@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-06T02:13:48.372Z"
-last_activity: 2026-03-06 -- Completed plan 02-01 (executor interface & file module)
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-06T02:15:00.000Z"
+last_activity: 2026-03-06 -- Completed plan 02-02 (resource executors)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 10
-  completed_plans: 7
-  percent: 20
+  completed_plans: 8
+  percent: 30
 ---
 
 # Project State
@@ -26,28 +26,28 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 2 of 4 (Convergence)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In Progress
-Last activity: 2026-03-06 -- Completed plan 02-01 (executor interface & file module)
+Last activity: 2026-03-06 -- Completed plan 02-02 (resource executors)
 
-Progress: [██--------] 20%
+Progress: [███-------] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 8
 - Average duration: 5min
-- Total execution time: 0.53 hours
+- Total execution time: 0.68 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation | 5/5 | 27min | 5min |
-| 02-convergence | 1/5 | 5min | 5min |
+| 02-convergence | 3/5 | 19min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: 01-04 (4min), 01-03 (4min), 01-02 (6min), 01-05 (6min), 02-01 (5min)
+- Last 5 plans: 01-03 (4min), 01-02 (6min), 01-05 (6min), 02-01 (5min), 02-02 (9min)
 - Trend: steady
 
 *Updated after each plan completion*
@@ -88,6 +88,9 @@ Recent decisions affecting current work:
 - [02-01]: EvaluateWhen uses missingkey=zero so missing facts render as zero values
 - [02-01]: Only exact string "true" after trim evaluates as true in when expressions
 - [02-01]: CommandRunner interface added for testable command execution in executors
+- [02-02]: ExecExecutor guard order: creates (file stat) first, then onlyif, then unless
+- [02-02]: Exec guards (onlyif/unless) skipped during dry-run to avoid side effects; creates guard still evaluated
+- [02-02]: Shared mockCmdRunnerGeneric in mocks_test.go avoids duplicating test mock infrastructure
 
 ### Pending Todos
 
@@ -100,6 +103,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T02:13:48.369Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-06T02:15:00Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

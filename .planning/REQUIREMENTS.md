@@ -27,15 +27,15 @@
 
 - [x] **CONV-01**: File resource executor checks SHA256 hash before writing, skips if match
 - [x] **CONV-02**: File resource uses atomic write-to-temp-then-rename pattern
-- [ ] **CONV-03**: Package resource executor queries package manager for installed state before acting
-- [ ] **CONV-04**: Service resource executor checks systemctl is-active/is-enabled before acting
-- [ ] **CONV-05**: User resource executor parses /etc/passwd for existence and attributes before acting
-- [ ] **CONV-06**: Exec resource executor runs arbitrary commands with idempotency guards (creates/onlyif/unless)
+- [x] **CONV-03**: Package resource executor queries package manager for installed state before acting
+- [x] **CONV-04**: Service resource executor checks systemctl is-active/is-enabled before acting
+- [x] **CONV-05**: User resource executor parses /etc/passwd for existence and attributes before acting
+- [x] **CONV-06**: Exec resource executor runs arbitrary commands with idempotency guards (creates/onlyif/unless)
 - [ ] **CONV-07**: Module dependencies form a DAG with topological ordering via Kahn's algorithm
 - [ ] **CONV-08**: Circular dependencies detected at config load time with clear error message
 - [ ] **CONV-09**: Resources support `notify` list — triggered resources re-apply when notifier changes
 - [ ] **CONV-10**: Resources support `subscribes` — alternative syntax for notify relationships
-- [ ] **CONV-11**: Service resource supports states: running, stopped, restarted, reloaded
+- [x] **CONV-11**: Service resource supports states: running, stopped, restarted, reloaded
 - [x] **CONV-12**: All executors record action_taken (none/create/update/delete/skip) in run results
 
 ### Configuration
@@ -125,7 +125,7 @@
 - [x] **INFRA-03**: Makefile: build, proto, certs, test, lint targets
 - [ ] **INFRA-04**: Bootstrap script at `GET /bootstrap` with server address + CA cert baked in
 - [ ] **INFRA-05**: Agent binary download endpoint: `GET /api/v1/agent/download/{os}/{arch}`
-- [ ] **INFRA-06**: Multi-platform package manager support via PackageManager interface (apt, dnf, yum, apk, pacman, brew, zypper)
+- [x] **INFRA-06**: Multi-platform package manager support via PackageManager interface (apt, dnf, yum, apk, pacman, brew, zypper)
 
 ## v2 Requirements
 
@@ -193,15 +193,15 @@
 | INFRA-03 | Phase 1 | Complete |
 | CONV-01 | Phase 2 | Complete |
 | CONV-02 | Phase 2 | Complete |
-| CONV-03 | Phase 2 | Pending |
-| CONV-04 | Phase 2 | Pending |
-| CONV-05 | Phase 2 | Pending |
-| CONV-06 | Phase 2 | Pending |
+| CONV-03 | Phase 2 | Complete |
+| CONV-04 | Phase 2 | Complete |
+| CONV-05 | Phase 2 | Complete |
+| CONV-06 | Phase 2 | Complete |
 | CONV-07 | Phase 2 | Pending |
 | CONV-08 | Phase 2 | Pending |
 | CONV-09 | Phase 2 | Pending |
 | CONV-10 | Phase 2 | Pending |
-| CONV-11 | Phase 2 | Pending |
+| CONV-11 | Phase 2 | Complete |
 | CONV-12 | Phase 2 | Complete |
 | CONF-09 | Phase 2 | Complete |
 | CONF-10 | Phase 2 | Complete |
@@ -214,7 +214,7 @@
 | AGNT-07 | Phase 2 | Pending |
 | AGNT-08 | Phase 2 | Pending |
 | AGNT-09 | Phase 2 | Complete |
-| INFRA-06 | Phase 2 | Pending |
+| INFRA-06 | Phase 2 | Complete |
 | CLI-01 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |
 | CLI-03 | Phase 3 | Pending |
