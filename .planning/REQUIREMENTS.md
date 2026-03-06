@@ -156,13 +156,101 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| *(populated during roadmap creation)* | | |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Pending |
+| SEC-05 | Phase 1 | Pending |
+| ENRL-01 | Phase 1 | Pending |
+| ENRL-02 | Phase 1 | Pending |
+| ENRL-03 | Phase 1 | Pending |
+| ENRL-04 | Phase 1 | Pending |
+| ENRL-05 | Phase 1 | Pending |
+| ENRL-06 | Phase 1 | Pending |
+| ENRL-07 | Phase 1 | Pending |
+| DB-01 | Phase 1 | Pending |
+| DB-02 | Phase 1 | Pending |
+| DB-03 | Phase 1 | Pending |
+| DB-04 | Phase 1 | Pending |
+| SECR-01 | Phase 1 | Pending |
+| SECR-02 | Phase 1 | Pending |
+| SECR-03 | Phase 1 | Pending |
+| SECR-04 | Phase 1 | Pending |
+| SECR-05 | Phase 1 | Pending |
+| SECR-06 | Phase 1 | Pending |
+| SECR-07 | Phase 1 | Pending |
+| CONF-01 | Phase 1 | Pending |
+| CONF-02 | Phase 1 | Pending |
+| CONF-03 | Phase 1 | Pending |
+| CONF-04 | Phase 1 | Pending |
+| CONF-05 | Phase 1 | Pending |
+| CONF-06 | Phase 1 | Pending |
+| CONF-07 | Phase 1 | Pending |
+| CONF-08 | Phase 1 | Pending |
+| AGNT-11 | Phase 1 | Pending |
+| INFRA-01 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Pending |
+| INFRA-03 | Phase 1 | Pending |
+| CONV-01 | Phase 2 | Pending |
+| CONV-02 | Phase 2 | Pending |
+| CONV-03 | Phase 2 | Pending |
+| CONV-04 | Phase 2 | Pending |
+| CONV-05 | Phase 2 | Pending |
+| CONV-06 | Phase 2 | Pending |
+| CONV-07 | Phase 2 | Pending |
+| CONV-08 | Phase 2 | Pending |
+| CONV-09 | Phase 2 | Pending |
+| CONV-10 | Phase 2 | Pending |
+| CONV-11 | Phase 2 | Pending |
+| CONV-12 | Phase 2 | Pending |
+| CONF-09 | Phase 2 | Pending |
+| CONF-10 | Phase 2 | Pending |
+| AGNT-01 | Phase 2 | Pending |
+| AGNT-02 | Phase 2 | Pending |
+| AGNT-03 | Phase 2 | Pending |
+| AGNT-04 | Phase 2 | Pending |
+| AGNT-05 | Phase 2 | Pending |
+| AGNT-06 | Phase 2 | Pending |
+| AGNT-07 | Phase 2 | Pending |
+| AGNT-08 | Phase 2 | Pending |
+| AGNT-09 | Phase 2 | Pending |
+| INFRA-06 | Phase 2 | Pending |
+| CLI-01 | Phase 3 | Pending |
+| CLI-02 | Phase 3 | Pending |
+| CLI-03 | Phase 3 | Pending |
+| CLI-04 | Phase 3 | Pending |
+| CLI-05 | Phase 3 | Pending |
+| CLI-06 | Phase 3 | Pending |
+| CLI-07 | Phase 3 | Pending |
+| CLI-08 | Phase 3 | Pending |
+| CLI-09 | Phase 3 | Pending |
+| CLI-10 | Phase 3 | Pending |
+| CLI-11 | Phase 3 | Pending |
+| OBS-01 | Phase 3 | Pending |
+| OBS-02 | Phase 3 | Pending |
+| OBS-03 | Phase 3 | Pending |
+| OBS-04 | Phase 3 | Pending |
+| OBS-05 | Phase 3 | Pending |
+| SECR-08 | Phase 3 | Pending |
+| SECR-09 | Phase 3 | Pending |
+| SECR-10 | Phase 3 | Pending |
+| UI-01 | Phase 4 | Pending |
+| UI-02 | Phase 4 | Pending |
+| UI-03 | Phase 4 | Pending |
+| UI-04 | Phase 4 | Pending |
+| UI-05 | Phase 4 | Pending |
+| UI-06 | Phase 4 | Pending |
+| UI-07 | Phase 4 | Pending |
+| UI-08 | Phase 4 | Pending |
+| AGNT-10 | Phase 4 | Pending |
+| INFRA-04 | Phase 4 | Pending |
+| INFRA-05 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 74 total
-- Mapped to phases: 0
-- Unmapped: 74
+- v1 requirements: 89 total
+- Mapped to phases: 89
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after initial definition*
+*Last updated: 2026-03-05 after roadmap creation*
