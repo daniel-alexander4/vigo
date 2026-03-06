@@ -22,8 +22,6 @@ const bcryptCost = 10
 // Sentinel errors returned by Registry methods.
 var (
 	ErrNoMatchingPattern = errors.New("no matching approved pattern found for hostname or IP")
-	ErrInvalidToken      = errors.New("token does not match any approved pattern")
-	ErrTokenAlreadyUsed  = errors.New("enrollment token has already been used")
 	ErrClientRevoked     = errors.New("client is revoked")
 	ErrClientNotFound    = errors.New("client not found")
 	ErrHostnameRevoked   = errors.New("hostname belongs to a revoked client and cannot re-enroll")
