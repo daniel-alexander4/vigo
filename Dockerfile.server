@@ -1,0 +1,20 @@
+FROM golang:1.26-alpine AS builder
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -o isogov-server ./server
+
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /build/isogov-server /usr/local/bin/isogov-server
+COPY --from=builder /build/migrations /migrations
+
+EXPOSE 9090 8080
+
+ENTRYPOINT ["isogov-server"]
