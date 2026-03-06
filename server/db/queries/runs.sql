@@ -30,3 +30,9 @@ SELECT id, run_id, module_name, resource_type, resource_name, action_taken, chan
 FROM run_results
 WHERE run_id = $1
 ORDER BY created_at ASC;
+
+-- name: ListAllRuns :many
+SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+FROM runs
+ORDER BY started_at DESC
+LIMIT $1;

@@ -11,10 +11,21 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearForcePush = `-- name: ClearForcePush :exec
+UPDATE clients
+SET force_push = false
+WHERE id = $1
+`
+
+func (q *Queries) ClearForcePush(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearForcePush, id)
+	return err
+}
+
 const createClient = `-- name: CreateClient :one
 INSERT INTO clients (hostname, ip_address, pubkey_pem)
 VALUES ($1, $2, $3)
-RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at
+RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 `
 
 type CreateClientParams struct {
@@ -35,12 +46,13 @@ func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (Cli
 		&i.LastSeen,
 		&i.Revoked,
 		&i.RevokedAt,
+		&i.ForcePush,
 	)
 	return i, err
 }
 
 const getClientByHostname = `-- name: GetClientByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM clients
 WHERE hostname = $1
 `
@@ -57,12 +69,13 @@ func (q *Queries) GetClientByHostname(ctx context.Context, hostname string) (Cli
 		&i.LastSeen,
 		&i.Revoked,
 		&i.RevokedAt,
+		&i.ForcePush,
 	)
 	return i, err
 }
 
 const getClientByID = `-- name: GetClientByID :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM clients
 WHERE id = $1
 `
@@ -79,12 +92,13 @@ func (q *Queries) GetClientByID(ctx context.Context, id uuid.UUID) (Client, erro
 		&i.LastSeen,
 		&i.Revoked,
 		&i.RevokedAt,
+		&i.ForcePush,
 	)
 	return i, err
 }
 
 const listClients = `-- name: ListClients :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM clients
 ORDER BY enrolled_at DESC
 `
@@ -107,6 +121,43 @@ func (q *Queries) ListClients(ctx context.Context) ([]Client, error) {
 			&i.LastSeen,
 			&i.Revoked,
 			&i.RevokedAt,
+			&i.ForcePush,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listClientsWithForcePush = `-- name: ListClientsWithForcePush :many
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
+FROM clients
+WHERE force_push = true
+`
+
+func (q *Queries) ListClientsWithForcePush(ctx context.Context) ([]Client, error) {
+	rows, err := q.db.Query(ctx, listClientsWithForcePush)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Client{}
+	for rows.Next() {
+		var i Client
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hostname,
+			&i.IpAddress,
+			&i.PubkeyPem,
+			&i.EnrolledAt,
+			&i.LastSeen,
+			&i.Revoked,
+			&i.RevokedAt,
+			&i.ForcePush,
 		); err != nil {
 			return nil, err
 		}
@@ -126,6 +177,17 @@ WHERE id = $1
 
 func (q *Queries) RevokeClient(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, revokeClient, id)
+	return err
+}
+
+const setForcePush = `-- name: SetForcePush :exec
+UPDATE clients
+SET force_push = true
+WHERE id = $1
+`
+
+func (q *Queries) SetForcePush(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, setForcePush, id)
 	return err
 }
 

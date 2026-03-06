@@ -30,6 +30,7 @@ type Client struct {
 	LastSeen   pgtype.Timestamptz `json:"last_seen"`
 	Revoked    bool               `json:"revoked"`
 	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+	ForcePush  bool               `json:"force_push"`
 }
 
 type ClientFact struct {
@@ -37,6 +38,26 @@ type ClientFact struct {
 	ClientID    uuid.UUID       `json:"client_id"`
 	Facts       json.RawMessage `json:"facts"`
 	CollectedAt time.Time       `json:"collected_at"`
+}
+
+type ComplianceHistory struct {
+	ID         uuid.UUID   `json:"id"`
+	RecordedAt pgtype.Date `json:"recorded_at"`
+	Total      int32       `json:"total"`
+	Compliant  int32       `json:"compliant"`
+	Drifted    int32       `json:"drifted"`
+	Failing    int32       `json:"failing"`
+	Stale      int32       `json:"stale"`
+	Unknown    int32       `json:"unknown"`
+}
+
+type EnvPromotion struct {
+	ID         uuid.UUID       `json:"id"`
+	ModuleName string          `json:"module_name"`
+	FromEnv    string          `json:"from_env"`
+	ToEnv      string          `json:"to_env"`
+	Diff       json.RawMessage `json:"diff"`
+	PromotedAt time.Time       `json:"promoted_at"`
 }
 
 type FileSnapshot struct {

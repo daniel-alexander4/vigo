@@ -133,6 +133,43 @@ func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
 	return i, err
 }
 
+const listAllRuns = `-- name: ListAllRuns :many
+SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+FROM runs
+ORDER BY started_at DESC
+LIMIT $1
+`
+
+func (q *Queries) ListAllRuns(ctx context.Context, limit int32) ([]Run, error) {
+	rows, err := q.db.Query(ctx, listAllRuns, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientID,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Status,
+			&i.ModuleCount,
+			&i.ChangedCount,
+			&i.FailedCount,
+			&i.SkippedCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRunResults = `-- name: ListRunResults :many
 SELECT id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
 FROM run_results
