@@ -1,0 +1,22 @@
+rules:
+  - match: "web-*"
+    environment: production
+    modules:
+      - name: base
+        source: modules/base.yaml
+      - name: nginx
+        source: modules/nginx.yaml
+
+  - match: "db-*"
+    environment: production
+    modules:
+      - name: base
+        source: modules/base.yaml
+      - name: postgres
+        source: modules/postgres.yaml
+
+  - match: "*.staging.example.com"
+    environment: staging
+    modules:
+      - name: base
+        source: modules/base.yaml
