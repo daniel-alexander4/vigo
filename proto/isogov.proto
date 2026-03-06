@@ -111,6 +111,79 @@ service IsgovAdmin {
       body: "*"
     };
   }
+
+  // ListAllRuns lists recent runs across all clients.
+  rpc ListAllRuns(ListAllRunsRequest) returns (ListRunsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/runs/all"
+    };
+  }
+
+  // AddWebhook registers a new webhook endpoint.
+  rpc AddWebhook(AddWebhookRequest) returns (AddWebhookResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/webhooks"
+      body: "*"
+    };
+  }
+
+  // ListWebhooks lists all registered webhooks.
+  rpc ListWebhooks(ListWebhooksRequest) returns (ListWebhooksResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/webhooks"
+    };
+  }
+
+  // DeleteWebhook removes a webhook by ID.
+  rpc DeleteWebhook(DeleteWebhookRequest) returns (DeleteWebhookResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/webhooks/{id}"
+    };
+  }
+
+  // GetComplianceSummary returns aggregate compliance status across all clients.
+  rpc GetComplianceSummary(GetComplianceSummaryRequest) returns (GetComplianceSummaryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/compliance"
+    };
+  }
+
+  // GetClientCompliance returns compliance details for a single client.
+  rpc GetClientCompliance(GetClientComplianceRequest) returns (GetClientComplianceResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/clients/{id}/compliance"
+    };
+  }
+
+  // Rollback reverts a client to a previous run's state.
+  rpc Rollback(RollbackRequest) returns (RollbackResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/clients/{client_id}/rollback"
+      body: "*"
+    };
+  }
+
+  // ListPackages lists package audit records, optionally filtered by client.
+  rpc ListPackages(ListPackagesRequest) returns (ListPackagesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/packages"
+    };
+  }
+
+  // ListPackageDrift lists packages where installed version differs from desired.
+  rpc ListPackageDrift(ListPackageDriftRequest) returns (ListPackageDriftResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/packages/drift"
+    };
+  }
+
+  // PromoteEnv promotes environment variables from one tier to another.
+  rpc PromoteEnv(PromoteEnvRequest) returns (PromoteEnvResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/env/promote"
+      body: "*"
+    };
+  }
 }
 
 // =============================================================================
@@ -314,4 +387,147 @@ message GenerateTokenRequest {}
 
 message GenerateTokenResponse {
   string token = 1;
+}
+
+// =============================================================================
+// Phase 3: ListAllRuns messages
+// =============================================================================
+
+message ListAllRunsRequest {
+  int32 limit = 1;              // default 20
+}
+
+// =============================================================================
+// Phase 3: Webhook messages
+// =============================================================================
+
+message AddWebhookRequest {
+  string url = 1;
+  string secret = 2;
+  repeated string events = 3;
+}
+
+message AddWebhookResponse {
+  WebhookInfo webhook = 1;
+}
+
+message ListWebhooksRequest {}
+
+message ListWebhooksResponse {
+  repeated WebhookInfo webhooks = 1;
+}
+
+message DeleteWebhookRequest {
+  string id = 1;
+}
+
+message DeleteWebhookResponse {}
+
+message WebhookInfo {
+  string id = 1;
+  string url = 2;
+  repeated string events = 3;
+  google.protobuf.Timestamp created_at = 4;
+  bool active = 5;
+}
+
+// =============================================================================
+// Phase 3: Compliance messages
+// =============================================================================
+
+message GetComplianceSummaryRequest {}
+
+message GetComplianceSummaryResponse {
+  int32 total = 1;
+  int32 compliant = 2;
+  int32 drifted = 3;
+  int32 failing = 4;
+  int32 stale = 5;
+  int32 unknown = 6;
+  float compliance_pct = 7;
+}
+
+message GetClientComplianceRequest {
+  string id = 1;
+}
+
+message GetClientComplianceResponse {
+  string status = 1;
+  Run last_run = 2;
+  repeated ComplianceSnapshot history = 3;
+}
+
+message ComplianceSnapshot {
+  string date = 1;
+  int32 total = 2;
+  int32 compliant = 3;
+  int32 drifted = 4;
+  int32 failing = 5;
+  int32 stale = 6;
+  int32 unknown = 7;
+}
+
+// =============================================================================
+// Phase 3: Rollback messages
+// =============================================================================
+
+message RollbackRequest {
+  string client_id = 1;
+  string run_id = 2;            // optional: rollback to specific run
+  string file_path = 3;         // optional: rollback a single file
+}
+
+message RollbackResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// =============================================================================
+// Phase 3: Package audit messages
+// =============================================================================
+
+message ListPackagesRequest {
+  string client_id = 1;         // optional filter
+}
+
+message ListPackagesResponse {
+  repeated PackageInfo packages = 1;
+}
+
+message ListPackageDriftRequest {}
+
+message ListPackageDriftResponse {
+  repeated PackageDrift drifts = 1;
+}
+
+message PackageInfo {
+  string client_id = 1;
+  string hostname = 2;
+  string package_name = 3;
+  string installed_version = 4;
+  string desired_version = 5;
+}
+
+message PackageDrift {
+  string client_id = 1;
+  string hostname = 2;
+  string package_name = 3;
+  string installed_version = 4;
+  string desired_version = 5;
+  google.protobuf.Timestamp detected_at = 6;
+}
+
+// =============================================================================
+// Phase 3: Env promote messages
+// =============================================================================
+
+message PromoteEnvRequest {
+  string module_name = 1;
+  string from_env = 2;
+  string to_env = 3;
+}
+
+message PromoteEnvResponse {
+  string promotion_id = 1;
+  map<string, string> diff = 2;
 }

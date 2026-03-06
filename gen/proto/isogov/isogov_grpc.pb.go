@@ -254,6 +254,16 @@ const (
 	IsgovAdmin_ListRuns_FullMethodName              = "/isogov.v1.IsgovAdmin/ListRuns"
 	IsgovAdmin_GetRun_FullMethodName                = "/isogov.v1.IsgovAdmin/GetRun"
 	IsgovAdmin_GenerateToken_FullMethodName         = "/isogov.v1.IsgovAdmin/GenerateToken"
+	IsgovAdmin_ListAllRuns_FullMethodName           = "/isogov.v1.IsgovAdmin/ListAllRuns"
+	IsgovAdmin_AddWebhook_FullMethodName            = "/isogov.v1.IsgovAdmin/AddWebhook"
+	IsgovAdmin_ListWebhooks_FullMethodName          = "/isogov.v1.IsgovAdmin/ListWebhooks"
+	IsgovAdmin_DeleteWebhook_FullMethodName         = "/isogov.v1.IsgovAdmin/DeleteWebhook"
+	IsgovAdmin_GetComplianceSummary_FullMethodName  = "/isogov.v1.IsgovAdmin/GetComplianceSummary"
+	IsgovAdmin_GetClientCompliance_FullMethodName   = "/isogov.v1.IsgovAdmin/GetClientCompliance"
+	IsgovAdmin_Rollback_FullMethodName              = "/isogov.v1.IsgovAdmin/Rollback"
+	IsgovAdmin_ListPackages_FullMethodName          = "/isogov.v1.IsgovAdmin/ListPackages"
+	IsgovAdmin_ListPackageDrift_FullMethodName      = "/isogov.v1.IsgovAdmin/ListPackageDrift"
+	IsgovAdmin_PromoteEnv_FullMethodName            = "/isogov.v1.IsgovAdmin/PromoteEnv"
 )
 
 // IsgovAdminClient is the client API for IsgovAdmin service.
@@ -282,6 +292,26 @@ type IsgovAdminClient interface {
 	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
 	// GenerateToken generates a cryptographically random one-time enrollment token.
 	GenerateToken(ctx context.Context, in *GenerateTokenRequest, opts ...grpc.CallOption) (*GenerateTokenResponse, error)
+	// ListAllRuns lists recent runs across all clients.
+	ListAllRuns(ctx context.Context, in *ListAllRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
+	// AddWebhook registers a new webhook endpoint.
+	AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error)
+	// ListWebhooks lists all registered webhooks.
+	ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error)
+	// DeleteWebhook removes a webhook by ID.
+	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error)
+	// GetComplianceSummary returns aggregate compliance status across all clients.
+	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
+	// GetClientCompliance returns compliance details for a single client.
+	GetClientCompliance(ctx context.Context, in *GetClientComplianceRequest, opts ...grpc.CallOption) (*GetClientComplianceResponse, error)
+	// Rollback reverts a client to a previous run's state.
+	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error)
+	// ListPackages lists package audit records, optionally filtered by client.
+	ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error)
+	// ListPackageDrift lists packages where installed version differs from desired.
+	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
+	// PromoteEnv promotes environment variables from one tier to another.
+	PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error)
 }
 
 type isgovAdminClient struct {
@@ -402,6 +432,106 @@ func (c *isgovAdminClient) GenerateToken(ctx context.Context, in *GenerateTokenR
 	return out, nil
 }
 
+func (c *isgovAdminClient) ListAllRuns(ctx context.Context, in *ListAllRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRunsResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_ListAllRuns_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddWebhookResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_AddWebhook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListWebhooksResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_ListWebhooks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteWebhookResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_DeleteWebhook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetComplianceSummaryResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_GetComplianceSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) GetClientCompliance(ctx context.Context, in *GetClientComplianceRequest, opts ...grpc.CallOption) (*GetClientComplianceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetClientComplianceResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_GetClientCompliance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_Rollback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPackagesResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_ListPackages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPackageDriftResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_ListPackageDrift_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *isgovAdminClient) PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromoteEnvResponse)
+	err := c.cc.Invoke(ctx, IsgovAdmin_PromoteEnv_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IsgovAdminServer is the server API for IsgovAdmin service.
 // All implementations must embed UnimplementedIsgovAdminServer
 // for forward compatibility.
@@ -428,6 +558,26 @@ type IsgovAdminServer interface {
 	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
 	// GenerateToken generates a cryptographically random one-time enrollment token.
 	GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error)
+	// ListAllRuns lists recent runs across all clients.
+	ListAllRuns(context.Context, *ListAllRunsRequest) (*ListRunsResponse, error)
+	// AddWebhook registers a new webhook endpoint.
+	AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error)
+	// ListWebhooks lists all registered webhooks.
+	ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error)
+	// DeleteWebhook removes a webhook by ID.
+	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
+	// GetComplianceSummary returns aggregate compliance status across all clients.
+	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
+	// GetClientCompliance returns compliance details for a single client.
+	GetClientCompliance(context.Context, *GetClientComplianceRequest) (*GetClientComplianceResponse, error)
+	// Rollback reverts a client to a previous run's state.
+	Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error)
+	// ListPackages lists package audit records, optionally filtered by client.
+	ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error)
+	// ListPackageDrift lists packages where installed version differs from desired.
+	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
+	// PromoteEnv promotes environment variables from one tier to another.
+	PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error)
 	mustEmbedUnimplementedIsgovAdminServer()
 }
 
@@ -470,6 +620,36 @@ func (UnimplementedIsgovAdminServer) GetRun(context.Context, *GetRunRequest) (*G
 }
 func (UnimplementedIsgovAdminServer) GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GenerateToken not implemented")
+}
+func (UnimplementedIsgovAdminServer) ListAllRuns(context.Context, *ListAllRunsRequest) (*ListRunsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAllRuns not implemented")
+}
+func (UnimplementedIsgovAdminServer) AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddWebhook not implemented")
+}
+func (UnimplementedIsgovAdminServer) ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListWebhooks not implemented")
+}
+func (UnimplementedIsgovAdminServer) DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteWebhook not implemented")
+}
+func (UnimplementedIsgovAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
+}
+func (UnimplementedIsgovAdminServer) GetClientCompliance(context.Context, *GetClientComplianceRequest) (*GetClientComplianceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetClientCompliance not implemented")
+}
+func (UnimplementedIsgovAdminServer) Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Rollback not implemented")
+}
+func (UnimplementedIsgovAdminServer) ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPackages not implemented")
+}
+func (UnimplementedIsgovAdminServer) ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPackageDrift not implemented")
+}
+func (UnimplementedIsgovAdminServer) PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PromoteEnv not implemented")
 }
 func (UnimplementedIsgovAdminServer) mustEmbedUnimplementedIsgovAdminServer() {}
 func (UnimplementedIsgovAdminServer) testEmbeddedByValue()                    {}
@@ -690,6 +870,186 @@ func _IsgovAdmin_GenerateToken_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IsgovAdmin_ListAllRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAllRunsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).ListAllRuns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_ListAllRuns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).ListAllRuns(ctx, req.(*ListAllRunsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_AddWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddWebhookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).AddWebhook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_AddWebhook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).AddWebhook(ctx, req.(*AddWebhookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_ListWebhooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListWebhooksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).ListWebhooks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_ListWebhooks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).ListWebhooks(ctx, req.(*ListWebhooksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_DeleteWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteWebhookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).DeleteWebhook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_DeleteWebhook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).DeleteWebhook(ctx, req.(*DeleteWebhookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetComplianceSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).GetComplianceSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_GetComplianceSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).GetComplianceSummary(ctx, req.(*GetComplianceSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_GetClientCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetClientComplianceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).GetClientCompliance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_GetClientCompliance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).GetClientCompliance(ctx, req.(*GetClientComplianceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).Rollback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_Rollback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).Rollback(ctx, req.(*RollbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_ListPackages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPackagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).ListPackages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_ListPackages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).ListPackages(ctx, req.(*ListPackagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_ListPackageDrift_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPackageDriftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).ListPackageDrift(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_ListPackageDrift_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).ListPackageDrift(ctx, req.(*ListPackageDriftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IsgovAdmin_PromoteEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromoteEnvRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAdminServer).PromoteEnv(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAdmin_PromoteEnv_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAdminServer).PromoteEnv(ctx, req.(*PromoteEnvRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IsgovAdmin_ServiceDesc is the grpc.ServiceDesc for IsgovAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -740,6 +1100,46 @@ var IsgovAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GenerateToken",
 			Handler:    _IsgovAdmin_GenerateToken_Handler,
+		},
+		{
+			MethodName: "ListAllRuns",
+			Handler:    _IsgovAdmin_ListAllRuns_Handler,
+		},
+		{
+			MethodName: "AddWebhook",
+			Handler:    _IsgovAdmin_AddWebhook_Handler,
+		},
+		{
+			MethodName: "ListWebhooks",
+			Handler:    _IsgovAdmin_ListWebhooks_Handler,
+		},
+		{
+			MethodName: "DeleteWebhook",
+			Handler:    _IsgovAdmin_DeleteWebhook_Handler,
+		},
+		{
+			MethodName: "GetComplianceSummary",
+			Handler:    _IsgovAdmin_GetComplianceSummary_Handler,
+		},
+		{
+			MethodName: "GetClientCompliance",
+			Handler:    _IsgovAdmin_GetClientCompliance_Handler,
+		},
+		{
+			MethodName: "Rollback",
+			Handler:    _IsgovAdmin_Rollback_Handler,
+		},
+		{
+			MethodName: "ListPackages",
+			Handler:    _IsgovAdmin_ListPackages_Handler,
+		},
+		{
+			MethodName: "ListPackageDrift",
+			Handler:    _IsgovAdmin_ListPackageDrift_Handler,
+		},
+		{
+			MethodName: "PromoteEnv",
+			Handler:    _IsgovAdmin_PromoteEnv_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
