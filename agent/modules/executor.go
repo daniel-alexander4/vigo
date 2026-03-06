@@ -1,7 +1,10 @@
 // Package modules provides resource executor types for the Isogov agent.
 package modules
 
-import "context"
+import (
+	"context"
+	"os/exec"
+)
 
 // ActionTaken describes what action an executor performed on a resource.
 type ActionTaken string
@@ -28,4 +31,17 @@ type ResourceResult struct {
 // Executor is the interface that all resource type executors must implement.
 type Executor interface {
 	Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult
+}
+
+// CommandRunner abstracts command execution for testability.
+type CommandRunner interface {
+	Run(ctx context.Context, name string, args ...string) ([]byte, error)
+}
+
+// DefaultRunner executes commands via os/exec.
+type DefaultRunner struct{}
+
+// Run executes a command and returns combined output.
+func (d *DefaultRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
 }
