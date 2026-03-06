@@ -103,9 +103,9 @@
 
 - [ ] **OBS-01**: Compliance status per client: compliant/drifted/failing/stale/unknown
 - [x] **OBS-02**: Compliance API: summary, per-client status, 30-day history
-- [ ] **OBS-03**: Prometheus metrics: clients_total, clients_active, checkins_total, run_duration_seconds, drift_detected_total, module_actions_total, compliance_status, compliance_pct, time_since_checkin_seconds
+- [x] **OBS-03**: Prometheus metrics: clients_total, clients_active, checkins_total, run_duration_seconds, drift_detected_total, module_actions_total, compliance_status, compliance_pct, time_since_checkin_seconds
 - [x] **OBS-04**: Webhook events: run.success/failure/partial, drift.detected, client.enrolled/revoked, plan.created/changes_detected, rollback.success/failure, secret.rotated, compliance.degraded, package.version_drift, node.stale
-- [ ] **OBS-05**: Webhook payloads signed with `X-Isogov-Signature: sha256=<hmac>`
+- [x] **OBS-05**: Webhook payloads signed with `X-Isogov-Signature: sha256=<hmac>`
 
 ### Web UI
 
@@ -228,9 +228,9 @@
 | CLI-11 | Phase 3 | Complete |
 | OBS-01 | Phase 3 | Pending |
 | OBS-02 | Phase 3 | Complete |
-| OBS-03 | Phase 3 | Pending |
+| OBS-03 | Phase 3 | Complete |
 | OBS-04 | Phase 3 | Complete |
-| OBS-05 | Phase 3 | Pending |
+| OBS-05 | Phase 3 | Complete |
 | SECR-08 | Phase 3 | Pending |
 | SECR-09 | Phase 3 | Pending |
 | SECR-10 | Phase 3 | Pending |
