@@ -60,9 +60,9 @@
 - [x] **SECR-05**: Known-secret fields without `secret:` prefix cause startup failure
 - [x] **SECR-06**: isopass unreachable at startup = hard failure, no insecure fallback
 - [x] **SECR-07**: Secret values never appear in logs, error messages, DB rows, gRPC payloads, or run results
-- [ ] **SECR-08**: Server polls isopass for version changes on watched secret paths at configurable interval
-- [ ] **SECR-09**: Secret rotation triggers immediate force-run for all affected clients
-- [ ] **SECR-10**: Server TLS cert reloads without restart via `crypto/tls` `GetCertificate` callback
+- [x] **SECR-08**: Server polls isopass for version changes on watched secret paths at configurable interval
+- [x] **SECR-09**: Secret rotation triggers immediate force-run for all affected clients
+- [x] **SECR-10**: Server TLS cert reloads without restart via `crypto/tls` `GetCertificate` callback
 
 ### Agent
 
@@ -231,9 +231,9 @@
 | OBS-03 | Phase 3 | Complete |
 | OBS-04 | Phase 3 | Complete |
 | OBS-05 | Phase 3 | Complete |
-| SECR-08 | Phase 3 | Pending |
-| SECR-09 | Phase 3 | Pending |
-| SECR-10 | Phase 3 | Pending |
+| SECR-08 | Phase 3 | Complete |
+| SECR-09 | Phase 3 | Complete |
+| SECR-10 | Phase 3 | Complete |
 | UI-01 | Phase 4 | Pending |
 | UI-02 | Phase 4 | Pending |
 | UI-03 | Phase 4 | Pending |

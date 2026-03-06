@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Server skeleton with mTLS, enrollment, config loading, secrets interface, and database
 - [x] **Phase 2: Convergence** - Agent daemon with DAG-ordered idempotent resource executors, fact collection, and notify/subscribe triggers (completed 2026-03-06)
-- [ ] **Phase 3: Operations** - CLI, REST API, compliance tracking, secret rotation, webhooks, and Prometheus metrics
+- [x] **Phase 3: Operations** - CLI, REST API, compliance tracking, secret rotation, webhooks, and Prometheus metrics (completed 2026-03-06)
 - [ ] **Phase 4: Web UI & Deployment** - Web dashboard SPA, bootstrap script, and agent self-update
 
 ## Phase Details
@@ -100,5 +100,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 5/5 | Complete | 2026-03-06 |
 | 2. Convergence | 5/5 | Complete   | 2026-03-06 |
-| 3. Operations | 4/5 | In Progress|  |
+| 3. Operations | 5/5 | Complete   | 2026-03-06 |
 | 4. Web UI & Deployment | 0/2 | Not started | - |

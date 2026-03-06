@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md
+stopped_at: Completed 03-05-PLAN.md
 last_updated: "2026-03-06T03:37:08.427Z"
-last_activity: 2026-03-06 -- Completed plan 03-04 (Metrics & Webhooks)
+last_activity: 2026-03-06 -- Completed plan 03-05 (Isopass Integration & Secret Rotation)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 15
-  completed_plans: 14
-  percent: 93
+  completed_plans: 15
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 3 of 4 (Operations)
-Plan: 4 of 5 in current phase
-Status: In Progress
-Last activity: 2026-03-06 -- Completed plan 03-04 (Metrics & Webhooks)
+Plan: 5 of 5 in current phase
+Status: Phase Complete
+Last activity: 2026-03-06 -- Completed plan 03-05 (Isopass Integration & Secret Rotation)
 
-Progress: [█████████-] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [█████████-] 93%
 | Phase 03 P04 | 5min | 2 tasks | 12 files |
 | Phase 03 P03 | 3min | 2 tasks | 14 files |
 | Phase 03 P02 | 6min | 2 tasks | 7 files |
+| Phase 03 P05 | 4min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [03-03]: ANSI color in preview command degrades gracefully for non-terminal stdout
 - [03-03]: rollback requires exactly one of --run or --file (mutually exclusive validation)
 - [Phase 03]: RunInfo struct decouples compliance from db.Run; stale=2x baseInterval; ForcePush sets DB flag only
+- [03-05]: Interface-based watcher deps (VersionProvider, ClientStore, DB, EventDispatcher) for clean unit testing
+- [03-05]: CertCache with sync.RWMutex for concurrent TLS handshake reads; NewServer returns 3 values including CertCache
 
 ### Pending Todos
 
@@ -127,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T03:37:08.424Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-03-06T03:42:16Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
