@@ -67,12 +67,14 @@ Plans:
   3. Prometheus metrics endpoint exposes client counts, check-in rates, drift detection, run duration, and compliance percentages
   4. Webhook events fire for run results, drift detection, enrollment changes, secret rotation, compliance degradation, and package drift -- all payloads signed with HMAC
   5. Server polls isopass for secret version changes at configurable intervals and triggers immediate force-runs for affected clients; TLS certs reload without server restart
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
-- [ ] 03-03: TBD
+- [ ] 03-01-PLAN.md -- Proto additions, new DB migrations, sqlc queries for all Phase 3 tables
+- [ ] 03-02-PLAN.md -- Compliance computation package and all IsgovAdmin gRPC handler implementations
+- [ ] 03-03-PLAN.md -- gvctl CLI wiring: HTTP client helper and all 10 subcommand groups via REST API
+- [ ] 03-04-PLAN.md -- Prometheus metrics exposition and webhook dispatcher with HMAC-SHA256 signing
+- [ ] 03-05-PLAN.md -- IsopassProvider, secret rotation watcher, and TLS certificate hot reload
 
 ### Phase 4: Web UI & Deployment
 **Goal**: Operators can monitor the fleet through a web dashboard, and new nodes can be bootstrapped with a single curl command and kept up to date via agent self-update
@@ -98,5 +100,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 5/5 | Complete | 2026-03-06 |
 | 2. Convergence | 5/5 | Complete   | 2026-03-06 |
-| 3. Operations | 0/3 | Not started | - |
+| 3. Operations | 0/5 | Not started | - |
 | 4. Web UI & Deployment | 0/2 | Not started | - |
