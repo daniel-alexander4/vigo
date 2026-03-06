@@ -7,6 +7,7 @@ import (
 
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 	"github.com/isogov/isogov/server/registry"
+	"github.com/isogov/isogov/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -50,6 +51,17 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		"hostname", req.GetHostname(),
 		"client_id", clientID.String(),
 	)
+
+	// Dispatch client.enrolled webhook event.
+	if s.dispatcher != nil {
+		s.dispatcher.Dispatch(ctx, "client.enrolled", webhook.EventPayload{
+			Client: &webhook.ClientInfo{
+				ID:       clientID.String(),
+				Hostname: req.GetHostname(),
+				IP:       req.GetIpAddress(),
+			},
+		})
+	}
 
 	return &pb.RegisterResponse{
 		Success:  true,

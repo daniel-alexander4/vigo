@@ -24,6 +24,7 @@ import (
 	"github.com/isogov/isogov/server/metrics"
 	"github.com/isogov/isogov/server/registry"
 	"github.com/isogov/isogov/server/secrets"
+	"github.com/isogov/isogov/server/webhook"
 )
 
 func main() {
@@ -120,6 +121,9 @@ func run() error {
 		}
 	}
 
+	// Create webhook dispatcher.
+	dispatcher := webhook.NewDispatcher(queries)
+
 	// Create and start gRPC server.
 	grpcSrv, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:     cfg.Server.TLS.CertFile,
@@ -130,6 +134,7 @@ func run() error {
 		ConfigStore:  configStore,
 		Queries:      queries,
 		BaseInterval: baseInterval,
+		Dispatcher:   dispatcher,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)

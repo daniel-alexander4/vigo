@@ -3,10 +3,13 @@ package grpc
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 	"github.com/isogov/isogov/server/db"
+	"github.com/isogov/isogov/server/metrics"
+	"github.com/isogov/isogov/server/webhook"
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -85,6 +88,28 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.Internal, "finishing run: %v", err)
 	}
 
+	// Look up client hostname for metric labels.
+	client, cErr := s.queries.GetClientByID(ctx, clientID)
+	hostname := clientID.String() // fallback if lookup fails
+	if cErr == nil {
+		hostname = client.Hostname
+	}
+
+	// Record metrics for each result.
+	for _, result := range req.GetResults() {
+		metrics.ModuleActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
+		if result.GetChanged() {
+			metrics.DriftDetected.WithLabelValues(hostname, result.GetModuleName()).Inc()
+		}
+	}
+
+	// Record run duration (approximate from run start to now).
+	run, runErr := s.queries.GetRunByID(ctx, runID)
+	if runErr == nil {
+		duration := time.Since(run.StartedAt).Seconds()
+		metrics.RunDuration.WithLabelValues(hostname).Observe(duration)
+	}
+
 	slog.Info("run completed",
 		"run_id", runID,
 		"client_id", clientID,
@@ -93,6 +118,38 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		"failed", failedCount,
 		"skipped", skippedCount,
 	)
+
+	// Dispatch webhook event asynchronously.
+	if s.dispatcher != nil {
+		event := webhook.FormatRunEvent(runStatus)
+		s.dispatcher.Dispatch(ctx, event, webhook.EventPayload{
+			Client: &webhook.ClientInfo{
+				ID:       clientID.String(),
+				Hostname: hostname,
+			},
+			Run: &webhook.RunInfo{
+				ID:      runID.String(),
+				Status:  runStatus,
+				Changed: changedCount,
+				Failed:  failedCount,
+			},
+		})
+
+		// Also fire drift.detected if any changes detected.
+		if changedCount > 0 {
+			s.dispatcher.Dispatch(ctx, "drift.detected", webhook.EventPayload{
+				Client: &webhook.ClientInfo{
+					ID:       clientID.String(),
+					Hostname: hostname,
+				},
+				Run: &webhook.RunInfo{
+					ID:      runID.String(),
+					Status:  runStatus,
+					Changed: changedCount,
+				},
+			})
+		}
+	}
 
 	return &pb.ReportResultResponse{Acknowledged: true}, nil
 }

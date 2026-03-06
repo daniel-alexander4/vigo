@@ -7,24 +7,28 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"time"
 
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 	"github.com/isogov/isogov/server/config"
 	"github.com/isogov/isogov/server/db"
 	"github.com/isogov/isogov/server/registry"
+	"github.com/isogov/isogov/server/webhook"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
 // ServerConfig holds everything needed to construct the gRPC server.
 type ServerConfig struct {
-	CertFile    string
-	KeyFile     string
-	CAFile      string
-	GRPCPort    string
-	Registry    *registry.Registry
-	ConfigStore *config.ConfigStore
-	Queries     *db.Queries
+	CertFile     string
+	KeyFile      string
+	CAFile       string
+	GRPCPort     string
+	Registry     *registry.Registry
+	ConfigStore  *config.ConfigStore
+	Queries      *db.Queries
+	BaseInterval time.Duration
+	Dispatcher   *webhook.Dispatcher
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -46,12 +50,15 @@ func NewServer(cfg ServerConfig) (*grpc.Server, error) {
 		registry:    cfg.Registry,
 		configStore: cfg.ConfigStore,
 		queries:     cfg.Queries,
+		dispatcher:  cfg.Dispatcher,
 	}
 	pb.RegisterIsgovAgentServer(srv, agentSvc)
 
 	adminSvc := &AdminService{
-		registry: cfg.Registry,
-		queries:  cfg.Queries,
+		registry:     cfg.Registry,
+		queries:      cfg.Queries,
+		configStore:  cfg.ConfigStore,
+		baseInterval: cfg.BaseInterval,
 	}
 	pb.RegisterIsgovAdminServer(srv, adminSvc)
 

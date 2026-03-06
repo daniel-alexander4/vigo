@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 	"github.com/isogov/isogov/server/config"
+	"github.com/isogov/isogov/server/metrics"
 	"github.com/isogov/isogov/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -26,6 +27,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 
 	// Validate client is not revoked.
 	if err := s.registry.ValidateClient(ctx, clientID); err != nil {
+		metrics.CheckinsTotal.WithLabelValues("error").Inc()
 		if errors.Is(err, registry.ErrClientRevoked) {
 			return nil, status.Error(codes.PermissionDenied, "client is revoked")
 		}
@@ -76,6 +78,8 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		slog.Error("failed to compile modules", "client_id", clientID, "error", err)
 		return nil, status.Errorf(codes.Internal, "compiling modules: %v", err)
 	}
+
+	metrics.CheckinsTotal.WithLabelValues("success").Inc()
 
 	slog.Info("check-in",
 		"client_id", clientID,
