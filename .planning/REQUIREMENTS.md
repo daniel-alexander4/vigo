@@ -10,8 +10,8 @@
 - [ ] **SEC-01**: Server accepts only mTLS gRPC connections from agents — no plaintext
 - [ ] **SEC-02**: Agents authenticate via ED25519 SSH keypair with signed payloads on every request
 - [ ] **SEC-03**: Server verifies client signature against stored pubkey before processing any request
-- [ ] **SEC-04**: Self-signed CA + server cert generation via `make certs` for development
-- [ ] **SEC-05**: Production supports bring-your-own TLS certs by replacing cert files in volume
+- [x] **SEC-04**: Self-signed CA + server cert generation via `make certs` for development
+- [x] **SEC-05**: Production supports bring-your-own TLS certs by replacing cert files in volume
 
 ### Enrollment
 
@@ -80,10 +80,10 @@
 
 ### Database
 
-- [ ] **DB-01**: PostgreSQL 16 with golang-migrate for schema migrations
-- [ ] **DB-02**: Tables: approved_patterns, clients, runs, run_results, client_facts, plans, plan_results, file_snapshots, secret_rotation_events, package_audit, webhooks
-- [ ] **DB-03**: All tables use UUIDs as primary keys
-- [ ] **DB-04**: Client facts retention: last 10 snapshots per client
+- [x] **DB-01**: PostgreSQL 16 with golang-migrate for schema migrations
+- [x] **DB-02**: Tables: approved_patterns, clients, runs, run_results, client_facts, plans, plan_results, file_snapshots, secret_rotation_events, package_audit, webhooks
+- [x] **DB-03**: All tables use UUIDs as primary keys
+- [x] **DB-04**: Client facts retention: last 10 snapshots per client
 
 ### CLI (gvctl)
 
@@ -120,9 +120,9 @@
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: Docker Compose with server, postgres, isopass services
-- [ ] **INFRA-02**: Dockerfile.server and Dockerfile.agent
-- [ ] **INFRA-03**: Makefile: build, proto, certs, test, lint targets
+- [x] **INFRA-01**: Docker Compose with server, postgres, isopass services
+- [x] **INFRA-02**: Dockerfile.server and Dockerfile.agent
+- [x] **INFRA-03**: Makefile: build, proto, certs, test, lint targets
 - [ ] **INFRA-04**: Bootstrap script at `GET /bootstrap` with server address + CA cert baked in
 - [ ] **INFRA-05**: Agent binary download endpoint: `GET /api/v1/agent/download/{os}/{arch}`
 - [ ] **INFRA-06**: Multi-platform package manager support via PackageManager interface (apt, dnf, yum, apk, pacman, brew, zypper)
@@ -159,8 +159,8 @@
 | SEC-01 | Phase 1 | Pending |
 | SEC-02 | Phase 1 | Pending |
 | SEC-03 | Phase 1 | Pending |
-| SEC-04 | Phase 1 | Pending |
-| SEC-05 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Complete |
+| SEC-05 | Phase 1 | Complete |
 | ENRL-01 | Phase 1 | Pending |
 | ENRL-02 | Phase 1 | Pending |
 | ENRL-03 | Phase 1 | Pending |
@@ -168,10 +168,10 @@
 | ENRL-05 | Phase 1 | Pending |
 | ENRL-06 | Phase 1 | Pending |
 | ENRL-07 | Phase 1 | Pending |
-| DB-01 | Phase 1 | Pending |
-| DB-02 | Phase 1 | Pending |
-| DB-03 | Phase 1 | Pending |
-| DB-04 | Phase 1 | Pending |
+| DB-01 | Phase 1 | Complete |
+| DB-02 | Phase 1 | Complete |
+| DB-03 | Phase 1 | Complete |
+| DB-04 | Phase 1 | Complete |
 | SECR-01 | Phase 1 | Pending |
 | SECR-02 | Phase 1 | Pending |
 | SECR-03 | Phase 1 | Pending |
@@ -188,9 +188,9 @@
 | CONF-07 | Phase 1 | Pending |
 | CONF-08 | Phase 1 | Pending |
 | AGNT-11 | Phase 1 | Pending |
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
+| INFRA-01 | Phase 1 | Complete |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
 | CONV-01 | Phase 2 | Pending |
 | CONV-02 | Phase 2 | Pending |
 | CONV-03 | Phase 2 | Pending |
