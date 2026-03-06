@@ -25,8 +25,8 @@
 
 ### Convergence Engine
 
-- [ ] **CONV-01**: File resource executor checks SHA256 hash before writing, skips if match
-- [ ] **CONV-02**: File resource uses atomic write-to-temp-then-rename pattern
+- [x] **CONV-01**: File resource executor checks SHA256 hash before writing, skips if match
+- [x] **CONV-02**: File resource uses atomic write-to-temp-then-rename pattern
 - [ ] **CONV-03**: Package resource executor queries package manager for installed state before acting
 - [ ] **CONV-04**: Service resource executor checks systemctl is-active/is-enabled before acting
 - [ ] **CONV-05**: User resource executor parses /etc/passwd for existence and attributes before acting
@@ -36,7 +36,7 @@
 - [ ] **CONV-09**: Resources support `notify` list — triggered resources re-apply when notifier changes
 - [ ] **CONV-10**: Resources support `subscribes` — alternative syntax for notify relationships
 - [ ] **CONV-11**: Service resource supports states: running, stopped, restarted, reloaded
-- [ ] **CONV-12**: All executors record action_taken (none/create/update/delete/skip) in run results
+- [x] **CONV-12**: All executors record action_taken (none/create/update/delete/skip) in run results
 
 ### Configuration
 
@@ -48,8 +48,8 @@
 - [x] **CONF-06**: Auto-classification rules in `config/classification.yaml` assign modules by hostname/IP pattern
 - [x] **CONF-07**: Explicit client YAML takes precedence over classification rules
 - [x] **CONF-08**: Unconfigured clients receive empty module list and run cleanly with no changes
-- [ ] **CONF-09**: Resources support `when:` field as Go template expression against facts
-- [ ] **CONF-10**: Resources where `when` evaluates to false are skipped with action_taken: skipped
+- [x] **CONF-09**: Resources support `when:` field as Go template expression against facts
+- [x] **CONF-10**: Resources where `when` evaluates to false are skipped with action_taken: skipped
 
 ### Secrets
 
@@ -74,7 +74,7 @@
 - [ ] **AGNT-06**: Agent supports `--dry-run` flag for one-shot preview mode
 - [ ] **AGNT-07**: Agent supports `isogov-agent run` for one-shot immediate convergence
 - [ ] **AGNT-08**: Agent supports `run --module <name>` to apply a single module
-- [ ] **AGNT-09**: File snapshots saved to `/var/lib/isogov/snapshots/` before overwrites (last 5 per path)
+- [x] **AGNT-09**: File snapshots saved to `/var/lib/isogov/snapshots/` before overwrites (last 5 per path)
 - [ ] **AGNT-10**: Agent checks for newer binary version on each check-in, self-updates after checksum verification
 - [x] **AGNT-11**: Agent generates ED25519 keypair on first run, stores private key locally
 
@@ -191,8 +191,8 @@
 | INFRA-01 | Phase 1 | Complete |
 | INFRA-02 | Phase 1 | Complete |
 | INFRA-03 | Phase 1 | Complete |
-| CONV-01 | Phase 2 | Pending |
-| CONV-02 | Phase 2 | Pending |
+| CONV-01 | Phase 2 | Complete |
+| CONV-02 | Phase 2 | Complete |
 | CONV-03 | Phase 2 | Pending |
 | CONV-04 | Phase 2 | Pending |
 | CONV-05 | Phase 2 | Pending |
@@ -202,9 +202,9 @@
 | CONV-09 | Phase 2 | Pending |
 | CONV-10 | Phase 2 | Pending |
 | CONV-11 | Phase 2 | Pending |
-| CONV-12 | Phase 2 | Pending |
-| CONF-09 | Phase 2 | Pending |
-| CONF-10 | Phase 2 | Pending |
+| CONV-12 | Phase 2 | Complete |
+| CONF-09 | Phase 2 | Complete |
+| CONF-10 | Phase 2 | Complete |
 | AGNT-01 | Phase 2 | Pending |
 | AGNT-02 | Phase 2 | Pending |
 | AGNT-03 | Phase 2 | Complete |
@@ -213,7 +213,7 @@
 | AGNT-06 | Phase 2 | Pending |
 | AGNT-07 | Phase 2 | Pending |
 | AGNT-08 | Phase 2 | Pending |
-| AGNT-09 | Phase 2 | Pending |
+| AGNT-09 | Phase 2 | Complete |
 | INFRA-06 | Phase 2 | Pending |
 | CLI-01 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |

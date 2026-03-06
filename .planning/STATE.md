@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-03-06T02:13:19.827Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-06T02:13:48.372Z"
 last_activity: 2026-03-06 -- Completed plan 02-01 (executor interface & file module)
 progress:
   total_phases: 4
@@ -84,6 +84,10 @@ Recent decisions affecting current work:
 - [Phase 02-03]: gopsutil promoted from indirect to direct dependency for cross-platform fact collection
 - [Phase 02-03]: PackageCollector returns empty map on unsupported platforms (non-fatal, informational)
 - [Phase 02-03]: CheckIn falls through to empty facts map when no facts exist yet (first check-in)
+- [02-01]: Snapshot naming uses SHA256 hex of file path as prefix, runID, .bak suffix
+- [02-01]: EvaluateWhen uses missingkey=zero so missing facts render as zero values
+- [02-01]: Only exact string "true" after trim evaluates as true in when expressions
+- [02-01]: CommandRunner interface added for testable command execution in executors
 
 ### Pending Todos
 
@@ -96,6 +100,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T02:13:06.758Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-03-06T02:13:48.369Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
