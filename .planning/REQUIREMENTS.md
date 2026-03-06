@@ -7,9 +7,9 @@
 
 ### Transport & Security
 
-- [ ] **SEC-01**: Server accepts only mTLS gRPC connections from agents — no plaintext
+- [x] **SEC-01**: Server accepts only mTLS gRPC connections from agents — no plaintext
 - [x] **SEC-02**: Agents authenticate via ED25519 SSH keypair with signed payloads on every request
-- [ ] **SEC-03**: Server verifies client signature against stored pubkey before processing any request
+- [x] **SEC-03**: Server verifies client signature against stored pubkey before processing any request
 - [x] **SEC-04**: Self-signed CA + server cert generation via `make certs` for development
 - [x] **SEC-05**: Production supports bring-your-own TLS certs by replacing cert files in volume
 
@@ -40,26 +40,26 @@
 
 ### Configuration
 
-- [ ] **CONF-01**: Server loads per-client config from `config/clients/*.yaml` files
-- [ ] **CONF-02**: Module YAML files use Go template syntax with `.Facts` and `.Vars` namespaces
-- [ ] **CONF-03**: Server watches `config/clients/` directory and reloads config without restart
-- [ ] **CONF-04**: Environment tiers allow per-environment variable overrides in `env_vars` blocks
-- [ ] **CONF-05**: Base vars merged with env-specific vars at render time (env wins on conflict)
-- [ ] **CONF-06**: Auto-classification rules in `config/classification.yaml` assign modules by hostname/IP pattern
-- [ ] **CONF-07**: Explicit client YAML takes precedence over classification rules
-- [ ] **CONF-08**: Unconfigured clients receive empty module list and run cleanly with no changes
+- [x] **CONF-01**: Server loads per-client config from `config/clients/*.yaml` files
+- [x] **CONF-02**: Module YAML files use Go template syntax with `.Facts` and `.Vars` namespaces
+- [x] **CONF-03**: Server watches `config/clients/` directory and reloads config without restart
+- [x] **CONF-04**: Environment tiers allow per-environment variable overrides in `env_vars` blocks
+- [x] **CONF-05**: Base vars merged with env-specific vars at render time (env wins on conflict)
+- [x] **CONF-06**: Auto-classification rules in `config/classification.yaml` assign modules by hostname/IP pattern
+- [x] **CONF-07**: Explicit client YAML takes precedence over classification rules
+- [x] **CONF-08**: Unconfigured clients receive empty module list and run cleanly with no changes
 - [ ] **CONF-09**: Resources support `when:` field as Go template expression against facts
 - [ ] **CONF-10**: Resources where `when` evaluates to false are skipped with action_taken: skipped
 
 ### Secrets
 
-- [ ] **SECR-01**: `secrets.Provider` interface with `Get(ctx, key)` and `GetBytes(ctx, key)` methods
+- [x] **SECR-01**: `secrets.Provider` interface with `Get(ctx, key)` and `GetBytes(ctx, key)` methods
 - [ ] **SECR-02**: `IsopassProvider` satisfies Provider interface using real isopass client
-- [ ] **SECR-03**: `StaticProvider` reads from environment variables for local dev/testing
-- [ ] **SECR-04**: Config loader detects `secret:` prefix and resolves via Provider at startup
-- [ ] **SECR-05**: Known-secret fields without `secret:` prefix cause startup failure
-- [ ] **SECR-06**: isopass unreachable at startup = hard failure, no insecure fallback
-- [ ] **SECR-07**: Secret values never appear in logs, error messages, DB rows, gRPC payloads, or run results
+- [x] **SECR-03**: `StaticProvider` reads from environment variables for local dev/testing
+- [x] **SECR-04**: Config loader detects `secret:` prefix and resolves via Provider at startup
+- [x] **SECR-05**: Known-secret fields without `secret:` prefix cause startup failure
+- [x] **SECR-06**: isopass unreachable at startup = hard failure, no insecure fallback
+- [x] **SECR-07**: Secret values never appear in logs, error messages, DB rows, gRPC payloads, or run results
 - [ ] **SECR-08**: Server polls isopass for version changes on watched secret paths at configurable interval
 - [ ] **SECR-09**: Secret rotation triggers immediate force-run for all affected clients
 - [ ] **SECR-10**: Server TLS cert reloads without restart via `crypto/tls` `GetCertificate` callback
@@ -156,9 +156,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
 | SEC-02 | Phase 1 | Complete |
-| SEC-03 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Complete |
 | SEC-04 | Phase 1 | Complete |
 | SEC-05 | Phase 1 | Complete |
 | ENRL-01 | Phase 1 | Complete |
@@ -172,21 +172,21 @@
 | DB-02 | Phase 1 | Complete |
 | DB-03 | Phase 1 | Complete |
 | DB-04 | Phase 1 | Complete |
-| SECR-01 | Phase 1 | Pending |
+| SECR-01 | Phase 1 | Complete |
 | SECR-02 | Phase 1 | Pending |
-| SECR-03 | Phase 1 | Pending |
-| SECR-04 | Phase 1 | Pending |
-| SECR-05 | Phase 1 | Pending |
-| SECR-06 | Phase 1 | Pending |
-| SECR-07 | Phase 1 | Pending |
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
-| CONF-03 | Phase 1 | Pending |
-| CONF-04 | Phase 1 | Pending |
-| CONF-05 | Phase 1 | Pending |
-| CONF-06 | Phase 1 | Pending |
-| CONF-07 | Phase 1 | Pending |
-| CONF-08 | Phase 1 | Pending |
+| SECR-03 | Phase 1 | Complete |
+| SECR-04 | Phase 1 | Complete |
+| SECR-05 | Phase 1 | Complete |
+| SECR-06 | Phase 1 | Complete |
+| SECR-07 | Phase 1 | Complete |
+| CONF-01 | Phase 1 | Complete |
+| CONF-02 | Phase 1 | Complete |
+| CONF-03 | Phase 1 | Complete |
+| CONF-04 | Phase 1 | Complete |
+| CONF-05 | Phase 1 | Complete |
+| CONF-06 | Phase 1 | Complete |
+| CONF-07 | Phase 1 | Complete |
+| CONF-08 | Phase 1 | Complete |
 | AGNT-11 | Phase 1 | Complete |
 | INFRA-01 | Phase 1 | Complete |
 | INFRA-02 | Phase 1 | Complete |
