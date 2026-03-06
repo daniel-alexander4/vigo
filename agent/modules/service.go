@@ -1,0 +1,133 @@
+package modules
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// ServiceExecutor manages service resources idempotently using systemctl.
+// It checks is-active and is-enabled before taking action.
+type ServiceExecutor struct {
+	Runner CommandRunner
+}
+
+func (s *ServiceExecutor) runner() CommandRunner {
+	if s.Runner != nil {
+		return s.Runner
+	}
+	return &DefaultRunner{}
+}
+
+// isActive checks if a service is currently running.
+func (s *ServiceExecutor) isActive(ctx context.Context, name string) bool {
+	_, err := s.runner().Run(ctx, "systemctl", "is-active", "--quiet", name)
+	return err == nil
+}
+
+// isEnabled checks if a service is enabled at boot.
+func (s *ServiceExecutor) isEnabled(ctx context.Context, name string) bool {
+	_, err := s.runner().Run(ctx, "systemctl", "is-enabled", "--quiet", name)
+	return err == nil
+}
+
+// Execute applies the desired service state based on params.
+// Supported params:
+//   - name: service name (required)
+//   - state: "running", "stopped", "restarted", or "reloaded"
+//   - enabled: "true" or "false" (optional)
+func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
+	start := time.Now()
+	name := params["name"]
+	result := ResourceResult{
+		ResourceType: "service",
+		ResourceName: name,
+	}
+
+	defer func() {
+		result.DurationMs = int32(time.Since(start).Milliseconds())
+	}()
+
+	if name == "" {
+		result.Error = fmt.Errorf("service executor: name param is required")
+		return result
+	}
+
+	state := params["state"]
+	if state == "" {
+		state = "running"
+	}
+	enabledParam := params["enabled"]
+
+	active := s.isActive(ctx, name)
+	enabled := s.isEnabled(ctx, name)
+
+	changed := false
+
+	// Determine state change needed
+	var stateCmd string
+	switch state {
+	case "running":
+		if !active {
+			stateCmd = "start"
+			changed = true
+		}
+	case "stopped":
+		if active {
+			stateCmd = "stop"
+			changed = true
+		}
+	case "restarted":
+		stateCmd = "restart"
+		changed = true
+	case "reloaded":
+		stateCmd = "reload"
+		changed = true
+	default:
+		result.Error = fmt.Errorf("service executor: unknown state %q", state)
+		return result
+	}
+
+	// Determine enabled change needed
+	var enableCmd string
+	if enabledParam == "true" && !enabled {
+		enableCmd = "enable"
+		changed = true
+	} else if enabledParam == "false" && enabled {
+		enableCmd = "disable"
+		changed = true
+	}
+
+	if !changed {
+		result.Action = ActionNone
+		result.Changed = false
+		return result
+	}
+
+	result.Action = ActionUpdated
+	result.Changed = true
+
+	if dryRun {
+		return result
+	}
+
+	// Execute state change
+	if stateCmd != "" {
+		out, err := s.runner().Run(ctx, "systemctl", stateCmd, name)
+		if err != nil {
+			result.Error = fmt.Errorf("systemctl %s %s: %w: %s", stateCmd, name, err, string(out))
+			return result
+		}
+	}
+
+	// Execute enabled change
+	if enableCmd != "" {
+		out, err := s.runner().Run(ctx, "systemctl", enableCmd, name)
+		if err != nil {
+			result.Error = fmt.Errorf("systemctl %s %s: %w: %s", enableCmd, name, err, string(out))
+			return result
+		}
+	}
+
+	return result
+}
