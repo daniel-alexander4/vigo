@@ -1,15 +1,34 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"os/signal"
+	"runtime"
+	"strings"
+	"syscall"
 
 	"github.com/isogov/isogov/agent/auth"
+	"github.com/isogov/isogov/agent/checkin"
+	"github.com/isogov/isogov/agent/facts"
+	"github.com/isogov/isogov/agent/modules"
+	"github.com/isogov/isogov/agent/modules/pkgmgr"
+	"github.com/isogov/isogov/agent/snapshots"
 	"github.com/spf13/cobra"
 )
 
-var dataDir string
+var (
+	dataDir  string
+	server   string
+	caFile   string
+	certFile string
+	keyFile  string
+	dryRun   bool
+	logLevel string
+)
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -17,12 +36,104 @@ func main() {
 	}
 }
 
+// setupLogger configures the global slog logger based on --log-level.
+func setupLogger() {
+	var level slog.Level
+	switch strings.ToLower(logLevel) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+}
+
+// loadClientID reads the client UUID from <data-dir>/client.uuid.
+func loadClientID() (string, error) {
+	data, err := os.ReadFile(dataDir + "/client.uuid")
+	if err != nil {
+		return "", fmt.Errorf("read client UUID from %s/client.uuid: %w (have you run 'isogov-agent register'?)", dataDir, err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// saveClientID writes the client UUID to <data-dir>/client.uuid.
+func saveClientID(id string) error {
+	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
+}
+
+// detectPackageManager uses OS facts to detect the platform package manager.
+func detectPackageManager() (pkgmgr.PackageManager, error) {
+	// Quick OS fact lookup for package manager detection.
+	osCollector := &facts.OSCollector{}
+	osFacts, err := osCollector.Collect(context.Background())
+	if err != nil {
+		// Fallback: use runtime.GOOS to determine family.
+		family := runtime.GOOS
+		return pkgmgr.Detect(family, "")
+	}
+
+	family, _ := osFacts["family"].(string)
+	distro, _ := osFacts["distro"].(string)
+	return pkgmgr.Detect(family, distro)
+}
+
+// buildExecutors creates the executor map with all resource type handlers.
+func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor {
+	executors := map[string]modules.Executor{
+		"file": &modules.FileExecutor{
+			SnapshotMgr: snapshotMgr,
+		},
+		"service": &modules.ServiceExecutor{},
+		"user":    &modules.UserExecutor{},
+		"exec":    &modules.ExecExecutor{},
+	}
+
+	// Auto-detect package manager. Non-fatal if detection fails.
+	pm, err := detectPackageManager()
+	if err != nil {
+		slog.Warn("package manager detection failed, package resources will error",
+			"error", err,
+		)
+	} else {
+		executors["package"] = &modules.PackageExecutor{PkgMgr: pm}
+	}
+
+	return executors
+}
+
+// newGRPCClient creates a gRPC client with the configured TLS settings.
+func newGRPCClient(clientID string, privateKey []byte) (*checkin.Client, error) {
+	return checkin.NewClient(server, caFile, certFile, keyFile, clientID, privateKey)
+}
+
+// signalContext returns a context that is cancelled on SIGINT or SIGTERM.
+func signalContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case sig := <-sigCh:
+			slog.Info("received signal, shutting down", "signal", sig)
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "isogov-agent",
 	Short: "Isogov configuration management agent",
 	Long:  "Agent daemon that pulls desired state from the Isogov server and applies idempotent resource changes.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Ensure data directory exists
+		setupLogger()
+		// Ensure data directory exists.
 		if err := os.MkdirAll(dataDir, 0700); err != nil {
 			return fmt.Errorf("create data directory %s: %w", dataDir, err)
 		}
@@ -31,21 +142,126 @@ var rootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := slog.Default()
 
-		pub, _, err := auth.LoadOrGenerate(dataDir)
+		// Load keypair.
+		_, priv, err := auth.LoadOrGenerate(dataDir)
 		if err != nil {
 			return fmt.Errorf("load or generate keypair: %w", err)
 		}
 
-		pemStr, err := auth.PublicKeyPEM(pub)
+		// Load client UUID.
+		clientID, err := loadClientID()
 		if err != nil {
-			return fmt.Errorf("export public key PEM: %w", err)
+			return err
 		}
 
-		logger.Info("agent keypair ready", "data_dir", dataDir)
-		logger.Info("public key", "pem", pemStr)
+		// Create gRPC client.
+		client, err := newGRPCClient(clientID, priv)
+		if err != nil {
+			return fmt.Errorf("create gRPC client: %w", err)
+		}
+		defer client.Close()
 
-		// No convergence loop yet -- that's Phase 2
-		logger.Info("agent: no convergence loop configured (Phase 2)")
+		// Initialize snapshot manager.
+		snapshotMgr := &snapshots.Manager{
+			BaseDir:    "/var/lib/isogov/snapshots",
+			MaxPerPath: 5,
+		}
+
+		// Build executors.
+		executors := buildExecutors(snapshotMgr)
+
+		logger.Info("starting daemon loop",
+			"data_dir", dataDir,
+			"server", server,
+			"dry_run", dryRun,
+		)
+
+		// Set up signal-aware context.
+		ctx, cancel := signalContext()
+		defer cancel()
+
+		// Start the daemon loop.
+		return checkin.Loop(ctx, client, executors, snapshotMgr)
+	},
+}
+
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run a single convergence cycle and exit",
+	Long:  "Performs one check-in, executes modules, reports results, and exits. Use --module to apply a single module.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logger := slog.Default()
+
+		module, _ := cmd.Flags().GetString("module")
+
+		// Load keypair.
+		_, priv, err := auth.LoadOrGenerate(dataDir)
+		if err != nil {
+			return fmt.Errorf("load or generate keypair: %w", err)
+		}
+
+		// Load client UUID.
+		clientID, err := loadClientID()
+		if err != nil {
+			return err
+		}
+
+		// Create gRPC client.
+		client, err := newGRPCClient(clientID, priv)
+		if err != nil {
+			return fmt.Errorf("create gRPC client: %w", err)
+		}
+		defer client.Close()
+
+		// Initialize snapshot manager.
+		snapshotMgr := &snapshots.Manager{
+			BaseDir:    "/var/lib/isogov/snapshots",
+			MaxPerPath: 5,
+		}
+
+		// Build executors.
+		executors := buildExecutors(snapshotMgr)
+
+		// Collect facts.
+		ctx := context.Background()
+		factsMap, err := facts.CollectAll(ctx, facts.DefaultCollectors())
+		if err != nil {
+			logger.Warn("fact collection failed", "error", err)
+			factsMap = make(map[string]any)
+		}
+
+		// Report facts.
+		if err := client.ReportFacts(ctx, factsMap); err != nil {
+			logger.Warn("failed to report facts", "error", err)
+		}
+
+		// Run once.
+		runResult, err := checkin.RunOnce(ctx, client, executors, factsMap, dryRun, module)
+		if err != nil {
+			return fmt.Errorf("convergence run failed: %w", err)
+		}
+
+		// Print summary.
+		hasError := false
+		for _, r := range runResult.Results {
+			status := string(r.Action)
+			if r.Error != nil {
+				status = "ERROR: " + r.Error.Error()
+				hasError = true
+			}
+			logger.Info("resource result",
+				"module", r.ModuleName,
+				"type", r.ResourceType,
+				"name", r.ResourceName,
+				"action", status,
+				"changed", r.Changed,
+			)
+		}
+
+		if hasError {
+			return fmt.Errorf("one or more resources failed")
+		}
+
 		return nil
 	},
 }
@@ -57,15 +273,15 @@ var registerCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := slog.Default()
 
-		server, _ := cmd.Flags().GetString("server")
 		token, _ := cmd.Flags().GetString("token")
 
-		pub, _, err := auth.LoadOrGenerate(dataDir)
+		// Load or generate keypair.
+		pub, priv, err := auth.LoadOrGenerate(dataDir)
 		if err != nil {
 			return fmt.Errorf("load or generate keypair: %w", err)
 		}
 
-		pemStr, err := auth.PublicKeyPEM(pub)
+		pubPEM, err := auth.PublicKeyPEM(pub)
 		if err != nil {
 			return fmt.Errorf("export public key PEM: %w", err)
 		}
@@ -75,26 +291,73 @@ var registerCmd = &cobra.Command{
 			return fmt.Errorf("get hostname: %w", err)
 		}
 
+		// Get primary IP address.
+		ipAddr := getOutboundIP()
+
 		logger.Info("registering with server",
 			"server", server,
 			"hostname", hostname,
+			"ip", ipAddr,
 			"data_dir", dataDir,
 		)
-		logger.Info("public key", "pem", pemStr)
 
-		// Stub: will call Register gRPC RPC with hostname, IP, pubkey PEM, and token
-		_ = token
-		logger.Info("register: gRPC registration not yet implemented (Plan 01-05)")
+		// Create gRPC client (no client UUID yet, use empty string).
+		client, err := checkin.NewClient(server, caFile, certFile, keyFile, "", priv)
+		if err != nil {
+			return fmt.Errorf("create gRPC client: %w", err)
+		}
+		defer client.Close()
+
+		// Call Register RPC.
+		resp, err := client.Register(context.Background(), hostname, ipAddr, pubPEM, token)
+		if err != nil {
+			return fmt.Errorf("registration failed: %w", err)
+		}
+
+		if !resp.Success {
+			return fmt.Errorf("registration rejected: %s", resp.Message)
+		}
+
+		// Save client UUID.
+		if err := saveClientID(resp.ClientId); err != nil {
+			return fmt.Errorf("save client UUID: %w", err)
+		}
+
+		logger.Info("registration successful",
+			"client_id", resp.ClientId,
+			"message", resp.Message,
+		)
 
 		return nil
 	},
 }
 
+// getOutboundIP returns the preferred outbound IP of this machine.
+func getOutboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/isogov", "directory for agent data (keypair, UUID)")
+	rootCmd.PersistentFlags().StringVar(&server, "server", "localhost:9090", "server gRPC address")
+	rootCmd.PersistentFlags().StringVar(&caFile, "ca-file", "", "CA certificate file for server verification")
+	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "client certificate file for mTLS (optional in dev)")
+	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "client key file for mTLS (optional in dev)")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 
-	registerCmd.Flags().String("server", "localhost:9090", "server gRPC address")
+	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview mode: show what would change without applying")
+
+	runCmd.Flags().String("module", "", "apply only the named module")
+	runCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview mode: show what would change without applying")
+
 	registerCmd.Flags().String("token", "", "one-time registration token")
 
+	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(registerCmd)
 }
