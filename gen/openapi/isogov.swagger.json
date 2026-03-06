@@ -166,6 +166,45 @@
         ]
       }
     },
+    "/api/v1/clients/{clientId}/rollback": {
+      "post": {
+        "summary": "Rollback reverts a client to a previous run's state.",
+        "operationId": "IsgovAdmin_Rollback",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RollbackResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IsgovAdminRollbackBody"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
     "/api/v1/clients/{id}": {
       "get": {
         "summary": "GetClient returns details for a single client.",
@@ -175,6 +214,37 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/v1GetClientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/clients/{id}/compliance": {
+      "get": {
+        "summary": "GetClientCompliance returns compliance details for a single client.",
+        "operationId": "IsgovAdmin_GetClientCompliance",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetClientComplianceResponse"
             }
           },
           "default": {
@@ -231,6 +301,117 @@
             }
           }
         ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/compliance": {
+      "get": {
+        "summary": "GetComplianceSummary returns aggregate compliance status across all clients.",
+        "operationId": "IsgovAdmin_GetComplianceSummary",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetComplianceSummaryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/env/promote": {
+      "post": {
+        "summary": "PromoteEnv promotes environment variables from one tier to another.",
+        "operationId": "IsgovAdmin_PromoteEnv",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PromoteEnvResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1PromoteEnvRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/packages": {
+      "get": {
+        "summary": "ListPackages lists package audit records, optionally filtered by client.",
+        "operationId": "IsgovAdmin_ListPackages",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPackagesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "clientId",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/packages/drift": {
+      "get": {
+        "summary": "ListPackageDrift lists packages where installed version differs from desired.",
+        "operationId": "IsgovAdmin_ListPackageDrift",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPackageDriftResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "tags": [
           "IsgovAdmin"
         ]
@@ -309,6 +490,39 @@
         ]
       }
     },
+    "/api/v1/runs/all": {
+      "get": {
+        "summary": "ListAllRuns lists recent runs across all clients.",
+        "operationId": "IsgovAdmin_ListAllRuns",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRunsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "description": "default 20",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
     "/api/v1/runs/{id}": {
       "get": {
         "summary": "GetRun returns details for a single run including per-module results.",
@@ -372,6 +586,91 @@
           "IsgovAdmin"
         ]
       }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "summary": "ListWebhooks lists all registered webhooks.",
+        "operationId": "IsgovAdmin_ListWebhooks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListWebhooksResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "IsgovAdmin"
+        ]
+      },
+      "post": {
+        "summary": "AddWebhook registers a new webhook endpoint.",
+        "operationId": "IsgovAdmin_AddWebhook",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddWebhookResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1AddWebhookRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}": {
+      "delete": {
+        "summary": "DeleteWebhook removes a webhook by ID.",
+        "operationId": "IsgovAdmin_DeleteWebhook",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteWebhookResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
     }
   },
   "definitions": {
@@ -380,6 +679,19 @@
     },
     "IsgovAdminRevokeClientBody": {
       "type": "object"
+    },
+    "IsgovAdminRollbackBody": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "title": "optional: rollback to specific run"
+        },
+        "filePath": {
+          "type": "string",
+          "title": "optional: rollback a single file"
+        }
+      }
     },
     "protobufAny": {
       "type": "object",
@@ -436,6 +748,31 @@
         }
       }
     },
+    "v1AddWebhookRequest": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1AddWebhookResponse": {
+      "type": "object",
+      "properties": {
+        "webhook": {
+          "$ref": "#/definitions/v1WebhookInfo"
+        }
+      }
+    },
     "v1ApprovedPattern": {
       "type": "object",
       "properties": {
@@ -487,6 +824,41 @@
         }
       }
     },
+    "v1ComplianceSnapshot": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "compliant": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "drifted": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "failing": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "stale": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "unknown": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1DeleteWebhookResponse": {
+      "type": "object"
+    },
     "v1DryRunResponse": {
       "type": "object",
       "properties": {
@@ -528,11 +900,62 @@
         }
       }
     },
+    "v1GetClientComplianceResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "lastRun": {
+          "$ref": "#/definitions/v1Run"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ComplianceSnapshot"
+          }
+        }
+      }
+    },
     "v1GetClientResponse": {
       "type": "object",
       "properties": {
         "client": {
           "$ref": "#/definitions/v1Client"
+        }
+      }
+    },
+    "v1GetComplianceSummaryResponse": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "compliant": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "drifted": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "failing": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "stale": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "unknown": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "compliancePct": {
+          "type": "number",
+          "format": "float"
         }
       }
     },
@@ -575,6 +998,30 @@
         }
       }
     },
+    "v1ListPackageDriftResponse": {
+      "type": "object",
+      "properties": {
+        "drifts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PackageDrift"
+          }
+        }
+      }
+    },
+    "v1ListPackagesResponse": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PackageInfo"
+          }
+        }
+      }
+    },
     "v1ListRunsResponse": {
       "type": "object",
       "properties": {
@@ -583,6 +1030,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1Run"
+          }
+        }
+      }
+    },
+    "v1ListWebhooksResponse": {
+      "type": "object",
+      "properties": {
+        "webhooks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WebhookInfo"
           }
         }
       }
@@ -615,6 +1074,50 @@
         }
       }
     },
+    "v1PackageDrift": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "packageName": {
+          "type": "string"
+        },
+        "installedVersion": {
+          "type": "string"
+        },
+        "desiredVersion": {
+          "type": "string"
+        },
+        "detectedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1PackageInfo": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "packageName": {
+          "type": "string"
+        },
+        "installedVersion": {
+          "type": "string"
+        },
+        "desiredVersion": {
+          "type": "string"
+        }
+      }
+    },
     "v1PlannedAction": {
       "type": "object",
       "properties": {
@@ -633,11 +1136,50 @@
         }
       }
     },
+    "v1PromoteEnvRequest": {
+      "type": "object",
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "fromEnv": {
+          "type": "string"
+        },
+        "toEnv": {
+          "type": "string"
+        }
+      }
+    },
+    "v1PromoteEnvResponse": {
+      "type": "object",
+      "properties": {
+        "promotionId": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1RevokeApprovedPatternResponse": {
       "type": "object"
     },
     "v1RevokeClientResponse": {
       "type": "object"
+    },
+    "v1RollbackResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
     },
     "v1Run": {
       "type": "object",
@@ -675,6 +1217,30 @@
         "skippedCount": {
           "type": "integer",
           "format": "int32"
+        }
+      }
+    },
+    "v1WebhookInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "active": {
+          "type": "boolean"
         }
       }
     }
