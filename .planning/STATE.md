@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-03-06T02:37:07.960Z"
-last_activity: 2026-03-06 -- Completed plan 02-05 (Agent assembly)
+status: in-progress
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-06T03:27:00Z"
+last_activity: 2026-03-06 -- Completed plan 03-01 (Proto + DB contracts)
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_plans: 15
+  completed_plans: 11
+  percent: 73
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** Phase 2: Convergence -- Complete
+**Current focus:** Phase 3: Operations -- In Progress
 
 ## Current Position
 
-Phase: 2 of 4 (Convergence)
-Plan: 5 of 5 in current phase
-Status: Phase Complete
-Last activity: 2026-03-06 -- Completed plan 02-05 (Agent assembly)
+Phase: 3 of 4 (Operations)
+Plan: 1 of 5 in current phase
+Status: In Progress
+Last activity: 2026-03-06 -- Completed plan 03-01 (Proto + DB contracts)
 
-Progress: [██████████] 100%
+Progress: [███████---] 73%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: 5min
-- Total execution time: 0.78 hours
+- Total execution time: 0.81 hours
 
 **By Phase:**
 
@@ -47,13 +47,14 @@ Progress: [██████████] 100%
 | 02-convergence | 5/5 | 28min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: 01-05 (6min), 02-01 (5min), 02-02 (9min), 02-03 (5min), 02-05 (5min)
+- Last 5 plans: 02-01 (5min), 02-02 (9min), 02-03 (5min), 02-05 (5min), 03-01 (2min)
 - Trend: steady
 
 *Updated after each plan completion*
 | Phase 02 P03 | 5min | 2 tasks | 15 files |
 | Phase 02 P04 | 4min | 2 tasks | 4 files |
 | Phase 02 P05 | 5min | 2 tasks | 5 files |
+| Phase 03 P01 | 2min | 2 tasks | 27 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [02-05]: ReportFacts accepts map[string]any and marshals to JSON internally
 - [02-05]: Register command wired with actual gRPC call, saves client UUID to data-dir/client.uuid
 - [02-05]: Package manager auto-detected via OS facts with graceful fallback
+- [03-01]: Updated all existing client SELECT queries to include force_push column to avoid partial struct issues
+- [03-01]: ListAllRuns added to runs.sql rather than a new file for query locality
+- [03-01]: ComplianceSnapshot uses DATE type with UNIQUE constraint for daily aggregation
 
 ### Pending Todos
 
@@ -112,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T02:30:00Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-03-06T03:27:00Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None

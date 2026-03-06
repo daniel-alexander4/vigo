@@ -92,19 +92,19 @@
 - [ ] **CLI-03**: `gvctl push <host> / --all` — force immediate check-in
 - [ ] **CLI-04**: `gvctl runs list/show` — view run history and detail
 - [ ] **CLI-05**: `gvctl tokens generate` — generate token and print bootstrap curl command
-- [ ] **CLI-06**: `gvctl webhooks add/list/delete` — manage webhook subscriptions
+- [x] **CLI-06**: `gvctl webhooks add/list/delete` — manage webhook subscriptions
 - [ ] **CLI-07**: `gvctl preview <host> / --all / --env` — trigger dry-run
-- [ ] **CLI-08**: `gvctl rollback <host> --run/--file` — restore file snapshots
-- [ ] **CLI-09**: `gvctl packages list/drift` — package version audit
-- [ ] **CLI-10**: `gvctl env promote` — promote env_var overrides between tiers
+- [x] **CLI-08**: `gvctl rollback <host> --run/--file` — restore file snapshots
+- [x] **CLI-09**: `gvctl packages list/drift` — package version audit
+- [x] **CLI-10**: `gvctl env promote` — promote env_var overrides between tiers
 - [ ] **CLI-11**: gvctl talks to server REST API, not gRPC directly
 
 ### Observability
 
 - [ ] **OBS-01**: Compliance status per client: compliant/drifted/failing/stale/unknown
-- [ ] **OBS-02**: Compliance API: summary, per-client status, 30-day history
+- [x] **OBS-02**: Compliance API: summary, per-client status, 30-day history
 - [ ] **OBS-03**: Prometheus metrics: clients_total, clients_active, checkins_total, run_duration_seconds, drift_detected_total, module_actions_total, compliance_status, compliance_pct, time_since_checkin_seconds
-- [ ] **OBS-04**: Webhook events: run.success/failure/partial, drift.detected, client.enrolled/revoked, plan.created/changes_detected, rollback.success/failure, secret.rotated, compliance.degraded, package.version_drift, node.stale
+- [x] **OBS-04**: Webhook events: run.success/failure/partial, drift.detected, client.enrolled/revoked, plan.created/changes_detected, rollback.success/failure, secret.rotated, compliance.degraded, package.version_drift, node.stale
 - [ ] **OBS-05**: Webhook payloads signed with `X-Isogov-Signature: sha256=<hmac>`
 
 ### Web UI
@@ -220,16 +220,16 @@
 | CLI-03 | Phase 3 | Pending |
 | CLI-04 | Phase 3 | Pending |
 | CLI-05 | Phase 3 | Pending |
-| CLI-06 | Phase 3 | Pending |
+| CLI-06 | Phase 3 | Complete |
 | CLI-07 | Phase 3 | Pending |
-| CLI-08 | Phase 3 | Pending |
-| CLI-09 | Phase 3 | Pending |
-| CLI-10 | Phase 3 | Pending |
+| CLI-08 | Phase 3 | Complete |
+| CLI-09 | Phase 3 | Complete |
+| CLI-10 | Phase 3 | Complete |
 | CLI-11 | Phase 3 | Pending |
 | OBS-01 | Phase 3 | Pending |
-| OBS-02 | Phase 3 | Pending |
+| OBS-02 | Phase 3 | Complete |
 | OBS-03 | Phase 3 | Pending |
-| OBS-04 | Phase 3 | Pending |
+| OBS-04 | Phase 3 | Complete |
 | OBS-05 | Phase 3 | Pending |
 | SECR-08 | Phase 3 | Pending |
 | SECR-09 | Phase 3 | Pending |
