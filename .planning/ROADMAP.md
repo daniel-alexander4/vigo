@@ -48,12 +48,14 @@ Plans:
   3. Changing a file resource triggers a service restart via notify/subscribe, and resources with `when:` expressions that evaluate to false are skipped
   4. Agent collects OS, hardware, network, and package facts via pluggable collectors, sends them with every check-in, and facts are available as template variables in config rendering
   5. Agent supports `--dry-run` for preview, `run` for one-shot convergence, `run --module <name>` for single-module apply, and saves file snapshots before overwrites
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md -- Executor interface, file executor with SHA256 + atomic write, snapshot manager, when: evaluator
+- [ ] 02-02-PLAN.md -- PackageManager interface (7 backends), package/service/user/exec executors
+- [ ] 02-03-PLAN.md -- Fact collectors (OS/hardware/network/packages), server ReportResult/ReportFacts handlers
+- [ ] 02-04-PLAN.md -- DAG topological sort (Kahn's), runner with notify/subscribe triggers
+- [ ] 02-05-PLAN.md -- Agent daemon loop with jitter/backoff, gRPC client, CLI commands (run/dry-run/module)
 
 ### Phase 3: Operations
 **Goal**: Operators have full visibility and control over the fleet via gvctl CLI and REST API, with compliance tracking, dry-run previews, file rollback, webhook notifications, Prometheus metrics, and automated secret rotation
@@ -95,6 +97,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 5/5 | Complete | 2026-03-06 |
-| 2. Convergence | 0/3 | Not started | - |
+| 2. Convergence | 0/5 | Planned | - |
 | 3. Operations | 0/3 | Not started | - |
 | 4. Web UI & Deployment | 0/2 | Not started | - |
