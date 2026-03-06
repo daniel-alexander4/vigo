@@ -31,10 +31,10 @@
 - [x] **CONV-04**: Service resource executor checks systemctl is-active/is-enabled before acting
 - [x] **CONV-05**: User resource executor parses /etc/passwd for existence and attributes before acting
 - [x] **CONV-06**: Exec resource executor runs arbitrary commands with idempotency guards (creates/onlyif/unless)
-- [ ] **CONV-07**: Module dependencies form a DAG with topological ordering via Kahn's algorithm
-- [ ] **CONV-08**: Circular dependencies detected at config load time with clear error message
-- [ ] **CONV-09**: Resources support `notify` list — triggered resources re-apply when notifier changes
-- [ ] **CONV-10**: Resources support `subscribes` — alternative syntax for notify relationships
+- [x] **CONV-07**: Module dependencies form a DAG with topological ordering via Kahn's algorithm
+- [x] **CONV-08**: Circular dependencies detected at config load time with clear error message
+- [x] **CONV-09**: Resources support `notify` list — triggered resources re-apply when notifier changes
+- [x] **CONV-10**: Resources support `subscribes` — alternative syntax for notify relationships
 - [x] **CONV-11**: Service resource supports states: running, stopped, restarted, reloaded
 - [x] **CONV-12**: All executors record action_taken (none/create/update/delete/skip) in run results
 
@@ -197,10 +197,10 @@
 | CONV-04 | Phase 2 | Complete |
 | CONV-05 | Phase 2 | Complete |
 | CONV-06 | Phase 2 | Complete |
-| CONV-07 | Phase 2 | Pending |
-| CONV-08 | Phase 2 | Pending |
-| CONV-09 | Phase 2 | Pending |
-| CONV-10 | Phase 2 | Pending |
+| CONV-07 | Phase 2 | Complete |
+| CONV-08 | Phase 2 | Complete |
+| CONV-09 | Phase 2 | Complete |
+| CONV-10 | Phase 2 | Complete |
 | CONV-11 | Phase 2 | Complete |
 | CONV-12 | Phase 2 | Complete |
 | CONF-09 | Phase 2 | Complete |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-06T02:15:00.000Z"
-last_activity: 2026-03-06 -- Completed plan 02-02 (resource executors)
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-03-06T02:22:55.998Z"
+last_activity: 2026-03-06 -- Completed plan 02-04 (DAG runner)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 10
-  completed_plans: 8
-  percent: 30
+  completed_plans: 9
+  percent: 90
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 2 of 4 (Convergence)
-Plan: 2 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In Progress
-Last activity: 2026-03-06 -- Completed plan 02-02 (resource executors)
+Last activity: 2026-03-06 -- Completed plan 02-04 (DAG runner)
 
-Progress: [███-------] 30%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [███-------] 30%
 
 *Updated after each plan completion*
 | Phase 02 P03 | 5min | 2 tasks | 15 files |
+| Phase 02 P04 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,9 @@ Recent decisions affecting current work:
 - [02-02]: ExecExecutor guard order: creates (file stat) first, then onlyif, then unless
 - [02-02]: Exec guards (onlyif/unless) skipped during dry-run to avoid side effects; creates guard still evaluated
 - [02-02]: Shared mockCmdRunnerGeneric in mocks_test.go avoids duplicating test mock infrastructure
+- [Phase 02]: [02-04]: Module-level depends_on/notify/subscribes resolved to resource names during BuildDAG
+- [Phase 02]: [02-04]: Notify map kept separate from sorted list for post-execution processing
+- [Phase 02]: [02-04]: Notify pass skipped entirely during dry-run to avoid side effects
 
 ### Pending Todos
 
@@ -103,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T02:15:00Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-03-06T02:22:49.615Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
