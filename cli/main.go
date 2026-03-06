@@ -32,5 +32,10 @@ func init() {
 		tokensCmd,
 		pushCmd,
 		runsCmd,
+		webhooksCmd,
+		previewCmd,
+		rollbackCmd,
+		packagesCmd,
+		envCmd,
 	)
 }
