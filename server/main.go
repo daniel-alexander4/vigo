@@ -125,7 +125,7 @@ func run() error {
 	dispatcher := webhook.NewDispatcher(queries)
 
 	// Create and start gRPC server.
-	grpcSrv, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:     cfg.Server.TLS.CertFile,
 		KeyFile:      cfg.Server.TLS.KeyFile,
 		CAFile:       cfg.Server.TLS.CAFile,

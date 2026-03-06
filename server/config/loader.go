@@ -259,6 +259,60 @@ func (cs *ConfigStore) resolveModuleSecrets(mod *ModuleConfig) error {
 	return nil
 }
 
+// ClientsReferencingSecret returns the hostnames of all clients whose
+// configuration contains a "secret:<secretPath>" reference. This is used
+// by the rotation watcher to identify which clients need force-push when
+// a secret rotates.
+func (cs *ConfigStore) ClientsReferencingSecret(secretPath string) []string {
+	needle := secretPrefix + secretPath
+
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	var hosts []string
+	for hostname, cfg := range cs.clients {
+		if configReferencesSecret(cfg, needle) {
+			hosts = append(hosts, hostname)
+		}
+	}
+	return hosts
+}
+
+// configReferencesSecret checks if any var or resource attribute in the
+// client config contains the given secret reference string.
+func configReferencesSecret(cfg *ClientConfig, needle string) bool {
+	// Check top-level vars.
+	for _, v := range cfg.Vars {
+		if s, ok := v.(string); ok && s == needle {
+			return true
+		}
+	}
+	// Check env_vars.
+	for _, envMap := range cfg.EnvVars {
+		for _, v := range envMap {
+			if s, ok := v.(string); ok && s == needle {
+				return true
+			}
+		}
+	}
+	// Check module vars and resource attributes.
+	for _, mod := range cfg.Modules {
+		for _, v := range mod.Vars {
+			if s, ok := v.(string); ok && s == needle {
+				return true
+			}
+		}
+		for _, res := range mod.Resources {
+			for _, v := range res.Attributes {
+				if s, ok := v.(string); ok && s == needle {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // isYAMLFile checks if a filename has a YAML extension.
 func isYAMLFile(name string) bool {
 	ext := filepath.Ext(name)

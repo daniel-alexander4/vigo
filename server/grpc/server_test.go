@@ -147,7 +147,7 @@ func startTestServer(t *testing.T) (string, func()) {
 		t.Fatal(err)
 	}
 
-	srv, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	srv, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:    filepath.Join(testCertDir, "server.crt"),
 		KeyFile:     filepath.Join(testCertDir, "server.key"),
 		CAFile:      filepath.Join(testCertDir, "ca.crt"),

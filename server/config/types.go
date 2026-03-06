@@ -8,6 +8,13 @@ type ServerConfig struct {
 	Server   ServerSection   `yaml:"server"`
 	Database DatabaseSection `yaml:"database"`
 	CheckIn  CheckInSection  `yaml:"checkin"`
+	Watcher  WatcherSection  `yaml:"watcher"`
+}
+
+// WatcherSection holds secret rotation watcher configuration.
+type WatcherSection struct {
+	Enabled      bool   `yaml:"enabled"`
+	PollInterval string `yaml:"poll_interval"`
 }
 
 // ServerSection holds listener and TLS config.

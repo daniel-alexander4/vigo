@@ -16,3 +16,7 @@ checkin:
 webhooks:
   timeout: "10s"
   max_retries: 3
+
+watcher:
+  enabled: true
+  poll_interval: "5m"
