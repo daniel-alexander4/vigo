@@ -13,7 +13,7 @@ Isogov delivers a pull-based configuration management system where agents conver
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Server skeleton with mTLS, enrollment, config loading, secrets interface, and database
-- [ ] **Phase 2: Convergence** - Agent daemon with DAG-ordered idempotent resource executors, fact collection, and notify/subscribe triggers
+- [x] **Phase 2: Convergence** - Agent daemon with DAG-ordered idempotent resource executors, fact collection, and notify/subscribe triggers (completed 2026-03-06)
 - [ ] **Phase 3: Operations** - CLI, REST API, compliance tracking, secret rotation, webhooks, and Prometheus metrics
 - [ ] **Phase 4: Web UI & Deployment** - Web dashboard SPA, bootstrap script, and agent self-update
 
@@ -97,6 +97,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 5/5 | Complete | 2026-03-06 |
-| 2. Convergence | 3/5 | In Progress|  |
+| 2. Convergence | 5/5 | Complete   | 2026-03-06 |
 | 3. Operations | 0/3 | Not started | - |
 | 4. Web UI & Deployment | 0/2 | Not started | - |

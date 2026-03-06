@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-03-06T02:22:55.998Z"
-last_activity: 2026-03-06 -- Completed plan 02-04 (DAG runner)
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-03-06T02:30:00Z"
+last_activity: 2026-03-06 -- Completed plan 02-05 (Agent assembly)
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 10
-  completed_plans: 9
-  percent: 90
+  completed_plans: 10
+  percent: 100
 ---
 
 # Project State
@@ -21,38 +21,39 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** Phase 2: Convergence -- In Progress
+**Current focus:** Phase 2: Convergence -- Complete
 
 ## Current Position
 
 Phase: 2 of 4 (Convergence)
-Plan: 4 of 5 in current phase
-Status: In Progress
-Last activity: 2026-03-06 -- Completed plan 02-04 (DAG runner)
+Plan: 5 of 5 in current phase
+Status: Phase Complete
+Last activity: 2026-03-06 -- Completed plan 02-05 (Agent assembly)
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 10
 - Average duration: 5min
-- Total execution time: 0.68 hours
+- Total execution time: 0.78 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation | 5/5 | 27min | 5min |
-| 02-convergence | 3/5 | 19min | 6min |
+| 02-convergence | 5/5 | 28min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (4min), 01-02 (6min), 01-05 (6min), 02-01 (5min), 02-02 (9min)
+- Last 5 plans: 01-05 (6min), 02-01 (5min), 02-02 (9min), 02-03 (5min), 02-05 (5min)
 - Trend: steady
 
 *Updated after each plan completion*
 | Phase 02 P03 | 5min | 2 tasks | 15 files |
 | Phase 02 P04 | 4min | 2 tasks | 4 files |
+| Phase 02 P05 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,10 @@ Recent decisions affecting current work:
 - [Phase 02]: [02-04]: Module-level depends_on/notify/subscribes resolved to resource names during BuildDAG
 - [Phase 02]: [02-04]: Notify map kept separate from sorted list for post-execution processing
 - [Phase 02]: [02-04]: Notify pass skipped entirely during dry-run to avoid side effects
+- [02-05]: RunResult struct wraps results + server timing for clean propagation from RunOnce to Loop
+- [02-05]: ReportFacts accepts map[string]any and marshals to JSON internally
+- [02-05]: Register command wired with actual gRPC call, saves client UUID to data-dir/client.uuid
+- [02-05]: Package manager auto-detected via OS facts with graceful fallback
 
 ### Pending Todos
 
@@ -107,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T02:22:49.615Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-03-06T02:30:00Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None

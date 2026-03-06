@@ -66,14 +66,14 @@
 
 ### Agent
 
-- [ ] **AGNT-01**: Agent runs as daemon with jittered pull loop (base_interval ± jitter_percent)
-- [ ] **AGNT-02**: Agent handles server unavailability with exponential backoff, never crashes
+- [x] **AGNT-01**: Agent runs as daemon with jittered pull loop (base_interval ± jitter_percent)
+- [x] **AGNT-02**: Agent handles server unavailability with exponential backoff, never crashes
 - [x] **AGNT-03**: Agent collects facts: os.family/distro/version/kernel/arch, hardware.cpu_count/memory_mb/disk_gb, network.hostname/fqdn/ip_addresses/mac_addresses, packages.installed
 - [x] **AGNT-04**: Facts sent with every check-in, stored in DB, available as template variables
 - [x] **AGNT-05**: Pluggable fact collectors via `Collector` interface (Name, Collect)
-- [ ] **AGNT-06**: Agent supports `--dry-run` flag for one-shot preview mode
-- [ ] **AGNT-07**: Agent supports `isogov-agent run` for one-shot immediate convergence
-- [ ] **AGNT-08**: Agent supports `run --module <name>` to apply a single module
+- [x] **AGNT-06**: Agent supports `--dry-run` flag for one-shot preview mode
+- [x] **AGNT-07**: Agent supports `isogov-agent run` for one-shot immediate convergence
+- [x] **AGNT-08**: Agent supports `run --module <name>` to apply a single module
 - [x] **AGNT-09**: File snapshots saved to `/var/lib/isogov/snapshots/` before overwrites (last 5 per path)
 - [ ] **AGNT-10**: Agent checks for newer binary version on each check-in, self-updates after checksum verification
 - [x] **AGNT-11**: Agent generates ED25519 keypair on first run, stores private key locally
@@ -205,14 +205,14 @@
 | CONV-12 | Phase 2 | Complete |
 | CONF-09 | Phase 2 | Complete |
 | CONF-10 | Phase 2 | Complete |
-| AGNT-01 | Phase 2 | Pending |
-| AGNT-02 | Phase 2 | Pending |
+| AGNT-01 | Phase 2 | Complete |
+| AGNT-02 | Phase 2 | Complete |
 | AGNT-03 | Phase 2 | Complete |
 | AGNT-04 | Phase 2 | Complete |
 | AGNT-05 | Phase 2 | Complete |
-| AGNT-06 | Phase 2 | Pending |
-| AGNT-07 | Phase 2 | Pending |
-| AGNT-08 | Phase 2 | Pending |
+| AGNT-06 | Phase 2 | Complete |
+| AGNT-07 | Phase 2 | Complete |
+| AGNT-08 | Phase 2 | Complete |
 | AGNT-09 | Phase 2 | Complete |
 | INFRA-06 | Phase 2 | Complete |
 | CLI-01 | Phase 3 | Pending |
