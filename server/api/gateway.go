@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -34,6 +35,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string)
 	}
 
 	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.Handle("/", gwMux)
 
 	return mux, nil

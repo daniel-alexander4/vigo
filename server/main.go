@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
@@ -20,6 +21,7 @@ import (
 	"github.com/isogov/isogov/server/config"
 	"github.com/isogov/isogov/server/db"
 	isgrpc "github.com/isogov/isogov/server/grpc"
+	"github.com/isogov/isogov/server/metrics"
 	"github.com/isogov/isogov/server/registry"
 	"github.com/isogov/isogov/server/secrets"
 )
@@ -110,15 +112,24 @@ func run() error {
 		}
 	}()
 
+	// Parse base interval for compliance stale threshold.
+	baseInterval := 30 * time.Minute // default
+	if cfg.CheckIn.BaseInterval != "" {
+		if parsed, err := time.ParseDuration(cfg.CheckIn.BaseInterval); err == nil {
+			baseInterval = parsed
+		}
+	}
+
 	// Create and start gRPC server.
 	grpcSrv, err := isgrpc.NewServer(isgrpc.ServerConfig{
-		CertFile:    cfg.Server.TLS.CertFile,
-		KeyFile:     cfg.Server.TLS.KeyFile,
-		CAFile:      cfg.Server.TLS.CAFile,
-		GRPCPort:    cfg.Server.GRPCListen,
-		Registry:    reg,
-		ConfigStore: configStore,
-		Queries:     queries,
+		CertFile:     cfg.Server.TLS.CertFile,
+		KeyFile:      cfg.Server.TLS.KeyFile,
+		CAFile:       cfg.Server.TLS.CAFile,
+		GRPCPort:     cfg.Server.GRPCListen,
+		Registry:     reg,
+		ConfigStore:  configStore,
+		Queries:      queries,
+		BaseInterval: baseInterval,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
@@ -135,6 +146,10 @@ func run() error {
 			slog.Error("gRPC server error", "error", err)
 		}
 	}()
+
+	// Start metrics collector in background.
+	metricsCollector := metrics.NewCollector(queries)
+	go metricsCollector.Run(ctx, 30*time.Second)
 
 	// Start REST gateway.
 	gwMux, err := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
