@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-03-06T03:37:00.393Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-06T03:37:08.427Z"
 last_activity: 2026-03-06 -- Completed plan 03-04 (Metrics & Webhooks)
 progress:
   total_phases: 4
@@ -114,6 +114,7 @@ Recent decisions affecting current work:
 - [03-03]: Separate Go file per CLI subcommand group with init() registration pattern
 - [03-03]: ANSI color in preview command degrades gracefully for non-terminal stdout
 - [03-03]: rollback requires exactly one of --run or --file (mutually exclusive validation)
+- [Phase 03]: RunInfo struct decouples compliance from db.Run; stale=2x baseInterval; ForcePush sets DB flag only
 
 ### Pending Todos
 
@@ -126,6 +127,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T03:35:00Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-03-06T03:37:08.424Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

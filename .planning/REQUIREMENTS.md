@@ -101,7 +101,7 @@
 
 ### Observability
 
-- [ ] **OBS-01**: Compliance status per client: compliant/drifted/failing/stale/unknown
+- [x] **OBS-01**: Compliance status per client: compliant/drifted/failing/stale/unknown
 - [x] **OBS-02**: Compliance API: summary, per-client status, 30-day history
 - [x] **OBS-03**: Prometheus metrics: clients_total, clients_active, checkins_total, run_duration_seconds, drift_detected_total, module_actions_total, compliance_status, compliance_pct, time_since_checkin_seconds
 - [x] **OBS-04**: Webhook events: run.success/failure/partial, drift.detected, client.enrolled/revoked, plan.created/changes_detected, rollback.success/failure, secret.rotated, compliance.degraded, package.version_drift, node.stale
@@ -226,7 +226,7 @@
 | CLI-09 | Phase 3 | Complete |
 | CLI-10 | Phase 3 | Complete |
 | CLI-11 | Phase 3 | Complete |
-| OBS-01 | Phase 3 | Pending |
+| OBS-01 | Phase 3 | Complete |
 | OBS-02 | Phase 3 | Complete |
 | OBS-03 | Phase 3 | Complete |
 | OBS-04 | Phase 3 | Complete |
