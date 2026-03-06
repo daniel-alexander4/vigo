@@ -8,20 +8,20 @@
 ### Transport & Security
 
 - [ ] **SEC-01**: Server accepts only mTLS gRPC connections from agents — no plaintext
-- [ ] **SEC-02**: Agents authenticate via ED25519 SSH keypair with signed payloads on every request
+- [x] **SEC-02**: Agents authenticate via ED25519 SSH keypair with signed payloads on every request
 - [ ] **SEC-03**: Server verifies client signature against stored pubkey before processing any request
 - [x] **SEC-04**: Self-signed CA + server cert generation via `make certs` for development
 - [x] **SEC-05**: Production supports bring-your-own TLS certs by replacing cert files in volume
 
 ### Enrollment
 
-- [ ] **ENRL-01**: Admin can add approved hostname/IP wildcard patterns with one-time tokens via gvctl
-- [ ] **ENRL-02**: Agent registers by sending hostname, IP, pubkey, and one-time token to server
-- [ ] **ENRL-03**: Server validates hostname/IP against approved patterns using glob matching
-- [ ] **ENRL-04**: One-time tokens are bcrypt-hashed at rest and marked used after successful enrollment
-- [ ] **ENRL-05**: Server returns assigned client UUID on successful registration
-- [ ] **ENRL-06**: Admin can revoke a client via gvctl, blocking all future check-ins
-- [ ] **ENRL-07**: Revoked clients cannot re-enroll with the same UUID
+- [x] **ENRL-01**: Admin can add approved hostname/IP wildcard patterns with one-time tokens via gvctl
+- [x] **ENRL-02**: Agent registers by sending hostname, IP, pubkey, and one-time token to server
+- [x] **ENRL-03**: Server validates hostname/IP against approved patterns using glob matching
+- [x] **ENRL-04**: One-time tokens are bcrypt-hashed at rest and marked used after successful enrollment
+- [x] **ENRL-05**: Server returns assigned client UUID on successful registration
+- [x] **ENRL-06**: Admin can revoke a client via gvctl, blocking all future check-ins
+- [x] **ENRL-07**: Revoked clients cannot re-enroll with the same UUID
 
 ### Convergence Engine
 
@@ -76,7 +76,7 @@
 - [ ] **AGNT-08**: Agent supports `run --module <name>` to apply a single module
 - [ ] **AGNT-09**: File snapshots saved to `/var/lib/isogov/snapshots/` before overwrites (last 5 per path)
 - [ ] **AGNT-10**: Agent checks for newer binary version on each check-in, self-updates after checksum verification
-- [ ] **AGNT-11**: Agent generates ED25519 keypair on first run, stores private key locally
+- [x] **AGNT-11**: Agent generates ED25519 keypair on first run, stores private key locally
 
 ### Database
 
@@ -157,17 +157,17 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SEC-01 | Phase 1 | Pending |
-| SEC-02 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Complete |
 | SEC-03 | Phase 1 | Pending |
 | SEC-04 | Phase 1 | Complete |
 | SEC-05 | Phase 1 | Complete |
-| ENRL-01 | Phase 1 | Pending |
-| ENRL-02 | Phase 1 | Pending |
-| ENRL-03 | Phase 1 | Pending |
-| ENRL-04 | Phase 1 | Pending |
-| ENRL-05 | Phase 1 | Pending |
-| ENRL-06 | Phase 1 | Pending |
-| ENRL-07 | Phase 1 | Pending |
+| ENRL-01 | Phase 1 | Complete |
+| ENRL-02 | Phase 1 | Complete |
+| ENRL-03 | Phase 1 | Complete |
+| ENRL-04 | Phase 1 | Complete |
+| ENRL-05 | Phase 1 | Complete |
+| ENRL-06 | Phase 1 | Complete |
+| ENRL-07 | Phase 1 | Complete |
 | DB-01 | Phase 1 | Complete |
 | DB-02 | Phase 1 | Complete |
 | DB-03 | Phase 1 | Complete |
@@ -187,7 +187,7 @@
 | CONF-06 | Phase 1 | Pending |
 | CONF-07 | Phase 1 | Pending |
 | CONF-08 | Phase 1 | Pending |
-| AGNT-11 | Phase 1 | Pending |
+| AGNT-11 | Phase 1 | Complete |
 | INFRA-01 | Phase 1 | Complete |
 | INFRA-02 | Phase 1 | Complete |
 | INFRA-03 | Phase 1 | Complete |
