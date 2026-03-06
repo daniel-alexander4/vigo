@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -49,10 +50,22 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// Resolve client config -- explicit YAML -> classification -> empty modules.
 	cfg := s.configStore.Get(client.Hostname)
 
-	// Convert config modules to proto modules, rendering templates at check-in time.
-	// Facts would come from the agent's ReportFacts -- for now we use an empty map
-	// since facts are reported separately and stored in the DB.
+	// Load latest facts from DB for template rendering. If no facts exist yet
+	// (first check-in before ReportFacts), use an empty map.
 	facts := make(map[string]any)
+	latestFacts, err := s.queries.GetLatestClientFacts(ctx, clientID)
+	if err == nil {
+		if err := json.Unmarshal(latestFacts.Facts, &facts); err != nil {
+			slog.Error("failed to unmarshal stored facts",
+				"client_id", clientID,
+				"error", err,
+			)
+			// Non-fatal: continue with empty facts.
+			facts = make(map[string]any)
+		}
+	}
+	// If err != nil (e.g., no rows found), we continue with empty facts -- expected
+	// on first check-in before the agent has reported facts.
 	vars := cfg.Vars
 	if vars == nil {
 		vars = make(map[string]any)
