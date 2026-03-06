@@ -29,12 +29,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Revoked clients receive errors on check-in and cannot re-enroll with the same UUID
   4. Server loads per-client YAML config from disk, resolves `secret:` prefixes via the Provider interface, merges environment variable overrides, applies classification rules, and hot-reloads on file changes
   5. `make proto`, `make certs`, `make build`, and `docker compose up` all work to produce a running development environment with server, PostgreSQL, and isopass
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md -- Proto, DB migrations, sqlc, infrastructure (Makefile, Docker, certs)
+- [ ] 01-02-PLAN.md -- Secrets provider interface, StaticProvider, config loading with hot-reload and classification
+- [ ] 01-03-PLAN.md -- Enrollment registry: pattern matching, token validation, revocation
+- [ ] 01-04-PLAN.md -- Agent stub: ED25519 keypair generation, signing, registration client
+- [ ] 01-05-PLAN.md -- Server wiring: mTLS gRPC, REST gateway, handlers, integration
 
 ### Phase 2: Convergence
 **Goal**: Agents pull their config from the server, build a dependency DAG, and idempotently converge managed resources (files, packages, services, users, exec) with notify/subscribe triggers, conditional execution, fact-driven templates, and full result reporting
@@ -92,7 +94,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/3 | Not started | - |
+| 1. Foundation | 0/5 | Planning complete | - |
 | 2. Convergence | 0/3 | Not started | - |
 | 3. Operations | 0/3 | Not started | - |
 | 4. Web UI & Deployment | 0/2 | Not started | - |
