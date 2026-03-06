@@ -100,5 +100,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 5/5 | Complete | 2026-03-06 |
 | 2. Convergence | 5/5 | Complete   | 2026-03-06 |
-| 3. Operations | 1/5 | In Progress|  |
+| 3. Operations | 2/5 | In Progress|  |
 | 4. Web UI & Deployment | 0/2 | Not started | - |

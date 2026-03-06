@@ -87,17 +87,17 @@
 
 ### CLI (gvctl)
 
-- [ ] **CLI-01**: `gvctl approved add/list/revoke` — manage approved patterns
-- [ ] **CLI-02**: `gvctl clients list/show/revoke` — manage enrolled clients
-- [ ] **CLI-03**: `gvctl push <host> / --all` — force immediate check-in
-- [ ] **CLI-04**: `gvctl runs list/show` — view run history and detail
-- [ ] **CLI-05**: `gvctl tokens generate` — generate token and print bootstrap curl command
+- [x] **CLI-01**: `gvctl approved add/list/revoke` — manage approved patterns
+- [x] **CLI-02**: `gvctl clients list/show/revoke` — manage enrolled clients
+- [x] **CLI-03**: `gvctl push <host> / --all` — force immediate check-in
+- [x] **CLI-04**: `gvctl runs list/show` — view run history and detail
+- [x] **CLI-05**: `gvctl tokens generate` — generate token and print bootstrap curl command
 - [x] **CLI-06**: `gvctl webhooks add/list/delete` — manage webhook subscriptions
-- [ ] **CLI-07**: `gvctl preview <host> / --all / --env` — trigger dry-run
+- [x] **CLI-07**: `gvctl preview <host> / --all / --env` — trigger dry-run
 - [x] **CLI-08**: `gvctl rollback <host> --run/--file` — restore file snapshots
 - [x] **CLI-09**: `gvctl packages list/drift` — package version audit
 - [x] **CLI-10**: `gvctl env promote` — promote env_var overrides between tiers
-- [ ] **CLI-11**: gvctl talks to server REST API, not gRPC directly
+- [x] **CLI-11**: gvctl talks to server REST API, not gRPC directly
 
 ### Observability
 
@@ -215,17 +215,17 @@
 | AGNT-08 | Phase 2 | Complete |
 | AGNT-09 | Phase 2 | Complete |
 | INFRA-06 | Phase 2 | Complete |
-| CLI-01 | Phase 3 | Pending |
-| CLI-02 | Phase 3 | Pending |
-| CLI-03 | Phase 3 | Pending |
-| CLI-04 | Phase 3 | Pending |
-| CLI-05 | Phase 3 | Pending |
+| CLI-01 | Phase 3 | Complete |
+| CLI-02 | Phase 3 | Complete |
+| CLI-03 | Phase 3 | Complete |
+| CLI-04 | Phase 3 | Complete |
+| CLI-05 | Phase 3 | Complete |
 | CLI-06 | Phase 3 | Complete |
-| CLI-07 | Phase 3 | Pending |
+| CLI-07 | Phase 3 | Complete |
 | CLI-08 | Phase 3 | Complete |
 | CLI-09 | Phase 3 | Complete |
 | CLI-10 | Phase 3 | Complete |
-| CLI-11 | Phase 3 | Pending |
+| CLI-11 | Phase 3 | Complete |
 | OBS-01 | Phase 3 | Pending |
 | OBS-02 | Phase 3 | Complete |
 | OBS-03 | Phase 3 | Pending |
