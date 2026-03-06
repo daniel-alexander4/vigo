@@ -1,0 +1,682 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "isogov.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "IsgovAgent"
+    },
+    {
+      "name": "IsgovAdmin"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/approved": {
+      "get": {
+        "summary": "ListApprovedPatterns lists all approved enrollment patterns.",
+        "operationId": "IsgovAdmin_ListApprovedPatterns",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListApprovedPatternsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "IsgovAdmin"
+        ]
+      },
+      "post": {
+        "summary": "AddApprovedPattern adds a hostname/IP wildcard pattern with a one-time token.",
+        "operationId": "IsgovAdmin_AddApprovedPattern",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddApprovedPatternResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1AddApprovedPatternRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/approved/{id}": {
+      "delete": {
+        "summary": "RevokeApprovedPattern removes an approved pattern.",
+        "operationId": "IsgovAdmin_RevokeApprovedPattern",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeApprovedPatternResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/clients": {
+      "get": {
+        "summary": "ListClients lists all enrolled clients.",
+        "operationId": "IsgovAdmin_ListClients",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListClientsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/clients/{clientId}/dry-run": {
+      "post": {
+        "summary": "DryRun computes a plan without applying changes.",
+        "operationId": "IsgovAdmin_DryRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DryRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IsgovAdminDryRunBody"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/clients/{id}": {
+      "get": {
+        "summary": "GetClient returns details for a single client.",
+        "operationId": "IsgovAdmin_GetClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetClientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/clients/{id}/revoke": {
+      "post": {
+        "summary": "RevokeClient revokes an enrolled client, blocking future check-ins.",
+        "operationId": "IsgovAdmin_RevokeClient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeClientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/IsgovAdminRevokeClientBody"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/push": {
+      "post": {
+        "summary": "ForcePush triggers an immediate check-in for a client or all clients.",
+        "operationId": "IsgovAdmin_ForcePush",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ForcePushResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ForcePushRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "summary": "ListRuns lists recent runs, optionally filtered by client.",
+        "operationId": "IsgovAdmin_ListRuns",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRunsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "clientId",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "description": "default 20",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}": {
+      "get": {
+        "summary": "GetRun returns details for a single run including per-module results.",
+        "operationId": "IsgovAdmin_GetRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    },
+    "/api/v1/tokens": {
+      "post": {
+        "summary": "GenerateToken generates a cryptographically random one-time enrollment token.",
+        "operationId": "IsgovAdmin_GenerateToken",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GenerateTokenResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GenerateTokenRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IsgovAdmin"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "IsgovAdminDryRunBody": {
+      "type": "object"
+    },
+    "IsgovAdminRevokeClientBody": {
+      "type": "object"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1AddApprovedPatternRequest": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string",
+          "title": "plaintext token; server will bcrypt hash it"
+        }
+      }
+    },
+    "v1AddApprovedPatternResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ApprovedPattern": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "used": {
+          "type": "boolean"
+        },
+        "usedBy": {
+          "type": "string",
+          "title": "client UUID if used"
+        }
+      }
+    },
+    "v1Client": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "ipAddress": {
+          "type": "string"
+        },
+        "enrolledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastSeen": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revoked": {
+          "type": "boolean"
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1DryRunResponse": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PlannedAction"
+          }
+        }
+      }
+    },
+    "v1ForcePushRequest": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "title": "empty = all clients"
+        }
+      }
+    },
+    "v1ForcePushResponse": {
+      "type": "object",
+      "properties": {
+        "clientsNotified": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1GenerateTokenRequest": {
+      "type": "object"
+    },
+    "v1GenerateTokenResponse": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        }
+      }
+    },
+    "v1GetClientResponse": {
+      "type": "object",
+      "properties": {
+        "client": {
+          "$ref": "#/definitions/v1Client"
+        }
+      }
+    },
+    "v1GetRunResponse": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "$ref": "#/definitions/v1Run"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ModuleResult"
+          }
+        }
+      }
+    },
+    "v1ListApprovedPatternsResponse": {
+      "type": "object",
+      "properties": {
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ApprovedPattern"
+          }
+        }
+      }
+    },
+    "v1ListClientsResponse": {
+      "type": "object",
+      "properties": {
+        "clients": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Client"
+          }
+        }
+      }
+    },
+    "v1ListRunsResponse": {
+      "type": "object",
+      "properties": {
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Run"
+          }
+        }
+      }
+    },
+    "v1ModuleResult": {
+      "type": "object",
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "resourceName": {
+          "type": "string"
+        },
+        "actionTaken": {
+          "type": "string",
+          "title": "none, created, updated, deleted"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "errorMessage": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1PlannedAction": {
+      "type": "object",
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "resourceName": {
+          "type": "string"
+        },
+        "plannedAction": {
+          "type": "string",
+          "title": "create, update, delete, none"
+        }
+      }
+    },
+    "v1RevokeApprovedPatternResponse": {
+      "type": "object"
+    },
+    "v1RevokeClientResponse": {
+      "type": "object"
+    },
+    "v1Run": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "title": "running, success, failure, partial"
+        },
+        "moduleCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "changedCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "failedCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skippedCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    }
+  }
+}
