@@ -3,7 +3,37 @@
 // provider to resolve "secret:" prefixes and supports hot-reload via fsnotify.
 package config
 
-import "github.com/isogov/isogov/server/conditionals"
+import (
+	"fmt"
+
+	"github.com/isogov/isogov/server/conditionals"
+	"gopkg.in/yaml.v3"
+)
+
+// StringOrSlice is a custom YAML type that accepts either a single string or
+// a list of strings. This allows conditional fields to use shorthand:
+//
+//	go_if_all_pass: is_debian        # single string
+//	go_if_all_pass: [is_debian, x]   # list form
+type StringOrSlice []string
+
+// UnmarshalYAML implements yaml.Unmarshaler for StringOrSlice.
+func (s *StringOrSlice) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		*s = []string{value.Value}
+		return nil
+	case yaml.SequenceNode:
+		var list []string
+		if err := value.Decode(&list); err != nil {
+			return err
+		}
+		*s = list
+		return nil
+	default:
+		return fmt.Errorf("StringOrSlice: expected string or list, got %v", value.Kind)
+	}
+}
 
 // ServerConfig represents the top-level server configuration from server.yaml.
 type ServerConfig struct {
@@ -65,13 +95,17 @@ type ModuleConfig struct {
 
 // ResourceConfig describes a single resource within a module.
 type ResourceConfig struct {
-	Name       string         `yaml:"name"`
-	Type       string         `yaml:"type"`
-	Attributes map[string]any `yaml:",inline"`
-	Notify     []string       `yaml:"notify"`
-	Subscribes []string       `yaml:"subscribes"`
-	When       string         `yaml:"when"`
-	DependsOn  []string       `yaml:"depends_on"`
+	Name          string        `yaml:"name"`
+	Type          string        `yaml:"type"`
+	GoIfAllPass   StringOrSlice `yaml:"go_if_all_pass,omitempty"`
+	GoIfAnyPass   StringOrSlice `yaml:"go_if_any_pass,omitempty"`
+	SkipIfAllPass StringOrSlice `yaml:"skip_if_all_pass,omitempty"`
+	SkipIfAnyPass StringOrSlice `yaml:"skip_if_any_pass,omitempty"`
+	Attributes    map[string]any `yaml:",inline"`
+	Notify        []string       `yaml:"notify"`
+	Subscribes    []string       `yaml:"subscribes"`
+	When          string         `yaml:"when"`
+	DependsOn     []string       `yaml:"depends_on"`
 }
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
