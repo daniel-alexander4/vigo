@@ -100,10 +100,14 @@ Plans:
 **Depends on**: Phase 4 (v1.0 complete)
 **Requirements**: INSP-01, INSP-02, INSP-03
 **Success Criteria** (what must be TRUE):
-  1. Running `isogov-agent traits` on a managed node prints all collected traits to stdout as JSON (default) or YAML (with `--format yaml`)
+  1. Running `isogov-agent traits` on a managed node prints all collected traits to stdout as pretty-printed JSON, with optional collector filtering and dot-path accessor
   2. Running `gvctl clients traits <hostname>` prints the stored traits for that client from the server database
-  3. The server REST endpoint `GET /api/v1/clients/{hostname}/traits` returns stored traits as a JSON object
-**Plans**: TBD
+  3. The server REST endpoint `GET /api/v1/clients/{hostname}/traits` returns stored traits as a JSON envelope
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md -- Agent `isogov-agent traits` subcommand with collector filtering and dot-path accessor
+- [ ] 05-02-PLAN.md -- Server REST endpoint + `gvctl clients traits` subcommand
 
 ### Phase 6: Custom Traits
 **Goal**: Admins can drop executable scripts into a server directory and have them automatically distributed to agents, executed with a timeout, and their output merged into the traits map under `custom.*`
@@ -127,5 +131,5 @@ Phases execute in numeric order: 5 -> 6
 | 2. Convergence | v1.0 | 5/5 | Complete | 2026-03-06 |
 | 3. Operations | v1.0 | 5/5 | Complete | 2026-03-06 |
 | 4. Web UI & Deployment | v1.0 | 4/4 | Complete | 2026-03-06 |
-| 5. Trait Inspection | v1.1 | 0/? | Not started | - |
+| 5. Trait Inspection | v1.1 | 0/2 | Planning | - |
 | 6. Custom Traits | v1.1 | 0/? | Not started | - |
