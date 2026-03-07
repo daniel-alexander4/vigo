@@ -24,7 +24,7 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 - [ ] Idempotent module executors: file (with SHA256 check), package (multi-platform), service (systemctl), user (/etc/passwd)
 - [ ] Module dependency DAG with topological ordering and circular dependency detection
 - [ ] Notify/subscribe triggers between resources (e.g., restart service when config changes)
-- [ ] Conditional resources via `when:` Go template expressions evaluated against node facts
+- [ ] Structured conditionals via `if:`/`not_if:` with trait-based operators on resources, blocks, and module references
 - [ ] Environment tiers with per-environment variable overrides merged at render time
 - [ ] Agent daemon with jittered pull loop, exponential backoff on server unavailability
 - [ ] Agent fact collection (OS, hardware, network, packages) via pluggable Collector interface
@@ -54,6 +54,16 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 - Windows support — Linux and macOS only
 - Non-Go agent implementations — single Go binary for all platforms
 - GUI-based config editing — config is YAML files on disk, edited directly
+
+## Current Milestone: v1.2 Structured Conditionals
+
+**Goal:** Replace freeform `when:` Go template expressions with structured `if:`/`not_if:` conditionals that validate exclusively against traits.
+
+**Target features:**
+- Conditional vars with trait-based operators (`only`, `not`, `gt`, `lt`, `gte`, `lte`, `match`)
+- `if:` / `not_if:` on individual resources — replaces `when:`
+- `conditional_block:` — inline resource grouping with shared conditionals
+- Module-level `if:` / `not_if:` on module references in roles and clients.yaml
 
 ## Current State
 
@@ -96,4 +106,4 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 | Manifest in CheckInResponse (not separate RPC) | One round-trip, no extra complexity | ✓ Good |
 
 ---
-*Last updated: 2026-03-07 after v1.1 milestone complete*
+*Last updated: 2026-03-07 after v1.2 milestone started*
