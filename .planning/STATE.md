@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Completed 04-04-PLAN.md (Gap Closure - Bootstrap Wiring + Loop Test Fix)
-last_updated: "2026-03-06T22:05:07.988Z"
-last_activity: 2026-03-06 -- Completed plan 04-04 (Gap Closure - Bootstrap Wiring + Loop Test Fix)
+milestone: v1.1
+milestone_name: Traits Visibility & Custom Traits
+status: active
+stopped_at: Defining requirements
+last_updated: "2026-03-07T00:00:00.000Z"
+last_activity: 2026-03-07 -- Milestone v1.1 started
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** Phase 4: Web UI & Deployment -- Complete
+**Current focus:** v1.1 Traits Visibility & Custom Traits
 
 ## Current Position
 
-Phase: 4 of 4 (Web UI & Deployment)
-Plan: 4 of 4 in current phase
-Status: Complete
-Last activity: 2026-03-07 - Completed quick task 1: Render module vars through RenderTemplate with Facts and Vars
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-07 — Milestone v1.1 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 

@@ -55,6 +55,15 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 - Non-Go agent implementations — single Go binary for all platforms
 - GUI-based config editing — config is YAML files on disk, edited directly
 
+## Current Milestone: v1.1 Traits Visibility & Custom Traits
+
+**Goal:** Make traits inspectable from CLI (agent + gvctl) and support server-distributed custom trait collectors.
+
+**Target features:**
+- Agent CLI `traits` command to dump collected traits locally
+- gvctl + REST endpoint to view stored traits for any client
+- Custom trait executables distributed from server, executed on agents, output merged under `custom.*` namespace
+
 ## Context
 
 - Full specification is in `isogov-handoff.md` at the repo root — it contains proto definitions, DB schema, config formats, module syntax, and detailed behavioral requirements
@@ -84,4 +93,4 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 | DAG-based module ordering | Explicit dependency declaration prevents ordering bugs | -- Pending |
 
 ---
-*Last updated: 2026-03-05 after initialization*
+*Last updated: 2026-03-07 after v1.1 milestone start*
