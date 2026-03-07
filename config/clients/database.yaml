@@ -1,0 +1,84 @@
+client: db01.example.com
+environment: production
+
+vars:
+  pg_version: "16"
+  pg_max_connections: "200"
+  pg_shared_buffers: "256MB"
+  pg_data_dir: "/var/lib/postgresql/16/main"
+  pg_log_dir: "/var/log/postgresql"
+  backup_dir: "/var/backups/postgresql"
+
+env_vars:
+  production:
+    pg_max_connections: "200"
+    pg_shared_buffers: "4GB"
+    pg_effective_cache_size: "12GB"
+    pg_work_mem: "64MB"
+  staging:
+    pg_max_connections: "50"
+    pg_shared_buffers: "256MB"
+    pg_effective_cache_size: "1GB"
+    pg_work_mem: "16MB"
+
+modules:
+  - name: postgresql
+    resources:
+      - name: install-postgresql
+        type: package
+        package: postgresql-{{ .Vars.pg_version }}
+        state: present
+
+      - name: pg-conf
+        type: file
+        path: /etc/postgresql/{{ .Vars.pg_version }}/main/postgresql.conf
+        content: |
+          data_directory = '{{ .Vars.pg_data_dir }}'
+          listen_addresses = '*'
+          port = 5432
+          max_connections = {{ .Vars.pg_max_connections }}
+          shared_buffers = {{ .Vars.pg_shared_buffers }}
+          effective_cache_size = {{ .Vars.pg_effective_cache_size }}
+          work_mem = {{ .Vars.pg_work_mem }}
+          logging_collector = on
+          log_directory = '{{ .Vars.pg_log_dir }}'
+          log_filename = 'postgresql-%Y-%m-%d.log'
+          log_rotation_age = 1d
+          log_min_duration_statement = 1000
+        owner: postgres
+        group: postgres
+        mode: "0644"
+        depends_on: [install-postgresql]
+        notify: [postgresql-service]
+
+      - name: pg-hba
+        type: file
+        path: /etc/postgresql/{{ .Vars.pg_version }}/main/pg_hba.conf
+        content: |
+          # TYPE  DATABASE  USER  ADDRESS       METHOD
+          local   all       postgres              peer
+          local   all       all                   peer
+          host    all       all   127.0.0.1/32    scram-sha-256
+          host    all       all   10.0.0.0/8      scram-sha-256
+          host    all       all   ::1/128         scram-sha-256
+        owner: postgres
+        group: postgres
+        mode: "0640"
+        depends_on: [install-postgresql]
+        notify: [postgresql-service]
+
+      - name: backup-dir
+        type: file
+        path: "{{ .Vars.backup_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"
+
+      - name: postgresql-service
+        type: service
+        service: postgresql
+        enabled: true
+        state: running
+        depends_on: [pg-conf, pg-hba]
+        subscribes: [pg-conf, pg-hba]

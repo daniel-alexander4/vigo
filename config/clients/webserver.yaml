@@ -1,0 +1,91 @@
+client: web01.example.com
+environment: production
+
+vars:
+  worker_processes: "auto"
+  server_name: "web01.example.com"
+  doc_root: "/var/www/html"
+  ssl_cert: "/etc/ssl/certs/web01.pem"
+  ssl_key: "/etc/ssl/private/web01.key"
+
+env_vars:
+  production:
+    worker_processes: "auto"
+    keepalive_timeout: "65"
+  staging:
+    worker_processes: "2"
+    keepalive_timeout: "30"
+
+modules:
+  - name: nginx
+    resources:
+      - name: install-nginx
+        type: package
+        package: nginx
+        state: present
+
+      - name: nginx-conf
+        type: file
+        path: /etc/nginx/nginx.conf
+        content: |
+          user www-data;
+          worker_processes {{ .Vars.worker_processes }};
+          pid /run/nginx.pid;
+
+          events {
+              worker_connections 1024;
+          }
+
+          http {
+              sendfile on;
+              tcp_nopush on;
+              keepalive_timeout {{ .Vars.keepalive_timeout }};
+
+              include /etc/nginx/mime.types;
+              default_type application/octet-stream;
+
+              access_log /var/log/nginx/access.log;
+              error_log /var/log/nginx/error.log;
+
+              include /etc/nginx/conf.d/*.conf;
+          }
+        owner: root
+        group: root
+        mode: "0644"
+        depends_on: [install-nginx]
+        notify: [nginx-service]
+
+      - name: default-site
+        type: file
+        path: /etc/nginx/conf.d/default.conf
+        content: |
+          server {
+              listen 80;
+              server_name {{ .Vars.server_name }};
+              root {{ .Vars.doc_root }};
+
+              location / {
+                  try_files $uri $uri/ =404;
+              }
+          }
+        owner: root
+        group: root
+        mode: "0644"
+        depends_on: [nginx-conf]
+        notify: [nginx-service]
+
+      - name: doc-root
+        type: file
+        path: "{{ .Vars.doc_root }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: "0755"
+
+      - name: nginx-service
+        type: service
+        service: nginx
+        enabled: true
+        state: running
+        depends_on: [nginx-conf, default-site]
+        subscribes: [nginx-conf, default-site]

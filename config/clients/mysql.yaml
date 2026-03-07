@@ -1,0 +1,66 @@
+client: mysql01.example.com
+environment: production
+
+vars:
+  mysql_port: "3306"
+  mysql_bind_address: "0.0.0.0"
+  mysql_max_connections: "200"
+  mysql_innodb_buffer_pool_size: "1G"
+  mysql_root_password: "secret:isogov/mysql/root-password"
+
+env_vars:
+  production:
+    mysql_max_connections: "500"
+    mysql_innodb_buffer_pool_size: "8G"
+  staging:
+    mysql_max_connections: "50"
+    mysql_innodb_buffer_pool_size: "512M"
+
+modules:
+  - name: mysql
+    resources:
+      - name: install-mysql
+        type: package
+        package: mysql-server
+        state: present
+
+      - name: mysql-cnf
+        type: file
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        content: |
+          [mysqld]
+          bind-address = {{ .Vars.mysql_bind_address }}
+          port = {{ .Vars.mysql_port }}
+          max_connections = {{ .Vars.mysql_max_connections }}
+          datadir = /var/lib/mysql
+          socket = /run/mysqld/mysqld.sock
+          pid-file = /run/mysqld/mysqld.pid
+
+          # InnoDB
+          innodb_buffer_pool_size = {{ .Vars.mysql_innodb_buffer_pool_size }}
+          innodb_log_file_size = 256M
+          innodb_flush_log_at_trx_commit = 1
+          innodb_flush_method = O_DIRECT
+
+          # Logging
+          log_error = /var/log/mysql/error.log
+          slow_query_log = 1
+          slow_query_log_file = /var/log/mysql/slow.log
+          long_query_time = 2
+
+          # Security
+          local_infile = 0
+          skip_symbolic_links = yes
+        owner: root
+        group: root
+        mode: "0644"
+        depends_on: [install-mysql]
+        notify: [mysql-service]
+
+      - name: mysql-service
+        type: service
+        service: mysql
+        enabled: true
+        state: running
+        depends_on: [mysql-cnf]
+        subscribes: [mysql-cnf]

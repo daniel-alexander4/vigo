@@ -1,0 +1,74 @@
+client: lb01.example.com
+environment: production
+
+vars:
+  haproxy_stats_port: "8404"
+  haproxy_stats_password: "secret:isogov/haproxy/stats-password"
+
+modules:
+  - name: haproxy
+    resources:
+      - name: install-haproxy
+        type: package
+        package: haproxy
+        state: present
+
+      - name: haproxy-cfg
+        type: file
+        path: /etc/haproxy/haproxy.cfg
+        content: |
+          global
+              log /dev/log local0
+              log /dev/log local1 notice
+              chroot /var/lib/haproxy
+              stats socket /run/haproxy/admin.sock mode 660 level admin
+              stats timeout 30s
+              user haproxy
+              group haproxy
+              daemon
+              maxconn 4096
+
+          defaults
+              log     global
+              mode    http
+              option  httplog
+              option  dontlognull
+              timeout connect 5000
+              timeout client  50000
+              timeout server  50000
+              errorfile 400 /etc/haproxy/errors/400.http
+              errorfile 403 /etc/haproxy/errors/403.http
+              errorfile 500 /etc/haproxy/errors/500.http
+              errorfile 502 /etc/haproxy/errors/502.http
+              errorfile 503 /etc/haproxy/errors/503.http
+              errorfile 504 /etc/haproxy/errors/504.http
+
+          listen stats
+              bind *:{{ .Vars.haproxy_stats_port }}
+              mode http
+              stats enable
+              stats uri /stats
+              stats auth admin:{{ .Vars.haproxy_stats_password }}
+
+          frontend http-in
+              bind *:80
+              default_backend webservers
+
+          backend webservers
+              balance roundrobin
+              option httpchk GET /health
+              server web01 10.0.1.10:8080 check
+              server web02 10.0.1.11:8080 check
+        owner: root
+        group: root
+        mode: "0644"
+        depends_on: [install-haproxy]
+        notify: [haproxy-service]
+
+      - name: haproxy-service
+        type: service
+        service: haproxy
+        enabled: true
+        state: running
+        depends_on: [haproxy-cfg]
+        subscribes: [haproxy-cfg]

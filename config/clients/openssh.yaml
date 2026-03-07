@@ -1,0 +1,102 @@
+client: bastion01.example.com
+environment: production
+
+vars:
+  ssh_port: "22"
+  ssh_permit_root: "no"
+  ssh_max_auth_tries: "3"
+  ssh_allow_groups: "sshusers sudo"
+
+modules:
+  - name: openssh
+    resources:
+      - name: install-openssh
+        type: package
+        package: openssh-server
+        state: present
+
+      - name: sshd-config
+        type: file
+        path: /etc/ssh/sshd_config
+        content: |
+          Port {{ .Vars.ssh_port }}
+          Protocol 2
+          HostKey /etc/ssh/ssh_host_ed25519_key
+          HostKey /etc/ssh/ssh_host_rsa_key
+
+          # Authentication
+          PermitRootLogin {{ .Vars.ssh_permit_root }}
+          MaxAuthTries {{ .Vars.ssh_max_auth_tries }}
+          PubkeyAuthentication yes
+          PasswordAuthentication no
+          PermitEmptyPasswords no
+          ChallengeResponseAuthentication no
+
+          # Access control
+          AllowGroups {{ .Vars.ssh_allow_groups }}
+
+          # Security
+          X11Forwarding no
+          AllowTcpForwarding no
+          AllowAgentForwarding no
+          ClientAliveInterval 300
+          ClientAliveCountMax 2
+          LoginGraceTime 30
+          MaxStartups 10:30:60
+
+          # Logging
+          SyslogFacility AUTH
+          LogLevel VERBOSE
+
+          # Subsystems
+          Subsystem sftp /usr/lib/openssh/sftp-server
+        owner: root
+        group: root
+        mode: "0600"
+        depends_on: [install-openssh]
+        notify: [sshd-service]
+
+      - name: sshd-service
+        type: service
+        service: sshd
+        enabled: true
+        state: running
+        depends_on: [sshd-config]
+        subscribes: [sshd-config]
+
+  - name: fail2ban
+    resources:
+      - name: install-fail2ban
+        type: package
+        package: fail2ban
+        state: present
+
+      - name: fail2ban-jail
+        type: file
+        path: /etc/fail2ban/jail.local
+        content: |
+          [DEFAULT]
+          bantime = 3600
+          findtime = 600
+          maxretry = 5
+
+          [sshd]
+          enabled = true
+          port = {{ .Vars.ssh_port }}
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+          bantime = 7200
+        owner: root
+        group: root
+        mode: "0644"
+        depends_on: [install-fail2ban]
+        notify: [fail2ban-service]
+
+      - name: fail2ban-service
+        type: service
+        service: fail2ban
+        enabled: true
+        state: running
+        depends_on: [fail2ban-jail]
+        subscribes: [fail2ban-jail]
