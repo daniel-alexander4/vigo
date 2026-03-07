@@ -1,3 +1,54 @@
-{{define "dashboard-content"}}
-<h1>Dashboard</h1>
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p>Fleet health at a glance</p>
+</div>
+
+<div id="stats"
+     hx-get="/ui/fragments/dashboard-stats"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "dashboard-stats" .}}
+</div>
+
+{{if .RecentRuns}}
+<div class="table-container">
+    <h3>Recent Activity</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Run</th>
+                <th>Host</th>
+                <th>Status</th>
+                <th>Modules</th>
+                <th>Changed</th>
+                <th>Failed</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .RecentRuns}}
+            <tr>
+                <td class="mono">{{truncUUID .ID}}</td>
+                <td>{{.Hostname}}</td>
+                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{.ModuleCount}}</td>
+                <td>{{.ChangedCount}}</td>
+                <td>{{.FailedCount}}</td>
+                <td class="text-muted">{{formatTime .StartedAt}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+{{end}}
+
+{{define "dashboard-stats"}}
+<div class="stat-cards">
+    {{template "stat-card" dict "Value" .TotalClients "Label" "Total Clients" "Color" "brand"}}
+    {{template "stat-card" dict "Value" .ActiveClients "Label" "Active (1h)" "Color" "success"}}
+    {{template "stat-card" dict "Value" .RecentFailures "Label" "Recent Failures" "Color" "danger"}}
+    {{template "stat-card" dict "Value" (printf "%.0f%%" .DriftRate) "Label" "Drift Rate" "Color" "warning"}}
+</div>
 {{end}}

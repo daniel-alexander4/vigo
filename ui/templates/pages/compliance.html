@@ -1,3 +1,75 @@
-{{define "compliance-content"}}
-<h1>Compliance</h1>
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Compliance</h1>
+    <p>Fleet compliance overview and trends</p>
+</div>
+
+<div class="compliance-gauge">
+    <div class="compliance-gauge__header">
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .CompliancePct}}%
+        </span>
+        <span class="compliance-gauge__label">compliant</span>
+    </div>
+    <div class="compliance-gauge__bar">
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .CompliancePct}}%"></div>
+    </div>
+</div>
+
+<div class="breakdown">
+    <div class="breakdown__item">
+        <div class="breakdown__count text-success">{{.Compliant}}</div>
+        <div class="breakdown__status">Compliant</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-warning">{{.Drifted}}</div>
+        <div class="breakdown__status">Drifted</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-danger">{{.Failing}}</div>
+        <div class="breakdown__status">Failing</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-warning">{{.Stale}}</div>
+        <div class="breakdown__status">Stale</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-muted">{{.Unknown}}</div>
+        <div class="breakdown__status">Unknown</div>
+    </div>
+</div>
+
+{{if .SparklineData}}
+<div class="sparkline-container">
+    <h3>30-Day Compliance Trend</h3>
+    {{sparklineSVG .SparklineData 400 60}}
+</div>
+{{end}}
+
+{{if .NonCompliant}}
+<div class="table-container">
+    <h3>Non-Compliant Clients</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+                <th>Last Run</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .NonCompliant}}
+            <tr>
+                <td>{{.Hostname}}</td>
+                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td class="text-muted">{{formatTime .LastSeen}}</td>
+                <td>{{if .LastRunStatus}}{{template "status-badge" dict "Status" .LastRunStatus}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
 {{end}}

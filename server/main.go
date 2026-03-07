@@ -156,8 +156,10 @@ func run() error {
 	metricsCollector := metrics.NewCollector(queries)
 	go metricsCollector.Run(ctx, 30*time.Second)
 
-	// Start REST gateway.
-	gwMux, err := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+	// Start REST gateway with UI.
+	version := envOrDefault("ISOGOV_VERSION", "dev")
+	agentDir := envOrDefault("ISOGOV_AGENT_DIR", "dist/agent")
+	gwMux, err := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, baseInterval, cfg.Server.APIListen, agentDir, version)
 	if err != nil {
 		return fmt.Errorf("creating REST gateway: %w", err)
 	}
