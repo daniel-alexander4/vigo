@@ -274,7 +274,7 @@ func TestLoop_BackoffOnError_DoesNotCrash(t *testing.T) {
 	executors := map[string]modules.Executor{}
 
 	// Loop should return context.DeadlineExceeded, not panic.
-	err := Loop(ctx, client, executors, nil)
+	err := Loop(ctx, client, executors, nil, nil)
 	if err == nil {
 		t.Fatal("Loop returned nil, expected context error")
 	}
