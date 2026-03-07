@@ -74,6 +74,16 @@ type CheckInSection struct {
 	JitterPercent int    `yaml:"jitter_percent"`
 }
 
+// ConditionalBlock groups resources under shared conditional fields.
+// When flattened, block-level conditionals are merged onto each child resource.
+type ConditionalBlock struct {
+	GoIfAllPass   StringOrSlice    `yaml:"go_if_all_pass,omitempty"`
+	GoIfAnyPass   StringOrSlice    `yaml:"go_if_any_pass,omitempty"`
+	SkipIfAllPass StringOrSlice    `yaml:"skip_if_all_pass,omitempty"`
+	SkipIfAnyPass StringOrSlice    `yaml:"skip_if_any_pass,omitempty"`
+	Resources     []ResourceConfig `yaml:"resources"`
+}
+
 // ClientConfig represents the resolved per-client configuration.
 // This is the output type returned by ConfigStore.Get().
 type ClientConfig struct {
