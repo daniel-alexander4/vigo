@@ -32,21 +32,39 @@ func RenderTemplate(tmpl string, facts map[string]any, vars map[string]any) (str
 	return buf.String(), nil
 }
 
-// RenderVars renders Go template syntax in var values. Only string values
-// are rendered; non-string values (int, bool, map, etc.) pass through unchanged.
-// Facts are available as .Facts, and other vars (in their current render-pass state)
-// are available as .Vars. This is a single-pass render: a var referencing another
-// var will see that var's pre-rendered value. Call this BEFORE resource attribute
+// RenderVars renders Go template syntax in var values in declaration order.
+// Only string values are rendered; non-string values (int, bool, map, etc.)
+// pass through unchanged. Vars are rendered top-down per varOrder so that
+// later vars can reference earlier rendered vars via .Vars. Facts are
+// available as .Facts. If varOrder is nil, all vars are still rendered but
+// in non-deterministic map order. Call this BEFORE resource attribute
 // rendering so that rendered vars are available to resource templates.
-func RenderVars(vars map[string]any, facts map[string]any) (map[string]any, error) {
+func RenderVars(vars map[string]any, facts map[string]any, varOrder []string) (map[string]any, error) {
 	result := make(map[string]any, len(vars))
 	for k, v := range vars {
-		strVal, ok := v.(string)
+		result[k] = v
+	}
+
+	// Use varOrder for deterministic top-down rendering. Fall back to
+	// map iteration if no order is provided.
+	keys := varOrder
+	if keys == nil {
+		keys = make([]string, 0, len(vars))
+		for k := range vars {
+			keys = append(keys, k)
+		}
+	}
+
+	for _, k := range keys {
+		v, ok := result[k]
 		if !ok {
-			result[k] = v
 			continue
 		}
-		rendered, err := RenderTemplate(strVal, facts, vars)
+		strVal, ok := v.(string)
+		if !ok {
+			continue
+		}
+		rendered, err := RenderTemplate(strVal, facts, result)
 		if err != nil {
 			return nil, fmt.Errorf("rendering var %q: %w", k, err)
 		}

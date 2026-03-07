@@ -786,11 +786,12 @@ clients:
 
 func TestRenderVars(t *testing.T) {
 	tests := []struct {
-		name    string
-		vars    map[string]any
-		facts   map[string]any
-		want    map[string]any
-		wantErr bool
+		name     string
+		vars     map[string]any
+		facts    map[string]any
+		varOrder []string
+		want     map[string]any
+		wantErr  bool
 	}{
 		{
 			name: "facts reference renders correctly",
@@ -800,6 +801,7 @@ func TestRenderVars(t *testing.T) {
 			facts: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
 			},
+			varOrder: []string{"greeting"},
 			want: map[string]any{
 				"greeting": "Hello from ubuntu",
 			},
@@ -810,10 +812,26 @@ func TestRenderVars(t *testing.T) {
 				"base_port": "8080",
 				"port_line": "port={{ .Vars.base_port }}",
 			},
-			facts: map[string]any{},
+			facts:    map[string]any{},
+			varOrder: []string{"base_port", "port_line"},
 			want: map[string]any{
 				"base_port": "8080",
 				"port_line": "port=8080",
+			},
+		},
+		{
+			name: "chained vars render top-down",
+			vars: map[string]any{
+				"distro":   "{{ .Facts.os.distro }}",
+				"greeting": "Hello from {{ .Vars.distro }}",
+			},
+			facts: map[string]any{
+				"os": map[string]any{"distro": "ubuntu"},
+			},
+			varOrder: []string{"distro", "greeting"},
+			want: map[string]any{
+				"distro":   "ubuntu",
+				"greeting": "Hello from ubuntu",
 			},
 		},
 		{
@@ -821,7 +839,8 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"plain": "no templates here",
 			},
-			facts: map[string]any{},
+			facts:    map[string]any{},
+			varOrder: []string{"plain"},
 			want: map[string]any{
 				"plain": "no templates here",
 			},
@@ -833,7 +852,8 @@ func TestRenderVars(t *testing.T) {
 				"enabled": true,
 				"name":    "test",
 			},
-			facts: map[string]any{},
+			facts:    map[string]any{},
+			varOrder: []string{"count", "enabled", "name"},
 			want: map[string]any{
 				"count":   42,
 				"enabled": true,
@@ -845,20 +865,35 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"bad": "{{ .InvalidSyntax }{",
 			},
-			facts:   map[string]any{},
-			wantErr: true,
+			facts:    map[string]any{},
+			varOrder: []string{"bad"},
+			wantErr:  true,
 		},
 		{
-			name:  "empty vars map returns empty map",
-			vars:  map[string]any{},
-			facts: map[string]any{},
-			want:  map[string]any{},
+			name:     "empty vars map returns empty map",
+			vars:     map[string]any{},
+			facts:    map[string]any{},
+			varOrder: nil,
+			want:     map[string]any{},
+		},
+		{
+			name: "nil varOrder falls back to map iteration",
+			vars: map[string]any{
+				"greeting": "Hello from {{ .Facts.os.distro }}",
+			},
+			facts: map[string]any{
+				"os": map[string]any{"distro": "ubuntu"},
+			},
+			varOrder: nil,
+			want: map[string]any{
+				"greeting": "Hello from ubuntu",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := RenderVars(tt.vars, tt.facts)
+			got, err := RenderVars(tt.vars, tt.facts, tt.varOrder)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

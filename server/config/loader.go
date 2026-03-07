@@ -233,13 +233,21 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 	}
 
 	// Build vars: module defaults first, then client-level overrides.
+	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
+	var varOrder []string
 	for _, name := range moduleNames {
 		for k, v := range moduleDefs[name].Vars {
+			if _, exists := vars[k]; !exists {
+				varOrder = append(varOrder, k)
+			}
 			vars[k] = v
 		}
 	}
 	for k, v := range entry.Vars {
+		if _, exists := vars[k]; !exists {
+			varOrder = append(varOrder, k)
+		}
 		vars[k] = v
 	}
 
@@ -248,6 +256,7 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 		Environment: entry.Environment,
 		Modules:     modules,
 		Vars:        vars,
+		VarOrder:    varOrder,
 		EnvVars:     entry.EnvVars,
 	}
 
@@ -435,6 +444,9 @@ func mergeEnvVars(cfg *ClientConfig) {
 		return
 	}
 	for k, v := range envOverrides {
+		if _, exists := cfg.Vars[k]; !exists {
+			cfg.VarOrder = append(cfg.VarOrder, k)
+		}
 		cfg.Vars[k] = v
 	}
 }
@@ -490,7 +502,8 @@ func (cs *ConfigStore) resolveModuleSecrets(mod *ModuleConfig) error {
 
 // resolveSourceFiles reads external template files referenced by the "source"
 // attribute on file resources. The source path is relative to the client-configs
-// directory. The file contents replace the "source" attribute with "content".
+// directory (e.g., "templates/nginx/nginx.conf.tmpl"). The file contents replace
+// the "source" attribute with "content".
 // It is an error to set both "source" and "content" on the same resource.
 func resolveSourceFiles(defs map[string]*ModuleDefinition, baseDir string) error {
 	for _, def := range defs {
@@ -585,6 +598,7 @@ func cloneClientConfig(cfg *ClientConfig) *ClientConfig {
 	for k, v := range cfg.Vars {
 		clone.Vars[k] = v
 	}
+	clone.VarOrder = append([]string(nil), cfg.VarOrder...)
 	return &clone
 }
 

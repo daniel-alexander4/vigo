@@ -49,6 +49,7 @@ type ClientConfig struct {
 	Environment string            `yaml:"environment"`
 	Modules     []ModuleConfig    `yaml:"modules"`
 	Vars        map[string]any    `yaml:"vars"`
+	VarOrder    []string          `yaml:"-"`
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
 }
 

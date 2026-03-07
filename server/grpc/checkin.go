@@ -75,7 +75,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 
 	// Render Go template syntax in var values (e.g., .Facts references)
 	// before resource attribute rendering so rendered vars are available.
-	vars, err = config.RenderVars(vars, facts)
+	vars, err = config.RenderVars(vars, facts, cfg.VarOrder)
 	if err != nil {
 		slog.Error("failed to render vars", "client_id", clientID, "error", err)
 		return nil, status.Errorf(codes.Internal, "rendering vars: %v", err)

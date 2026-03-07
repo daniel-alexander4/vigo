@@ -12,6 +12,7 @@ CLIENT_CONFIGS_DIR="${ISOGOV_DIR}/client-configs"
 CERTS_DIR="${ISOGOV_DIR}/server-configs/certs"
 MODULES_DIR="${CLIENT_CONFIGS_DIR}/modules"
 ROLES_DIR="${CLIENT_CONFIGS_DIR}/roles"
+TEMPLATES_DIR="${CLIENT_CONFIGS_DIR}/templates"
 SERVER_CONFIGS_DIR="${ISOGOV_DIR}/server-configs"
 ENV_FILE="${ISOGOV_DIR}/server-configs/.env"
 
@@ -30,7 +31,7 @@ fail()  { printf '\033[1;31m[FAIL]\033[0m  %s\n' "$*" >&2; exit 1; }
 
 info "Creating ${ISOGOV_DIR} directory structure"
 
-sudo mkdir -p "$CLIENT_CONFIGS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$CERTS_DIR"
+sudo mkdir -p "$CLIENT_CONFIGS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "$CERTS_DIR"
 
 ok "Directory structure ready"
 
@@ -161,6 +162,23 @@ done
 ROLE_COUNT=$(find "$ROLES_DIR" -name '*.yaml' 2>/dev/null | wc -l)
 echo "Role definitions: ${ROLE_COUNT} total (${NEW_ROLES} new)"
 
+# Template files — recursively copy preserving directory structure
+if [ -d "client-configs/templates" ]; then
+  NEW_TEMPLATES=0
+  while IFS= read -r src; do
+    rel="${src#client-configs/templates/}"
+    dest="${TEMPLATES_DIR}/${rel}"
+    dest_dir="$(dirname "$dest")"
+    if [ ! -f "$dest" ]; then
+      sudo mkdir -p "$dest_dir"
+      sudo cp "$src" "$dest"
+      NEW_TEMPLATES=$((NEW_TEMPLATES + 1))
+    fi
+  done < <(find client-configs/templates -type f)
+  TEMPLATE_COUNT=$(find "$TEMPLATES_DIR" -type f 2>/dev/null | wc -l)
+  echo "Template files: ${TEMPLATE_COUNT} total (${NEW_TEMPLATES} new)"
+fi
+
 ok "Config files ready"
 
 # ---------------------------------------------------------------------------
@@ -193,6 +211,7 @@ Config directory: ${ISOGOV_DIR}
   ${CLIENT_CONFIGS_DIR}/clients.yaml
   ${MODULES_DIR}/*.yaml
   ${ROLES_DIR}/*.yaml
+  ${TEMPLATES_DIR}/
   ${CERTS_DIR}/
   ${ENV_FILE}
 
