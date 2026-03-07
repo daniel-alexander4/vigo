@@ -23,6 +23,9 @@ service IsgovAgent {
 
   // ReportFacts submits collected facts from the agent.
   rpc ReportFacts(ReportFactsRequest) returns (ReportFactsResponse);
+
+  // DownloadCustomTrait retrieves a custom trait executable by name.
+  rpc DownloadCustomTrait(DownloadCustomTraitRequest) returns (DownloadCustomTraitResponse);
 }
 
 // =============================================================================
@@ -214,6 +217,23 @@ message CheckInResponse {
   repeated Module modules = 1;
   string base_interval = 2;   // e.g. "30m"
   int32 jitter_percent = 3;
+  repeated CustomTraitEntry custom_traits = 4;
+}
+
+// CustomTraitEntry describes a custom trait executable in the server's traits directory.
+message CustomTraitEntry {
+  string name = 1;            // trait name derived from filename (without extension)
+  string sha256 = 2;          // hex-encoded SHA256 checksum of the executable
+}
+
+// DownloadCustomTraitRequest asks the server for a custom trait executable's bytes.
+message DownloadCustomTraitRequest {
+  string name = 1;            // trait name (matches CustomTraitEntry.name)
+}
+
+// DownloadCustomTraitResponse returns the raw executable bytes.
+message DownloadCustomTraitResponse {
+  bytes data = 1;
 }
 
 message Module {

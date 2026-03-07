@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IsgovAgent_Register_FullMethodName     = "/isogov.v1.IsgovAgent/Register"
-	IsgovAgent_CheckIn_FullMethodName      = "/isogov.v1.IsgovAgent/CheckIn"
-	IsgovAgent_ReportResult_FullMethodName = "/isogov.v1.IsgovAgent/ReportResult"
-	IsgovAgent_ReportFacts_FullMethodName  = "/isogov.v1.IsgovAgent/ReportFacts"
+	IsgovAgent_Register_FullMethodName            = "/isogov.v1.IsgovAgent/Register"
+	IsgovAgent_CheckIn_FullMethodName             = "/isogov.v1.IsgovAgent/CheckIn"
+	IsgovAgent_ReportResult_FullMethodName        = "/isogov.v1.IsgovAgent/ReportResult"
+	IsgovAgent_ReportFacts_FullMethodName         = "/isogov.v1.IsgovAgent/ReportFacts"
+	IsgovAgent_DownloadCustomTrait_FullMethodName = "/isogov.v1.IsgovAgent/DownloadCustomTrait"
 )
 
 // IsgovAgentClient is the client API for IsgovAgent service.
@@ -37,6 +38,8 @@ type IsgovAgentClient interface {
 	ReportResult(ctx context.Context, in *ReportResultRequest, opts ...grpc.CallOption) (*ReportResultResponse, error)
 	// ReportFacts submits collected facts from the agent.
 	ReportFacts(ctx context.Context, in *ReportFactsRequest, opts ...grpc.CallOption) (*ReportFactsResponse, error)
+	// DownloadCustomTrait retrieves a custom trait executable by name.
+	DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error)
 }
 
 type isgovAgentClient struct {
@@ -87,6 +90,16 @@ func (c *isgovAgentClient) ReportFacts(ctx context.Context, in *ReportFactsReque
 	return out, nil
 }
 
+func (c *isgovAgentClient) DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DownloadCustomTraitResponse)
+	err := c.cc.Invoke(ctx, IsgovAgent_DownloadCustomTrait_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IsgovAgentServer is the server API for IsgovAgent service.
 // All implementations must embed UnimplementedIsgovAgentServer
 // for forward compatibility.
@@ -99,6 +112,8 @@ type IsgovAgentServer interface {
 	ReportResult(context.Context, *ReportResultRequest) (*ReportResultResponse, error)
 	// ReportFacts submits collected facts from the agent.
 	ReportFacts(context.Context, *ReportFactsRequest) (*ReportFactsResponse, error)
+	// DownloadCustomTrait retrieves a custom trait executable by name.
+	DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error)
 	mustEmbedUnimplementedIsgovAgentServer()
 }
 
@@ -120,6 +135,9 @@ func (UnimplementedIsgovAgentServer) ReportResult(context.Context, *ReportResult
 }
 func (UnimplementedIsgovAgentServer) ReportFacts(context.Context, *ReportFactsRequest) (*ReportFactsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportFacts not implemented")
+}
+func (UnimplementedIsgovAgentServer) DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DownloadCustomTrait not implemented")
 }
 func (UnimplementedIsgovAgentServer) mustEmbedUnimplementedIsgovAgentServer() {}
 func (UnimplementedIsgovAgentServer) testEmbeddedByValue()                    {}
@@ -214,6 +232,24 @@ func _IsgovAgent_ReportFacts_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IsgovAgent_DownloadCustomTrait_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DownloadCustomTraitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IsgovAgentServer).DownloadCustomTrait(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IsgovAgent_DownloadCustomTrait_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IsgovAgentServer).DownloadCustomTrait(ctx, req.(*DownloadCustomTraitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IsgovAgent_ServiceDesc is the grpc.ServiceDesc for IsgovAgent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -236,6 +272,10 @@ var IsgovAgent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportFacts",
 			Handler:    _IsgovAgent_ReportFacts_Handler,
+		},
+		{
+			MethodName: "DownloadCustomTrait",
+			Handler:    _IsgovAgent_DownloadCustomTrait_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
