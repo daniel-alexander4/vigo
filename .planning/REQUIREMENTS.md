@@ -140,9 +140,9 @@ Requirements for Traits Visibility & Custom Traits milestone.
 ### Custom Traits
 
 - [x] **CUST-01**: Server scans a configurable directory for custom trait executables and serves a manifest (name + SHA256 checksum) during check-in
-- [ ] **CUST-02**: Agent compares manifest against local cache and downloads new/changed trait executables via a dedicated gRPC call
-- [ ] **CUST-03**: Agent executes each custom trait executable with a timeout, parses JSON stdout, and merges output under `custom.<name>` in the traits map
-- [ ] **CUST-04**: Failed or timed-out custom trait executables are logged as warnings and skipped without affecting other traits or convergence
+- [x] **CUST-02**: Agent compares manifest against local cache and downloads new/changed trait executables via a dedicated gRPC call
+- [x] **CUST-03**: Agent executes each custom trait executable with a timeout, parses JSON stdout, and merges output under `custom.<name>` in the traits map
+- [x] **CUST-04**: Failed or timed-out custom trait executables are logged as warnings and skipped without affecting other traits or convergence
 
 ## v2 Requirements
 
@@ -266,9 +266,9 @@ Requirements for Traits Visibility & Custom Traits milestone.
 | INSP-02 | Phase 5 | Complete |
 | INSP-03 | Phase 5 | Complete |
 | CUST-01 | Phase 6 | Complete |
-| CUST-02 | Phase 6 | Pending |
-| CUST-03 | Phase 6 | Pending |
-| CUST-04 | Phase 6 | Pending |
+| CUST-02 | Phase 6 | Complete |
+| CUST-03 | Phase 6 | Complete |
+| CUST-04 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 89 total (all complete)
