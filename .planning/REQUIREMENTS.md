@@ -25,9 +25,9 @@ Requirements for v1.2 Structured Conditionals. Each maps to roadmap phases.
 
 ### Conditional Blocks
 
-- [ ] **COND-11**: `conditional_block:` wraps resources with shared conditional fields
-- [ ] **COND-12**: Resources inside blocks can have their own conditionals (both block and resource must pass)
-- [ ] **COND-13**: `depends_on` works across `conditional_block:` boundaries
+- [x] **COND-11**: `conditional_block:` wraps resources with shared conditional fields
+- [x] **COND-12**: Resources inside blocks can have their own conditionals (both block and resource must pass)
+- [x] **COND-13**: `depends_on` works across `conditional_block:` boundaries
 
 ### Module Conditionals
 
@@ -63,9 +63,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COND-08 | Phase 8 | Complete |
 | COND-09 | Phase 8 | Complete |
 | COND-10 | Phase 8 | Complete |
-| COND-11 | Phase 9 | Pending |
-| COND-12 | Phase 9 | Pending |
-| COND-13 | Phase 9 | Pending |
+| COND-11 | Phase 9 | Complete |
+| COND-12 | Phase 9 | Complete |
+| COND-13 | Phase 9 | Complete |
 | COND-14 | Phase 10 | Pending |
 | COND-15 | Phase 10 | Pending |
 
