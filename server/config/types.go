@@ -118,12 +118,56 @@ type ResourceConfig struct {
 }
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
+// It has a custom UnmarshalYAML that flattens conditional_block entries
+// in the resources list into plain ResourceConfig items.
 type ModuleDefinition struct {
 	Name            string                        `yaml:"name"`
 	DependsOn       []string                      `yaml:"depends_on"`
 	Resources       []ResourceConfig              `yaml:"resources"`
 	Vars            map[string]any                `yaml:"vars"`
 	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler for ModuleDefinition.
+// It handles the "resources" key specially by passing its child nodes
+// through FlattenResourceNodes to support conditional_block entries.
+// All other keys are decoded via the default YAML decoder.
+func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("ModuleDefinition: expected mapping, got %v", value.Kind)
+	}
+
+	// Walk key-value pairs in the mapping.
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		key := value.Content[i].Value
+		val := value.Content[i+1]
+
+		switch key {
+		case "name":
+			if err := val.Decode(&m.Name); err != nil {
+				return fmt.Errorf("decoding name: %w", err)
+			}
+		case "depends_on":
+			if err := val.Decode(&m.DependsOn); err != nil {
+				return fmt.Errorf("decoding depends_on: %w", err)
+			}
+		case "vars":
+			if err := val.Decode(&m.Vars); err != nil {
+				return fmt.Errorf("decoding vars: %w", err)
+			}
+		case "resources":
+			if val.Kind != yaml.SequenceNode {
+				return fmt.Errorf("resources: expected sequence, got %v", val.Kind)
+			}
+			resources, err := FlattenResourceNodes(val.Content)
+			if err != nil {
+				return fmt.Errorf("flattening resources: %w", err)
+			}
+			m.Resources = resources
+		}
+	}
+
+	return nil
 }
 
 // RoleDefinition is a named list of modules loaded from config/roles/*.yaml.
