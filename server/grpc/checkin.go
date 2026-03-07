@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/isogov/isogov/server/conditionals"
 	"github.com/isogov/isogov/server/config"
 	"github.com/isogov/isogov/server/metrics"
 	"github.com/isogov/isogov/server/registry"
@@ -73,6 +74,11 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		vars = make(map[string]any)
 	}
 
+	// Evaluate conditional vars against client traits. Results are set as
+	// "true"/"false" strings in the vars map, inserted before regular vars
+	// in varOrder so they're available for Go template rendering.
+	vars, cfg.VarOrder = evaluateConditionalVars(cfg, facts, vars, cfg.VarOrder)
+
 	// Render Go template syntax in var values (e.g., .Facts references)
 	// before resource attribute rendering so rendered vars are available.
 	vars, err = config.RenderVars(vars, facts, cfg.VarOrder)
@@ -115,6 +121,35 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		Modules:      modules,
 		CustomTraits: customTraits,
 	}, nil
+}
+
+// evaluateConditionalVars evaluates each ConditionalVar against the client's
+// traits map and sets the result as a "true" or "false" string in the vars map.
+// Conditional var names are prepended to varOrder so they are available for
+// template rendering in regular vars.
+func evaluateConditionalVars(cfg *config.ClientConfig, facts, vars map[string]any, varOrder []string) (map[string]any, []string) {
+	if len(cfg.ConditionalVars) == 0 {
+		return vars, varOrder
+	}
+
+	// Prepend conditional var names to varOrder so they render first.
+	var condNames []string
+	for _, cv := range cfg.ConditionalVars {
+		result := conditionals.Evaluate(cv, facts)
+		if result {
+			vars[cv.Name] = "true"
+		} else {
+			vars[cv.Name] = "false"
+		}
+		condNames = append(condNames, cv.Name)
+	}
+
+	// Insert conditional var names before existing varOrder entries.
+	newOrder := make([]string, 0, len(condNames)+len(varOrder))
+	newOrder = append(newOrder, condNames...)
+	newOrder = append(newOrder, varOrder...)
+
+	return vars, newOrder
 }
 
 // configToProtoModules converts a ClientConfig's modules into proto Module
