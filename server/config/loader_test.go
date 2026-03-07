@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -626,6 +627,117 @@ clients:
 	patterns = store.ClientsReferencingSecret("nonexistent")
 	if len(patterns) != 0 {
 		t.Errorf("expected empty, got %v", patterns)
+	}
+}
+
+func TestSourceFileLoading(t *testing.T) {
+	dir := setupDir(t)
+
+	// Create templates directory and template file.
+	tmplDir := filepath.Join(dir, "templates")
+	if err := os.MkdirAll(tmplDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(tmplDir, "nginx.conf.tmpl"), `worker_processes {{ .Vars.worker_processes }};`)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+vars:
+  worker_processes: "auto"
+resources:
+  - name: nginx-conf
+    type: file
+    path: /etc/nginx/nginx.conf
+    source: templates/nginx.conf.tmpl
+    owner: root
+    mode: "0644"
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web.example.com"
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	}
+
+	res := cfg.Modules[0].Resources[0]
+	content, ok := res.Attributes["content"]
+	if !ok {
+		t.Fatal("expected 'content' attribute after source resolution")
+	}
+	if content != `worker_processes {{ .Vars.worker_processes }};` {
+		t.Errorf("content = %q, want template text", content)
+	}
+	if _, hasSource := res.Attributes["source"]; hasSource {
+		t.Error("'source' attribute should be removed after resolution")
+	}
+}
+
+func TestSourceAndContentMutuallyExclusive(t *testing.T) {
+	dir := setupDir(t)
+
+	tmplDir := filepath.Join(dir, "templates")
+	if err := os.MkdirAll(tmplDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(tmplDir, "test.tmpl"), "template content")
+
+	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+name: bad
+resources:
+  - name: both-set
+    type: file
+    path: /etc/test
+    source: templates/test.tmpl
+    content: "inline content"
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "test.example.com"
+    modules: [bad]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for both source and content set, got nil")
+	}
+	expected := "cannot set both 'source' and 'content'"
+	if !strings.Contains(err.Error(), expected) {
+		t.Errorf("error = %q, want it to contain %q", err, expected)
+	}
+}
+
+func TestSourceFileMissing(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+name: bad
+resources:
+  - name: missing-source
+    type: file
+    path: /etc/test
+    source: templates/nonexistent.tmpl
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "test.example.com"
+    modules: [bad]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for missing source file, got nil")
+	}
+	if !strings.Contains(err.Error(), "reading source") {
+		t.Errorf("error = %q, want it to mention reading source", err)
 	}
 }
 

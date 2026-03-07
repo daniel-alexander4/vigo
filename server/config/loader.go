@@ -105,6 +105,12 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 			return fmt.Errorf("watching %s: %w", dir, err)
 		}
 	}
+	// Watch templates dir if it exists (template files aren't YAML).
+	if _, err := os.Stat(cs.templatesDir()); err == nil {
+		if err := watcher.Add(cs.templatesDir()); err != nil {
+			return fmt.Errorf("watching %s: %w", cs.templatesDir(), err)
+		}
+	}
 
 	var debounceTimer *time.Timer
 	for {
@@ -115,7 +121,8 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
-			if !isYAMLFile(event.Name) {
+			inTemplatesDir := strings.HasPrefix(event.Name, cs.templatesDir()+string(os.PathSeparator))
+			if !isYAMLFile(event.Name) && !inTemplatesDir {
 				continue
 			}
 			if debounceTimer != nil {
@@ -141,12 +148,19 @@ func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "modul
 // rolesDir returns the path to the roles subdirectory.
 func (cs *ConfigStore) rolesDir() string { return filepath.Join(cs.dir, "roles") }
 
+// templatesDir returns the path to the templates subdirectory.
+func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
+
 // loadAll reads module defs, role defs, and client YAML files, resolves
 // all entries, and atomically swaps the config.
 func (cs *ConfigStore) loadAll() error {
 	moduleDefs, err := loadModuleDefs(cs.modulesDir())
 	if err != nil {
 		return fmt.Errorf("loading modules: %w", err)
+	}
+
+	if err := resolveSourceFiles(moduleDefs, cs.dir); err != nil {
+		return fmt.Errorf("resolving source files: %w", err)
 	}
 
 	roleDefs, err := loadRoleDefs(cs.rolesDir())
@@ -469,6 +483,48 @@ func (cs *ConfigStore) resolveModuleSecrets(mod *ModuleConfig) error {
 				}
 				attrs[k] = resolved
 			}
+		}
+	}
+	return nil
+}
+
+// resolveSourceFiles reads external template files referenced by the "source"
+// attribute on file resources. The source path is relative to the client-configs
+// directory. The file contents replace the "source" attribute with "content".
+// It is an error to set both "source" and "content" on the same resource.
+func resolveSourceFiles(defs map[string]*ModuleDefinition, baseDir string) error {
+	for _, def := range defs {
+		for i := range def.Resources {
+			attrs := def.Resources[i].Attributes
+			if attrs == nil {
+				continue
+			}
+			source, hasSource := attrs["source"]
+			_, hasContent := attrs["content"]
+
+			if hasSource && hasContent {
+				return fmt.Errorf("module %q resource %q: cannot set both 'source' and 'content'",
+					def.Name, def.Resources[i].Name)
+			}
+			if !hasSource {
+				continue
+			}
+
+			sourcePath, ok := source.(string)
+			if !ok {
+				return fmt.Errorf("module %q resource %q: 'source' must be a string",
+					def.Name, def.Resources[i].Name)
+			}
+
+			fullPath := filepath.Join(baseDir, sourcePath)
+			data, err := os.ReadFile(fullPath)
+			if err != nil {
+				return fmt.Errorf("module %q resource %q: reading source %q: %w",
+					def.Name, def.Resources[i].Name, sourcePath, err)
+			}
+
+			attrs["content"] = string(data)
+			delete(attrs, "source")
 		}
 	}
 	return nil

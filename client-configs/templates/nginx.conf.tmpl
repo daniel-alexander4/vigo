@@ -1,0 +1,21 @@
+user www-data;
+worker_processes {{ .Vars.worker_processes }};
+pid /run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout {{ .Vars.keepalive_timeout }};
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    include /etc/nginx/conf.d/*.conf;
+}
