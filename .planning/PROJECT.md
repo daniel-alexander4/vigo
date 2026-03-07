@@ -55,14 +55,15 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 - Non-Go agent implementations — single Go binary for all platforms
 - GUI-based config editing — config is YAML files on disk, edited directly
 
-## Current Milestone: v1.1 Traits Visibility & Custom Traits
+## Current State
 
-**Goal:** Make traits inspectable from CLI (agent + gvctl) and support server-distributed custom trait collectors.
+**Shipped:** v1.0 MVP (2026-03-06), v1.1 Traits Visibility & Custom Traits (2026-03-07)
+**Codebase:** ~23,400 LOC Go, 6 phases, 23 plans executed
 
-**Target features:**
-- Agent CLI `traits` command to dump collected traits locally
-- gvctl + REST endpoint to view stored traits for any client
-- Custom trait executables distributed from server, executed on agents, output merged under `custom.*` namespace
+**v1.1 delivered:**
+- `isogov-agent traits` CLI for local trait inspection with dot-path accessor
+- `gvctl clients traits` + REST endpoint for remote trait viewing
+- Server-distributed custom trait executables with SHA256 sync, 10s timeout execution, and `custom.*` namespace merging
 
 ## Context
 
@@ -86,11 +87,13 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Pull-based architecture (not push) | Agents behind firewalls/NAT; server doesn't need to reach clients | -- Pending |
-| isopass as sole secrets backend | Centralized secret management with rotation awareness | -- Pending |
-| YAML config on filesystem as source of truth | GitOps-friendly, auditable, no config drift between DB and files | -- Pending |
-| Go template syntax for module templates | Built into Go stdlib, familiar to Go developers, no extra dependency | -- Pending |
-| DAG-based module ordering | Explicit dependency declaration prevents ordering bugs | -- Pending |
+| Pull-based architecture (not push) | Agents behind firewalls/NAT; server doesn't need to reach clients | ✓ Good |
+| isopass as sole secrets backend | Centralized secret management with rotation awareness | ✓ Good |
+| YAML config on filesystem as source of truth | GitOps-friendly, auditable, no config drift between DB and files | ✓ Good |
+| Go template syntax for module templates | Built into Go stdlib, familiar to Go developers, no extra dependency | ✓ Good |
+| DAG-based module ordering | Explicit dependency declaration prevents ordering bugs | ✓ Good |
+| Custom traits as executables (not plugins) | Language-agnostic, simple contract (JSON stdout), no Go SDK needed | ✓ Good |
+| Manifest in CheckInResponse (not separate RPC) | One round-trip, no extra complexity | ✓ Good |
 
 ---
-*Last updated: 2026-03-07 after v1.1 milestone start*
+*Last updated: 2026-03-07 after v1.1 milestone complete*
