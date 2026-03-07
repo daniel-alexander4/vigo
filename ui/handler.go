@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,12 @@ type DataSource interface {
 	DashboardData(baseInterval time.Duration) DashboardPageData
 	ComplianceData(baseInterval time.Duration) CompliancePageData
 	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
+	ClientsData(baseInterval time.Duration, statusFilter string) ClientsPageData
+	ClientDetailData(clientID uuid.UUID, baseInterval time.Duration) (ClientDetailPageData, error)
+	RunsData(statusFilter string) RunsPageData
+	RunDetailData(runID uuid.UUID) (RunDetailPageData, error)
+	ConfigData(hostname string) (ConfigPageData, error)
+	PlanDetailData(planID uuid.UUID) (PlanDetailPageData, error)
 }
 
 // Handler serves all UI pages.
@@ -132,6 +139,103 @@ type DashboardStatsFragmentData struct {
 	ActiveClients  int
 	RecentFailures int
 	DriftRate      float64
+}
+
+// ClientRow is a single client displayed in the clients table.
+type ClientRow struct {
+	ID         uuid.UUID
+	Hostname   string
+	IPAddress  string
+	EnrolledAt time.Time
+	LastSeen   time.Time
+	Status     string
+}
+
+// ClientsPageData holds data for the clients list page.
+type ClientsPageData struct {
+	PageData
+	Clients      []ClientRow
+	StatusFilter string
+	ClientCount  int
+}
+
+// ClientDetailRunRow is a run with its per-module results for the client detail page.
+type ClientDetailRunRow struct {
+	RunRow
+	Results []RunResultRow
+}
+
+// RunResultRow is a single run result (per-module) displayed in a table.
+type RunResultRow struct {
+	ModuleName   string
+	ResourceType string
+	ResourceName string
+	ActionTaken  string
+	Changed      bool
+	ErrorMessage string
+	DurationMs   int32
+}
+
+// ClientDetailPageData holds data for the client detail page.
+type ClientDetailPageData struct {
+	PageData
+	Client       ClientRow
+	Runs         []ClientDetailRunRow
+	Facts        map[string]any
+	DriftHistory []DriftPoint
+}
+
+// DriftPoint represents a single data point in the drift history timeline.
+type DriftPoint struct {
+	StartedAt    time.Time
+	Status       string
+	ChangedCount int32
+	FailedCount  int32
+}
+
+// RunsPageData holds data for the runs list page.
+type RunsPageData struct {
+	PageData
+	Runs         []RunRow
+	StatusFilter string
+	RunCount     int
+}
+
+// RunDetailPageData holds data for the run detail page.
+type RunDetailPageData struct {
+	PageData
+	Run      RunRow
+	Results  []RunResultRow
+}
+
+// ConfigPageData holds data for the config viewer page.
+type ConfigPageData struct {
+	PageData
+	Hostname string
+	RawYAML  string
+}
+
+// PlanResultRow is a single plan result displayed in the plans page.
+type PlanResultRow struct {
+	ModuleName    string
+	ResourceType  string
+	ResourceName  string
+	PlannedAction string
+	ActionColor   string
+}
+
+// PlanDetailPageData holds data for the plan detail page.
+type PlanDetailPageData struct {
+	PageData
+	PlanID      uuid.UUID
+	Hostname    string
+	CreatedAt   time.Time
+	Results     []PlanResultRow
+	TotalCount  int
+	CreateCount int
+	UpdateCount int
+	DeleteCount int
+	SkipCount   int
 }
 
 // --- Handlers ---
@@ -410,5 +514,29 @@ func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) Dashboard
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
+}
+
+func (ds *dbDataSource) ClientsData(baseInterval time.Duration, statusFilter string) ClientsPageData {
+	return ClientsPageData{PageData: PageData{Title: "Clients", ActiveNav: "clients"}}
+}
+
+func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.Duration) (ClientDetailPageData, error) {
+	return ClientDetailPageData{}, fmt.Errorf("not implemented")
+}
+
+func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
+	return RunsPageData{PageData: PageData{Title: "Runs", ActiveNav: "runs"}}
+}
+
+func (ds *dbDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error) {
+	return RunDetailPageData{}, fmt.Errorf("not implemented")
+}
+
+func (ds *dbDataSource) ConfigData(hostname string) (ConfigPageData, error) {
+	return ConfigPageData{}, fmt.Errorf("not implemented")
+}
+
+func (ds *dbDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, error) {
+	return PlanDetailPageData{}, fmt.Errorf("not implemented")
 }
 
