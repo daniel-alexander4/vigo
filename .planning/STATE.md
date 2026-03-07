@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-06T19:27:40.886Z"
-last_activity: 2026-03-06 -- Completed plan 03-05 (Isopass Integration & Secret Rotation)
+status: in-progress
+stopped_at: Completed 04-02-PLAN.md (Bootstrap & Agent Self-Update)
+last_updated: "2026-03-06T20:17:46Z"
+last_activity: 2026-03-06 -- Completed plan 04-02 (Bootstrap & Agent Self-Update)
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 15
-  completed_plans: 15
-  percent: 100
+  total_plans: 18
+  completed_plans: 17
+  percent: 94
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** Phase 3: Operations -- In Progress
+**Current focus:** Phase 4: Web UI & Deployment -- In Progress
 
 ## Current Position
 
-Phase: 3 of 4 (Operations)
-Plan: 5 of 5 in current phase
-Status: Phase Complete
-Last activity: 2026-03-06 -- Completed plan 03-05 (Isopass Integration & Secret Rotation)
+Phase: 4 of 4 (Web UI & Deployment)
+Plan: 2 of 3 in current phase
+Status: In Progress
+Last activity: 2026-03-06 -- Completed plan 04-02 (Bootstrap & Agent Self-Update)
 
-Progress: [██████████] 100%
+Progress: [█████████ ] 94%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██████████] 100%
 | Phase 03 P03 | 3min | 2 tasks | 14 files |
 | Phase 03 P02 | 6min | 2 tasks | 7 files |
 | Phase 03 P05 | 4min | 2 tasks | 10 files |
+| Phase 04 P02 | 5min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,12 @@ Recent decisions affecting current work:
 - [Phase 03]: RunInfo struct decouples compliance from db.Run; stale=2x baseInterval; ForcePush sets DB flag only
 - [03-05]: Interface-based watcher deps (VersionProvider, ClientStore, DB, EventDispatcher) for clean unit testing
 - [03-05]: CertCache with sync.RWMutex for concurrent TLS handshake reads; NewServer returns 3 values including CertCache
+- [04-02]: text/template for bootstrap script (not html/template) to avoid HTML escaping in shell
+- [04-02]: Single-quoted interpolated values in bootstrap script for shell injection prevention
+- [04-02]: Checksum cache keyed by file path with modtime invalidation
+- [04-02]: ExecFn injection pattern for testable syscall.Exec without replacing process in tests
+- [04-02]: UpdateConfig struct passed to Loop for optional self-update (nil disables)
+- [04-02]: Self-update failure logged as warning, never crashes agent (retry next cycle)
 
 ### Pending Todos
 
@@ -130,6 +137,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T19:27:40.883Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-web-ui-deployment/04-CONTEXT.md
+Last session: 2026-03-06T20:17:46Z
+Stopped at: Completed 04-02-PLAN.md (Bootstrap & Agent Self-Update)
+Resume file: .planning/phases/04-web-ui-deployment/04-02-SUMMARY.md

@@ -75,7 +75,7 @@
 - [x] **AGNT-07**: Agent supports `isogov-agent run` for one-shot immediate convergence
 - [x] **AGNT-08**: Agent supports `run --module <name>` to apply a single module
 - [x] **AGNT-09**: File snapshots saved to `/var/lib/isogov/snapshots/` before overwrites (last 5 per path)
-- [ ] **AGNT-10**: Agent checks for newer binary version on each check-in, self-updates after checksum verification
+- [x] **AGNT-10**: Agent checks for newer binary version on each check-in, self-updates after checksum verification
 - [x] **AGNT-11**: Agent generates ED25519 keypair on first run, stores private key locally
 
 ### Database
@@ -123,8 +123,8 @@
 - [x] **INFRA-01**: Docker Compose with server, postgres, isopass services
 - [x] **INFRA-02**: Dockerfile.server and Dockerfile.agent
 - [x] **INFRA-03**: Makefile: build, proto, certs, test, lint targets
-- [ ] **INFRA-04**: Bootstrap script at `GET /bootstrap` with server address + CA cert baked in
-- [ ] **INFRA-05**: Agent binary download endpoint: `GET /api/v1/agent/download/{os}/{arch}`
+- [x] **INFRA-04**: Bootstrap script at `GET /bootstrap` with server address + CA cert baked in
+- [x] **INFRA-05**: Agent binary download endpoint: `GET /api/v1/agent/download/{os}/{arch}`
 - [x] **INFRA-06**: Multi-platform package manager support via PackageManager interface (apt, dnf, yum, apk, pacman, brew, zypper)
 
 ## v2 Requirements
@@ -242,9 +242,9 @@
 | UI-06 | Phase 4 | Pending |
 | UI-07 | Phase 4 | Pending |
 | UI-08 | Phase 4 | Pending |
-| AGNT-10 | Phase 4 | Pending |
-| INFRA-04 | Phase 4 | Pending |
-| INFRA-05 | Phase 4 | Pending |
+| AGNT-10 | Phase 4 | Complete |
+| INFRA-04 | Phase 4 | Complete |
+| INFRA-05 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 89 total
