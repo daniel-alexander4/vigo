@@ -87,16 +87,33 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		return nil, status.Errorf(codes.Internal, "compiling modules: %v", err)
 	}
 
+	// Scan traits directory and build manifest for custom trait sync.
+	var customTraits []*pb.CustomTraitEntry
+	traitEntries, traitErr := s.traitsScanner.ScanDir()
+	if traitErr != nil {
+		slog.Warn("failed to scan traits directory", "error", traitErr)
+		// Non-fatal: continue without custom traits.
+	} else {
+		for _, te := range traitEntries {
+			customTraits = append(customTraits, &pb.CustomTraitEntry{
+				Name:   te.Name,
+				Sha256: te.SHA256,
+			})
+		}
+	}
+
 	metrics.CheckinsTotal.WithLabelValues("success").Inc()
 
 	slog.Info("check-in",
 		"client_id", clientID,
 		"hostname", client.Hostname,
 		"modules", len(modules),
+		"custom_traits", len(customTraits),
 	)
 
 	return &pb.CheckInResponse{
-		Modules: modules,
+		Modules:      modules,
+		CustomTraits: customTraits,
 	}, nil
 }
 

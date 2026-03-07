@@ -14,6 +14,7 @@ import (
 	"github.com/isogov/isogov/server/config"
 	"github.com/isogov/isogov/server/db"
 	"github.com/isogov/isogov/server/registry"
+	"github.com/isogov/isogov/server/traits"
 	"github.com/isogov/isogov/server/webhook"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -64,6 +65,7 @@ type ServerConfig struct {
 	Queries      *db.Queries
 	BaseInterval time.Duration
 	Dispatcher   *webhook.Dispatcher
+	TraitsDir    string
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -83,10 +85,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, error) {
 	)
 
 	agentSvc := &AgentService{
-		registry:    cfg.Registry,
-		configStore: cfg.ConfigStore,
-		queries:     cfg.Queries,
-		dispatcher:  cfg.Dispatcher,
+		registry:      cfg.Registry,
+		configStore:   cfg.ConfigStore,
+		queries:       cfg.Queries,
+		dispatcher:    cfg.Dispatcher,
+		traitsScanner: traits.NewScanner(cfg.TraitsDir),
 	}
 	pb.RegisterIsgovAgentServer(srv, agentSvc)
 

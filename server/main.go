@@ -43,6 +43,7 @@ func run() error {
 	configFile := envOrDefault("ISOGOV_CONFIG_FILE", "server-configs/server.yaml")
 	clientConfigsDir := envOrDefault("ISOGOV_CLIENT_CONFIGS_DIR", "client-configs")
 	migrationsDir := envOrDefault("ISOGOV_MIGRATIONS_DIR", "migrations")
+	traitsDir := envOrDefault("ISOGOV_TRAITS_DIR", "traits")
 
 	// Initialize secrets provider (StaticProvider for dev, IsopassProvider for prod in Phase 3).
 	provider, err := secrets.NewStaticProvider(envFile)
@@ -134,6 +135,7 @@ func run() error {
 		Queries:      queries,
 		BaseInterval: baseInterval,
 		Dispatcher:   dispatcher,
+		TraitsDir:    traitsDir,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
