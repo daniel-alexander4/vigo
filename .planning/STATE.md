@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Traits Visibility & Custom Traits
-status: executing
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-03-07T14:18:39Z"
+status: completed
+stopped_at: Completed 05-02-PLAN.md -- Phase 5 complete
+last_updated: "2026-03-07T14:23:25.874Z"
 last_activity: 2026-03-07 -- Completed 05-02 server traits endpoint and gvctl CLI
 progress:
   total_phases: 6
