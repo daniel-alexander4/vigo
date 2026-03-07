@@ -41,6 +41,22 @@ func IsConditionalVar(v any) bool {
 	return hasTrait
 }
 
+// HasOperatorKey returns true if v is a map containing any known operator key.
+// This catches malformed conditional vars (e.g., missing "trait" field) so they
+// can be reported as validation errors rather than silently treated as regular vars.
+func HasOperatorKey(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	for key := range m {
+		if validOperators[key] {
+			return true
+		}
+	}
+	return false
+}
+
 // ParseConditionalVar validates and parses a raw map[string]any (from YAML
 // unmarshaling) into a ConditionalVar. It returns an error if the trait field
 // is missing, no operator is present, multiple operators are present, the

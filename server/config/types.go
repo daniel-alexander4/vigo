@@ -3,6 +3,8 @@
 // provider to resolve "secret:" prefixes and supports hot-reload via fsnotify.
 package config
 
+import "github.com/isogov/isogov/server/conditionals"
+
 // ServerConfig represents the top-level server configuration from server.yaml.
 type ServerConfig struct {
 	Server   ServerSection   `yaml:"server"`
@@ -45,12 +47,13 @@ type CheckInSection struct {
 // ClientConfig represents the resolved per-client configuration.
 // This is the output type returned by ConfigStore.Get().
 type ClientConfig struct {
-	Client      string            `yaml:"client"`
-	Environment string            `yaml:"environment"`
-	Modules     []ModuleConfig    `yaml:"modules"`
-	Vars        map[string]any    `yaml:"vars"`
-	VarOrder    []string          `yaml:"-"`
-	EnvVars     map[string]map[string]any `yaml:"env_vars"`
+	Client          string                    `yaml:"client"`
+	Environment     string                    `yaml:"environment"`
+	Modules         []ModuleConfig            `yaml:"modules"`
+	Vars            map[string]any            `yaml:"vars"`
+	VarOrder        []string                  `yaml:"-"`
+	EnvVars         map[string]map[string]any `yaml:"env_vars"`
+	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
 }
 
 // ModuleConfig describes a module assigned to a client.
@@ -73,10 +76,11 @@ type ResourceConfig struct {
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
 type ModuleDefinition struct {
-	Name      string           `yaml:"name"`
-	DependsOn []string         `yaml:"depends_on"`
-	Resources []ResourceConfig `yaml:"resources"`
-	Vars      map[string]any   `yaml:"vars"`
+	Name            string                        `yaml:"name"`
+	DependsOn       []string                      `yaml:"depends_on"`
+	Resources       []ResourceConfig              `yaml:"resources"`
+	Vars            map[string]any                `yaml:"vars"`
+	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
 }
 
 // RoleDefinition is a named list of modules loaded from config/roles/*.yaml.

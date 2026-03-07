@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/isogov/isogov/server/conditionals"
 	"github.com/isogov/isogov/server/secrets"
 	"gopkg.in/yaml.v3"
 )
@@ -232,6 +233,19 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 		})
 	}
 
+	// Collect conditional vars from modules. Deduplicate by name
+	// (first definition wins, matching var merge behavior).
+	var condVars []conditionals.ConditionalVar
+	condVarNames := make(map[string]bool)
+	for _, name := range moduleNames {
+		for _, cv := range moduleDefs[name].ConditionalVars {
+			if !condVarNames[cv.Name] {
+				condVarNames[cv.Name] = true
+				condVars = append(condVars, cv)
+			}
+		}
+	}
+
 	// Build vars: module defaults first, then client-level overrides.
 	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
@@ -245,6 +259,11 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 		}
 	}
 	for k, v := range entry.Vars {
+		// Skip client-level vars that would conflict with conditional var names.
+		// Conditional vars take precedence -- they are evaluated at check-in time.
+		if condVarNames[k] {
+			continue
+		}
 		if _, exists := vars[k]; !exists {
 			varOrder = append(varOrder, k)
 		}
@@ -252,12 +271,13 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 	}
 
 	cfg := &ClientConfig{
-		Client:      entry.Match,
-		Environment: entry.Environment,
-		Modules:     modules,
-		Vars:        vars,
-		VarOrder:    varOrder,
-		EnvVars:     entry.EnvVars,
+		Client:          entry.Match,
+		Environment:     entry.Environment,
+		Modules:         modules,
+		Vars:            vars,
+		VarOrder:        varOrder,
+		EnvVars:         entry.EnvVars,
+		ConditionalVars: condVars,
 	}
 
 	// Merge environment-specific vars.
@@ -359,6 +379,27 @@ func loadModuleDefs(dir string) (map[string]*ModuleDefinition, error) {
 		if _, exists := defs[def.Name]; exists {
 			return nil, fmt.Errorf("duplicate module name %q in %s", def.Name, path)
 		}
+
+		// Separate conditional vars from regular vars.
+		// A conditional var is any map value with a "trait" key or any
+		// known operator key (only, not, gt, lt, gte, lte, match).
+		// Maps with operator keys but no trait are caught as validation
+		// errors by ParseConditionalVar.
+		var condVars []conditionals.ConditionalVar
+		for name, v := range def.Vars {
+			if !conditionals.IsConditionalVar(v) && !conditionals.HasOperatorKey(v) {
+				continue
+			}
+			rawMap, _ := v.(map[string]any)
+			cv, err := conditionals.ParseConditionalVar(name, rawMap)
+			if err != nil {
+				return nil, fmt.Errorf("module %q: %w", def.Name, err)
+			}
+			condVars = append(condVars, cv)
+			delete(def.Vars, name)
+		}
+		def.ConditionalVars = condVars
+
 		defs[def.Name] = &def
 	}
 	return defs, nil
@@ -599,6 +640,7 @@ func cloneClientConfig(cfg *ClientConfig) *ClientConfig {
 		clone.Vars[k] = v
 	}
 	clone.VarOrder = append([]string(nil), cfg.VarOrder...)
+	clone.ConditionalVars = append([]conditionals.ConditionalVar(nil), cfg.ConditionalVars...)
 	return &clone
 }
 
