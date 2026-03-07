@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -108,6 +110,76 @@ var clientsRevokeCmd = &cobra.Command{
 	},
 }
 
+var clientsTraitsCmd = &cobra.Command{
+	Use:   "traits <hostname> [dot.path]",
+	Short: "View collected traits for a client",
+	Args:  cobra.RangeArgs(1, 2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		hostname := args[0]
+		client := newAPIClient()
+
+		var resp struct {
+			Hostname    string         `json:"hostname"`
+			CollectedAt string         `json:"collected_at"`
+			Traits      map[string]any `json:"traits"`
+		}
+		if err := client.get("/api/v1/clients/"+hostname+"/traits", &resp); err != nil {
+			return err
+		}
+
+		// If a dot-path is provided, extract just that value.
+		if len(args) == 2 {
+			val, ok := traverseDotPath(resp.Traits, args[1])
+			if !ok {
+				return fmt.Errorf("trait path '%s' not found", args[1])
+			}
+			fmt.Fprintln(os.Stdout, formatTraitValue(val))
+			return nil
+		}
+
+		// No dot-path: print the full envelope as pretty JSON.
+		data, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to format response: %w", err)
+		}
+		fmt.Fprintln(os.Stdout, string(data))
+		return nil
+	},
+}
+
+// traverseDotPath walks a nested map using a dot-separated path and returns
+// the value at that path. Returns (nil, false) if any segment is missing.
+func traverseDotPath(data map[string]any, path string) (any, bool) {
+	parts := strings.Split(path, ".")
+	var current any = data
+	for _, part := range parts {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = m[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+// formatTraitValue formats a trait value for display. Scalars (string, number,
+// bool) are printed plainly; maps and slices are pretty-printed as JSON.
+func formatTraitValue(v any) string {
+	switch v.(type) {
+	case map[string]any, []any:
+		data, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			return fmt.Sprint(v)
+		}
+		return string(data)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
 func init() {
-	clientsCmd.AddCommand(clientsListCmd, clientsShowCmd, clientsRevokeCmd)
+	clientsCmd.AddCommand(clientsListCmd, clientsShowCmd, clientsRevokeCmd, clientsTraitsCmd)
 }
