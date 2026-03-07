@@ -6,6 +6,7 @@ certs/
 
 # Build output
 bin/
+dist/
 
 # Vendor directory
 vendor/

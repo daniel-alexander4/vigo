@@ -1,4 +1,6 @@
-.PHONY: build proto certs test lint seed migrate sqlc clean
+.PHONY: build proto certs test lint seed migrate sqlc dist clean
+
+VERSION ?= dev
 
 build:
 	go build -o bin/isogov-server ./server
@@ -41,5 +43,11 @@ migrate:
 sqlc:
 	sqlc generate
 
+dist:
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/linux/amd64/isogov-agent ./agent
+	GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/linux/arm64/isogov-agent ./agent
+	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/darwin/amd64/isogov-agent ./agent
+	GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/darwin/arm64/isogov-agent ./agent
+
 clean:
-	rm -rf bin/ certs/
+	rm -rf bin/ certs/ dist/
