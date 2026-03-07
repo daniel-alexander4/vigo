@@ -289,6 +289,188 @@ func TestConfigToProtoModulesNoConditionalsPassThrough(t *testing.T) {
 	}
 }
 
+// --- Conditional Block Check-In Pipeline Tests ---
+
+func TestConditionalBlockAllResourcesIncludedWhenConditionTrue(t *testing.T) {
+	// Simulates a module with resources that came from a conditional_block
+	// flattening. Block condition go_if_all_pass: [is_debian] is true.
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "debian-tools",
+				Resources: []config.ResourceConfig{
+					{
+						Name:        "install-apt-utils",
+						Type:        "package",
+						GoIfAllPass: config.StringOrSlice{"is_debian"},
+						Attributes:  map[string]any{"name": "apt-utils"},
+					},
+					{
+						Name:        "apt-update",
+						Type:        "exec",
+						GoIfAllPass: config.StringOrSlice{"is_debian"},
+						Attributes:  map[string]any{"command": "apt-get update"},
+					},
+				},
+			},
+		},
+	}
+
+	vars := map[string]any{"is_debian": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 2 {
+		t.Fatalf("expected 2 resources, got %d", len(modules[0].Resources))
+	}
+	if modules[0].Resources[0].Name != "install-apt-utils" {
+		t.Errorf("Resources[0].Name = %q, want install-apt-utils", modules[0].Resources[0].Name)
+	}
+	if modules[0].Resources[1].Name != "apt-update" {
+		t.Errorf("Resources[1].Name = %q, want apt-update", modules[0].Resources[1].Name)
+	}
+}
+
+func TestConditionalBlockAllResourcesExcludedWhenConditionFalse(t *testing.T) {
+	// Block condition go_if_all_pass: [is_debian] is false -- all block
+	// resources should be excluded, module should be excluded entirely.
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "debian-tools",
+				Resources: []config.ResourceConfig{
+					{
+						Name:        "install-apt-utils",
+						Type:        "package",
+						GoIfAllPass: config.StringOrSlice{"is_debian"},
+						Attributes:  map[string]any{"name": "apt-utils"},
+					},
+					{
+						Name:        "apt-update",
+						Type:        "exec",
+						GoIfAllPass: config.StringOrSlice{"is_debian"},
+						Attributes:  map[string]any{"command": "apt-get update"},
+					},
+				},
+			},
+		},
+	}
+
+	vars := map[string]any{"is_debian": "false"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 0 {
+		t.Errorf("expected 0 modules (block condition false), got %d", len(modules))
+	}
+}
+
+func TestConditionalBlockResourceLevelSkipOverridesBlockPass(t *testing.T) {
+	// Block go_if_all_pass: [is_debian] passes, but resource has
+	// skip_if_any_pass: [is_container] which also passes -- resource excluded.
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "debian-desktop",
+				Resources: []config.ResourceConfig{
+					{
+						Name:          "desktop-tool",
+						Type:          "package",
+						GoIfAllPass:   config.StringOrSlice{"is_debian"},
+						SkipIfAnyPass: config.StringOrSlice{"is_container"},
+						Attributes:    map[string]any{"name": "desktop-tool"},
+					},
+					{
+						Name:        "apt-update",
+						Type:        "exec",
+						GoIfAllPass: config.StringOrSlice{"is_debian"},
+						Attributes:  map[string]any{"command": "apt-get update"},
+					},
+				},
+			},
+		},
+	}
+
+	// Both is_debian and is_container are true: desktop-tool excluded, apt-update included
+	vars := map[string]any{"is_debian": "true", "is_container": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 1 {
+		t.Fatalf("expected 1 resource (desktop-tool skipped), got %d", len(modules[0].Resources))
+	}
+	if modules[0].Resources[0].Name != "apt-update" {
+		t.Errorf("expected apt-update, got %q", modules[0].Resources[0].Name)
+	}
+
+	// is_debian=true, is_container=false: both resources included
+	vars = map[string]any{"is_debian": "true", "is_container": "false"}
+	modules, err = configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 2 {
+		t.Fatalf("expected 2 resources, got %d", len(modules[0].Resources))
+	}
+}
+
+func TestConditionalBlockDependsOnFromNonBlockToBlockResource(t *testing.T) {
+	// Non-block resource depends_on a block resource. Both included when
+	// conditions pass. Verifies depends_on name references work across
+	// block boundaries in the proto response.
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "cross-dep",
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "setup-repo",
+						Type:       "exec",
+						Attributes: map[string]any{"command": "add-repo"},
+					},
+					{
+						Name:        "install-tool",
+						Type:        "package",
+						GoIfAllPass: config.StringOrSlice{"is_debian"},
+						DependsOn:   []string{"setup-repo"},
+						Attributes:  map[string]any{"name": "my-tool"},
+					},
+				},
+			},
+		},
+	}
+
+	vars := map[string]any{"is_debian": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 2 {
+		t.Fatalf("expected 2 resources, got %d", len(modules[0].Resources))
+	}
+	if modules[0].Resources[0].Name != "setup-repo" {
+		t.Errorf("Resources[0].Name = %q, want setup-repo", modules[0].Resources[0].Name)
+	}
+	if modules[0].Resources[1].Name != "install-tool" {
+		t.Errorf("Resources[1].Name = %q, want install-tool", modules[0].Resources[1].Name)
+	}
+}
+
 func TestEvaluateConditionalVarsBeforeRenderVars(t *testing.T) {
 	// Ensure conditional vars are inserted at the beginning of varOrder
 	// so regular vars can reference them via Go templates.
