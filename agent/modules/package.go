@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/isogov/isogov/agent/modules/pkgmgr"
@@ -17,22 +18,23 @@ type PackageExecutor struct {
 
 // Execute applies the desired package state based on params.
 // Supported params:
-//   - name: package name (required)
+//   - name: package name or comma-separated list (required)
 //   - state: "present" (default) or "absent"
-//   - version: desired version (optional, triggers upgrade if different)
+//   - version: desired version (optional, triggers upgrade if different;
+//     applies to all packages when using a comma-separated list)
 func (p *PackageExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
 	start := time.Now()
-	name := params["name"]
+	nameParam := params["name"]
 	result := ResourceResult{
 		ResourceType: "package",
-		ResourceName: name,
+		ResourceName: nameParam,
 	}
 
 	defer func() {
 		result.DurationMs = int32(time.Since(start).Milliseconds())
 	}()
 
-	if name == "" {
+	if nameParam == "" {
 		result.Error = fmt.Errorf("package executor: name param is required")
 		return result
 	}
@@ -43,6 +45,50 @@ func (p *PackageExecutor) Execute(ctx context.Context, params map[string]string,
 	}
 	version := params["version"]
 
+	// Split comma-separated package names.
+	names := splitNames(nameParam)
+
+	for _, name := range names {
+		res := p.executeOne(ctx, name, state, version, dryRun)
+		if res.Error != nil {
+			result.Error = res.Error
+			return result
+		}
+		if res.Changed {
+			result.Changed = true
+			// Use the most significant action (created/deleted > updated > none).
+			if result.Action == "" || result.Action == ActionNone {
+				result.Action = res.Action
+			}
+		}
+	}
+
+	if result.Action == "" {
+		result.Action = ActionNone
+	}
+	return result
+}
+
+// splitNames splits a comma-separated name string into trimmed, non-empty names.
+func splitNames(s string) []string {
+	parts := strings.Split(s, ",")
+	names := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			names = append(names, p)
+		}
+	}
+	return names
+}
+
+// executeOne applies the desired state for a single package.
+func (p *PackageExecutor) executeOne(ctx context.Context, name, state, version string, dryRun bool) ResourceResult {
+	result := ResourceResult{
+		ResourceType: "package",
+		ResourceName: name,
+	}
+
 	installed, currentVersion, err := p.PkgMgr.IsInstalled(ctx, name)
 	if err != nil {
 		result.Error = fmt.Errorf("query package %s: %w", name, err)
@@ -52,7 +98,6 @@ func (p *PackageExecutor) Execute(ctx context.Context, params map[string]string,
 	switch state {
 	case "present":
 		if installed {
-			// If a specific version is requested and it differs, upgrade
 			if version != "" && currentVersion != version {
 				result.Action = ActionUpdated
 				result.Changed = true
@@ -64,12 +109,10 @@ func (p *PackageExecutor) Execute(ctx context.Context, params map[string]string,
 				}
 				return result
 			}
-			// Already installed at desired version (or no version specified)
 			result.Action = ActionNone
 			result.Changed = false
 			return result
 		}
-		// Not installed -- install
 		result.Action = ActionCreated
 		result.Changed = true
 		if dryRun {

@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -33,22 +34,22 @@ func (s *ServiceExecutor) isEnabled(ctx context.Context, name string) bool {
 
 // Execute applies the desired service state based on params.
 // Supported params:
-//   - name: service name (required)
+//   - name: service name or comma-separated list (required)
 //   - state: "running", "stopped", "restarted", or "reloaded"
 //   - enabled: "true" or "false" (optional)
 func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
 	start := time.Now()
-	name := params["name"]
+	nameParam := params["name"]
 	result := ResourceResult{
 		ResourceType: "service",
-		ResourceName: name,
+		ResourceName: nameParam,
 	}
 
 	defer func() {
 		result.DurationMs = int32(time.Since(start).Milliseconds())
 	}()
 
-	if name == "" {
+	if nameParam == "" {
 		result.Error = fmt.Errorf("service executor: name param is required")
 		return result
 	}
@@ -59,12 +60,53 @@ func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string,
 	}
 	enabledParam := params["enabled"]
 
+	names := splitServiceNames(nameParam)
+
+	for _, name := range names {
+		res := s.executeOne(ctx, name, state, enabledParam, dryRun)
+		if res.Error != nil {
+			result.Error = res.Error
+			return result
+		}
+		if res.Changed {
+			result.Changed = true
+			if result.Action == "" || result.Action == ActionNone {
+				result.Action = res.Action
+			}
+		}
+	}
+
+	if result.Action == "" {
+		result.Action = ActionNone
+	}
+	return result
+}
+
+// splitServiceNames splits a comma-separated name string into trimmed, non-empty names.
+func splitServiceNames(s string) []string {
+	parts := strings.Split(s, ",")
+	names := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			names = append(names, p)
+		}
+	}
+	return names
+}
+
+// executeOne applies the desired state for a single service.
+func (s *ServiceExecutor) executeOne(ctx context.Context, name, state, enabledParam string, dryRun bool) ResourceResult {
+	result := ResourceResult{
+		ResourceType: "service",
+		ResourceName: name,
+	}
+
 	active := s.isActive(ctx, name)
 	enabled := s.isEnabled(ctx, name)
 
 	changed := false
 
-	// Determine state change needed
 	var stateCmd string
 	switch state {
 	case "running":
@@ -88,7 +130,6 @@ func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string,
 		return result
 	}
 
-	// Determine enabled change needed
 	var enableCmd string
 	if enabledParam == "true" && !enabled {
 		enableCmd = "enable"
@@ -111,7 +152,6 @@ func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string,
 		return result
 	}
 
-	// Execute state change
 	if stateCmd != "" {
 		out, err := s.runner().Run(ctx, "systemctl", stateCmd, name)
 		if err != nil {
@@ -120,7 +160,6 @@ func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string,
 		}
 	}
 
-	// Execute enabled change
 	if enableCmd != "" {
 		out, err := s.runner().Run(ctx, "systemctl", enableCmd, name)
 		if err != nil {

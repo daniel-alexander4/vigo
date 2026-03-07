@@ -251,3 +251,91 @@ func TestServiceExecutor_MissingName(t *testing.T) {
 		t.Error("expected error for missing name, got nil")
 	}
 }
+
+func TestServiceExecutor_MultipleServices(t *testing.T) {
+	runner := newMockCmdRunnerGeneric()
+	// nginx is stopped, php-fpm is stopped, redis is already running
+	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
+	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 1")}
+	runner.results["systemctl is-active --quiet php-fpm"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
+	runner.results["systemctl is-enabled --quiet php-fpm"] = mockCmdResult{err: fmt.Errorf("exit status 1")}
+	runner.results["systemctl is-active --quiet redis"] = mockCmdResult{}
+	runner.results["systemctl is-enabled --quiet redis"] = mockCmdResult{}
+
+	se := &ServiceExecutor{Runner: runner}
+	result := se.Execute(context.Background(), map[string]string{
+		"name":    "nginx, php-fpm, redis",
+		"state":   "running",
+		"enabled": "true",
+	}, false)
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if !result.Changed {
+		t.Error("Changed = false, want true")
+	}
+	if result.Action != ActionUpdated {
+		t.Errorf("Action = %q, want %q", result.Action, ActionUpdated)
+	}
+
+	// nginx and php-fpm should be started and enabled, redis already fine
+	startCount := 0
+	enableCount := 0
+	for _, c := range runner.calls {
+		if strings.Contains(c, "systemctl start") {
+			startCount++
+		}
+		if strings.Contains(c, "systemctl enable") {
+			enableCount++
+		}
+	}
+	if startCount != 2 {
+		t.Errorf("expected 2 start calls, got %d (calls: %v)", startCount, runner.calls)
+	}
+	if enableCount != 2 {
+		t.Errorf("expected 2 enable calls, got %d (calls: %v)", enableCount, runner.calls)
+	}
+}
+
+func TestServiceExecutor_MultipleAllRunning(t *testing.T) {
+	runner := newMockCmdRunnerGeneric()
+	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
+	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results["systemctl is-active --quiet redis"] = mockCmdResult{}
+	runner.results["systemctl is-enabled --quiet redis"] = mockCmdResult{}
+
+	se := &ServiceExecutor{Runner: runner}
+	result := se.Execute(context.Background(), map[string]string{
+		"name":    "nginx, redis",
+		"state":   "running",
+		"enabled": "true",
+	}, false)
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %v", result.Error)
+	}
+	if result.Changed {
+		t.Error("Changed = true, want false (all already running and enabled)")
+	}
+	if result.Action != ActionNone {
+		t.Errorf("Action = %q, want %q", result.Action, ActionNone)
+	}
+}
+
+func TestServiceExecutor_MultipleStopsOnError(t *testing.T) {
+	runner := newMockCmdRunnerGeneric()
+	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
+	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results["systemctl start nginx"] = mockCmdResult{err: fmt.Errorf("exit status 1"), output: []byte("Failed to start")}
+
+	se := &ServiceExecutor{Runner: runner}
+	result := se.Execute(context.Background(), map[string]string{
+		"name":  "nginx, redis",
+		"state": "running",
+	}, false)
+
+	if result.Error == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
