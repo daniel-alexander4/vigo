@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 04-02-PLAN.md (Bootstrap & Agent Self-Update)
-last_updated: "2026-03-06T20:17:46Z"
-last_activity: 2026-03-06 -- Completed plan 04-02 (Bootstrap & Agent Self-Update)
+stopped_at: Completed 04-01-PLAN.md (Dashboard & Compliance UI)
+last_updated: "2026-03-06T20:23:00Z"
+last_activity: 2026-03-06 -- Completed plan 04-01 (Dashboard & Compliance UI)
 progress:
   total_phases: 4
   completed_phases: 3
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 Phase: 4 of 4 (Web UI & Deployment)
 Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-03-06 -- Completed plan 04-02 (Bootstrap & Agent Self-Update)
+Last activity: 2026-03-06 -- Completed plan 04-01 (Dashboard & Compliance UI)
 
 Progress: [█████████ ] 94%
 
@@ -60,6 +60,7 @@ Progress: [█████████ ] 94%
 | Phase 03 P02 | 6min | 2 tasks | 7 files |
 | Phase 03 P05 | 4min | 2 tasks | 10 files |
 | Phase 04 P02 | 5min | 2 tasks | 9 files |
+| Phase 04 P01 | 10min | 2 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -125,6 +126,10 @@ Recent decisions affecting current work:
 - [04-02]: ExecFn injection pattern for testable syscall.Exec without replacing process in tests
 - [04-02]: UpdateConfig struct passed to Loop for optional self-update (nil disables)
 - [04-02]: Self-update failure logged as warning, never crashes agent (retry next cycle)
+- [04-01]: Per-page template cloning avoids name collision pitfall (each page gets own clone of base+partials)
+- [04-01]: DataSource interface decouples handlers from DB for testable mock injection
+- [04-01]: grpc-gateway moved from / to /api/ to avoid shadowing UI routes
+- [04-01]: Coming-soon placeholder template for stub pages to avoid rendering errors
 
 ### Pending Todos
 
@@ -137,6 +142,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T20:17:46Z
-Stopped at: Completed 04-02-PLAN.md (Bootstrap & Agent Self-Update)
-Resume file: .planning/phases/04-web-ui-deployment/04-02-SUMMARY.md
+Last session: 2026-03-06T20:23:00Z
+Stopped at: Completed 04-01-PLAN.md (Dashboard & Compliance UI)
+Resume file: .planning/phases/04-web-ui-deployment/04-01-SUMMARY.md
