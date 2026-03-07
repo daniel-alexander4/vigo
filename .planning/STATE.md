@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Structured Conditionals
 status: in-progress
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-07T20:37:00Z"
-last_activity: 2026-03-07 -- Completed 08-01 resource conditional fields and ShouldRunResource
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-03-07T20:43:03Z"
+last_activity: 2026-03-07 -- Completed 08-02 server-side resource filtering and when: removal
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 96
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** Phase 8 - Resource Conditionals
+**Current focus:** Phase 8 complete, ready for Phase 9
 
 ## Current Position
 
-Phase: 8 of 10 (Resource Conditionals) -- IN PROGRESS
-Plan: 1 of 2 complete
-Status: 08-01 complete, ready for 08-02
-Last activity: 2026-03-07 -- Completed 08-01 resource conditional fields and ShouldRunResource
+Phase: 8 of 10 (Resource Conditionals) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase 8 complete, ready for 09-conditional-blocks
+Last activity: 2026-03-07 -- Completed 08-02 server-side resource filtering and when: removal
 
-Progress: [██████████] 96%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 26
+- Total plans completed: 27
 - Average duration: 5min
-- Total execution time: ~1.9 hours
+- Total execution time: ~2.0 hours
 
 **By Phase:**
 
@@ -50,7 +50,7 @@ Progress: [██████████] 96%
 | 05-Trait Inspection | 2/2 | 5min | 2.5min |
 | 06-Custom Traits | 2/2 | 8min | 4min |
 | 07-Conditional Vars | 2/2 | 7min | 3.5min |
-| 08-Resource Conditionals | 1/2 | 2min | 2min |
+| 08-Resource Conditionals | 2/2 | 6min | 3min |
 
 *Updated after each plan completion*
 
@@ -76,6 +76,10 @@ Recent decisions affecting current work:
 - [08-01]: varIsTrue checks string "true" equality -- consistent with phase 7 boolean convention
 - [08-01]: Empty conditional lists = no constraint (resource runs)
 - [08-01]: Conditional fields placed before Attributes inline to prevent YAML inline capture
+- [08-02]: Server-side resource filtering via ShouldRunResource in configToProtoModules
+- [08-02]: Empty modules excluded from proto response when all resources filtered
+- [08-02]: Proto Module field 7 reserved after removing when field
+- [08-02]: Agent simplified -- no conditional evaluation, server sends only runnable resources
 
 ### Pending Todos
 
@@ -87,6 +91,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T20:37:00Z
-Stopped at: Completed 08-01-PLAN.md
-Resume file: .planning/phases/08-resource-conditionals/08-01-SUMMARY.md
+Last session: 2026-03-07T20:43:03Z
+Stopped at: Completed 08-02-PLAN.md
+Resume file: .planning/phases/08-resource-conditionals/08-02-SUMMARY.md
