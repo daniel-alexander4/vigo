@@ -104,7 +104,7 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 | 4. Web UI & Deployment | v1.0 | 4/4 | Complete | 2026-03-06 |
 | 5. Trait Inspection | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 6. Custom Traits | v1.1 | 2/2 | Complete | 2026-03-07 |
-| 7. Conditional Vars | v1.2 | 0/2 | In progress | - |
+| 7. Conditional Vars | 1/2 | In Progress|  | - |
 | 8. Resource Conditionals | v1.2 | 0/0 | Not started | - |
 | 9. Conditional Blocks | v1.2 | 0/0 | Not started | - |
 | 10. Module Conditionals | v1.2 | 0/0 | Not started | - |
