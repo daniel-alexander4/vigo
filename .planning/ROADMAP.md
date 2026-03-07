@@ -44,11 +44,11 @@
   2. Admin can define a conditional var with numeric operators (`gt`, `lt`, `gte`, `lte`) and it evaluates correctly against numeric trait values
   3. Admin can define a conditional var with `match:` regex operator and it evaluates correctly against string trait values
   4. Conditional vars are referenceable by name from any of the four conditional fields (`go_if_all_pass:`, `go_if_any_pass:`, `skip_if_all_pass:`, `skip_if_any_pass:`) and server resolves them to true/false before sending to agent
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01-PLAN.md — Conditional var evaluation engine (TDD: server/conditionals package with all operators)
+- [ ] 07-02-PLAN.md — Wire conditional vars into config loader and check-in flow
 
 ### Phase 8: Resource Conditionals
 **Goal**: Resources use the four structured conditional fields to control execution, fully replacing freeform `when:` expressions
@@ -104,7 +104,7 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 | 4. Web UI & Deployment | v1.0 | 4/4 | Complete | 2026-03-06 |
 | 5. Trait Inspection | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 6. Custom Traits | v1.1 | 2/2 | Complete | 2026-03-07 |
-| 7. Conditional Vars | v1.2 | 0/0 | Not started | - |
+| 7. Conditional Vars | v1.2 | 0/2 | In progress | - |
 | 8. Resource Conditionals | v1.2 | 0/0 | Not started | - |
 | 9. Conditional Blocks | v1.2 | 0/0 | Not started | - |
 | 10. Module Conditionals | v1.2 | 0/0 | Not started | - |
