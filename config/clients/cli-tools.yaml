@@ -1,0 +1,49 @@
+client: dev01.example.com
+environment: production
+
+vars:
+  glow_version: "2.1.0"
+  bat_version: "0.25.0"
+  fd_version: "10.2.0"
+  ripgrep_version: "14.1.1"
+
+modules:
+  # Tools available via third-party APT repos use repository + package.
+  - name: charm-tools
+    resources:
+      - name: charm-repo
+        type: repository
+        name: charm
+        key_url: https://repo.charm.sh/apt/gpg.key
+        repo: "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *"
+        state: present
+
+      - name: install-glow
+        type: package
+        package: glow
+        state: present
+        depends_on: [charm-repo]
+
+  # Tools without repos use archive to download from GitHub releases.
+  - name: github-tools
+    resources:
+      - name: install-bat
+        type: archive
+        url: "https://github.com/sharkdp/bat/releases/download/v{{ .Vars.bat_version }}/bat-v{{ .Vars.bat_version }}-x86_64-unknown-linux-musl.tar.gz"
+        path: /usr/local/bin/bat
+        binary: bat
+        unless: "bat --version | grep {{ .Vars.bat_version }}"
+
+      - name: install-fd
+        type: archive
+        url: "https://github.com/sharkdp/fd/releases/download/v{{ .Vars.fd_version }}/fd-v{{ .Vars.fd_version }}-x86_64-unknown-linux-musl.tar.gz"
+        path: /usr/local/bin/fd
+        binary: fd
+        unless: "fd --version | grep {{ .Vars.fd_version }}"
+
+      - name: install-ripgrep
+        type: archive
+        url: "https://github.com/BurntSushi/ripgrep/releases/download/{{ .Vars.ripgrep_version }}/ripgrep-{{ .Vars.ripgrep_version }}-x86_64-unknown-linux-musl.tar.gz"
+        path: /usr/local/bin/rg
+        binary: rg
+        unless: "rg --version | grep {{ .Vars.ripgrep_version }}"

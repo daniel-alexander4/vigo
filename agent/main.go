@@ -92,9 +92,10 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"file": &modules.FileExecutor{
 			SnapshotMgr: snapshotMgr,
 		},
-		"service": &modules.ServiceExecutor{},
-		"user":    &modules.UserExecutor{},
-		"exec":    &modules.ExecExecutor{},
+		"service":    &modules.ServiceExecutor{},
+		"user":       &modules.UserExecutor{},
+		"exec":       &modules.ExecExecutor{},
+		"archive":    &modules.ArchiveExecutor{},
 	}
 
 	// Auto-detect package manager. Non-fatal if detection fails.
@@ -107,7 +108,26 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		executors["package"] = &modules.PackageExecutor{PkgMgr: pm}
 	}
 
+	// Auto-detect repo manager. Non-fatal if unavailable (some distros
+	// like Alpine don't support managed repos).
+	osFamily, osDistro := detectOSInfo()
+	if rm := pkgmgr.DetectRepoManager(osFamily, osDistro); rm != nil {
+		executors["repository"] = &modules.RepositoryExecutor{RepoMgr: rm}
+	}
+
 	return executors
+}
+
+// detectOSInfo returns the OS family and distro for repo manager detection.
+func detectOSInfo() (family, distro string) {
+	osCollector := &facts.OSCollector{}
+	osFacts, err := osCollector.Collect(context.Background())
+	if err != nil {
+		return runtime.GOOS, ""
+	}
+	family, _ = osFacts["family"].(string)
+	distro, _ = osFacts["distro"].(string)
+	return family, distro
 }
 
 // newGRPCClient creates a gRPC client with the configured TLS settings.

@@ -7,6 +7,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+ISOGOV_DIR="/etc/isogov"
+CONFIG_DIR="${ISOGOV_DIR}/config"
+CERTS_DIR="${ISOGOV_DIR}/certs"
+CLIENTS_DIR="${CONFIG_DIR}/clients"
+ENV_FILE="${ISOGOV_DIR}/.env"
+
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
@@ -17,16 +23,30 @@ warn()  { printf '\033[1;33m[WARN]\033[0m  %s\n' "$*"; }
 fail()  { printf '\033[1;31m[FAIL]\033[0m  %s\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Step 2: Generate TLS certs (if missing)
+# Step 1: Create /etc/isogov directory structure
+# ---------------------------------------------------------------------------
+
+info "Creating ${ISOGOV_DIR} directory structure"
+
+sudo mkdir -p "$CONFIG_DIR" "$CLIENTS_DIR" "$CERTS_DIR"
+
+ok "Directory structure ready"
+
+# ---------------------------------------------------------------------------
+# Step 2: Generate TLS certs (if missing) and copy to /etc/isogov/certs
 # ---------------------------------------------------------------------------
 
 info "Checking TLS certificates"
 
-if [ -f certs/server.crt ] && [ -f certs/server.key ] && [ -f certs/ca.crt ]; then
-  echo 'Certs already exist — skipping generation'
+if [ -f "${CERTS_DIR}/server.crt" ] && [ -f "${CERTS_DIR}/server.key" ] && [ -f "${CERTS_DIR}/ca.crt" ]; then
+  echo 'Certs already exist in /etc/isogov/certs — skipping'
 else
-  echo 'Generating self-signed CA + server certs...'
-  make certs
+  if [ ! -f certs/server.crt ] || [ ! -f certs/server.key ] || [ ! -f certs/ca.crt ]; then
+    echo 'Generating self-signed CA + server certs...'
+    make certs
+  fi
+  sudo cp certs/server.crt certs/server.key certs/ca.crt "$CERTS_DIR/"
+  echo "Copied certs to ${CERTS_DIR}"
 fi
 
 ok "TLS certificates ready"
@@ -37,10 +57,10 @@ ok "TLS certificates ready"
 
 info "Checking .env file"
 
-if [ -f .env ]; then
-  echo '.env already exists — skipping'
+if [ -f "$ENV_FILE" ]; then
+  echo "${ENV_FILE} already exists — skipping"
 else
-  cat > .env <<'ENVFILE'
+  sudo tee "$ENV_FILE" > /dev/null <<'ENVFILE'
 # =============================================================================
 # Isogov Environment Configuration
 # =============================================================================
@@ -87,184 +107,50 @@ ISOGOV_TLS_CA=certs/ca.crt
 # .env file path override (default: .env — this file)
 # ISOGOV_ENV_FILE=.env
 ENVFILE
-  echo '.env created with defaults'
+  echo "${ENV_FILE} created with defaults"
 fi
 
 ok ".env ready"
 
 # ---------------------------------------------------------------------------
-# Step 4: Write example client configs (if clients dir is empty)
+# Step 4: Copy config files to /etc/isogov/config
 # ---------------------------------------------------------------------------
 
-info "Checking client configs"
+info "Populating ${CONFIG_DIR}"
 
-CLIENT_COUNT=$(find config/clients -name '*.yaml' 2>/dev/null | wc -l)
-if [ "$CLIENT_COUNT" -gt 0 ]; then
-  echo "Found ${CLIENT_COUNT} client config(s) — skipping examples"
+# Server config
+if [ -f "${CONFIG_DIR}/server.yaml" ]; then
+  echo 'server.yaml already exists — skipping'
 else
-  mkdir -p config/clients
-
-  # Example 1: Explicit client config for a web server
-  cat > config/clients/web01.example.com.yaml <<'CLIENTFILE'
-# Explicit client config — matched by exact hostname.
-# This takes precedence over classification rules.
-client: web01.example.com
-environment: production
-
-vars:
-  app_port: \"8085\"
-  log_level: \"info\"
-  doc_root: \"/var/www/html\"
-
-env_vars:
-  production:
-    app_port: \"443\"
-    max_workers: \"8\"
-  staging:
-    app_port: \"8443\"
-    max_workers: \"2\"
-
-modules:
-  - name: webserver
-    resources:
-      - name: install-nginx
-        type: package
-        package: nginx
-        state: present
-
-      - name: nginx-config
-        type: file
-        path: /etc/nginx/sites-available/default
-        content: |
-          server {
-              listen {{ .Vars.app_port }};
-              root {{ .Vars.doc_root }};
-              access_log /var/log/nginx/access.log;
-          }
-        owner: root
-        group: root
-        mode: \"0644\"
-        depends_on: [install-nginx]
-        notify: [restart-nginx]
-
-      - name: restart-nginx
-        type: service
-        service: nginx
-        enabled: true
-        state: running
-        subscribes: [nginx-config]
-CLIENTFILE
-
-  # Example 2: Database server
-  cat > config/clients/db01.example.com.yaml <<'CLIENTFILE'
-# Database server — manages PostgreSQL installation and config.
-client: db01.example.com
-environment: production
-
-vars:
-  pg_version: \"16\"
-  max_connections: \"200\"
-  shared_buffers: \"256MB\"
-
-modules:
-  - name: postgres
-    resources:
-      - name: install-postgres
-        type: package
-        package: postgresql
-        state: present
-
-      - name: pg-config
-        type: file
-        path: /etc/postgresql/16/main/postgresql.conf
-        content: |
-          max_connections = {{ .Vars.max_connections }}
-          shared_buffers = {{ .Vars.shared_buffers }}
-          listen_addresses = '*'
-        owner: postgres
-        group: postgres
-        mode: \"0644\"
-        depends_on: [install-postgres]
-        notify: [restart-postgres]
-
-      - name: restart-postgres
-        type: service
-        service: postgresql
-        enabled: true
-        state: running
-        subscribes: [pg-config]
-CLIENTFILE
-
-  echo 'Created 2 example client configs'
+  sudo cp config/server.yaml "$CONFIG_DIR/"
+  echo 'Copied server.yaml'
 fi
 
-ok "Client configs ready"
-
-# ---------------------------------------------------------------------------
-# Step 5: Write classification rules (if default/empty)
-# ---------------------------------------------------------------------------
-
-info "Checking classification rules"
-
-# Only overwrite if it still has the example modules/ references that don't exist
-if grep -q 'source: modules/' config/classification.yaml 2>/dev/null; then
-  cat > config/classification.yaml <<'CLASSFILE'
-# Classification rules — auto-assign modules to clients by hostname pattern.
-# First matching rule wins. Explicit client YAML (config/clients/*.yaml)
-# always takes precedence over classification.
-#
-# Clients that match no rule and have no explicit config get an empty
-# module list and run cleanly with no changes.
-
-rules:
-  # Web servers: any hostname starting with 'web-'
-  - match: \"web-*\"
-    environment: production
-    modules:
-      - name: webserver
-        resources:
-          - name: install-nginx
-            type: package
-            package: nginx
-            state: present
-          - name: ensure-running
-            type: service
-            service: nginx
-            enabled: true
-            state: running
-            depends_on: [install-nginx]
-
-  # Database servers: any hostname starting with 'db-'
-  - match: \"db-*\"
-    environment: production
-    modules:
-      - name: database
-        resources:
-          - name: install-postgres
-            type: package
-            package: postgresql
-            state: present
-          - name: ensure-running
-            type: service
-            service: postgresql
-            enabled: true
-            state: running
-            depends_on: [install-postgres]
-
-  # Staging: anything under *.staging.example.com
-  - match: \"*.staging.example.com\"
-    environment: staging
-    modules: []
-CLASSFILE
-  echo 'Updated classification.yaml with working examples'
+# Classification rules
+if [ -f "${CONFIG_DIR}/classification.yaml" ]; then
+  echo 'classification.yaml already exists — skipping'
 else
-  echo 'classification.yaml already customized — skipping'
+  sudo cp config/classification.yaml "$CONFIG_DIR/"
+  echo 'Copied classification.yaml'
 fi
 
-ok "Classification rules ready"
+# Client configs — copy any that don't already exist in destination
+NEW_CLIENTS=0
+for src in config/clients/*.yaml; do
+  [ -f "$src" ] || continue
+  dest="${CLIENTS_DIR}/$(basename "$src")"
+  if [ ! -f "$dest" ]; then
+    sudo cp "$src" "$dest"
+    NEW_CLIENTS=$((NEW_CLIENTS + 1))
+  fi
+done
+CLIENT_COUNT=$(find "$CLIENTS_DIR" -name '*.yaml' 2>/dev/null | wc -l)
+echo "Client configs: ${CLIENT_COUNT} total (${NEW_CLIENTS} new)"
+
+ok "Config files ready"
 
 # ---------------------------------------------------------------------------
-# Step 6: Build and start containers
+# Step 5: Build and start containers
 # ---------------------------------------------------------------------------
 
 info "Building and starting containers"
@@ -279,14 +165,21 @@ docker compose ps
 ok "Containers running"
 
 # ---------------------------------------------------------------------------
-# Step 7: Print status and next steps
+# Step 6: Print status and next steps
 # ---------------------------------------------------------------------------
 
-cat <<'DONE'
+cat <<DONE
 
 ============================================================
   Isogov deployed successfully
 ============================================================
+
+Config directory: ${ISOGOV_DIR}
+  ${CONFIG_DIR}/server.yaml
+  ${CONFIG_DIR}/classification.yaml
+  ${CLIENTS_DIR}/*.yaml
+  ${CERTS_DIR}/
+  ${ENV_FILE}
 
 Services:
   - PostgreSQL:  port 5432 (internal)
@@ -299,19 +192,19 @@ Next steps:
      http://<server-ip>:8080/
 
   2. Generate an enrollment token:
-     docker compose exec server gvctl tokens generate \
+     docker compose exec server gvctl tokens generate \\
        --pattern "*.example.com"
 
   3. On each managed node, run the printed curl command:
      curl http://<server-ip>:8080/bootstrap?token=<TOKEN> | bash
 
-  4. Edit client configs in config/clients/*.yaml
+  4. Edit client configs in ${CLIENTS_DIR}/
      (server hot-reloads automatically)
 
   5. For production:
-     - Replace certs/ with real TLS certificates
-     - Change POSTGRES_PASSWORD in docker-compose.yml + .env
-     - Set ISOGOV_WEBHOOK_SECRET in .env
+     - Replace ${CERTS_DIR}/ with real TLS certificates
+     - Change POSTGRES_PASSWORD in docker-compose.yml + ${ENV_FILE}
+     - Set ISOGOV_WEBHOOK_SECRET in ${ENV_FILE}
      - Set ISOGOV_VERSION to your release tag
 
 ============================================================

@@ -37,3 +37,26 @@ func Detect(osFamily, osDistro string) (PackageManager, error) {
 		return nil, fmt.Errorf("unsupported Linux distribution: %s", distro)
 	}
 }
+
+// DetectRepoManager returns the appropriate RepoManager for the given OS
+// family and distro. Returns nil (not an error) for platforms that don't
+// support repository management (e.g., macOS/brew, Alpine/apk).
+func DetectRepoManager(osFamily, osDistro string) RepoManager {
+	family := strings.ToLower(osFamily)
+	distro := strings.ToLower(osDistro)
+
+	if family != "linux" {
+		return nil
+	}
+
+	switch distro {
+	case "ubuntu", "debian", "mint":
+		return &AptRepoManager{}
+	case "fedora", "rhel", "rocky", "alma", "centos":
+		return &DnfRepoManager{}
+	case "opensuse", "sles":
+		return &DnfRepoManager{} // zypper uses same /etc/yum.repos.d/ layout
+	default:
+		return nil
+	}
+}

@@ -4,18 +4,27 @@ Pull-based configuration management for Linux and macOS. Agents on managed nodes
 
 ## Quickstart
 
-### 1. Generate TLS certificates
+### 1. Create `/etc/isogov`
+
+All server config lives in `/etc/isogov` on the host. The container bind-mounts it read-only.
+
+```bash
+sudo mkdir -p /etc/isogov/{config/clients,certs}
+```
+
+### 2. Generate TLS certificates
 
 ```bash
 make certs
+sudo cp certs/* /etc/isogov/certs/
 ```
 
-This creates a self-signed CA + server cert in `certs/`. For production, replace with your own.
+For production, replace with your own CA and server cert.
 
-### 2. Create the `.env` file
+### 3. Create the `.env` file
 
 ```bash
-cat > .env <<'EOF'
+sudo tee /etc/isogov/.env <<'EOF'
 ISOGOV_DB_DSN=postgres://isogov:secret@postgres:5432/isogov?sslmode=disable
 ISOGOV_TLS_CERT=certs/server.crt
 ISOGOV_TLS_KEY=certs/server.key
@@ -23,7 +32,15 @@ ISOGOV_TLS_CA=certs/ca.crt
 EOF
 ```
 
-### 3. Start the server
+### 4. Copy config files
+
+```bash
+sudo cp config/server.yaml /etc/isogov/config/
+sudo cp config/classification.yaml /etc/isogov/config/
+sudo cp config/clients/*.yaml /etc/isogov/config/clients/
+```
+
+### 5. Start the server
 
 ```bash
 docker compose up -d
@@ -37,7 +54,7 @@ docker compose ps
 
 You should see `postgres` (healthy) and `server` (running). The dashboard is at `http://<server-ip>:8080/`.
 
-### 4. Create an approved pattern and enrollment token
+### 6. Create an approved pattern and enrollment token
 
 ```bash
 docker compose exec server gvctl tokens generate --pattern "*.example.com"
@@ -45,7 +62,7 @@ docker compose exec server gvctl tokens generate --pattern "*.example.com"
 
 This prints a `curl` command with the enrollment token baked in.
 
-### 5. Bootstrap a managed node
+### 7. Bootstrap a managed node
 
 On each target node, run the `curl` command from the previous step:
 
@@ -55,12 +72,12 @@ curl http://<server-ip>:8080/bootstrap?token=<TOKEN> | bash
 
 The bootstrap script detects OS/arch, downloads the agent binary, installs it, copies the CA cert, generates an ED25519 keypair, and enrolls with the server.
 
-### 6. Define desired state
+### 8. Define desired state
 
-Create a client config in `config/clients/`:
+Create a client config in `/etc/isogov/config/clients/`:
 
 ```yaml
-# config/clients/web01.example.com.yaml
+# /etc/isogov/config/clients/web01.example.com.yaml
 client: web01.example.com
 environment: production
 
@@ -97,9 +114,9 @@ modules:
         subscribes: [nginx-config]
 ```
 
-The server watches `config/clients/` and hot-reloads automatically. On the next check-in, the agent converges to this state.
+The server watches `/etc/isogov/config/clients/` and hot-reloads automatically. On the next check-in, the agent converges to this state.
 
-### 7. Verify convergence
+### 9. Verify convergence
 
 ```bash
 # List enrolled clients
@@ -156,7 +173,8 @@ Ready-to-use configs for popular Linux software in `config/clients/` and `config
 | Docker | [`config/clients/docker-host.yaml`](config/clients/docker-host.yaml) | `daemon.json`, log rotation, containerd |
 | HAProxy | [`config/clients/haproxy.yaml`](config/clients/haproxy.yaml) | Stats page, roundrobin backend, health checks |
 | OpenSSH + fail2ban | [`config/clients/openssh.yaml`](config/clients/openssh.yaml) | Hardened sshd, key-only auth, brute-force protection |
-| Prometheus + Grafana | [`config/clients/monitoring.yaml`](config/clients/monitoring.yaml) | Prometheus, node-exporter, Grafana (multi-module) |
+| Prometheus + Grafana | [`config/clients/monitoring.yaml`](config/clients/monitoring.yaml) | Prometheus, node-exporter, Grafana (`repository` for APT repo) |
+| CLI tools | [`config/clients/cli-tools.yaml`](config/clients/cli-tools.yaml) | `repository` for Charm repo, `archive` for GitHub releases (bat, fd, rg) |
 
 The [`config/classification.yaml`](config/classification.yaml) file includes matching rules for all of these roles (`web-*`, `db-*`, `mysql-*`, `cache-*`, `lb-*`, `docker-*`, `mon-*`, `bastion-*`).
 
@@ -192,6 +210,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 | `package` | Package installation/removal | Query package manager |
 | `service` | Service state (running/stopped/restarted) | `systemctl` status |
 | `user` | User accounts and attributes | `/etc/passwd` lookup |
+| `repository` | Third-party package repos + GPG keys | Check repo config file exists |
+| `archive` | Download + install binaries from URLs | SHA256 hash or `unless` command |
 | `exec` | Arbitrary commands | `creates`/`onlyif`/`unless` guards |
 
 ## Key features

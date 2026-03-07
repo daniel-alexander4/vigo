@@ -14,23 +14,31 @@ modules:
         package: ca-certificates
         state: present
 
+      - name: docker-repo
+        type: repository
+        name: docker
+        key_url: https://download.docker.com/linux/ubuntu/gpg
+        repo: "deb [signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"
+        state: present
+        depends_on: [docker-deps]
+
       - name: install-docker
         type: package
         package: docker-ce
         state: present
-        depends_on: [docker-deps]
+        depends_on: [docker-repo]
 
       - name: install-docker-cli
         type: package
         package: docker-ce-cli
         state: present
-        depends_on: [docker-deps]
+        depends_on: [docker-repo]
 
       - name: install-containerd
         type: package
         package: containerd.io
         state: present
-        depends_on: [docker-deps]
+        depends_on: [docker-repo]
 
       - name: docker-daemon-json
         type: file

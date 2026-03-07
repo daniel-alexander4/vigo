@@ -75,10 +75,18 @@ modules:
 
   - name: grafana
     resources:
+      - name: grafana-repo
+        type: repository
+        name: grafana
+        key_url: https://apt.grafana.com/gpg.key
+        repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
+        state: present
+
       - name: install-grafana
         type: package
         package: grafana
         state: present
+        depends_on: [grafana-repo]
 
       - name: grafana-ini
         type: file
