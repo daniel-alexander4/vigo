@@ -17,7 +17,6 @@ type ResourceNode struct {
 	DependsOn  []string
 	Notify     []string
 	Subscribes []string
-	When       string
 	ModuleName string
 }
 
@@ -41,7 +40,6 @@ func BuildDAG(modules []*pb.Module) ([]ResourceNode, map[string][]string, error)
 				Type:       res.GetType(),
 				Params:     res.GetParams(),
 				ModuleName: mod.GetName(),
-				When:       mod.GetWhen(),
 				Notify:     copyStrings(mod.GetNotify()),
 				Subscribes: copyStrings(mod.GetSubscribes()),
 			}

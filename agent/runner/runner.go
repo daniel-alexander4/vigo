@@ -9,13 +9,14 @@ import (
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 )
 
-// Runner executes resources in DAG order with notify/subscribe triggers
-// and when: conditional evaluation.
+// Runner executes resources in DAG order with notify/subscribe triggers.
+// Conditional evaluation happens server-side; the agent receives only
+// resources that should run.
 type Runner struct {
 	// Executors maps resource type names to their executor implementations.
 	Executors map[string]modules.Executor
 
-	// Facts are the collected node facts used for when: condition evaluation.
+	// Facts are the collected node facts (used for template rendering).
 	Facts map[string]any
 
 	// DryRun passes through to executors and disables the notify pass.
@@ -37,8 +38,8 @@ func NewRunner(executors map[string]modules.Executor, facts map[string]any, dryR
 }
 
 // Run executes all resources from the provided proto modules in DAG topological
-// order. It evaluates when: conditions, records results for each resource, and
-// performs a notify pass after the main execution pass for changed resources.
+// order. It records results for each resource and performs a notify pass after
+// the main execution pass for changed resources.
 //
 // The function returns a slice of ResourceResult for all resources (main pass
 // + notify pass). It returns an error only for fatal DAG construction failures
@@ -85,26 +86,14 @@ func (r *Runner) Run(ctx context.Context, protoModules []*pb.Module) ([]modules.
 	return results, nil
 }
 
-// executeResource runs a single resource: evaluates when condition, looks up
-// executor, and calls Execute.
+// executeResource runs a single resource: looks up executor and calls Execute.
+// Conditional evaluation happens server-side; the agent only receives resources
+// that should run.
 func (r *Runner) executeResource(ctx context.Context, node ResourceNode) modules.ResourceResult {
 	result := modules.ResourceResult{
 		ModuleName:   node.ModuleName,
 		ResourceType: node.Type,
 		ResourceName: node.Name,
-	}
-
-	// Evaluate when condition.
-	if node.When != "" {
-		shouldRun, err := EvaluateWhen(node.When, r.Facts)
-		if err != nil {
-			result.Error = fmt.Errorf("evaluate when for %q: %w", node.Name, err)
-			return result
-		}
-		if !shouldRun {
-			result.Action = modules.ActionSkipped
-			return result
-		}
 	}
 
 	// Look up executor by resource type.

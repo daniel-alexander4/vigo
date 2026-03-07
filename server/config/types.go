@@ -104,7 +104,6 @@ type ResourceConfig struct {
 	Attributes    map[string]any `yaml:",inline"`
 	Notify        []string       `yaml:"notify"`
 	Subscribes    []string       `yaml:"subscribes"`
-	When          string         `yaml:"when"`
 	DependsOn     []string       `yaml:"depends_on"`
 }
 

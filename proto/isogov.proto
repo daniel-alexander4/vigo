@@ -243,7 +243,7 @@ message Module {
   repeated string depends_on = 4;
   repeated string notify = 5;
   repeated string subscribes = 6;
-  string when = 7;            // Go template condition evaluated against .Facts
+  reserved 7;                 // was: string when (now evaluated server-side)
 }
 
 message Resource {

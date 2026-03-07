@@ -438,7 +438,6 @@ type Module struct {
 	DependsOn     []string               `protobuf:"bytes,4,rep,name=depends_on,json=dependsOn,proto3" json:"depends_on,omitempty"`
 	Notify        []string               `protobuf:"bytes,5,rep,name=notify,proto3" json:"notify,omitempty"`
 	Subscribes    []string               `protobuf:"bytes,6,rep,name=subscribes,proto3" json:"subscribes,omitempty"`
-	When          string                 `protobuf:"bytes,7,opt,name=when,proto3" json:"when,omitempty"` // Go template condition evaluated against .Facts
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -513,13 +512,6 @@ func (x *Module) GetSubscribes() []string {
 		return x.Subscribes
 	}
 	return nil
-}
-
-func (x *Module) GetWhen() string {
-	if x != nil {
-		return x.When
-	}
-	return ""
 }
 
 type Resource struct {
@@ -3510,7 +3502,7 @@ const file_isogov_proto_rawDesc = "" +
 	"\x1aDownloadCustomTraitRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"1\n" +
 	"\x1bDownloadCustomTraitResponse\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"\xdf\x01\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"\xd1\x01\n" +
 	"\x06Module\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x121\n" +
@@ -3520,8 +3512,7 @@ const file_isogov_proto_rawDesc = "" +
 	"\x06notify\x18\x05 \x03(\tR\x06notify\x12\x1e\n" +
 	"\n" +
 	"subscribes\x18\x06 \x03(\tR\n" +
-	"subscribes\x12\x12\n" +
-	"\x04when\x18\a \x01(\tR\x04when\"\xa6\x01\n" +
+	"subscribesJ\x04\b\a\x10\b\"\xa6\x01\n" +
 	"\bResource\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x127\n" +

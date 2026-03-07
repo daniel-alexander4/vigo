@@ -108,10 +108,6 @@ func withSubscribes(targets ...string) moduleOpt {
 	return func(m *pb.Module) { m.Subscribes = targets }
 }
 
-func withWhen(expr string) moduleOpt {
-	return func(m *pb.Module) { m.When = expr }
-}
-
 func TestRunnerTopologicalOrder(t *testing.T) {
 	mock := newMockExecutor()
 	mock.changed["base"] = true
@@ -159,44 +155,6 @@ func TestRunnerTopologicalOrder(t *testing.T) {
 	}
 	if appIdx >= svcIdx {
 		t.Errorf("app (%d) should execute before svc (%d)", appIdx, svcIdx)
-	}
-}
-
-func TestRunnerWhenSkips(t *testing.T) {
-	mock := newMockExecutor()
-
-	mods := []*pb.Module{
-		makeModule("base", "file", []string{"base-res"}),
-		makeModule("skip-me", "file", []string{"skipped-res"}, withWhen(`{{ eq .Traits.os.family "windows" }}`)),
-	}
-
-	facts := map[string]any{
-		"os": map[string]any{"family": "linux"},
-	}
-
-	r := NewRunner(map[string]modules.Executor{"file": mock}, facts, false, "")
-	results, err := r.Run(context.Background(), mods)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-
-	// Should have 2 results: base-res (executed) and skipped-res (skipped)
-	if len(results) != 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
-	}
-
-	for _, res := range results {
-		if res.ResourceName == "skipped-res" {
-			if res.Action != modules.ActionSkipped {
-				t.Errorf("expected skipped-res to be ActionSkipped, got %s", res.Action)
-			}
-		}
-	}
-
-	// Mock should only have been called once (for base-res)
-	calls := mock.callNames()
-	if len(calls) != 1 || calls[0] != "base-res" {
-		t.Errorf("expected only base-res call, got %v", calls)
 	}
 }
 
