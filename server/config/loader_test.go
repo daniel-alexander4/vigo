@@ -920,6 +920,211 @@ func TestRenderVars(t *testing.T) {
 	}
 }
 
+func TestLoadModuleWithConditionalVars(t *testing.T) {
+	dir := setupDir(t)
+
+	// Module with both regular vars and a conditional var.
+	writeFile(t, filepath.Join(dir, "modules", "webserver.yaml"), `
+name: webserver
+vars:
+  port: "8080"
+  is_debian:
+    trait: "os.distro"
+    only: [debian, ubuntu]
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web.example.com"
+    modules: [webserver]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web.example.com")
+
+	// Regular var should remain in Vars map.
+	if cfg.Vars["port"] != "8080" {
+		t.Errorf("regular var 'port' = %v, want '8080'", cfg.Vars["port"])
+	}
+
+	// Conditional var should NOT be in Vars map (it's not a template-renderable string).
+	if _, exists := cfg.Vars["is_debian"]; exists {
+		t.Error("conditional var 'is_debian' should not be in Vars map")
+	}
+
+	// Conditional var should be in ConditionalVars slice.
+	if len(cfg.ConditionalVars) != 1 {
+		t.Fatalf("len(ConditionalVars) = %d, want 1", len(cfg.ConditionalVars))
+	}
+	cv := cfg.ConditionalVars[0]
+	if cv.Name != "is_debian" {
+		t.Errorf("ConditionalVar name = %q, want 'is_debian'", cv.Name)
+	}
+	if cv.Trait != "os.distro" {
+		t.Errorf("ConditionalVar trait = %q, want 'os.distro'", cv.Trait)
+	}
+	if cv.Operator != "only" {
+		t.Errorf("ConditionalVar operator = %q, want 'only'", cv.Operator)
+	}
+}
+
+func TestLoadModuleInvalidConditionalVar(t *testing.T) {
+	dir := setupDir(t)
+
+	// Module with a bad conditional var (no trait field).
+	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+name: bad
+vars:
+  broken_cond:
+    only: [debian, ubuntu]
+resources: []
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "test.example.com"
+    modules: [bad]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for conditional var without trait field, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing required 'trait' field") {
+		t.Errorf("error = %q, want it to mention missing trait field", err)
+	}
+}
+
+func TestLoadModuleInvalidConditionalVarBadOperator(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+name: bad
+vars:
+  broken_cond:
+    trait: "os.distro"
+    invalid_op: [debian]
+resources: []
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "test.example.com"
+    modules: [bad]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for conditional var with invalid operator, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown operator") {
+		t.Errorf("error = %q, want it to mention unknown operator", err)
+	}
+}
+
+func TestResolveEntryWithConditionalVars(t *testing.T) {
+	dir := setupDir(t)
+
+	// Two modules, each with a conditional var.
+	writeFile(t, filepath.Join(dir, "modules", "mod_a.yaml"), `
+name: mod_a
+vars:
+  is_ubuntu:
+    trait: "os.distro"
+    only: [ubuntu]
+  port: "80"
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "mod_b.yaml"), `
+name: mod_b
+vars:
+  has_enough_mem:
+    trait: "hardware.memory_mb"
+    gte: 4096
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "multi.example.com"
+    modules: [mod_a, mod_b]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("multi.example.com")
+
+	// Should have 2 conditional vars from the two modules.
+	if len(cfg.ConditionalVars) != 2 {
+		t.Fatalf("len(ConditionalVars) = %d, want 2", len(cfg.ConditionalVars))
+	}
+
+	// Regular var should remain.
+	if cfg.Vars["port"] != "80" {
+		t.Errorf("regular var 'port' = %v, want '80'", cfg.Vars["port"])
+	}
+
+	// Conditional vars should NOT be in Vars map.
+	if _, exists := cfg.Vars["is_ubuntu"]; exists {
+		t.Error("conditional var 'is_ubuntu' should not be in Vars map")
+	}
+	if _, exists := cfg.Vars["has_enough_mem"]; exists {
+		t.Error("conditional var 'has_enough_mem' should not be in Vars map")
+	}
+}
+
+func TestConditionalVarsNotOverridableByClientVars(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "mod.yaml"), `
+name: mod
+vars:
+  is_debian:
+    trait: "os.distro"
+    only: [debian, ubuntu]
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "override.example.com"
+    modules: [mod]
+    vars:
+      is_debian: "manual_override"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("override.example.com")
+
+	// Conditional var should still be in ConditionalVars (not overridden).
+	if len(cfg.ConditionalVars) != 1 {
+		t.Fatalf("len(ConditionalVars) = %d, want 1 (client var should not override conditional var)", len(cfg.ConditionalVars))
+	}
+	if cfg.ConditionalVars[0].Name != "is_debian" {
+		t.Errorf("ConditionalVar name = %q, want 'is_debian'", cfg.ConditionalVars[0].Name)
+	}
+
+	// The client-level override should NOT end up in Vars either -- conditional vars
+	// take precedence and the name is reserved.
+	if _, exists := cfg.Vars["is_debian"]; exists {
+		t.Error("conditional var name 'is_debian' should not be in Vars map even when client tries to override it")
+	}
+}
+
 func TestTemplateRendering(t *testing.T) {
 	facts := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
