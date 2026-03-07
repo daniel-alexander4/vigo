@@ -1,3 +1,47 @@
 {{define "page-content"}}
-<div class="coming-soon"><h2>Runs</h2><p>Coming soon</p></div>
+<div class="page-header">
+    <h1>Runs</h1>
+    <p>{{.RunCount}} runs across all clients</p>
+</div>
+
+<div class="filter-bar mb-2">
+    <a href="/runs" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
+    <a href="/runs?status=success" class="btn btn--sm{{if eq .StatusFilter "success"}} btn--primary{{end}}">Success</a>
+    <a href="/runs?status=failure" class="btn btn--sm{{if eq .StatusFilter "failure"}} btn--primary{{end}}">Failure</a>
+    <a href="/runs?status=partial" class="btn btn--sm{{if eq .StatusFilter "partial"}} btn--primary{{end}}">Partial</a>
+</div>
+
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Run</th>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Modules</th>
+                <th>Changed</th>
+                <th>Failed</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Runs}}
+            <tr>
+                <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
+                <td>{{.Hostname}}</td>
+                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{.ModuleCount}}</td>
+                <td>{{.ChangedCount}}</td>
+                <td>{{.FailedCount}}</td>
+                <td class="text-muted">{{formatTime .StartedAt}}</td>
+            </tr>
+            {{end}}
+            {{if not .Runs}}
+            <tr>
+                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
 {{end}}

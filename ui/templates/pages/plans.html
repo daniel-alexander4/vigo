@@ -1,3 +1,64 @@
 {{define "page-content"}}
-<div class="coming-soon"><h2>Plans</h2><p>Coming soon</p></div>
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/clients">Clients</a> &rsaquo; {{.Hostname}} &rsaquo; Plan
+    </div>
+    <h1>Plan {{truncUUID .PlanID}}</h1>
+    <p>
+        Client: <a href="/clients/{{.PlanID}}">{{.Hostname}}</a>
+        &middot; Created: {{formatTime .CreatedAt}}
+    </p>
+</div>
+
+<div class="stat-cards mb-2">
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.TotalCount}}</div>
+        <div class="stat-card__label">Total Resources</div>
+    </div>
+    <div class="stat-card stat-card--success">
+        <div class="stat-card__value">{{.CreateCount}}</div>
+        <div class="stat-card__label">Creates</div>
+    </div>
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.UpdateCount}}</div>
+        <div class="stat-card__label">Updates</div>
+    </div>
+    <div class="stat-card stat-card--danger">
+        <div class="stat-card__value">{{.DeleteCount}}</div>
+        <div class="stat-card__label">Deletes</div>
+    </div>
+</div>
+
+<div class="table-container">
+    <h3>Planned Actions</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Module</th>
+                <th>Type</th>
+                <th>Resource</th>
+                <th>Planned Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Results}}
+            <tr>
+                <td>{{.ModuleName}}</td>
+                <td class="mono">{{.ResourceType}}</td>
+                <td class="mono">{{.ResourceName}}</td>
+                <td>
+                    <span class="badge badge--{{.ActionColor}}">
+                        {{.PlannedAction}}
+                    </span>
+                </td>
+            </tr>
+            {{end}}
+            {{if not .Results}}
+            <tr>
+                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No planned actions.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
 {{end}}

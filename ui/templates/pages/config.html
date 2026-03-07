@@ -1,3 +1,16 @@
 {{define "page-content"}}
-<div class="coming-soon"><h2>Config</h2><p>Coming soon</p></div>
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/clients">Clients</a> &rsaquo; {{.Hostname}} &rsaquo; Config
+    </div>
+    <h1>Config: {{.Hostname}}</h1>
+</div>
+
+<div class="code-block">
+    {{highlightYAML .RawYAML}}
+</div>
+
+<p class="text-muted" style="font-size:12px;">
+    Showing raw configuration. Secret references (<code>secret:...</code>) are not resolved for security.
+</p>
 {{end}}

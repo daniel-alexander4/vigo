@@ -60,6 +60,12 @@ func NewConfigStore(clientsDir, classificationPath string, provider secrets.Prov
 	return cs, nil
 }
 
+// Dir returns the path to the clients configuration directory.
+// Used by the UI to read raw YAML files from disk (without resolving secrets).
+func (cs *ConfigStore) Dir() string {
+	return cs.dir
+}
+
 // Get returns the resolved config for the given hostname. Lookup order:
 //  1. Explicit client config from YAML file
 //  2. Auto-classification from classification.yaml

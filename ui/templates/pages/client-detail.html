@@ -1,3 +1,104 @@
 {{define "page-content"}}
-<div class="coming-soon"><h2>Client Detail</h2><p>Coming soon</p></div>
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/clients">Clients</a> &rsaquo; {{.Client.Hostname}}
+    </div>
+    <h1>{{.Client.Hostname}}</h1>
+    <p class="mono">{{.Client.IPAddress}} &middot; Enrolled {{formatTime .Client.EnrolledAt}}</p>
+</div>
+
+<div class="client-header mb-2">
+    {{template "status-badge" dict "Status" .Client.Status}}
+    <span class="text-muted ml-1">Last seen: {{formatTime .Client.LastSeen}}</span>
+    <a href="/config/{{.Client.Hostname}}" class="btn btn--sm" style="margin-left:auto;">View Config</a>
+</div>
+
+<div class="client-layout">
+    <div class="client-main">
+        {{if .DriftHistory}}
+        <div class="table-container mb-2">
+            <h3>Drift History</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Changed</th>
+                        <th>Failed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .DriftHistory}}
+                    <tr>
+                        <td class="text-muted">{{formatTime .StartedAt}}</td>
+                        <td>{{template "status-badge" dict "Status" .Status}}</td>
+                        <td>{{.ChangedCount}}</td>
+                        <td>{{.FailedCount}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+
+        <div class="table-container">
+            <h3>Recent Runs</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Run</th>
+                        <th>Status</th>
+                        <th>Modules</th>
+                        <th>Changed</th>
+                        <th>Failed</th>
+                        <th>Time</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Runs}}
+                    <tr>
+                        <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
+                        <td>{{template "status-badge" dict "Status" .Status}}</td>
+                        <td>{{.ModuleCount}}</td>
+                        <td>{{.ChangedCount}}</td>
+                        <td>{{.FailedCount}}</td>
+                        <td class="text-muted">{{formatTime .StartedAt}}</td>
+                        <td>
+                            <button class="btn btn--sm"
+                                    hx-get="/runs/{{.ID}}"
+                                    hx-target="next .run-results"
+                                    hx-swap="innerHTML">Details</button>
+                        </td>
+                    </tr>
+                    <tr class="run-results-row">
+                        <td colspan="7" class="run-results" style="padding:0;"></td>
+                    </tr>
+                    {{end}}
+                    {{if not .Runs}}
+                    <tr>
+                        <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs recorded for this client.</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="client-sidebar">
+        <div class="facts-panel">
+            <h3>Facts</h3>
+            {{if .Facts}}
+            <dl class="facts-list">
+                {{range $key, $val := .Facts}}
+                <dt class="facts-key">{{$key}}</dt>
+                <dd class="facts-val mono">{{$val}}</dd>
+                {{end}}
+            </dl>
+            {{else}}
+            <p class="text-muted">No facts collected yet.</p>
+            {{end}}
+        </div>
+    </div>
+</div>
 {{end}}

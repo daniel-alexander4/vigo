@@ -1,3 +1,67 @@
 {{define "page-content"}}
-<div class="coming-soon"><h2>Run Detail</h2><p>Coming soon</p></div>
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/runs">Runs</a> &rsaquo; {{truncUUID .Run.ID}}
+    </div>
+    <h1>Run {{truncUUID .Run.ID}}</h1>
+    <p>
+        Client: <a href="/clients/{{.Run.ID}}">{{.Run.Hostname}}</a>
+        &middot; {{template "status-badge" dict "Status" .Run.Status}}
+        &middot; {{formatTime .Run.StartedAt}}
+    </p>
+</div>
+
+<div class="stat-cards mb-2">
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.Run.ModuleCount}}</div>
+        <div class="stat-card__label">Modules</div>
+    </div>
+    <div class="stat-card stat-card--success">
+        <div class="stat-card__value">{{.Run.ChangedCount}}</div>
+        <div class="stat-card__label">Changed</div>
+    </div>
+    <div class="stat-card stat-card--danger">
+        <div class="stat-card__value">{{.Run.FailedCount}}</div>
+        <div class="stat-card__label">Failed</div>
+    </div>
+</div>
+
+<div class="table-container">
+    <h3>Per-Module Results</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Module</th>
+                <th>Type</th>
+                <th>Resource</th>
+                <th>Action</th>
+                <th>Changed</th>
+                <th>Error</th>
+                <th>Duration</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Results}}
+            <tr>
+                <td>{{.ModuleName}}</td>
+                <td class="mono">{{.ResourceType}}</td>
+                <td class="mono">{{.ResourceName}}</td>
+                <td>
+                    <span class="badge badge--{{if eq .ActionTaken "create"}}success{{else if eq .ActionTaken "update"}}info{{else if eq .ActionTaken "delete"}}danger{{else}}muted{{end}}">
+                        {{.ActionTaken}}
+                    </span>
+                </td>
+                <td>{{if .Changed}}yes{{else}}-{{end}}</td>
+                <td>{{if .ErrorMessage}}<span class="text-danger">{{.ErrorMessage}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                <td class="mono">{{.DurationMs}}ms</td>
+            </tr>
+            {{end}}
+            {{if not .Results}}
+            <tr>
+                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No module results recorded.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
 {{end}}

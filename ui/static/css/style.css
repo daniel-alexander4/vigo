@@ -531,6 +531,90 @@ body {
     color: var(--color-text);
 }
 
+/* === Filter Bar === */
+.filter-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* === Breadcrumb === */
+.breadcrumb {
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+.breadcrumb a {
+    color: var(--color-brand);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+/* === Client Detail Layout === */
+.client-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 28px;
+}
+
+.client-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* === Facts Panel === */
+.facts-panel {
+    background: var(--color-card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.facts-panel h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.facts-list {
+    display: grid;
+    gap: 8px;
+}
+
+.facts-key {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.facts-val {
+    font-size: 13px;
+    color: var(--color-text);
+    margin-left: 0;
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+
+/* === Badge info color === */
+.badge--info {
+    background: #ebf4ff;
+    color: var(--color-brand);
+}
+
+/* === Run results expand === */
+.run-results-row td {
+    border-bottom: none !important;
+}
+
 /* === Responsive === */
 @media (max-width: 1200px) {
     .stat-cards {

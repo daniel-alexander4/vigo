@@ -14,6 +14,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/isogov/isogov/server/config"
 	"github.com/isogov/isogov/server/db"
 	"github.com/isogov/isogov/ui"
 	"google.golang.org/grpc"
@@ -23,7 +24,7 @@ import (
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
 // at the given address using mTLS credentials. It registers the IsgovAdmin
 // service handlers on /api/ paths and mounts the web UI on /.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, baseInterval time.Duration, serverAddr, agentDir, version string) (*http.ServeMux, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version string) (*http.ServeMux, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -42,7 +43,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	mux.Handle("/metrics", promhttp.Handler())
 
 	// Mount UI routes.
-	uiHandler, err := ui.NewHandler(queries, baseInterval, serverAddr, caFile, agentDir, version)
+	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, serverAddr, caFile, agentDir, version)
 	if err != nil {
 		return nil, fmt.Errorf("creating UI handler: %w", err)
 	}

@@ -2,14 +2,18 @@ package ui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/isogov/isogov/server/compliance"
+	"github.com/isogov/isogov/server/config"
 	"github.com/isogov/isogov/server/db"
 )
 
@@ -35,11 +39,11 @@ type Handler struct {
 	serverAddr   string
 	caFile       string
 	agentDir     string
-	version string
+	version      string
 }
 
 // NewHandler creates a UI handler wired to real database queries.
-func NewHandler(queries *db.Queries, baseInterval time.Duration, serverAddr, caFile, agentDir, version string) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -47,7 +51,7 @@ func NewHandler(queries *db.Queries, baseInterval time.Duration, serverAddr, caF
 
 	return &Handler{
 		renderer:     renderer,
-		dataSource:   &dbDataSource{queries: queries},
+		dataSource:   &dbDataSource{queries: queries, configStore: configStore},
 		baseInterval: baseInterval,
 		serverAddr:   serverAddr,
 		caFile:       caFile,
@@ -204,8 +208,8 @@ type RunsPageData struct {
 // RunDetailPageData holds data for the run detail page.
 type RunDetailPageData struct {
 	PageData
-	Run      RunRow
-	Results  []RunResultRow
+	Run     RunRow
+	Results []RunResultRow
 }
 
 // ConfigPageData holds data for the config viewer page.
@@ -260,70 +264,125 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "compliance", data)
 }
 
-// Clients renders a placeholder clients page (implemented in Plan 03).
+// Clients renders the clients list page with optional status filter.
 func (h *Handler) Clients(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, "coming-soon", PageData{
-		Title:     "Clients",
-		ActiveNav: "clients",
-		Version:   h.version,
-	})
+	statusFilter := r.URL.Query().Get("status")
+	data := h.dataSource.ClientsData(h.baseInterval, statusFilter)
+	data.Version = h.version
+	h.renderer.Render(w, "clients", data)
 }
 
-// ClientDetail renders a placeholder client detail page.
+// ClientDetail renders the client detail page with runs, facts, and drift history.
 func (h *Handler) ClientDetail(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, "coming-soon", PageData{
-		Title:     "Client Detail",
-		ActiveNav: "clients",
-		Version:   h.version,
-	})
+	idStr := r.PathValue("id")
+	clientID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "invalid client ID", http.StatusBadRequest)
+		return
+	}
+
+	data, err := h.dataSource.ClientDetailData(clientID, h.baseInterval)
+	if err != nil {
+		http.Error(w, "client not found", http.StatusNotFound)
+		return
+	}
+	data.Version = h.version
+	h.renderer.Render(w, "client-detail", data)
 }
 
-// Runs renders a placeholder runs page.
+// Runs renders the runs list page with optional status filter.
 func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, "coming-soon", PageData{
-		Title:     "Runs",
-		ActiveNav: "runs",
-		Version:   h.version,
-	})
+	statusFilter := r.URL.Query().Get("status")
+	data := h.dataSource.RunsData(statusFilter)
+	data.Version = h.version
+	h.renderer.Render(w, "runs", data)
 }
 
-// RunDetail renders a placeholder run detail page.
+// RunDetail renders the run detail page with per-module results.
 func (h *Handler) RunDetail(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, "coming-soon", PageData{
-		Title:     "Run Detail",
-		ActiveNav: "runs",
-		Version:   h.version,
-	})
+	idStr := r.PathValue("id")
+	runID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "invalid run ID", http.StatusBadRequest)
+		return
+	}
+
+	data, err := h.dataSource.RunDetailData(runID)
+	if err != nil {
+		http.Error(w, "run not found", http.StatusNotFound)
+		return
+	}
+	data.Version = h.version
+	h.renderer.Render(w, "run-detail", data)
 }
 
-// Config renders a placeholder config viewer page.
+// Config renders the config viewer page with syntax-highlighted raw YAML.
 func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, "coming-soon", PageData{
-		Title:     "Config Viewer",
-		ActiveNav: "clients",
-		Version:   h.version,
-	})
+	hostname := r.PathValue("hostname")
+	data, err := h.dataSource.ConfigData(hostname)
+	if err != nil {
+		http.Error(w, "config not found", http.StatusNotFound)
+		return
+	}
+	data.Version = h.version
+	h.renderer.Render(w, "config", data)
 }
 
-// Plans renders a placeholder plans page.
+// Plans renders the plan detail page with color-coded actions.
 func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, "coming-soon", PageData{
-		Title:     "Plans",
-		ActiveNav: "clients",
-		Version:   h.version,
-	})
+	idStr := r.PathValue("id")
+	planID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "invalid plan ID", http.StatusBadRequest)
+		return
+	}
+
+	data, err := h.dataSource.PlanDetailData(planID)
+	if err != nil {
+		http.Error(w, "plan not found", http.StatusNotFound)
+		return
+	}
+	data.Version = h.version
+	h.renderer.Render(w, "plans", data)
 }
 
 // ClientsTable renders the clients table fragment for HTMX polling.
 func (h *Handler) ClientsTable(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<div class="coming-soon"><h2>Clients Table</h2><p>Coming soon</p></div>`))
+	statusFilter := r.URL.Query().Get("status")
+	data := h.dataSource.ClientsData(h.baseInterval, statusFilter)
+	h.renderer.RenderFragment(w, "clients", "clients-table", data)
 }
 
 // --- Production data source ---
 
 type dbDataSource struct {
-	queries *db.Queries
+	queries     *db.Queries
+	configStore *config.ConfigStore
+}
+
+// clientComplianceInfo computes compliance status for a client using its latest run.
+func (ds *dbDataSource) clientComplianceInfo(ctx context.Context, c db.Client, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
+	lastSeen := time.Time{}
+	if c.LastSeen.Valid {
+		lastSeen = c.LastSeen.Time
+	}
+
+	latestRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
+		ClientID: c.ID,
+		Limit:    1,
+	})
+	if err != nil {
+		return compliance.ComputeStatus(nil, lastSeen, baseInterval), nil
+	}
+
+	if len(latestRuns) > 0 {
+		runInfo = &compliance.RunInfo{
+			Status:       latestRuns[0].Status,
+			ChangedCount: latestRuns[0].ChangedCount,
+		}
+	}
+
+	return compliance.ComputeStatus(runInfo, lastSeen, baseInterval), runInfo
 }
 
 func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
@@ -334,7 +393,6 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		return DashboardPageData{PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"}}
 	}
 
-	// Compute stats
 	totalClients := len(clients)
 	activeCount := 0
 	driftedCount := 0
@@ -348,29 +406,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 			activeCount++
 		}
 
-		// Compute compliance status for this client
-		lastSeen := time.Time{}
-		if c.LastSeen.Valid {
-			lastSeen = c.LastSeen.Time
-		}
-
-		latestRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-			ClientID: c.ID,
-			Limit:    1,
-		})
-		if err != nil {
-			continue
-		}
-
-		var runInfo *compliance.RunInfo
-		if len(latestRuns) > 0 {
-			runInfo = &compliance.RunInfo{
-				Status:       latestRuns[0].Status,
-				ChangedCount: latestRuns[0].ChangedCount,
-			}
-		}
-
-		status := compliance.ComputeStatus(runInfo, lastSeen, baseInterval)
+		status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
 		switch status {
 		case "drifted":
 			driftedCount++
@@ -384,13 +420,11 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		driftRate = float64(driftedCount) / float64(totalClients) * 100
 	}
 
-	// Recent runs
 	allRuns, err := ds.queries.ListAllRuns(ctx, 10)
 	if err != nil {
 		slog.Error("failed to list runs", "error", err)
 	}
 
-	// Build hostname lookup
 	clientMap := make(map[uuid.UUID]string, len(clients))
 	for _, c := range clients {
 		clientMap[c.ID] = c.Hostname
@@ -439,28 +473,18 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 			lastSeen = c.LastSeen.Time
 		}
 
-		latestRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-			ClientID: c.ID,
-			Limit:    1,
-		})
-		if err != nil {
-			continue
-		}
-
-		var runInfo *compliance.RunInfo
-		var lastRunStatus string
-		if len(latestRuns) > 0 {
-			runInfo = &compliance.RunInfo{
-				Status:       latestRuns[0].Status,
-				ChangedCount: latestRuns[0].ChangedCount,
-			}
-			lastRunStatus = latestRuns[0].Status
-		}
-
-		status := compliance.ComputeStatus(runInfo, lastSeen, baseInterval)
+		status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
 		statuses = append(statuses, status)
 
 		if status != "compliant" {
+			lastRunStatus := ""
+			latestRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
+				ClientID: c.ID,
+				Limit:    1,
+			})
+			if err == nil && len(latestRuns) > 0 {
+				lastRunStatus = latestRuns[0].Status
+			}
 			nonCompliant = append(nonCompliant, ComplianceRow{
 				Hostname:      c.Hostname,
 				Status:        status,
@@ -477,14 +501,12 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 		compPct = float64(summary["compliant"]) / float64(total) * 100
 	}
 
-	// 30-day compliance history for sparkline
 	history, err := ds.queries.ListComplianceHistory(ctx, 30)
 	if err != nil {
 		slog.Error("failed to list compliance history", "error", err)
 	}
 
 	sparkData := make([]float64, 0, len(history))
-	// Reverse so oldest is first (ListComplianceHistory returns DESC)
 	for i := len(history) - 1; i >= 0; i-- {
 		h := history[i]
 		if h.Total > 0 {
@@ -517,26 +539,314 @@ func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) Dashboard
 }
 
 func (ds *dbDataSource) ClientsData(baseInterval time.Duration, statusFilter string) ClientsPageData {
-	return ClientsPageData{PageData: PageData{Title: "Clients", ActiveNav: "clients"}}
+	ctx := context.Background()
+	clients, err := ds.queries.ListClients(ctx)
+	if err != nil {
+		slog.Error("failed to list clients", "error", err)
+		return ClientsPageData{PageData: PageData{Title: "Clients", ActiveNav: "clients"}}
+	}
+
+	var rows []ClientRow
+	for _, c := range clients {
+		if c.Revoked {
+			continue
+		}
+		status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
+
+		if statusFilter != "" && status != statusFilter {
+			continue
+		}
+
+		lastSeen := time.Time{}
+		if c.LastSeen.Valid {
+			lastSeen = c.LastSeen.Time
+		}
+
+		rows = append(rows, ClientRow{
+			ID:         c.ID,
+			Hostname:   c.Hostname,
+			IPAddress:  c.IpAddress,
+			EnrolledAt: c.EnrolledAt,
+			LastSeen:   lastSeen,
+			Status:     status,
+		})
+	}
+
+	return ClientsPageData{
+		PageData:     PageData{Title: "Clients", ActiveNav: "clients"},
+		Clients:      rows,
+		StatusFilter: statusFilter,
+		ClientCount:  len(rows),
+	}
 }
 
 func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.Duration) (ClientDetailPageData, error) {
-	return ClientDetailPageData{}, fmt.Errorf("not implemented")
+	ctx := context.Background()
+	c, err := ds.queries.GetClientByID(ctx, clientID)
+	if err != nil {
+		return ClientDetailPageData{}, fmt.Errorf("client not found: %w", err)
+	}
+
+	lastSeen := time.Time{}
+	if c.LastSeen.Valid {
+		lastSeen = c.LastSeen.Time
+	}
+
+	status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
+
+	client := ClientRow{
+		ID:         c.ID,
+		Hostname:   c.Hostname,
+		IPAddress:  c.IpAddress,
+		EnrolledAt: c.EnrolledAt,
+		LastSeen:   lastSeen,
+		Status:     status,
+	}
+
+	// Fetch last 20 runs with results
+	dbRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
+		ClientID: clientID,
+		Limit:    20,
+	})
+	if err != nil {
+		slog.Error("failed to list runs for client", "error", err)
+	}
+
+	var runs []ClientDetailRunRow
+	var driftHistory []DriftPoint
+	for _, r := range dbRuns {
+		dbResults, err := ds.queries.ListRunResults(ctx, r.ID)
+		if err != nil {
+			slog.Error("failed to list run results", "run_id", r.ID, "error", err)
+		}
+
+		var results []RunResultRow
+		for _, res := range dbResults {
+			errMsg := ""
+			if res.ErrorMessage.Valid {
+				errMsg = res.ErrorMessage.String
+			}
+			results = append(results, RunResultRow{
+				ModuleName:   res.ModuleName,
+				ResourceType: res.ResourceType,
+				ResourceName: res.ResourceName,
+				ActionTaken:  res.ActionTaken,
+				Changed:      res.Changed,
+				ErrorMessage: errMsg,
+				DurationMs:   res.DurationMs,
+			})
+		}
+
+		runs = append(runs, ClientDetailRunRow{
+			RunRow: RunRow{
+				ID:           r.ID,
+				Hostname:     c.Hostname,
+				StartedAt:    r.StartedAt,
+				Status:       r.Status,
+				ModuleCount:  r.ModuleCount,
+				ChangedCount: r.ChangedCount,
+				FailedCount:  r.FailedCount,
+			},
+			Results: results,
+		})
+
+		driftHistory = append(driftHistory, DriftPoint{
+			StartedAt:    r.StartedAt,
+			Status:       r.Status,
+			ChangedCount: r.ChangedCount,
+			FailedCount:  r.FailedCount,
+		})
+	}
+
+	// Fetch latest facts
+	facts := make(map[string]any)
+	cf, err := ds.queries.GetLatestClientFacts(ctx, clientID)
+	if err == nil {
+		_ = json.Unmarshal(cf.Facts, &facts)
+	}
+
+	return ClientDetailPageData{
+		PageData:     PageData{Title: "Client: " + c.Hostname, ActiveNav: "clients"},
+		Client:       client,
+		Runs:         runs,
+		Facts:        facts,
+		DriftHistory: driftHistory,
+	}, nil
 }
 
 func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
-	return RunsPageData{PageData: PageData{Title: "Runs", ActiveNav: "runs"}}
+	ctx := context.Background()
+	allRuns, err := ds.queries.ListAllRuns(ctx, 100)
+	if err != nil {
+		slog.Error("failed to list runs", "error", err)
+		return RunsPageData{PageData: PageData{Title: "Runs", ActiveNav: "runs"}}
+	}
+
+	// Build client hostname lookup to avoid N+1
+	clients, err := ds.queries.ListClients(ctx)
+	if err != nil {
+		slog.Error("failed to list clients for hostname lookup", "error", err)
+	}
+	clientMap := make(map[uuid.UUID]string, len(clients))
+	for _, c := range clients {
+		clientMap[c.ID] = c.Hostname
+	}
+
+	var rows []RunRow
+	for _, r := range allRuns {
+		if statusFilter != "" && r.Status != statusFilter {
+			continue
+		}
+		rows = append(rows, RunRow{
+			ID:           r.ID,
+			Hostname:     clientMap[r.ClientID],
+			StartedAt:    r.StartedAt,
+			Status:       r.Status,
+			ModuleCount:  r.ModuleCount,
+			ChangedCount: r.ChangedCount,
+			FailedCount:  r.FailedCount,
+		})
+	}
+
+	return RunsPageData{
+		PageData:     PageData{Title: "Runs", ActiveNav: "runs"},
+		Runs:         rows,
+		StatusFilter: statusFilter,
+		RunCount:     len(rows),
+	}
 }
 
 func (ds *dbDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error) {
-	return RunDetailPageData{}, fmt.Errorf("not implemented")
+	ctx := context.Background()
+	r, err := ds.queries.GetRunByID(ctx, runID)
+	if err != nil {
+		return RunDetailPageData{}, fmt.Errorf("run not found: %w", err)
+	}
+
+	c, err := ds.queries.GetClientByID(ctx, r.ClientID)
+	if err != nil {
+		return RunDetailPageData{}, fmt.Errorf("client not found: %w", err)
+	}
+
+	dbResults, err := ds.queries.ListRunResults(ctx, runID)
+	if err != nil {
+		return RunDetailPageData{}, fmt.Errorf("listing run results: %w", err)
+	}
+
+	var results []RunResultRow
+	for _, res := range dbResults {
+		errMsg := ""
+		if res.ErrorMessage.Valid {
+			errMsg = res.ErrorMessage.String
+		}
+		results = append(results, RunResultRow{
+			ModuleName:   res.ModuleName,
+			ResourceType: res.ResourceType,
+			ResourceName: res.ResourceName,
+			ActionTaken:  res.ActionTaken,
+			Changed:      res.Changed,
+			ErrorMessage: errMsg,
+			DurationMs:   res.DurationMs,
+		})
+	}
+
+	return RunDetailPageData{
+		PageData: PageData{Title: "Run Detail", ActiveNav: "runs"},
+		Run: RunRow{
+			ID:           r.ID,
+			Hostname:     c.Hostname,
+			StartedAt:    r.StartedAt,
+			Status:       r.Status,
+			ModuleCount:  r.ModuleCount,
+			ChangedCount: r.ChangedCount,
+			FailedCount:  r.FailedCount,
+		},
+		Results: results,
+	}, nil
 }
 
 func (ds *dbDataSource) ConfigData(hostname string) (ConfigPageData, error) {
-	return ConfigPageData{}, fmt.Errorf("not implemented")
+	if ds.configStore == nil {
+		return ConfigPageData{}, fmt.Errorf("no config store")
+	}
+
+	path := filepath.Join(ds.configStore.Dir(), hostname+".yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ConfigPageData{}, fmt.Errorf("config not found for %s: %w", hostname, err)
+	}
+
+	return ConfigPageData{
+		PageData: PageData{Title: "Config: " + hostname, ActiveNav: "clients"},
+		Hostname: hostname,
+		RawYAML:  string(data),
+	}, nil
 }
 
 func (ds *dbDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, error) {
-	return PlanDetailPageData{}, fmt.Errorf("not implemented")
+	ctx := context.Background()
+	p, err := ds.queries.GetPlanByID(ctx, planID)
+	if err != nil {
+		return PlanDetailPageData{}, fmt.Errorf("plan not found: %w", err)
+	}
+
+	c, err := ds.queries.GetClientByID(ctx, p.ClientID)
+	if err != nil {
+		return PlanDetailPageData{}, fmt.Errorf("client not found: %w", err)
+	}
+
+	dbResults, err := ds.queries.ListPlanResults(ctx, planID)
+	if err != nil {
+		return PlanDetailPageData{}, fmt.Errorf("listing plan results: %w", err)
+	}
+
+	var results []PlanResultRow
+	createCount, updateCount, deleteCount, skipCount := 0, 0, 0, 0
+	for _, r := range dbResults {
+		color := planActionColor(r.PlannedAction)
+		results = append(results, PlanResultRow{
+			ModuleName:    r.ModuleName,
+			ResourceType:  r.ResourceType,
+			ResourceName:  r.ResourceName,
+			PlannedAction: r.PlannedAction,
+			ActionColor:   color,
+		})
+		switch r.PlannedAction {
+		case "create":
+			createCount++
+		case "update":
+			updateCount++
+		case "delete":
+			deleteCount++
+		default:
+			skipCount++
+		}
+	}
+
+	return PlanDetailPageData{
+		PageData:    PageData{Title: "Plan Detail", ActiveNav: "clients"},
+		PlanID:      p.ID,
+		Hostname:    c.Hostname,
+		CreatedAt:   p.CreatedAt,
+		Results:     results,
+		TotalCount:  len(results),
+		CreateCount: createCount,
+		UpdateCount: updateCount,
+		DeleteCount: deleteCount,
+		SkipCount:   skipCount,
+	}, nil
 }
 
+// planActionColor maps a plan action to a badge CSS class.
+func planActionColor(action string) string {
+	switch action {
+	case "create":
+		return "success"
+	case "update":
+		return "info"
+	case "delete":
+		return "danger"
+	default:
+		return "muted"
+	}
+}
