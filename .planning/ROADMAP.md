@@ -118,7 +118,11 @@ Plans:
   2. Agents compare the manifest against their local cache, download new or changed executables via a dedicated gRPC call, and store them locally
   3. Custom trait output appears under `custom.<name>` in the traits map and is usable in `{{ .Traits.custom.<name>.key }}` templates and `when:` expressions
   4. A failing or timed-out custom trait executable logs a warning and is skipped -- other traits and convergence proceed unaffected
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md -- Proto definitions, server traits scanner, manifest in CheckIn, DownloadCustomTrait RPC
+- [ ] 06-02-PLAN.md -- Agent sync/cache, execution with timeout, JSON parsing, traits merging in loop
 
 ## Progress
 
@@ -132,4 +136,4 @@ Phases execute in numeric order: 5 -> 6
 | 3. Operations | v1.0 | 5/5 | Complete | 2026-03-06 |
 | 4. Web UI & Deployment | v1.0 | 4/4 | Complete | 2026-03-06 |
 | 5. Trait Inspection | v1.1 | 0/2 | Planning | - |
-| 6. Custom Traits | v1.1 | 0/? | Not started | - |
+| 6. Custom Traits | v1.1 | 0/2 | Planning | - |
