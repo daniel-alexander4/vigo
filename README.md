@@ -114,7 +114,7 @@ resources:
     subscribes: [nginx-conf]
 ```
 
-The `source` field references a template file relative to `client-configs/` (e.g. `client-configs/templates/nginx.conf.tmpl`). You can also use inline `content` — the two are mutually exclusive. Templates use Go template syntax with `.Facts` and `.Vars` namespaces.
+The `source` field references a template file relative to `client-configs/` (e.g. `client-configs/templates/nginx.conf.tmpl`). You can also use inline `content` — the two are mutually exclusive. Templates use Go template syntax with `.Traits` and `.Vars` namespaces.
 
 Group modules into roles in `client-configs/roles/`:
 

@@ -199,7 +199,7 @@ func TestBuildDAGModuleLevelMetadata(t *testing.T) {
 			Name:         "app",
 			ResourceType: "file",
 			DependsOn:    []string{"base"},
-			When:         `{{ eq .Facts.os.family "linux" }}`,
+			When:         `{{ eq .Traits.os.family "linux" }}`,
 			Resources: []*pb.Resource{
 				{Name: "app-config", Type: "file", Params: map[string]string{"path": "/etc/app.conf"}},
 			},
@@ -227,7 +227,7 @@ func TestBuildDAGModuleLevelMetadata(t *testing.T) {
 	// Find the app node and check its when condition
 	for _, n := range nodes {
 		if n.ModuleName == "app" {
-			if n.When != `{{ eq .Facts.os.family "linux" }}` {
+			if n.When != `{{ eq .Traits.os.family "linux" }}` {
 				t.Errorf("expected when condition on app node, got %q", n.When)
 			}
 			if len(n.DependsOn) == 0 {

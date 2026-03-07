@@ -1,6 +1,6 @@
 // Package facts provides pluggable fact collectors that gather system
 // information from managed nodes. Facts are used in Go templates as
-// .Facts.os.family, .Facts.hardware.cpu_count, etc.
+// .Traits.os.family, .Facts.hardware.cpu_count, etc.
 package facts
 
 import (

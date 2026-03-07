@@ -8,10 +8,10 @@ import (
 	"text/template"
 )
 
-// whenContext provides the template execution context with Facts accessible
-// via .Facts in template expressions.
+// whenContext provides the template execution context with Traits accessible
+// via .Traits in template expressions.
 type whenContext struct {
-	Facts map[string]any
+	Traits map[string]any
 }
 
 // EvaluateWhen evaluates a Go template expression against a facts map.
@@ -29,7 +29,7 @@ func EvaluateWhen(expr string, facts map[string]any) (bool, error) {
 		return false, fmt.Errorf("parse when expression: %w", err)
 	}
 
-	ctx := whenContext{Facts: facts}
+	ctx := whenContext{Traits: facts}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, ctx); err != nil {

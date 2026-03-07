@@ -167,7 +167,7 @@ func TestRunnerWhenSkips(t *testing.T) {
 
 	mods := []*pb.Module{
 		makeModule("base", "file", []string{"base-res"}),
-		makeModule("skip-me", "file", []string{"skipped-res"}, withWhen(`{{ eq .Facts.os.family "windows" }}`)),
+		makeModule("skip-me", "file", []string{"skipped-res"}, withWhen(`{{ eq .Traits.os.family "windows" }}`)),
 	}
 
 	facts := map[string]any{

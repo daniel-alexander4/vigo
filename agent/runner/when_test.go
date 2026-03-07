@@ -21,7 +21,7 @@ func TestEvaluateWhenMatchingCondition(t *testing.T) {
 		},
 	}
 
-	result, err := EvaluateWhen(`{{ eq .Facts.os.family "linux" }}`, facts)
+	result, err := EvaluateWhen(`{{ eq .Traits.os.family "linux" }}`, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestEvaluateWhenNonMatchingCondition(t *testing.T) {
 		},
 	}
 
-	result, err := EvaluateWhen(`{{ eq .Facts.os.family "linux" }}`, facts)
+	result, err := EvaluateWhen(`{{ eq .Traits.os.family "linux" }}`, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestEvaluateWhenMissingFactKey(t *testing.T) {
 	}
 
 	// Missing key should render as zero value, not "true"
-	result, err := EvaluateWhen(`{{ eq .Facts.os.nonexistent "linux" }}`, facts)
+	result, err := EvaluateWhen(`{{ eq .Traits.os.nonexistent "linux" }}`, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen with missing key: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestEvaluateWhenMissingTopLevelFact(t *testing.T) {
 	facts := map[string]any{}
 
 	// Completely missing top-level fact
-	result, err := EvaluateWhen(`{{ eq .Facts.os "something" }}`, facts)
+	result, err := EvaluateWhen(`{{ eq .Traits.os "something" }}`, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen with missing top-level: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestEvaluateWhenNestedFacts(t *testing.T) {
 		},
 	}
 
-	result, err := EvaluateWhen(`{{ eq .Facts.os.distro "ubuntu" }}`, facts)
+	result, err := EvaluateWhen(`{{ eq .Traits.os.distro "ubuntu" }}`, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen nested: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestEvaluateWhenNotEqual(t *testing.T) {
 		},
 	}
 
-	result, err := EvaluateWhen(`{{ ne .Facts.os.family "darwin" }}`, facts)
+	result, err := EvaluateWhen(`{{ ne .Traits.os.family "darwin" }}`, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen ne: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestEvaluateWhenAndCondition(t *testing.T) {
 		},
 	}
 
-	result, err := EvaluateWhen(`{{ and (eq .Facts.os.family "linux") (eq .Facts.os.distro "ubuntu") }}`, facts)
+	result, err := EvaluateWhen(`{{ and (eq .Traits.os.family "linux") (eq .Traits.os.distro "ubuntu") }}`, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen and: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestEvaluateWhenWhitespaceResult(t *testing.T) {
 		},
 	}
 
-	result, err := EvaluateWhen(`  {{ eq .Facts.os.family "linux" }}  `, facts)
+	result, err := EvaluateWhen(`  {{ eq .Traits.os.family "linux" }}  `, facts)
 	if err != nil {
 		t.Fatalf("EvaluateWhen whitespace: %v", err)
 	}

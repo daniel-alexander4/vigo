@@ -796,7 +796,7 @@ func TestRenderVars(t *testing.T) {
 		{
 			name: "facts reference renders correctly",
 			vars: map[string]any{
-				"greeting": "Hello from {{ .Facts.os.distro }}",
+				"greeting": "Hello from {{ .Traits.os.distro }}",
 			},
 			facts: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
@@ -822,7 +822,7 @@ func TestRenderVars(t *testing.T) {
 		{
 			name: "chained vars render top-down",
 			vars: map[string]any{
-				"distro":   "{{ .Facts.os.distro }}",
+				"distro":   "{{ .Traits.os.distro }}",
 				"greeting": "Hello from {{ .Vars.distro }}",
 			},
 			facts: map[string]any{
@@ -879,7 +879,7 @@ func TestRenderVars(t *testing.T) {
 		{
 			name: "nil varOrder falls back to map iteration",
 			vars: map[string]any{
-				"greeting": "Hello from {{ .Facts.os.distro }}",
+				"greeting": "Hello from {{ .Traits.os.distro }}",
 			},
 			facts: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
@@ -928,7 +928,7 @@ func TestTemplateRendering(t *testing.T) {
 		"app_port": "8080",
 	}
 
-	result, err := RenderTemplate("port={{ .Vars.app_port }} os={{ .Facts.os.distro }}", facts, vars)
+	result, err := RenderTemplate("port={{ .Vars.app_port }} os={{ .Traits.os.distro }}", facts, vars)
 	if err != nil {
 		t.Fatalf("RenderTemplate: %v", err)
 	}
