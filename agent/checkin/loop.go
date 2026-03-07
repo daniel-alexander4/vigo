@@ -7,14 +7,25 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net/http"
+	"os"
+	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/isogov/isogov/agent/facts"
 	"github.com/isogov/isogov/agent/modules"
 	"github.com/isogov/isogov/agent/runner"
 	"github.com/isogov/isogov/agent/snapshots"
+	"github.com/isogov/isogov/agent/update"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 )
+
+// UpdateConfig holds configuration for the agent self-update mechanism.
+type UpdateConfig struct {
+	APIAddr        string // REST API base URL (e.g., "http://localhost:8080")
+	CurrentVersion string // Current agent version for comparison
+}
 
 // jitteredDuration adds random jitter to a base duration.
 // The result is base +/- (jitterPct% of base).
@@ -115,7 +126,11 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 // iteration it collects facts, reports them, checks in, executes modules, and
 // reports results. Server errors trigger exponential backoff; successful runs
 // reset the backoff and sleep with jitter per the server's response.
-func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager) error {
+//
+// If updateCfg is non-nil, the agent checks for a newer version after each
+// successful convergence run and self-updates via atomic binary replacement
+// and exec restart.
+func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig) error {
 	logger := slog.Default()
 	bo := NewBackoff()
 
@@ -185,7 +200,12 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			"errors", errCount,
 		)
 
-		// 4. Sleep with jitter based on server-provided interval.
+		// 4. Check for self-update after successful convergence.
+		if updateCfg != nil && updateCfg.APIAddr != "" && updateCfg.CurrentVersion != "" {
+			checkSelfUpdate(ctx, logger, updateCfg)
+		}
+
+		// 5. Sleep with jitter based on server-provided interval.
 		sleepDur := jitteredDuration(runResult.BaseInterval, runResult.JitterPct)
 		logger.Info("sleeping until next check-in", "duration", sleepDur)
 
@@ -195,4 +215,42 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		case <-time.After(sleepDur):
 		}
 	}
+}
+
+// checkSelfUpdate queries the server for a newer agent version and applies the
+// update if available. Failures are logged but never crash the agent -- the old
+// version continues running and will retry on the next cycle.
+func checkSelfUpdate(ctx context.Context, logger *slog.Logger, cfg *UpdateConfig) {
+	info, err := update.CheckForUpdate(ctx, cfg.APIAddr, cfg.CurrentVersion, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		logger.Warn("self-update version check failed", "error", err)
+		return
+	}
+	if info == nil {
+		logger.Debug("agent is up to date", "version", cfg.CurrentVersion)
+		return
+	}
+
+	logger.Info("newer agent version available, updating",
+		"current", cfg.CurrentVersion,
+		"new", info.Version,
+	)
+
+	currentBinary, err := os.Executable()
+	if err != nil {
+		logger.Warn("self-update failed: cannot determine current binary path", "error", err)
+		return
+	}
+
+	execFn := func(binary string, args []string, env []string) error {
+		return syscall.Exec(binary, args, env)
+	}
+
+	if err := update.Apply(info, currentBinary, &http.Client{Timeout: 60 * time.Second}, execFn); err != nil {
+		logger.Warn("self-update apply failed, continuing with current version", "error", err)
+		return
+	}
+
+	// If Apply + exec succeeded, this line is never reached (process replaced).
+	// If execFn returned an error, it was caught above.
 }

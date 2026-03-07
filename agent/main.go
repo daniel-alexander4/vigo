@@ -20,12 +20,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version is injected at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 var (
 	dataDir  string
 	server   string
 	caFile   string
 	certFile string
 	keyFile  string
+	apiAddr  string
 	dryRun   bool
 	logLevel string
 )
@@ -173,6 +177,8 @@ var rootCmd = &cobra.Command{
 		logger.Info("starting daemon loop",
 			"data_dir", dataDir,
 			"server", server,
+			"api_addr", apiAddr,
+			"version", version,
 			"dry_run", dryRun,
 		)
 
@@ -180,8 +186,14 @@ var rootCmd = &cobra.Command{
 		ctx, cancel := signalContext()
 		defer cancel()
 
+		// Configure self-update.
+		updateCfg := &checkin.UpdateConfig{
+			APIAddr:        apiAddr,
+			CurrentVersion: version,
+		}
+
 		// Start the daemon loop.
-		return checkin.Loop(ctx, client, executors, snapshotMgr)
+		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg)
 	},
 }
 
@@ -332,6 +344,14 @@ var registerCmd = &cobra.Command{
 	},
 }
 
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the agent version",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(version)
+	},
+}
+
 // getOutboundIP returns the preferred outbound IP of this machine.
 func getOutboundIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -350,6 +370,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "client certificate file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "client key file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().StringVar(&apiAddr, "api-addr", "http://localhost:8080", "server REST API address for self-update")
 
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview mode: show what would change without applying")
 
@@ -360,4 +381,5 @@ func init() {
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(registerCmd)
+	rootCmd.AddCommand(versionCmd)
 }
