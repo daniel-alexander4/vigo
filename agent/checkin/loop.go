@@ -17,6 +17,7 @@ import (
 	"github.com/isogov/isogov/agent/modules"
 	"github.com/isogov/isogov/agent/runner"
 	"github.com/isogov/isogov/agent/snapshots"
+	"github.com/isogov/isogov/agent/traits"
 	"github.com/isogov/isogov/agent/update"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
 )
@@ -123,14 +124,15 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 }
 
 // Loop runs the daemon pull loop until the context is cancelled. On each
-// iteration it collects facts, reports them, checks in, executes modules, and
-// reports results. Server errors trigger exponential backoff; successful runs
-// reset the backoff and sleep with jitter per the server's response.
+// iteration it syncs custom traits (if traitsCacheDir is non-empty), collects
+// facts, reports them, checks in, executes modules, and reports results.
+// Server errors trigger exponential backoff; successful runs reset the backoff
+// and sleep with jitter per the server's response.
 //
 // If updateCfg is non-nil, the agent checks for a newer version after each
 // successful convergence run and self-updates via atomic binary replacement
 // and exec restart.
-func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig) error {
+func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, traitsCacheDir string) error {
 	logger := slog.Default()
 	bo := NewBackoff()
 
@@ -149,12 +151,34 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		default:
 		}
 
+		// 0. Pre-check-in to get custom traits manifest.
+		var customTraits map[string]any
+		if traitsCacheDir != "" {
+			preResp, preErr := client.CheckIn(ctx, "")
+			if preErr != nil {
+				logger.Warn("pre-check-in for traits manifest failed", "error", preErr)
+			} else if len(preResp.CustomTraits) > 0 {
+				traitsExec := traits.NewExecutor(traitsCacheDir, client, 10*time.Second)
+				customTraits, preErr = traitsExec.SyncAndRun(ctx, preResp.CustomTraits)
+				if preErr != nil {
+					logger.Warn("custom traits sync/run failed", "error", preErr)
+				}
+			}
+		}
+
 		// 1. Collect facts.
 		factsMap, err := facts.CollectAll(ctx, facts.DefaultCollectors())
 		if err != nil {
 			logger.Warn("fact collection failed", "error", err)
 			// Use empty facts -- collection is best-effort.
 			factsMap = make(map[string]any)
+		}
+
+		// 1b. Merge custom traits into facts map.
+		if customTraits != nil {
+			for k, v := range customTraits {
+				factsMap[k] = v
+			}
 		}
 
 		// 2. Report facts to server.

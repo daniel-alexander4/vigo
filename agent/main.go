@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -212,8 +213,9 @@ var rootCmd = &cobra.Command{
 			CurrentVersion: version,
 		}
 
-		// Start the daemon loop.
-		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg)
+		// Start the daemon loop with custom traits cache.
+		traitsCacheDir := filepath.Join(dataDir, "traits")
+		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg, traitsCacheDir)
 	},
 }
 

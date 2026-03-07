@@ -148,6 +148,19 @@ func (c *Client) ReportFacts(ctx context.Context, factsMap map[string]any) error
 	return nil
 }
 
+// DownloadCustomTrait retrieves a custom trait executable's bytes from the
+// server by name. The request travels over the mTLS-authenticated channel.
+func (c *Client) DownloadCustomTrait(ctx context.Context, name string) ([]byte, error) {
+	resp, err := c.agent.DownloadCustomTrait(ctx, &pb.DownloadCustomTraitRequest{
+		Name: name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("download custom trait %q: %w", name, err)
+	}
+
+	return resp.Data, nil
+}
+
 // Close closes the underlying gRPC connection.
 func (c *Client) Close() error {
 	return c.conn.Close()

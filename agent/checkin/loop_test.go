@@ -134,6 +134,10 @@ func (m *mockAgentClient) ReportFacts(_ context.Context, _ *pb.ReportFactsReques
 	return &pb.ReportFactsResponse{Acknowledged: true}, m.factsErr
 }
 
+func (m *mockAgentClient) DownloadCustomTrait(_ context.Context, _ *pb.DownloadCustomTraitRequest, _ ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
+	return &pb.DownloadCustomTraitResponse{}, nil
+}
+
 // newMockClient creates a Client with a mock gRPC agent for testing.
 func newMockClient(mock *mockAgentClient) *Client {
 	return &Client{
@@ -274,7 +278,7 @@ func TestLoop_BackoffOnError_DoesNotCrash(t *testing.T) {
 	executors := map[string]modules.Executor{}
 
 	// Loop should return context.DeadlineExceeded, not panic.
-	err := Loop(ctx, client, executors, nil, nil)
+	err := Loop(ctx, client, executors, nil, nil, "")
 	if err == nil {
 		t.Fatal("Loop returned nil, expected context error")
 	}
@@ -309,4 +313,8 @@ func (c *countingMockAgent) ReportResult(ctx context.Context, req *pb.ReportResu
 
 func (c *countingMockAgent) ReportFacts(ctx context.Context, req *pb.ReportFactsRequest, opts ...grpc.CallOption) (*pb.ReportFactsResponse, error) {
 	return c.inner.ReportFacts(ctx, req, opts...)
+}
+
+func (c *countingMockAgent) DownloadCustomTrait(ctx context.Context, req *pb.DownloadCustomTraitRequest, opts ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
+	return c.inner.DownloadCustomTrait(ctx, req, opts...)
 }
