@@ -16,11 +16,11 @@ Requirements for v1.2 Structured Conditionals. Each maps to roadmap phases.
 
 ### Resource Conditionals
 
-- [ ] **COND-05**: `go_if_all_pass:` — resource runs when ALL listed conditions are true (string or list)
-- [ ] **COND-06**: `go_if_any_pass:` — resource runs when at least one listed condition is true (list)
-- [ ] **COND-07**: `skip_if_all_pass:` — resource skipped when ALL listed conditions are true (string or list)
-- [ ] **COND-08**: `skip_if_any_pass:` — resource skipped when ANY listed condition is true (list)
-- [ ] **COND-09**: All four fields combinable on a single resource (all constraints must hold)
+- [x] **COND-05**: `go_if_all_pass:` — resource runs when ALL listed conditions are true (string or list)
+- [x] **COND-06**: `go_if_any_pass:` — resource runs when at least one listed condition is true (list)
+- [x] **COND-07**: `skip_if_all_pass:` — resource skipped when ALL listed conditions are true (string or list)
+- [x] **COND-08**: `skip_if_any_pass:` — resource skipped when ANY listed condition is true (list)
+- [x] **COND-09**: All four fields combinable on a single resource (all constraints must hold)
 - [ ] **COND-10**: Existing `when:` field is removed and replaced by the new conditional fields
 
 ### Conditional Blocks
@@ -57,11 +57,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COND-02 | Phase 7 | Complete |
 | COND-03 | Phase 7 | Complete |
 | COND-04 | Phase 7 | Complete |
-| COND-05 | Phase 8 | Pending |
-| COND-06 | Phase 8 | Pending |
-| COND-07 | Phase 8 | Pending |
-| COND-08 | Phase 8 | Pending |
-| COND-09 | Phase 8 | Pending |
+| COND-05 | Phase 8 | Complete |
+| COND-06 | Phase 8 | Complete |
+| COND-07 | Phase 8 | Complete |
+| COND-08 | Phase 8 | Complete |
+| COND-09 | Phase 8 | Complete |
 | COND-10 | Phase 8 | Pending |
 | COND-11 | Phase 9 | Pending |
 | COND-12 | Phase 9 | Pending |

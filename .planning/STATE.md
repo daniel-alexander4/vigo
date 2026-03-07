@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Structured Conditionals
-status: completed
-stopped_at: Completed 07-02-PLAN.md (Phase 7 complete)
-last_updated: "2026-03-07T19:47:36.395Z"
-last_activity: 2026-03-07 -- Completed 07-02 config loader and CheckIn integration
+status: in-progress
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-07T20:37:00Z"
+last_activity: 2026-03-07 -- Completed 08-01 resource conditional fields and ShouldRunResource
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_plans: 4
+  completed_plans: 3
+  percent: 96
 ---
 
 # Project State
@@ -25,17 +25,17 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 
 ## Current Position
 
-Phase: 7 of 10 (Conditional Vars) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 7 complete, ready for Phase 8
-Last activity: 2026-03-07 -- Completed 07-02 config loader and CheckIn integration
+Phase: 8 of 10 (Resource Conditionals) -- IN PROGRESS
+Plan: 1 of 2 complete
+Status: 08-01 complete, ready for 08-02
+Last activity: 2026-03-07 -- Completed 08-01 resource conditional fields and ShouldRunResource
 
-Progress: [██████████] 100%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
+- Total plans completed: 26
 - Average duration: 5min
 - Total execution time: ~1.9 hours
 
@@ -50,6 +50,7 @@ Progress: [██████████] 100%
 | 05-Trait Inspection | 2/2 | 5min | 2.5min |
 | 06-Custom Traits | 2/2 | 8min | 4min |
 | 07-Conditional Vars | 2/2 | 7min | 3.5min |
+| 08-Resource Conditionals | 1/2 | 2min | 2min |
 
 *Updated after each plan completion*
 
@@ -70,6 +71,11 @@ Recent decisions affecting current work:
 - [07-02]: Conditional vars removed from Vars map at load time (not template-renderable)
 - [07-02]: Client-level vars cannot override conditional var names
 - [07-02]: Conditional var results prepended to varOrder for template availability
+- [08-01]: Gate-then-veto evaluation order for resource conditionals
+- [08-01]: StringOrSlice YAML type for string/list shorthand on conditional fields
+- [08-01]: varIsTrue checks string "true" equality -- consistent with phase 7 boolean convention
+- [08-01]: Empty conditional lists = no constraint (resource runs)
+- [08-01]: Conditional fields placed before Attributes inline to prevent YAML inline capture
 
 ### Pending Todos
 
@@ -81,6 +87,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T19:43:10Z
-Stopped at: Completed 07-02-PLAN.md (Phase 7 complete)
-Resume file: .planning/phases/07-conditional-vars/07-02-SUMMARY.md
+Last session: 2026-03-07T20:37:00Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: .planning/phases/08-resource-conditionals/08-01-SUMMARY.md
