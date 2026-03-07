@@ -741,6 +741,150 @@ clients:
 	}
 }
 
+func TestSourceFileNestedTemplatesDir(t *testing.T) {
+	dir := setupDir(t)
+
+	// Create nested templates directory structure.
+	nestedDir := filepath.Join(dir, "templates", "nginx", "sites")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(nestedDir, "default.conf.tmpl"), `server { listen {{ .Vars.port }}; }`)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+vars:
+  port: "80"
+resources:
+  - name: nginx-site
+    type: file
+    path: /etc/nginx/sites-enabled/default
+    source: templates/nginx/sites/default.conf.tmpl
+    mode: "0644"
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web.example.com"
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web.example.com")
+	res := cfg.Modules[0].Resources[0]
+	content, ok := res.Attributes["content"]
+	if !ok {
+		t.Fatal("expected 'content' attribute after source resolution")
+	}
+	if content != `server { listen {{ .Vars.port }}; }` {
+		t.Errorf("content = %q, want template text", content)
+	}
+}
+
+func TestRenderVars(t *testing.T) {
+	tests := []struct {
+		name    string
+		vars    map[string]any
+		facts   map[string]any
+		want    map[string]any
+		wantErr bool
+	}{
+		{
+			name: "facts reference renders correctly",
+			vars: map[string]any{
+				"greeting": "Hello from {{ .Facts.os.distro }}",
+			},
+			facts: map[string]any{
+				"os": map[string]any{"distro": "ubuntu"},
+			},
+			want: map[string]any{
+				"greeting": "Hello from ubuntu",
+			},
+		},
+		{
+			name: "vars reference renders correctly",
+			vars: map[string]any{
+				"base_port": "8080",
+				"port_line": "port={{ .Vars.base_port }}",
+			},
+			facts: map[string]any{},
+			want: map[string]any{
+				"base_port": "8080",
+				"port_line": "port=8080",
+			},
+		},
+		{
+			name: "plain string without template syntax passes through",
+			vars: map[string]any{
+				"plain": "no templates here",
+			},
+			facts: map[string]any{},
+			want: map[string]any{
+				"plain": "no templates here",
+			},
+		},
+		{
+			name: "non-string values are skipped without error",
+			vars: map[string]any{
+				"count":   42,
+				"enabled": true,
+				"name":    "test",
+			},
+			facts: map[string]any{},
+			want: map[string]any{
+				"count":   42,
+				"enabled": true,
+				"name":    "test",
+			},
+		},
+		{
+			name: "invalid template syntax returns error",
+			vars: map[string]any{
+				"bad": "{{ .InvalidSyntax }{",
+			},
+			facts:   map[string]any{},
+			wantErr: true,
+		},
+		{
+			name:  "empty vars map returns empty map",
+			vars:  map[string]any{},
+			facts: map[string]any{},
+			want:  map[string]any{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := RenderVars(tt.vars, tt.facts)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("len(got) = %d, want %d", len(got), len(tt.want))
+			}
+			for k, wantV := range tt.want {
+				gotV, ok := got[k]
+				if !ok {
+					t.Errorf("missing key %q", k)
+					continue
+				}
+				if fmt.Sprintf("%v", gotV) != fmt.Sprintf("%v", wantV) {
+					t.Errorf("key %q = %v, want %v", k, gotV, wantV)
+				}
+			}
+		})
+	}
+}
+
 func TestTemplateRendering(t *testing.T) {
 	facts := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
