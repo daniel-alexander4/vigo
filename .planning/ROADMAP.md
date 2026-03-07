@@ -85,12 +85,13 @@ Plans:
   2. Web UI provides filterable run log, read-only config viewer, dry-run plan viewer with color-coded actions, and compliance gauge with 30-day trend chart
   3. `curl <server>/bootstrap | bash` installs the agent binary, configures the server address and CA cert, generates a keypair, and enrolls the node
   4. Agent checks for newer binary versions on each check-in and self-updates after checksum verification
-**Plans**: 3 plans
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01-PLAN.md -- UI package foundation (embed, renderer, CSS, HTMX), dashboard page, compliance page, gateway wiring
-- [ ] 04-02-PLAN.md -- Bootstrap script endpoint, agent binary distribution, agent self-update mechanism
-- [ ] 04-03-PLAN.md -- Remaining UI pages (clients, client detail, runs, config viewer, plans viewer), server main.go wiring
+- [x] 04-01-PLAN.md -- UI package foundation (embed, renderer, CSS, HTMX), dashboard page, compliance page, gateway wiring
+- [x] 04-02-PLAN.md -- Bootstrap script endpoint, agent binary distribution, agent self-update mechanism
+- [x] 04-03-PLAN.md -- Remaining UI pages (clients, client detail, runs, config viewer, plans viewer), server main.go wiring
+- [ ] 04-04-PLAN.md -- Gap closure: wire bootstrap handler into gateway, fix Loop test regression
 
 ## Progress
 
@@ -102,4 +103,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Foundation | 5/5 | Complete | 2026-03-06 |
 | 2. Convergence | 5/5 | Complete   | 2026-03-06 |
 | 3. Operations | 5/5 | Complete   | 2026-03-06 |
-| 4. Web UI & Deployment | 0/3 | Not started | - |
+| 4. Web UI & Deployment | 3/4 | In progress | - |
