@@ -262,21 +262,20 @@ Requirements for Traits Visibility & Custom Traits milestone.
 | AGNT-10 | Phase 4 | Complete |
 | INFRA-04 | Phase 4 | Complete |
 | INFRA-05 | Phase 4 | Complete |
-
-| INSP-01 | — | Pending |
-| INSP-02 | — | Pending |
-| INSP-03 | — | Pending |
-| CUST-01 | — | Pending |
-| CUST-02 | — | Pending |
-| CUST-03 | — | Pending |
-| CUST-04 | — | Pending |
+| INSP-01 | Phase 5 | Pending |
+| INSP-02 | Phase 5 | Pending |
+| INSP-03 | Phase 5 | Pending |
+| CUST-01 | Phase 6 | Pending |
+| CUST-02 | Phase 6 | Pending |
+| CUST-03 | Phase 6 | Pending |
+| CUST-04 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 89 total (all complete)
 - v1.1 requirements: 7 total
-- Mapped to phases: 0
-- Unmapped: 7 ⚠️
+- Mapped to phases: 7/7
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-07 after v1.1 requirements definition*
+*Last updated: 2026-03-07 after v1.1 roadmap creation*

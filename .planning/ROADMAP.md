@@ -1,23 +1,14 @@
 # Roadmap: Isogov
 
-## Overview
+## Milestones
 
-Isogov delivers a pull-based configuration management system where agents converge managed nodes to declared desired state via gRPC/mTLS. The roadmap moves from server foundation (transport, enrollment, config loading, database) through the core convergence engine (DAG-ordered idempotent executors, agent daemon, fact collection) into operational tooling (CLI, compliance, observability) and finally the web UI and deployment conveniences. Each phase delivers a coherent, independently verifiable capability.
+- [x] **v1.0 MVP** - Phases 1-4 (shipped 2026-03-06)
+- [ ] **v1.1 Traits Visibility & Custom Traits** - Phases 5-6 (in progress)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-
-Decimal phases appear between their surrounding integers in numeric order.
-
-- [x] **Phase 1: Foundation** - Server skeleton with mTLS, enrollment, config loading, secrets interface, and database
-- [x] **Phase 2: Convergence** - Agent daemon with DAG-ordered idempotent resource executors, fact collection, and notify/subscribe triggers (completed 2026-03-06)
-- [x] **Phase 3: Operations** - CLI, REST API, compliance tracking, secret rotation, webhooks, and Prometheus metrics (completed 2026-03-06)
-- [ ] **Phase 4: Web UI & Deployment** - Web dashboard SPA, bootstrap script, and agent self-update
-
-## Phase Details
+<details>
+<summary>v1.0 MVP (Phases 1-4) - SHIPPED 2026-03-06</summary>
 
 ### Phase 1: Foundation
 **Goal**: A running server that accepts mTLS connections, enrolls agents via one-time tokens, loads per-client YAML config with template rendering and secret resolution, and persists all state to PostgreSQL
@@ -32,11 +23,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 5 plans
 
 Plans:
-- [x] 01-01-PLAN.md -- Proto, DB migrations, sqlc, infrastructure (Makefile, Docker, certs)
-- [x] 01-02-PLAN.md -- Secrets provider interface, StaticProvider, config loading with hot-reload and classification
-- [x] 01-03-PLAN.md -- Enrollment registry: pattern matching, token validation, revocation
-- [x] 01-04-PLAN.md -- Agent stub: ED25519 keypair generation, signing, registration client
-- [x] 01-05-PLAN.md -- Server wiring: mTLS gRPC, REST gateway, handlers, integration
+- [x] 01-01: Proto, DB migrations, sqlc, infrastructure (Makefile, Docker, certs)
+- [x] 01-02: Secrets provider interface, StaticProvider, config loading with hot-reload and classification
+- [x] 01-03: Enrollment registry: pattern matching, token validation, revocation
+- [x] 01-04: Agent stub: ED25519 keypair generation, signing, registration client
+- [x] 01-05: Server wiring: mTLS gRPC, REST gateway, handlers, integration
 
 ### Phase 2: Convergence
 **Goal**: Agents pull their config from the server, build a dependency DAG, and idempotently converge managed resources (files, packages, services, users, exec) with notify/subscribe triggers, conditional execution, fact-driven templates, and full result reporting
@@ -51,11 +42,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Executor interface, file executor with SHA256 + atomic write, snapshot manager, when: evaluator
-- [ ] 02-02-PLAN.md -- PackageManager interface (7 backends), package/service/user/exec executors
-- [ ] 02-03-PLAN.md -- Fact collectors (OS/hardware/network/packages), server ReportResult/ReportFacts handlers
-- [ ] 02-04-PLAN.md -- DAG topological sort (Kahn's), runner with notify/subscribe triggers
-- [ ] 02-05-PLAN.md -- Agent daemon loop with jitter/backoff, gRPC client, CLI commands (run/dry-run/module)
+- [x] 02-01: File executor with SHA256 + atomic write, snapshot manager, when evaluator
+- [x] 02-02: PackageManager interface (7 backends), package/service/user/exec executors
+- [x] 02-03: Fact collectors (OS/hardware/network/packages), server ReportResult/ReportFacts handlers
+- [x] 02-04: DAG topological sort (Kahn's), runner with notify/subscribe triggers
+- [x] 02-05: Agent daemon loop with jitter/backoff, gRPC client, CLI commands (run/dry-run/module)
 
 ### Phase 3: Operations
 **Goal**: Operators have full visibility and control over the fleet via gvctl CLI and REST API, with compliance tracking, dry-run previews, file rollback, webhook notifications, Prometheus metrics, and automated secret rotation
@@ -70,11 +61,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md -- Proto additions, new DB migrations, sqlc queries for all Phase 3 tables
-- [ ] 03-02-PLAN.md -- Compliance computation package and all IsgovAdmin gRPC handler implementations
-- [ ] 03-03-PLAN.md -- gvctl CLI wiring: HTTP client helper and all 10 subcommand groups via REST API
-- [ ] 03-04-PLAN.md -- Prometheus metrics exposition and webhook dispatcher with HMAC-SHA256 signing
-- [ ] 03-05-PLAN.md -- IsopassProvider, secret rotation watcher, and TLS certificate hot reload
+- [x] 03-01: REST API for clients, runs, compliance, approved patterns
+- [x] 03-02: gvctl push, preview, rollback, packages, env commands
+- [x] 03-03: gvctl approved, clients, runs, tokens, webhooks commands
+- [x] 03-04: Prometheus metrics + webhook dispatcher
+- [x] 03-05: Secret rotation watcher + TLS hot reload
 
 ### Phase 4: Web UI & Deployment
 **Goal**: Operators can monitor the fleet through a web dashboard, and new nodes can be bootstrapped with a single curl command and kept up to date via agent self-update
@@ -88,19 +79,53 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [x] 04-01-PLAN.md -- UI package foundation (embed, renderer, CSS, HTMX), dashboard page, compliance page, gateway wiring
-- [x] 04-02-PLAN.md -- Bootstrap script endpoint, agent binary distribution, agent self-update mechanism
-- [x] 04-03-PLAN.md -- Remaining UI pages (clients, client detail, runs, config viewer, plans viewer), server main.go wiring
-- [ ] 04-04-PLAN.md -- Gap closure: wire bootstrap handler into gateway, fix Loop test regression
+- [x] 04-01: UI package foundation (embed, renderer, CSS, HTMX), dashboard page, compliance page
+- [x] 04-02: Bootstrap script endpoint, agent binary distribution, agent self-update mechanism
+- [x] 04-03: Remaining UI pages (clients, client detail, runs, config viewer, plans viewer)
+- [x] 04-04: Gap closure (bootstrap wiring + loop test fix)
+
+</details>
+
+### v1.1 Traits Visibility & Custom Traits (In Progress)
+
+**Milestone Goal:** Make traits inspectable from CLI (agent + gvctl) and support server-distributed custom trait collectors.
+
+- [ ] **Phase 5: Trait Inspection** - Agent and gvctl commands to view collected traits
+- [ ] **Phase 6: Custom Traits** - Server-distributed trait executables with agent-side execution and merging
+
+## Phase Details
+
+### Phase 5: Trait Inspection
+**Goal**: Admins can inspect collected traits for any node -- locally on the agent and remotely via gvctl
+**Depends on**: Phase 4 (v1.0 complete)
+**Requirements**: INSP-01, INSP-02, INSP-03
+**Success Criteria** (what must be TRUE):
+  1. Running `isogov-agent traits` on a managed node prints all collected traits to stdout as JSON (default) or YAML (with `--format yaml`)
+  2. Running `gvctl clients traits <hostname>` prints the stored traits for that client from the server database
+  3. The server REST endpoint `GET /api/v1/clients/{hostname}/traits` returns stored traits as a JSON object
+**Plans**: TBD
+
+### Phase 6: Custom Traits
+**Goal**: Admins can drop executable scripts into a server directory and have them automatically distributed to agents, executed with a timeout, and their output merged into the traits map under `custom.*`
+**Depends on**: Phase 5
+**Requirements**: CUST-01, CUST-02, CUST-03, CUST-04
+**Success Criteria** (what must be TRUE):
+  1. Placing an executable in the server's custom traits directory causes it to appear in the check-in manifest with its name and SHA256 checksum
+  2. Agents compare the manifest against their local cache, download new or changed executables via a dedicated gRPC call, and store them locally
+  3. Custom trait output appears under `custom.<name>` in the traits map and is usable in `{{ .Traits.custom.<name>.key }}` templates and `when:` expressions
+  4. A failing or timed-out custom trait executable logs a warning and is skipped -- other traits and convergence proceed unaffected
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4
+Phases execute in numeric order: 5 -> 6
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Foundation | 5/5 | Complete | 2026-03-06 |
-| 2. Convergence | 5/5 | Complete   | 2026-03-06 |
-| 3. Operations | 5/5 | Complete   | 2026-03-06 |
-| 4. Web UI & Deployment | 3/4 | In progress | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Foundation | v1.0 | 5/5 | Complete | 2026-03-06 |
+| 2. Convergence | v1.0 | 5/5 | Complete | 2026-03-06 |
+| 3. Operations | v1.0 | 5/5 | Complete | 2026-03-06 |
+| 4. Web UI & Deployment | v1.0 | 4/4 | Complete | 2026-03-06 |
+| 5. Trait Inspection | v1.1 | 0/? | Not started | - |
+| 6. Custom Traits | v1.1 | 0/? | Not started | - |
