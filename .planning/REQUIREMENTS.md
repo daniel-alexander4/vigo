@@ -12,7 +12,7 @@ Requirements for v1.2 Structured Conditionals. Each maps to roadmap phases.
 - [x] **COND-01**: Admin can define conditional vars with list matching (`only`, `not`)
 - [x] **COND-02**: Admin can define conditional vars with numeric comparisons (`gt`, `lt`, `gte`, `lte`)
 - [x] **COND-03**: Admin can define conditional vars with regex matching (`match`)
-- [ ] **COND-04**: Conditional vars evaluate to true/false and can be referenced by name in all four conditional fields
+- [x] **COND-04**: Conditional vars evaluate to true/false and can be referenced by name in all four conditional fields
 
 ### Resource Conditionals
 
@@ -56,7 +56,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COND-01 | Phase 7 | Complete |
 | COND-02 | Phase 7 | Complete |
 | COND-03 | Phase 7 | Complete |
-| COND-04 | Phase 7 | Pending |
+| COND-04 | Phase 7 | Complete |
 | COND-05 | Phase 8 | Pending |
 | COND-06 | Phase 8 | Pending |
 | COND-07 | Phase 8 | Pending |
