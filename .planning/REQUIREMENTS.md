@@ -134,8 +134,8 @@ Requirements for Traits Visibility & Custom Traits milestone.
 ### Trait Inspection
 
 - [x] **INSP-01**: Admin can run `isogov-agent traits` to dump all collected traits to stdout as JSON or YAML
-- [ ] **INSP-02**: Admin can run `gvctl clients traits <hostname>` to view stored traits for a specific client
-- [ ] **INSP-03**: Server exposes REST endpoint returning stored traits for a client by hostname
+- [x] **INSP-02**: Admin can run `gvctl clients traits <hostname>` to view stored traits for a specific client
+- [x] **INSP-03**: Server exposes REST endpoint returning stored traits for a client by hostname
 
 ### Custom Traits
 
@@ -263,8 +263,8 @@ Requirements for Traits Visibility & Custom Traits milestone.
 | INFRA-04 | Phase 4 | Complete |
 | INFRA-05 | Phase 4 | Complete |
 | INSP-01 | Phase 5 | Complete |
-| INSP-02 | Phase 5 | Pending |
-| INSP-03 | Phase 5 | Pending |
+| INSP-02 | Phase 5 | Complete |
+| INSP-03 | Phase 5 | Complete |
 | CUST-01 | Phase 6 | Pending |
 | CUST-02 | Phase 6 | Pending |
 | CUST-03 | Phase 6 | Pending |
