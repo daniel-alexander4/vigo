@@ -20,11 +20,12 @@ services:
       context: .
       dockerfile: Dockerfile.server
     ports:
-      - "9090:9090"
-      - "8080:8080"
+      - "9095:9090"
+      - "8085:8080"
     volumes:
       - ./config:/config:ro
       - ./certs:/certs:ro
+      - ./.env:/.env:ro
     env_file:
       - .env
     depends_on:

@@ -1,22 +1,46 @@
+# Classification rules — auto-assign modules to clients by hostname pattern.
+# First matching rule wins. Explicit client YAML (config/clients/*.yaml)
+# always takes precedence over classification.
+#
+# Clients that match no rule and have no explicit config get an empty
+# module list and run cleanly with no changes.
+
 rules:
-  - match: "web-*"
+  # Web servers: any hostname starting with 'web-'
+  - match: \"web-*\"
     environment: production
     modules:
-      - name: base
-        source: modules/base.yaml
-      - name: nginx
-        source: modules/nginx.yaml
+      - name: webserver
+        resources:
+          - name: install-nginx
+            type: package
+            package: nginx
+            state: present
+          - name: ensure-running
+            type: service
+            service: nginx
+            enabled: true
+            state: running
+            depends_on: [install-nginx]
 
-  - match: "db-*"
+  # Database servers: any hostname starting with 'db-'
+  - match: \"db-*\"
     environment: production
     modules:
-      - name: base
-        source: modules/base.yaml
-      - name: postgres
-        source: modules/postgres.yaml
+      - name: database
+        resources:
+          - name: install-postgres
+            type: package
+            package: postgresql
+            state: present
+          - name: ensure-running
+            type: service
+            service: postgresql
+            enabled: true
+            state: running
+            depends_on: [install-postgres]
 
-  - match: "*.staging.example.com"
+  # Staging: anything under *.staging.example.com
+  - match: \"*.staging.example.com\"
     environment: staging
-    modules:
-      - name: base
-        source: modules/base.yaml
+    modules: []
