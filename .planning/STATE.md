@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Traits Visibility & Custom Traits
-status: completed
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-07T14:42:45.632Z"
-last_activity: 2026-03-07 -- Completed 05-02 server traits endpoint and gvctl CLI
+status: in_progress
+stopped_at: Completed 06-01 custom trait manifest and download RPC
+last_updated: "2026-03-07T14:56:09.000Z"
+last_activity: 2026-03-07 -- Completed 06-01 custom trait manifest and download RPC
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 21
-  completed_plans: 21
-  percent: 100
+  total_plans: 23
+  completed_plans: 22
+  percent: 96
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** v1.1 Traits Visibility & Custom Traits -- Phase 5: Trait Inspection
+**Current focus:** v1.1 Traits Visibility & Custom Traits -- Phase 6: Custom Traits
 
 ## Current Position
 
-Phase: 5 of 6 (Trait Inspection) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 5 complete, ready for Phase 6
-Last activity: 2026-03-07 -- Completed 05-02 server traits endpoint and gvctl CLI
+Phase: 6 of 6 (Custom Traits)
+Plan: 1 of 2 complete
+Status: Plan 06-01 complete, ready for 06-02
+Last activity: 2026-03-07 -- Completed 06-01 custom trait manifest and download RPC
 
-Progress: [██████████] 100%
+Progress: [█████████░] 96%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
+- Total plans completed: 22
 - Average duration: 5min
-- Total execution time: ~1.7 hours
+- Total execution time: ~1.75 hours
 
 **By Phase:**
 
@@ -49,9 +49,10 @@ Progress: [██████████] 100%
 | 04-Web UI | 4/4 | 24min | 6min |
 
 | 05-Trait Inspection | 2/2 | 5min | 2.5min |
+| 06-Custom Traits | 1/2 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (5min), 04-03 (8min), 04-04 (1min), 05-01 (2min), 05-02 (3min)
+- Last 5 plans: 04-03 (8min), 04-04 (1min), 05-01 (2min), 05-02 (3min), 06-01 (3min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -69,6 +70,7 @@ Recent decisions affecting current work:
 - [Post-v1.0]: `source` field on file resources references templates relative to `client-configs/`
 - [05-01]: SplitN recursive descent for dot-path traversal; reflect.Kind for scalar vs structured formatting
 - [05-02]: Direct REST handler on ServeMux (more specific route wins over /api/ catch-all); mock DBTX pattern for handler testing
+- [06-01]: Scan traits dir on every CheckIn (no fsnotify); trait name = filename minus last extension
 
 ### Pending Todos
 
@@ -80,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T14:42:45.630Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-custom-traits/06-CONTEXT.md
+Last session: 2026-03-07T14:56:09.000Z
+Stopped at: Completed 06-01 custom trait manifest and download RPC
+Resume file: .planning/phases/06-custom-traits/06-02-PLAN.md

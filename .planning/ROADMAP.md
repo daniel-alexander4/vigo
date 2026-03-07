@@ -90,7 +90,7 @@ Plans:
 
 **Milestone Goal:** Make traits inspectable from CLI (agent + gvctl) and support server-distributed custom trait collectors.
 
-- [ ] **Phase 5: Trait Inspection** - Agent and gvctl commands to view collected traits
+- [x] **Phase 5: Trait Inspection** - Agent and gvctl commands to view collected traits
 - [ ] **Phase 6: Custom Traits** - Server-distributed trait executables with agent-side execution and merging
 
 ## Phase Details
@@ -106,8 +106,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- Agent `isogov-agent traits` subcommand with collector filtering and dot-path accessor
-- [ ] 05-02-PLAN.md -- Server REST endpoint + `gvctl clients traits` subcommand
+- [x] 05-01-PLAN.md -- Agent `isogov-agent traits` subcommand with collector filtering and dot-path accessor
+- [x] 05-02-PLAN.md -- Server REST endpoint + `gvctl clients traits` subcommand
 
 ### Phase 6: Custom Traits
 **Goal**: Admins can drop executable scripts into a server directory and have them automatically distributed to agents, executed with a timeout, and their output merged into the traits map under `custom.*`
@@ -121,7 +121,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md -- Proto definitions, server traits scanner, manifest in CheckIn, DownloadCustomTrait RPC
+- [x] 06-01-PLAN.md -- Proto definitions, server traits scanner, manifest in CheckIn, DownloadCustomTrait RPC
 - [ ] 06-02-PLAN.md -- Agent sync/cache, execution with timeout, JSON parsing, traits merging in loop
 
 ## Progress
@@ -135,5 +135,5 @@ Phases execute in numeric order: 5 -> 6
 | 2. Convergence | v1.0 | 5/5 | Complete | 2026-03-06 |
 | 3. Operations | v1.0 | 5/5 | Complete | 2026-03-06 |
 | 4. Web UI & Deployment | v1.0 | 4/4 | Complete | 2026-03-06 |
-| 5. Trait Inspection | v1.1 | 0/2 | Planning | - |
-| 6. Custom Traits | v1.1 | 0/2 | Planning | - |
+| 5. Trait Inspection | v1.1 | 2/2 | Complete | 2026-03-07 |
+| 6. Custom Traits | v1.1 | 1/2 | In Progress | - |
