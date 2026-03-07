@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Structured Conditionals
 status: in_progress
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-03-07T22:19:42Z"
-last_activity: "2026-03-07 -- Completed 09-01 conditional_block parsing and flattening"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-03-07T22:24:55Z"
+last_activity: "2026-03-07 -- Completed 09-02 conditional block integration tests"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
-  percent: 83
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** Phase 9 in progress -- conditional_block parsing complete, integration pending
+**Current focus:** Phase 9 complete -- conditional_block parsing, integration, and filtering all tested
 
 ## Current Position
 
-Phase: 9 of 10 (Conditional Blocks) -- IN PROGRESS
-Plan: 1 of 2 complete
-Status: 09-01 complete, ready for 09-02
-Last activity: 2026-03-07 -- Completed 09-01 conditional_block parsing and flattening
+Phase: 9 of 10 (Conditional Blocks) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase 9 complete, ready for phase 10
+Last activity: 2026-03-07 -- Completed 09-02 conditional block integration tests
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -51,7 +51,7 @@ Progress: [████████░░] 83%
 | 06-Custom Traits | 2/2 | 8min | 4min |
 | 07-Conditional Vars | 2/2 | 7min | 3.5min |
 | 08-Resource Conditionals | 2/2 | 6min | 3min |
-| 09-Conditional Blocks | 1/2 | 2min | 2min |
+| 09-Conditional Blocks | 2/2 | 4min | 2min |
 
 *Updated after each plan completion*
 
@@ -84,6 +84,8 @@ Recent decisions affecting current work:
 - [09-01]: Block conditionals merged via append -- block values prepended to resource values
 - [09-01]: Custom UnmarshalYAML on ModuleDefinition intercepts resources key, keeping loader.go unchanged
 - [09-01]: FlattenResourceNodes operates on raw yaml.Node for conditional_block detection
+- [09-02]: No loader.go changes needed -- custom UnmarshalYAML transparently handles conditional_block during yaml.Unmarshal
+- [09-02]: Check-in pipeline tests construct ClientConfig directly -- YAML path covered by loader tests
 
 ### Pending Todos
 
@@ -95,6 +97,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T22:17:03Z
-Stopped at: Completed 09-01-PLAN.md
-Resume file: .planning/phases/09-conditional-blocks/09-01-SUMMARY.md
+Last session: 2026-03-07T22:24:55Z
+Stopped at: Completed 09-02-PLAN.md
+Resume file: .planning/phases/09-conditional-blocks/09-02-SUMMARY.md
