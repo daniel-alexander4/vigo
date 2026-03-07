@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Structured Conditionals
-status: defining_requirements
-stopped_at: Milestone v1.2 started
-last_updated: "2026-03-07T18:00:00.000Z"
-last_activity: 2026-03-07 -- Milestone v1.2 started
+status: ready_to_plan
+stopped_at: Roadmap created for v1.2 (4 phases, 15 requirements)
+last_updated: "2026-03-07T19:00:00.000Z"
+last_activity: 2026-03-07 -- v1.2 roadmap created
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** v1.2 Structured Conditionals
+**Current focus:** Phase 7 - Conditional Vars
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 7 of 10 (Conditional Vars) -- first phase of v1.2
 Plan: --
-Status: Defining requirements
-Last activity: 2026-03-07 -- Milestone v1.2 started
+Status: Ready to plan
+Last activity: 2026-03-07 -- v1.2 roadmap created
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -57,10 +59,10 @@ Last activity: 2026-03-07 -- Milestone v1.2 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [v1.2]: `if:`/`not_if:` replaces `when:` -- structured trait-only conditionals
-- [v1.2]: Conditional vars with operators: only, not, gt, lt, gte, lte, match
+- [v1.2]: Four conditional fields replace `when:` -- `go_if_all_pass`, `go_if_any_pass`, `skip_if_all_pass`, `skip_if_any_pass`
+- [v1.2]: Conditional vars use operator syntax: only, not, gt, lt, gte, lte, match
 - [v1.2]: `conditional_block:` for inline resource grouping with shared conditionals
-- [v1.2]: Module-level `if:`/`not_if:` on module references in roles and clients.yaml
+- [v1.2]: Module-level conditionals on references in roles and clients.yaml
 
 ### Pending Todos
 
@@ -72,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T18:00:00.000Z
-Stopped at: Milestone v1.2 started
-Resume file: N/A (defining requirements)
+Last session: 2026-03-07T19:00:00.000Z
+Stopped at: v1.2 roadmap created (4 phases, 15 requirements mapped)
+Resume file: None -- ready for `/gsd:plan-phase 7`

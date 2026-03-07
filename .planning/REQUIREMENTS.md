@@ -53,27 +53,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COND-01 | TBD | Pending |
-| COND-02 | TBD | Pending |
-| COND-03 | TBD | Pending |
-| COND-04 | TBD | Pending |
-| COND-05 | TBD | Pending |
-| COND-06 | TBD | Pending |
-| COND-07 | TBD | Pending |
-| COND-08 | TBD | Pending |
-| COND-09 | TBD | Pending |
-| COND-10 | TBD | Pending |
-| COND-11 | TBD | Pending |
-| COND-12 | TBD | Pending |
-| COND-13 | TBD | Pending |
-| COND-14 | TBD | Pending |
-| COND-15 | TBD | Pending |
+| COND-01 | Phase 7 | Pending |
+| COND-02 | Phase 7 | Pending |
+| COND-03 | Phase 7 | Pending |
+| COND-04 | Phase 7 | Pending |
+| COND-05 | Phase 8 | Pending |
+| COND-06 | Phase 8 | Pending |
+| COND-07 | Phase 8 | Pending |
+| COND-08 | Phase 8 | Pending |
+| COND-09 | Phase 8 | Pending |
+| COND-10 | Phase 8 | Pending |
+| COND-11 | Phase 9 | Pending |
+| COND-12 | Phase 9 | Pending |
+| COND-13 | Phase 9 | Pending |
+| COND-14 | Phase 10 | Pending |
+| COND-15 | Phase 10 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-07*
-*Last updated: 2026-03-07 after initial definition*
+*Last updated: 2026-03-07 after roadmap creation*
