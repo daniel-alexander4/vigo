@@ -27,7 +27,7 @@ type FileExecutor struct {
 }
 
 // Execute applies the desired file state based on params. Supported params:
-//   - path: target file path (required)
+//   - targetpath: target file path on the managed node (required)
 //   - content: desired file content (required for state=present)
 //   - mode: file permission mode as octal string (default "0644")
 //   - owner: file owner (not enforced on non-root, placeholder)
@@ -37,16 +37,16 @@ func (f *FileExecutor) Execute(_ context.Context, params map[string]string, dryR
 	start := time.Now()
 	result := ResourceResult{
 		ResourceType: "file",
-		ResourceName: params["path"],
+		ResourceName: params["targetpath"],
 	}
 
 	defer func() {
 		result.DurationMs = int32(time.Since(start).Milliseconds())
 	}()
 
-	path := params["path"]
+	path := params["targetpath"]
 	if path == "" {
-		result.Error = fmt.Errorf("file executor: path param is required")
+		result.Error = fmt.Errorf("file executor: targetpath param is required")
 		return result
 	}
 

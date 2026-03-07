@@ -11,7 +11,7 @@ resources:
 
   - name: haproxy-cfg
     type: file
-    path: /etc/haproxy/haproxy.cfg
+    targetpath: /etc/haproxy/haproxy.cfg
     content: |
       global
           log /dev/log local0

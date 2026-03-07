@@ -23,7 +23,7 @@ import (
 //
 // Supported params:
 //   - url:      download URL (required)
-//   - path:     destination file path for the binary (required)
+//   - targetpath: destination file path for the binary (required)
 //   - binary:   name of binary inside archive to extract (optional; if omitted,
 //               treats download as a direct binary or extracts first executable)
 //   - sha256:   expected hex SHA256 hash of the installed binary (optional)
@@ -52,7 +52,7 @@ func (a *ArchiveExecutor) httpClient() *http.Client {
 
 func (a *ArchiveExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
 	start := time.Now()
-	path := params["path"]
+	path := params["targetpath"]
 	result := ResourceResult{
 		ResourceType: "archive",
 		ResourceName: path,
@@ -68,7 +68,7 @@ func (a *ArchiveExecutor) Execute(ctx context.Context, params map[string]string,
 		return result
 	}
 	if path == "" {
-		result.Error = fmt.Errorf("archive executor: path param is required")
+		result.Error = fmt.Errorf("archive executor: targetpath param is required")
 		return result
 	}
 
@@ -89,7 +89,7 @@ func (a *ArchiveExecutor) Execute(ctx context.Context, params map[string]string,
 }
 
 func (a *ArchiveExecutor) handlePresent(ctx context.Context, params map[string]string, dryRun bool, result ResourceResult) ResourceResult {
-	path := params["path"]
+	path := params["targetpath"]
 	expectedHash := params["sha256"]
 	unless := params["unless"]
 

@@ -99,7 +99,7 @@ resources:
 
   - name: nginx-conf
     type: file
-    path: /etc/nginx/nginx.conf
+    targetpath: /etc/nginx/nginx.conf
     source: templates/nginx.conf.tmpl
     owner: root
     mode: "0644"
@@ -251,7 +251,7 @@ clients:
 resources:
   - name: grafana-ini
     type: file
-    path: /etc/grafana/grafana.ini
+    targetpath: /etc/grafana/grafana.ini
     content: |
       admin_password = secret:isogov/grafana/admin-password
 ```

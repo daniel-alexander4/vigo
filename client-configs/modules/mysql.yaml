@@ -14,7 +14,7 @@ resources:
 
   - name: mysql-cnf
     type: file
-    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    targetpath: /etc/mysql/mysql.conf.d/mysqld.cnf
     content: |
       [mysqld]
       bind-address = {{ .Vars.mysql_bind_address }}

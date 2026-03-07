@@ -73,7 +73,7 @@ func TestFileExecutorIdempotent_NoChange(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": content,
 		"mode":    "0644",
 		"state":   "present",
@@ -97,7 +97,7 @@ func TestFileExecutorCreatesNewFile(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": content,
 		"mode":    "0644",
 		"state":   "present",
@@ -129,7 +129,7 @@ func TestFileExecutorUpdatesExistingFile(t *testing.T) {
 	newContent := "updated content\n"
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": newContent,
 		"mode":    "0644",
 		"state":   "present",
@@ -155,7 +155,7 @@ func TestFileExecutorDryRun(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": content,
 		"mode":    "0644",
 		"state":   "present",
@@ -182,7 +182,7 @@ func TestFileExecutorDeletesFile(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":  path,
+		"targetpath":  path,
 		"state": "absent",
 	}, false)
 
@@ -203,7 +203,7 @@ func TestFileExecutorDeleteNonExistent(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":  path,
+		"targetpath":  path,
 		"state": "absent",
 	}, false)
 
@@ -224,7 +224,7 @@ func TestFileExecutorModeChange(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": content,
 		"mode":    "0644",
 		"state":   "present",
@@ -245,7 +245,7 @@ func TestFileExecutorDefaultMode(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": content,
 		"state":   "present",
 	}, false)
@@ -268,7 +268,7 @@ func TestFileExecutorCreatesParentDir(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": content,
 		"mode":    "0644",
 		"state":   "present",
@@ -303,7 +303,7 @@ func TestFileExecutorSnapshotIntegration(t *testing.T) {
 	}
 
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": newContent,
 		"mode":    "0644",
 		"state":   "present",
@@ -329,7 +329,7 @@ func TestFileExecutorResourceType(t *testing.T) {
 
 	fe := &FileExecutor{}
 	result := fe.Execute(context.Background(), map[string]string{
-		"path":    path,
+		"targetpath":    path,
 		"content": "test\n",
 		"state":   "present",
 	}, false)

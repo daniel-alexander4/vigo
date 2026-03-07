@@ -181,7 +181,7 @@ name: app
 resources:
   - name: config
     type: file
-    path: /etc/app/db.conf
+    targetpath: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
@@ -596,7 +596,7 @@ name: app
 resources:
   - name: config
     type: file
-    path: /etc/app/config
+    targetpath: /etc/app/config
     content: "secret:myapp/db/config"
 `)
 	writeFile(t, filepath.Join(dir, "modules", "other.yaml"), `
@@ -647,7 +647,7 @@ vars:
 resources:
   - name: nginx-conf
     type: file
-    path: /etc/nginx/nginx.conf
+    targetpath: /etc/nginx/nginx.conf
     source: templates/nginx.conf.tmpl
     owner: root
     mode: "0644"
@@ -695,7 +695,7 @@ name: bad
 resources:
   - name: both-set
     type: file
-    path: /etc/test
+    targetpath: /etc/test
     source: templates/test.tmpl
     content: "inline content"
 `)
@@ -723,7 +723,7 @@ name: bad
 resources:
   - name: missing-source
     type: file
-    path: /etc/test
+    targetpath: /etc/test
     source: templates/nonexistent.tmpl
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
@@ -758,7 +758,7 @@ vars:
 resources:
   - name: nginx-site
     type: file
-    path: /etc/nginx/sites-enabled/default
+    targetpath: /etc/nginx/sites-enabled/default
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
 `)

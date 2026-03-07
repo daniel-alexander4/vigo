@@ -33,7 +33,7 @@ func TestArchiveExecutor_DirectBinary(t *testing.T) {
 	exe := &ArchiveExecutor{HTTPClient: srv.Client()}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":  srv.URL + "/mybinary",
-		"path": path,
+		"targetpath": path,
 	}, false)
 
 	if result.Error != nil {
@@ -75,7 +75,7 @@ func TestArchiveExecutor_IdempotentFileExists(t *testing.T) {
 	exe := &ArchiveExecutor{}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":  "https://example.com/binary",
-		"path": path,
+		"targetpath": path,
 	}, false)
 
 	if result.Error != nil {
@@ -100,7 +100,7 @@ func TestArchiveExecutor_SHA256Match(t *testing.T) {
 	exe := &ArchiveExecutor{}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":    "https://example.com/binary",
-		"path":   path,
+		"targetpath":   path,
 		"sha256": hash,
 	}, false)
 
@@ -128,7 +128,7 @@ func TestArchiveExecutor_SHA256Mismatch(t *testing.T) {
 	exe := &ArchiveExecutor{HTTPClient: srv.Client()}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":    srv.URL + "/binary",
-		"path":   path,
+		"targetpath":   path,
 		"sha256": newHash,
 	}, false)
 
@@ -155,7 +155,7 @@ func TestArchiveExecutor_SHA256VerifyFails(t *testing.T) {
 	exe := &ArchiveExecutor{HTTPClient: srv.Client()}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":    srv.URL + "/binary",
-		"path":   path,
+		"targetpath":   path,
 		"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}, false)
 
@@ -179,7 +179,7 @@ func TestArchiveExecutor_UnlessSkips(t *testing.T) {
 	exe := &ArchiveExecutor{Runner: runner}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":    "https://example.com/binary",
-		"path":   path,
+		"targetpath":   path,
 		"unless": "true",
 	}, false)
 
@@ -208,7 +208,7 @@ func TestArchiveExecutor_UnlessFailsTriggersUpdate(t *testing.T) {
 	exe := &ArchiveExecutor{Runner: runner, HTTPClient: srv.Client()}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":    srv.URL + "/binary",
-		"path":   path,
+		"targetpath":   path,
 		"unless": "glow --version",
 	}, false)
 
@@ -227,7 +227,7 @@ func TestArchiveExecutor_DryRun(t *testing.T) {
 	exe := &ArchiveExecutor{}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":  "https://example.com/binary",
-		"path": path,
+		"targetpath": path,
 	}, true)
 
 	if result.Error != nil {
@@ -252,7 +252,7 @@ func TestArchiveExecutor_Absent(t *testing.T) {
 	exe := &ArchiveExecutor{}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":   "https://example.com/binary",
-		"path":  path,
+		"targetpath":  path,
 		"state": "absent",
 	}, false)
 
@@ -274,7 +274,7 @@ func TestArchiveExecutor_AbsentNotPresent(t *testing.T) {
 	exe := &ArchiveExecutor{}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":   "https://example.com/binary",
-		"path":  path,
+		"targetpath":  path,
 		"state": "absent",
 	}, false)
 
@@ -289,7 +289,7 @@ func TestArchiveExecutor_AbsentNotPresent(t *testing.T) {
 func TestArchiveExecutor_MissingURL(t *testing.T) {
 	exe := &ArchiveExecutor{}
 	result := exe.Execute(context.Background(), map[string]string{
-		"path": "/usr/local/bin/something",
+		"targetpath": "/usr/local/bin/something",
 	}, false)
 
 	if result.Error == nil {
@@ -297,14 +297,14 @@ func TestArchiveExecutor_MissingURL(t *testing.T) {
 	}
 }
 
-func TestArchiveExecutor_MissingPath(t *testing.T) {
+func TestArchiveExecutor_MissingTargetPath(t *testing.T) {
 	exe := &ArchiveExecutor{}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url": "https://example.com/binary",
 	}, false)
 
 	if result.Error == nil {
-		t.Fatal("Error = nil, want error for missing path")
+		t.Fatal("Error = nil, want error for missing targetpath")
 	}
 }
 
@@ -321,7 +321,7 @@ func TestArchiveExecutor_CustomMode(t *testing.T) {
 	exe := &ArchiveExecutor{HTTPClient: srv.Client()}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":  srv.URL + "/mybinary",
-		"path": path,
+		"targetpath": path,
 		"mode": "0700",
 	}, false)
 
@@ -350,7 +350,7 @@ func TestArchiveExecutor_HTTPError(t *testing.T) {
 	exe := &ArchiveExecutor{HTTPClient: srv.Client()}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":  srv.URL + "/notfound",
-		"path": path,
+		"targetpath": path,
 	}, false)
 
 	if result.Error == nil {
@@ -371,7 +371,7 @@ func TestArchiveExecutor_CreatesParentDir(t *testing.T) {
 	exe := &ArchiveExecutor{HTTPClient: srv.Client()}
 	result := exe.Execute(context.Background(), map[string]string{
 		"url":  srv.URL + "/binary",
-		"path": path,
+		"targetpath": path,
 	}, false)
 
 	if result.Error != nil {
