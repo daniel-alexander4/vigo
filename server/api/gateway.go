@@ -14,6 +14,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/isogov/isogov/server/bootstrap"
 	"github.com/isogov/isogov/server/config"
 	"github.com/isogov/isogov/server/db"
 	"github.com/isogov/isogov/ui"
@@ -48,6 +49,10 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 		return nil, fmt.Errorf("creating UI handler: %w", err)
 	}
 	uiHandler.RegisterRoutes(mux)
+
+	// Mount bootstrap and agent distribution routes.
+	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
+	bh.RegisterRoutes(mux)
 
 	// grpc-gateway catches /api/ paths (gvctl CLI uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
