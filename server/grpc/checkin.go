@@ -167,6 +167,12 @@ func configToProtoModules(cfg *config.ClientConfig, facts, vars map[string]any) 
 		}
 
 		for _, res := range mod.Resources {
+			// Evaluate resource conditionals server-side. Skipped resources
+			// are excluded from the proto response entirely.
+			if !config.ShouldRunResource(res, vars) {
+				continue
+			}
+
 			params := make(map[string]string)
 			for k, v := range res.Attributes {
 				strVal := fmt.Sprintf("%v", v)
@@ -191,12 +197,14 @@ func configToProtoModules(cfg *config.ClientConfig, facts, vars map[string]any) 
 				pbMod.ResourceType = res.Type
 			}
 
-			// Copy resource-level notify/subscribes/when to module level.
+			// Copy resource-level notify/subscribes to module level.
 			pbMod.Notify = append(pbMod.Notify, res.Notify...)
 			pbMod.Subscribes = append(pbMod.Subscribes, res.Subscribes...)
-			if res.When != "" {
-				pbMod.When = res.When
-			}
+		}
+
+		// Skip empty modules (all resources were filtered out by conditionals).
+		if len(pbMod.Resources) == 0 {
+			continue
 		}
 
 		modules = append(modules, pbMod)

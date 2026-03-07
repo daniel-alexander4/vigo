@@ -128,6 +128,167 @@ func TestEvaluateConditionalVarsMultiple(t *testing.T) {
 	}
 }
 
+func TestConfigToProtoModulesGoIfAllPass(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "nginx",
+				Resources: []config.ResourceConfig{
+					{
+						Name:        "install-nginx",
+						Type:        "package",
+						GoIfAllPass: config.StringOrSlice{"is_debian"},
+						Attributes:  map[string]any{"name": "nginx"},
+					},
+				},
+			},
+		},
+	}
+
+	// is_debian=true -> resource included
+	vars := map[string]any{"is_debian": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(modules[0].Resources))
+	}
+
+	// is_debian=false -> resource excluded, module excluded
+	vars = map[string]any{"is_debian": "false"}
+	modules, err = configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 0 {
+		t.Errorf("expected 0 modules (resource filtered), got %d", len(modules))
+	}
+}
+
+func TestConfigToProtoModulesSkipIfAnyPass(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "linux-tools",
+				Resources: []config.ResourceConfig{
+					{
+						Name:          "install-tool",
+						Type:          "package",
+						SkipIfAnyPass: config.StringOrSlice{"is_windows"},
+						Attributes:    map[string]any{"name": "htop"},
+					},
+				},
+			},
+		},
+	}
+
+	// is_windows=true -> resource excluded
+	vars := map[string]any{"is_windows": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 0 {
+		t.Errorf("expected 0 modules (resource skipped), got %d", len(modules))
+	}
+
+	// is_windows=false -> resource included
+	vars = map[string]any{"is_windows": "false"}
+	modules, err = configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(modules[0].Resources))
+	}
+}
+
+func TestConfigToProtoModulesEmptyModuleExcluded(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "all-skipped",
+				Resources: []config.ResourceConfig{
+					{
+						Name:        "res-a",
+						Type:        "file",
+						GoIfAllPass: config.StringOrSlice{"never_true"},
+						Attributes:  map[string]any{"content": "a"},
+					},
+					{
+						Name:        "res-b",
+						Type:        "file",
+						GoIfAllPass: config.StringOrSlice{"never_true"},
+						Attributes:  map[string]any{"content": "b"},
+					},
+				},
+			},
+			{
+				Name: "has-resources",
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "res-c",
+						Type:       "file",
+						Attributes: map[string]any{"content": "c"},
+					},
+				},
+			},
+		},
+	}
+
+	vars := map[string]any{"never_true": "false"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	// Only "has-resources" should remain
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module (empty excluded), got %d", len(modules))
+	}
+	if modules[0].Name != "has-resources" {
+		t.Errorf("expected module 'has-resources', got %q", modules[0].Name)
+	}
+}
+
+func TestConfigToProtoModulesNoConditionalsPassThrough(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "basic",
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "basic-res",
+						Type:       "file",
+						Attributes: map[string]any{"content": "hello"},
+					},
+				},
+			},
+		},
+	}
+
+	// No conditional fields -> resource always included
+	modules, err := configToProtoModules(cfg, nil, map[string]any{})
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(modules[0].Resources))
+	}
+	if modules[0].Resources[0].Name != "basic-res" {
+		t.Errorf("expected resource 'basic-res', got %q", modules[0].Resources[0].Name)
+	}
+}
+
 func TestEvaluateConditionalVarsBeforeRenderVars(t *testing.T) {
 	// Ensure conditional vars are inserted at the beginning of varOrder
 	// so regular vars can reference them via Go templates.
