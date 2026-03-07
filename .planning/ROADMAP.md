@@ -74,10 +74,11 @@ Plans:
   1. A `conditional_block:` entry in the resources list applies its conditional fields to all child resources, skipping the entire group when conditions fail
   2. Resources inside a conditional block can declare their own conditional fields, and both the block-level and resource-level conditions must pass for the resource to run
   3. `depends_on` references work across `conditional_block:` boundaries -- a resource outside a block can depend on a resource inside, and vice versa
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md — Conditional block parsing and flattening (TDD: FlattenResourceNodes with merge logic)
+- [ ] 09-02-PLAN.md — Wire into config loader and check-in pipeline integration tests
 
 ### Phase 10: Module Conditionals
 **Goal**: Admins can conditionally skip entire modules at the role and client level using the same conditional fields
@@ -104,7 +105,7 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 | 4. Web UI & Deployment | v1.0 | 4/4 | Complete | 2026-03-06 |
 | 5. Trait Inspection | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 6. Custom Traits | v1.1 | 2/2 | Complete | 2026-03-07 |
-| 7. Conditional Vars | 1/2 | In Progress|  | - |
-| 8. Resource Conditionals | v1.2 | 0/2 | Not started | - |
-| 9. Conditional Blocks | v1.2 | 0/0 | Not started | - |
+| 7. Conditional Vars | v1.2 | 2/2 | Complete | 2026-03-07 |
+| 8. Resource Conditionals | v1.2 | 2/2 | Complete | 2026-03-07 |
+| 9. Conditional Blocks | v1.2 | 0/2 | Not started | - |
 | 10. Module Conditionals | v1.2 | 0/0 | Not started | - |
