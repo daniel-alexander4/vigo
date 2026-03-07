@@ -31,3 +31,26 @@ func RenderTemplate(tmpl string, facts map[string]any, vars map[string]any) (str
 	}
 	return buf.String(), nil
 }
+
+// RenderVars renders Go template syntax in var values. Only string values
+// are rendered; non-string values (int, bool, map, etc.) pass through unchanged.
+// Facts are available as .Facts, and other vars (in their current render-pass state)
+// are available as .Vars. This is a single-pass render: a var referencing another
+// var will see that var's pre-rendered value. Call this BEFORE resource attribute
+// rendering so that rendered vars are available to resource templates.
+func RenderVars(vars map[string]any, facts map[string]any) (map[string]any, error) {
+	result := make(map[string]any, len(vars))
+	for k, v := range vars {
+		strVal, ok := v.(string)
+		if !ok {
+			result[k] = v
+			continue
+		}
+		rendered, err := RenderTemplate(strVal, facts, vars)
+		if err != nil {
+			return nil, fmt.Errorf("rendering var %q: %w", k, err)
+		}
+		result[k] = rendered
+	}
+	return result, nil
+}
