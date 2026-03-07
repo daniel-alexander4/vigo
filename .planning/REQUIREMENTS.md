@@ -110,11 +110,11 @@
 ### Web UI
 
 - [x] **UI-01**: Dashboard: total clients, active in last hour, recent failures, drift rate
-- [ ] **UI-02**: Clients view: table with hostname, IP, enrolled date, last seen, status badge
-- [ ] **UI-03**: Client detail: last N runs, expandable per-module results, drift history chart
-- [ ] **UI-04**: Runs view: filterable run log across all clients
-- [ ] **UI-05**: Config view: read-only display of client YAML config
-- [ ] **UI-06**: Plans view: dry-run plans with per-resource actions, color-coded by severity
+- [x] **UI-02**: Clients view: table with hostname, IP, enrolled date, last seen, status badge
+- [x] **UI-03**: Client detail: last N runs, expandable per-module results, drift history chart
+- [x] **UI-04**: Runs view: filterable run log across all clients
+- [x] **UI-05**: Config view: read-only display of client YAML config
+- [x] **UI-06**: Plans view: dry-run plans with per-resource actions, color-coded by severity
 - [x] **UI-07**: Compliance view: percentage gauge, breakdown donut, non-compliant table, 30-day trend
 - [x] **UI-08**: SPA served from server binary via `go:embed`
 
@@ -235,11 +235,11 @@
 | SECR-09 | Phase 3 | Complete |
 | SECR-10 | Phase 3 | Complete |
 | UI-01 | Phase 4 | Complete |
-| UI-02 | Phase 4 | Pending |
-| UI-03 | Phase 4 | Pending |
-| UI-04 | Phase 4 | Pending |
-| UI-05 | Phase 4 | Pending |
-| UI-06 | Phase 4 | Pending |
+| UI-02 | Phase 4 | Complete |
+| UI-03 | Phase 4 | Complete |
+| UI-04 | Phase 4 | Complete |
+| UI-05 | Phase 4 | Complete |
+| UI-06 | Phase 4 | Complete |
 | UI-07 | Phase 4 | Complete |
 | UI-08 | Phase 4 | Complete |
 | AGNT-10 | Phase 4 | Complete |
