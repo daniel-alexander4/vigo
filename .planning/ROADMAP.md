@@ -60,11 +60,11 @@ Plans:
   3. A resource with multiple conditional fields applied simultaneously evaluates all of them (all constraints must hold for the resource to run)
   4. The `when:` field no longer exists in code or config -- all references are removed and replaced by conditional fields
   5. String shorthand works for single conditions (e.g., `go_if_all_pass: is_debian`) alongside list form
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Resource conditional evaluation engine (TDD: ShouldRunResource with all four fields, StringOrSlice type)
+- [ ] 08-02-PLAN.md — Wire into check-in flow and remove when: from entire codebase
 
 ### Phase 9: Conditional Blocks
 **Goal**: Admins can group multiple resources under shared conditionals using `conditional_block:` inline wrappers
@@ -105,6 +105,6 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 | 5. Trait Inspection | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 6. Custom Traits | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 7. Conditional Vars | 1/2 | In Progress|  | - |
-| 8. Resource Conditionals | v1.2 | 0/0 | Not started | - |
+| 8. Resource Conditionals | v1.2 | 0/2 | Not started | - |
 | 9. Conditional Blocks | v1.2 | 0/0 | Not started | - |
 | 10. Module Conditionals | v1.2 | 0/0 | Not started | - |
