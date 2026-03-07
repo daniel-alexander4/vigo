@@ -127,6 +127,23 @@
 - [x] **INFRA-05**: Agent binary download endpoint: `GET /api/v1/agent/download/{os}/{arch}`
 - [x] **INFRA-06**: Multi-platform package manager support via PackageManager interface (apt, dnf, yum, apk, pacman, brew, zypper)
 
+## v1.1 Requirements
+
+Requirements for Traits Visibility & Custom Traits milestone.
+
+### Trait Inspection
+
+- [ ] **INSP-01**: Admin can run `isogov-agent traits` to dump all collected traits to stdout as JSON or YAML
+- [ ] **INSP-02**: Admin can run `gvctl clients traits <hostname>` to view stored traits for a specific client
+- [ ] **INSP-03**: Server exposes REST endpoint returning stored traits for a client by hostname
+
+### Custom Traits
+
+- [ ] **CUST-01**: Server scans a configurable directory for custom trait executables and serves a manifest (name + SHA256 checksum) during check-in
+- [ ] **CUST-02**: Agent compares manifest against local cache and downloads new/changed trait executables via a dedicated gRPC call
+- [ ] **CUST-03**: Agent executes each custom trait executable with a timeout, parses JSON stdout, and merges output under `custom.<name>` in the traits map
+- [ ] **CUST-04**: Failed or timed-out custom trait executables are logged as warnings and skipped without affecting other traits or convergence
+
 ## v2 Requirements
 
 ### Extended Resources
@@ -246,11 +263,20 @@
 | INFRA-04 | Phase 4 | Complete |
 | INFRA-05 | Phase 4 | Complete |
 
+| INSP-01 | — | Pending |
+| INSP-02 | — | Pending |
+| INSP-03 | — | Pending |
+| CUST-01 | — | Pending |
+| CUST-02 | — | Pending |
+| CUST-03 | — | Pending |
+| CUST-04 | — | Pending |
+
 **Coverage:**
-- v1 requirements: 89 total
-- Mapped to phases: 89
-- Unmapped: 0
+- v1 requirements: 89 total (all complete)
+- v1.1 requirements: 7 total
+- Mapped to phases: 0
+- Unmapped: 7 ⚠️
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after roadmap creation*
+*Last updated: 2026-03-07 after v1.1 requirements definition*
