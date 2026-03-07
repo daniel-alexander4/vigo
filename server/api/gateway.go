@@ -50,6 +50,10 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	uiHandler.RegisterRoutes(mux)
 
+	// Mount traits endpoint (direct handler, not proxied through grpc-gateway).
+	traitsHandler := NewTraitsHandler(queries)
+	traitsHandler.RegisterRoutes(mux)
+
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
 	bh.RegisterRoutes(mux)

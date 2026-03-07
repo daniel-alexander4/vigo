@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,15 +17,15 @@ type mockDBTX struct {
 	queryRowFn func(sql string, args ...any) pgx.Row
 }
 
-func (m *mockDBTX) Exec(_ interface{}, _ string, _ ...interface{}) (pgconn.CommandTag, error) {
+func (m *mockDBTX) Exec(_ context.Context, _ string, _ ...interface{}) (pgconn.CommandTag, error) {
 	return pgconn.CommandTag{}, nil
 }
 
-func (m *mockDBTX) Query(_ interface{}, _ string, _ ...interface{}) (pgx.Rows, error) {
+func (m *mockDBTX) Query(_ context.Context, _ string, _ ...interface{}) (pgx.Rows, error) {
 	return nil, nil
 }
 
-func (m *mockDBTX) QueryRow(_ interface{}, sql string, args ...interface{}) pgx.Row {
+func (m *mockDBTX) QueryRow(_ context.Context, sql string, args ...interface{}) pgx.Row {
 	return m.queryRowFn(sql, args...)
 }
 
