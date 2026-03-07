@@ -35,9 +35,10 @@ EOF
 ### 4. Copy config files
 
 ```bash
-sudo cp config/server.yaml /etc/isogov/config/
-sudo cp config/classification.yaml /etc/isogov/config/
-sudo cp config/clients/*.yaml /etc/isogov/config/clients/
+sudo cp -r server-configs /etc/isogov/
+sudo cp config/clients.yaml /etc/isogov/config/
+sudo cp -r config/modules /etc/isogov/config/
+sudo cp -r config/roles /etc/isogov/config/
 ```
 
 ### 5. Start the server
@@ -231,7 +232,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 
 ## Environment configuration
 
-All `secret:` references in `config/server.yaml` are resolved from `.env`:
+All `secret:` references in `server-configs/server.yaml` are resolved from `.env`:
 
 | `.env` variable | Required | Description |
 |-----------------|----------|-------------|

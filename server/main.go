@@ -39,10 +39,9 @@ func run() error {
 	defer cancel()
 
 	// Determine config paths relative to working directory.
-	envFile := envOrDefault("ISOGOV_ENV_FILE", ".env")
-	configFile := envOrDefault("ISOGOV_CONFIG_FILE", "config/server.yaml")
-	clientsDir := envOrDefault("ISOGOV_CLIENTS_DIR", "config/clients")
-	classificationFile := envOrDefault("ISOGOV_CLASSIFICATION_FILE", "config/classification.yaml")
+	envFile := envOrDefault("ISOGOV_ENV_FILE", "server-configs/.env")
+	configFile := envOrDefault("ISOGOV_CONFIG_FILE", "server-configs/server.yaml")
+	clientConfigsDir := envOrDefault("ISOGOV_CLIENT_CONFIGS_DIR", "client-configs")
 	migrationsDir := envOrDefault("ISOGOV_MIGRATIONS_DIR", "migrations")
 
 	// Initialize secrets provider (StaticProvider for dev, IsopassProvider for prod in Phase 3).
@@ -101,7 +100,7 @@ func run() error {
 	queries := db.New(pool)
 	reg := registry.NewRegistry(queries)
 
-	configStore, err := config.NewConfigStore(clientsDir, classificationFile, provider)
+	configStore, err := config.NewConfigStore(clientConfigsDir, provider)
 	if err != nil {
 		return fmt.Errorf("initializing config store: %w", err)
 	}

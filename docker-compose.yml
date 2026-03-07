@@ -23,11 +23,11 @@ services:
       - "9095:9090"
       - "8085:8080"
     volumes:
-      - /etc/isogov/config:/config:ro
-      - /etc/isogov/certs:/certs:ro
-      - /etc/isogov/.env:/.env:ro
+      - /etc/isogov/client-configs:/client-configs:ro
+      - /etc/isogov/server-configs:/server-configs:ro
+      - /etc/isogov/server-configs/certs:/certs:ro
     env_file:
-      - /etc/isogov/.env
+      - /etc/isogov/server-configs/.env
     depends_on:
       postgres:
         condition: service_healthy

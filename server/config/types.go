@@ -42,7 +42,8 @@ type CheckInSection struct {
 	JitterPercent int    `yaml:"jitter_percent"`
 }
 
-// ClientConfig represents a per-client YAML configuration.
+// ClientConfig represents the resolved per-client configuration.
+// This is the output type returned by ConfigStore.Get().
 type ClientConfig struct {
 	Client      string            `yaml:"client"`
 	Environment string            `yaml:"environment"`
@@ -54,11 +55,8 @@ type ClientConfig struct {
 // ModuleConfig describes a module assigned to a client.
 type ModuleConfig struct {
 	Name      string           `yaml:"name"`
-	Source    string           `yaml:"source"`
 	DependsOn []string         `yaml:"depends_on"`
 	Resources []ResourceConfig `yaml:"resources"`
-	Vars      map[string]any   `yaml:"vars"`
-	EnvVars   map[string]map[string]any `yaml:"env_vars"`
 }
 
 // ResourceConfig describes a single resource within a module.
@@ -72,15 +70,31 @@ type ResourceConfig struct {
 	DependsOn  []string       `yaml:"depends_on"`
 }
 
-// ClassificationRule defines a rule for auto-classifying clients by
-// hostname or IP glob pattern.
-type ClassificationRule struct {
-	Match       string         `yaml:"match"`
-	Environment string         `yaml:"environment"`
-	Modules     []ModuleConfig `yaml:"modules"`
+// ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
+type ModuleDefinition struct {
+	Name      string           `yaml:"name"`
+	DependsOn []string         `yaml:"depends_on"`
+	Resources []ResourceConfig `yaml:"resources"`
+	Vars      map[string]any   `yaml:"vars"`
 }
 
-// ClassificationConfig is the top-level structure of classification.yaml.
-type ClassificationConfig struct {
-	Rules []ClassificationRule `yaml:"rules"`
+// RoleDefinition is a named list of modules loaded from config/roles/*.yaml.
+type RoleDefinition struct {
+	Name    string   `yaml:"name"`
+	Modules []string `yaml:"modules"`
+}
+
+// ClientEntry is a single entry in config/clients.yaml.
+type ClientEntry struct {
+	Match       string                    `yaml:"match"`
+	Environment string                    `yaml:"environment"`
+	Roles       []string                  `yaml:"roles"`
+	Modules     []string                  `yaml:"modules"`
+	Vars        map[string]any            `yaml:"vars"`
+	EnvVars     map[string]map[string]any `yaml:"env_vars"`
+}
+
+// ClientsConfig is the top-level structure of clients.yaml.
+type ClientsConfig struct {
+	Clients []ClientEntry `yaml:"clients"`
 }

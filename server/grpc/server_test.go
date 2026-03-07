@@ -134,15 +134,15 @@ func startTestServer(t *testing.T) (string, func()) {
 	queries := db.New(testPool)
 	reg := registry.NewRegistry(queries)
 
-	// Create a minimal config store (empty clients dir).
-	tmpDir := t.TempDir()
-	clientsDir := filepath.Join(tmpDir, "clients")
-	if err := os.MkdirAll(clientsDir, 0755); err != nil {
-		t.Fatal(err)
+	// Create a minimal config store (empty client-configs dir with modules/ and roles/ subdirs).
+	clientConfigsDir := filepath.Join(t.TempDir(), "client-configs")
+	for _, sub := range []string{"modules", "roles"} {
+		if err := os.MkdirAll(filepath.Join(clientConfigsDir, sub), 0755); err != nil {
+			t.Fatal(err)
+		}
 	}
-	classFile := filepath.Join(tmpDir, "classification.yaml")
 
-	configStore, err := config.NewConfigStore(clientsDir, classFile, &noopProvider{})
+	configStore, err := config.NewConfigStore(clientConfigsDir, &noopProvider{})
 	if err != nil {
 		t.Fatal(err)
 	}

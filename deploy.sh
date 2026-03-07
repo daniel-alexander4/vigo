@@ -8,10 +8,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 ISOGOV_DIR="/etc/isogov"
-CONFIG_DIR="${ISOGOV_DIR}/config"
-CERTS_DIR="${ISOGOV_DIR}/certs"
-CLIENTS_DIR="${CONFIG_DIR}/clients"
-ENV_FILE="${ISOGOV_DIR}/.env"
+CLIENT_CONFIGS_DIR="${ISOGOV_DIR}/client-configs"
+CERTS_DIR="${ISOGOV_DIR}/server-configs/certs"
+MODULES_DIR="${CLIENT_CONFIGS_DIR}/modules"
+ROLES_DIR="${CLIENT_CONFIGS_DIR}/roles"
+SERVER_CONFIGS_DIR="${ISOGOV_DIR}/server-configs"
+ENV_FILE="${ISOGOV_DIR}/server-configs/.env"
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -28,24 +30,24 @@ fail()  { printf '\033[1;31m[FAIL]\033[0m  %s\n' "$*" >&2; exit 1; }
 
 info "Creating ${ISOGOV_DIR} directory structure"
 
-sudo mkdir -p "$CONFIG_DIR" "$CLIENTS_DIR" "$CERTS_DIR"
+sudo mkdir -p "$CLIENT_CONFIGS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$CERTS_DIR"
 
 ok "Directory structure ready"
 
 # ---------------------------------------------------------------------------
-# Step 2: Generate TLS certs (if missing) and copy to /etc/isogov/certs
+# Step 2: Generate TLS certs (if missing) and copy to server-configs/certs
 # ---------------------------------------------------------------------------
 
 info "Checking TLS certificates"
 
 if [ -f "${CERTS_DIR}/server.crt" ] && [ -f "${CERTS_DIR}/server.key" ] && [ -f "${CERTS_DIR}/ca.crt" ]; then
-  echo 'Certs already exist in /etc/isogov/certs — skipping'
+  echo 'Certs already exist — skipping'
 else
-  if [ ! -f certs/server.crt ] || [ ! -f certs/server.key ] || [ ! -f certs/ca.crt ]; then
+  if [ ! -f server-configs/certs/server.crt ] || [ ! -f server-configs/certs/server.key ] || [ ! -f server-configs/certs/ca.crt ]; then
     echo 'Generating self-signed CA + server certs...'
     make certs
   fi
-  sudo cp certs/server.crt certs/server.key certs/ca.crt "$CERTS_DIR/"
+  sudo cp server-configs/certs/server.crt server-configs/certs/server.key server-configs/certs/ca.crt "$CERTS_DIR/"
   echo "Copied certs to ${CERTS_DIR}"
 fi
 
@@ -65,7 +67,7 @@ else
 # Isogov Environment Configuration
 # =============================================================================
 # The StaticProvider reads these values to resolve secret: references in
-# config/server.yaml. Every secret:path/to/key maps to an env var:
+# server-configs/server.yaml. Every secret:path/to/key maps to an env var:
 #   secret:isogov/db/dsn  ->  ISOGOV_DB_DSN
 #   secret:isogov/tls/cert -> ISOGOV_TLS_CERT
 # Rule: uppercase, slashes become underscores.
@@ -82,14 +84,11 @@ ISOGOV_TLS_CA=certs/ca.crt
 # OPTIONAL — uncomment and edit as needed:
 # =============================================================================
 
-# Server config file path (default: config/server.yaml)
-# ISOGOV_CONFIG_FILE=config/server.yaml
+# Server config file path (default: server-configs/server.yaml)
+# ISOGOV_CONFIG_FILE=server-configs/server.yaml
 
-# Client configs directory (default: config/clients)
-# ISOGOV_CLIENTS_DIR=config/clients
-
-# Classification rules file (default: config/classification.yaml)
-# ISOGOV_CLASSIFICATION_FILE=config/classification.yaml
+# Client configs directory (default: client-configs)
+# ISOGOV_CLIENT_CONFIGS_DIR=client-configs
 
 # Migrations directory (default: migrations)
 # ISOGOV_MIGRATIONS_DIR=migrations
@@ -104,8 +103,8 @@ ISOGOV_TLS_CA=certs/ca.crt
 # Webhook secret for HMAC-SHA256 payload signing
 # ISOGOV_WEBHOOK_SECRET=change-me-to-a-random-string
 
-# .env file path override (default: .env — this file)
-# ISOGOV_ENV_FILE=.env
+# .env file path override (default: server-configs/.env)
+# ISOGOV_ENV_FILE=server-configs/.env
 ENVFILE
   echo "${ENV_FILE} created with defaults"
 fi
@@ -116,36 +115,51 @@ ok ".env ready"
 # Step 4: Copy config files to /etc/isogov/config
 # ---------------------------------------------------------------------------
 
-info "Populating ${CONFIG_DIR}"
+info "Populating ${CLIENT_CONFIGS_DIR}"
 
 # Server config
-if [ -f "${CONFIG_DIR}/server.yaml" ]; then
+SERVER_CONFIGS_DIR="${ISOGOV_DIR}/server-configs"
+sudo mkdir -p "$SERVER_CONFIGS_DIR"
+if [ -f "${SERVER_CONFIGS_DIR}/server.yaml" ]; then
   echo 'server.yaml already exists — skipping'
 else
-  sudo cp config/server.yaml "$CONFIG_DIR/"
+  sudo cp server-configs/server.yaml "$SERVER_CONFIGS_DIR/"
   echo 'Copied server.yaml'
 fi
 
-# Classification rules
-if [ -f "${CONFIG_DIR}/classification.yaml" ]; then
-  echo 'classification.yaml already exists — skipping'
+# clients.yaml
+if [ -f "${CLIENT_CONFIGS_DIR}/clients.yaml" ]; then
+  echo 'clients.yaml already exists — skipping'
 else
-  sudo cp config/classification.yaml "$CONFIG_DIR/"
-  echo 'Copied classification.yaml'
+  sudo cp client-configs/clients.yaml "$CLIENT_CONFIGS_DIR/"
+  echo 'Copied clients.yaml'
 fi
 
-# Client configs — copy any that don't already exist in destination
-NEW_CLIENTS=0
-for src in config/clients/*.yaml; do
+# Module definitions — copy any that don't already exist
+NEW_MODULES=0
+for src in client-configs/modules/*.yaml; do
   [ -f "$src" ] || continue
-  dest="${CLIENTS_DIR}/$(basename "$src")"
+  dest="${MODULES_DIR}/$(basename "$src")"
   if [ ! -f "$dest" ]; then
     sudo cp "$src" "$dest"
-    NEW_CLIENTS=$((NEW_CLIENTS + 1))
+    NEW_MODULES=$((NEW_MODULES + 1))
   fi
 done
-CLIENT_COUNT=$(find "$CLIENTS_DIR" -name '*.yaml' 2>/dev/null | wc -l)
-echo "Client configs: ${CLIENT_COUNT} total (${NEW_CLIENTS} new)"
+MODULE_COUNT=$(find "$MODULES_DIR" -name '*.yaml' 2>/dev/null | wc -l)
+echo "Module definitions: ${MODULE_COUNT} total (${NEW_MODULES} new)"
+
+# Role definitions — copy any that don't already exist
+NEW_ROLES=0
+for src in client-configs/roles/*.yaml; do
+  [ -f "$src" ] || continue
+  dest="${ROLES_DIR}/$(basename "$src")"
+  if [ ! -f "$dest" ]; then
+    sudo cp "$src" "$dest"
+    NEW_ROLES=$((NEW_ROLES + 1))
+  fi
+done
+ROLE_COUNT=$(find "$ROLES_DIR" -name '*.yaml' 2>/dev/null | wc -l)
+echo "Role definitions: ${ROLE_COUNT} total (${NEW_ROLES} new)"
 
 ok "Config files ready"
 
@@ -175,9 +189,10 @@ cat <<DONE
 ============================================================
 
 Config directory: ${ISOGOV_DIR}
-  ${CONFIG_DIR}/server.yaml
-  ${CONFIG_DIR}/classification.yaml
-  ${CLIENTS_DIR}/*.yaml
+  ${ISOGOV_DIR}/server-configs/server.yaml
+  ${CLIENT_CONFIGS_DIR}/clients.yaml
+  ${MODULES_DIR}/*.yaml
+  ${ROLES_DIR}/*.yaml
   ${CERTS_DIR}/
   ${ENV_FILE}
 
@@ -198,8 +213,8 @@ Next steps:
   3. On each managed node, run the printed curl command:
      curl http://<server-ip>:8080/bootstrap?token=<TOKEN> | bash
 
-  4. Edit client configs in ${CLIENTS_DIR}/
-     (server hot-reloads automatically)
+  4. Edit configs in ${CLIENT_CONFIGS_DIR}/
+     (modules, roles, clients.yaml — server hot-reloads automatically)
 
   5. For production:
      - Replace ${CERTS_DIR}/ with real TLS certificates

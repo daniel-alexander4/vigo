@@ -7,8 +7,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -770,8 +768,7 @@ func (ds *dbDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 		return ConfigPageData{}, fmt.Errorf("no config store")
 	}
 
-	path := filepath.Join(ds.configStore.Dir(), hostname+".yaml")
-	data, err := os.ReadFile(path)
+	yamlStr, err := ds.configStore.EffectiveConfigYAML(hostname)
 	if err != nil {
 		return ConfigPageData{}, fmt.Errorf("config not found for %s: %w", hostname, err)
 	}
@@ -779,7 +776,7 @@ func (ds *dbDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 	return ConfigPageData{
 		PageData: PageData{Title: "Config: " + hostname, ActiveNav: "clients"},
 		Hostname: hostname,
-		RawYAML:  string(data),
+		RawYAML:  yamlStr,
 	}, nil
 }
 

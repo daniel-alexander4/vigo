@@ -1,0 +1,48 @@
+name: grafana
+
+vars:
+  grafana_port: "3000"
+
+resources:
+  - name: grafana-repo
+    type: repository
+    name: grafana
+    key_url: https://apt.grafana.com/gpg.key
+    repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
+    state: present
+
+  - name: install-grafana
+    type: package
+    package: grafana
+    state: present
+    depends_on: [grafana-repo]
+
+  - name: grafana-ini
+    type: file
+    path: /etc/grafana/grafana.ini
+    content: |
+      [server]
+      http_port = {{ .Vars.grafana_port }}
+
+      [security]
+      admin_password = secret:isogov/grafana/admin-password
+
+      [auth.anonymous]
+      enabled = false
+
+      [log]
+      mode = file
+      level = info
+    owner: root
+    group: grafana
+    mode: "0640"
+    depends_on: [install-grafana]
+    notify: [grafana-service]
+
+  - name: grafana-service
+    type: service
+    service: grafana-server
+    enabled: true
+    state: running
+    depends_on: [grafana-ini]
+    subscribes: [grafana-ini]

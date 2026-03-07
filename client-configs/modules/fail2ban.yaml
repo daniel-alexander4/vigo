@@ -1,0 +1,37 @@
+name: fail2ban
+
+resources:
+  - name: install-fail2ban
+    type: package
+    package: fail2ban
+    state: present
+
+  - name: fail2ban-jail
+    type: file
+    path: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port = {{ .Vars.ssh_port }}
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 7200
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-fail2ban]
+    notify: [fail2ban-service]
+
+  - name: fail2ban-service
+    type: service
+    service: fail2ban
+    enabled: true
+    state: running
+    depends_on: [fail2ban-jail]
+    subscribes: [fail2ban-jail]

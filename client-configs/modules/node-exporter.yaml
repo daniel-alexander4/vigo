@@ -1,0 +1,14 @@
+name: node-exporter
+
+resources:
+  - name: install-node-exporter
+    type: package
+    package: prometheus-node-exporter
+    state: present
+
+  - name: node-exporter-service
+    type: service
+    service: prometheus-node-exporter
+    enabled: true
+    state: running
+    depends_on: [install-node-exporter]

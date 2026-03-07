@@ -1,0 +1,79 @@
+name: docker
+
+vars:
+  docker_storage_driver: "overlay2"
+  docker_log_max_size: "100m"
+  docker_log_max_file: "3"
+
+resources:
+  - name: docker-deps
+    type: package
+    package: ca-certificates
+    state: present
+
+  - name: docker-repo
+    type: repository
+    name: docker
+    key_url: https://download.docker.com/linux/ubuntu/gpg
+    repo: "deb [signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"
+    state: present
+    depends_on: [docker-deps]
+
+  - name: install-docker
+    type: package
+    package: docker-ce
+    state: present
+    depends_on: [docker-repo]
+
+  - name: install-docker-cli
+    type: package
+    package: docker-ce-cli
+    state: present
+    depends_on: [docker-repo]
+
+  - name: install-containerd
+    type: package
+    package: containerd.io
+    state: present
+    depends_on: [docker-repo]
+
+  - name: docker-daemon-json
+    type: file
+    path: /etc/docker/daemon.json
+    content: |
+      {
+        "storage-driver": "{{ .Vars.docker_storage_driver }}",
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "{{ .Vars.docker_log_max_size }}",
+          "max-file": "{{ .Vars.docker_log_max_file }}"
+        },
+        "live-restore": true,
+        "default-ulimits": {
+          "nofile": {
+            "Name": "nofile",
+            "Hard": 65536,
+            "Soft": 65536
+          }
+        }
+      }
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-docker]
+    notify: [docker-service]
+
+  - name: docker-service
+    type: service
+    service: docker
+    enabled: true
+    state: running
+    depends_on: [install-docker, docker-daemon-json]
+    subscribes: [docker-daemon-json]
+
+  - name: containerd-service
+    type: service
+    service: containerd
+    enabled: true
+    state: running
+    depends_on: [install-containerd]

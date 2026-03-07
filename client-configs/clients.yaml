@@ -1,0 +1,121 @@
+# Client-to-module mappings. First match wins.
+# Entries can reference roles (config/roles/) or modules (config/modules/) by name.
+# Client-level vars override module default vars.
+
+clients:
+  # --- Explicit hosts (specific overrides before patterns) ---
+
+  - match: "web01.example.com"
+    environment: production
+    roles: [webserver]
+    vars:
+      server_name: "web01.example.com"
+      ssl_cert: "/etc/ssl/certs/web01.pem"
+      ssl_key: "/etc/ssl/private/web01.key"
+    env_vars:
+      production:
+        worker_processes: "auto"
+        keepalive_timeout: "65"
+      staging:
+        worker_processes: "2"
+        keepalive_timeout: "30"
+
+  - match: "db01.example.com"
+    environment: production
+    roles: [database]
+    env_vars:
+      production:
+        pg_max_connections: "200"
+        pg_shared_buffers: "4GB"
+        pg_effective_cache_size: "12GB"
+        pg_work_mem: "64MB"
+      staging:
+        pg_max_connections: "50"
+        pg_shared_buffers: "256MB"
+        pg_effective_cache_size: "1GB"
+        pg_work_mem: "16MB"
+
+  - match: "cache01.example.com"
+    environment: production
+    modules: [redis]
+    vars:
+      redis_password: "secret:isogov/redis/password"
+    env_vars:
+      production:
+        redis_maxmemory: "4gb"
+        redis_bind: "0.0.0.0"
+      staging:
+        redis_maxmemory: "256mb"
+        redis_bind: "127.0.0.1"
+
+  - match: "docker01.example.com"
+    environment: production
+    modules: [docker]
+
+  - match: "mon01.example.com"
+    environment: production
+    roles: [monitoring]
+
+  - match: "lb01.example.com"
+    environment: production
+    modules: [haproxy]
+    vars:
+      haproxy_stats_password: "secret:isogov/haproxy/stats-password"
+
+  - match: "bastion01.example.com"
+    environment: production
+    roles: [bastion]
+
+  - match: "mysql01.example.com"
+    environment: production
+    modules: [mysql]
+    vars:
+      mysql_root_password: "secret:isogov/mysql/root-password"
+    env_vars:
+      production:
+        mysql_max_connections: "500"
+        mysql_innodb_buffer_pool_size: "8G"
+      staging:
+        mysql_max_connections: "50"
+        mysql_innodb_buffer_pool_size: "512M"
+
+  - match: "dev01.example.com"
+    environment: production
+    modules: [charm-tools, github-tools]
+
+  # --- Pattern-based entries (catch-all for hostnames matching globs) ---
+
+  - match: "web-*"
+    environment: production
+    roles: [webserver]
+
+  - match: "db-*"
+    environment: production
+    roles: [database]
+
+  - match: "mysql-*"
+    environment: production
+    modules: [mysql]
+
+  - match: "cache-*"
+    environment: production
+    modules: [redis]
+
+  - match: "lb-*"
+    environment: production
+    modules: [haproxy]
+
+  - match: "docker-*"
+    environment: production
+    modules: [docker]
+
+  - match: "mon-*"
+    environment: production
+    roles: [monitoring]
+
+  - match: "bastion-*"
+    environment: production
+    roles: [bastion]
+
+  - match: "*.staging.example.com"
+    environment: staging

@@ -31,52 +31,52 @@ func (m *mockProvider) Close() error { return nil }
 
 // --- helpers ---
 
-func setupTestDir(t *testing.T) (clientsDir, classificationPath string) {
+// setupDir creates a client-configs directory with modules/ and roles/ subdirs.
+func setupDir(t *testing.T) string {
 	t.Helper()
-	tmpDir := t.TempDir()
-	clientsDir = filepath.Join(tmpDir, "clients")
-	if err := os.MkdirAll(clientsDir, 0o755); err != nil {
-		t.Fatal(err)
+	dir := filepath.Join(t.TempDir(), "client-configs")
+	for _, sub := range []string{"modules", "roles"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
-	classificationPath = filepath.Join(tmpDir, "classification.yaml")
-	// Write empty classification by default
-	if err := os.WriteFile(classificationPath, []byte("rules: []\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return
+	return dir
 }
 
-func writeClientYAML(t *testing.T, dir, name, content string) {
+func writeFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // --- Tests ---
 
-func TestLoadClientConfig(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	writeClientYAML(t, clientsDir, "test.yaml", `
-client: test.example.com
-environment: production
-modules:
-  - name: nginx
-    resources:
-      - name: install-nginx
-        type: package
-        package: nginx
-        state: present
+func TestLoadModuleAndResolve(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
 `)
-	mp := &mockProvider{secrets: map[string]string{}}
-	store, err := NewConfigStore(clientsDir, classPath, mp)
+
+	writeFile(t, filepath.Join(dir, "webservers.yaml"), `
+clients:
+  - match: "test.example.com"
+    environment: production
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
+
 	cfg := store.Get("test.example.com")
-	if cfg == nil {
-		t.Fatal("expected config for test.example.com, got nil")
-	}
 	if cfg.Client != "test.example.com" {
 		t.Errorf("Client = %q, want test.example.com", cfg.Client)
 	}
@@ -88,80 +88,351 @@ modules:
 	}
 }
 
-func TestSecretResolution(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	writeClientYAML(t, clientsDir, "web.yaml", `
-client: web.example.com
-environment: production
-vars:
-  db_dsn: "secret:isogov/db/dsn"
-modules:
-  - name: app
-    resources:
-      - name: config
-        type: file
-        path: /etc/app/db.conf
-        content: "secret:myapp/db/config"
+func TestRoleResolution(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
 `)
-	mp := &mockProvider{secrets: map[string]string{
-		"isogov/db/dsn":    "postgres://real:pw@db:5432/prod",
-		"myapp/db/config":  "host=db port=5432 user=myapp",
-	}}
-	store, err := NewConfigStore(clientsDir, classPath, mp)
+	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+name: certbot
+resources:
+  - name: install-certbot
+    type: package
+    package: certbot
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
+name: webserver
+modules: [nginx, certbot]
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web01.example.com"
+    environment: production
+    roles: [webserver]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
+
+	cfg := store.Get("web01.example.com")
+	if len(cfg.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	}
+	if cfg.Modules[0].Name != "nginx" {
+		t.Errorf("Module[0] = %q, want nginx", cfg.Modules[0].Name)
+	}
+	if cfg.Modules[1].Name != "certbot" {
+		t.Errorf("Module[1] = %q, want certbot", cfg.Modules[1].Name)
+	}
+}
+
+func TestModuleDefaultVarsOverriddenByClient(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+vars:
+  worker_processes: "auto"
+  keepalive_timeout: "65"
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web01.example.com"
+    environment: production
+    modules: [nginx]
+    vars:
+      worker_processes: "4"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.example.com")
+	if cfg.Vars["worker_processes"] != "4" {
+		t.Errorf("worker_processes = %v, want 4 (client override)", cfg.Vars["worker_processes"])
+	}
+	if cfg.Vars["keepalive_timeout"] != "65" {
+		t.Errorf("keepalive_timeout = %v, want 65 (module default)", cfg.Vars["keepalive_timeout"])
+	}
+}
+
+func TestSecretResolution(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: config
+    type: file
+    path: /etc/app/db.conf
+    content: "secret:myapp/db/config"
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web.example.com"
+    environment: production
+    modules: [app]
+    vars:
+      db_dsn: "secret:isogov/db/dsn"
+`)
+
+	mp := &mockProvider{secrets: map[string]string{
+		"isogov/db/dsn":   "postgres://real:pw@db:5432/prod",
+		"myapp/db/config": "host=db port=5432 user=myapp",
+	}}
+	store, err := NewConfigStore(dir, mp)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
 	cfg := store.Get("web.example.com")
-	if cfg == nil {
-		t.Fatal("expected config, got nil")
-	}
-	// Vars should have the resolved secret
-	val, ok := cfg.Vars["db_dsn"]
-	if !ok {
-		t.Fatal("vars missing db_dsn")
-	}
-	if val != "postgres://real:pw@db:5432/prod" {
-		t.Errorf("db_dsn = %q, want resolved DSN", val)
+	if cfg.Vars["db_dsn"] != "postgres://real:pw@db:5432/prod" {
+		t.Errorf("db_dsn = %q, want resolved DSN", cfg.Vars["db_dsn"])
 	}
 }
 
 func TestKnownSecretEnforcement(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	// dsn without secret: prefix should fail
-	writeClientYAML(t, clientsDir, "bad.yaml", `
-client: bad.example.com
-environment: production
-vars:
-  dsn: "postgres://plaintext@db/bad"
-modules: []
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources: []
 `)
-	mp := &mockProvider{secrets: map[string]string{}}
-	_, err := NewConfigStore(clientsDir, classPath, mp)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "bad.example.com"
+    environment: production
+    modules: [app]
+    vars:
+      dsn: "postgres://plaintext@db/bad"
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
 	if err == nil {
 		t.Fatal("expected error for known-secret field without secret: prefix, got nil")
 	}
 }
 
 func TestHardFailUnresolvable(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	writeClientYAML(t, clientsDir, "fail.yaml", `
-client: fail.example.com
-environment: production
-vars:
-  db_conn: "secret:nonexistent/key"
-modules: []
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources: []
 `)
-	mp := &mockProvider{secrets: map[string]string{}}
-	_, err := NewConfigStore(clientsDir, classPath, mp)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "fail.example.com"
+    environment: production
+    modules: [app]
+    vars:
+      db_conn: "secret:nonexistent/key"
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
 	if err == nil {
 		t.Fatal("expected error for unresolvable secret, got nil")
 	}
 }
 
+func TestPatternMatching(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+name: base
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "*.prod.example.com"
+    environment: production
+    modules: [base, nginx]
+  - match: "*.staging.example.com"
+    environment: staging
+    modules: [base]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.prod.example.com")
+	if cfg.Environment != "production" {
+		t.Errorf("Environment = %q, want production", cfg.Environment)
+	}
+	if len(cfg.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	}
+
+	cfg2 := store.Get("app.staging.example.com")
+	if cfg2.Environment != "staging" {
+		t.Errorf("Environment = %q, want staging", cfg2.Environment)
+	}
+}
+
+func TestFirstMatchWins(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "explicit.yaml"), `
+name: explicit
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "pattern.yaml"), `
+name: pattern
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web01.prod.example.com"
+    environment: staging
+    modules: [explicit]
+  - match: "*.prod.example.com"
+    environment: production
+    modules: [pattern]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.prod.example.com")
+	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "explicit" {
+		t.Errorf("expected explicit module, got %v", cfg.Modules)
+	}
+	if cfg.Environment != "staging" {
+		t.Errorf("Environment = %q, want staging (first match)", cfg.Environment)
+	}
+}
+
+func TestMultipleClientFiles(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "postgres.yaml"), `
+name: postgres
+resources: []
+`)
+	// Two separate client files
+	writeFile(t, filepath.Join(dir, "webservers.yaml"), `
+clients:
+  - match: "web-*"
+    environment: production
+    modules: [nginx]
+`)
+	writeFile(t, filepath.Join(dir, "databases.yaml"), `
+clients:
+  - match: "db-*"
+    environment: production
+    modules: [postgres]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	web := store.Get("web-01")
+	if len(web.Modules) != 1 || web.Modules[0].Name != "nginx" {
+		t.Errorf("web-01: expected nginx, got %v", web.Modules)
+	}
+
+	db := store.Get("db-01")
+	if len(db.Modules) != 1 || db.Modules[0].Name != "postgres" {
+		t.Errorf("db-01: expected postgres, got %v", db.Modules)
+	}
+}
+
+func TestUnconfiguredClient(t *testing.T) {
+	dir := setupDir(t)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("unknown.example.com")
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if len(cfg.Modules) != 0 {
+		t.Errorf("expected empty modules, got %d", len(cfg.Modules))
+	}
+}
+
+func TestEnvVarMerge(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "envtest.example.com"
+    environment: production
+    modules: [app]
+    vars:
+      app_port: "8080"
+      log_level: "info"
+    env_vars:
+      production:
+        app_port: "443"
+        max_workers: "8"
+      staging:
+        app_port: "8443"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("envtest.example.com")
+	if cfg.Vars["app_port"] != "443" {
+		t.Errorf("app_port = %v, want 443 (env override)", cfg.Vars["app_port"])
+	}
+	if cfg.Vars["log_level"] != "info" {
+		t.Errorf("log_level = %v, want info (base)", cfg.Vars["log_level"])
+	}
+	if cfg.Vars["max_workers"] != "8" {
+		t.Errorf("max_workers = %v, want 8 (env override)", cfg.Vars["max_workers"])
+	}
+}
+
 func TestConfigWatcher(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	mp := &mockProvider{secrets: map[string]string{}}
-	store, err := NewConfigStore(clientsDir, classPath, mp)
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources: []
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -170,23 +441,21 @@ func TestConfigWatcher(t *testing.T) {
 	defer cancel()
 
 	go store.Watch(ctx)
-
-	// Give the watcher time to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Initially unconfigured: empty environment (fallback config)
+	// Initially unconfigured
 	if cfg := store.Get("new.example.com"); cfg.Environment != "" {
-		t.Fatalf("expected empty environment before file write, got %q", cfg.Environment)
+		t.Fatalf("expected empty environment before update, got %q", cfg.Environment)
 	}
 
 	// Write a new client file
-	writeClientYAML(t, clientsDir, "new.yaml", `
-client: new.example.com
-environment: staging
-modules: []
+	writeFile(t, filepath.Join(dir, "new-hosts.yaml"), `
+clients:
+  - match: "new.example.com"
+    environment: staging
+    modules: [app]
 `)
 
-	// Wait for fsnotify + debounce (up to 2 seconds)
 	deadline := time.Now().Add(2 * time.Second)
 	var found bool
 	for time.Now().Before(deadline) {
@@ -203,14 +472,20 @@ modules: []
 }
 
 func TestBadConfigKeepsOld(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	writeClientYAML(t, clientsDir, "good.yaml", `
-client: good.example.com
-environment: production
-modules: []
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources: []
 `)
-	mp := &mockProvider{secrets: map[string]string{}}
-	store, err := NewConfigStore(clientsDir, classPath, mp)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "good.example.com"
+    environment: production
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -221,163 +496,136 @@ modules: []
 	go store.Watch(ctx)
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify good config exists
 	if cfg := store.Get("good.example.com"); cfg == nil {
 		t.Fatal("expected good config")
 	}
 
-	// Write invalid YAML over the file
-	writeClientYAML(t, clientsDir, "good.yaml", `
-client: good.example.com
+	// Write invalid YAML
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
   invalid yaml: [[[
 `)
 
-	// Wait for debounce
 	time.Sleep(700 * time.Millisecond)
 
 	// Good config should still be there
-	if cfg := store.Get("good.example.com"); cfg == nil {
-		t.Fatal("bad YAML replaced good config -- expected old config to be preserved")
+	if cfg := store.Get("good.example.com"); cfg.Environment != "production" {
+		t.Fatal("bad YAML replaced good config")
 	}
 }
 
-func TestClassification(t *testing.T) {
-	clientsDir := t.TempDir()
-	clientsDirInner := filepath.Join(clientsDir, "clients")
-	if err := os.MkdirAll(clientsDirInner, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	classPath := filepath.Join(clientsDir, "classification.yaml")
-	if err := os.WriteFile(classPath, []byte(`
-rules:
-  - match: "*.prod.example.com"
-    environment: production
-    modules:
-      - name: base
-      - name: nginx
-  - match: "*.staging.example.com"
-    environment: staging
-    modules:
-      - name: base
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+func TestUnknownModuleError(t *testing.T) {
+	dir := setupDir(t)
 
-	mp := &mockProvider{secrets: map[string]string{}}
-	store, err := NewConfigStore(clientsDirInner, classPath, mp)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
-
-	cfg := store.Get("web01.prod.example.com")
-	if cfg == nil {
-		t.Fatal("expected classified config for web01.prod.example.com, got nil")
-	}
-	if cfg.Environment != "production" {
-		t.Errorf("Environment = %q, want production", cfg.Environment)
-	}
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
-	}
-}
-
-func TestExplicitOverClassification(t *testing.T) {
-	clientsDir := t.TempDir()
-	clientsDirInner := filepath.Join(clientsDir, "clients")
-	if err := os.MkdirAll(clientsDirInner, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	classPath := filepath.Join(clientsDir, "classification.yaml")
-	if err := os.WriteFile(classPath, []byte(`
-rules:
-  - match: "*.prod.example.com"
-    environment: production
-    modules:
-      - name: classified-module
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Explicit config takes precedence
-	writeClientYAML(t, clientsDirInner, "web01.yaml", `
-client: web01.prod.example.com
-environment: staging
-modules:
-  - name: explicit-module
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "bad.example.com"
+    modules: [nonexistent]
 `)
 
-	mp := &mockProvider{secrets: map[string]string{}}
-	store, err := NewConfigStore(clientsDirInner, classPath, mp)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
-
-	cfg := store.Get("web01.prod.example.com")
-	if cfg == nil {
-		t.Fatal("expected config, got nil")
-	}
-	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "explicit-module" {
-		t.Errorf("expected explicit-module, got %v", cfg.Modules)
-	}
-	if cfg.Environment != "staging" {
-		t.Errorf("Environment = %q, want staging (from explicit config)", cfg.Environment)
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for unknown module, got nil")
 	}
 }
 
-func TestUnconfiguredClient(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	mp := &mockProvider{secrets: map[string]string{}}
-	store, err := NewConfigStore(clientsDir, classPath, mp)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
+func TestUnknownRoleError(t *testing.T) {
+	dir := setupDir(t)
 
-	cfg := store.Get("unknown.example.com")
-	if cfg == nil {
-		t.Fatal("expected non-nil config with empty modules for unconfigured client")
-	}
-	if len(cfg.Modules) != 0 {
-		t.Errorf("expected empty modules, got %d", len(cfg.Modules))
-	}
-}
-
-func TestEnvVarMerge(t *testing.T) {
-	clientsDir, classPath := setupTestDir(t)
-	writeClientYAML(t, clientsDir, "envtest.yaml", `
-client: envtest.example.com
-environment: production
-vars:
-  app_port: "8080"
-  log_level: "info"
-env_vars:
-  production:
-    app_port: "443"
-    max_workers: "8"
-  staging:
-    app_port: "8443"
-modules: []
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "bad.example.com"
+    roles: [nonexistent]
 `)
-	mp := &mockProvider{secrets: map[string]string{}}
-	store, err := NewConfigStore(clientsDir, classPath, mp)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for unknown role, got nil")
+	}
+}
+
+func TestRoleReferencesUnknownModule(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "roles", "bad.yaml"), `
+name: bad
+modules: [nonexistent]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for role referencing unknown module, got nil")
+	}
+}
+
+func TestDedupModules(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "roles", "web.yaml"), `
+name: web
+modules: [nginx]
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "dup.example.com"
+    roles: [web]
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	cfg := store.Get("envtest.example.com")
-	if cfg == nil {
-		t.Fatal("expected config, got nil")
+	cfg := store.Get("dup.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Errorf("expected 1 module (deduped), got %d", len(cfg.Modules))
 	}
-	// env-specific "production" app_port should win
-	if cfg.Vars["app_port"] != "443" {
-		t.Errorf("app_port = %v, want 443 (env override)", cfg.Vars["app_port"])
+}
+
+func TestClientsReferencingSecret(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: config
+    type: file
+    path: /etc/app/config
+    content: "secret:myapp/db/config"
+`)
+	writeFile(t, filepath.Join(dir, "modules", "other.yaml"), `
+name: other
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web-*"
+    modules: [app]
+  - match: "db-*"
+    modules: [other]
+`)
+
+	mp := &mockProvider{secrets: map[string]string{
+		"myapp/db/config": "resolved-value",
+	}}
+	store, err := NewConfigStore(dir, mp)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
 	}
-	// base log_level should survive
-	if cfg.Vars["log_level"] != "info" {
-		t.Errorf("log_level = %v, want info (base)", cfg.Vars["log_level"])
+
+	patterns := store.ClientsReferencingSecret("myapp/db/config")
+	if len(patterns) != 1 || patterns[0] != "web-*" {
+		t.Errorf("expected [web-*], got %v", patterns)
 	}
-	// env-specific max_workers should be present
-	if cfg.Vars["max_workers"] != "8" {
-		t.Errorf("max_workers = %v, want 8 (env override)", cfg.Vars["max_workers"])
+
+	patterns = store.ClientsReferencingSecret("nonexistent")
+	if len(patterns) != 0 {
+		t.Errorf("expected empty, got %v", patterns)
 	}
 }
 

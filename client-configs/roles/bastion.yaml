@@ -1,0 +1,4 @@
+name: bastion
+modules:
+  - openssh
+  - fail2ban

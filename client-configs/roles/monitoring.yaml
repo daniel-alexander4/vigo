@@ -1,0 +1,5 @@
+name: monitoring
+modules:
+  - prometheus
+  - node-exporter
+  - grafana
