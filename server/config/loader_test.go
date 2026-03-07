@@ -1125,6 +1125,238 @@ clients:
 	}
 }
 
+// --- Conditional Block Loader Integration Tests ---
+
+func TestLoadModuleConditionalBlockLoadsCorrectly(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "debian-tools.yaml"), `
+name: debian-tools
+resources:
+  - conditional_block:
+      go_if_all_pass: is_debian
+      resources:
+        - name: install-apt-utils
+          type: package
+          package: apt-utils
+          state: present
+        - name: apt-update
+          type: exec
+          command: "apt-get update"
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "deb.example.com"
+    modules: [debian-tools]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("deb.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	}
+	mod := cfg.Modules[0]
+	if len(mod.Resources) != 2 {
+		t.Fatalf("len(Resources) = %d, want 2 (flattened from block)", len(mod.Resources))
+	}
+	// Both resources should have go_if_all_pass: [is_debian] from block
+	for i, res := range mod.Resources {
+		if len(res.GoIfAllPass) != 1 || res.GoIfAllPass[0] != "is_debian" {
+			t.Errorf("Resources[%d].GoIfAllPass = %v, want [is_debian]", i, res.GoIfAllPass)
+		}
+	}
+	if mod.Resources[0].Name != "install-apt-utils" {
+		t.Errorf("Resources[0].Name = %q, want install-apt-utils", mod.Resources[0].Name)
+	}
+	if mod.Resources[1].Name != "apt-update" {
+		t.Errorf("Resources[1].Name = %q, want apt-update", mod.Resources[1].Name)
+	}
+}
+
+func TestLoadModuleMixedPlainAndConditionalBlock(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "mixed.yaml"), `
+name: mixed
+resources:
+  - name: always-run
+    type: package
+    package: curl
+    state: present
+
+  - conditional_block:
+      go_if_all_pass: is_debian
+      resources:
+        - name: apt-setup
+          type: exec
+          command: "apt-get update"
+
+  - name: final-step
+    type: service
+    service: nginx
+    state: running
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "mix.example.com"
+    modules: [mixed]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("mix.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	}
+	mod := cfg.Modules[0]
+	if len(mod.Resources) != 3 {
+		t.Fatalf("len(Resources) = %d, want 3", len(mod.Resources))
+	}
+	// Check ordering: always-run, apt-setup, final-step
+	expectedNames := []string{"always-run", "apt-setup", "final-step"}
+	for i, want := range expectedNames {
+		if mod.Resources[i].Name != want {
+			t.Errorf("Resources[%d].Name = %q, want %q", i, mod.Resources[i].Name, want)
+		}
+	}
+	// Only apt-setup should have GoIfAllPass
+	if len(mod.Resources[0].GoIfAllPass) != 0 {
+		t.Errorf("always-run should have no GoIfAllPass, got %v", mod.Resources[0].GoIfAllPass)
+	}
+	if len(mod.Resources[1].GoIfAllPass) != 1 || mod.Resources[1].GoIfAllPass[0] != "is_debian" {
+		t.Errorf("apt-setup.GoIfAllPass = %v, want [is_debian]", mod.Resources[1].GoIfAllPass)
+	}
+	if len(mod.Resources[2].GoIfAllPass) != 0 {
+		t.Errorf("final-step should have no GoIfAllPass, got %v", mod.Resources[2].GoIfAllPass)
+	}
+}
+
+func TestLoadModuleConditionalBlockDependsOnAcrossBoundary(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "cross-dep.yaml"), `
+name: cross-dep
+resources:
+  - name: setup-repo
+    type: exec
+    command: "add-repo"
+
+  - conditional_block:
+      go_if_all_pass: is_debian
+      resources:
+        - name: install-tool
+          type: package
+          package: my-tool
+          state: present
+          depends_on: [setup-repo]
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "dep.example.com"
+    modules: [cross-dep]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("dep.example.com")
+	mod := cfg.Modules[0]
+	if len(mod.Resources) != 2 {
+		t.Fatalf("len(Resources) = %d, want 2", len(mod.Resources))
+	}
+	// install-tool should have depends_on: [setup-repo] preserved and GoIfAllPass: [is_debian]
+	res := mod.Resources[1]
+	if res.Name != "install-tool" {
+		t.Errorf("Resources[1].Name = %q, want install-tool", res.Name)
+	}
+	if len(res.DependsOn) != 1 || res.DependsOn[0] != "setup-repo" {
+		t.Errorf("install-tool.DependsOn = %v, want [setup-repo]", res.DependsOn)
+	}
+	if len(res.GoIfAllPass) != 1 || res.GoIfAllPass[0] != "is_debian" {
+		t.Errorf("install-tool.GoIfAllPass = %v, want [is_debian]", res.GoIfAllPass)
+	}
+}
+
+func TestLoadModuleConditionalBlockWithResourceLevelConditionals(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "dual-cond.yaml"), `
+name: dual-cond
+resources:
+  - conditional_block:
+      go_if_all_pass: is_debian
+      resources:
+        - name: desktop-tool
+          type: package
+          package: desktop-tool
+          state: present
+          skip_if_any_pass: is_container
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "dual.example.com"
+    modules: [dual-cond]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("dual.example.com")
+	mod := cfg.Modules[0]
+	if len(mod.Resources) != 1 {
+		t.Fatalf("len(Resources) = %d, want 1", len(mod.Resources))
+	}
+	res := mod.Resources[0]
+	// Should have both block-level go_if_all_pass AND resource-level skip_if_any_pass
+	if len(res.GoIfAllPass) != 1 || res.GoIfAllPass[0] != "is_debian" {
+		t.Errorf("GoIfAllPass = %v, want [is_debian]", res.GoIfAllPass)
+	}
+	if len(res.SkipIfAnyPass) != 1 || res.SkipIfAnyPass[0] != "is_container" {
+		t.Errorf("SkipIfAnyPass = %v, want [is_container]", res.SkipIfAnyPass)
+	}
+}
+
+func TestLoadModuleConditionalBlockEmptyResourcesError(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "bad-block.yaml"), `
+name: bad-block
+resources:
+  - conditional_block:
+      go_if_all_pass: is_debian
+      resources: []
+`)
+
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "bad.example.com"
+    modules: [bad-block]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected error for conditional_block with empty resources, got nil")
+	}
+	if !strings.Contains(err.Error(), "conditional_block has no resources") {
+		t.Errorf("error = %q, want it to contain 'conditional_block has no resources'", err)
+	}
+}
+
 func TestTemplateRendering(t *testing.T) {
 	facts := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
