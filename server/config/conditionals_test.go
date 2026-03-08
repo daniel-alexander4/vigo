@@ -164,6 +164,178 @@ func TestStringOrSlice_List(t *testing.T) {
 	}
 }
 
+// --- ModuleRef YAML unmarshal tests ---
+
+func TestModuleRef_PlainString(t *testing.T) {
+	yamlData := `modules: [nginx]`
+	var out struct {
+		Modules []ModuleRef `yaml:"modules"`
+	}
+	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(out.Modules))
+	}
+	if out.Modules[0].Name != "nginx" {
+		t.Errorf("Name = %q, want nginx", out.Modules[0].Name)
+	}
+	if len(out.Modules[0].GoIfAllPass) != 0 {
+		t.Errorf("GoIfAllPass = %v, want empty", out.Modules[0].GoIfAllPass)
+	}
+}
+
+func TestModuleRef_ObjectWithGoIfAllPass(t *testing.T) {
+	yamlData := `
+modules:
+  - name: nginx
+    go_if_all_pass: is_debian
+`
+	var out struct {
+		Modules []ModuleRef `yaml:"modules"`
+	}
+	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(out.Modules))
+	}
+	if out.Modules[0].Name != "nginx" {
+		t.Errorf("Name = %q, want nginx", out.Modules[0].Name)
+	}
+	if len(out.Modules[0].GoIfAllPass) != 1 || out.Modules[0].GoIfAllPass[0] != "is_debian" {
+		t.Errorf("GoIfAllPass = %v, want [is_debian]", out.Modules[0].GoIfAllPass)
+	}
+}
+
+func TestModuleRef_ObjectWithListForm(t *testing.T) {
+	yamlData := `
+modules:
+  - name: nginx
+    skip_if_any_pass: [is_container, is_vm]
+`
+	var out struct {
+		Modules []ModuleRef `yaml:"modules"`
+	}
+	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(out.Modules))
+	}
+	if len(out.Modules[0].SkipIfAnyPass) != 2 {
+		t.Fatalf("SkipIfAnyPass = %v, want [is_container, is_vm]", out.Modules[0].SkipIfAnyPass)
+	}
+	if out.Modules[0].SkipIfAnyPass[0] != "is_container" || out.Modules[0].SkipIfAnyPass[1] != "is_vm" {
+		t.Errorf("SkipIfAnyPass = %v, want [is_container, is_vm]", out.Modules[0].SkipIfAnyPass)
+	}
+}
+
+func TestModuleRef_MixedPlainAndObject(t *testing.T) {
+	yamlData := `
+modules:
+  - nginx
+  - name: redis
+    go_if_all_pass: is_debian
+`
+	var out struct {
+		Modules []ModuleRef `yaml:"modules"`
+	}
+	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(out.Modules))
+	}
+	if out.Modules[0].Name != "nginx" {
+		t.Errorf("Modules[0].Name = %q, want nginx", out.Modules[0].Name)
+	}
+	if len(out.Modules[0].GoIfAllPass) != 0 {
+		t.Errorf("Modules[0].GoIfAllPass = %v, want empty", out.Modules[0].GoIfAllPass)
+	}
+	if out.Modules[1].Name != "redis" {
+		t.Errorf("Modules[1].Name = %q, want redis", out.Modules[1].Name)
+	}
+	if len(out.Modules[1].GoIfAllPass) != 1 || out.Modules[1].GoIfAllPass[0] != "is_debian" {
+		t.Errorf("Modules[1].GoIfAllPass = %v, want [is_debian]", out.Modules[1].GoIfAllPass)
+	}
+}
+
+// --- ShouldIncludeModule tests ---
+
+func TestShouldIncludeModule_NoConditionals(t *testing.T) {
+	mod := ModuleConfig{Name: "basic"}
+	if !ShouldIncludeModule(mod, map[string]any{}) {
+		t.Error("expected true when no conditional fields set")
+	}
+}
+
+func TestShouldIncludeModule_GoIfAllPassFalse(t *testing.T) {
+	mod := ModuleConfig{
+		Name:        "nginx",
+		GoIfAllPass: StringOrSlice{"is_debian"},
+	}
+	vars := map[string]any{"is_debian": "false"}
+	if ShouldIncludeModule(mod, vars) {
+		t.Error("expected false when go_if_all_pass var is false")
+	}
+}
+
+func TestShouldIncludeModule_GoIfAllPassTrue(t *testing.T) {
+	mod := ModuleConfig{
+		Name:        "nginx",
+		GoIfAllPass: StringOrSlice{"is_debian"},
+	}
+	vars := map[string]any{"is_debian": "true"}
+	if !ShouldIncludeModule(mod, vars) {
+		t.Error("expected true when go_if_all_pass var is true")
+	}
+}
+
+func TestShouldIncludeModule_SkipIfAnyPassTrue(t *testing.T) {
+	mod := ModuleConfig{
+		Name:          "desktop-tools",
+		SkipIfAnyPass: StringOrSlice{"is_container"},
+	}
+	vars := map[string]any{"is_container": "true"}
+	if ShouldIncludeModule(mod, vars) {
+		t.Error("expected false when skip_if_any_pass var is true")
+	}
+}
+
+func TestShouldIncludeModule_SkipIfAnyPassFalse(t *testing.T) {
+	mod := ModuleConfig{
+		Name:          "desktop-tools",
+		SkipIfAnyPass: StringOrSlice{"is_container"},
+	}
+	vars := map[string]any{"is_container": "false"}
+	if !ShouldIncludeModule(mod, vars) {
+		t.Error("expected true when skip_if_any_pass var is false")
+	}
+}
+
+func TestShouldIncludeModule_GoIfAnyPassNoneTrue(t *testing.T) {
+	mod := ModuleConfig{
+		Name:        "tool",
+		GoIfAnyPass: StringOrSlice{"is_debian", "is_ubuntu"},
+	}
+	vars := map[string]any{"is_debian": "false", "is_ubuntu": "false"}
+	if ShouldIncludeModule(mod, vars) {
+		t.Error("expected false when no go_if_any_pass vars are true")
+	}
+}
+
+func TestShouldIncludeModule_SkipIfAllPassAllTrue(t *testing.T) {
+	mod := ModuleConfig{
+		Name:          "tool",
+		SkipIfAllPass: StringOrSlice{"is_legacy", "is_deprecated"},
+	}
+	vars := map[string]any{"is_legacy": "true", "is_deprecated": "true"}
+	if ShouldIncludeModule(mod, vars) {
+		t.Error("expected false when all skip_if_all_pass vars are true")
+	}
+}
+
 func TestStringOrSlice_AllFourFields(t *testing.T) {
 	yamlData := `
 go_if_all_pass: is_debian

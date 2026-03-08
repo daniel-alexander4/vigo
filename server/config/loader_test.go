@@ -1357,6 +1357,192 @@ clients:
 	}
 }
 
+// --- Module Conditional Ref Loader Tests ---
+
+func TestRoleWithConditionalModuleRef(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+name: certbot
+resources:
+  - name: install-certbot
+    type: package
+    package: certbot
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
+name: webserver
+modules:
+  - name: nginx
+    go_if_all_pass: is_debian
+  - certbot
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web.example.com"
+    roles: [webserver]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web.example.com")
+	if len(cfg.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	}
+
+	// nginx should have GoIfAllPass from the role ref.
+	if len(cfg.Modules[0].GoIfAllPass) != 1 || cfg.Modules[0].GoIfAllPass[0] != "is_debian" {
+		t.Errorf("nginx.GoIfAllPass = %v, want [is_debian]", cfg.Modules[0].GoIfAllPass)
+	}
+
+	// certbot should have no conditionals.
+	if len(cfg.Modules[1].GoIfAllPass) != 0 {
+		t.Errorf("certbot.GoIfAllPass = %v, want empty", cfg.Modules[1].GoIfAllPass)
+	}
+}
+
+func TestClientWithConditionalModuleRef(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "redis.yaml"), `
+name: redis
+resources:
+  - name: install-redis
+    type: package
+    package: redis
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "db.example.com"
+    modules:
+      - name: redis
+        skip_if_any_pass: is_container
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("db.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	}
+	if len(cfg.Modules[0].SkipIfAnyPass) != 1 || cfg.Modules[0].SkipIfAnyPass[0] != "is_container" {
+		t.Errorf("redis.SkipIfAnyPass = %v, want [is_container]", cfg.Modules[0].SkipIfAnyPass)
+	}
+}
+
+func TestMixedPlainAndConditionalModuleRefsInRole(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+name: certbot
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "roles", "web.yaml"), `
+name: web
+modules:
+  - nginx
+  - name: certbot
+    go_if_any_pass: [is_debian, is_ubuntu]
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "mix.example.com"
+    roles: [web]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("mix.example.com")
+	if len(cfg.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	}
+	// nginx: plain string, no conditionals
+	if len(cfg.Modules[0].GoIfAnyPass) != 0 {
+		t.Errorf("nginx should have no conditionals, got GoIfAnyPass=%v", cfg.Modules[0].GoIfAnyPass)
+	}
+	// certbot: object with go_if_any_pass
+	if len(cfg.Modules[1].GoIfAnyPass) != 2 {
+		t.Errorf("certbot.GoIfAnyPass = %v, want [is_debian, is_ubuntu]", cfg.Modules[1].GoIfAnyPass)
+	}
+}
+
+func TestBackwardCompatPlainStringModulesStillWork(t *testing.T) {
+	// This test explicitly verifies that existing role/client YAML with plain
+	// string module references continues to load without any changes.
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+name: certbot
+resources:
+  - name: install-certbot
+    type: package
+    package: certbot
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
+name: webserver
+modules: [nginx, certbot]
+`)
+	writeFile(t, filepath.Join(dir, "clients.yaml"), `
+clients:
+  - match: "web01.example.com"
+    roles: [webserver]
+  - match: "web02.example.com"
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg1 := store.Get("web01.example.com")
+	if len(cfg1.Modules) != 2 {
+		t.Fatalf("web01: len(Modules) = %d, want 2", len(cfg1.Modules))
+	}
+	if cfg1.Modules[0].Name != "nginx" || cfg1.Modules[1].Name != "certbot" {
+		t.Errorf("web01: modules = [%s, %s], want [nginx, certbot]", cfg1.Modules[0].Name, cfg1.Modules[1].Name)
+	}
+
+	cfg2 := store.Get("web02.example.com")
+	if len(cfg2.Modules) != 1 {
+		t.Fatalf("web02: len(Modules) = %d, want 1", len(cfg2.Modules))
+	}
+	if cfg2.Modules[0].Name != "nginx" {
+		t.Errorf("web02: module = %q, want nginx", cfg2.Modules[0].Name)
+	}
+}
+
 func TestTemplateRendering(t *testing.T) {
 	facts := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
