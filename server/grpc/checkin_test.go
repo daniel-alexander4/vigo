@@ -471,6 +471,204 @@ func TestConditionalBlockDependsOnFromNonBlockToBlockResource(t *testing.T) {
 	}
 }
 
+// --- Module-Level Conditional Tests ---
+
+func TestConfigToProtoModulesModuleGoIfAllPassTrue(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name:        "nginx",
+				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "install-nginx",
+						Type:       "package",
+						Attributes: map[string]any{"name": "nginx"},
+					},
+				},
+			},
+		},
+	}
+
+	vars := map[string]any{"is_debian": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(modules[0].Resources))
+	}
+	if modules[0].Name != "nginx" {
+		t.Errorf("module name = %q, want nginx", modules[0].Name)
+	}
+}
+
+func TestConfigToProtoModulesModuleGoIfAllPassFalse(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name:        "nginx",
+				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "install-nginx",
+						Type:       "package",
+						Attributes: map[string]any{"name": "nginx"},
+					},
+				},
+			},
+		},
+	}
+
+	vars := map[string]any{"is_debian": "false"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 0 {
+		t.Errorf("expected 0 modules (module-level condition false), got %d", len(modules))
+	}
+}
+
+func TestConfigToProtoModulesModuleSkipIfAnyPassTrue(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name:          "desktop-tools",
+				SkipIfAnyPass: config.StringOrSlice{"is_container"},
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "install-gui",
+						Type:       "package",
+						Attributes: map[string]any{"name": "gui-toolkit"},
+					},
+				},
+			},
+		},
+	}
+
+	vars := map[string]any{"is_container": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 0 {
+		t.Errorf("expected 0 modules (skip_if_any_pass triggered), got %d", len(modules))
+	}
+}
+
+func TestConfigToProtoModulesModuleNoConditionals(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name: "basic",
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "install-basic",
+						Type:       "package",
+						Attributes: map[string]any{"name": "curl"},
+					},
+				},
+			},
+		},
+	}
+
+	modules, err := configToProtoModules(cfg, nil, map[string]any{})
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if modules[0].Name != "basic" {
+		t.Errorf("module name = %q, want basic", modules[0].Name)
+	}
+}
+
+func TestConfigToProtoModulesModuleMixedConditionals(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name:        "nginx",
+				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "install-nginx",
+						Type:       "package",
+						Attributes: map[string]any{"name": "nginx"},
+					},
+				},
+			},
+			{
+				Name: "curl",
+				Resources: []config.ResourceConfig{
+					{
+						Name:       "install-curl",
+						Type:       "package",
+						Attributes: map[string]any{"name": "curl"},
+					},
+				},
+			},
+		},
+	}
+
+	// is_debian=false: nginx excluded, curl included
+	vars := map[string]any{"is_debian": "false"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module (conditional one excluded), got %d", len(modules))
+	}
+	if modules[0].Name != "curl" {
+		t.Errorf("expected module 'curl', got %q", modules[0].Name)
+	}
+}
+
+func TestConfigToProtoModulesModulePassesButResourceFiltered(t *testing.T) {
+	cfg := &config.ClientConfig{
+		Modules: []config.ModuleConfig{
+			{
+				Name:        "tools",
+				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Resources: []config.ResourceConfig{
+					{
+						Name:          "desktop-tool",
+						Type:          "package",
+						SkipIfAnyPass: config.StringOrSlice{"is_container"},
+						Attributes:    map[string]any{"name": "desktop-tool"},
+					},
+					{
+						Name:       "cli-tool",
+						Type:       "package",
+						Attributes: map[string]any{"name": "cli-tool"},
+					},
+				},
+			},
+		},
+	}
+
+	// Module passes (is_debian=true), but desktop-tool is skipped (is_container=true)
+	vars := map[string]any{"is_debian": "true", "is_container": "true"}
+	modules, err := configToProtoModules(cfg, nil, vars)
+	if err != nil {
+		t.Fatalf("configToProtoModules: %v", err)
+	}
+	if len(modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(modules))
+	}
+	if len(modules[0].Resources) != 1 {
+		t.Fatalf("expected 1 resource (desktop-tool filtered), got %d", len(modules[0].Resources))
+	}
+	if modules[0].Resources[0].Name != "cli-tool" {
+		t.Errorf("expected cli-tool, got %q", modules[0].Resources[0].Name)
+	}
+}
+
 func TestEvaluateConditionalVarsBeforeRenderVars(t *testing.T) {
 	// Ensure conditional vars are inserted at the beginning of varOrder
 	// so regular vars can reference them via Go templates.
