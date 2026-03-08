@@ -98,9 +98,13 @@ type ClientConfig struct {
 
 // ModuleConfig describes a module assigned to a client.
 type ModuleConfig struct {
-	Name      string           `yaml:"name"`
-	DependsOn []string         `yaml:"depends_on"`
-	Resources []ResourceConfig `yaml:"resources"`
+	Name          string           `yaml:"name"`
+	DependsOn     []string         `yaml:"depends_on"`
+	GoIfAllPass   StringOrSlice    `yaml:"go_if_all_pass,omitempty"`
+	GoIfAnyPass   StringOrSlice    `yaml:"go_if_any_pass,omitempty"`
+	SkipIfAllPass StringOrSlice    `yaml:"skip_if_all_pass,omitempty"`
+	SkipIfAnyPass StringOrSlice    `yaml:"skip_if_any_pass,omitempty"`
+	Resources     []ResourceConfig `yaml:"resources"`
 }
 
 // ResourceConfig describes a single resource within a module.
@@ -170,10 +174,47 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// ModuleRef is a reference to a module in a role or client entry. It supports
+// two YAML forms:
+//
+//	modules: [nginx]               # plain string -> ModuleRef{Name: "nginx"}
+//	modules:
+//	  - name: nginx                # object form with optional conditional fields
+//	    go_if_all_pass: is_debian
+type ModuleRef struct {
+	Name          string        `yaml:"name"`
+	GoIfAllPass   StringOrSlice `yaml:"go_if_all_pass,omitempty"`
+	GoIfAnyPass   StringOrSlice `yaml:"go_if_any_pass,omitempty"`
+	SkipIfAllPass StringOrSlice `yaml:"skip_if_all_pass,omitempty"`
+	SkipIfAnyPass StringOrSlice `yaml:"skip_if_any_pass,omitempty"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler for ModuleRef. It handles two forms:
+//   - Scalar string: "nginx" -> ModuleRef{Name: "nginx"}
+//   - Mapping: {name: nginx, go_if_all_pass: is_debian} -> decoded normally
+func (m *ModuleRef) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		m.Name = value.Value
+		return nil
+	case yaml.MappingNode:
+		// Use an alias to avoid infinite recursion in UnmarshalYAML.
+		type moduleRefAlias ModuleRef
+		var alias moduleRefAlias
+		if err := value.Decode(&alias); err != nil {
+			return err
+		}
+		*m = ModuleRef(alias)
+		return nil
+	default:
+		return fmt.Errorf("ModuleRef: expected string or mapping, got %v", value.Kind)
+	}
+}
+
 // RoleDefinition is a named list of modules loaded from config/roles/*.yaml.
 type RoleDefinition struct {
-	Name    string   `yaml:"name"`
-	Modules []string `yaml:"modules"`
+	Name    string      `yaml:"name"`
+	Modules []ModuleRef `yaml:"modules"`
 }
 
 // ClientEntry is a single entry in config/clients.yaml.
@@ -181,7 +222,7 @@ type ClientEntry struct {
 	Match       string                    `yaml:"match"`
 	Environment string                    `yaml:"environment"`
 	Roles       []string                  `yaml:"roles"`
-	Modules     []string                  `yaml:"modules"`
+	Modules     []ModuleRef               `yaml:"modules"`
 	Vars        map[string]any            `yaml:"vars"`
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
 }

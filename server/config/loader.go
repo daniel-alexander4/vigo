@@ -176,9 +176,9 @@ func (cs *ConfigStore) loadAll() error {
 
 	// Validate role references.
 	for _, role := range roleDefs {
-		for _, modName := range role.Modules {
-			if _, ok := moduleDefs[modName]; !ok {
-				return fmt.Errorf("role %q references unknown module %q", role.Name, modName)
+		for _, ref := range role.Modules {
+			if _, ok := moduleDefs[ref.Name]; !ok {
+				return fmt.Errorf("role %q references unknown module %q", role.Name, ref.Name)
 			}
 		}
 	}
@@ -207,30 +207,51 @@ func (cs *ConfigStore) loadAll() error {
 
 // resolveEntry converts a ClientEntry into a fully resolved ClientConfig.
 func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*ClientConfig, error) {
-	// Collect module names: roles first, then direct modules.
-	var moduleNames []string
+	// Collect module refs: roles first, then direct modules. First ref wins
+	// for conditional fields (matching existing var merge behavior).
+	var moduleRefs []ModuleRef
+	seen := make(map[string]bool)
 	for _, roleName := range entry.Roles {
 		role, ok := roleDefs[roleName]
 		if !ok {
 			return nil, fmt.Errorf("unknown role %q", roleName)
 		}
-		moduleNames = append(moduleNames, role.Modules...)
+		for _, ref := range role.Modules {
+			if !seen[ref.Name] {
+				seen[ref.Name] = true
+				moduleRefs = append(moduleRefs, ref)
+			}
+		}
 	}
-	moduleNames = append(moduleNames, entry.Modules...)
-	moduleNames = dedupStrings(moduleNames)
+	for _, ref := range entry.Modules {
+		if !seen[ref.Name] {
+			seen[ref.Name] = true
+			moduleRefs = append(moduleRefs, ref)
+		}
+	}
 
-	// Resolve module definitions into ModuleConfigs.
+	// Resolve module definitions into ModuleConfigs, carrying conditional fields.
 	var modules []ModuleConfig
-	for _, name := range moduleNames {
-		def, ok := moduleDefs[name]
+	for _, ref := range moduleRefs {
+		def, ok := moduleDefs[ref.Name]
 		if !ok {
-			return nil, fmt.Errorf("unknown module %q", name)
+			return nil, fmt.Errorf("unknown module %q", ref.Name)
 		}
 		modules = append(modules, ModuleConfig{
-			Name:      def.Name,
-			DependsOn: append([]string(nil), def.DependsOn...),
-			Resources: cloneResources(def.Resources),
+			Name:          def.Name,
+			DependsOn:     append([]string(nil), def.DependsOn...),
+			GoIfAllPass:   ref.GoIfAllPass,
+			GoIfAnyPass:   ref.GoIfAnyPass,
+			SkipIfAllPass: ref.SkipIfAllPass,
+			SkipIfAnyPass: ref.SkipIfAnyPass,
+			Resources:     cloneResources(def.Resources),
 		})
+	}
+
+	// Extract module names for var collection below.
+	moduleNames := make([]string, len(moduleRefs))
+	for i, ref := range moduleRefs {
+		moduleNames[i] = ref.Name
 	}
 
 	// Collect conditional vars from modules. Deduplicate by name
