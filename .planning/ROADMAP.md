@@ -87,10 +87,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. A module reference in a role YAML with conditional fields is skipped entirely when conditions evaluate to skip, and all its resources are excluded from the module list sent to the agent
   2. A module reference in clients.yaml with conditional fields is skipped entirely when conditions evaluate to skip, and all its resources are excluded from the module list sent to the agent
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md — ModuleRef type with conditional fields, ShouldIncludeModule evaluator, loader and check-in pipeline integration
 
 ## Progress
 
@@ -107,5 +107,5 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 | 6. Custom Traits | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 7. Conditional Vars | v1.2 | 2/2 | Complete | 2026-03-07 |
 | 8. Resource Conditionals | v1.2 | 2/2 | Complete | 2026-03-07 |
-| 9. Conditional Blocks | v1.2 | 0/2 | Not started | - |
-| 10. Module Conditionals | v1.2 | 0/0 | Not started | - |
+| 9. Conditional Blocks | v1.2 | 2/2 | Complete | 2026-03-07 |
+| 10. Module Conditionals | v1.2 | 0/1 | Not started | - |
