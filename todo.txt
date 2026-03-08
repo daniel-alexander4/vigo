@@ -1,0 +1,43 @@
+hobgoblin — the project and repo
+hobd — the daemon
+hobcli — the CLI (server side)
+hob-agent - CLI client side
+nails — discovered facts about a node
+
+when resource uses content:, add a baseindent value, such that if value=0 the resulting file will not have any prepended spaces, but it honors the indents relative to the content. IE
+
+
+
+    baseindent: 2
+    content: |
+      data_directory = '{{ .Vars.pg_data_dir }}'
+      listen_addresses = '*'
+      port = 5432
+        max_connections = {{ .Vars.pg_max_connections }}
+        shared_buffers = {{ .Vars.pg_shared_buffers }}
+      effective_cache_size = {{ .Vars.pg_effective_cache_size }}
+      work_mem = {{ .Vars.pg_work_mem }}
+      logging_collector = on
+      log_directory = '{{ .Vars.pg_log_dir }}'
+      log_filename = 'postgresql-%Y-%m-%d.log'
+      log_rotation_age = 1d
+      log_min_duration_statement = 1000
+
+would render the resulting file (variables replaced) with 2 spaces at front, but 4 spaces for the two indented lines:
+  data_directory = '{{ .Vars.pg_data_dir }}'
+  listen_addresses = '*'
+  port = 5432
+    max_connections = {{ .Vars.pg_max_connections }}
+    shared_buffers = {{ .Vars.pg_shared_buffers }}
+  effective_cache_size = {{ .Vars.pg_effective_cache_size }}
+  work_mem = {{ .Vars.pg_work_mem }}
+  logging_collector = on
+  log_directory = '{{ .Vars.pg_log_dir }}'
+  log_filename = 'postgresql-%Y-%m-%d.log'
+  log_rotation_age = 1d
+  log_min_duration_statement = 1000
+
+
+We need conditionals available to each resource, if: with flags that cover the various states (only, not, and, or, etc). They should only validate on traits - they should not allow free-form commands. Process would be to create a custom trait if necessary then validate on conditional. can set conditional as a var and use in multiple resources. Resources should allow multiple if: keys. ask questions about how to implement
+
+should be configurable for different secrets servers

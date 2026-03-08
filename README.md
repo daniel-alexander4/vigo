@@ -116,6 +116,23 @@ resources:
 
 The `source` field references a template file relative to `client-configs/` (e.g. `client-configs/templates/nginx.conf.tmpl`). You can also use inline `content` — the two are mutually exclusive. Templates use Go template syntax with `.Traits` and `.Vars` namespaces.
 
+Use `baseindent` to prepend a fixed number of spaces to every non-empty line of `content`. Relative indentation within the content block is preserved:
+
+```yaml
+  - name: app-conf
+    type: file
+    targetpath: /etc/myapp/config.yml
+    baseindent: 2
+    content: |
+      database:
+        host: localhost
+        port: 5432
+      cache:
+        ttl: 300
+```
+
+This writes each line with 2 extra leading spaces (4 for the already-indented lines), while empty lines remain empty. Defaults to 0 (no extra indent).
+
 Group modules into roles in `client-configs/roles/`:
 
 ```yaml
@@ -206,7 +223,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 
 | Type | What it manages | Idempotency check |
 |------|----------------|-------------------|
-| `file` | File content, owner, group, mode | SHA256 hash comparison |
+| `file` | File content, owner, group, mode, base indent | SHA256 hash comparison |
 | `package` | Package installation/removal | Query package manager |
 | `service` | Service state (running/stopped/restarted) | `systemctl` status |
 | `user` | User accounts and attributes | `/etc/passwd` lookup |
@@ -220,7 +237,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 - **ED25519 auth** — every agent request is signature-verified
 - **Dependency DAG** — resources declare `depends_on`, topologically sorted
 - **Notify/subscribe** — config change triggers service restart
-- **Conditional resources** — `when:` expressions evaluated against node facts
+- **Conditional resources** — structured conditionals (`go_if_all_pass`, `skip_if_any_pass`, etc.) evaluated server-side
 - **Fact collection** — OS, hardware, network, packages reported every check-in
 - **Compliance tracking** — compliant/drifted/failing/stale/unknown per client
 - **Secret rotation** — server polls isopass, force-runs affected clients

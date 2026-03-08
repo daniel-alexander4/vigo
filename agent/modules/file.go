@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/isogov/isogov/agent/snapshots"
@@ -29,6 +30,7 @@ type FileExecutor struct {
 // Execute applies the desired file state based on params. Supported params:
 //   - targetpath: target file path on the managed node (required)
 //   - content: desired file content (required for state=present)
+//   - baseindent: number of spaces to prepend to every non-empty line (default 0)
 //   - mode: file permission mode as octal string (default "0644")
 //   - owner: file owner (not enforced on non-root, placeholder)
 //   - group: file group (not enforced on non-root, placeholder)
@@ -91,6 +93,19 @@ func (f *FileExecutor) handleAbsent(path string, dryRun bool, result ResourceRes
 // handlePresent ensures a file exists with the desired content, mode, and ownership.
 func (f *FileExecutor) handlePresent(path string, params map[string]string, dryRun bool, result ResourceResult) ResourceResult {
 	content := params["content"]
+
+	// Apply base indentation if specified
+	if biStr := params["baseindent"]; biStr != "" {
+		bi, err := strconv.Atoi(biStr)
+		if err != nil {
+			result.Error = fmt.Errorf("parse baseindent %q: %w", biStr, err)
+			return result
+		}
+		if bi > 0 {
+			content = applyBaseIndent(content, bi)
+		}
+	}
+
 	modeStr := params["mode"]
 	if modeStr == "" {
 		modeStr = "0644"
@@ -194,6 +209,18 @@ func (f *FileExecutor) handlePresent(path string, params map[string]string, dryR
 func sha256Hex(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
+}
+
+// applyBaseIndent prepends n spaces to every non-empty line of content.
+func applyBaseIndent(content string, n int) string {
+	prefix := strings.Repeat(" ", n)
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = prefix + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // fileHash returns the hex-encoded SHA256 hash of a file's contents.
