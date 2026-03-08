@@ -161,6 +161,12 @@ func configToProtoModules(cfg *config.ClientConfig, facts, vars map[string]any) 
 
 	modules := make([]*pb.Module, 0, len(cfg.Modules))
 	for _, mod := range cfg.Modules {
+		// Evaluate module-level conditionals. If the module is skipped,
+		// none of its resources are sent to the agent.
+		if !config.ShouldIncludeModule(mod, vars) {
+			continue
+		}
+
 		pbMod := &pb.Module{
 			Name:      mod.Name,
 			DependsOn: mod.DependsOn,
