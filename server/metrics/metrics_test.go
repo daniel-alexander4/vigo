@@ -28,15 +28,15 @@ func TestAllMetricsRegistered(t *testing.T) {
 	}
 
 	required := []string{
-		"isogov_clients_total",
-		"isogov_clients_active_total",
-		"isogov_checkins_total",
-		"isogov_run_duration_seconds",
-		"isogov_drift_detected_total",
-		"isogov_module_actions_total",
-		"isogov_compliance_status",
-		"isogov_compliance_pct",
-		"isogov_time_since_checkin_seconds",
+		"hobnob_clients_total",
+		"hobnob_clients_active_total",
+		"hobnob_checkins_total",
+		"hobnob_run_duration_seconds",
+		"hobnob_drift_detected_total",
+		"hobnob_module_actions_total",
+		"hobnob_compliance_status",
+		"hobnob_compliance_pct",
+		"hobnob_time_since_checkin_seconds",
 	}
 
 	for _, name := range required {

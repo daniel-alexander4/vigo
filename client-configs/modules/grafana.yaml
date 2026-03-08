@@ -25,7 +25,7 @@ resources:
       http_port = {{ .Vars.grafana_port }}
 
       [security]
-      admin_password = secret:isogov/grafana/admin-password
+      admin_password = secret:hobnob/grafana/admin-password
 
       [auth.anonymous]
       enabled = false

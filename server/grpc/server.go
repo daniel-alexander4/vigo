@@ -1,5 +1,5 @@
-// Package grpc provides the mTLS gRPC server for Isogov, implementing
-// both IsgovAgent and IsgovAdmin service handlers.
+// Package grpc provides the mTLS gRPC server for Hobnob, implementing
+// both HobnobAgent and HobnobAdmin service handlers.
 package grpc
 
 import (
@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/config"
-	"github.com/isogov/isogov/server/db"
-	"github.com/isogov/isogov/server/registry"
-	"github.com/isogov/isogov/server/traits"
-	"github.com/isogov/isogov/server/webhook"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/registry"
+	"github.com/hobnob/hobnob/server/traits"
+	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -91,7 +91,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, error) {
 		dispatcher:    cfg.Dispatcher,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir),
 	}
-	pb.RegisterIsgovAgentServer(srv, agentSvc)
+	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
 	adminSvc := &AdminService{
 		registry:     cfg.Registry,
@@ -99,7 +99,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, error) {
 		configStore:  cfg.ConfigStore,
 		baseInterval: cfg.BaseInterval,
 	}
-	pb.RegisterIsgovAdminServer(srv, adminSvc)
+	pb.RegisterHobnobAdminServer(srv, adminSvc)
 
 	return srv, certCache, nil
 }

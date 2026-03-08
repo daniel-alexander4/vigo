@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/isogov/isogov/agent/facts"
+	"github.com/hobnob/hobnob/agent/nails"
 )
 
 // --- traverseDotPath tests ---
@@ -87,7 +87,7 @@ func TestTraversDotPath_DeepNested(t *testing.T) {
 // --- filterCollectors tests ---
 
 func TestFilterCollectors_SingleMatch(t *testing.T) {
-	all := facts.DefaultCollectors()
+	all := nails.DefaultCollectors()
 
 	filtered, err := filterCollectors(all, []string{"os"})
 	if err != nil {
@@ -102,7 +102,7 @@ func TestFilterCollectors_SingleMatch(t *testing.T) {
 }
 
 func TestFilterCollectors_MultipleMatch(t *testing.T) {
-	all := facts.DefaultCollectors()
+	all := nails.DefaultCollectors()
 
 	filtered, err := filterCollectors(all, []string{"os", "hardware"})
 	if err != nil {
@@ -122,7 +122,7 @@ func TestFilterCollectors_MultipleMatch(t *testing.T) {
 }
 
 func TestFilterCollectors_Nonexistent(t *testing.T) {
-	all := facts.DefaultCollectors()
+	all := nails.DefaultCollectors()
 
 	_, err := filterCollectors(all, []string{"nonexistent"})
 	if err == nil {
@@ -131,7 +131,7 @@ func TestFilterCollectors_Nonexistent(t *testing.T) {
 }
 
 func TestFilterCollectors_MixedValidInvalid(t *testing.T) {
-	all := facts.DefaultCollectors()
+	all := nails.DefaultCollectors()
 
 	_, err := filterCollectors(all, []string{"os", "nonexistent"})
 	if err == nil {

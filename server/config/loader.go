@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/isogov/isogov/server/conditionals"
-	"github.com/isogov/isogov/server/secrets"
+	"github.com/hobnob/hobnob/server/conditionals"
+	"github.com/hobnob/hobnob/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 
@@ -238,13 +238,10 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 			return nil, fmt.Errorf("unknown module %q", ref.Name)
 		}
 		modules = append(modules, ModuleConfig{
-			Name:          def.Name,
-			DependsOn:     append([]string(nil), def.DependsOn...),
-			GoIfAllPass:   ref.GoIfAllPass,
-			GoIfAnyPass:   ref.GoIfAnyPass,
-			SkipIfAllPass: ref.SkipIfAllPass,
-			SkipIfAnyPass: ref.SkipIfAnyPass,
-			Resources:     cloneResources(def.Resources),
+			Name:      def.Name,
+			DependsOn: append([]string(nil), def.DependsOn...),
+			When:      ref.When,
+			Resources: cloneResources(def.Resources),
 		})
 	}
 
@@ -403,7 +400,7 @@ func loadModuleDefs(dir string) (map[string]*ModuleDefinition, error) {
 
 		// Separate conditional vars from regular vars.
 		// A conditional var is any map value with a "trait" key or any
-		// known operator key (only, not, gt, lt, gte, lte, match).
+		// known operator key (in, not_in, gt, lt, gte, lte, regex).
 		// Maps with operator keys but no trait are caught as validation
 		// errors by ParseConditionalVar.
 		var condVars []conditionals.ConditionalVar

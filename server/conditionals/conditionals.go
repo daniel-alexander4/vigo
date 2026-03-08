@@ -13,20 +13,20 @@ import (
 
 // validOperators defines the set of allowed operator names.
 var validOperators = map[string]bool{
-	"only":  true,
-	"not":   true,
-	"gt":    true,
-	"lt":    true,
-	"gte":   true,
-	"lte":   true,
-	"match": true,
+	"in":     true,
+	"not_in": true,
+	"gt":     true,
+	"lt":     true,
+	"gte":    true,
+	"lte":    true,
+	"regex":  true,
 }
 
 // ConditionalVar represents a parsed conditional variable definition.
 type ConditionalVar struct {
 	Name     string
 	Trait    string // dot-path into traits map (e.g. "os.distro")
-	Operator string // one of: only, not, gt, lt, gte, lte, match
+	Operator string // one of: in, not_in, gt, lt, gte, lte, regex
 	Operand  any    // type depends on operator
 }
 
@@ -79,7 +79,7 @@ func ParseConditionalVar(name string, raw map[string]any) (ConditionalVar, error
 			continue
 		}
 		if !validOperators[key] {
-			return ConditionalVar{}, fmt.Errorf("conditional var %q: unknown operator %q (valid: only, not, gt, lt, gte, lte, match)", name, key)
+			return ConditionalVar{}, fmt.Errorf("conditional var %q: unknown operator %q (valid: in, not_in, gt, lt, gte, lte, regex)", name, key)
 		}
 		if operator != "" {
 			return ConditionalVar{}, fmt.Errorf("conditional var %q: multiple operators found (%q and %q); exactly one required", name, operator, key)
@@ -88,19 +88,19 @@ func ParseConditionalVar(name string, raw map[string]any) (ConditionalVar, error
 		operand = val
 	}
 	if operator == "" {
-		return ConditionalVar{}, fmt.Errorf("conditional var %q: no operator field found (need one of: only, not, gt, lt, gte, lte, match)", name)
+		return ConditionalVar{}, fmt.Errorf("conditional var %q: no operator field found (need one of: in, not_in, gt, lt, gte, lte, regex)", name)
 	}
 
 	// Validate and transform operand based on operator.
 	switch operator {
-	case "match":
+	case "regex":
 		pattern, ok := operand.(string)
 		if !ok {
-			return ConditionalVar{}, fmt.Errorf("conditional var %q: 'match' operand must be a string", name)
+			return ConditionalVar{}, fmt.Errorf("conditional var %q: 'regex' operand must be a string", name)
 		}
 		re, err := regexp.Compile(pattern)
 		if err != nil {
-			return ConditionalVar{}, fmt.Errorf("conditional var %q: invalid regex in 'match': %w", name, err)
+			return ConditionalVar{}, fmt.Errorf("conditional var %q: invalid regex in 'regex': %w", name, err)
 		}
 		operand = re
 	}
@@ -123,10 +123,10 @@ func Evaluate(cv ConditionalVar, traits map[string]any) bool {
 	}
 
 	switch cv.Operator {
-	case "only":
-		return evalOnly(traitVal, cv.Operand)
-	case "not":
-		return evalNot(traitVal, cv.Operand)
+	case "in":
+		return evalIn(traitVal, cv.Operand)
+	case "not_in":
+		return evalNotIn(traitVal, cv.Operand)
 	case "gt":
 		return evalNumeric(traitVal, cv.Operand, func(a, b float64) bool { return a > b })
 	case "lt":
@@ -135,8 +135,8 @@ func Evaluate(cv ConditionalVar, traits map[string]any) bool {
 		return evalNumeric(traitVal, cv.Operand, func(a, b float64) bool { return a >= b })
 	case "lte":
 		return evalNumeric(traitVal, cv.Operand, func(a, b float64) bool { return a <= b })
-	case "match":
-		return evalMatch(traitVal, cv.Operand)
+	case "regex":
+		return evalRegex(traitVal, cv.Operand)
 	default:
 		return false
 	}
@@ -160,8 +160,8 @@ func traverseDotPath(path string, m map[string]any) any {
 	return current
 }
 
-// evalOnly checks if the trait value (as string) is in the operand list.
-func evalOnly(traitVal, operand any) bool {
+// evalIn checks if the trait value (as string) is in the operand list.
+func evalIn(traitVal, operand any) bool {
 	list, ok := operand.([]any)
 	if !ok {
 		return false
@@ -175,8 +175,8 @@ func evalOnly(traitVal, operand any) bool {
 	return false
 }
 
-// evalNot checks if the trait value (as string) is NOT in the operand list.
-func evalNot(traitVal, operand any) bool {
+// evalNotIn checks if the trait value (as string) is NOT in the operand list.
+func evalNotIn(traitVal, operand any) bool {
 	list, ok := operand.([]any)
 	if !ok {
 		return false
@@ -230,8 +230,8 @@ func toFloat64(v any) (float64, bool) {
 	}
 }
 
-// evalMatch runs the pre-compiled regex against the string form of the trait value.
-func evalMatch(traitVal, operand any) bool {
+// evalRegex runs the pre-compiled regex against the string form of the trait value.
+func evalRegex(traitVal, operand any) bool {
 	re, ok := operand.(*regexp.Regexp)
 	if !ok {
 		return false

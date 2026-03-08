@@ -9,7 +9,7 @@ import "context"
 // The rest of the codebase depends only on this interface, never on a
 // concrete implementation.
 type Provider interface {
-	// Get retrieves a secret string by its path/key (e.g. "isogov/db/dsn").
+	// Get retrieves a secret string by its path/key (e.g. "hobnob/db/dsn").
 	Get(ctx context.Context, key string) (string, error)
 
 	// GetBytes retrieves a binary secret (e.g. a TLS cert/key PEM block).

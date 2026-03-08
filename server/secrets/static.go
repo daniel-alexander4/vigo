@@ -16,8 +16,8 @@ type StaticProvider struct {
 }
 
 // NewStaticProvider loads secrets from the given .env file path.
-// Key paths like "isogov/db/dsn" are resolved by converting to the
-// environment variable name ISOGOV_DB_DSN (uppercase, slashes to underscores).
+// Key paths like "hobnob/db/dsn" are resolved by converting to the
+// environment variable name HOBNOB_DB_DSN (uppercase, slashes to underscores).
 func NewStaticProvider(path string) (*StaticProvider, error) {
 	env, err := godotenv.Read(path)
 	if err != nil {
@@ -27,7 +27,7 @@ func NewStaticProvider(path string) (*StaticProvider, error) {
 }
 
 // Get resolves a secret key path to its value.
-// Key format: "isogov/db/dsn" -> env var ISOGOV_DB_DSN.
+// Key format: "hobnob/db/dsn" -> env var HOBNOB_DB_DSN.
 // Returns an error if the key is not found (fail-fast, never return empty).
 func (p *StaticProvider) Get(_ context.Context, key string) (string, error) {
 	envKey := pathToEnvVar(key)
@@ -52,8 +52,8 @@ func (p *StaticProvider) Close() error {
 	return nil
 }
 
-// pathToEnvVar converts a secret path like "isogov/db/dsn" to an
-// environment variable name like "ISOGOV_DB_DSN".
+// pathToEnvVar converts a secret path like "hobnob/db/dsn" to an
+// environment variable name like "HOBNOB_DB_DSN".
 func pathToEnvVar(key string) string {
 	return strings.ToUpper(strings.ReplaceAll(key, "/", "_"))
 }

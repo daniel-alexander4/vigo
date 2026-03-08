@@ -17,14 +17,14 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/isogov/isogov/server/api"
-	"github.com/isogov/isogov/server/config"
-	"github.com/isogov/isogov/server/db"
-	isgrpc "github.com/isogov/isogov/server/grpc"
-	"github.com/isogov/isogov/server/metrics"
-	"github.com/isogov/isogov/server/registry"
-	"github.com/isogov/isogov/server/secrets"
-	"github.com/isogov/isogov/server/webhook"
+	"github.com/hobnob/hobnob/server/api"
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
+	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/hobnob/hobnob/server/registry"
+	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/hobnob/hobnob/server/webhook"
 )
 
 func main() {
@@ -39,11 +39,11 @@ func run() error {
 	defer cancel()
 
 	// Determine config paths relative to working directory.
-	envFile := envOrDefault("ISOGOV_ENV_FILE", "server-configs/.env")
-	configFile := envOrDefault("ISOGOV_CONFIG_FILE", "server-configs/server.yaml")
-	clientConfigsDir := envOrDefault("ISOGOV_CLIENT_CONFIGS_DIR", "client-configs")
-	migrationsDir := envOrDefault("ISOGOV_MIGRATIONS_DIR", "migrations")
-	traitsDir := envOrDefault("ISOGOV_TRAITS_DIR", "traits")
+	envFile := envOrDefault("HOBNOB_ENV_FILE", "server-configs/.env")
+	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server-configs/server.yaml")
+	clientConfigsDir := envOrDefault("HOBNOB_CLIENT_CONFIGS_DIR", "client-configs")
+	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
+	traitsDir := envOrDefault("HOBNOB_TRAITS_DIR", "traits")
 
 	// Initialize secrets provider (StaticProvider for dev, IsopassProvider for prod in Phase 3).
 	provider, err := secrets.NewStaticProvider(envFile)
@@ -158,8 +158,8 @@ func run() error {
 	go metricsCollector.Run(ctx, 30*time.Second)
 
 	// Start REST gateway with UI.
-	version := envOrDefault("ISOGOV_VERSION", "dev")
-	agentDir := envOrDefault("ISOGOV_AGENT_DIR", "dist/agent")
+	version := envOrDefault("HOBNOB_VERSION", "dev")
+	agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
 	gwMux, err := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version)
 	if err != nil {
 		return fmt.Errorf("creating REST gateway: %w", err)

@@ -6,16 +6,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/db"
-	"github.com/isogov/isogov/server/metrics"
-	"github.com/isogov/isogov/server/webhook"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/hobnob/hobnob/server/webhook"
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// ReportResult handles the IsgovAgent.ReportResult RPC. It stores per-module
+// ReportResult handles the HobnobAgent.ReportResult RPC. It stores per-module
 // execution results in the database and marks the run as finished.
 func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultRequest) (*pb.ReportResultResponse, error) {
 	runID, err := uuid.Parse(req.GetRunId())

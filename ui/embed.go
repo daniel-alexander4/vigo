@@ -1,4 +1,4 @@
-// Package ui provides embedded web UI assets and rendering for the Isogov dashboard.
+// Package ui provides embedded web UI assets and rendering for the Hobnob dashboard.
 package ui
 
 import "embed"

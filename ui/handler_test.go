@@ -533,8 +533,8 @@ func defaultTestData() *testData {
 	planID := uuid.New()
 
 	// Create a temp config dir with test YAML
-	configDir, _ := os.MkdirTemp("", "isogov-config-test")
-	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("client: web-01.example.com\nvars:\n  dsn: \"secret:isogov/db/dsn\"\nmodules:\n  - name: test\n    type: file\n"), 0644)
+	configDir, _ := os.MkdirTemp("", "hobnob-config-test")
+	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("client: web-01.example.com\nvars:\n  dsn: \"secret:hobnob/db/dsn\"\nmodules:\n  - name: test\n    type: file\n"), 0644)
 
 	return &testData{
 		clients: []testClient{
@@ -995,8 +995,8 @@ func actionColor(action string) string {
 	}
 }
 
-// factsJSON helper for test validation.
-func factsJSON(facts map[string]any) json.RawMessage {
+// nailsJSON helper for test validation.
+func nailsJSON(facts map[string]any) json.RawMessage {
 	b, _ := json.Marshal(facts)
 	return b
 }

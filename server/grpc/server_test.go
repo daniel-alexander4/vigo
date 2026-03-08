@@ -32,12 +32,12 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/isogov/isogov/agent/auth"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/config"
-	"github.com/isogov/isogov/server/db"
-	isgrpc "github.com/isogov/isogov/server/grpc"
-	"github.com/isogov/isogov/server/registry"
+	"github.com/hobnob/hobnob/agent/auth"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
+	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	"github.com/hobnob/hobnob/server/registry"
 )
 
 var (
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:16-alpine",
-		postgres.WithDatabase("isogov_test"),
+		postgres.WithDatabase("hobnob_test"),
 		postgres.WithUsername("test"),
 		postgres.WithPassword("test"),
 		testcontainers.WithWaitStrategy(
@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 	defer testPool.Close()
 
 	// Generate test TLS certs.
-	testCertDir, err = os.MkdirTemp("", "isogov-test-certs-*")
+	testCertDir, err = os.MkdirTemp("", "hobnob-test-certs-*")
 	if err != nil {
 		log.Fatalf("failed to create temp cert dir: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestMTLSRequired(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewIsgovAgentClient(conn)
+	client := pb.NewHobnobAgentClient(conn)
 	_, err = client.Register(context.Background(), &pb.RegisterRequest{
 		Hostname:  "test-host",
 		IpAddress: "10.0.0.1",
@@ -266,7 +266,7 @@ func TestRegisterFlow(t *testing.T) {
 	}
 
 	// Register via gRPC.
-	client := pb.NewIsgovAgentClient(conn)
+	client := pb.NewHobnobAgentClient(conn)
 	resp, err := client.Register(ctx, &pb.RegisterRequest{
 		Hostname:  "web01.test.example.com",
 		IpAddress: "10.0.1.5",
@@ -328,7 +328,7 @@ func TestCheckInRevoked(t *testing.T) {
 	}
 
 	// CheckIn should fail for revoked client.
-	agentClient := pb.NewIsgovAgentClient(conn)
+	agentClient := pb.NewHobnobAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("test-fingerprint")
@@ -386,7 +386,7 @@ func TestCheckInSuccess(t *testing.T) {
 	}
 
 	// CheckIn should succeed with valid signature.
-	agentClient := pb.NewIsgovAgentClient(conn)
+	agentClient := pb.NewHobnobAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("some-fingerprint")
@@ -445,7 +445,7 @@ func TestCheckInBadSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	agentClient := pb.NewIsgovAgentClient(conn)
+	agentClient := pb.NewHobnobAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("fingerprint")

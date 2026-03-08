@@ -9,7 +9,7 @@ import (
 func TestIsConditionalVar_WithTraitKey(t *testing.T) {
 	v := map[string]any{
 		"trait": "os.distro",
-		"only":  []any{"debian", "ubuntu"},
+		"in":    []any{"debian", "ubuntu"},
 	}
 	if !IsConditionalVar(v) {
 		t.Error("expected map with 'trait' key to be a conditional var")
@@ -39,10 +39,10 @@ func TestIsConditionalVar_Nil(t *testing.T) {
 
 // --- ParseConditionalVar tests ---
 
-func TestParseConditionalVar_OnlyOperator(t *testing.T) {
+func TestParseConditionalVar_InOperator(t *testing.T) {
 	raw := map[string]any{
 		"trait": "os.distro",
-		"only":  []any{"debian", "ubuntu"},
+		"in":    []any{"debian", "ubuntu"},
 	}
 	cv, err := ParseConditionalVar("is_debian", raw)
 	if err != nil {
@@ -51,22 +51,22 @@ func TestParseConditionalVar_OnlyOperator(t *testing.T) {
 	if cv.Trait != "os.distro" {
 		t.Errorf("expected trait 'os.distro', got %q", cv.Trait)
 	}
-	if cv.Operator != "only" {
-		t.Errorf("expected operator 'only', got %q", cv.Operator)
+	if cv.Operator != "in" {
+		t.Errorf("expected operator 'in', got %q", cv.Operator)
 	}
 }
 
-func TestParseConditionalVar_NotOperator(t *testing.T) {
+func TestParseConditionalVar_NotInOperator(t *testing.T) {
 	raw := map[string]any{
-		"trait": "os.family",
-		"not":   []any{"windows"},
+		"trait":  "os.family",
+		"not_in": []any{"windows"},
 	}
 	cv, err := ParseConditionalVar("not_windows", raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cv.Operator != "not" {
-		t.Errorf("expected operator 'not', got %q", cv.Operator)
+	if cv.Operator != "not_in" {
+		t.Errorf("expected operator 'not_in', got %q", cv.Operator)
 	}
 }
 
@@ -126,24 +126,24 @@ func TestParseConditionalVar_LteOperator(t *testing.T) {
 	}
 }
 
-func TestParseConditionalVar_MatchOperator(t *testing.T) {
+func TestParseConditionalVar_RegexOperator(t *testing.T) {
 	raw := map[string]any{
 		"trait": "os.distro",
-		"match": "^ubuntu",
+		"regex": "^ubuntu",
 	}
 	cv, err := ParseConditionalVar("is_ubuntu", raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cv.Operator != "match" {
-		t.Errorf("expected operator 'match', got %q", cv.Operator)
+	if cv.Operator != "regex" {
+		t.Errorf("expected operator 'regex', got %q", cv.Operator)
 	}
 }
 
 func TestParseConditionalVar_InvalidRegex(t *testing.T) {
 	raw := map[string]any{
 		"trait": "os.distro",
-		"match": "[invalid",
+		"regex": "[invalid",
 	}
 	_, err := ParseConditionalVar("bad_regex", raw)
 	if err == nil {
@@ -153,7 +153,7 @@ func TestParseConditionalVar_InvalidRegex(t *testing.T) {
 
 func TestParseConditionalVar_MissingTrait(t *testing.T) {
 	raw := map[string]any{
-		"only": []any{"debian"},
+		"in": []any{"debian"},
 	}
 	_, err := ParseConditionalVar("no_trait", raw)
 	if err == nil {
@@ -173,9 +173,9 @@ func TestParseConditionalVar_NoOperator(t *testing.T) {
 
 func TestParseConditionalVar_MultipleOperators(t *testing.T) {
 	raw := map[string]any{
-		"trait": "os.distro",
-		"only":  []any{"debian"},
-		"not":   []any{"ubuntu"},
+		"trait":  "os.distro",
+		"in":     []any{"debian"},
+		"not_in": []any{"ubuntu"},
 	}
 	_, err := ParseConditionalVar("multi_op", raw)
 	if err == nil {
@@ -199,26 +199,26 @@ func TestParseConditionalVar_InvalidOperatorName(t *testing.T) {
 func TestEvaluate_Only_Match(t *testing.T) {
 	cv := mustParse(t, "is_debian", map[string]any{
 		"trait": "os.distro",
-		"only":  []any{"debian", "ubuntu"},
+		"in": []any{"debian", "ubuntu"},
 	})
 	traits := map[string]any{
 		"os": map[string]any{"distro": "debian"},
 	}
 	if !Evaluate(cv, traits) {
-		t.Error("expected only:[debian, ubuntu] to match trait 'debian'")
+		t.Error("expected in:[debian, ubuntu] to match trait 'debian'")
 	}
 }
 
 func TestEvaluate_Only_NoMatch(t *testing.T) {
 	cv := mustParse(t, "is_debian", map[string]any{
 		"trait": "os.distro",
-		"only":  []any{"debian", "ubuntu"},
+		"in": []any{"debian", "ubuntu"},
 	})
 	traits := map[string]any{
 		"os": map[string]any{"distro": "centos"},
 	}
 	if Evaluate(cv, traits) {
-		t.Error("expected only:[debian, ubuntu] to NOT match trait 'centos'")
+		t.Error("expected in:[debian, ubuntu] to NOT match trait 'centos'")
 	}
 }
 
@@ -227,26 +227,26 @@ func TestEvaluate_Only_NoMatch(t *testing.T) {
 func TestEvaluate_Not_Match(t *testing.T) {
 	cv := mustParse(t, "not_windows", map[string]any{
 		"trait": "os.family",
-		"not":   []any{"windows"},
+		"not_in": []any{"windows"},
 	})
 	traits := map[string]any{
 		"os": map[string]any{"family": "linux"},
 	}
 	if !Evaluate(cv, traits) {
-		t.Error("expected not:[windows] to be true when trait is 'linux'")
+		t.Error("expected not_in:[windows] to be true when trait is 'linux'")
 	}
 }
 
 func TestEvaluate_Not_NoMatch(t *testing.T) {
 	cv := mustParse(t, "not_windows", map[string]any{
 		"trait": "os.family",
-		"not":   []any{"windows"},
+		"not_in": []any{"windows"},
 	})
 	traits := map[string]any{
 		"os": map[string]any{"family": "windows"},
 	}
 	if Evaluate(cv, traits) {
-		t.Error("expected not:[windows] to be false when trait is 'windows'")
+		t.Error("expected not_in:[windows] to be false when trait is 'windows'")
 	}
 }
 
@@ -406,50 +406,50 @@ func TestEvaluate_Lte_GreaterThan(t *testing.T) {
 func TestEvaluate_Match_True(t *testing.T) {
 	cv := mustParse(t, "is_ubuntu", map[string]any{
 		"trait": "os.distro",
-		"match": "^ubuntu",
+		"regex": "^ubuntu",
 	})
 	traits := map[string]any{
 		"os": map[string]any{"distro": "ubuntu-22.04"},
 	}
 	if !Evaluate(cv, traits) {
-		t.Error("expected match:'^ubuntu' to be true for 'ubuntu-22.04'")
+		t.Error("expected regex:'^ubuntu' to be true for 'ubuntu-22.04'")
 	}
 }
 
 func TestEvaluate_Match_False(t *testing.T) {
 	cv := mustParse(t, "is_ubuntu", map[string]any{
 		"trait": "os.distro",
-		"match": "^ubuntu",
+		"regex": "^ubuntu",
 	})
 	traits := map[string]any{
 		"os": map[string]any{"distro": "debian-12"},
 	}
 	if Evaluate(cv, traits) {
-		t.Error("expected match:'^ubuntu' to be false for 'debian-12'")
+		t.Error("expected regex:'^ubuntu' to be false for 'debian-12'")
 	}
 }
 
 // --- Evaluate edge cases ---
 
-func TestEvaluate_MissingTrait_Only(t *testing.T) {
+func TestEvaluate_MissingTrait_In(t *testing.T) {
 	cv := mustParse(t, "is_debian", map[string]any{
 		"trait": "os.distro",
-		"only":  []any{"debian"},
+		"in":    []any{"debian"},
 	})
 	traits := map[string]any{}
 	if Evaluate(cv, traits) {
-		t.Error("expected false when trait is missing (only operator)")
+		t.Error("expected false when trait is missing (in operator)")
 	}
 }
 
-func TestEvaluate_MissingTrait_Not(t *testing.T) {
+func TestEvaluate_MissingTrait_NotIn(t *testing.T) {
 	cv := mustParse(t, "not_windows", map[string]any{
-		"trait": "os.family",
-		"not":   []any{"windows"},
+		"trait":  "os.family",
+		"not_in": []any{"windows"},
 	})
 	traits := map[string]any{}
 	if Evaluate(cv, traits) {
-		t.Error("expected false when trait is missing (not operator)")
+		t.Error("expected false when trait is missing (not_in operator)")
 	}
 }
 
@@ -464,14 +464,14 @@ func TestEvaluate_MissingTrait_Gt(t *testing.T) {
 	}
 }
 
-func TestEvaluate_MissingTrait_Match(t *testing.T) {
+func TestEvaluate_MissingTrait_Regex(t *testing.T) {
 	cv := mustParse(t, "is_ubuntu", map[string]any{
 		"trait": "os.distro",
-		"match": "^ubuntu",
+		"regex": "^ubuntu",
 	})
 	traits := map[string]any{}
 	if Evaluate(cv, traits) {
-		t.Error("expected false when trait is missing (match operator)")
+		t.Error("expected false when trait is missing (regex operator)")
 	}
 }
 
@@ -532,7 +532,7 @@ func TestEvaluate_StringNumericTrait_Gt(t *testing.T) {
 func TestEvaluate_DotPath_Nested(t *testing.T) {
 	cv := mustParse(t, "deep", map[string]any{
 		"trait": "a.b.c",
-		"only":  []any{"found"},
+		"in": []any{"found"},
 	})
 	traits := map[string]any{
 		"a": map[string]any{
@@ -549,7 +549,7 @@ func TestEvaluate_DotPath_Nested(t *testing.T) {
 func TestEvaluate_DotPath_MissingIntermediate(t *testing.T) {
 	cv := mustParse(t, "deep", map[string]any{
 		"trait": "a.b.c",
-		"only":  []any{"found"},
+		"in": []any{"found"},
 	})
 	traits := map[string]any{
 		"a": map[string]any{
@@ -564,7 +564,7 @@ func TestEvaluate_DotPath_MissingIntermediate(t *testing.T) {
 func TestEvaluate_DotPath_TopLevel(t *testing.T) {
 	cv := mustParse(t, "hostname_check", map[string]any{
 		"trait": "hostname",
-		"only":  []any{"web01"},
+		"in": []any{"web01"},
 	})
 	traits := map[string]any{
 		"hostname": "web01",
@@ -577,7 +577,7 @@ func TestEvaluate_DotPath_TopLevel(t *testing.T) {
 func TestEvaluate_Only_NumericTraitAsString(t *testing.T) {
 	cv := mustParse(t, "check", map[string]any{
 		"trait": "count",
-		"only":  []any{"5"},
+		"in": []any{"5"},
 	})
 	traits := map[string]any{
 		"count": 5,

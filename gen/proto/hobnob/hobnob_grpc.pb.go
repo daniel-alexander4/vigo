@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             (unknown)
-// source: isogov.proto
+// source: hobnob.proto
 
-package isogov
+package hobnob
 
 import (
 	context "context"
@@ -19,297 +19,297 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IsgovAgent_Register_FullMethodName            = "/isogov.v1.IsgovAgent/Register"
-	IsgovAgent_CheckIn_FullMethodName             = "/isogov.v1.IsgovAgent/CheckIn"
-	IsgovAgent_ReportResult_FullMethodName        = "/isogov.v1.IsgovAgent/ReportResult"
-	IsgovAgent_ReportFacts_FullMethodName         = "/isogov.v1.IsgovAgent/ReportFacts"
-	IsgovAgent_DownloadCustomTrait_FullMethodName = "/isogov.v1.IsgovAgent/DownloadCustomTrait"
+	HobnobAgent_Register_FullMethodName            = "/hobnob.v1.HobnobAgent/Register"
+	HobnobAgent_CheckIn_FullMethodName             = "/hobnob.v1.HobnobAgent/CheckIn"
+	HobnobAgent_ReportResult_FullMethodName        = "/hobnob.v1.HobnobAgent/ReportResult"
+	HobnobAgent_ReportNails_FullMethodName         = "/hobnob.v1.HobnobAgent/ReportNails"
+	HobnobAgent_DownloadCustomTrait_FullMethodName = "/hobnob.v1.HobnobAgent/DownloadCustomTrait"
 )
 
-// IsgovAgentClient is the client API for IsgovAgent service.
+// HobnobAgentClient is the client API for HobnobAgent service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type IsgovAgentClient interface {
+type HobnobAgentClient interface {
 	// Register enrolls a new agent with the server using hostname, IP, pubkey, and one-time token.
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	// CheckIn is the agent pull loop — returns modules to apply based on current state.
 	CheckIn(ctx context.Context, in *CheckInRequest, opts ...grpc.CallOption) (*CheckInResponse, error)
 	// ReportResult submits per-module execution results after a run.
 	ReportResult(ctx context.Context, in *ReportResultRequest, opts ...grpc.CallOption) (*ReportResultResponse, error)
-	// ReportFacts submits collected facts from the agent.
-	ReportFacts(ctx context.Context, in *ReportFactsRequest, opts ...grpc.CallOption) (*ReportFactsResponse, error)
+	// ReportNails submits collected nails from the agent.
+	ReportNails(ctx context.Context, in *ReportNailsRequest, opts ...grpc.CallOption) (*ReportNailsResponse, error)
 	// DownloadCustomTrait retrieves a custom trait executable by name.
 	DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error)
 }
 
-type isgovAgentClient struct {
+type hobnobAgentClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewIsgovAgentClient(cc grpc.ClientConnInterface) IsgovAgentClient {
-	return &isgovAgentClient{cc}
+func NewHobnobAgentClient(cc grpc.ClientConnInterface) HobnobAgentClient {
+	return &hobnobAgentClient{cc}
 }
 
-func (c *isgovAgentClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
+func (c *hobnobAgentClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterResponse)
-	err := c.cc.Invoke(ctx, IsgovAgent_Register_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAgent_Register_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAgentClient) CheckIn(ctx context.Context, in *CheckInRequest, opts ...grpc.CallOption) (*CheckInResponse, error) {
+func (c *hobnobAgentClient) CheckIn(ctx context.Context, in *CheckInRequest, opts ...grpc.CallOption) (*CheckInResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckInResponse)
-	err := c.cc.Invoke(ctx, IsgovAgent_CheckIn_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAgent_CheckIn_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAgentClient) ReportResult(ctx context.Context, in *ReportResultRequest, opts ...grpc.CallOption) (*ReportResultResponse, error) {
+func (c *hobnobAgentClient) ReportResult(ctx context.Context, in *ReportResultRequest, opts ...grpc.CallOption) (*ReportResultResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReportResultResponse)
-	err := c.cc.Invoke(ctx, IsgovAgent_ReportResult_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAgent_ReportResult_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAgentClient) ReportFacts(ctx context.Context, in *ReportFactsRequest, opts ...grpc.CallOption) (*ReportFactsResponse, error) {
+func (c *hobnobAgentClient) ReportNails(ctx context.Context, in *ReportNailsRequest, opts ...grpc.CallOption) (*ReportNailsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReportFactsResponse)
-	err := c.cc.Invoke(ctx, IsgovAgent_ReportFacts_FullMethodName, in, out, cOpts...)
+	out := new(ReportNailsResponse)
+	err := c.cc.Invoke(ctx, HobnobAgent_ReportNails_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAgentClient) DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error) {
+func (c *hobnobAgentClient) DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DownloadCustomTraitResponse)
-	err := c.cc.Invoke(ctx, IsgovAgent_DownloadCustomTrait_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAgent_DownloadCustomTrait_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// IsgovAgentServer is the server API for IsgovAgent service.
-// All implementations must embed UnimplementedIsgovAgentServer
+// HobnobAgentServer is the server API for HobnobAgent service.
+// All implementations must embed UnimplementedHobnobAgentServer
 // for forward compatibility.
-type IsgovAgentServer interface {
+type HobnobAgentServer interface {
 	// Register enrolls a new agent with the server using hostname, IP, pubkey, and one-time token.
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	// CheckIn is the agent pull loop — returns modules to apply based on current state.
 	CheckIn(context.Context, *CheckInRequest) (*CheckInResponse, error)
 	// ReportResult submits per-module execution results after a run.
 	ReportResult(context.Context, *ReportResultRequest) (*ReportResultResponse, error)
-	// ReportFacts submits collected facts from the agent.
-	ReportFacts(context.Context, *ReportFactsRequest) (*ReportFactsResponse, error)
+	// ReportNails submits collected nails from the agent.
+	ReportNails(context.Context, *ReportNailsRequest) (*ReportNailsResponse, error)
 	// DownloadCustomTrait retrieves a custom trait executable by name.
 	DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error)
-	mustEmbedUnimplementedIsgovAgentServer()
+	mustEmbedUnimplementedHobnobAgentServer()
 }
 
-// UnimplementedIsgovAgentServer must be embedded to have
+// UnimplementedHobnobAgentServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedIsgovAgentServer struct{}
+type UnimplementedHobnobAgentServer struct{}
 
-func (UnimplementedIsgovAgentServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
+func (UnimplementedHobnobAgentServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
 }
-func (UnimplementedIsgovAgentServer) CheckIn(context.Context, *CheckInRequest) (*CheckInResponse, error) {
+func (UnimplementedHobnobAgentServer) CheckIn(context.Context, *CheckInRequest) (*CheckInResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckIn not implemented")
 }
-func (UnimplementedIsgovAgentServer) ReportResult(context.Context, *ReportResultRequest) (*ReportResultResponse, error) {
+func (UnimplementedHobnobAgentServer) ReportResult(context.Context, *ReportResultRequest) (*ReportResultResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportResult not implemented")
 }
-func (UnimplementedIsgovAgentServer) ReportFacts(context.Context, *ReportFactsRequest) (*ReportFactsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReportFacts not implemented")
+func (UnimplementedHobnobAgentServer) ReportNails(context.Context, *ReportNailsRequest) (*ReportNailsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportNails not implemented")
 }
-func (UnimplementedIsgovAgentServer) DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error) {
+func (UnimplementedHobnobAgentServer) DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DownloadCustomTrait not implemented")
 }
-func (UnimplementedIsgovAgentServer) mustEmbedUnimplementedIsgovAgentServer() {}
-func (UnimplementedIsgovAgentServer) testEmbeddedByValue()                    {}
+func (UnimplementedHobnobAgentServer) mustEmbedUnimplementedHobnobAgentServer() {}
+func (UnimplementedHobnobAgentServer) testEmbeddedByValue()                     {}
 
-// UnsafeIsgovAgentServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to IsgovAgentServer will
+// UnsafeHobnobAgentServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to HobnobAgentServer will
 // result in compilation errors.
-type UnsafeIsgovAgentServer interface {
-	mustEmbedUnimplementedIsgovAgentServer()
+type UnsafeHobnobAgentServer interface {
+	mustEmbedUnimplementedHobnobAgentServer()
 }
 
-func RegisterIsgovAgentServer(s grpc.ServiceRegistrar, srv IsgovAgentServer) {
-	// If the following call panics, it indicates UnimplementedIsgovAgentServer was
+func RegisterHobnobAgentServer(s grpc.ServiceRegistrar, srv HobnobAgentServer) {
+	// If the following call panics, it indicates UnimplementedHobnobAgentServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&IsgovAgent_ServiceDesc, srv)
+	s.RegisterService(&HobnobAgent_ServiceDesc, srv)
 }
 
-func _IsgovAgent_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAgent_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RegisterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAgentServer).Register(ctx, in)
+		return srv.(HobnobAgentServer).Register(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAgent_Register_FullMethodName,
+		FullMethod: HobnobAgent_Register_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAgentServer).Register(ctx, req.(*RegisterRequest))
+		return srv.(HobnobAgentServer).Register(ctx, req.(*RegisterRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAgent_CheckIn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAgent_CheckIn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckInRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAgentServer).CheckIn(ctx, in)
+		return srv.(HobnobAgentServer).CheckIn(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAgent_CheckIn_FullMethodName,
+		FullMethod: HobnobAgent_CheckIn_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAgentServer).CheckIn(ctx, req.(*CheckInRequest))
+		return srv.(HobnobAgentServer).CheckIn(ctx, req.(*CheckInRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAgent_ReportResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAgent_ReportResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReportResultRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAgentServer).ReportResult(ctx, in)
+		return srv.(HobnobAgentServer).ReportResult(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAgent_ReportResult_FullMethodName,
+		FullMethod: HobnobAgent_ReportResult_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAgentServer).ReportResult(ctx, req.(*ReportResultRequest))
+		return srv.(HobnobAgentServer).ReportResult(ctx, req.(*ReportResultRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAgent_ReportFacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReportFactsRequest)
+func _HobnobAgent_ReportNails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportNailsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAgentServer).ReportFacts(ctx, in)
+		return srv.(HobnobAgentServer).ReportNails(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAgent_ReportFacts_FullMethodName,
+		FullMethod: HobnobAgent_ReportNails_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAgentServer).ReportFacts(ctx, req.(*ReportFactsRequest))
+		return srv.(HobnobAgentServer).ReportNails(ctx, req.(*ReportNailsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAgent_DownloadCustomTrait_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAgent_DownloadCustomTrait_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DownloadCustomTraitRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAgentServer).DownloadCustomTrait(ctx, in)
+		return srv.(HobnobAgentServer).DownloadCustomTrait(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAgent_DownloadCustomTrait_FullMethodName,
+		FullMethod: HobnobAgent_DownloadCustomTrait_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAgentServer).DownloadCustomTrait(ctx, req.(*DownloadCustomTraitRequest))
+		return srv.(HobnobAgentServer).DownloadCustomTrait(ctx, req.(*DownloadCustomTraitRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// IsgovAgent_ServiceDesc is the grpc.ServiceDesc for IsgovAgent service.
+// HobnobAgent_ServiceDesc is the grpc.ServiceDesc for HobnobAgent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var IsgovAgent_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "isogov.v1.IsgovAgent",
-	HandlerType: (*IsgovAgentServer)(nil),
+var HobnobAgent_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "hobnob.v1.HobnobAgent",
+	HandlerType: (*HobnobAgentServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Register",
-			Handler:    _IsgovAgent_Register_Handler,
+			Handler:    _HobnobAgent_Register_Handler,
 		},
 		{
 			MethodName: "CheckIn",
-			Handler:    _IsgovAgent_CheckIn_Handler,
+			Handler:    _HobnobAgent_CheckIn_Handler,
 		},
 		{
 			MethodName: "ReportResult",
-			Handler:    _IsgovAgent_ReportResult_Handler,
+			Handler:    _HobnobAgent_ReportResult_Handler,
 		},
 		{
-			MethodName: "ReportFacts",
-			Handler:    _IsgovAgent_ReportFacts_Handler,
+			MethodName: "ReportNails",
+			Handler:    _HobnobAgent_ReportNails_Handler,
 		},
 		{
 			MethodName: "DownloadCustomTrait",
-			Handler:    _IsgovAgent_DownloadCustomTrait_Handler,
+			Handler:    _HobnobAgent_DownloadCustomTrait_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "isogov.proto",
+	Metadata: "hobnob.proto",
 }
 
 const (
-	IsgovAdmin_AddApprovedPattern_FullMethodName    = "/isogov.v1.IsgovAdmin/AddApprovedPattern"
-	IsgovAdmin_ListApprovedPatterns_FullMethodName  = "/isogov.v1.IsgovAdmin/ListApprovedPatterns"
-	IsgovAdmin_RevokeApprovedPattern_FullMethodName = "/isogov.v1.IsgovAdmin/RevokeApprovedPattern"
-	IsgovAdmin_ListClients_FullMethodName           = "/isogov.v1.IsgovAdmin/ListClients"
-	IsgovAdmin_GetClient_FullMethodName             = "/isogov.v1.IsgovAdmin/GetClient"
-	IsgovAdmin_RevokeClient_FullMethodName          = "/isogov.v1.IsgovAdmin/RevokeClient"
-	IsgovAdmin_ForcePush_FullMethodName             = "/isogov.v1.IsgovAdmin/ForcePush"
-	IsgovAdmin_DryRun_FullMethodName                = "/isogov.v1.IsgovAdmin/DryRun"
-	IsgovAdmin_ListRuns_FullMethodName              = "/isogov.v1.IsgovAdmin/ListRuns"
-	IsgovAdmin_GetRun_FullMethodName                = "/isogov.v1.IsgovAdmin/GetRun"
-	IsgovAdmin_GenerateToken_FullMethodName         = "/isogov.v1.IsgovAdmin/GenerateToken"
-	IsgovAdmin_ListAllRuns_FullMethodName           = "/isogov.v1.IsgovAdmin/ListAllRuns"
-	IsgovAdmin_AddWebhook_FullMethodName            = "/isogov.v1.IsgovAdmin/AddWebhook"
-	IsgovAdmin_ListWebhooks_FullMethodName          = "/isogov.v1.IsgovAdmin/ListWebhooks"
-	IsgovAdmin_DeleteWebhook_FullMethodName         = "/isogov.v1.IsgovAdmin/DeleteWebhook"
-	IsgovAdmin_GetComplianceSummary_FullMethodName  = "/isogov.v1.IsgovAdmin/GetComplianceSummary"
-	IsgovAdmin_GetClientCompliance_FullMethodName   = "/isogov.v1.IsgovAdmin/GetClientCompliance"
-	IsgovAdmin_Rollback_FullMethodName              = "/isogov.v1.IsgovAdmin/Rollback"
-	IsgovAdmin_ListPackages_FullMethodName          = "/isogov.v1.IsgovAdmin/ListPackages"
-	IsgovAdmin_ListPackageDrift_FullMethodName      = "/isogov.v1.IsgovAdmin/ListPackageDrift"
-	IsgovAdmin_PromoteEnv_FullMethodName            = "/isogov.v1.IsgovAdmin/PromoteEnv"
+	HobnobAdmin_AddApprovedPattern_FullMethodName    = "/hobnob.v1.HobnobAdmin/AddApprovedPattern"
+	HobnobAdmin_ListApprovedPatterns_FullMethodName  = "/hobnob.v1.HobnobAdmin/ListApprovedPatterns"
+	HobnobAdmin_RevokeApprovedPattern_FullMethodName = "/hobnob.v1.HobnobAdmin/RevokeApprovedPattern"
+	HobnobAdmin_ListClients_FullMethodName           = "/hobnob.v1.HobnobAdmin/ListClients"
+	HobnobAdmin_GetClient_FullMethodName             = "/hobnob.v1.HobnobAdmin/GetClient"
+	HobnobAdmin_RevokeClient_FullMethodName          = "/hobnob.v1.HobnobAdmin/RevokeClient"
+	HobnobAdmin_ForcePush_FullMethodName             = "/hobnob.v1.HobnobAdmin/ForcePush"
+	HobnobAdmin_DryRun_FullMethodName                = "/hobnob.v1.HobnobAdmin/DryRun"
+	HobnobAdmin_ListRuns_FullMethodName              = "/hobnob.v1.HobnobAdmin/ListRuns"
+	HobnobAdmin_GetRun_FullMethodName                = "/hobnob.v1.HobnobAdmin/GetRun"
+	HobnobAdmin_GenerateToken_FullMethodName         = "/hobnob.v1.HobnobAdmin/GenerateToken"
+	HobnobAdmin_ListAllRuns_FullMethodName           = "/hobnob.v1.HobnobAdmin/ListAllRuns"
+	HobnobAdmin_AddWebhook_FullMethodName            = "/hobnob.v1.HobnobAdmin/AddWebhook"
+	HobnobAdmin_ListWebhooks_FullMethodName          = "/hobnob.v1.HobnobAdmin/ListWebhooks"
+	HobnobAdmin_DeleteWebhook_FullMethodName         = "/hobnob.v1.HobnobAdmin/DeleteWebhook"
+	HobnobAdmin_GetComplianceSummary_FullMethodName  = "/hobnob.v1.HobnobAdmin/GetComplianceSummary"
+	HobnobAdmin_GetClientCompliance_FullMethodName   = "/hobnob.v1.HobnobAdmin/GetClientCompliance"
+	HobnobAdmin_Rollback_FullMethodName              = "/hobnob.v1.HobnobAdmin/Rollback"
+	HobnobAdmin_ListPackages_FullMethodName          = "/hobnob.v1.HobnobAdmin/ListPackages"
+	HobnobAdmin_ListPackageDrift_FullMethodName      = "/hobnob.v1.HobnobAdmin/ListPackageDrift"
+	HobnobAdmin_PromoteEnv_FullMethodName            = "/hobnob.v1.HobnobAdmin/PromoteEnv"
 )
 
-// IsgovAdminClient is the client API for IsgovAdmin service.
+// HobnobAdminClient is the client API for HobnobAdmin service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type IsgovAdminClient interface {
+type HobnobAdminClient interface {
 	// AddApprovedPattern adds a hostname/IP wildcard pattern with a one-time token.
 	AddApprovedPattern(ctx context.Context, in *AddApprovedPatternRequest, opts ...grpc.CallOption) (*AddApprovedPatternResponse, error)
 	// ListApprovedPatterns lists all approved enrollment patterns.
@@ -354,228 +354,228 @@ type IsgovAdminClient interface {
 	PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error)
 }
 
-type isgovAdminClient struct {
+type hobnobAdminClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewIsgovAdminClient(cc grpc.ClientConnInterface) IsgovAdminClient {
-	return &isgovAdminClient{cc}
+func NewHobnobAdminClient(cc grpc.ClientConnInterface) HobnobAdminClient {
+	return &hobnobAdminClient{cc}
 }
 
-func (c *isgovAdminClient) AddApprovedPattern(ctx context.Context, in *AddApprovedPatternRequest, opts ...grpc.CallOption) (*AddApprovedPatternResponse, error) {
+func (c *hobnobAdminClient) AddApprovedPattern(ctx context.Context, in *AddApprovedPatternRequest, opts ...grpc.CallOption) (*AddApprovedPatternResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddApprovedPatternResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_AddApprovedPattern_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_AddApprovedPattern_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ListApprovedPatterns(ctx context.Context, in *ListApprovedPatternsRequest, opts ...grpc.CallOption) (*ListApprovedPatternsResponse, error) {
+func (c *hobnobAdminClient) ListApprovedPatterns(ctx context.Context, in *ListApprovedPatternsRequest, opts ...grpc.CallOption) (*ListApprovedPatternsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListApprovedPatternsResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ListApprovedPatterns_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListApprovedPatterns_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) RevokeApprovedPattern(ctx context.Context, in *RevokeApprovedPatternRequest, opts ...grpc.CallOption) (*RevokeApprovedPatternResponse, error) {
+func (c *hobnobAdminClient) RevokeApprovedPattern(ctx context.Context, in *RevokeApprovedPatternRequest, opts ...grpc.CallOption) (*RevokeApprovedPatternResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RevokeApprovedPatternResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_RevokeApprovedPattern_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_RevokeApprovedPattern_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ListClients(ctx context.Context, in *ListClientsRequest, opts ...grpc.CallOption) (*ListClientsResponse, error) {
+func (c *hobnobAdminClient) ListClients(ctx context.Context, in *ListClientsRequest, opts ...grpc.CallOption) (*ListClientsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListClientsResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ListClients_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListClients_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) GetClient(ctx context.Context, in *GetClientRequest, opts ...grpc.CallOption) (*GetClientResponse, error) {
+func (c *hobnobAdminClient) GetClient(ctx context.Context, in *GetClientRequest, opts ...grpc.CallOption) (*GetClientResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetClientResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_GetClient_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetClient_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) RevokeClient(ctx context.Context, in *RevokeClientRequest, opts ...grpc.CallOption) (*RevokeClientResponse, error) {
+func (c *hobnobAdminClient) RevokeClient(ctx context.Context, in *RevokeClientRequest, opts ...grpc.CallOption) (*RevokeClientResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RevokeClientResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_RevokeClient_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_RevokeClient_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ForcePush(ctx context.Context, in *ForcePushRequest, opts ...grpc.CallOption) (*ForcePushResponse, error) {
+func (c *hobnobAdminClient) ForcePush(ctx context.Context, in *ForcePushRequest, opts ...grpc.CallOption) (*ForcePushResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ForcePushResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ForcePush_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ForcePush_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) DryRun(ctx context.Context, in *DryRunRequest, opts ...grpc.CallOption) (*DryRunResponse, error) {
+func (c *hobnobAdminClient) DryRun(ctx context.Context, in *DryRunRequest, opts ...grpc.CallOption) (*DryRunResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DryRunResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_DryRun_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_DryRun_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
+func (c *hobnobAdminClient) ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRunsResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ListRuns_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListRuns_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error) {
+func (c *hobnobAdminClient) GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetRunResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_GetRun_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetRun_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) GenerateToken(ctx context.Context, in *GenerateTokenRequest, opts ...grpc.CallOption) (*GenerateTokenResponse, error) {
+func (c *hobnobAdminClient) GenerateToken(ctx context.Context, in *GenerateTokenRequest, opts ...grpc.CallOption) (*GenerateTokenResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GenerateTokenResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_GenerateToken_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GenerateToken_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ListAllRuns(ctx context.Context, in *ListAllRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
+func (c *hobnobAdminClient) ListAllRuns(ctx context.Context, in *ListAllRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRunsResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ListAllRuns_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListAllRuns_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error) {
+func (c *hobnobAdminClient) AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddWebhookResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_AddWebhook_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_AddWebhook_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error) {
+func (c *hobnobAdminClient) ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListWebhooksResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ListWebhooks_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListWebhooks_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error) {
+func (c *hobnobAdminClient) DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteWebhookResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_DeleteWebhook_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_DeleteWebhook_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error) {
+func (c *hobnobAdminClient) GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetComplianceSummaryResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_GetComplianceSummary_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetComplianceSummary_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) GetClientCompliance(ctx context.Context, in *GetClientComplianceRequest, opts ...grpc.CallOption) (*GetClientComplianceResponse, error) {
+func (c *hobnobAdminClient) GetClientCompliance(ctx context.Context, in *GetClientComplianceRequest, opts ...grpc.CallOption) (*GetClientComplianceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetClientComplianceResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_GetClientCompliance_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetClientCompliance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error) {
+func (c *hobnobAdminClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RollbackResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_Rollback_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_Rollback_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error) {
+func (c *hobnobAdminClient) ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPackagesResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ListPackages_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListPackages_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error) {
+func (c *hobnobAdminClient) ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPackageDriftResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_ListPackageDrift_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListPackageDrift_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *isgovAdminClient) PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error) {
+func (c *hobnobAdminClient) PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PromoteEnvResponse)
-	err := c.cc.Invoke(ctx, IsgovAdmin_PromoteEnv_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, HobnobAdmin_PromoteEnv_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// IsgovAdminServer is the server API for IsgovAdmin service.
-// All implementations must embed UnimplementedIsgovAdminServer
+// HobnobAdminServer is the server API for HobnobAdmin service.
+// All implementations must embed UnimplementedHobnobAdminServer
 // for forward compatibility.
-type IsgovAdminServer interface {
+type HobnobAdminServer interface {
 	// AddApprovedPattern adds a hostname/IP wildcard pattern with a one-time token.
 	AddApprovedPattern(context.Context, *AddApprovedPatternRequest) (*AddApprovedPatternResponse, error)
 	// ListApprovedPatterns lists all approved enrollment patterns.
@@ -618,570 +618,570 @@ type IsgovAdminServer interface {
 	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
 	// PromoteEnv promotes environment variables from one tier to another.
 	PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error)
-	mustEmbedUnimplementedIsgovAdminServer()
+	mustEmbedUnimplementedHobnobAdminServer()
 }
 
-// UnimplementedIsgovAdminServer must be embedded to have
+// UnimplementedHobnobAdminServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedIsgovAdminServer struct{}
+type UnimplementedHobnobAdminServer struct{}
 
-func (UnimplementedIsgovAdminServer) AddApprovedPattern(context.Context, *AddApprovedPatternRequest) (*AddApprovedPatternResponse, error) {
+func (UnimplementedHobnobAdminServer) AddApprovedPattern(context.Context, *AddApprovedPatternRequest) (*AddApprovedPatternResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddApprovedPattern not implemented")
 }
-func (UnimplementedIsgovAdminServer) ListApprovedPatterns(context.Context, *ListApprovedPatternsRequest) (*ListApprovedPatternsResponse, error) {
+func (UnimplementedHobnobAdminServer) ListApprovedPatterns(context.Context, *ListApprovedPatternsRequest) (*ListApprovedPatternsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListApprovedPatterns not implemented")
 }
-func (UnimplementedIsgovAdminServer) RevokeApprovedPattern(context.Context, *RevokeApprovedPatternRequest) (*RevokeApprovedPatternResponse, error) {
+func (UnimplementedHobnobAdminServer) RevokeApprovedPattern(context.Context, *RevokeApprovedPatternRequest) (*RevokeApprovedPatternResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeApprovedPattern not implemented")
 }
-func (UnimplementedIsgovAdminServer) ListClients(context.Context, *ListClientsRequest) (*ListClientsResponse, error) {
+func (UnimplementedHobnobAdminServer) ListClients(context.Context, *ListClientsRequest) (*ListClientsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListClients not implemented")
 }
-func (UnimplementedIsgovAdminServer) GetClient(context.Context, *GetClientRequest) (*GetClientResponse, error) {
+func (UnimplementedHobnobAdminServer) GetClient(context.Context, *GetClientRequest) (*GetClientResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetClient not implemented")
 }
-func (UnimplementedIsgovAdminServer) RevokeClient(context.Context, *RevokeClientRequest) (*RevokeClientResponse, error) {
+func (UnimplementedHobnobAdminServer) RevokeClient(context.Context, *RevokeClientRequest) (*RevokeClientResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeClient not implemented")
 }
-func (UnimplementedIsgovAdminServer) ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error) {
+func (UnimplementedHobnobAdminServer) ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForcePush not implemented")
 }
-func (UnimplementedIsgovAdminServer) DryRun(context.Context, *DryRunRequest) (*DryRunResponse, error) {
+func (UnimplementedHobnobAdminServer) DryRun(context.Context, *DryRunRequest) (*DryRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DryRun not implemented")
 }
-func (UnimplementedIsgovAdminServer) ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error) {
+func (UnimplementedHobnobAdminServer) ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRuns not implemented")
 }
-func (UnimplementedIsgovAdminServer) GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error) {
+func (UnimplementedHobnobAdminServer) GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRun not implemented")
 }
-func (UnimplementedIsgovAdminServer) GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error) {
+func (UnimplementedHobnobAdminServer) GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GenerateToken not implemented")
 }
-func (UnimplementedIsgovAdminServer) ListAllRuns(context.Context, *ListAllRunsRequest) (*ListRunsResponse, error) {
+func (UnimplementedHobnobAdminServer) ListAllRuns(context.Context, *ListAllRunsRequest) (*ListRunsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAllRuns not implemented")
 }
-func (UnimplementedIsgovAdminServer) AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error) {
+func (UnimplementedHobnobAdminServer) AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddWebhook not implemented")
 }
-func (UnimplementedIsgovAdminServer) ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error) {
+func (UnimplementedHobnobAdminServer) ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListWebhooks not implemented")
 }
-func (UnimplementedIsgovAdminServer) DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error) {
+func (UnimplementedHobnobAdminServer) DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteWebhook not implemented")
 }
-func (UnimplementedIsgovAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
+func (UnimplementedHobnobAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
 }
-func (UnimplementedIsgovAdminServer) GetClientCompliance(context.Context, *GetClientComplianceRequest) (*GetClientComplianceResponse, error) {
+func (UnimplementedHobnobAdminServer) GetClientCompliance(context.Context, *GetClientComplianceRequest) (*GetClientComplianceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetClientCompliance not implemented")
 }
-func (UnimplementedIsgovAdminServer) Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error) {
+func (UnimplementedHobnobAdminServer) Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Rollback not implemented")
 }
-func (UnimplementedIsgovAdminServer) ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error) {
+func (UnimplementedHobnobAdminServer) ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPackages not implemented")
 }
-func (UnimplementedIsgovAdminServer) ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error) {
+func (UnimplementedHobnobAdminServer) ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPackageDrift not implemented")
 }
-func (UnimplementedIsgovAdminServer) PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error) {
+func (UnimplementedHobnobAdminServer) PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PromoteEnv not implemented")
 }
-func (UnimplementedIsgovAdminServer) mustEmbedUnimplementedIsgovAdminServer() {}
-func (UnimplementedIsgovAdminServer) testEmbeddedByValue()                    {}
+func (UnimplementedHobnobAdminServer) mustEmbedUnimplementedHobnobAdminServer() {}
+func (UnimplementedHobnobAdminServer) testEmbeddedByValue()                     {}
 
-// UnsafeIsgovAdminServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to IsgovAdminServer will
+// UnsafeHobnobAdminServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to HobnobAdminServer will
 // result in compilation errors.
-type UnsafeIsgovAdminServer interface {
-	mustEmbedUnimplementedIsgovAdminServer()
+type UnsafeHobnobAdminServer interface {
+	mustEmbedUnimplementedHobnobAdminServer()
 }
 
-func RegisterIsgovAdminServer(s grpc.ServiceRegistrar, srv IsgovAdminServer) {
-	// If the following call panics, it indicates UnimplementedIsgovAdminServer was
+func RegisterHobnobAdminServer(s grpc.ServiceRegistrar, srv HobnobAdminServer) {
+	// If the following call panics, it indicates UnimplementedHobnobAdminServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&IsgovAdmin_ServiceDesc, srv)
+	s.RegisterService(&HobnobAdmin_ServiceDesc, srv)
 }
 
-func _IsgovAdmin_AddApprovedPattern_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_AddApprovedPattern_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddApprovedPatternRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).AddApprovedPattern(ctx, in)
+		return srv.(HobnobAdminServer).AddApprovedPattern(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_AddApprovedPattern_FullMethodName,
+		FullMethod: HobnobAdmin_AddApprovedPattern_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).AddApprovedPattern(ctx, req.(*AddApprovedPatternRequest))
+		return srv.(HobnobAdminServer).AddApprovedPattern(ctx, req.(*AddApprovedPatternRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ListApprovedPatterns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ListApprovedPatterns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListApprovedPatternsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ListApprovedPatterns(ctx, in)
+		return srv.(HobnobAdminServer).ListApprovedPatterns(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ListApprovedPatterns_FullMethodName,
+		FullMethod: HobnobAdmin_ListApprovedPatterns_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ListApprovedPatterns(ctx, req.(*ListApprovedPatternsRequest))
+		return srv.(HobnobAdminServer).ListApprovedPatterns(ctx, req.(*ListApprovedPatternsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_RevokeApprovedPattern_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_RevokeApprovedPattern_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RevokeApprovedPatternRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).RevokeApprovedPattern(ctx, in)
+		return srv.(HobnobAdminServer).RevokeApprovedPattern(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_RevokeApprovedPattern_FullMethodName,
+		FullMethod: HobnobAdmin_RevokeApprovedPattern_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).RevokeApprovedPattern(ctx, req.(*RevokeApprovedPatternRequest))
+		return srv.(HobnobAdminServer).RevokeApprovedPattern(ctx, req.(*RevokeApprovedPatternRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ListClients_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ListClients_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListClientsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ListClients(ctx, in)
+		return srv.(HobnobAdminServer).ListClients(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ListClients_FullMethodName,
+		FullMethod: HobnobAdmin_ListClients_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ListClients(ctx, req.(*ListClientsRequest))
+		return srv.(HobnobAdminServer).ListClients(ctx, req.(*ListClientsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_GetClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_GetClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetClientRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).GetClient(ctx, in)
+		return srv.(HobnobAdminServer).GetClient(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_GetClient_FullMethodName,
+		FullMethod: HobnobAdmin_GetClient_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).GetClient(ctx, req.(*GetClientRequest))
+		return srv.(HobnobAdminServer).GetClient(ctx, req.(*GetClientRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_RevokeClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_RevokeClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RevokeClientRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).RevokeClient(ctx, in)
+		return srv.(HobnobAdminServer).RevokeClient(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_RevokeClient_FullMethodName,
+		FullMethod: HobnobAdmin_RevokeClient_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).RevokeClient(ctx, req.(*RevokeClientRequest))
+		return srv.(HobnobAdminServer).RevokeClient(ctx, req.(*RevokeClientRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ForcePush_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ForcePush_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ForcePushRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ForcePush(ctx, in)
+		return srv.(HobnobAdminServer).ForcePush(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ForcePush_FullMethodName,
+		FullMethod: HobnobAdmin_ForcePush_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ForcePush(ctx, req.(*ForcePushRequest))
+		return srv.(HobnobAdminServer).ForcePush(ctx, req.(*ForcePushRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_DryRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_DryRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DryRunRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).DryRun(ctx, in)
+		return srv.(HobnobAdminServer).DryRun(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_DryRun_FullMethodName,
+		FullMethod: HobnobAdmin_DryRun_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).DryRun(ctx, req.(*DryRunRequest))
+		return srv.(HobnobAdminServer).DryRun(ctx, req.(*DryRunRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ListRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ListRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRunsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ListRuns(ctx, in)
+		return srv.(HobnobAdminServer).ListRuns(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ListRuns_FullMethodName,
+		FullMethod: HobnobAdmin_ListRuns_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ListRuns(ctx, req.(*ListRunsRequest))
+		return srv.(HobnobAdminServer).ListRuns(ctx, req.(*ListRunsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_GetRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_GetRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRunRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).GetRun(ctx, in)
+		return srv.(HobnobAdminServer).GetRun(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_GetRun_FullMethodName,
+		FullMethod: HobnobAdmin_GetRun_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).GetRun(ctx, req.(*GetRunRequest))
+		return srv.(HobnobAdminServer).GetRun(ctx, req.(*GetRunRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_GenerateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_GenerateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GenerateTokenRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).GenerateToken(ctx, in)
+		return srv.(HobnobAdminServer).GenerateToken(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_GenerateToken_FullMethodName,
+		FullMethod: HobnobAdmin_GenerateToken_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).GenerateToken(ctx, req.(*GenerateTokenRequest))
+		return srv.(HobnobAdminServer).GenerateToken(ctx, req.(*GenerateTokenRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ListAllRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ListAllRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAllRunsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ListAllRuns(ctx, in)
+		return srv.(HobnobAdminServer).ListAllRuns(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ListAllRuns_FullMethodName,
+		FullMethod: HobnobAdmin_ListAllRuns_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ListAllRuns(ctx, req.(*ListAllRunsRequest))
+		return srv.(HobnobAdminServer).ListAllRuns(ctx, req.(*ListAllRunsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_AddWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_AddWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddWebhookRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).AddWebhook(ctx, in)
+		return srv.(HobnobAdminServer).AddWebhook(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_AddWebhook_FullMethodName,
+		FullMethod: HobnobAdmin_AddWebhook_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).AddWebhook(ctx, req.(*AddWebhookRequest))
+		return srv.(HobnobAdminServer).AddWebhook(ctx, req.(*AddWebhookRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ListWebhooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ListWebhooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListWebhooksRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ListWebhooks(ctx, in)
+		return srv.(HobnobAdminServer).ListWebhooks(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ListWebhooks_FullMethodName,
+		FullMethod: HobnobAdmin_ListWebhooks_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ListWebhooks(ctx, req.(*ListWebhooksRequest))
+		return srv.(HobnobAdminServer).ListWebhooks(ctx, req.(*ListWebhooksRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_DeleteWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_DeleteWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteWebhookRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).DeleteWebhook(ctx, in)
+		return srv.(HobnobAdminServer).DeleteWebhook(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_DeleteWebhook_FullMethodName,
+		FullMethod: HobnobAdmin_DeleteWebhook_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).DeleteWebhook(ctx, req.(*DeleteWebhookRequest))
+		return srv.(HobnobAdminServer).DeleteWebhook(ctx, req.(*DeleteWebhookRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetComplianceSummaryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).GetComplianceSummary(ctx, in)
+		return srv.(HobnobAdminServer).GetComplianceSummary(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_GetComplianceSummary_FullMethodName,
+		FullMethod: HobnobAdmin_GetComplianceSummary_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).GetComplianceSummary(ctx, req.(*GetComplianceSummaryRequest))
+		return srv.(HobnobAdminServer).GetComplianceSummary(ctx, req.(*GetComplianceSummaryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_GetClientCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_GetClientCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetClientComplianceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).GetClientCompliance(ctx, in)
+		return srv.(HobnobAdminServer).GetClientCompliance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_GetClientCompliance_FullMethodName,
+		FullMethod: HobnobAdmin_GetClientCompliance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).GetClientCompliance(ctx, req.(*GetClientComplianceRequest))
+		return srv.(HobnobAdminServer).GetClientCompliance(ctx, req.(*GetClientComplianceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_Rollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RollbackRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).Rollback(ctx, in)
+		return srv.(HobnobAdminServer).Rollback(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_Rollback_FullMethodName,
+		FullMethod: HobnobAdmin_Rollback_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).Rollback(ctx, req.(*RollbackRequest))
+		return srv.(HobnobAdminServer).Rollback(ctx, req.(*RollbackRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ListPackages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ListPackages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPackagesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ListPackages(ctx, in)
+		return srv.(HobnobAdminServer).ListPackages(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ListPackages_FullMethodName,
+		FullMethod: HobnobAdmin_ListPackages_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ListPackages(ctx, req.(*ListPackagesRequest))
+		return srv.(HobnobAdminServer).ListPackages(ctx, req.(*ListPackagesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_ListPackageDrift_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_ListPackageDrift_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPackageDriftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).ListPackageDrift(ctx, in)
+		return srv.(HobnobAdminServer).ListPackageDrift(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_ListPackageDrift_FullMethodName,
+		FullMethod: HobnobAdmin_ListPackageDrift_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).ListPackageDrift(ctx, req.(*ListPackageDriftRequest))
+		return srv.(HobnobAdminServer).ListPackageDrift(ctx, req.(*ListPackageDriftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IsgovAdmin_PromoteEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _HobnobAdmin_PromoteEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PromoteEnvRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IsgovAdminServer).PromoteEnv(ctx, in)
+		return srv.(HobnobAdminServer).PromoteEnv(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: IsgovAdmin_PromoteEnv_FullMethodName,
+		FullMethod: HobnobAdmin_PromoteEnv_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IsgovAdminServer).PromoteEnv(ctx, req.(*PromoteEnvRequest))
+		return srv.(HobnobAdminServer).PromoteEnv(ctx, req.(*PromoteEnvRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// IsgovAdmin_ServiceDesc is the grpc.ServiceDesc for IsgovAdmin service.
+// HobnobAdmin_ServiceDesc is the grpc.ServiceDesc for HobnobAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var IsgovAdmin_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "isogov.v1.IsgovAdmin",
-	HandlerType: (*IsgovAdminServer)(nil),
+var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "hobnob.v1.HobnobAdmin",
+	HandlerType: (*HobnobAdminServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "AddApprovedPattern",
-			Handler:    _IsgovAdmin_AddApprovedPattern_Handler,
+			Handler:    _HobnobAdmin_AddApprovedPattern_Handler,
 		},
 		{
 			MethodName: "ListApprovedPatterns",
-			Handler:    _IsgovAdmin_ListApprovedPatterns_Handler,
+			Handler:    _HobnobAdmin_ListApprovedPatterns_Handler,
 		},
 		{
 			MethodName: "RevokeApprovedPattern",
-			Handler:    _IsgovAdmin_RevokeApprovedPattern_Handler,
+			Handler:    _HobnobAdmin_RevokeApprovedPattern_Handler,
 		},
 		{
 			MethodName: "ListClients",
-			Handler:    _IsgovAdmin_ListClients_Handler,
+			Handler:    _HobnobAdmin_ListClients_Handler,
 		},
 		{
 			MethodName: "GetClient",
-			Handler:    _IsgovAdmin_GetClient_Handler,
+			Handler:    _HobnobAdmin_GetClient_Handler,
 		},
 		{
 			MethodName: "RevokeClient",
-			Handler:    _IsgovAdmin_RevokeClient_Handler,
+			Handler:    _HobnobAdmin_RevokeClient_Handler,
 		},
 		{
 			MethodName: "ForcePush",
-			Handler:    _IsgovAdmin_ForcePush_Handler,
+			Handler:    _HobnobAdmin_ForcePush_Handler,
 		},
 		{
 			MethodName: "DryRun",
-			Handler:    _IsgovAdmin_DryRun_Handler,
+			Handler:    _HobnobAdmin_DryRun_Handler,
 		},
 		{
 			MethodName: "ListRuns",
-			Handler:    _IsgovAdmin_ListRuns_Handler,
+			Handler:    _HobnobAdmin_ListRuns_Handler,
 		},
 		{
 			MethodName: "GetRun",
-			Handler:    _IsgovAdmin_GetRun_Handler,
+			Handler:    _HobnobAdmin_GetRun_Handler,
 		},
 		{
 			MethodName: "GenerateToken",
-			Handler:    _IsgovAdmin_GenerateToken_Handler,
+			Handler:    _HobnobAdmin_GenerateToken_Handler,
 		},
 		{
 			MethodName: "ListAllRuns",
-			Handler:    _IsgovAdmin_ListAllRuns_Handler,
+			Handler:    _HobnobAdmin_ListAllRuns_Handler,
 		},
 		{
 			MethodName: "AddWebhook",
-			Handler:    _IsgovAdmin_AddWebhook_Handler,
+			Handler:    _HobnobAdmin_AddWebhook_Handler,
 		},
 		{
 			MethodName: "ListWebhooks",
-			Handler:    _IsgovAdmin_ListWebhooks_Handler,
+			Handler:    _HobnobAdmin_ListWebhooks_Handler,
 		},
 		{
 			MethodName: "DeleteWebhook",
-			Handler:    _IsgovAdmin_DeleteWebhook_Handler,
+			Handler:    _HobnobAdmin_DeleteWebhook_Handler,
 		},
 		{
 			MethodName: "GetComplianceSummary",
-			Handler:    _IsgovAdmin_GetComplianceSummary_Handler,
+			Handler:    _HobnobAdmin_GetComplianceSummary_Handler,
 		},
 		{
 			MethodName: "GetClientCompliance",
-			Handler:    _IsgovAdmin_GetClientCompliance_Handler,
+			Handler:    _HobnobAdmin_GetClientCompliance_Handler,
 		},
 		{
 			MethodName: "Rollback",
-			Handler:    _IsgovAdmin_Rollback_Handler,
+			Handler:    _HobnobAdmin_Rollback_Handler,
 		},
 		{
 			MethodName: "ListPackages",
-			Handler:    _IsgovAdmin_ListPackages_Handler,
+			Handler:    _HobnobAdmin_ListPackages_Handler,
 		},
 		{
 			MethodName: "ListPackageDrift",
-			Handler:    _IsgovAdmin_ListPackageDrift_Handler,
+			Handler:    _HobnobAdmin_ListPackageDrift_Handler,
 		},
 		{
 			MethodName: "PromoteEnv",
-			Handler:    _IsgovAdmin_PromoteEnv_Handler,
+			Handler:    _HobnobAdmin_PromoteEnv_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "isogov.proto",
+	Metadata: "hobnob.proto",
 }

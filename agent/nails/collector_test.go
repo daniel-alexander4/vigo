@@ -1,4 +1,4 @@
-package facts
+package nails
 
 import (
 	"context"
@@ -125,7 +125,7 @@ func TestOSCollector_ReturnsExpectedKeys(t *testing.T) {
 	expectedKeys := []string{"family", "distro", "version", "kernel", "arch"}
 	for _, key := range expectedKeys {
 		if _, ok := result[key]; !ok {
-			t.Errorf("missing key %q in OS facts", key)
+			t.Errorf("missing key %q in OS nails", key)
 		}
 	}
 

@@ -1,4 +1,4 @@
-module github.com/isogov/isogov
+module github.com/hobnob/hobnob
 
 go 1.25.0
 

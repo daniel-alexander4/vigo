@@ -39,7 +39,7 @@ func RenderTemplate(tmpl string, traits map[string]any, vars map[string]any) (st
 // available as .Traits. If varOrder is nil, all vars are still rendered but
 // in non-deterministic map order. Call this BEFORE resource attribute
 // rendering so that rendered vars are available to resource templates.
-func RenderVars(vars map[string]any, facts map[string]any, varOrder []string) (map[string]any, error) {
+func RenderVars(vars map[string]any, nails map[string]any, varOrder []string) (map[string]any, error) {
 	result := make(map[string]any, len(vars))
 	for k, v := range vars {
 		result[k] = v
@@ -64,7 +64,7 @@ func RenderVars(vars map[string]any, facts map[string]any, varOrder []string) (m
 		if !ok {
 			continue
 		}
-		rendered, err := RenderTemplate(strVal, facts, result)
+		rendered, err := RenderTemplate(strVal, nails, result)
 		if err != nil {
 			return nil, fmt.Errorf("rendering var %q: %w", k, err)
 		}

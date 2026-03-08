@@ -4,7 +4,7 @@ import (
 	"crypto/ed25519"
 	"testing"
 
-	"github.com/isogov/isogov/agent/auth"
+	"github.com/hobnob/hobnob/agent/auth"
 )
 
 func TestSignPayload(t *testing.T) {

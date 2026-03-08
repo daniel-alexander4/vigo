@@ -2,12 +2,12 @@ server:
   grpc_listen: ":9090"
   api_listen: ":8080"
   tls:
-    cert_file: "secret:isogov/tls/cert"
-    key_file: "secret:isogov/tls/key"
-    ca_file: "secret:isogov/tls/ca"
+    cert_file: "secret:hobnob/tls/cert"
+    key_file: "secret:hobnob/tls/key"
+    ca_file: "secret:hobnob/tls/ca"
 
 database:
-  dsn: "secret:isogov/db/dsn"
+  dsn: "secret:hobnob/db/dsn"
 
 checkin:
   base_interval: "30m"

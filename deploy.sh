@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Isogov deployment script — run on the Docker server after rsync.
-# Usage: cd /path/to/isogov && ./deploy.sh
+# Hobnob deployment script — run on the Docker server after rsync.
+# Usage: cd /path/to/hobnob && ./deploy.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-ISOGOV_DIR="/etc/isogov"
-CLIENT_CONFIGS_DIR="${ISOGOV_DIR}/client-configs"
-CERTS_DIR="${ISOGOV_DIR}/server-configs/certs"
+HOBNOB_DIR="/etc/hobnob"
+CLIENT_CONFIGS_DIR="${HOBNOB_DIR}/client-configs"
+CERTS_DIR="${HOBNOB_DIR}/server-configs/certs"
 MODULES_DIR="${CLIENT_CONFIGS_DIR}/modules"
 ROLES_DIR="${CLIENT_CONFIGS_DIR}/roles"
 TEMPLATES_DIR="${CLIENT_CONFIGS_DIR}/templates"
-SERVER_CONFIGS_DIR="${ISOGOV_DIR}/server-configs"
-ENV_FILE="${ISOGOV_DIR}/server-configs/.env"
+SERVER_CONFIGS_DIR="${HOBNOB_DIR}/server-configs"
+ENV_FILE="${HOBNOB_DIR}/server-configs/.env"
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -26,10 +26,10 @@ warn()  { printf '\033[1;33m[WARN]\033[0m  %s\n' "$*"; }
 fail()  { printf '\033[1;31m[FAIL]\033[0m  %s\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Step 1: Create /etc/isogov directory structure
+# Step 1: Create /etc/hobnob directory structure
 # ---------------------------------------------------------------------------
 
-info "Creating ${ISOGOV_DIR} directory structure"
+info "Creating ${HOBNOB_DIR} directory structure"
 
 sudo mkdir -p "$CLIENT_CONFIGS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "$CERTS_DIR"
 
@@ -65,47 +65,47 @@ if [ -f "$ENV_FILE" ]; then
 else
   sudo tee "$ENV_FILE" > /dev/null <<'ENVFILE'
 # =============================================================================
-# Isogov Environment Configuration
+# Hobnob Environment Configuration
 # =============================================================================
 # The StaticProvider reads these values to resolve secret: references in
 # server-configs/server.yaml. Every secret:path/to/key maps to an env var:
-#   secret:isogov/db/dsn  ->  ISOGOV_DB_DSN
-#   secret:isogov/tls/cert -> ISOGOV_TLS_CERT
+#   secret:hobnob/db/dsn  ->  HOBNOB_DB_DSN
+#   secret:hobnob/tls/cert -> HOBNOB_TLS_CERT
 # Rule: uppercase, slashes become underscores.
 #
 # REQUIRED — server will not start without these:
 # =============================================================================
 
-ISOGOV_DB_DSN=postgres://isogov:secret@postgres:5432/isogov?sslmode=disable
-ISOGOV_TLS_CERT=certs/server.crt
-ISOGOV_TLS_KEY=certs/server.key
-ISOGOV_TLS_CA=certs/ca.crt
+HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
+HOBNOB_TLS_CERT=certs/server.crt
+HOBNOB_TLS_KEY=certs/server.key
+HOBNOB_TLS_CA=certs/ca.crt
 
 # =============================================================================
 # OPTIONAL — uncomment and edit as needed:
 # =============================================================================
 
 # Server config file path (default: server-configs/server.yaml)
-# ISOGOV_CONFIG_FILE=server-configs/server.yaml
+# HOBNOB_CONFIG_FILE=server-configs/server.yaml
 
 # Client configs directory (default: client-configs)
-# ISOGOV_CLIENT_CONFIGS_DIR=client-configs
+# HOBNOB_CLIENT_CONFIGS_DIR=client-configs
 
 # Migrations directory (default: migrations)
-# ISOGOV_MIGRATIONS_DIR=migrations
+# HOBNOB_MIGRATIONS_DIR=migrations
 
 # Server version string reported to agents for self-update (default: dev)
-# ISOGOV_VERSION=1.0.0
+# HOBNOB_VERSION=1.0.0
 
 # Directory containing cross-compiled agent binaries for distribution
 # Used by GET /api/v1/agent/download/{os}/{arch} (default: dist/agent)
-# ISOGOV_AGENT_DIR=dist/agent
+# HOBNOB_AGENT_DIR=dist/agent
 
 # Webhook secret for HMAC-SHA256 payload signing
-# ISOGOV_WEBHOOK_SECRET=change-me-to-a-random-string
+# HOBNOB_WEBHOOK_SECRET=change-me-to-a-random-string
 
 # .env file path override (default: server-configs/.env)
-# ISOGOV_ENV_FILE=server-configs/.env
+# HOBNOB_ENV_FILE=server-configs/.env
 ENVFILE
   echo "${ENV_FILE} created with defaults"
 fi
@@ -113,13 +113,13 @@ fi
 ok ".env ready"
 
 # ---------------------------------------------------------------------------
-# Step 4: Copy config files to /etc/isogov/config
+# Step 4: Copy config files to /etc/hobnob/config
 # ---------------------------------------------------------------------------
 
 info "Populating ${CLIENT_CONFIGS_DIR}"
 
 # Server config
-SERVER_CONFIGS_DIR="${ISOGOV_DIR}/server-configs"
+SERVER_CONFIGS_DIR="${HOBNOB_DIR}/server-configs"
 sudo mkdir -p "$SERVER_CONFIGS_DIR"
 if [ -f "${SERVER_CONFIGS_DIR}/server.yaml" ]; then
   echo 'server.yaml already exists — skipping'
@@ -203,11 +203,11 @@ ok "Containers running"
 cat <<DONE
 
 ============================================================
-  Isogov deployed successfully
+  Hobnob deployed successfully
 ============================================================
 
-Config directory: ${ISOGOV_DIR}
-  ${ISOGOV_DIR}/server-configs/server.yaml
+Config directory: ${HOBNOB_DIR}
+  ${HOBNOB_DIR}/server-configs/server.yaml
   ${CLIENT_CONFIGS_DIR}/clients.yaml
   ${MODULES_DIR}/*.yaml
   ${ROLES_DIR}/*.yaml
@@ -218,7 +218,7 @@ Config directory: ${ISOGOV_DIR}
 Services:
   - PostgreSQL:  port 5432 (internal)
   - gRPC (mTLS): port 9090 (agent traffic)
-  - REST + UI:   port 8085 (gvctl, dashboard, bootstrap)
+  - REST + UI:   port 8085 (hobcli, dashboard, bootstrap)
 
 Next steps:
 
@@ -226,7 +226,7 @@ Next steps:
      http://<server-ip>:8080/
 
   2. Generate an enrollment token:
-     docker compose exec server gvctl tokens generate \\
+     docker compose exec server hobcli tokens generate \\
        --pattern "*.example.com"
 
   3. On each managed node, run the printed curl command:
@@ -238,8 +238,8 @@ Next steps:
   5. For production:
      - Replace ${CERTS_DIR}/ with real TLS certificates
      - Change POSTGRES_PASSWORD in docker-compose.yml + ${ENV_FILE}
-     - Set ISOGOV_WEBHOOK_SECRET in ${ENV_FILE}
-     - Set ISOGOV_VERSION to your release tag
+     - Set HOBNOB_WEBHOOK_SECRET in ${ENV_FILE}
+     - Set HOBNOB_VERSION to your release tag
 
 ============================================================
 DONE

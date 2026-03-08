@@ -8,17 +8,17 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/conditionals"
-	"github.com/isogov/isogov/server/config"
-	"github.com/isogov/isogov/server/metrics"
-	"github.com/isogov/isogov/server/registry"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/conditionals"
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/hobnob/hobnob/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// CheckIn handles the IsgovAgent.CheckIn RPC. It validates the client is not
-// revoked, looks up its configuration, renders templates with facts, and
+// CheckIn handles the HobnobAgent.CheckIn RPC. It validates the client is not
+// revoked, looks up its configuration, renders templates with nails, and
 // returns the compiled module list.
 func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
 	clientID, err := uuid.Parse(req.GetClientId())
@@ -53,22 +53,22 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// Resolve client config -- explicit YAML -> classification -> empty modules.
 	cfg := s.configStore.Get(client.Hostname)
 
-	// Load latest facts from DB for template rendering. If no facts exist yet
-	// (first check-in before ReportFacts), use an empty map.
-	facts := make(map[string]any)
-	latestFacts, err := s.queries.GetLatestClientFacts(ctx, clientID)
+	// Load latest nails from DB for template rendering. If no nails exist yet
+	// (first check-in before ReportNails), use an empty map.
+	nails := make(map[string]any)
+	latestFacts, err := s.queries.GetLatestClientNails(ctx, clientID)
 	if err == nil {
-		if err := json.Unmarshal(latestFacts.Facts, &facts); err != nil {
-			slog.Error("failed to unmarshal stored facts",
+		if err := json.Unmarshal(latestFacts.Nails, &nails); err != nil {
+			slog.Error("failed to unmarshal stored nails",
 				"client_id", clientID,
 				"error", err,
 			)
-			// Non-fatal: continue with empty facts.
-			facts = make(map[string]any)
+			// Non-fatal: continue with empty nails.
+			nails = make(map[string]any)
 		}
 	}
-	// If err != nil (e.g., no rows found), we continue with empty facts -- expected
-	// on first check-in before the agent has reported facts.
+	// If err != nil (e.g., no rows found), we continue with empty nails -- expected
+	// on first check-in before the agent has reported nails.
 	vars := cfg.Vars
 	if vars == nil {
 		vars = make(map[string]any)
@@ -77,17 +77,17 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// Evaluate conditional vars against client traits. Results are set as
 	// "true"/"false" strings in the vars map, inserted before regular vars
 	// in varOrder so they're available for Go template rendering.
-	vars, cfg.VarOrder = evaluateConditionalVars(cfg, facts, vars, cfg.VarOrder)
+	vars, cfg.VarOrder = evaluateConditionalVars(cfg, nails, vars, cfg.VarOrder)
 
-	// Render Go template syntax in var values (e.g., .Facts references)
+	// Render Go template syntax in var values (e.g., .Nails references)
 	// before resource attribute rendering so rendered vars are available.
-	vars, err = config.RenderVars(vars, facts, cfg.VarOrder)
+	vars, err = config.RenderVars(vars, nails, cfg.VarOrder)
 	if err != nil {
 		slog.Error("failed to render vars", "client_id", clientID, "error", err)
 		return nil, status.Errorf(codes.Internal, "rendering vars: %v", err)
 	}
 
-	modules, err := configToProtoModules(cfg, facts, vars)
+	modules, err := configToProtoModules(cfg, nails, vars)
 	if err != nil {
 		slog.Error("failed to compile modules", "client_id", clientID, "error", err)
 		return nil, status.Errorf(codes.Internal, "compiling modules: %v", err)
@@ -127,7 +127,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 // traits map and sets the result as a "true" or "false" string in the vars map.
 // Conditional var names are prepended to varOrder so they are available for
 // template rendering in regular vars.
-func evaluateConditionalVars(cfg *config.ClientConfig, facts, vars map[string]any, varOrder []string) (map[string]any, []string) {
+func evaluateConditionalVars(cfg *config.ClientConfig, nails, vars map[string]any, varOrder []string) (map[string]any, []string) {
 	if len(cfg.ConditionalVars) == 0 {
 		return vars, varOrder
 	}
@@ -135,7 +135,7 @@ func evaluateConditionalVars(cfg *config.ClientConfig, facts, vars map[string]an
 	// Prepend conditional var names to varOrder so they render first.
 	var condNames []string
 	for _, cv := range cfg.ConditionalVars {
-		result := conditionals.Evaluate(cv, facts)
+		result := conditionals.Evaluate(cv, nails)
 		if result {
 			vars[cv.Name] = "true"
 		} else {
@@ -153,8 +153,8 @@ func evaluateConditionalVars(cfg *config.ClientConfig, facts, vars map[string]an
 }
 
 // configToProtoModules converts a ClientConfig's modules into proto Module
-// messages, rendering any Go template strings with the provided facts and vars.
-func configToProtoModules(cfg *config.ClientConfig, facts, vars map[string]any) ([]*pb.Module, error) {
+// messages, rendering any Go template strings with the provided nails and vars.
+func configToProtoModules(cfg *config.ClientConfig, nails, vars map[string]any) ([]*pb.Module, error) {
 	if len(cfg.Modules) == 0 {
 		return nil, nil
 	}
@@ -173,9 +173,14 @@ func configToProtoModules(cfg *config.ClientConfig, facts, vars map[string]any) 
 		}
 
 		for _, res := range mod.Resources {
-			// Evaluate resource conditionals server-side. Skipped resources
-			// are excluded from the proto response entirely.
-			if !config.ShouldRunResource(res, vars) {
+			// Evaluate resource when expression. Server-side filtering removes
+			// resources that are definitively false. Expressions with builtins
+			// that can't be resolved server-side are passed to the agent.
+			shouldInclude, agentWhen, err := config.EvaluateResourceWhen(res.When, vars)
+			if err != nil {
+				return nil, fmt.Errorf("evaluating when for resource %q: %w", res.Name, err)
+			}
+			if !shouldInclude {
 				continue
 			}
 
@@ -183,7 +188,7 @@ func configToProtoModules(cfg *config.ClientConfig, facts, vars map[string]any) 
 			for k, v := range res.Attributes {
 				strVal := fmt.Sprintf("%v", v)
 				// Render template if it contains Go template syntax.
-				rendered, err := config.RenderTemplate(strVal, facts, vars)
+				rendered, err := config.RenderTemplate(strVal, nails, vars)
 				if err != nil {
 					return nil, fmt.Errorf("rendering template for resource %q attr %q: %w",
 						res.Name, k, err)
@@ -195,6 +200,9 @@ func configToProtoModules(cfg *config.ClientConfig, facts, vars map[string]any) 
 				Name:   res.Name,
 				Type:   res.Type,
 				Params: params,
+			}
+			if agentWhen != "" {
+				pbRes.When = agentWhen
 			}
 			pbMod.Resources = append(pbMod.Resources, pbRes)
 

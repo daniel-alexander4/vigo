@@ -142,7 +142,7 @@ func (a *ArchiveExecutor) handlePresent(ctx context.Context, params map[string]s
 	}
 
 	// Download to temp file.
-	tmpDir, err := os.MkdirTemp("", "isogov-archive-*")
+	tmpDir, err := os.MkdirTemp("", "hobnob-archive-*")
 	if err != nil {
 		result.Error = fmt.Errorf("create temp dir: %w", err)
 		return result

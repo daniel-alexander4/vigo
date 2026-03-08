@@ -39,7 +39,7 @@ clients:
     environment: production
     modules: [redis]
     vars:
-      redis_password: "secret:isogov/redis/password"
+      redis_password: "secret:hobnob/redis/password"
     env_vars:
       production:
         redis_maxmemory: "4gb"
@@ -60,7 +60,7 @@ clients:
     environment: production
     modules: [haproxy]
     vars:
-      haproxy_stats_password: "secret:isogov/haproxy/stats-password"
+      haproxy_stats_password: "secret:hobnob/haproxy/stats-password"
 
   - match: "bastion01.example.com"
     environment: production
@@ -70,7 +70,7 @@ clients:
     environment: production
     modules: [mysql]
     vars:
-      mysql_root_password: "secret:isogov/mysql/root-password"
+      mysql_root_password: "secret:hobnob/mysql/root-password"
     env_vars:
       production:
         mysql_max_connections: "500"

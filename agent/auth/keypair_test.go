@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/isogov/isogov/agent/auth"
+	"github.com/hobnob/hobnob/agent/auth"
 )
 
 func TestGenerateKeypair(t *testing.T) {

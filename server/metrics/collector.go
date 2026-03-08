@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/isogov/isogov/server/db"
+	"github.com/hobnob/hobnob/server/db"
 )
 
 // Collector periodically queries the database to update gauge metrics.

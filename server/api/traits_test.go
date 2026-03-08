@@ -39,7 +39,7 @@ func (r *mockRow) Scan(dest ...any) error {
 }
 
 func TestTraitsHandler_Success(t *testing.T) {
-	// Mock: GetClientByHostname returns a client, GetLatestClientFacts returns facts.
+	// Mock: GetClientByHostname returns a client, GetLatestClientNails returns nails.
 	callCount := 0
 	collectedAt := time.Date(2026, 3, 7, 10, 30, 0, 0, time.UTC)
 	mockDB := &mockDBTX{
@@ -53,9 +53,9 @@ func TestTraitsHandler_Success(t *testing.T) {
 					return nil
 				}}
 			}
-			// GetLatestClientFacts
+			// GetLatestClientNails
 			return &mockRow{scanFn: func(dest ...any) error {
-				// id, client_id, facts, collected_at
+				// id, client_id, nails, collected_at
 				*dest[2].(*json.RawMessage) = json.RawMessage(`{"os":{"distro":"ubuntu","version":"22.04"}}`)
 				*dest[3].(*time.Time) = collectedAt
 				return nil
@@ -156,7 +156,7 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 					return nil
 				}}
 			}
-			// GetLatestClientFacts returns no rows
+			// GetLatestClientNails returns no rows
 			return &mockRow{scanFn: func(dest ...any) error {
 				return pgx.ErrNoRows
 			}}

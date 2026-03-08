@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package isogov.v1;
+package hobnob.v1;
 
-option go_package = "github.com/isogov/isogov/gen/proto/isogov";
+option go_package = "github.com/hobnob/hobnob/gen/proto/hobnob";
 
 import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
@@ -11,7 +11,7 @@ import "google/api/annotations.proto";
 // Agent-facing service (gRPC-only, port 9090)
 // =============================================================================
 
-service IsgovAgent {
+service HobnobAgent {
   // Register enrolls a new agent with the server using hostname, IP, pubkey, and one-time token.
   rpc Register(RegisterRequest) returns (RegisterResponse);
 
@@ -21,8 +21,8 @@ service IsgovAgent {
   // ReportResult submits per-module execution results after a run.
   rpc ReportResult(ReportResultRequest) returns (ReportResultResponse);
 
-  // ReportFacts submits collected facts from the agent.
-  rpc ReportFacts(ReportFactsRequest) returns (ReportFactsResponse);
+  // ReportNails submits collected nails from the agent.
+  rpc ReportNails(ReportNailsRequest) returns (ReportNailsResponse);
 
   // DownloadCustomTrait retrieves a custom trait executable by name.
   rpc DownloadCustomTrait(DownloadCustomTraitRequest) returns (DownloadCustomTraitResponse);
@@ -32,7 +32,7 @@ service IsgovAgent {
 // Admin-facing service (gRPC + grpc-gateway REST, port 8080)
 // =============================================================================
 
-service IsgovAdmin {
+service HobnobAdmin {
   // AddApprovedPattern adds a hostname/IP wildcard pattern with a one-time token.
   rpc AddApprovedPattern(AddApprovedPatternRequest) returns (AddApprovedPatternResponse) {
     option (google.api.http) = {
@@ -250,6 +250,7 @@ message Resource {
   string name = 1;
   string type = 2;            // file, package, service, user
   map<string, string> params = 3;
+  string when = 4;            // when expression for agent-side eval (builtins)
 }
 
 message ReportResultRequest {
@@ -274,14 +275,14 @@ message ReportResultResponse {
   bool acknowledged = 1;
 }
 
-message ReportFactsRequest {
+message ReportNailsRequest {
   string client_id = 1;
-  bytes facts_json = 2;       // JSON-encoded facts map
+  bytes nails_json = 2;       // JSON-encoded nails map
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
 }
 
-message ReportFactsResponse {
+message ReportNailsResponse {
   bool acknowledged = 1;
 }
 

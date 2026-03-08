@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/isogov/isogov/server/db"
+	"github.com/hobnob/hobnob/server/db"
 )
 
 func TestHMACSigning(t *testing.T) {
@@ -114,25 +114,25 @@ func TestDispatchSendsCorrectHeaders(t *testing.T) {
 		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 
-	// Check X-Isogov-Event.
-	if ev := receivedHeaders.Get("X-Isogov-Event"); ev != "run.success" {
-		t.Errorf("X-Isogov-Event = %q, want run.success", ev)
+	// Check X-Hobnob-Event.
+	if ev := receivedHeaders.Get("X-Hobnob-Event"); ev != "run.success" {
+		t.Errorf("X-Hobnob-Event = %q, want run.success", ev)
 	}
 
-	// Check X-Isogov-Signature format and correctness.
-	sig := receivedHeaders.Get("X-Isogov-Signature")
+	// Check X-Hobnob-Signature format and correctness.
+	sig := receivedHeaders.Get("X-Hobnob-Signature")
 	if sig == "" {
-		t.Fatal("X-Isogov-Signature header missing")
+		t.Fatal("X-Hobnob-Signature header missing")
 	}
 
 	const prefix = "sha256="
 	if len(sig) <= len(prefix) || sig[:len(prefix)] != prefix {
-		t.Fatalf("X-Isogov-Signature should start with %q, got %q", prefix, sig)
+		t.Fatalf("X-Hobnob-Signature should start with %q, got %q", prefix, sig)
 	}
 
 	expectedSig := sign(secret, receivedBody)
 	if sig != prefix+expectedSig {
-		t.Errorf("X-Isogov-Signature = %q, want %q", sig, prefix+expectedSig)
+		t.Errorf("X-Hobnob-Signature = %q, want %q", sig, prefix+expectedSig)
 	}
 }
 

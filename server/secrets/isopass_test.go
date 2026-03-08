@@ -65,11 +65,11 @@ func mockIsopassServer(t *testing.T) *httptest.Server {
 		json.NewDecoder(r.Body).Decode(&body)
 
 		secrets := map[string][]map[string]any{
-			"isogov/db/dsn": {
-				{"id": "secret-1", "name": "isogov/db/dsn", "value": "postgres://user:pass@localhost/isogov"},
+			"hobnob/db/dsn": {
+				{"id": "secret-1", "name": "hobnob/db/dsn", "value": "postgres://user:pass@localhost/hobnob"},
 			},
-			"isogov/tls/cert": {
-				{"id": "secret-2", "name": "isogov/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB..."},
+			"hobnob/tls/cert": {
+				{"id": "secret-2", "name": "hobnob/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB..."},
 			},
 		}
 
@@ -112,9 +112,9 @@ func TestIsopassGet(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	val, err := p.Get(context.Background(), "isogov/db/dsn")
+	val, err := p.Get(context.Background(), "hobnob/db/dsn")
 	require.NoError(t, err)
-	assert.Equal(t, "postgres://user:pass@localhost/isogov", val)
+	assert.Equal(t, "postgres://user:pass@localhost/hobnob", val)
 }
 
 func TestIsopassGetNotFound(t *testing.T) {
@@ -138,7 +138,7 @@ func TestIsopassGetBytes(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	val, err := p.GetBytes(context.Background(), "isogov/tls/cert")
+	val, err := p.GetBytes(context.Background(), "hobnob/tls/cert")
 	require.NoError(t, err)
 	assert.Equal(t, []byte("-----BEGIN CERTIFICATE-----\nMIIB..."), val)
 }
@@ -151,7 +151,7 @@ func TestIsopassGetVersion(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	ver, err := p.GetVersion(context.Background(), "isogov/db/dsn")
+	ver, err := p.GetVersion(context.Background(), "hobnob/db/dsn")
 	require.NoError(t, err)
 	assert.Equal(t, 2, ver)
 }
@@ -165,11 +165,11 @@ func TestIsopassTokenExchange(t *testing.T) {
 	defer p.Close()
 
 	// First call should trigger token exchange.
-	_, err = p.Get(context.Background(), "isogov/db/dsn")
+	_, err = p.Get(context.Background(), "hobnob/db/dsn")
 	require.NoError(t, err)
 
 	// Second call should reuse token (no re-exchange).
-	_, err = p.Get(context.Background(), "isogov/db/dsn")
+	_, err = p.Get(context.Background(), "hobnob/db/dsn")
 	require.NoError(t, err)
 }
 
@@ -188,9 +188,9 @@ func TestIsopassTokenRenewalOnExpiry(t *testing.T) {
 	p.mu.Unlock()
 
 	// Call should trigger a new token exchange.
-	val, err := p.Get(context.Background(), "isogov/db/dsn")
+	val, err := p.Get(context.Background(), "hobnob/db/dsn")
 	require.NoError(t, err)
-	assert.Equal(t, "postgres://user:pass@localhost/isogov", val)
+	assert.Equal(t, "postgres://user:pass@localhost/hobnob", val)
 }
 
 func TestIsopassAuthFailure(t *testing.T) {
@@ -201,7 +201,7 @@ func TestIsopassAuthFailure(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	_, err = p.Get(context.Background(), "isogov/db/dsn")
+	_, err = p.Get(context.Background(), "hobnob/db/dsn")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication failed")
 }
@@ -211,6 +211,6 @@ func TestIsopassUnreachable(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	_, err = p.Get(context.Background(), "isogov/db/dsn")
+	_, err = p.Get(context.Background(), "hobnob/db/dsn")
 	require.Error(t, err)
 }

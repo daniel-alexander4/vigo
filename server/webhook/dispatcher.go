@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/isogov/isogov/server/db"
+	"github.com/hobnob/hobnob/server/db"
 )
 
 // EventPayload is the JSON body sent to webhook endpoints.
@@ -102,8 +102,8 @@ func (d *Dispatcher) deliver(wh db.Webhook, event string, body []byte) {
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Isogov-Signature", signature)
-		req.Header.Set("X-Isogov-Event", event)
+		req.Header.Set("X-Hobnob-Signature", signature)
+		req.Header.Set("X-Hobnob-Event", event)
 
 		resp, err := d.httpClient.Do(req)
 		if err != nil {

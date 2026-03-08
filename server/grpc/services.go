@@ -3,17 +3,17 @@ package grpc
 import (
 	"time"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/config"
-	"github.com/isogov/isogov/server/db"
-	"github.com/isogov/isogov/server/registry"
-	"github.com/isogov/isogov/server/traits"
-	"github.com/isogov/isogov/server/webhook"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/registry"
+	"github.com/hobnob/hobnob/server/traits"
+	"github.com/hobnob/hobnob/server/webhook"
 )
 
-// AgentService implements the IsgovAgent gRPC service.
+// AgentService implements the HobnobAgent gRPC service.
 type AgentService struct {
-	pb.UnimplementedIsgovAgentServer
+	pb.UnimplementedHobnobAgentServer
 	registry       *registry.Registry
 	configStore    *config.ConfigStore
 	queries        *db.Queries
@@ -21,9 +21,9 @@ type AgentService struct {
 	traitsScanner  *traits.Scanner
 }
 
-// AdminService implements the IsgovAdmin gRPC service.
+// AdminService implements the HobnobAdmin gRPC service.
 type AdminService struct {
-	pb.UnimplementedIsgovAdminServer
+	pb.UnimplementedHobnobAdminServer
 	registry     *registry.Registry
 	queries      *db.Queries
 	configStore  *config.ConfigStore

@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

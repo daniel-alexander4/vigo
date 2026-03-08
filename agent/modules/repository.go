@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/isogov/isogov/agent/modules/pkgmgr"
+	"github.com/hobnob/hobnob/agent/modules/pkgmgr"
 )
 
 // RepositoryExecutor manages package repository resources idempotently.

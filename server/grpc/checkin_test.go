@@ -3,8 +3,8 @@ package grpc
 import (
 	"testing"
 
-	"github.com/isogov/isogov/server/conditionals"
-	"github.com/isogov/isogov/server/config"
+	"github.com/hobnob/hobnob/server/conditionals"
+	"github.com/hobnob/hobnob/server/config"
 )
 
 func TestEvaluateConditionalVarsMatch(t *testing.T) {
@@ -15,22 +15,22 @@ func TestEvaluateConditionalVarsMatch(t *testing.T) {
 			{
 				Name:     "is_debian",
 				Trait:    "os.distro",
-				Operator: "only",
+				Operator: "in",
 				Operand:  []any{"debian", "ubuntu"},
 			},
 		},
 	}
 
-	facts := map[string]any{
+	nails := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
 	}
 
 	vars := map[string]any{"port": "8080"}
 	varOrder := []string{"port"}
 
-	vars, varOrder = evaluateConditionalVars(cfg, facts, vars, varOrder)
+	vars, varOrder = evaluateConditionalVars(cfg, nails, vars, varOrder)
 
-	// Should set is_debian to "true" since ubuntu is in the only list.
+	// Should set is_debian to "true" since ubuntu is in the list.
 	val, ok := vars["is_debian"]
 	if !ok {
 		t.Fatal("expected 'is_debian' in vars map")
@@ -63,20 +63,20 @@ func TestEvaluateConditionalVarsNoMatch(t *testing.T) {
 			{
 				Name:     "is_debian",
 				Trait:    "os.distro",
-				Operator: "only",
+				Operator: "in",
 				Operand:  []any{"debian", "ubuntu"},
 			},
 		},
 	}
 
-	facts := map[string]any{
+	nails := map[string]any{
 		"os": map[string]any{"distro": "centos"},
 	}
 
 	vars := make(map[string]any)
 	varOrder := []string{}
 
-	vars, varOrder = evaluateConditionalVars(cfg, facts, vars, varOrder)
+	vars, varOrder = evaluateConditionalVars(cfg, nails, vars, varOrder)
 
 	val, ok := vars["is_debian"]
 	if !ok {
@@ -93,7 +93,7 @@ func TestEvaluateConditionalVarsMultiple(t *testing.T) {
 			{
 				Name:     "is_debian",
 				Trait:    "os.distro",
-				Operator: "only",
+				Operator: "in",
 				Operand:  []any{"debian", "ubuntu"},
 			},
 			{
@@ -105,7 +105,7 @@ func TestEvaluateConditionalVarsMultiple(t *testing.T) {
 		},
 	}
 
-	facts := map[string]any{
+	nails := map[string]any{
 		"os":       map[string]any{"distro": "ubuntu"},
 		"hardware": map[string]any{"memory_mb": float64(8192)},
 	}
@@ -113,7 +113,7 @@ func TestEvaluateConditionalVarsMultiple(t *testing.T) {
 	vars := make(map[string]any)
 	varOrder := []string{}
 
-	vars, varOrder = evaluateConditionalVars(cfg, facts, vars, varOrder)
+	vars, varOrder = evaluateConditionalVars(cfg, nails, vars, varOrder)
 
 	if vars["is_debian"] != "true" {
 		t.Errorf("is_debian = %q, want 'true'", vars["is_debian"])
@@ -128,17 +128,17 @@ func TestEvaluateConditionalVarsMultiple(t *testing.T) {
 	}
 }
 
-func TestConfigToProtoModulesGoIfAllPass(t *testing.T) {
+func TestConfigToProtoModulesWhenTrue(t *testing.T) {
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
 				Name: "nginx",
 				Resources: []config.ResourceConfig{
 					{
-						Name:        "install-nginx",
-						Type:        "package",
-						GoIfAllPass: config.StringOrSlice{"is_debian"},
-						Attributes:  map[string]any{"name": "nginx"},
+						Name:       "install-nginx",
+						Type:       "package",
+						When:       "is_debian",
+						Attributes: map[string]any{"name": "nginx"},
 					},
 				},
 			},
@@ -169,17 +169,17 @@ func TestConfigToProtoModulesGoIfAllPass(t *testing.T) {
 	}
 }
 
-func TestConfigToProtoModulesSkipIfAnyPass(t *testing.T) {
+func TestConfigToProtoModulesWhenNot(t *testing.T) {
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
 				Name: "linux-tools",
 				Resources: []config.ResourceConfig{
 					{
-						Name:          "install-tool",
-						Type:          "package",
-						SkipIfAnyPass: config.StringOrSlice{"is_windows"},
-						Attributes:    map[string]any{"name": "htop"},
+						Name:       "install-tool",
+						Type:       "package",
+						When:       "not is_windows",
+						Attributes: map[string]any{"name": "htop"},
 					},
 				},
 			},
@@ -217,16 +217,16 @@ func TestConfigToProtoModulesEmptyModuleExcluded(t *testing.T) {
 				Name: "all-skipped",
 				Resources: []config.ResourceConfig{
 					{
-						Name:        "res-a",
-						Type:        "file",
-						GoIfAllPass: config.StringOrSlice{"never_true"},
-						Attributes:  map[string]any{"content": "a"},
+						Name:       "res-a",
+						Type:       "file",
+						When:       "never_true",
+						Attributes: map[string]any{"content": "a"},
 					},
 					{
-						Name:        "res-b",
-						Type:        "file",
-						GoIfAllPass: config.StringOrSlice{"never_true"},
-						Attributes:  map[string]any{"content": "b"},
+						Name:       "res-b",
+						Type:       "file",
+						When:       "never_true",
+						Attributes: map[string]any{"content": "b"},
 					},
 				},
 			},
@@ -292,24 +292,23 @@ func TestConfigToProtoModulesNoConditionalsPassThrough(t *testing.T) {
 // --- Conditional Block Check-In Pipeline Tests ---
 
 func TestConditionalBlockAllResourcesIncludedWhenConditionTrue(t *testing.T) {
-	// Simulates a module with resources that came from a conditional_block
-	// flattening. Block condition go_if_all_pass: [is_debian] is true.
+	// Simulates a module with resources that have when: is_debian.
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
 				Name: "debian-tools",
 				Resources: []config.ResourceConfig{
 					{
-						Name:        "install-apt-utils",
-						Type:        "package",
-						GoIfAllPass: config.StringOrSlice{"is_debian"},
-						Attributes:  map[string]any{"name": "apt-utils"},
+						Name:       "install-apt-utils",
+						Type:       "package",
+						When:       "is_debian",
+						Attributes: map[string]any{"name": "apt-utils"},
 					},
 					{
-						Name:        "apt-update",
-						Type:        "exec",
-						GoIfAllPass: config.StringOrSlice{"is_debian"},
-						Attributes:  map[string]any{"command": "apt-get update"},
+						Name:       "apt-update",
+						Type:       "exec",
+						When:       "is_debian",
+						Attributes: map[string]any{"command": "apt-get update"},
 					},
 				},
 			},
@@ -336,24 +335,24 @@ func TestConditionalBlockAllResourcesIncludedWhenConditionTrue(t *testing.T) {
 }
 
 func TestConditionalBlockAllResourcesExcludedWhenConditionFalse(t *testing.T) {
-	// Block condition go_if_all_pass: [is_debian] is false -- all block
-	// resources should be excluded, module should be excluded entirely.
+	// when: is_debian is false -- all resources should be excluded,
+	// module should be excluded entirely.
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
 				Name: "debian-tools",
 				Resources: []config.ResourceConfig{
 					{
-						Name:        "install-apt-utils",
-						Type:        "package",
-						GoIfAllPass: config.StringOrSlice{"is_debian"},
-						Attributes:  map[string]any{"name": "apt-utils"},
+						Name:       "install-apt-utils",
+						Type:       "package",
+						When:       "is_debian",
+						Attributes: map[string]any{"name": "apt-utils"},
 					},
 					{
-						Name:        "apt-update",
-						Type:        "exec",
-						GoIfAllPass: config.StringOrSlice{"is_debian"},
-						Attributes:  map[string]any{"command": "apt-get update"},
+						Name:       "apt-update",
+						Type:       "exec",
+						When:       "is_debian",
+						Attributes: map[string]any{"command": "apt-get update"},
 					},
 				},
 			},
@@ -371,25 +370,24 @@ func TestConditionalBlockAllResourcesExcludedWhenConditionFalse(t *testing.T) {
 }
 
 func TestConditionalBlockResourceLevelSkipOverridesBlockPass(t *testing.T) {
-	// Block go_if_all_pass: [is_debian] passes, but resource has
-	// skip_if_any_pass: [is_container] which also passes -- resource excluded.
+	// Resource has when: "is_debian and not is_container".
+	// is_container passes -- resource excluded.
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
 				Name: "debian-desktop",
 				Resources: []config.ResourceConfig{
 					{
-						Name:          "desktop-tool",
-						Type:          "package",
-						GoIfAllPass:   config.StringOrSlice{"is_debian"},
-						SkipIfAnyPass: config.StringOrSlice{"is_container"},
-						Attributes:    map[string]any{"name": "desktop-tool"},
+						Name:       "desktop-tool",
+						Type:       "package",
+						When:       "is_debian and not is_container",
+						Attributes: map[string]any{"name": "desktop-tool"},
 					},
 					{
-						Name:        "apt-update",
-						Type:        "exec",
-						GoIfAllPass: config.StringOrSlice{"is_debian"},
-						Attributes:  map[string]any{"command": "apt-get update"},
+						Name:       "apt-update",
+						Type:       "exec",
+						When:       "is_debian",
+						Attributes: map[string]any{"command": "apt-get update"},
 					},
 				},
 			},
@@ -441,11 +439,11 @@ func TestConditionalBlockDependsOnFromNonBlockToBlockResource(t *testing.T) {
 						Attributes: map[string]any{"command": "add-repo"},
 					},
 					{
-						Name:        "install-tool",
-						Type:        "package",
-						GoIfAllPass: config.StringOrSlice{"is_debian"},
-						DependsOn:   []string{"setup-repo"},
-						Attributes:  map[string]any{"name": "my-tool"},
+						Name:       "install-tool",
+						Type:       "package",
+						When:       "is_debian",
+						DependsOn:  []string{"setup-repo"},
+						Attributes: map[string]any{"name": "my-tool"},
 					},
 				},
 			},
@@ -473,12 +471,12 @@ func TestConditionalBlockDependsOnFromNonBlockToBlockResource(t *testing.T) {
 
 // --- Module-Level Conditional Tests ---
 
-func TestConfigToProtoModulesModuleGoIfAllPassTrue(t *testing.T) {
+func TestConfigToProtoModulesModuleWhenTrue(t *testing.T) {
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
-				Name:        "nginx",
-				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Name: "nginx",
+				When: "is_debian",
 				Resources: []config.ResourceConfig{
 					{
 						Name:       "install-nginx",
@@ -506,12 +504,12 @@ func TestConfigToProtoModulesModuleGoIfAllPassTrue(t *testing.T) {
 	}
 }
 
-func TestConfigToProtoModulesModuleGoIfAllPassFalse(t *testing.T) {
+func TestConfigToProtoModulesModuleWhenFalse(t *testing.T) {
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
-				Name:        "nginx",
-				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Name: "nginx",
+				When: "is_debian",
 				Resources: []config.ResourceConfig{
 					{
 						Name:       "install-nginx",
@@ -533,12 +531,12 @@ func TestConfigToProtoModulesModuleGoIfAllPassFalse(t *testing.T) {
 	}
 }
 
-func TestConfigToProtoModulesModuleSkipIfAnyPassTrue(t *testing.T) {
+func TestConfigToProtoModulesModuleWhenNotTrue(t *testing.T) {
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
-				Name:          "desktop-tools",
-				SkipIfAnyPass: config.StringOrSlice{"is_container"},
+				Name: "desktop-tools",
+				When: "not is_container",
 				Resources: []config.ResourceConfig{
 					{
 						Name:       "install-gui",
@@ -556,7 +554,7 @@ func TestConfigToProtoModulesModuleSkipIfAnyPassTrue(t *testing.T) {
 		t.Fatalf("configToProtoModules: %v", err)
 	}
 	if len(modules) != 0 {
-		t.Errorf("expected 0 modules (skip_if_any_pass triggered), got %d", len(modules))
+		t.Errorf("expected 0 modules (when: not is_container triggered), got %d", len(modules))
 	}
 }
 
@@ -592,8 +590,8 @@ func TestConfigToProtoModulesModuleMixedConditionals(t *testing.T) {
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
-				Name:        "nginx",
-				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Name: "nginx",
+				When: "is_debian",
 				Resources: []config.ResourceConfig{
 					{
 						Name:       "install-nginx",
@@ -633,14 +631,14 @@ func TestConfigToProtoModulesModulePassesButResourceFiltered(t *testing.T) {
 	cfg := &config.ClientConfig{
 		Modules: []config.ModuleConfig{
 			{
-				Name:        "tools",
-				GoIfAllPass: config.StringOrSlice{"is_debian"},
+				Name: "tools",
+				When: "is_debian",
 				Resources: []config.ResourceConfig{
 					{
-						Name:          "desktop-tool",
-						Type:          "package",
-						SkipIfAnyPass: config.StringOrSlice{"is_container"},
-						Attributes:    map[string]any{"name": "desktop-tool"},
+						Name:       "desktop-tool",
+						Type:       "package",
+						When:       "not is_container",
+						Attributes: map[string]any{"name": "desktop-tool"},
 					},
 					{
 						Name:       "cli-tool",
@@ -677,13 +675,13 @@ func TestEvaluateConditionalVarsBeforeRenderVars(t *testing.T) {
 			{
 				Name:     "is_ubuntu",
 				Trait:    "os.distro",
-				Operator: "only",
+				Operator: "in",
 				Operand:  []any{"ubuntu"},
 			},
 		},
 	}
 
-	facts := map[string]any{
+	nails := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
 	}
 
@@ -692,7 +690,7 @@ func TestEvaluateConditionalVarsBeforeRenderVars(t *testing.T) {
 	}
 	varOrder := []string{"greeting"}
 
-	vars, varOrder = evaluateConditionalVars(cfg, facts, vars, varOrder)
+	vars, varOrder = evaluateConditionalVars(cfg, nails, vars, varOrder)
 
 	// is_ubuntu should appear BEFORE greeting in varOrder so that
 	// RenderVars can use it in template rendering.

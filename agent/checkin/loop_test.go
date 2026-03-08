@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/isogov/isogov/agent/modules"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/hobnob/hobnob/agent/modules"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"google.golang.org/grpc"
 )
 
@@ -107,13 +107,13 @@ func TestResultsToProto(t *testing.T) {
 	}
 }
 
-// mockAgentClient implements pb.IsgovAgentClient for testing.
+// mockAgentClient implements pb.HobnobAgentClient for testing.
 type mockAgentClient struct {
 	checkInResp  *pb.CheckInResponse
 	checkInErr   error
 	reportCalled bool
-	factsCalled  bool
-	factsErr     error
+	nailsCalled  bool
+	nailsErr     error
 }
 
 func (m *mockAgentClient) Register(_ context.Context, _ *pb.RegisterRequest, _ ...grpc.CallOption) (*pb.RegisterResponse, error) {
@@ -129,9 +129,9 @@ func (m *mockAgentClient) ReportResult(_ context.Context, _ *pb.ReportResultRequ
 	return &pb.ReportResultResponse{Acknowledged: true}, nil
 }
 
-func (m *mockAgentClient) ReportFacts(_ context.Context, _ *pb.ReportFactsRequest, _ ...grpc.CallOption) (*pb.ReportFactsResponse, error) {
-	m.factsCalled = true
-	return &pb.ReportFactsResponse{Acknowledged: true}, m.factsErr
+func (m *mockAgentClient) ReportNails(_ context.Context, _ *pb.ReportNailsRequest, _ ...grpc.CallOption) (*pb.ReportNailsResponse, error) {
+	m.nailsCalled = true
+	return &pb.ReportNailsResponse{Acknowledged: true}, m.nailsErr
 }
 
 func (m *mockAgentClient) DownloadCustomTrait(_ context.Context, _ *pb.DownloadCustomTraitRequest, _ ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
@@ -158,9 +158,9 @@ func TestRunOnce_DryRun_DoesNotCallReportResult(t *testing.T) {
 
 	client := newMockClient(mock)
 	executors := map[string]modules.Executor{}
-	factsMap := map[string]any{}
+	nailsMap := map[string]any{}
 
-	result, err := RunOnce(context.Background(), client, executors, factsMap, true, "")
+	result, err := RunOnce(context.Background(), client, executors, nailsMap, true, "")
 	if err != nil {
 		t.Fatalf("RunOnce dry-run: %v", err)
 	}
@@ -185,9 +185,9 @@ func TestRunOnce_ReportsResults(t *testing.T) {
 
 	client := newMockClient(mock)
 	executors := map[string]modules.Executor{}
-	factsMap := map[string]any{}
+	nailsMap := map[string]any{}
 
-	_, err := RunOnce(context.Background(), client, executors, factsMap, false, "")
+	_, err := RunOnce(context.Background(), client, executors, nailsMap, false, "")
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestLoop_BackoffOnError_DoesNotCrash(t *testing.T) {
 
 // countingMockAgent wraps a mock to count CheckIn calls.
 type countingMockAgent struct {
-	inner     pb.IsgovAgentClient
+	inner     pb.HobnobAgentClient
 	callCount *int
 }
 
@@ -311,8 +311,8 @@ func (c *countingMockAgent) ReportResult(ctx context.Context, req *pb.ReportResu
 	return c.inner.ReportResult(ctx, req, opts...)
 }
 
-func (c *countingMockAgent) ReportFacts(ctx context.Context, req *pb.ReportFactsRequest, opts ...grpc.CallOption) (*pb.ReportFactsResponse, error) {
-	return c.inner.ReportFacts(ctx, req, opts...)
+func (c *countingMockAgent) ReportNails(ctx context.Context, req *pb.ReportNailsRequest, opts ...grpc.CallOption) (*pb.ReportNailsResponse, error) {
+	return c.inner.ReportNails(ctx, req, opts...)
 }
 
 func (c *countingMockAgent) DownloadCustomTrait(ctx context.Context, req *pb.DownloadCustomTraitRequest, opts ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {

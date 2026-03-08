@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
 // ResourceNode represents a single resource in the execution DAG.
@@ -18,6 +18,7 @@ type ResourceNode struct {
 	Notify     []string
 	Subscribes []string
 	ModuleName string
+	When       string
 }
 
 // BuildDAG flattens proto modules into a list of ResourceNodes, normalizes
@@ -42,6 +43,7 @@ func BuildDAG(modules []*pb.Module) ([]ResourceNode, map[string][]string, error)
 				ModuleName: mod.GetName(),
 				Notify:     copyStrings(mod.GetNotify()),
 				Subscribes: copyStrings(mod.GetSubscribes()),
+				When:       res.GetWhen(),
 			}
 
 			// Module-level depends_on references module names. We need to

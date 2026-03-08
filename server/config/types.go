@@ -6,34 +6,9 @@ package config
 import (
 	"fmt"
 
-	"github.com/isogov/isogov/server/conditionals"
+	"github.com/hobnob/hobnob/server/conditionals"
 	"gopkg.in/yaml.v3"
 )
-
-// StringOrSlice is a custom YAML type that accepts either a single string or
-// a list of strings. This allows conditional fields to use shorthand:
-//
-//	go_if_all_pass: is_debian        # single string
-//	go_if_all_pass: [is_debian, x]   # list form
-type StringOrSlice []string
-
-// UnmarshalYAML implements yaml.Unmarshaler for StringOrSlice.
-func (s *StringOrSlice) UnmarshalYAML(value *yaml.Node) error {
-	switch value.Kind {
-	case yaml.ScalarNode:
-		*s = []string{value.Value}
-		return nil
-	case yaml.SequenceNode:
-		var list []string
-		if err := value.Decode(&list); err != nil {
-			return err
-		}
-		*s = list
-		return nil
-	default:
-		return fmt.Errorf("StringOrSlice: expected string or list, got %v", value.Kind)
-	}
-}
 
 // ServerConfig represents the top-level server configuration from server.yaml.
 type ServerConfig struct {
@@ -74,14 +49,11 @@ type CheckInSection struct {
 	JitterPercent int    `yaml:"jitter_percent"`
 }
 
-// ConditionalBlock groups resources under shared conditional fields.
-// When flattened, block-level conditionals are merged onto each child resource.
+// ConditionalBlock groups resources under a shared when expression.
+// When flattened, block-level when is AND-composed with each child resource's when.
 type ConditionalBlock struct {
-	GoIfAllPass   StringOrSlice    `yaml:"go_if_all_pass,omitempty"`
-	GoIfAnyPass   StringOrSlice    `yaml:"go_if_any_pass,omitempty"`
-	SkipIfAllPass StringOrSlice    `yaml:"skip_if_all_pass,omitempty"`
-	SkipIfAnyPass StringOrSlice    `yaml:"skip_if_any_pass,omitempty"`
-	Resources     []ResourceConfig `yaml:"resources"`
+	When      string           `yaml:"when,omitempty"`
+	Resources []ResourceConfig `yaml:"resources"`
 }
 
 // ClientConfig represents the resolved per-client configuration.
@@ -98,27 +70,21 @@ type ClientConfig struct {
 
 // ModuleConfig describes a module assigned to a client.
 type ModuleConfig struct {
-	Name          string           `yaml:"name"`
-	DependsOn     []string         `yaml:"depends_on"`
-	GoIfAllPass   StringOrSlice    `yaml:"go_if_all_pass,omitempty"`
-	GoIfAnyPass   StringOrSlice    `yaml:"go_if_any_pass,omitempty"`
-	SkipIfAllPass StringOrSlice    `yaml:"skip_if_all_pass,omitempty"`
-	SkipIfAnyPass StringOrSlice    `yaml:"skip_if_any_pass,omitempty"`
-	Resources     []ResourceConfig `yaml:"resources"`
+	Name      string           `yaml:"name"`
+	DependsOn []string         `yaml:"depends_on"`
+	When      string           `yaml:"when,omitempty"`
+	Resources []ResourceConfig `yaml:"resources"`
 }
 
 // ResourceConfig describes a single resource within a module.
 type ResourceConfig struct {
-	Name          string        `yaml:"name"`
-	Type          string        `yaml:"type"`
-	GoIfAllPass   StringOrSlice `yaml:"go_if_all_pass,omitempty"`
-	GoIfAnyPass   StringOrSlice `yaml:"go_if_any_pass,omitempty"`
-	SkipIfAllPass StringOrSlice `yaml:"skip_if_all_pass,omitempty"`
-	SkipIfAnyPass StringOrSlice `yaml:"skip_if_any_pass,omitempty"`
-	Attributes    map[string]any `yaml:",inline"`
-	Notify        []string       `yaml:"notify"`
-	Subscribes    []string       `yaml:"subscribes"`
-	DependsOn     []string       `yaml:"depends_on"`
+	Name       string         `yaml:"name"`
+	Type       string         `yaml:"type"`
+	When       string         `yaml:"when,omitempty"`
+	Attributes map[string]any `yaml:",inline"`
+	Notify     []string       `yaml:"notify"`
+	Subscribes []string       `yaml:"subscribes"`
+	DependsOn  []string       `yaml:"depends_on"`
 }
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
@@ -179,19 +145,16 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 //
 //	modules: [nginx]               # plain string -> ModuleRef{Name: "nginx"}
 //	modules:
-//	  - name: nginx                # object form with optional conditional fields
-//	    go_if_all_pass: is_debian
+//	  - name: nginx                # object form with optional when expression
+//	    when: "is_debian"
 type ModuleRef struct {
-	Name          string        `yaml:"name"`
-	GoIfAllPass   StringOrSlice `yaml:"go_if_all_pass,omitempty"`
-	GoIfAnyPass   StringOrSlice `yaml:"go_if_any_pass,omitempty"`
-	SkipIfAllPass StringOrSlice `yaml:"skip_if_all_pass,omitempty"`
-	SkipIfAnyPass StringOrSlice `yaml:"skip_if_any_pass,omitempty"`
+	Name string `yaml:"name"`
+	When string `yaml:"when,omitempty"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ModuleRef. It handles two forms:
 //   - Scalar string: "nginx" -> ModuleRef{Name: "nginx"}
-//   - Mapping: {name: nginx, go_if_all_pass: is_debian} -> decoded normally
+//   - Mapping: {name: nginx, when: "is_debian"} -> decoded normally
 func (m *ModuleRef) UnmarshalYAML(value *yaml.Node) error {
 	switch value.Kind {
 	case yaml.ScalarNode:

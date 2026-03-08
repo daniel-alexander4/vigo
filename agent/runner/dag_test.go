@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
 func TestTopoSortNoDeps(t *testing.T) {

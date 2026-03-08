@@ -74,5 +74,5 @@ func ComputeChecksum(binaryPath string) (string, error) {
 
 // BinaryPath returns the expected filesystem path for an agent binary.
 func BinaryPath(agentDir, goos, goarch string) string {
-	return filepath.Join(agentDir, goos, goarch, "isogov-agent")
+	return filepath.Join(agentDir, goos, goarch, "hob")
 }

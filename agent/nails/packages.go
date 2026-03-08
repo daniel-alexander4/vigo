@@ -1,4 +1,4 @@
-package facts
+package nails
 
 import (
 	"bufio"

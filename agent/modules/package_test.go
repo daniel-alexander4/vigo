@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/isogov/isogov/agent/modules/pkgmgr"
+	"github.com/hobnob/hobnob/agent/modules/pkgmgr"
 )
 
 // Compile-time interface check

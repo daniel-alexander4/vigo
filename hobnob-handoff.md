@@ -1,8 +1,8 @@
-# Isogov — Claude Code Handoff Document
+# Hobnob — Claude Code Handoff Document
 
 ## Project Overview
 
-Build **Isogov**, a Puppet-style configuration management system written in Go with a PostgreSQL backend. All components are containerized. All traffic is TLS-protected. Clients authenticate via SSH public key exchange after an approved-list + one-time-token bootstrap.
+Build **Hobnob**, a Puppet-style configuration management system written in Go with a PostgreSQL backend. All components are containerized. All traffic is TLS-protected. Clients authenticate via SSH public key exchange after an approved-list + one-time-token bootstrap.
 
 ---
 
@@ -25,9 +25,9 @@ Build **Isogov**, a Puppet-style configuration management system written in Go w
 ## Repository Structure
 
 ```
-isogov/
+hobnob/
 ├── proto/
-│   └── isogov.proto          # gRPC service definitions
+│   └── hobnob.proto          # gRPC service definitions
 ├── server/
 │   ├── main.go
 │   ├── grpc/                    # gRPC handlers
@@ -46,7 +46,7 @@ isogov/
 │   │   ├── service.go
 │   │   └── user.go
 │   └── auth/                    # Keypair management + registration
-├── cli/                         # gvctl admin CLI
+├── cli/                         # hobcli admin CLI
 │   └── main.go
 ├── ui/                          # Lightweight SPA (served by server)
 ├── config/
@@ -66,16 +66,16 @@ isogov/
 
 ---
 
-## gRPC Service Definition (`proto/isogov.proto`)
+## gRPC Service Definition (`proto/hobnob.proto`)
 
 Define the following services and messages:
 
 ```protobuf
-service Isogov {
+service Hobnob {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc CheckIn(CheckInRequest) returns (CheckInResponse);
   rpc ReportResult(RunReport) returns (ReportAck);
-  rpc ForcePush(ForcePushRequest) returns (ForcePushResponse); // called by gvctl
+  rpc ForcePush(ForcePushRequest) returns (ForcePushResponse); // called by hobcli
 }
 ```
 
@@ -100,13 +100,13 @@ All requests must be signed with the client's registered ED25519 private key. Th
 
 ### Bootstrap
 
-1. Admin runs: `gvctl approved add "*.web.example.com" --token <one-time-token>`
+1. Admin runs: `hobcli approved add "*.web.example.com" --token <one-time-token>`
 2. Server stores the pattern + hashed token in `approved_patterns` table
 3. Admin installs agent on client node with the token baked in as an env var or config file
 
 ### First Run (agent side)
 
-1. Agent generates ED25519 keypair, stores private key locally (e.g. `/etc/isogov/agent.key`)
+1. Agent generates ED25519 keypair, stores private key locally (e.g. `/etc/hobnob/agent.key`)
 2. Agent calls `Register()` gRPC with hostname, IP, pubkey, token
 3. Server checks:
    - Does hostname OR IP match any approved pattern? (wildcard glob matching)
@@ -203,7 +203,7 @@ server:
     ca_file: "/certs/ca.crt"       # For verifying client certs (mTLS)
 
 database:
-  dsn: "postgres://isogov:secret@postgres:5432/isogov?sslmode=disable"
+  dsn: "postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable"
 
 checkin:
   base_interval: "30m"             # Clients should use this as their base interval
@@ -309,43 +309,43 @@ Always record `action_taken: none` in run results when no change was needed.
 7. Go to step 2
 ```
 
-### Agent Config (`/etc/isogov/agent.yaml`)
+### Agent Config (`/etc/hobnob/agent.yaml`)
 
 ```yaml
-server: "isogov.example.com:9090"
+server: "hobnob.example.com:9090"
 tls:
-  ca_file: "/etc/isogov/ca.crt"
-key_file: "/etc/isogov/agent.key"
-client_id_file: "/etc/isogov/client.uuid"
+  ca_file: "/etc/hobnob/ca.crt"
+key_file: "/etc/hobnob/agent.key"
+client_id_file: "/etc/hobnob/client.uuid"
 registration_token: ""             # Only needed on first run; cleared after enrollment
 log_level: "info"
 ```
 
 ---
 
-## CLI Tool (`gvctl`)
+## CLI Tool (`hobcli`)
 
-Implement the following subcommands. `gvctl` talks to the server REST API (not gRPC directly).
+Implement the following subcommands. `hobcli` talks to the server REST API (not gRPC directly).
 
 ```
-gvctl approved add <pattern> --token <token>   # Add to approved list
-gvctl approved list                            # List all approved patterns
-gvctl approved revoke <pattern>                # Remove pattern
+hobcli approved add <pattern> --token <token>   # Add to approved list
+hobcli approved list                            # List all approved patterns
+hobcli approved revoke <pattern>                # Remove pattern
 
-gvctl clients list                             # List all enrolled clients
-gvctl clients show <hostname-or-uuid>          # Full detail + last run
-gvctl clients revoke <hostname-or-uuid>        # Revoke client (blocks future check-ins)
+hobcli clients list                             # List all enrolled clients
+hobcli clients show <hostname-or-uuid>          # Full detail + last run
+hobcli clients revoke <hostname-or-uuid>        # Revoke client (blocks future check-ins)
 
-gvctl push <hostname-or-uuid>                  # Force immediate check-in via ForcePush RPC
-gvctl push --all                               # Force all clients
+hobcli push <hostname-or-uuid>                  # Force immediate check-in via ForcePush RPC
+hobcli push --all                               # Force all clients
 
-gvctl runs list [--client <name>] [--limit 20] # Recent runs
-gvctl runs show <run-uuid>                     # Full run detail with per-resource results
+hobcli runs list [--client <name>] [--limit 20] # Recent runs
+hobcli runs show <run-uuid>                     # Full run detail with per-resource results
 
-gvctl tokens generate                          # Generate a cryptographically random one-time token
-gvctl webhooks add <url> --events run.failure,drift.detected
-gvctl webhooks list
-gvctl webhooks delete <id>
+hobcli tokens generate                          # Generate a cryptographically random one-time token
+hobcli webhooks add <url> --events run.failure,drift.detected
+hobcli webhooks list
+hobcli webhooks delete <id>
 ```
 
 ---
@@ -369,19 +369,19 @@ Tech choice for the SPA is up to you — keep it simple (vanilla JS + htmx is fi
 Expose on `GET /metrics`. Include at minimum:
 
 ```
-isogov_clients_total                        # Gauge: total enrolled clients
-isogov_clients_active_total                 # Gauge: clients seen in last 1h
-isogov_checkins_total{status}               # Counter: check-ins by status
-isogov_run_duration_seconds{client}         # Histogram: run duration
-isogov_drift_detected_total{client,module}  # Counter: drift events
-isogov_module_actions_total{type,action}    # Counter: actions taken by type
+hobnob_clients_total                        # Gauge: total enrolled clients
+hobnob_clients_active_total                 # Gauge: clients seen in last 1h
+hobnob_checkins_total{status}               # Counter: check-ins by status
+hobnob_run_duration_seconds{client}         # Histogram: run duration
+hobnob_drift_detected_total{client,module}  # Counter: drift events
+hobnob_module_actions_total{type,action}    # Counter: actions taken by type
 ```
 
 ---
 
 ## Webhook Payload
 
-POST to configured URL, signed with `X-Isogov-Signature: sha256=<hmac>`.
+POST to configured URL, signed with `X-Hobnob-Signature: sha256=<hmac>`.
 
 ```json
 {
@@ -411,8 +411,8 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: isogov
-      POSTGRES_USER: isogov
+      POSTGRES_DB: hobnob
+      POSTGRES_USER: hobnob
       POSTGRES_PASSWORD: secret
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -442,7 +442,7 @@ volumes:
 Include a `make certs` target in the Makefile that uses `openssl` to:
 
 1. Generate a CA keypair (`ca.key`, `ca.crt`)
-2. Generate a server keypair signed by the CA (`server.key`, `server.crt`) with SANs for `localhost` and `isogov`
+2. Generate a server keypair signed by the CA (`server.key`, `server.crt`) with SANs for `localhost` and `hobnob`
 3. Output all certs to `./certs/`
 
 For production, document how to swap in a cert from Let's Encrypt or an internal CA by replacing the files in the certs volume.
@@ -457,11 +457,11 @@ For production, document how to swap in a cert from Let's Encrypt or an internal
 2. Identify the public Go API surface — the client constructor, fetch/get methods, auth mechanism, and any error types
 3. Note whether isopass uses a daemon/socket, HTTP API, Unix socket, or is a pure library
 4. Note how isopass authenticates callers (token, mTLS, OS user, etc.)
-5. Design the Isogov integration based on what you find — do not assume an API shape
+5. Design the Hobnob integration based on what you find — do not assume an API shape
 
 **Integration requirements (implement once you understand the API):**
 
-Isogov must use isopass as the **sole source of secrets at runtime**. Secrets must never be stored in YAML config files, environment variables, or the database in plaintext. This includes:
+Hobnob must use isopass as the **sole source of secrets at runtime**. Secrets must never be stored in YAML config files, environment variables, or the database in plaintext. This includes:
 
 - The PostgreSQL DSN / password
 - TLS private keys and certificates (server cert, CA cert)
@@ -496,17 +496,17 @@ In `config/server.yaml` and per-client YAML files, secret values are replaced wi
 
 ```yaml
 database:
-  dsn: "secret:isogov/db/dsn"          # isopass path, not a literal value
+  dsn: "secret:hobnob/db/dsn"          # isopass path, not a literal value
 
 server:
   tls:
-    cert_file: "secret:isogov/tls/cert"
-    key_file: "secret:isogov/tls/key"
-    ca_file: "secret:isogov/tls/ca"
+    cert_file: "secret:hobnob/tls/cert"
+    key_file: "secret:hobnob/tls/key"
+    ca_file: "secret:hobnob/tls/ca"
 
 webhooks:
-  - url: "https://hooks.example.com/isogov"
-    secret: "secret:isogov/webhooks/hook1-hmac"
+  - url: "https://hooks.example.com/hobnob"
+    secret: "secret:hobnob/webhooks/hook1-hmac"
 ```
 
 The config loader must detect the `secret:` prefix and resolve the value through the `Provider` interface at startup before the resolved value is used anywhere.
@@ -543,7 +543,7 @@ Once you have read the isopass repo and understand how it runs (standalone binar
 ## Implementation Order (Suggested)
 
 1. **Read `~/repos/isopass` in full** — understand the API before writing anything else
-2. `proto/isogov.proto` — define all messages and services first
+2. `proto/hobnob.proto` — define all messages and services first
 3. `server/secrets/` — implement `Provider` interface + `IsopassProvider` + `StaticProvider` (dev/test fallback)
 4. Database migrations — get the schema locked in
 5. Server skeleton — gRPC server, TLS loaded via secrets provider, DB connection pool
@@ -552,7 +552,7 @@ Once you have read the isopass repo and understand how it runs (standalone binar
 8. CheckIn + module dispatch (server side) — YAML config loading with `secret:` resolution
 9. Agent module executors — file, package, service, user (all idempotent; secrets resolved before apply)
 10. Agent run loop — jittered daemon, reporting
-11. REST API + `gvctl` CLI
+11. REST API + `hobcli` CLI
 12. Prometheus metrics
 13. Webhook dispatcher
 14. Web UI
@@ -568,7 +568,7 @@ Once you have read the isopass repo and understand how it runs (standalone binar
 - All module executors MUST be idempotent — check before act, always
 - Revoked clients receive an error on check-in and cannot re-enroll with the same UUID
 - The agent must handle server unavailability gracefully (exponential backoff, never crash)
-- `gvctl push` should queue a force-run flag in the DB that the next check-in picks up (don't require the server to initiate outbound connections to clients)
+- `hobcli push` should queue a force-run flag in the DB that the next check-in picks up (don't require the server to initiate outbound connections to clients)
 - **Secrets must never appear in plaintext** in config files, environment variables, logs, database rows, gRPC payloads, or run results — isopass is the only secrets store
 - **The `secret:` prefix convention is mandatory** for any config value that is a credential — the config loader must enforce this and refuse to start if a known-secret field lacks the prefix
 - **isopass unreachable = hard startup failure** — do not fall back to insecure defaults silently
@@ -761,10 +761,10 @@ resources:
 
 At render time, base `vars` are merged with the matching `env_vars` block (env-specific values win). The merged set is available as `.Vars` in templates.
 
-### Environment Promotion via gvctl
+### Environment Promotion via hobcli
 
 ```
-gvctl env promote <module> --from staging --to production
+hobcli env promote <module> --from staging --to production
 ```
 
 This copies the current `staging` env_var overrides into `production`, creating a git-style promotion audit trail in the database.
@@ -782,15 +782,15 @@ Both the agent and the server support a dry-run mode. In dry-run mode, the agent
 ### Agent Dry-Run Flag
 
 ```
-isogov-agent --dry-run            # one-shot dry run, exits after reporting
+hobnob-agent --dry-run            # one-shot dry run, exits after reporting
 ```
 
-### gvctl Dry-Run (Force Push with Preview)
+### hobcli Dry-Run (Force Push with Preview)
 
 ```
-gvctl preview <hostname-or-uuid>     # triggers dry-run on a specific client
-gvctl preview --all                  # dry-run across all clients
-gvctl preview --env staging          # dry-run all staging clients
+hobcli preview <hostname-or-uuid>     # triggers dry-run on a specific client
+hobcli preview --all                  # dry-run across all clients
+hobcli preview --env staging          # dry-run all staging clients
 ```
 
 ### gRPC Addition
@@ -808,7 +808,7 @@ CREATE TABLE plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id UUID NOT NULL REFERENCES clients(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  triggered_by TEXT NOT NULL        -- 'schedule', 'gvctl', 'api'
+  triggered_by TEXT NOT NULL        -- 'schedule', 'hobcli', 'api'
 );
 
 CREATE TABLE plan_results (
@@ -831,7 +831,7 @@ Add a **Plans** view showing pending/recent dry-run plans. Each plan is expandab
 
 ## Rollback & File Snapshots
 
-Before the `file` module executor overwrites or deletes a managed file, it saves a snapshot of the previous content. Snapshots are stored on the client node in `/var/lib/isogov/snapshots/` and metadata is reported to the server.
+Before the `file` module executor overwrites or deletes a managed file, it saves a snapshot of the previous content. Snapshots are stored on the client node in `/var/lib/hobnob/snapshots/` and metadata is reported to the server.
 
 ### Snapshot Behavior
 
@@ -843,10 +843,10 @@ Before the `file` module executor overwrites or deletes a managed file, it saves
 ### Rollback Command
 
 ```
-gvctl rollback <hostname-or-uuid> --run <run-uuid>
+hobcli rollback <hostname-or-uuid> --run <run-uuid>
   # Triggers the agent to restore all file snapshots taken during that run
 
-gvctl rollback <hostname-or-uuid> --file /etc/nginx/nginx.conf
+hobcli rollback <hostname-or-uuid> --file /etc/nginx/nginx.conf
   # Triggers the agent to restore the most recent snapshot of a specific file
 ```
 
@@ -896,13 +896,13 @@ rules:
       - source: modules/nginx.yaml
 ```
 
-If a client has an explicit `clients/<hostname>.yaml` file, that takes full precedence over classification rules. Classification rules are the fallback. The `gvctl clients show` command displays whether a client is explicitly configured or auto-classified and which rule matched.
+If a client has an explicit `clients/<hostname>.yaml` file, that takes full precedence over classification rules. Classification rules are the fallback. The `hobcli clients show` command displays whether a client is explicitly configured or auto-classified and which rule matched.
 
 ---
 
 ## Secret Rotation Awareness
 
-When isopass rotates a secret that Isogov depends on, affected nodes must re-converge promptly rather than waiting for their next scheduled check-in. Implement this via two mechanisms:
+When isopass rotates a secret that Hobnob depends on, affected nodes must re-converge promptly rather than waiting for their next scheduled check-in. Implement this via two mechanisms:
 
 ### Server-Side Secret Watcher
 
@@ -913,14 +913,14 @@ The server polls isopass for version changes on all watched secret paths at a co
 secrets:
   rotation_poll_interval: "5m"
   watched_paths:
-    - "isogov/tls/cert"
-    - "isogov/tls/key"
-    - "isogov/db/dsn"
+    - "hobnob/tls/cert"
+    - "hobnob/tls/key"
+    - "hobnob/db/dsn"
 ```
 
 ### Webhook from isopass (if supported)
 
-After reading the isopass repo: if isopass supports outbound webhooks on secret rotation, implement a `POST /api/v1/secret-rotated` endpoint on the Isogov server that accepts rotation events and immediately queues affected clients for re-convergence. Document the isopass webhook configuration needed.
+After reading the isopass repo: if isopass supports outbound webhooks on secret rotation, implement a `POST /api/v1/secret-rotated` endpoint on the Hobnob server that accepts rotation events and immediately queues affected clients for re-convergence. Document the isopass webhook configuration needed.
 
 ### Server TLS Hot Reload
 
@@ -956,7 +956,7 @@ resources:
 
 ### Version Drift Detection
 
-On every check-in, the agent reports all managed package versions as part of facts (`packages.installed`). The server compares reported versions against pinned versions in the module config and records a `version_drift` event if they diverge (e.g. a sysadmin manually upgraded a package outside Isogov).
+On every check-in, the agent reports all managed package versions as part of facts (`packages.installed`). The server compares reported versions against pinned versions in the module config and records a `version_drift` event if they diverge (e.g. a sysadmin manually upgraded a package outside Hobnob).
 
 ### Database Addition
 
@@ -973,12 +973,12 @@ CREATE TABLE package_audit (
 );
 ```
 
-### gvctl Commands
+### hobcli Commands
 
 ```
-gvctl packages list <hostname-or-uuid>     # all managed packages + installed versions
-gvctl packages drift                        # all nodes with version drift
-gvctl packages drift --package nginx        # drift for a specific package across all nodes
+hobcli packages list <hostname-or-uuid>     # all managed packages + installed versions
+hobcli packages drift                        # all nodes with version drift
+hobcli packages drift --package nginx        # drift for a specific package across all nodes
 ```
 
 ---
@@ -1059,9 +1059,9 @@ Add a **Compliance** view to the dashboard:
 ### Prometheus Metrics Addition
 
 ```
-isogov_compliance_status{client,status}   # Gauge: 1 if client is in this status
-isogov_compliance_pct                     # Gauge: fleet-wide compliance percentage
-isogov_time_since_checkin_seconds{client} # Gauge: seconds since last check-in
+hobnob_compliance_status{client,status}   # Gauge: 1 if client is in this status
+hobnob_compliance_pct                     # Gauge: fleet-wide compliance percentage
+hobnob_time_since_checkin_seconds{client} # Gauge: seconds since last check-in
 ```
 
 ---
@@ -1071,7 +1071,7 @@ isogov_time_since_checkin_seconds{client} # Gauge: seconds since last check-in
 Add the following directories/files to the original structure:
 
 ```
-isogov/
+hobnob/
 ├── agent/
 │   ├── facts/                   # Fact collectors
 │   │   ├── collector.go         # Collector interface
@@ -1100,10 +1100,10 @@ isogov/
 
 ## Updated gRPC Service Definition
 
-Extend `proto/isogov.proto` with the additional RPCs:
+Extend `proto/hobnob.proto` with the additional RPCs:
 
 ```protobuf
-service Isogov {
+service Hobnob {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc CheckIn(CheckInRequest) returns (CheckInResponse);
   rpc ReportResult(RunReport) returns (ReportAck);
@@ -1121,7 +1121,7 @@ The `CheckInRequest` must include the latest facts snapshot so the server always
 ## Updated Implementation Order (Suggested)
 
 1. **Read `~/repos/isopass` in full** — understand the API before writing anything else
-2. `proto/isogov.proto` — all services and messages including new RPCs
+2. `proto/hobnob.proto` — all services and messages including new RPCs
 3. `server/secrets/` — `Provider` interface + `IsopassProvider` + `StaticProvider`
 4. Database migrations — full schema including all new tables
 5. Server skeleton — gRPC, TLS via secrets provider, DB pool
@@ -1135,7 +1135,7 @@ The `CheckInRequest` must include the latest facts snapshot so the server always
 13. **Conditional resources** — `when:` evaluation against facts
 14. Agent run loop — jittered daemon, reporting, rollback handler
 15. **Compliance tracker** — status computation, history table, compliance API
-16. REST API + `gvctl` CLI (including all new subcommands)
+16. REST API + `hobcli` CLI (including all new subcommands)
 17. Prometheus metrics (including new compliance metrics)
 18. Webhook dispatcher (including new event types)
 19. **Secret rotation watcher** — polling + optional isopass webhook endpoint
@@ -1163,9 +1163,9 @@ Add the following events to the original list:
 
 These principles take precedence over cleverness, flexibility, or feature completeness. When in doubt, choose the simpler path.
 
-**Simplicity.** Every concept in Isogov should be explainable in one sentence. If a feature requires a paragraph to explain how to use it, it needs to be redesigned. Prefer fewer, more composable primitives over many specialized ones.
+**Simplicity.** Every concept in Hobnob should be explainable in one sentence. If a feature requires a paragraph to explain how to use it, it needs to be redesigned. Prefer fewer, more composable primitives over many specialized ones.
 
-**Clarity.** A sysadmin who has never seen Isogov before should be able to read a client YAML file and immediately understand what it does. Naming must be unambiguous. Error messages must say what went wrong and what to do about it — never just a code or a stack trace.
+**Clarity.** A sysadmin who has never seen Hobnob before should be able to read a client YAML file and immediately understand what it does. Naming must be unambiguous. Error messages must say what went wrong and what to do about it — never just a code or a stack trace.
 
 **Conciseness.** Config files should contain only what is necessary. No boilerplate, no mandatory fields that are almost always the same value, no repetition between files. Defaults must be sensible enough that a minimal config is also a correct config.
 
@@ -1179,7 +1179,7 @@ There is exactly **one way** to configure a client on the server: a YAML file in
 - To change a client's modules: edit that file
 - To remove a client's config: delete that file
 
-The server watches the `config/clients/` directory for changes and reloads automatically. No restart required. `gvctl` never writes client config — it is read-only with respect to config files. Its role is operations (tokens, revocation, pushes, reports), not configuration.
+The server watches the `config/clients/` directory for changes and reloads automatically. No restart required. `hobcli` never writes client config — it is read-only with respect to config files. Its role is operations (tokens, revocation, pushes, reports), not configuration.
 
 Auto-classification rules in `config/classification.yaml` follow the same principle — one file, one format, edited directly.
 
@@ -1212,7 +1212,7 @@ GET /api/v1/agent/download        → binary stream
 The agent provides a one-shot run command for cases where a sysadmin wants to trigger an immediate convergence without waiting for the next scheduled check-in:
 
 ```bash
-isogov-agent run
+hobnob-agent run
 ```
 
 This performs a single check-in, applies all modules, reports results, and exits. It does not affect the running daemon's schedule. Output goes to stdout so it is usable interactively.
@@ -1220,12 +1220,12 @@ This performs a single check-in, applies all modules, reports results, and exits
 Flags:
 
 ```bash
-isogov-agent run --dry-run          # preview only, no changes applied
-isogov-agent run --module <name>    # apply a single named module only
-isogov-agent run --verbose          # show per-resource detail
+hobnob-agent run --dry-run          # preview only, no changes applied
+hobnob-agent run --module <name>    # apply a single named module only
+hobnob-agent run --verbose          # show per-resource detail
 ```
 
-If the daemon is not running, `isogov-agent run` works identically — it is fully self-contained and does not depend on the daemon being active.
+If the daemon is not running, `hobnob-agent run` works identically — it is fully self-contained and does not depend on the daemon being active.
 
 ---
 
@@ -1234,15 +1234,15 @@ If the daemon is not running, `isogov-agent run` works identically — it is ful
 The server hosts a bootstrap script at a well-known endpoint. Enrolling a new node requires exactly one command copy-pasted into a root shell:
 
 ```bash
-curl -fsSL https://isogov.example.com/bootstrap | bash -s -- --token <one-time-token>
+curl -fsSL https://hobnob.example.com/bootstrap | bash -s -- --token <one-time-token>
 ```
 
 Or with explicit options:
 
 ```bash
-curl -fsSL https://isogov.example.com/bootstrap | bash -s -- \
+curl -fsSL https://hobnob.example.com/bootstrap | bash -s -- \
   --token <one-time-token> \
-  --server isogov.example.com:9090
+  --server hobnob.example.com:9090
 ```
 
 ### What the Bootstrap Script Does
@@ -1250,10 +1250,10 @@ curl -fsSL https://isogov.example.com/bootstrap | bash -s -- \
 The script is generated dynamically by the server and bakes in the server address and CA certificate automatically. When run on a new node it:
 
 1. Detects the OS and architecture
-2. Downloads the correct `isogov-agent` binary from the server
+2. Downloads the correct `hobnob-agent` binary from the server
 3. Verifies the binary checksum
-4. Writes `/etc/isogov/agent.yaml` with the server address and CA cert
-5. Writes the one-time token to `/etc/isogov/token` (mode 0600)
+4. Writes `/etc/hobnob/agent.yaml` with the server address and CA cert
+5. Writes the one-time token to `/etc/hobnob/token` (mode 0600)
 6. Installs the agent as a systemd service (or launchd on macOS)
 7. Starts the service — triggering immediate registration and first run
 8. Cleans up the token file after successful enrollment
@@ -1272,22 +1272,22 @@ GET /api/v1/agent/latest
   → { version: "1.2.3", sha256: "...", platforms: { "linux/amd64": "/agent/download/linux/amd64", ... } }
 
 GET /api/v1/agent/download/{os}/{arch}
-  → binary stream of the isogov-agent binary for the requested platform
+  → binary stream of the hobnob-agent binary for the requested platform
 ```
 
 The `/bootstrap` endpoint requires no authentication — the one-time token is passed as a flag to the downloaded script, not to the server at download time. The CA cert embedded in the script allows the agent to verify the server's TLS cert before the first gRPC call.
 
-### gvctl Bootstrap Helpers
+### hobcli Bootstrap Helpers
 
 ```bash
-gvctl tokens generate
+hobcli tokens generate
   → prints a new one-time token and the full bootstrap curl command ready to copy-paste
 
-gvctl tokens generate --pattern "web-*"
+hobcli tokens generate --pattern "web-*"
   → generates token and auto-creates the approved_patterns entry in one step
 ```
 
 This means enrolling a new node is a two-step process total:
-1. Run `gvctl tokens generate --pattern "web-*"` on the server — copy the output
+1. Run `hobcli tokens generate --pattern "web-*"` on the server — copy the output
 2. Paste the curl one-liner into a root shell on the new node
 

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/isogov/isogov/agent/auth"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/db"
+	"github.com/hobnob/hobnob/agent/auth"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/db"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -34,7 +34,7 @@ func SignatureVerifyInterceptor(queries *db.Queries) grpc.UnaryServerInterceptor
 		handler grpc.UnaryHandler,
 	) (any, error) {
 		// Skip signature verification for Register -- agent has no UUID yet.
-		if info.FullMethod == pb.IsgovAgent_Register_FullMethodName {
+		if info.FullMethod == pb.HobnobAgent_Register_FullMethodName {
 			return handler(ctx, req)
 		}
 
@@ -48,8 +48,8 @@ func SignatureVerifyInterceptor(queries *db.Queries) grpc.UnaryServerInterceptor
 			if err := verifyReportResult(ctx, queries, r); err != nil {
 				return nil, err
 			}
-		case *pb.ReportFactsRequest:
-			if err := verifyReportFacts(ctx, queries, r); err != nil {
+		case *pb.ReportNailsRequest:
+			if err := verifyReportNails(ctx, queries, r); err != nil {
 				return nil, err
 			}
 		default:
@@ -123,8 +123,8 @@ func verifyReportResult(ctx context.Context, queries *db.Queries, req *pb.Report
 	return nil
 }
 
-// verifyReportFacts validates the signature on a ReportFactsRequest.
-func verifyReportFacts(ctx context.Context, queries *db.Queries, req *pb.ReportFactsRequest) error {
+// verifyReportNails validates the signature on a ReportNailsRequest.
+func verifyReportNails(ctx context.Context, queries *db.Queries, req *pb.ReportNailsRequest) error {
 	clientID, err := uuid.Parse(req.GetClientId())
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid client_id: %v", err)
@@ -144,7 +144,7 @@ func verifyReportFacts(ctx context.Context, queries *db.Queries, req *pb.ReportF
 		return err
 	}
 
-	payload := req.GetFactsJson()
+	payload := req.GetNailsJson()
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {

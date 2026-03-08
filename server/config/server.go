@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/isogov/isogov/server/secrets"
+	"github.com/hobnob/hobnob/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 

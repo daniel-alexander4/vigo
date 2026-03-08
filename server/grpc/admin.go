@@ -13,9 +13,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/compliance"
-	"github.com/isogov/isogov/server/db"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/compliance"
+	"github.com/hobnob/hobnob/server/db"
 )
 
 // ---------- Approved Patterns ----------

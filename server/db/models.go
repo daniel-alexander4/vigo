@@ -33,10 +33,10 @@ type Client struct {
 	ForcePush  bool               `json:"force_push"`
 }
 
-type ClientFact struct {
+type ClientNail struct {
 	ID          uuid.UUID       `json:"id"`
 	ClientID    uuid.UUID       `json:"client_id"`
-	Facts       json.RawMessage `json:"facts"`
+	Nails       json.RawMessage `json:"nails"`
 	CollectedAt time.Time       `json:"collected_at"`
 }
 

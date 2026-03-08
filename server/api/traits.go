@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/isogov/isogov/server/db"
+	"github.com/hobnob/hobnob/server/db"
 )
 
 // TraitsHandler serves the REST endpoint for client trait inspection.
@@ -57,7 +57,7 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	facts, err := h.queries.GetLatestClientFacts(ctx, client.ID)
+	nails, err := h.queries.GetLatestClientNails(ctx, client.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSONError(w, http.StatusNotFound,
@@ -70,8 +70,8 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 
 	resp := traitsResponse{
 		Hostname:    hostname,
-		CollectedAt: facts.CollectedAt.Format(time.RFC3339),
-		Traits:      facts.Facts,
+		CollectedAt: nails.CollectedAt.Format(time.RFC3339),
+		Traits:      nails.Nails,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

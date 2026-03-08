@@ -13,22 +13,22 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/isogov/isogov/agent/auth"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/hobnob/hobnob/agent/auth"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// Client wraps the gRPC IsgovAgent client with ED25519 signing.
+// Client wraps the gRPC HobnobAgent client with ED25519 signing.
 type Client struct {
 	conn       *grpc.ClientConn
-	agent      pb.IsgovAgentClient
+	agent      pb.HobnobAgentClient
 	clientID   string
 	privateKey ed25519.PrivateKey
 }
 
-// NewClient creates a new gRPC client connection to the Isogov server.
+// NewClient creates a new gRPC client connection to the Hobnob server.
 // It loads TLS credentials for mTLS. If clientCertFile is empty, it connects
 // with only CA verification (dev mode) -- the server's signature interceptor
 // provides real auth via ED25519.
@@ -65,7 +65,7 @@ func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, clientID strin
 
 	return &Client{
 		conn:       conn,
-		agent:      pb.NewIsgovAgentClient(conn),
+		agent:      pb.NewHobnobAgentClient(conn),
 		clientID:   clientID,
 		privateKey: privateKey,
 	}, nil
@@ -124,20 +124,20 @@ func (c *Client) ReportResult(ctx context.Context, runID string, results []*pb.M
 	return nil
 }
 
-// ReportFacts calls the server's ReportFacts RPC with ED25519-signed facts JSON.
-func (c *Client) ReportFacts(ctx context.Context, factsMap map[string]any) error {
-	factsJSON, err := json.Marshal(factsMap)
+// ReportNails calls the server's ReportNails RPC with ED25519-signed facts JSON.
+func (c *Client) ReportNails(ctx context.Context, nailsMap map[string]any) error {
+	nailsJSON, err := json.Marshal(nailsMap)
 	if err != nil {
-		return fmt.Errorf("marshal facts: %w", err)
+		return fmt.Errorf("marshal nails: %w", err)
 	}
 
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
-	sig := auth.SignPayload(factsJSON, ts, c.privateKey)
+	sig := auth.SignPayload(nailsJSON, ts, c.privateKey)
 
-	_, err = c.agent.ReportFacts(ctx, &pb.ReportFactsRequest{
+	_, err = c.agent.ReportNails(ctx, &pb.ReportNailsRequest{
 		ClientId:  c.clientID,
-		FactsJson: factsJSON,
+		NailsJson: nailsJSON,
 		Signature: sig,
 		Timestamp: timestamppb.New(now),
 	})

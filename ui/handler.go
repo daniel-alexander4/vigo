@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/isogov/isogov/server/compliance"
-	"github.com/isogov/isogov/server/config"
-	"github.com/isogov/isogov/server/db"
+	"github.com/hobnob/hobnob/server/compliance"
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -658,9 +658,9 @@ func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.D
 
 	// Fetch latest facts
 	facts := make(map[string]any)
-	cf, err := ds.queries.GetLatestClientFacts(ctx, clientID)
+	cf, err := ds.queries.GetLatestClientNails(ctx, clientID)
 	if err == nil {
-		_ = json.Unmarshal(cf.Facts, &facts)
+		_ = json.Unmarshal(cf.Nails, &facts)
 	}
 
 	return ClientDetailPageData{

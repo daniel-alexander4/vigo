@@ -74,7 +74,7 @@ func (m *Manager) Restore(filePath, snapshotPath string) error {
 		return fmt.Errorf("create target dir: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(dir, ".isogov-restore-*")
+	tmp, err := os.CreateTemp(dir, ".hobnob-restore-*")
 	if err != nil {
 		return fmt.Errorf("create temp for restore: %w", err)
 	}

@@ -1,4 +1,4 @@
-// Package modules provides resource executor types for the Isogov agent.
+// Package modules provides resource executor types for the Hobnob agent.
 package modules
 
 import (

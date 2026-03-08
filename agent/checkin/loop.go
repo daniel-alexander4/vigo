@@ -13,13 +13,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/isogov/isogov/agent/facts"
-	"github.com/isogov/isogov/agent/modules"
-	"github.com/isogov/isogov/agent/runner"
-	"github.com/isogov/isogov/agent/snapshots"
-	"github.com/isogov/isogov/agent/traits"
-	"github.com/isogov/isogov/agent/update"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/hobnob/hobnob/agent/nails"
+	"github.com/hobnob/hobnob/agent/modules"
+	"github.com/hobnob/hobnob/agent/runner"
+	"github.com/hobnob/hobnob/agent/snapshots"
+	"github.com/hobnob/hobnob/agent/traits"
+	"github.com/hobnob/hobnob/agent/update"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
 // UpdateConfig holds configuration for the agent self-update mechanism.
@@ -39,10 +39,10 @@ func jitteredDuration(base time.Duration, jitterPct int) time.Duration {
 	return base + time.Duration(jitter)
 }
 
-// stateFingerprint computes a SHA256 hex digest of the facts map for use as
+// stateFingerprint computes a SHA256 hex digest of the nails map for use as
 // the check-in state fingerprint.
-func stateFingerprint(factsMap map[string]any) string {
-	data, _ := json.Marshal(factsMap)
+func stateFingerprint(nailsMap map[string]any) string {
+	data, _ := json.Marshal(nailsMap)
 	h := sha256.Sum256(data)
 	return fmt.Sprintf("%x", h)
 }
@@ -79,8 +79,8 @@ type RunResult struct {
 // RunOnce performs a single check-in, executes the returned modules, and reports
 // results. It is used by both the one-shot "run" command and the daemon loop.
 // If dryRun is true, results are not reported back to the server.
-func RunOnce(ctx context.Context, client *Client, executors map[string]modules.Executor, factsMap map[string]any, dryRun bool, module string) (*RunResult, error) {
-	fp := stateFingerprint(factsMap)
+func RunOnce(ctx context.Context, client *Client, executors map[string]modules.Executor, nailsMap map[string]any, dryRun bool, module string) (*RunResult, error) {
+	fp := stateFingerprint(nailsMap)
 
 	resp, err := client.CheckIn(ctx, fp)
 	if err != nil {
@@ -102,7 +102,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 	// Generate a run ID from current timestamp.
 	runID := fmt.Sprintf("run-%d", time.Now().UnixNano())
 
-	r := runner.NewRunner(executors, factsMap, dryRun, module)
+	r := runner.NewRunner(executors, nailsMap, dryRun, module)
 	results, err := r.Run(ctx, resp.Modules)
 	if err != nil {
 		return nil, fmt.Errorf("run modules: %w", err)
@@ -166,29 +166,29 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			}
 		}
 
-		// 1. Collect facts.
-		factsMap, err := facts.CollectAll(ctx, facts.DefaultCollectors())
+		// 1. Collect nails.
+		nailsMap, err := nails.CollectAll(ctx, nails.DefaultCollectors())
 		if err != nil {
 			logger.Warn("fact collection failed", "error", err)
-			// Use empty facts -- collection is best-effort.
-			factsMap = make(map[string]any)
+			// Use empty nails -- collection is best-effort.
+			nailsMap = make(map[string]any)
 		}
 
-		// 1b. Merge custom traits into facts map.
+		// 1b. Merge custom traits into nails map.
 		if customTraits != nil {
 			for k, v := range customTraits {
-				factsMap[k] = v
+				nailsMap[k] = v
 			}
 		}
 
-		// 2. Report facts to server.
-		if err := client.ReportFacts(ctx, factsMap); err != nil {
-			logger.Warn("failed to report facts", "error", err)
-			// Continue -- facts reporting is non-fatal for convergence.
+		// 2. Report nails to server.
+		if err := client.ReportNails(ctx, nailsMap); err != nil {
+			logger.Warn("failed to report nails", "error", err)
+			// Continue -- nails reporting is non-fatal for convergence.
 		}
 
 		// 3. Run once (check-in + execute + report).
-		runResult, err := RunOnce(ctx, client, executors, factsMap, false, "")
+		runResult, err := RunOnce(ctx, client, executors, nailsMap, false, "")
 		if err != nil {
 			// Server error -- apply backoff.
 			wait := bo.NextBackOff()

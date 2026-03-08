@@ -17,14 +17,14 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "gvctl",
-	Short: "Isogov admin CLI",
-	Long:  "gvctl is the administrative CLI for the Isogov configuration management system.\nIt communicates with the server's REST API to manage enrollment, clients, and runs.",
+	Use:   "hobcli",
+	Short: "Hobnob admin CLI",
+	Long:  "hobcli is the administrative CLI for the Hobnob configuration management system.\nIt communicates with the server's REST API to manage enrollment, clients, and runs.",
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "http://localhost:8080",
-		"Base URL for the Isogov REST API")
+		"Base URL for the Hobnob REST API")
 
 	rootCmd.AddCommand(
 		approvedCmd,

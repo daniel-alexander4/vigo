@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/isogov/isogov/agent/snapshots"
+	"github.com/hobnob/hobnob/agent/snapshots"
 )
 
 // FileExecutor manages file resources idempotently. It checks SHA256 content
@@ -170,7 +170,7 @@ func (f *FileExecutor) handlePresent(path string, params map[string]string, dryR
 
 	// Atomic write: create temp in same directory, write, chmod, rename.
 	// Temp file MUST be in filepath.Dir(target) to avoid EXDEV on rename.
-	tmp, err := os.CreateTemp(dir, ".isogov-*")
+	tmp, err := os.CreateTemp(dir, ".hobnob-*")
 	if err != nil {
 		result.Error = fmt.Errorf("create temp file in %s: %w", dir, err)
 		return result

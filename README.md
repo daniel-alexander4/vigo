@@ -1,22 +1,22 @@
-# Isogov
+# Hobnob
 
 Pull-based configuration management for Linux and macOS. Agents on managed nodes pull desired state from a central server via gRPC over mTLS, apply idempotent changes (files, packages, services, users), and report results back.
 
 ## Quickstart
 
-### 1. Create `/etc/isogov`
+### 1. Create `/etc/hobnob`
 
-All server config lives in `/etc/isogov` on the host. The container bind-mounts it read-only.
+All server config lives in `/etc/hobnob` on the host. The container bind-mounts it read-only.
 
 ```bash
-sudo mkdir -p /etc/isogov/certs
+sudo mkdir -p /etc/hobnob/certs
 ```
 
 ### 2. Generate TLS certificates
 
 ```bash
 make certs
-sudo cp certs/* /etc/isogov/certs/
+sudo cp certs/* /etc/hobnob/certs/
 ```
 
 For production, replace with your own CA and server cert.
@@ -24,19 +24,19 @@ For production, replace with your own CA and server cert.
 ### 3. Create the `.env` file
 
 ```bash
-sudo tee /etc/isogov/.env <<'EOF'
-ISOGOV_DB_DSN=postgres://isogov:secret@postgres:5432/isogov?sslmode=disable
-ISOGOV_TLS_CERT=certs/server.crt
-ISOGOV_TLS_KEY=certs/server.key
-ISOGOV_TLS_CA=certs/ca.crt
+sudo tee /etc/hobnob/.env <<'EOF'
+HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
+HOBNOB_TLS_CERT=certs/server.crt
+HOBNOB_TLS_KEY=certs/server.key
+HOBNOB_TLS_CA=certs/ca.crt
 EOF
 ```
 
 ### 4. Copy config files
 
 ```bash
-sudo cp -r server-configs /etc/isogov/
-sudo cp -r client-configs /etc/isogov/
+sudo cp -r server-configs /etc/hobnob/
+sudo cp -r client-configs /etc/hobnob/
 ```
 
 ### 5. Start the server
@@ -45,7 +45,7 @@ sudo cp -r client-configs /etc/isogov/
 docker compose up -d
 ```
 
-This starts PostgreSQL and the isogov server. Migrations run automatically. Verify:
+This starts PostgreSQL and the hobnob server. Migrations run automatically. Verify:
 
 ```bash
 docker compose ps
@@ -56,7 +56,7 @@ You should see `postgres` (healthy) and `server` (running). The dashboard is at 
 ### 6. Create an approved pattern and enrollment token
 
 ```bash
-docker compose exec server gvctl tokens generate --pattern "*.example.com"
+docker compose exec server hobcli tokens generate --pattern "*.example.com"
 ```
 
 This prints a `curl` command with the enrollment token baked in.
@@ -147,13 +147,13 @@ The server watches `client-configs/` and hot-reloads automatically. On the next 
 
 ```bash
 # List enrolled clients
-docker compose exec server gvctl clients list
+docker compose exec server hobcli clients list
 
 # View run results
-docker compose exec server gvctl runs list
+docker compose exec server hobcli runs list
 
 # Check compliance
-docker compose exec server gvctl clients show web01.example.com
+docker compose exec server hobcli clients show web01.example.com
 ```
 
 Or open the web dashboard at `http://<server-ip>:8080/`.
@@ -216,7 +216,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 
 - **Server** — gRPC endpoint for agents, REST API + web UI for operators
 - **Agent** — daemon on each managed node, pulls config, converges idempotently
-- **gvctl** — admin CLI, talks to server REST API
+- **hobcli** — admin CLI, talks to server REST API
 - **Config** — YAML files on disk, hot-reloaded on change
 
 ## Resource types
@@ -246,6 +246,197 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 - **Agent self-update** — automatic binary updates with checksum verification
 - **Web dashboard** — fleet overview, client drill-down, compliance trends
 
+## Conditionals
+
+Conditionals control which resources and modules run on a given node. They are evaluated **server-side** — agents never see skipped resources. The system has three layers: conditional vars, resource/module conditionals, and conditional blocks.
+
+### Conditional vars
+
+A conditional var is a structured YAML variable that evaluates a node trait and produces a boolean (`"true"` or `"false"`). Define them in `vars` at the module, client, or environment level:
+
+```yaml
+vars:
+  is_debian:
+    trait: os.distro
+    only: [debian, ubuntu]
+
+  is_not_container:
+    trait: hardware.virtualization
+    not: [docker, lxc]
+
+  has_enough_ram:
+    trait: hardware.memory_mb
+    gte: 2048
+
+  hostname_matches_web:
+    trait: os.hostname
+    match: "^web\\d+\\."
+```
+
+Each conditional var requires a `trait` field (dot-path into the node's traits map) and exactly one operator:
+
+| Operator | Operand type | True when |
+|----------|-------------|-----------|
+| `only` | list | trait value is in the list |
+| `not` | list | trait value is NOT in the list |
+| `gt` | number | trait > operand |
+| `lt` | number | trait < operand |
+| `gte` | number | trait >= operand |
+| `lte` | number | trait <= operand |
+| `match` | regex string | trait matches the regex |
+
+Missing traits evaluate to `false`. Conditional vars are evaluated before template rendering, so their boolean results are available to other vars and to conditional fields.
+
+### Resource conditionals
+
+Resources use four fields to reference conditional vars. Evaluation follows a **gate-then-veto** pattern:
+
+```yaml
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+    go_if_all_pass: [is_debian, has_enough_ram]   # gate: ALL must be true
+
+  - name: install-httpd
+    type: package
+    package: httpd
+    state: present
+    go_if_any_pass: [is_rhel, is_centos]          # gate: at least ONE must be true
+
+  - name: dev-tools
+    type: package
+    package: strace, htop
+    state: present
+    skip_if_all_pass: [is_production, is_locked]   # veto: skip if ALL are true
+
+  - name: debug-config
+    type: file
+    targetpath: /etc/myapp/debug.conf
+    content: "debug = true"
+    skip_if_any_pass: is_production                # veto: skip if ANY is true
+```
+
+| Field | Behavior |
+|-------|----------|
+| `go_if_all_pass` | Gate — ALL listed vars must be `"true"`, otherwise resource is skipped |
+| `go_if_any_pass` | Gate — at least ONE listed var must be `"true"`, otherwise skipped |
+| `skip_if_all_pass` | Veto — if ALL listed vars are `"true"`, resource is skipped |
+| `skip_if_any_pass` | Veto — if ANY listed var is `"true"`, resource is skipped |
+
+Gates are checked first, then vetoes. Each field accepts a single string or a list.
+
+### Module conditionals
+
+The same four fields work on module references in `clients.yaml` and role definitions, skipping entire modules:
+
+```yaml
+# client-configs/clients.yaml
+clients:
+  - match: "*.example.com"
+    vars:
+      is_debian:
+        trait: os.distro
+        only: [debian, ubuntu]
+    modules:
+      - nginx
+      - name: apt-cacher
+        go_if_all_pass: is_debian
+      - name: selinux-policy
+        skip_if_any_pass: is_debian
+```
+
+Plain string module references (like `nginx` above) are always included. The object form with `name:` allows attaching conditional fields.
+
+### Conditional blocks
+
+When multiple resources share the same conditions, use `conditional_block` to avoid repetition:
+
+```yaml
+resources:
+  - name: always-runs
+    type: package
+    package: curl
+    state: present
+
+  - conditional_block:
+      go_if_all_pass: is_debian
+      resources:
+        - name: apt-transport-https
+          type: package
+          package: apt-transport-https
+          state: present
+
+        - name: apt-conf
+          type: file
+          targetpath: /etc/apt/apt.conf.d/99custom
+          content: |
+            APT::Install-Recommends "false";
+
+  - name: also-always-runs
+    type: package
+    package: wget
+    state: present
+```
+
+Block-level conditionals are merged onto each child resource at config load time — the block flattens away. If a child resource also has its own conditional fields, both sets apply (block conditions are prepended).
+
+### Full example
+
+Putting it all together — a module that adapts to OS and hardware:
+
+```yaml
+name: webserver
+
+vars:
+  is_debian:
+    trait: os.distro
+    only: [debian, ubuntu]
+  is_rhel:
+    trait: os.distro
+    only: [rhel, centos, rocky, alma]
+  has_enough_ram:
+    trait: hardware.memory_mb
+    gte: 1024
+  worker_processes: "auto"
+
+resources:
+  - name: install-nginx-deb
+    type: package
+    package: nginx
+    state: present
+    go_if_all_pass: is_debian
+
+  - name: install-nginx-rpm
+    type: package
+    package: nginx
+    state: present
+    go_if_all_pass: is_rhel
+
+  - name: nginx-conf
+    type: file
+    targetpath: /etc/nginx/nginx.conf
+    source: templates/nginx.conf.tmpl
+    mode: "0644"
+    notify: [nginx-service]
+
+  - name: cache-tuning
+    type: file
+    targetpath: /etc/nginx/conf.d/cache.conf
+    content: |
+      proxy_cache_path /var/cache/nginx levels=1:2
+        keys_zone=default:10m max_size=1g;
+    go_if_all_pass: has_enough_ram
+
+  - name: nginx-service
+    type: service
+    service: nginx
+    enabled: true
+    state: running
+    subscribes: [nginx-conf]
+```
+
 ## Secrets
 
 Sensitive values in config files use the `secret:` prefix instead of plaintext. The server resolves these references at config load time before sending anything to agents — agents receive the resolved values, never the `secret:` references.
@@ -260,7 +451,7 @@ clients:
   - match: "cache01.example.com"
     modules: [redis]
     vars:
-      redis_password: "secret:isogov/redis/password"
+      redis_password: "secret:hobnob/redis/password"
 ```
 
 ```yaml
@@ -270,14 +461,14 @@ resources:
     type: file
     targetpath: /etc/grafana/grafana.ini
     content: |
-      admin_password = secret:isogov/grafana/admin-password
+      admin_password = secret:hobnob/grafana/admin-password
 ```
 
 Certain field names (`dsn`, `tls_cert_path`, `tls_key_path`, `webhook_secret`) are enforced — the server rejects configs that set these to plaintext values.
 
 ### Secrets providers
 
-Isogov supports two secret backends via the `secrets.Provider` interface:
+Hobnob supports two secret backends via the `secrets.Provider` interface:
 
 **IsopassProvider (production)** — retrieves secrets from an [isopass](https://github.com/dansheldon/isopass) instance over HTTP. Authenticates with a service account bearer token, exchanges it for a short-lived API token, and searches for secrets by path. Configure with:
 
@@ -288,7 +479,7 @@ ISOPASS_BEARER_TOKEN=<service-account-token>
 
 The server also polls isopass for secret version changes. When a secret rotates, all clients referencing it are automatically queued for re-convergence.
 
-**StaticProvider (development)** — reads from a `.env` file. Secret paths are converted to environment variable names: `secret:isogov/db/dsn` → `ISOGOV_DB_DSN` (uppercase, slashes to underscores).
+**StaticProvider (development)** — reads from a `.env` file. Secret paths are converted to environment variable names: `secret:hobnob/db/dsn` → `HOBNOB_DB_DSN` (uppercase, slashes to underscores).
 
 ### Security guarantees
 
@@ -302,18 +493,18 @@ The server's own config (`server-configs/server.yaml`) also uses `secret:` refer
 
 | `.env` variable | Required | Description |
 |-----------------|----------|-------------|
-| `ISOGOV_DB_DSN` | Yes | PostgreSQL connection string |
-| `ISOGOV_TLS_CERT` | Yes | Path to server TLS certificate |
-| `ISOGOV_TLS_KEY` | Yes | Path to server TLS private key |
-| `ISOGOV_TLS_CA` | Yes | Path to CA certificate |
-| `ISOGOV_WEBHOOK_SECRET` | No | HMAC secret for webhook signing |
-| `ISOGOV_VERSION` | No | Version string for agent self-update |
-| `ISOGOV_AGENT_DIR` | No | Directory with cross-compiled agent binaries |
+| `HOBNOB_DB_DSN` | Yes | PostgreSQL connection string |
+| `HOBNOB_TLS_CERT` | Yes | Path to server TLS certificate |
+| `HOBNOB_TLS_KEY` | Yes | Path to server TLS private key |
+| `HOBNOB_TLS_CA` | Yes | Path to CA certificate |
+| `HOBNOB_WEBHOOK_SECRET` | No | HMAC secret for webhook signing |
+| `HOBNOB_VERSION` | No | Version string for agent self-update |
+| `HOBNOB_AGENT_DIR` | No | Directory with cross-compiled agent binaries |
 
 ## Development
 
 ```bash
-make build          # Build server, agent, and gvctl
+make build          # Build server, agent, and hobcli
 make proto          # Regenerate protobuf/gRPC code
 make certs          # Generate self-signed TLS certs
 make test           # Run all tests

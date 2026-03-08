@@ -1,15 +1,15 @@
-// Package facts provides pluggable fact collectors that gather system
+// Package nails provides pluggable nail collectors that gather system
 // information from managed nodes. Facts are used in Go templates as
-// .Traits.os.family, .Facts.hardware.cpu_count, etc.
-package facts
+// .Traits.os.family, .Nails.hardware.cpu_count, etc.
+package nails
 
 import (
 	"context"
 	"log/slog"
 )
 
-// Collector is the interface for pluggable fact collectors. Each collector
-// gathers a category of system facts and returns them as a flat map.
+// Collector is the interface for pluggable nail collectors. Each collector
+// gathers a category of system nails and returns them as a flat map.
 type Collector interface {
 	// Name returns the top-level key under which this collector's facts are stored.
 	Name() string
@@ -36,7 +36,7 @@ func CollectAll(ctx context.Context, collectors []Collector) (map[string]any, er
 	return result, nil
 }
 
-// DefaultCollectors returns the standard set of fact collectors.
+// DefaultCollectors returns the standard set of nail collectors.
 func DefaultCollectors() []Collector {
 	return []Collector{
 		&OSCollector{},

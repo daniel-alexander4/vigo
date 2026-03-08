@@ -7,6 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func assertWhenEqual(t *testing.T, name, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("%s = %q, want %q", name, got, want)
+	}
+}
+
 // TestFlattenPlainResourcesPassThrough verifies that plain resources without
 // blocks pass through unchanged (Test 1).
 func TestFlattenPlainResourcesPassThrough(t *testing.T) {
@@ -34,12 +41,11 @@ func TestFlattenPlainResourcesPassThrough(t *testing.T) {
 }
 
 // TestFlattenBlockMergesConditionals verifies that a single block with
-// go_if_all_pass flattens into child resources with block conditionals
-// merged (Test 2).
+// when flattens into child resources with block when merged (Test 2).
 func TestFlattenBlockMergesConditionals(t *testing.T) {
 	input := `
 - conditional_block:
-    go_if_all_pass: is_debian
+    when: "is_debian"
     resources:
       - name: r1
         type: file
@@ -58,25 +64,24 @@ func TestFlattenBlockMergesConditionals(t *testing.T) {
 	if resources[0].Name != "r1" || resources[0].Type != "file" {
 		t.Errorf("resources[0] = {%q, %q}, want {r1, file}", resources[0].Name, resources[0].Type)
 	}
-	assertSliceEqual(t, "r1.GoIfAllPass", resources[0].GoIfAllPass, []string{"is_debian"})
+	assertWhenEqual(t, "r1.When", resources[0].When, "is_debian")
 	if resources[1].Name != "r2" || resources[1].Type != "exec" {
 		t.Errorf("resources[1] = {%q, %q}, want {r2, exec}", resources[1].Name, resources[1].Type)
 	}
-	assertSliceEqual(t, "r2.GoIfAllPass", resources[1].GoIfAllPass, []string{"is_debian"})
+	assertWhenEqual(t, "r2.When", resources[1].When, "is_debian")
 }
 
 // TestFlattenBlockMergesDifferentConditionals verifies that block-level
-// conditionals merge with resource-level conditionals on different fields
-// (COND-12, Test 3).
+// when merges with resource-level when via AND composition (COND-12, Test 3).
 func TestFlattenBlockMergesDifferentConditionals(t *testing.T) {
 	input := `
 - conditional_block:
-    go_if_all_pass: is_debian
+    when: "is_debian"
     resources:
       - name: r1
         type: file
         targetpath: /etc/r1
-        skip_if_any_pass: is_container
+        when: "not is_container"
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
@@ -85,21 +90,20 @@ func TestFlattenBlockMergesDifferentConditionals(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("len = %d, want 1", len(resources))
 	}
-	assertSliceEqual(t, "r1.GoIfAllPass", resources[0].GoIfAllPass, []string{"is_debian"})
-	assertSliceEqual(t, "r1.SkipIfAnyPass", resources[0].SkipIfAnyPass, []string{"is_container"})
+	assertWhenEqual(t, "r1.When", resources[0].When, "(is_debian) and (not is_container)")
 }
 
-// TestFlattenBlockSameFieldConcatenated verifies that the same conditional
-// field on block and resource are concatenated (Test 4).
+// TestFlattenBlockSameFieldConcatenated verifies that when expressions on
+// block and resource are AND-composed (Test 4).
 func TestFlattenBlockSameFieldConcatenated(t *testing.T) {
 	input := `
 - conditional_block:
-    go_if_all_pass: is_debian
+    when: "is_debian"
     resources:
       - name: r1
         type: file
         targetpath: /etc/r1
-        go_if_all_pass: has_enough_mem
+        when: "has_enough_mem"
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
@@ -108,7 +112,7 @@ func TestFlattenBlockSameFieldConcatenated(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("len = %d, want 1", len(resources))
 	}
-	assertSliceEqual(t, "r1.GoIfAllPass", resources[0].GoIfAllPass, []string{"is_debian", "has_enough_mem"})
+	assertWhenEqual(t, "r1.When", resources[0].When, "(is_debian) and (has_enough_mem)")
 }
 
 // TestFlattenMixedResourcesAndBlocksOrdering verifies that mixed plain
@@ -154,7 +158,7 @@ func TestFlattenDependsOnAcrossBlockBoundaryOutsideToInside(t *testing.T) {
   targetpath: /outside
   depends_on: [inside]
 - conditional_block:
-    go_if_all_pass: x
+    when: "x"
     resources:
       - name: inside
         type: exec
@@ -174,7 +178,7 @@ func TestFlattenDependsOnAcrossBlockBoundaryOutsideToInside(t *testing.T) {
 	if resources[1].Name != "inside" {
 		t.Errorf("resources[1].Name = %q, want inside", resources[1].Name)
 	}
-	assertSliceEqual(t, "inside.GoIfAllPass", resources[1].GoIfAllPass, []string{"x"})
+	assertWhenEqual(t, "inside.When", resources[1].When, "x")
 }
 
 // TestFlattenDependsOnFromInsideToOutside verifies that depends_on from
@@ -212,7 +216,7 @@ func TestFlattenDependsOnFromInsideToOutside(t *testing.T) {
 func TestFlattenBlockEmptyResourcesError(t *testing.T) {
 	input := `
 - conditional_block:
-    go_if_all_pass: x
+    when: "x"
     resources: []
 `
 	_, err := flattenFromYAML(t, input)
@@ -224,15 +228,12 @@ func TestFlattenBlockEmptyResourcesError(t *testing.T) {
 	}
 }
 
-// TestFlattenBlockAllFourConditionalFields verifies that all four conditional
-// fields on a block are merged onto child resources (Test 9).
-func TestFlattenBlockAllFourConditionalFields(t *testing.T) {
+// TestFlattenBlockWhenExpression verifies that a when expression on a block
+// is merged onto child resources (Test 9).
+func TestFlattenBlockWhenExpression(t *testing.T) {
 	input := `
 - conditional_block:
-    go_if_all_pass: a
-    go_if_any_pass: [b, c]
-    skip_if_all_pass: d
-    skip_if_any_pass: [e]
+    when: "a and b"
     resources:
       - name: r1
         type: file
@@ -246,10 +247,7 @@ func TestFlattenBlockAllFourConditionalFields(t *testing.T) {
 		t.Fatalf("len = %d, want 1", len(resources))
 	}
 	r := resources[0]
-	assertSliceEqual(t, "GoIfAllPass", r.GoIfAllPass, []string{"a"})
-	assertSliceEqual(t, "GoIfAnyPass", r.GoIfAnyPass, []string{"b", "c"})
-	assertSliceEqual(t, "SkipIfAllPass", r.SkipIfAllPass, []string{"d"})
-	assertSliceEqual(t, "SkipIfAnyPass", r.SkipIfAnyPass, []string{"e"})
+	assertWhenEqual(t, "When", r.When, "a and b")
 }
 
 // TestConditionalBlockYAMLUnmarshalIntegration verifies that a full module
@@ -264,7 +262,7 @@ resources:
     package: nginx
 
   - conditional_block:
-      go_if_all_pass: is_debian
+      when: "is_debian"
       resources:
         - name: apt-config
           type: file
@@ -298,12 +296,12 @@ resources:
 	if def.Resources[1].Name != "apt-config" {
 		t.Errorf("Resources[1].Name = %q, want apt-config", def.Resources[1].Name)
 	}
-	assertSliceEqual(t, "apt-config.GoIfAllPass", def.Resources[1].GoIfAllPass, []string{"is_debian"})
+	assertWhenEqual(t, "apt-config.When", def.Resources[1].When, "is_debian")
 	// apt-update from block
 	if def.Resources[2].Name != "apt-update" {
 		t.Errorf("Resources[2].Name = %q, want apt-update", def.Resources[2].Name)
 	}
-	assertSliceEqual(t, "apt-update.GoIfAllPass", def.Resources[2].GoIfAllPass, []string{"is_debian"})
+	assertWhenEqual(t, "apt-update.When", def.Resources[2].When, "is_debian")
 	assertSliceEqual(t, "apt-update.DependsOn", def.Resources[2].DependsOn, []string{"apt-config"})
 	// final
 	if def.Resources[3].Name != "final" {

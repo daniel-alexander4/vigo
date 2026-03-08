@@ -190,11 +190,11 @@ clients:
     environment: production
     modules: [app]
     vars:
-      db_dsn: "secret:isogov/db/dsn"
+      db_dsn: "secret:hobnob/db/dsn"
 `)
 
 	mp := &mockProvider{secrets: map[string]string{
-		"isogov/db/dsn":   "postgres://real:pw@db:5432/prod",
+		"hobnob/db/dsn":   "postgres://real:pw@db:5432/prod",
 		"myapp/db/config": "host=db port=5432 user=myapp",
 	}}
 	store, err := NewConfigStore(dir, mp)
@@ -788,17 +788,17 @@ func TestRenderVars(t *testing.T) {
 	tests := []struct {
 		name     string
 		vars     map[string]any
-		facts    map[string]any
+		nails    map[string]any
 		varOrder []string
 		want     map[string]any
 		wantErr  bool
 	}{
 		{
-			name: "facts reference renders correctly",
+			name: "nails reference renders correctly",
 			vars: map[string]any{
 				"greeting": "Hello from {{ .Traits.os.distro }}",
 			},
-			facts: map[string]any{
+			nails: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
 			},
 			varOrder: []string{"greeting"},
@@ -812,7 +812,7 @@ func TestRenderVars(t *testing.T) {
 				"base_port": "8080",
 				"port_line": "port={{ .Vars.base_port }}",
 			},
-			facts:    map[string]any{},
+			nails:    map[string]any{},
 			varOrder: []string{"base_port", "port_line"},
 			want: map[string]any{
 				"base_port": "8080",
@@ -825,7 +825,7 @@ func TestRenderVars(t *testing.T) {
 				"distro":   "{{ .Traits.os.distro }}",
 				"greeting": "Hello from {{ .Vars.distro }}",
 			},
-			facts: map[string]any{
+			nails: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
 			},
 			varOrder: []string{"distro", "greeting"},
@@ -839,7 +839,7 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"plain": "no templates here",
 			},
-			facts:    map[string]any{},
+			nails:    map[string]any{},
 			varOrder: []string{"plain"},
 			want: map[string]any{
 				"plain": "no templates here",
@@ -852,7 +852,7 @@ func TestRenderVars(t *testing.T) {
 				"enabled": true,
 				"name":    "test",
 			},
-			facts:    map[string]any{},
+			nails:    map[string]any{},
 			varOrder: []string{"count", "enabled", "name"},
 			want: map[string]any{
 				"count":   42,
@@ -865,14 +865,14 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"bad": "{{ .InvalidSyntax }{",
 			},
-			facts:    map[string]any{},
+			nails:    map[string]any{},
 			varOrder: []string{"bad"},
 			wantErr:  true,
 		},
 		{
 			name:     "empty vars map returns empty map",
 			vars:     map[string]any{},
-			facts:    map[string]any{},
+			nails:    map[string]any{},
 			varOrder: nil,
 			want:     map[string]any{},
 		},
@@ -881,7 +881,7 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"greeting": "Hello from {{ .Traits.os.distro }}",
 			},
-			facts: map[string]any{
+			nails: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
 			},
 			varOrder: nil,
@@ -893,7 +893,7 @@ func TestRenderVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := RenderVars(tt.vars, tt.facts, tt.varOrder)
+			got, err := RenderVars(tt.vars, tt.nails, tt.varOrder)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -930,7 +930,7 @@ vars:
   port: "8080"
   is_debian:
     trait: "os.distro"
-    only: [debian, ubuntu]
+    in: [debian, ubuntu]
 resources:
   - name: install-nginx
     type: package
@@ -972,8 +972,8 @@ clients:
 	if cv.Trait != "os.distro" {
 		t.Errorf("ConditionalVar trait = %q, want 'os.distro'", cv.Trait)
 	}
-	if cv.Operator != "only" {
-		t.Errorf("ConditionalVar operator = %q, want 'only'", cv.Operator)
+	if cv.Operator != "in" {
+		t.Errorf("ConditionalVar operator = %q, want 'in'", cv.Operator)
 	}
 }
 
@@ -985,7 +985,7 @@ func TestLoadModuleInvalidConditionalVar(t *testing.T) {
 name: bad
 vars:
   broken_cond:
-    only: [debian, ubuntu]
+    in: [debian, ubuntu]
 resources: []
 `)
 
@@ -1040,7 +1040,7 @@ name: mod_a
 vars:
   is_ubuntu:
     trait: "os.distro"
-    only: [ubuntu]
+    in: [ubuntu]
   port: "80"
 resources: []
 `)
@@ -1092,7 +1092,7 @@ name: mod
 vars:
   is_debian:
     trait: "os.distro"
-    only: [debian, ubuntu]
+    in: [debian, ubuntu]
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
@@ -1134,7 +1134,7 @@ func TestLoadModuleConditionalBlockLoadsCorrectly(t *testing.T) {
 name: debian-tools
 resources:
   - conditional_block:
-      go_if_all_pass: is_debian
+      when: "is_debian"
       resources:
         - name: install-apt-utils
           type: package
@@ -1164,10 +1164,10 @@ clients:
 	if len(mod.Resources) != 2 {
 		t.Fatalf("len(Resources) = %d, want 2 (flattened from block)", len(mod.Resources))
 	}
-	// Both resources should have go_if_all_pass: [is_debian] from block
+	// Both resources should have when: "is_debian" from block
 	for i, res := range mod.Resources {
-		if len(res.GoIfAllPass) != 1 || res.GoIfAllPass[0] != "is_debian" {
-			t.Errorf("Resources[%d].GoIfAllPass = %v, want [is_debian]", i, res.GoIfAllPass)
+		if res.When != "is_debian" {
+			t.Errorf("Resources[%d].When = %q, want \"is_debian\"", i, res.When)
 		}
 	}
 	if mod.Resources[0].Name != "install-apt-utils" {
@@ -1190,7 +1190,7 @@ resources:
     state: present
 
   - conditional_block:
-      go_if_all_pass: is_debian
+      when: "is_debian"
       resources:
         - name: apt-setup
           type: exec
@@ -1228,15 +1228,15 @@ clients:
 			t.Errorf("Resources[%d].Name = %q, want %q", i, mod.Resources[i].Name, want)
 		}
 	}
-	// Only apt-setup should have GoIfAllPass
-	if len(mod.Resources[0].GoIfAllPass) != 0 {
-		t.Errorf("always-run should have no GoIfAllPass, got %v", mod.Resources[0].GoIfAllPass)
+	// Only apt-setup should have When
+	if mod.Resources[0].When != "" {
+		t.Errorf("always-run should have no When, got %q", mod.Resources[0].When)
 	}
-	if len(mod.Resources[1].GoIfAllPass) != 1 || mod.Resources[1].GoIfAllPass[0] != "is_debian" {
-		t.Errorf("apt-setup.GoIfAllPass = %v, want [is_debian]", mod.Resources[1].GoIfAllPass)
+	if mod.Resources[1].When != "is_debian" {
+		t.Errorf("apt-setup.When = %q, want \"is_debian\"", mod.Resources[1].When)
 	}
-	if len(mod.Resources[2].GoIfAllPass) != 0 {
-		t.Errorf("final-step should have no GoIfAllPass, got %v", mod.Resources[2].GoIfAllPass)
+	if mod.Resources[2].When != "" {
+		t.Errorf("final-step should have no When, got %q", mod.Resources[2].When)
 	}
 }
 
@@ -1251,7 +1251,7 @@ resources:
     command: "add-repo"
 
   - conditional_block:
-      go_if_all_pass: is_debian
+      when: "is_debian"
       resources:
         - name: install-tool
           type: package
@@ -1276,7 +1276,7 @@ clients:
 	if len(mod.Resources) != 2 {
 		t.Fatalf("len(Resources) = %d, want 2", len(mod.Resources))
 	}
-	// install-tool should have depends_on: [setup-repo] preserved and GoIfAllPass: [is_debian]
+	// install-tool should have depends_on: [setup-repo] preserved and when: "is_debian"
 	res := mod.Resources[1]
 	if res.Name != "install-tool" {
 		t.Errorf("Resources[1].Name = %q, want install-tool", res.Name)
@@ -1284,8 +1284,8 @@ clients:
 	if len(res.DependsOn) != 1 || res.DependsOn[0] != "setup-repo" {
 		t.Errorf("install-tool.DependsOn = %v, want [setup-repo]", res.DependsOn)
 	}
-	if len(res.GoIfAllPass) != 1 || res.GoIfAllPass[0] != "is_debian" {
-		t.Errorf("install-tool.GoIfAllPass = %v, want [is_debian]", res.GoIfAllPass)
+	if res.When != "is_debian" {
+		t.Errorf("install-tool.When = %q, want \"is_debian\"", res.When)
 	}
 }
 
@@ -1296,13 +1296,13 @@ func TestLoadModuleConditionalBlockWithResourceLevelConditionals(t *testing.T) {
 name: dual-cond
 resources:
   - conditional_block:
-      go_if_all_pass: is_debian
+      when: "is_debian"
       resources:
         - name: desktop-tool
           type: package
           package: desktop-tool
           state: present
-          skip_if_any_pass: is_container
+          when: "not is_container"
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
@@ -1322,12 +1322,10 @@ clients:
 		t.Fatalf("len(Resources) = %d, want 1", len(mod.Resources))
 	}
 	res := mod.Resources[0]
-	// Should have both block-level go_if_all_pass AND resource-level skip_if_any_pass
-	if len(res.GoIfAllPass) != 1 || res.GoIfAllPass[0] != "is_debian" {
-		t.Errorf("GoIfAllPass = %v, want [is_debian]", res.GoIfAllPass)
-	}
-	if len(res.SkipIfAnyPass) != 1 || res.SkipIfAnyPass[0] != "is_container" {
-		t.Errorf("SkipIfAnyPass = %v, want [is_container]", res.SkipIfAnyPass)
+	// Block when and resource when are AND-composed.
+	want := "(is_debian) and (not is_container)"
+	if res.When != want {
+		t.Errorf("When = %q, want %q", res.When, want)
 	}
 }
 
@@ -1338,7 +1336,7 @@ func TestLoadModuleConditionalBlockEmptyResourcesError(t *testing.T) {
 name: bad-block
 resources:
   - conditional_block:
-      go_if_all_pass: is_debian
+      when: "is_debian"
       resources: []
 `)
 
@@ -1382,7 +1380,7 @@ resources:
 name: webserver
 modules:
   - name: nginx
-    go_if_all_pass: is_debian
+    when: "is_debian"
   - certbot
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
@@ -1401,14 +1399,14 @@ clients:
 		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
 	}
 
-	// nginx should have GoIfAllPass from the role ref.
-	if len(cfg.Modules[0].GoIfAllPass) != 1 || cfg.Modules[0].GoIfAllPass[0] != "is_debian" {
-		t.Errorf("nginx.GoIfAllPass = %v, want [is_debian]", cfg.Modules[0].GoIfAllPass)
+	// nginx should have When from the role ref.
+	if cfg.Modules[0].When != "is_debian" {
+		t.Errorf("nginx.When = %q, want \"is_debian\"", cfg.Modules[0].When)
 	}
 
 	// certbot should have no conditionals.
-	if len(cfg.Modules[1].GoIfAllPass) != 0 {
-		t.Errorf("certbot.GoIfAllPass = %v, want empty", cfg.Modules[1].GoIfAllPass)
+	if cfg.Modules[1].When != "" {
+		t.Errorf("certbot.When = %q, want empty", cfg.Modules[1].When)
 	}
 }
 
@@ -1428,7 +1426,7 @@ clients:
   - match: "db.example.com"
     modules:
       - name: redis
-        skip_if_any_pass: is_container
+        when: "not is_container"
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
@@ -1440,8 +1438,8 @@ clients:
 	if len(cfg.Modules) != 1 {
 		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
 	}
-	if len(cfg.Modules[0].SkipIfAnyPass) != 1 || cfg.Modules[0].SkipIfAnyPass[0] != "is_container" {
-		t.Errorf("redis.SkipIfAnyPass = %v, want [is_container]", cfg.Modules[0].SkipIfAnyPass)
+	if cfg.Modules[0].When != "not is_container" {
+		t.Errorf("redis.When = %q, want \"not is_container\"", cfg.Modules[0].When)
 	}
 }
 
@@ -1461,7 +1459,7 @@ name: web
 modules:
   - nginx
   - name: certbot
-    go_if_any_pass: [is_debian, is_ubuntu]
+    when: "is_debian or is_ubuntu"
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
 clients:
@@ -1479,12 +1477,12 @@ clients:
 		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
 	}
 	// nginx: plain string, no conditionals
-	if len(cfg.Modules[0].GoIfAnyPass) != 0 {
-		t.Errorf("nginx should have no conditionals, got GoIfAnyPass=%v", cfg.Modules[0].GoIfAnyPass)
+	if cfg.Modules[0].When != "" {
+		t.Errorf("nginx should have no conditionals, got When=%q", cfg.Modules[0].When)
 	}
-	// certbot: object with go_if_any_pass
-	if len(cfg.Modules[1].GoIfAnyPass) != 2 {
-		t.Errorf("certbot.GoIfAnyPass = %v, want [is_debian, is_ubuntu]", cfg.Modules[1].GoIfAnyPass)
+	// certbot: object with when expression
+	if cfg.Modules[1].When != "is_debian or is_ubuntu" {
+		t.Errorf("certbot.When = %q, want \"is_debian or is_ubuntu\"", cfg.Modules[1].When)
 	}
 }
 
@@ -1544,14 +1542,14 @@ clients:
 }
 
 func TestTemplateRendering(t *testing.T) {
-	facts := map[string]any{
+	nails := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
 	}
 	vars := map[string]any{
 		"app_port": "8080",
 	}
 
-	result, err := RenderTemplate("port={{ .Vars.app_port }} os={{ .Traits.os.distro }}", facts, vars)
+	result, err := RenderTemplate("port={{ .Vars.app_port }} os={{ .Traits.os.distro }}", nails, vars)
 	if err != nil {
 		t.Fatalf("RenderTemplate: %v", err)
 	}

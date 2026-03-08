@@ -1,4 +1,4 @@
-// Command seed inserts development test data into the Isogov database.
+// Command seed inserts development test data into the Hobnob database.
 // It is idempotent -- safe to run multiple times.
 //
 // Usage: go run ./cmd/seed/main.go
@@ -24,9 +24,9 @@ func main() {
 func run() error {
 	ctx := context.Background()
 
-	dsn := os.Getenv("ISOGOV_DB_DSN")
+	dsn := os.Getenv("HOBNOB_DB_DSN")
 	if dsn == "" {
-		dsn = "postgres://isogov:secret@localhost:5432/isogov?sslmode=disable"
+		dsn = "postgres://hobnob:secret@localhost:5432/hobnob?sslmode=disable"
 	}
 
 	pool, err := pgxpool.New(ctx, dsn)

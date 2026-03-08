@@ -3,10 +3,14 @@ package runner
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 
-	"github.com/isogov/isogov/agent/modules"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/hobnob/hobnob/agent/modules"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/conditionals"
 )
 
 // Runner executes resources in DAG order with notify/subscribe triggers.
@@ -16,8 +20,8 @@ type Runner struct {
 	// Executors maps resource type names to their executor implementations.
 	Executors map[string]modules.Executor
 
-	// Facts are the collected node facts (used for template rendering).
-	Facts map[string]any
+	// Nails are the collected node nails (used for template rendering).
+	Nails map[string]any
 
 	// DryRun passes through to executors and disables the notify pass.
 	DryRun bool
@@ -28,10 +32,10 @@ type Runner struct {
 }
 
 // NewRunner creates a Runner with the given configuration.
-func NewRunner(executors map[string]modules.Executor, facts map[string]any, dryRun bool, module string) *Runner {
+func NewRunner(executors map[string]modules.Executor, nails map[string]any, dryRun bool, module string) *Runner {
 	return &Runner{
 		Executors: executors,
-		Facts:     facts,
+		Nails:     nails,
 		DryRun:    dryRun,
 		Module:    module,
 	}
@@ -87,13 +91,26 @@ func (r *Runner) Run(ctx context.Context, protoModules []*pb.Module) ([]modules.
 }
 
 // executeResource runs a single resource: looks up executor and calls Execute.
-// Conditional evaluation happens server-side; the agent only receives resources
-// that should run.
+// If the resource has a When expression (containing builtins), evaluate it
+// agent-side before running. Pure var expressions are resolved server-side.
 func (r *Runner) executeResource(ctx context.Context, node ResourceNode) modules.ResourceResult {
 	result := modules.ResourceResult{
 		ModuleName:   node.ModuleName,
 		ResourceType: node.Type,
 		ResourceName: node.Name,
+	}
+
+	// Evaluate agent-side when expression if present.
+	if node.When != "" {
+		shouldRun, err := evaluateAgentWhen(ctx, node.When)
+		if err != nil {
+			result.Error = fmt.Errorf("evaluating when expression: %w", err)
+			return result
+		}
+		if !shouldRun {
+			result.Action = modules.ActionSkipped
+			return result
+		}
 	}
 
 	// Look up executor by resource type.
@@ -183,4 +200,37 @@ func (r *Runner) executeNotifyPass(
 	}
 
 	return results
+}
+
+// evaluateAgentWhen evaluates a when expression on the agent side. Only
+// builtin function calls should remain in agent-side expressions; var
+// references have been substituted to true/false by the server.
+func evaluateAgentWhen(ctx context.Context, when string) (bool, error) {
+	expr, err := conditionals.ParseWhenExpr(when)
+	if err != nil {
+		return false, fmt.Errorf("parsing when expression %q: %w", when, err)
+	}
+
+	return conditionals.EvalWhenExprWithFuncs(expr, func(name string) bool {
+		// All vars should be substituted; unknown vars evaluate to false.
+		return false
+	}, func(name string, args []string) (bool, error) {
+		switch name {
+		case "file_exists":
+			if len(args) != 1 {
+				return false, fmt.Errorf("file_exists requires exactly 1 argument")
+			}
+			_, err := os.Stat(args[0])
+			return err == nil, nil
+		case "command_succeeds":
+			if len(args) != 1 {
+				return false, fmt.Errorf("command_succeeds requires exactly 1 argument")
+			}
+			parts := strings.Fields(args[0])
+			cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+			return cmd.Run() == nil, nil
+		default:
+			return false, fmt.Errorf("unknown builtin function %q", name)
+		}
+	})
 }

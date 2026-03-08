@@ -1,15 +1,15 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "isogov.proto",
+    "title": "hobnob.proto",
     "version": "version not set"
   },
   "tags": [
     {
-      "name": "IsgovAgent"
+      "name": "HobnobAgent"
     },
     {
-      "name": "IsgovAdmin"
+      "name": "HobnobAdmin"
     }
   ],
   "consumes": [
@@ -22,7 +22,7 @@
     "/api/v1/approved": {
       "get": {
         "summary": "ListApprovedPatterns lists all approved enrollment patterns.",
-        "operationId": "IsgovAdmin_ListApprovedPatterns",
+        "operationId": "HobnobAdmin_ListApprovedPatterns",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -38,12 +38,12 @@
           }
         },
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       },
       "post": {
         "summary": "AddApprovedPattern adds a hostname/IP wildcard pattern with a one-time token.",
-        "operationId": "IsgovAdmin_AddApprovedPattern",
+        "operationId": "HobnobAdmin_AddApprovedPattern",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -69,14 +69,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/approved/{id}": {
       "delete": {
         "summary": "RevokeApprovedPattern removes an approved pattern.",
-        "operationId": "IsgovAdmin_RevokeApprovedPattern",
+        "operationId": "HobnobAdmin_RevokeApprovedPattern",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -100,14 +100,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/clients": {
       "get": {
         "summary": "ListClients lists all enrolled clients.",
-        "operationId": "IsgovAdmin_ListClients",
+        "operationId": "HobnobAdmin_ListClients",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -123,14 +123,14 @@
           }
         },
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/clients/{clientId}/dry-run": {
       "post": {
         "summary": "DryRun computes a plan without applying changes.",
-        "operationId": "IsgovAdmin_DryRun",
+        "operationId": "HobnobAdmin_DryRun",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -157,19 +157,19 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/IsgovAdminDryRunBody"
+              "$ref": "#/definitions/HobnobAdminDryRunBody"
             }
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/clients/{clientId}/rollback": {
       "post": {
         "summary": "Rollback reverts a client to a previous run's state.",
-        "operationId": "IsgovAdmin_Rollback",
+        "operationId": "HobnobAdmin_Rollback",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -196,19 +196,19 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/IsgovAdminRollbackBody"
+              "$ref": "#/definitions/HobnobAdminRollbackBody"
             }
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/clients/{id}": {
       "get": {
         "summary": "GetClient returns details for a single client.",
-        "operationId": "IsgovAdmin_GetClient",
+        "operationId": "HobnobAdmin_GetClient",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -232,14 +232,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/clients/{id}/compliance": {
       "get": {
         "summary": "GetClientCompliance returns compliance details for a single client.",
-        "operationId": "IsgovAdmin_GetClientCompliance",
+        "operationId": "HobnobAdmin_GetClientCompliance",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -263,14 +263,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/clients/{id}/revoke": {
       "post": {
         "summary": "RevokeClient revokes an enrolled client, blocking future check-ins.",
-        "operationId": "IsgovAdmin_RevokeClient",
+        "operationId": "HobnobAdmin_RevokeClient",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -297,19 +297,19 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/IsgovAdminRevokeClientBody"
+              "$ref": "#/definitions/HobnobAdminRevokeClientBody"
             }
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/compliance": {
       "get": {
         "summary": "GetComplianceSummary returns aggregate compliance status across all clients.",
-        "operationId": "IsgovAdmin_GetComplianceSummary",
+        "operationId": "HobnobAdmin_GetComplianceSummary",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -325,14 +325,14 @@
           }
         },
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/env/promote": {
       "post": {
         "summary": "PromoteEnv promotes environment variables from one tier to another.",
-        "operationId": "IsgovAdmin_PromoteEnv",
+        "operationId": "HobnobAdmin_PromoteEnv",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -358,14 +358,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/packages": {
       "get": {
         "summary": "ListPackages lists package audit records, optionally filtered by client.",
-        "operationId": "IsgovAdmin_ListPackages",
+        "operationId": "HobnobAdmin_ListPackages",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -390,14 +390,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/packages/drift": {
       "get": {
         "summary": "ListPackageDrift lists packages where installed version differs from desired.",
-        "operationId": "IsgovAdmin_ListPackageDrift",
+        "operationId": "HobnobAdmin_ListPackageDrift",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -413,14 +413,14 @@
           }
         },
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/push": {
       "post": {
         "summary": "ForcePush triggers an immediate check-in for a client or all clients.",
-        "operationId": "IsgovAdmin_ForcePush",
+        "operationId": "HobnobAdmin_ForcePush",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -446,14 +446,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/runs": {
       "get": {
         "summary": "ListRuns lists recent runs, optionally filtered by client.",
-        "operationId": "IsgovAdmin_ListRuns",
+        "operationId": "HobnobAdmin_ListRuns",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -486,14 +486,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/runs/all": {
       "get": {
         "summary": "ListAllRuns lists recent runs across all clients.",
-        "operationId": "IsgovAdmin_ListAllRuns",
+        "operationId": "HobnobAdmin_ListAllRuns",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -519,14 +519,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/runs/{id}": {
       "get": {
         "summary": "GetRun returns details for a single run including per-module results.",
-        "operationId": "IsgovAdmin_GetRun",
+        "operationId": "HobnobAdmin_GetRun",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -550,14 +550,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/tokens": {
       "post": {
         "summary": "GenerateToken generates a cryptographically random one-time enrollment token.",
-        "operationId": "IsgovAdmin_GenerateToken",
+        "operationId": "HobnobAdmin_GenerateToken",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -583,14 +583,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/webhooks": {
       "get": {
         "summary": "ListWebhooks lists all registered webhooks.",
-        "operationId": "IsgovAdmin_ListWebhooks",
+        "operationId": "HobnobAdmin_ListWebhooks",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -606,12 +606,12 @@
           }
         },
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       },
       "post": {
         "summary": "AddWebhook registers a new webhook endpoint.",
-        "operationId": "IsgovAdmin_AddWebhook",
+        "operationId": "HobnobAdmin_AddWebhook",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -637,14 +637,14 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     },
     "/api/v1/webhooks/{id}": {
       "delete": {
         "summary": "DeleteWebhook removes a webhook by ID.",
-        "operationId": "IsgovAdmin_DeleteWebhook",
+        "operationId": "HobnobAdmin_DeleteWebhook",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -668,19 +668,19 @@
           }
         ],
         "tags": [
-          "IsgovAdmin"
+          "HobnobAdmin"
         ]
       }
     }
   },
   "definitions": {
-    "IsgovAdminDryRunBody": {
+    "HobnobAdminDryRunBody": {
       "type": "object"
     },
-    "IsgovAdminRevokeClientBody": {
+    "HobnobAdminRevokeClientBody": {
       "type": "object"
     },
-    "IsgovAdminRollbackBody": {
+    "HobnobAdminRollbackBody": {
       "type": "object",
       "properties": {
         "runId": {

@@ -1,4 +1,4 @@
-package facts
+package nails
 
 import (
 	"context"
@@ -7,14 +7,14 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 )
 
-// OSCollector gathers operating system facts: family, distro, version,
+// OSCollector gathers operating system nails: family, distro, version,
 // kernel version, and architecture.
 type OSCollector struct{}
 
 // Name returns "os".
 func (c *OSCollector) Name() string { return "os" }
 
-// Collect returns OS facts using gopsutil host.Info and runtime.GOARCH.
+// Collect returns OS nails using gopsutil host.Info and runtime.GOARCH.
 func (c *OSCollector) Collect(_ context.Context) (map[string]any, error) {
 	info, err := host.Info()
 	if err != nil {

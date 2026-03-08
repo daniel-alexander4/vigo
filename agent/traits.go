@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/isogov/isogov/agent/facts"
+	"github.com/hobnob/hobnob/agent/nails"
 	"github.com/spf13/cobra"
 )
 
@@ -23,21 +23,21 @@ With collector names (e.g. "os", "hardware"), prints only those categories.
 With a dot-path (e.g. "os.distro"), prints just that value.
 
 Examples:
-  isogov-agent traits                  # all traits
-  isogov-agent traits os               # only OS traits
-  isogov-agent traits os hardware      # OS and hardware traits
-  isogov-agent traits os.distro        # just the distro value`,
+  hob traits                  # all traits
+  hob traits os               # only OS traits
+  hob traits os hardware      # OS and hardware traits
+  hob traits os.distro        # just the distro value`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Suppress slog output for clean JSON-only stdout.
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
 
 		ctx := context.Background()
-		allCollectors := facts.DefaultCollectors()
+		allCollectors := nails.DefaultCollectors()
 
 		// No args: collect everything and print.
 		if len(args) == 0 {
-			traits, err := facts.CollectAll(ctx, allCollectors)
+			traits, err := nails.CollectAll(ctx, allCollectors)
 			if err != nil {
 				return err
 			}
@@ -47,7 +47,7 @@ Examples:
 		// If first arg contains a dot, treat as dot-path query.
 		if strings.Contains(args[0], ".") {
 			dotPath := args[0]
-			traits, err := facts.CollectAll(ctx, allCollectors)
+			traits, err := nails.CollectAll(ctx, allCollectors)
 			if err != nil {
 				return err
 			}
@@ -67,7 +67,7 @@ Examples:
 			os.Exit(1)
 		}
 
-		traits, err := facts.CollectAll(ctx, filtered)
+		traits, err := nails.CollectAll(ctx, filtered)
 		if err != nil {
 			return err
 		}
@@ -104,13 +104,13 @@ func traverseDotPath(data map[string]any, path string) (any, bool) {
 
 // filterCollectors returns only the collectors whose Name() matches one of the
 // provided names. Returns an error if any name has no matching collector.
-func filterCollectors(all []facts.Collector, names []string) ([]facts.Collector, error) {
-	available := make(map[string]facts.Collector, len(all))
+func filterCollectors(all []nails.Collector, names []string) ([]nails.Collector, error) {
+	available := make(map[string]nails.Collector, len(all))
 	for _, c := range all {
 		available[c.Name()] = c
 	}
 
-	var result []facts.Collector
+	var result []nails.Collector
 	var unknown []string
 	for _, name := range names {
 		c, ok := available[name]

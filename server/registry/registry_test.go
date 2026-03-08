@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/isogov/isogov/server/db"
-	"github.com/isogov/isogov/server/registry"
+	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/registry"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:16-alpine",
-		postgres.WithDatabase("isogov_test"),
+		postgres.WithDatabase("hobnob_test"),
 		postgres.WithUsername("test"),
 		postgres.WithPassword("test"),
 		testcontainers.WithWaitStrategy(

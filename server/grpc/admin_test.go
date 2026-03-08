@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
 func TestGenerateToken(t *testing.T) {

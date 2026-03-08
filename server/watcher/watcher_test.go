@@ -88,9 +88,9 @@ func (m *mockDispatcher) DispatchRotation(ctx context.Context, event string, sec
 
 func TestRotationTrigger(t *testing.T) {
 	clientID := uuid.New()
-	provider := &mockVersionProvider{versions: map[string]int{"isogov/db/dsn": 1}}
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
 	store := &mockClientStore{refs: map[string][]string{
-		"isogov/db/dsn": {"web-01.example.com"},
+		"hobnob/db/dsn": {"web-01.example.com"},
 	}}
 	database := &mockDB{
 		clientsByHost: map[string]uuid.UUID{
@@ -99,7 +99,7 @@ func TestRotationTrigger(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"isogov/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -108,7 +108,7 @@ func TestRotationTrigger(t *testing.T) {
 	w.initVersions(ctx)
 
 	// Simulate version bump.
-	provider.setVersion("isogov/db/dsn", 2)
+	provider.setVersion("hobnob/db/dsn", 2)
 
 	// Run one check.
 	w.checkRotations(ctx)
@@ -117,7 +117,7 @@ func TestRotationTrigger(t *testing.T) {
 	database.mu.Lock()
 	assert.Contains(t, database.forcePushed, clientID)
 	assert.Len(t, database.rotationEvents, 1)
-	assert.Equal(t, "isogov/db/dsn", database.rotationEvents[0].SecretPath)
+	assert.Equal(t, "hobnob/db/dsn", database.rotationEvents[0].SecretPath)
 	database.mu.Unlock()
 
 	// Verify webhook dispatched.
@@ -127,12 +127,12 @@ func TestRotationTrigger(t *testing.T) {
 }
 
 func TestNoActionWhenVersionsUnchanged(t *testing.T) {
-	provider := &mockVersionProvider{versions: map[string]int{"isogov/db/dsn": 1}}
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
 	store := &mockClientStore{refs: map[string][]string{}}
 	database := &mockDB{clientsByHost: map[string]uuid.UUID{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"isogov/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -147,12 +147,12 @@ func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 }
 
 func TestWatcherRunLoop(t *testing.T) {
-	provider := &mockVersionProvider{versions: map[string]int{"isogov/db/dsn": 1}}
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
 	store := &mockClientStore{refs: map[string][]string{}}
 	database := &mockDB{clientsByHost: map[string]uuid.UUID{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 50*time.Millisecond, []string{"isogov/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 50*time.Millisecond, []string{"hobnob/db/dsn"})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -165,9 +165,9 @@ func TestMultipleAffectedClients(t *testing.T) {
 	client1 := uuid.New()
 	client2 := uuid.New()
 
-	provider := &mockVersionProvider{versions: map[string]int{"isogov/tls/cert": 1}}
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/tls/cert": 1}}
 	store := &mockClientStore{refs: map[string][]string{
-		"isogov/tls/cert": {"web-01.example.com", "web-02.example.com"},
+		"hobnob/tls/cert": {"web-01.example.com", "web-02.example.com"},
 	}}
 	database := &mockDB{
 		clientsByHost: map[string]uuid.UUID{
@@ -177,12 +177,12 @@ func TestMultipleAffectedClients(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"isogov/tls/cert"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/tls/cert"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
 
-	provider.setVersion("isogov/tls/cert", 2)
+	provider.setVersion("hobnob/tls/cert", 2)
 	w.checkRotations(ctx)
 
 	database.mu.Lock()

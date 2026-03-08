@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/isogov/isogov/agent/snapshots"
+	"github.com/hobnob/hobnob/agent/snapshots"
 )
 
 func writeFile(t *testing.T, path, content string, mode os.FileMode) {

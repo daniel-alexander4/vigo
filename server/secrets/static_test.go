@@ -15,11 +15,11 @@ func TestStaticProviderGet(t *testing.T) {
 	}
 	defer p.Close()
 
-	val, err := p.Get(context.Background(), "isogov/db/dsn")
+	val, err := p.Get(context.Background(), "hobnob/db/dsn")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if val != "postgres://isogov:testpw@localhost:5432/isogov_test?sslmode=disable" {
+	if val != "postgres://hobnob:testpw@localhost:5432/hobnob_test?sslmode=disable" {
 		t.Errorf("got %q, want postgres DSN", val)
 	}
 }
@@ -31,11 +31,11 @@ func TestStaticProviderGetBytes(t *testing.T) {
 	}
 	defer p.Close()
 
-	val, err := p.GetBytes(context.Background(), "isogov/db/dsn")
+	val, err := p.GetBytes(context.Background(), "hobnob/db/dsn")
 	if err != nil {
 		t.Fatalf("GetBytes: %v", err)
 	}
-	expected := "postgres://isogov:testpw@localhost:5432/isogov_test?sslmode=disable"
+	expected := "postgres://hobnob:testpw@localhost:5432/hobnob_test?sslmode=disable"
 	if string(val) != expected {
 		t.Errorf("got %q, want %q", string(val), expected)
 	}

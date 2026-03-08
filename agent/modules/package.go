@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/isogov/isogov/agent/modules/pkgmgr"
+	"github.com/hobnob/hobnob/agent/modules/pkgmgr"
 )
 
 // PackageExecutor manages package resources idempotently. It queries the

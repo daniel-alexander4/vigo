@@ -1,5 +1,5 @@
 // Package traits implements custom trait executable sync, execution, and JSON
-// parsing for the Isogov agent.
+// parsing for the Hobnob agent.
 package traits
 
 import (
@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
 // Downloader abstracts the gRPC download call for testability.

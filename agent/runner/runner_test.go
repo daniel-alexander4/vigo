@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/isogov/isogov/agent/modules"
-	pb "github.com/isogov/isogov/gen/proto/isogov"
+	"github.com/hobnob/hobnob/agent/modules"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
 // mockExecutor records calls and returns canned results.

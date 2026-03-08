@@ -54,7 +54,7 @@ func NewIsopassProvider(baseURL, bearerToken string) (*IsopassProvider, error) {
 	}, nil
 }
 
-// Get retrieves a secret string by key path (e.g. "isogov/db/dsn").
+// Get retrieves a secret string by key path (e.g. "hobnob/db/dsn").
 func (p *IsopassProvider) Get(ctx context.Context, key string) (string, error) {
 	if err := p.ensureToken(ctx); err != nil {
 		return "", fmt.Errorf("isopass auth: %w", err)

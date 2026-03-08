@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/isogov/isogov/server/db"
+	"github.com/hobnob/hobnob/server/db"
 )
 
 // bcryptCost is the bcrypt hash cost for one-time enrollment tokens.

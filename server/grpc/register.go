@@ -5,14 +5,14 @@ import (
 	"errors"
 	"log/slog"
 
-	pb "github.com/isogov/isogov/gen/proto/isogov"
-	"github.com/isogov/isogov/server/registry"
-	"github.com/isogov/isogov/server/webhook"
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/registry"
+	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// Register handles the IsgovAgent.Register RPC. It delegates to the enrollment
+// Register handles the HobnobAgent.Register RPC. It delegates to the enrollment
 // registry to validate the one-time token, match approved patterns, and create
 // the client record.
 func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {

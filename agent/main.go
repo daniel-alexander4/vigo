@@ -12,12 +12,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/isogov/isogov/agent/auth"
-	"github.com/isogov/isogov/agent/checkin"
-	"github.com/isogov/isogov/agent/facts"
-	"github.com/isogov/isogov/agent/modules"
-	"github.com/isogov/isogov/agent/modules/pkgmgr"
-	"github.com/isogov/isogov/agent/snapshots"
+	"github.com/hobnob/hobnob/agent/auth"
+	"github.com/hobnob/hobnob/agent/checkin"
+	"github.com/hobnob/hobnob/agent/nails"
+	"github.com/hobnob/hobnob/agent/modules"
+	"github.com/hobnob/hobnob/agent/modules/pkgmgr"
+	"github.com/hobnob/hobnob/agent/snapshots"
 	"github.com/spf13/cobra"
 )
 
@@ -61,7 +61,7 @@ func setupLogger() {
 func loadClientID() (string, error) {
 	data, err := os.ReadFile(dataDir + "/client.uuid")
 	if err != nil {
-		return "", fmt.Errorf("read client UUID from %s/client.uuid: %w (have you run 'isogov-agent register'?)", dataDir, err)
+		return "", fmt.Errorf("read client UUID from %s/client.uuid: %w (have you run 'hob register'?)", dataDir, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
@@ -71,10 +71,10 @@ func saveClientID(id string) error {
 	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
 }
 
-// detectPackageManager uses OS facts to detect the platform package manager.
+// detectPackageManager uses OS nails to detect the platform package manager.
 func detectPackageManager() (pkgmgr.PackageManager, error) {
 	// Quick OS fact lookup for package manager detection.
-	osCollector := &facts.OSCollector{}
+	osCollector := &nails.OSCollector{}
 	osFacts, err := osCollector.Collect(context.Background())
 	if err != nil {
 		// Fallback: use runtime.GOOS to determine family.
@@ -121,7 +121,7 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 
 // detectOSInfo returns the OS family and distro for repo manager detection.
 func detectOSInfo() (family, distro string) {
-	osCollector := &facts.OSCollector{}
+	osCollector := &nails.OSCollector{}
 	osFacts, err := osCollector.Collect(context.Background())
 	if err != nil {
 		return runtime.GOOS, ""
@@ -153,9 +153,9 @@ func signalContext() (context.Context, context.CancelFunc) {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "isogov-agent",
-	Short: "Isogov configuration management agent",
-	Long:  "Agent daemon that pulls desired state from the Isogov server and applies idempotent resource changes.",
+	Use:   "hob",
+	Short: "Hobnob configuration management agent",
+	Long:  "Agent daemon that pulls desired state from the Hobnob server and applies idempotent resource changes.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		setupLogger()
 		// Ensure data directory exists.
@@ -188,7 +188,7 @@ var rootCmd = &cobra.Command{
 
 		// Initialize snapshot manager.
 		snapshotMgr := &snapshots.Manager{
-			BaseDir:    "/var/lib/isogov/snapshots",
+			BaseDir:    "/var/lib/hobnob/snapshots",
 			MaxPerPath: 5,
 		}
 
@@ -249,28 +249,28 @@ var runCmd = &cobra.Command{
 
 		// Initialize snapshot manager.
 		snapshotMgr := &snapshots.Manager{
-			BaseDir:    "/var/lib/isogov/snapshots",
+			BaseDir:    "/var/lib/hobnob/snapshots",
 			MaxPerPath: 5,
 		}
 
 		// Build executors.
 		executors := buildExecutors(snapshotMgr)
 
-		// Collect facts.
+		// Collect nails.
 		ctx := context.Background()
-		factsMap, err := facts.CollectAll(ctx, facts.DefaultCollectors())
+		nailsMap, err := nails.CollectAll(ctx, nails.DefaultCollectors())
 		if err != nil {
 			logger.Warn("fact collection failed", "error", err)
-			factsMap = make(map[string]any)
+			nailsMap = make(map[string]any)
 		}
 
-		// Report facts.
-		if err := client.ReportFacts(ctx, factsMap); err != nil {
-			logger.Warn("failed to report facts", "error", err)
+		// Report nails.
+		if err := client.ReportNails(ctx, nailsMap); err != nil {
+			logger.Warn("failed to report nails", "error", err)
 		}
 
 		// Run once.
-		runResult, err := checkin.RunOnce(ctx, client, executors, factsMap, dryRun, module)
+		runResult, err := checkin.RunOnce(ctx, client, executors, nailsMap, dryRun, module)
 		if err != nil {
 			return fmt.Errorf("convergence run failed: %w", err)
 		}
@@ -302,7 +302,7 @@ var runCmd = &cobra.Command{
 
 var registerCmd = &cobra.Command{
 	Use:   "register",
-	Short: "Register this agent with the Isogov server",
+	Short: "Register this agent with the Hobnob server",
 	Long:  "Generates a keypair (if needed) and registers with the server using a one-time token.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := slog.Default()
@@ -386,7 +386,7 @@ func getOutboundIP() string {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/isogov", "directory for agent data (keypair, UUID)")
+	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/hobnob", "directory for agent data (keypair, UUID)")
 	rootCmd.PersistentFlags().StringVar(&server, "server", "localhost:9090", "server gRPC address")
 	rootCmd.PersistentFlags().StringVar(&caFile, "ca-file", "", "CA certificate file for server verification")
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "client certificate file for mTLS (optional in dev)")

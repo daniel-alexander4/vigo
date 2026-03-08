@@ -1,4 +1,4 @@
-package facts
+package nails
 
 import (
 	"context"
@@ -8,14 +8,14 @@ import (
 	psnet "github.com/shirou/gopsutil/v4/net"
 )
 
-// NetworkCollector gathers network facts: hostname, FQDN, IP addresses,
+// NetworkCollector gathers network nails: hostname, FQDN, IP addresses,
 // and MAC addresses.
 type NetworkCollector struct{}
 
 // Name returns "network".
 func (c *NetworkCollector) Name() string { return "network" }
 
-// Collect returns network facts using os.Hostname and gopsutil net.Interfaces.
+// Collect returns network nails using os.Hostname and gopsutil net.Interfaces.
 func (c *NetworkCollector) Collect(_ context.Context) (map[string]any, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
