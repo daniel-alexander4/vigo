@@ -31,7 +31,7 @@
 - [ ] **Phase 7: Conditional Vars** - Define named conditions in module YAML with trait-based operators
 - [ ] **Phase 8: Resource Conditionals** - Apply conditional fields to resources, replacing `when:`
 - [ ] **Phase 9: Conditional Blocks** - Group resources under shared conditionals with `conditional_block:`
-- [ ] **Phase 10: Module Conditionals** - Apply conditional fields to module references in roles and clients.yaml
+- [x] **Phase 10: Module Conditionals** - Apply conditional fields to module references in roles and clients.yaml (completed 2026-03-08)
 
 ## Phase Details
 
@@ -108,4 +108,4 @@ Phases execute in numeric order: 7 -> 8 -> 9 -> 10
 | 7. Conditional Vars | v1.2 | 2/2 | Complete | 2026-03-07 |
 | 8. Resource Conditionals | v1.2 | 2/2 | Complete | 2026-03-07 |
 | 9. Conditional Blocks | v1.2 | 2/2 | Complete | 2026-03-07 |
-| 10. Module Conditionals | v1.2 | 0/1 | Not started | - |
+| 10. Module Conditionals | 1/1 | Complete   | 2026-03-08 | - |

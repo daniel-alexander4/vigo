@@ -31,8 +31,8 @@ Requirements for v1.2 Structured Conditionals. Each maps to roadmap phases.
 
 ### Module Conditionals
 
-- [ ] **COND-14**: Conditional fields on module references in roles YAML to skip entire modules
-- [ ] **COND-15**: Conditional fields on module references in clients.yaml to skip entire modules
+- [x] **COND-14**: Conditional fields on module references in roles YAML to skip entire modules
+- [x] **COND-15**: Conditional fields on module references in clients.yaml to skip entire modules
 
 ## Future Requirements
 
@@ -66,8 +66,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COND-11 | Phase 9 | Complete |
 | COND-12 | Phase 9 | Complete |
 | COND-13 | Phase 9 | Complete |
-| COND-14 | Phase 10 | Pending |
-| COND-15 | Phase 10 | Pending |
+| COND-14 | Phase 10 | Complete |
+| COND-15 | Phase 10 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 15 total

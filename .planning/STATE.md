@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Structured Conditionals
 status: completed
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-03-07T22:29:43.356Z"
-last_activity: 2026-03-07 -- Completed 09-02 conditional block integration tests
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-03-08T02:07:00Z"
+last_activity: 2026-03-08 -- Completed 10-01 module conditionals
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  completed_phases: 4
+  total_plans: 7
+  completed_plans: 7
   percent: 100
 ---
 
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** Phase 9 complete -- conditional_block parsing, integration, and filtering all tested
+**Current focus:** v1.2 milestone complete -- all structured conditional features implemented across phases 7-10
 
 ## Current Position
 
-Phase: 9 of 10 (Conditional Blocks) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 9 complete, ready for phase 10
-Last activity: 2026-03-07 -- Completed 09-02 conditional block integration tests
+Phase: 10 of 10 (Module Conditionals) -- COMPLETE
+Plan: 1 of 1 complete
+Status: Phase 10 complete, v1.2 milestone complete
+Last activity: 2026-03-08 -- Completed 10-01 module conditionals
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 5min
-- Total execution time: ~2.0 hours
+- Total execution time: ~2.1 hours
 
 **By Phase:**
 
@@ -52,6 +52,7 @@ Progress: [██████████] 100%
 | 07-Conditional Vars | 2/2 | 7min | 3.5min |
 | 08-Resource Conditionals | 2/2 | 6min | 3min |
 | 09-Conditional Blocks | 2/2 | 4min | 2min |
+| 10-Module Conditionals | 1/1 | 4min | 4min |
 
 *Updated after each plan completion*
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [09-01]: FlattenResourceNodes operates on raw yaml.Node for conditional_block detection
 - [09-02]: No loader.go changes needed -- custom UnmarshalYAML transparently handles conditional_block during yaml.Unmarshal
 - [09-02]: Check-in pipeline tests construct ClientConfig directly -- YAML path covered by loader tests
+- [10-01]: ModuleRef polymorphic YAML type (scalar string or mapping) with alias-based UnmarshalYAML
+- [10-01]: First ModuleRef wins for conditional fields during dedup (matching var merge behavior)
+- [10-01]: ShouldIncludeModule placed before resource loop in configToProtoModules
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-07T22:24:55Z
-Stopped at: Completed 09-02-PLAN.md
-Resume file: .planning/phases/09-conditional-blocks/09-02-SUMMARY.md
+Last session: 2026-03-08T02:07:00Z
+Stopped at: Completed 10-01-PLAN.md
+Resume file: .planning/phases/10-module-conditionals/10-01-SUMMARY.md
