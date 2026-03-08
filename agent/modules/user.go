@@ -155,7 +155,7 @@ func (u *UserExecutor) createUser(ctx context.Context, name string, params map[s
 }
 
 // updateUser checks if attributes differ and runs usermod if needed.
-func (u *UserExecutor) updateUser(_ context.Context, name string, params map[string]string, entry *passwdEntry, dryRun bool, result ResourceResult) ResourceResult {
+func (u *UserExecutor) updateUser(ctx context.Context, name string, params map[string]string, entry *passwdEntry, dryRun bool, result ResourceResult) ResourceResult {
 	// Check if any attributes need to change
 	needsUpdate := false
 	var modArgs []string
@@ -195,7 +195,6 @@ func (u *UserExecutor) updateUser(_ context.Context, name string, params map[str
 	}
 
 	modArgs = append(modArgs, name)
-	ctx := context.Background()
 	out, err := u.runner().Run(ctx, "usermod", modArgs...)
 	if err != nil {
 		result.Error = fmt.Errorf("usermod %s: %w: %s", name, err, string(out))

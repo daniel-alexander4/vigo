@@ -13,6 +13,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/hobnob/hobnob/server/conditionals"
 	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/hobnob/hobnob/server/validate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,7 +35,7 @@ type resolvedEntry struct {
 }
 
 // ConfigStore loads, watches, and provides per-client configuration.
-// The clientsDir contains .yaml files with client entries at the top level,
+// The clientsDir contains .hob/.yaml files with client entries at the top level,
 // plus modules/ and roles/ subdirectories. Secret references are resolved
 // via a secrets.Provider. Hot-reload via fsnotify.
 type ConfigStore struct {
@@ -43,16 +44,21 @@ type ConfigStore struct {
 	rawModules map[string]*ModuleDefinition // unresolved, for secret ref scanning
 	dir        string                       // client-configs directory
 	provider   secrets.Provider
+	dangerous  bool // allow non-idempotent resources
 }
 
 // NewConfigStore creates a ConfigStore that scans clientsDir for client
-// YAML files, module definitions from clientsDir/modules/, and role
-// definitions from clientsDir/roles/. Secret references are resolved
+// config files (.hob or .yaml), module definitions from clientsDir/modules/,
+// and role definitions from clientsDir/roles/. Secret references are resolved
 // using the given provider.
-func NewConfigStore(clientsDir string, provider secrets.Provider) (*ConfigStore, error) {
+//
+// By default, all resources must pass idempotency validation. Set dangerous
+// to true to allow non-idempotent resources (e.g., exec without guards).
+func NewConfigStore(clientsDir string, provider secrets.Provider, dangerous bool) (*ConfigStore, error) {
 	cs := &ConfigStore{
-		dir:      clientsDir,
-		provider: provider,
+		dir:       clientsDir,
+		provider:  provider,
+		dangerous: dangerous,
 	}
 	if err := cs.loadAll(); err != nil {
 		return nil, err
@@ -123,7 +129,7 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 				return nil
 			}
 			inTemplatesDir := strings.HasPrefix(event.Name, cs.templatesDir()+string(os.PathSeparator))
-			if !isYAMLFile(event.Name) && !inTemplatesDir {
+			if !isConfigFile(event.Name) && !inTemplatesDir {
 				continue
 			}
 			if debounceTimer != nil {
@@ -155,7 +161,7 @@ func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "tem
 // loadAll reads module defs, role defs, and client YAML files, resolves
 // all entries, and atomically swaps the config.
 func (cs *ConfigStore) loadAll() error {
-	moduleDefs, err := loadModuleDefs(cs.modulesDir())
+	moduleDefs, err := loadModuleDefs(cs.modulesDir(), cs.dangerous)
 	if err != nil {
 		return fmt.Errorf("loading modules: %w", err)
 	}
@@ -352,8 +358,7 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 	// Redact resolved secrets in vars.
 	redacted := cloneClientConfig(cfg)
 	for k, v := range redacted.Vars {
-		if s, ok := v.(string); ok && knownSecretFields[k] {
-			_ = s
+		if _, ok := v.(string); ok && knownSecretFields[k] {
 			redacted.Vars[k] = "[REDACTED]"
 		}
 	}
@@ -367,8 +372,8 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 
 // --- internal helpers ---
 
-// loadModuleDefs reads all YAML files from the modules directory.
-func loadModuleDefs(dir string) (map[string]*ModuleDefinition, error) {
+// loadModuleDefs reads all config files from the modules directory.
+func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -379,7 +384,7 @@ func loadModuleDefs(dir string) (map[string]*ModuleDefinition, error) {
 
 	defs := make(map[string]*ModuleDefinition)
 	for _, entry := range entries {
-		if entry.IsDir() || !isYAMLFile(entry.Name()) {
+		if entry.IsDir() || !isConfigFile(entry.Name()) {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
@@ -387,8 +392,8 @@ func loadModuleDefs(dir string) (map[string]*ModuleDefinition, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
 		}
-		var def ModuleDefinition
-		if err := yaml.Unmarshal(data, &def); err != nil {
+		def, err := ParseModuleFile(data)
+		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", path, err)
 		}
 		if def.Name == "" {
@@ -418,12 +423,25 @@ func loadModuleDefs(dir string) (map[string]*ModuleDefinition, error) {
 		}
 		def.ConditionalVars = condVars
 
-		defs[def.Name] = &def
+		// Idempotency validation.
+		findings := validate.ValidateModule(moduleToValidate(def))
+		for _, f := range findings {
+			if f.Severity == validate.SeverityWarning {
+				slog.Warn("idempotency warning", "module", def.Name, "finding", f.String())
+			}
+		}
+		if !dangerous && validate.HasErrors(findings) {
+			return nil, fmt.Errorf("module %q failed idempotency check in %s:\n%s"+
+				"hint: fix the resources above, or start the server with --dangerous to bypass",
+				def.Name, path, validate.FormatFindings(findings))
+		}
+
+		defs[def.Name] = def
 	}
 	return defs, nil
 }
 
-// loadRoleDefs reads all YAML files from the roles directory.
+// loadRoleDefs reads all config files from the roles directory.
 func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -435,7 +453,7 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 
 	defs := make(map[string]*RoleDefinition)
 	for _, entry := range entries {
-		if entry.IsDir() || !isYAMLFile(entry.Name()) {
+		if entry.IsDir() || !isConfigFile(entry.Name()) {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
@@ -458,8 +476,8 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 	return defs, nil
 }
 
-// loadClientsDir reads all .yaml files at the top level of dir (not subdirs)
-// and merges their client entries in filesystem order.
+// loadClientsDir reads all config files (.hob/.yaml) at the top level of dir
+// (not subdirs) and merges their client entries in filesystem order.
 func loadClientsDir(dir string) ([]ClientEntry, error) {
 	dirEntries, err := os.ReadDir(dir)
 	if err != nil {
@@ -468,7 +486,7 @@ func loadClientsDir(dir string) ([]ClientEntry, error) {
 
 	var allEntries []ClientEntry
 	for _, de := range dirEntries {
-		if de.IsDir() || !isYAMLFile(de.Name()) {
+		if de.IsDir() || !isConfigFile(de.Name()) {
 			continue
 		}
 		path := filepath.Join(dir, de.Name())
@@ -621,7 +639,8 @@ func moduleDefReferencesSecret(def *ModuleDefinition, needle string) bool {
 }
 
 // entryReferencesSecret checks if a client entry uses any affected module
-// or has the secret in its vars/env_vars.
+// or has the secret in its env_vars (non-active environment overrides retain
+// raw secret: prefixes since only the active environment is resolved).
 func entryReferencesSecret(cfg *ClientConfig, affectedModules map[string]bool, needle string) bool {
 	// Check if any module is affected.
 	for _, mod := range cfg.Modules {
@@ -629,12 +648,8 @@ func entryReferencesSecret(cfg *ClientConfig, affectedModules map[string]bool, n
 			return true
 		}
 	}
-	// Check vars (these are pre-merged, so check EnvVars too).
-	for _, v := range cfg.Vars {
-		if s, ok := v.(string); ok && s == needle {
-			return true
-		}
-	}
+	// Check env_vars — non-active environments retain raw secret: references.
+	// (cfg.Vars is already resolved, so checking it would never match.)
 	if cfg.EnvVars != nil {
 		for _, envMap := range cfg.EnvVars {
 			for _, v := range envMap {
@@ -645,6 +660,50 @@ func entryReferencesSecret(cfg *ClientConfig, affectedModules map[string]bool, n
 		}
 	}
 	return false
+}
+
+// ComputeEnvDiff compares env_vars between two environments across all client
+// entries that include the given module. Returns a map of var_name -> "old → new".
+func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[string]string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	diff := make(map[string]string)
+	for _, entry := range cs.entries {
+		hasModule := false
+		for _, mod := range entry.config.Modules {
+			if mod.Name == moduleName {
+				hasModule = true
+				break
+			}
+		}
+		if !hasModule {
+			continue
+		}
+
+		fromVars := entry.config.EnvVars[fromEnv]
+		toVars := entry.config.EnvVars[toEnv]
+
+		for k, fromVal := range fromVars {
+			fromStr := fmt.Sprintf("%v", fromVal)
+			toVal, exists := toVars[k]
+			if !exists {
+				diff[k] = fromStr + " → (unset)"
+			} else {
+				toStr := fmt.Sprintf("%v", toVal)
+				if fromStr != toStr {
+					diff[k] = fromStr + " → " + toStr
+				}
+			}
+		}
+		for k, toVal := range toVars {
+			if _, exists := fromVars[k]; !exists {
+				diff[k] = "(unset) → " + fmt.Sprintf("%v", toVal)
+			}
+		}
+	}
+
+	return diff
 }
 
 // cloneClientConfig returns a shallow copy of the ClientConfig with a
@@ -686,21 +745,25 @@ func cloneResources(resources []ResourceConfig) []ResourceConfig {
 	return cloned
 }
 
-// dedupStrings removes duplicates from a string slice, preserving order.
-func dedupStrings(ss []string) []string {
-	seen := make(map[string]bool, len(ss))
-	result := make([]string, 0, len(ss))
-	for _, s := range ss {
-		if !seen[s] {
-			seen[s] = true
-			result = append(result, s)
-		}
-	}
-	return result
+
+// isConfigFile checks if a filename has a recognized config extension.
+// Accepts .hob (preferred), .yaml, and .yml.
+func isConfigFile(name string) bool {
+	ext := filepath.Ext(name)
+	return ext == ".hob" || ext == ".yaml" || ext == ".yml"
 }
 
-// isYAMLFile checks if a filename has a YAML extension.
-func isYAMLFile(name string) bool {
-	ext := filepath.Ext(name)
-	return ext == ".yaml" || ext == ".yml"
+// moduleToValidate converts a ModuleDefinition to a validate.Module.
+func moduleToValidate(def *ModuleDefinition) validate.Module {
+	mod := validate.Module{Name: def.Name}
+	for _, r := range def.Resources {
+		mod.Resources = append(mod.Resources, validate.Resource{
+			Name:       r.Name,
+			Type:       r.Type,
+			Attributes: r.Attributes,
+			Notify:     r.Notify,
+			Subscribes: r.Subscribes,
+		})
+	}
+	return mod
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -87,7 +88,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("resolving migrations path: %w", err)
 	}
-	migDSN := "pgx5://" + cfg.Database.DSN[len("postgres://"):]
+	migDSN := dsnToMigrateScheme(cfg.Database.DSN)
 	mig, err := migrate.New("file://"+absPath, migDSN)
 	if err != nil {
 		return fmt.Errorf("creating migrate instance: %w", err)
@@ -108,7 +109,8 @@ func run() error {
 	queries := db.New(pool)
 	reg := registry.NewRegistry(queries)
 
-	configStore, err := config.NewConfigStore(clientConfigsDir, provider)
+	dangerous := os.Getenv("HOBNOB_DANGEROUS") == "1" || hasFlag("--dangerous")
+	configStore, err := config.NewConfigStore(clientConfigsDir, provider, dangerous)
 	if err != nil {
 		return fmt.Errorf("initializing config store: %w", err)
 	}
@@ -200,6 +202,29 @@ func run() error {
 
 	slog.Info("server stopped")
 	return nil
+}
+
+// hasFlag checks if a flag is present in os.Args.
+func hasFlag(flag string) bool {
+	for _, arg := range os.Args[1:] {
+		if arg == flag {
+			return true
+		}
+	}
+	return false
+}
+
+// dsnToMigrateScheme converts a postgres DSN to the pgx5 scheme used by
+// golang-migrate. Handles both postgres:// and postgresql:// prefixes.
+func dsnToMigrateScheme(dsn string) string {
+	switch {
+	case strings.HasPrefix(dsn, "postgres://"):
+		return "pgx5://" + dsn[len("postgres://"):]
+	case strings.HasPrefix(dsn, "postgresql://"):
+		return "pgx5://" + dsn[len("postgresql://"):]
+	default:
+		return dsn
+	}
 }
 
 // envOrDefault returns the environment variable value or a default.

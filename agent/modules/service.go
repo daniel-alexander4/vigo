@@ -3,7 +3,6 @@ package modules
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -60,7 +59,7 @@ func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string,
 	}
 	enabledParam := params["enabled"]
 
-	names := splitServiceNames(nameParam)
+	names := splitNames(nameParam)
 
 	for _, name := range names {
 		res := s.executeOne(ctx, name, state, enabledParam, dryRun)
@@ -80,19 +79,6 @@ func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string,
 		result.Action = ActionNone
 	}
 	return result
-}
-
-// splitServiceNames splits a comma-separated name string into trimmed, non-empty names.
-func splitServiceNames(s string) []string {
-	parts := strings.Split(s, ",")
-	names := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			names = append(names, p)
-		}
-	}
-	return names
 }
 
 // executeOne applies the desired state for a single service.

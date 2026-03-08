@@ -142,7 +142,7 @@ func startTestServer(t *testing.T) (string, func()) {
 		}
 	}
 
-	configStore, err := config.NewConfigStore(clientConfigsDir, &noopProvider{})
+	configStore, err := config.NewConfigStore(clientConfigsDir, &noopProvider{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -44,5 +44,13 @@ func DefaultCollectors() []Collector {
 		&NetworkCollector{},
 		&PackageCollector{},
 		&TimeCollector{},
+		&IdentityCollector{},
+		&VirtualCollector{},
+		&UptimeCollector{},
+		&LoadAvgCollector{},
+		&MountpointsCollector{},
+		&ProcessorsCollector{},
+		&DMICollector{},
+		&CloudCollector{},
 	}
 }

@@ -6,12 +6,13 @@ build:
 	go build -o bin/hobd ./server
 	go build -o bin/hob ./agent
 	go build -o bin/hobcli ./cli
+	ln -sf hobcli bin/hobvi
 
 proto:
 	buf generate
 
 certs:
-	mkdir -p certs
+	mkdir -p server-configs/certs
 	@echo "Generating CA keypair..."
 	openssl genrsa -out server-configs/certs/ca.key 4096
 	openssl req -new -x509 -key server-configs/certs/ca.key -out server-configs/certs/ca.crt -days 3650 \

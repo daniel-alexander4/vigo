@@ -71,20 +71,17 @@ func saveClientID(id string) error {
 	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
 }
 
-// detectPackageManager uses OS nails to detect the platform package manager.
-func detectPackageManager() (pkgmgr.PackageManager, error) {
-	// Quick OS fact lookup for package manager detection.
+// detectOSInfo returns the OS family and distro from nails. Falls back to
+// runtime.GOOS if the OS collector fails.
+func detectOSInfo() (family, distro string) {
 	osCollector := &nails.OSCollector{}
 	osFacts, err := osCollector.Collect(context.Background())
 	if err != nil {
-		// Fallback: use runtime.GOOS to determine family.
-		family := runtime.GOOS
-		return pkgmgr.Detect(family, "")
+		return runtime.GOOS, ""
 	}
-
-	family, _ := osFacts["family"].(string)
-	distro, _ := osFacts["distro"].(string)
-	return pkgmgr.Detect(family, distro)
+	family, _ = osFacts["family"].(string)
+	distro, _ = osFacts["distro"].(string)
+	return family, distro
 }
 
 // buildExecutors creates the executor map with all resource type handlers.
@@ -100,8 +97,10 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"cron":       &modules.CronExecutor{},
 	}
 
+	osFamily, osDistro := detectOSInfo()
+
 	// Auto-detect package manager. Non-fatal if detection fails.
-	pm, err := detectPackageManager()
+	pm, err := pkgmgr.Detect(osFamily, osDistro)
 	if err != nil {
 		slog.Warn("package manager detection failed, package resources will error",
 			"error", err,
@@ -112,24 +111,11 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 
 	// Auto-detect repo manager. Non-fatal if unavailable (some distros
 	// like Alpine don't support managed repos).
-	osFamily, osDistro := detectOSInfo()
 	if rm := pkgmgr.DetectRepoManager(osFamily, osDistro); rm != nil {
 		executors["repository"] = &modules.RepositoryExecutor{RepoMgr: rm}
 	}
 
 	return executors
-}
-
-// detectOSInfo returns the OS family and distro for repo manager detection.
-func detectOSInfo() (family, distro string) {
-	osCollector := &nails.OSCollector{}
-	osFacts, err := osCollector.Collect(context.Background())
-	if err != nil {
-		return runtime.GOOS, ""
-	}
-	family, _ = osFacts["family"].(string)
-	distro, _ = osFacts["distro"].(string)
-	return family, distro
 }
 
 // newGRPCClient creates a gRPC client with the configured TLS settings.

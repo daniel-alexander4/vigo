@@ -73,10 +73,10 @@ The bootstrap script detects OS/arch, downloads the agent binary, installs it, c
 
 ### 8. Define desired state
 
-Edit `client-configs/clients.yaml` to map hostnames to modules and roles:
+Edit `client-configs/clients.hob` to map hostnames to modules and roles:
 
 ```yaml
-# client-configs/clients.yaml
+# client-configs/clients.hob
 clients:
   - match: "web01.example.com"
     environment: production
@@ -85,7 +85,7 @@ clients:
       doc_root: "/var/www/html"
 ```
 
-Modules are defined in `client-configs/modules/`. For example, `client-configs/modules/nginx.yaml`:
+Modules are defined in `client-configs/modules/`. For example, `client-configs/modules/nginx.hob`:
 
 ```yaml
 name: nginx
@@ -136,7 +136,7 @@ This writes each line with 2 extra leading spaces (4 for the already-indented li
 Group modules into roles in `client-configs/roles/`:
 
 ```yaml
-# client-configs/roles/webserver.yaml
+# client-configs/roles/webserver.hob
 name: webserver
 modules: [nginx, certbot]
 ```
@@ -162,20 +162,20 @@ Or open the web dashboard at `http://<server-ip>:8080/`.
 
 ```
 client-configs/
-├── clients.yaml          # Maps hostnames/globs to roles and modules
+├── clients.hob           # Maps hostnames/globs to roles and modules
 ├── modules/              # Reusable resource sets with default vars
-│   ├── nginx.yaml
-│   ├── postgresql.yaml
+│   ├── nginx.hob
+│   ├── postgresql.hob
 │   └── ...
 ├── roles/                # Named groups of modules
-│   ├── webserver.yaml
-│   ├── database.yaml
+│   ├── webserver.hob
+│   ├── database.hob
 │   └── ...
 └── templates/            # External template files (referenced via source:)
     └── nginx.conf.tmpl
 ```
 
-`clients.yaml` entries use glob patterns — first match wins. Client-level `vars` override module defaults. Clients matching no entry get an empty module list.
+Config files use the `.hob` extension (YAML syntax). The server also accepts `.yaml`/`.yml` for backwards compatibility. `clients.hob` entries use glob patterns — first match wins. Client-level `vars` override module defaults. Clients matching no entry get an empty module list.
 
 ## Examples
 
@@ -183,17 +183,17 @@ Ready-to-use module definitions in `client-configs/modules/` and role groupings 
 
 | Module | File | What it configures |
 |--------|------|--------------------|
-| Nginx | [`client-configs/modules/nginx.yaml`](client-configs/modules/nginx.yaml) | Virtual host, worker tuning, `source:` template |
-| PostgreSQL | [`client-configs/modules/postgresql.yaml`](client-configs/modules/postgresql.yaml) | `postgresql.conf` + `pg_hba.conf`, memory tuning |
-| MySQL | [`client-configs/modules/mysql.yaml`](client-configs/modules/mysql.yaml) | InnoDB tuning, slow query log, security hardening |
-| Redis | [`client-configs/modules/redis.yaml`](client-configs/modules/redis.yaml) | LRU eviction, AOF persistence, `secret:` password |
-| Docker | [`client-configs/modules/docker.yaml`](client-configs/modules/docker.yaml) | `daemon.json`, log rotation, containerd |
-| HAProxy | [`client-configs/modules/haproxy.yaml`](client-configs/modules/haproxy.yaml) | Stats page, roundrobin backend, health checks |
-| OpenSSH + fail2ban | [`client-configs/modules/openssh.yaml`](client-configs/modules/openssh.yaml), [`fail2ban.yaml`](client-configs/modules/fail2ban.yaml) | Hardened sshd, key-only auth, brute-force protection |
-| Prometheus + Grafana | [`client-configs/modules/prometheus.yaml`](client-configs/modules/prometheus.yaml), [`grafana.yaml`](client-configs/modules/grafana.yaml) | Prometheus, node-exporter, Grafana |
-| CLI tools | [`client-configs/modules/charm-tools.yaml`](client-configs/modules/charm-tools.yaml), [`github-tools.yaml`](client-configs/modules/github-tools.yaml) | `repository` for Charm repo, `archive` for GitHub releases |
+| Nginx | [`client-configs/modules/nginx.hob`](client-configs/modules/nginx.hob) | Virtual host, worker tuning, `source:` template |
+| PostgreSQL | [`client-configs/modules/postgresql.hob`](client-configs/modules/postgresql.hob) | `postgresql.conf` + `pg_hba.conf`, memory tuning |
+| MySQL | [`client-configs/modules/mysql.hob`](client-configs/modules/mysql.hob) | InnoDB tuning, slow query log, security hardening |
+| Redis | [`client-configs/modules/redis.hob`](client-configs/modules/redis.hob) | LRU eviction, AOF persistence, `secret:` password |
+| Docker | [`client-configs/modules/docker.hob`](client-configs/modules/docker.hob) | `daemon.json`, log rotation, containerd |
+| HAProxy | [`client-configs/modules/haproxy.hob`](client-configs/modules/haproxy.hob) | Stats page, roundrobin backend, health checks |
+| OpenSSH + fail2ban | [`client-configs/modules/openssh.hob`](client-configs/modules/openssh.hob), [`fail2ban.hob`](client-configs/modules/fail2ban.hob) | Hardened sshd, key-only auth, brute-force protection |
+| Prometheus + Grafana | [`client-configs/modules/prometheus.hob`](client-configs/modules/prometheus.hob), [`grafana.hob`](client-configs/modules/grafana.hob) | Prometheus, node-exporter, Grafana |
+| CLI tools | [`client-configs/modules/charm-tools.hob`](client-configs/modules/charm-tools.hob), [`github-tools.hob`](client-configs/modules/github-tools.hob) | `repository` for Charm repo, `archive` for GitHub releases |
 
-Client-to-module mappings are in [`client-configs/clients.yaml`](client-configs/clients.yaml), with roles like `webserver`, `database`, `monitoring`, and `bastion` in [`client-configs/roles/`](client-configs/roles/).
+Client-to-module mappings are in [`client-configs/clients.hob`](client-configs/clients.hob), with roles like `webserver`, `database`, `monitoring`, and `bastion` in [`client-configs/roles/`](client-configs/roles/).
 
 Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`), Go template variables, per-environment overrides, and `secret:` references where appropriate.
 
@@ -217,7 +217,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 - **Server** — gRPC endpoint for agents, REST API + web UI for operators
 - **Agent** — daemon on each managed node, pulls config, converges idempotently
 - **hobcli** — admin CLI, talks to server REST API
-- **Config** — YAML files on disk, hot-reloaded on change
+- **Config** — `.hob` files (YAML syntax) on disk, hot-reloaded on change
+- **hobvi** — vim-based editor with syntax highlighting and idempotency validation on save
 
 ## Resource types
 
@@ -230,6 +231,34 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 | `repository` | Third-party package repos + GPG keys | Check repo config file exists |
 | `archive` | Download + install binaries from URLs | SHA256 hash or `unless` command |
 | `exec` | Arbitrary commands | `creates`/`onlyif`/`unless` guards |
+| `cron` | Cron jobs via `/etc/cron.d/` drop-ins | File content hash comparison |
+
+## Idempotency validation
+
+Hobnob enforces idempotency at config load time. Every resource must be provably idempotent before the server will accept it:
+
+- **Inherently idempotent** — `file`, `package`, `service`, `user`, `repository`, `archive`, `cron` all check current state before acting
+- **Requires a guard** — `exec` must declare at least one of `creates`, `onlyif`, or `unless`
+- **Warning** — `service` with `state: restarted`/`reloaded` without `subscribes` triggers a warning (runs every convergence)
+
+Non-idempotent resources are rejected unless the server is started with `--dangerous` or `HOBNOB_DANGEROUS=1`.
+
+### Validation tools
+
+```bash
+# Validate .hob files for YAML correctness + idempotency
+hobcli validate client-configs/modules/*.hob
+
+# Allow non-idempotent resources (shows errors but exits 0)
+hobcli validate --dangerous modules/risky.hob
+
+# Edit with vim — syntax highlighting + validation on save
+hobcli vi client-configs/modules/nginx.hob
+# or via the hobvi symlink:
+hobvi client-configs/modules/nginx.hob
+```
+
+`hobcli validate` checks: (1) YAML syntax, (2) required fields (`name`, resource `name`/`type`), (3) idempotency rules. `hobcli vi` opens vim with `.hob` syntax highlighting and blocks saves that fail validation.
 
 ## Key features
 
@@ -238,7 +267,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 - **Dependency DAG** — resources declare `depends_on`, topologically sorted
 - **Notify/subscribe** — config change triggers service restart
 - **Conditional resources** — structured conditionals (`go_if_all_pass`, `skip_if_any_pass`, etc.) evaluated server-side
-- **Fact collection** — OS, hardware, network, packages reported every check-in
+- **Idempotency enforcement** — `exec` resources require guards; validated at config load time
+- **Nail collection** — OS, hardware, network, packages, identity, virtual, uptime, load, mountpoints, processors, DMI, cloud reported every check-in
 - **Compliance tracking** — compliant/drifted/failing/stale/unknown per client
 - **Secret rotation** — server polls isopass, force-runs affected clients
 - **Webhooks** — HMAC-signed events for runs, drift, enrollment, rotation
@@ -329,10 +359,10 @@ Gates are checked first, then vetoes. Each field accepts a single string or a li
 
 ### Module conditionals
 
-The same four fields work on module references in `clients.yaml` and role definitions, skipping entire modules:
+The same four fields work on module references in `clients.hob` and role definitions, skipping entire modules:
 
 ```yaml
-# client-configs/clients.yaml
+# client-configs/clients.hob
 clients:
   - match: "*.example.com"
     vars:
@@ -446,7 +476,7 @@ Sensitive values in config files use the `secret:` prefix instead of plaintext. 
 Reference secrets by path in `client-configs/clients.yaml` or module definitions:
 
 ```yaml
-# client-configs/clients.yaml
+# client-configs/clients.hob
 clients:
   - match: "cache01.example.com"
     modules: [redis]
@@ -455,7 +485,7 @@ clients:
 ```
 
 ```yaml
-# client-configs/modules/grafana.yaml (inline in resource attributes)
+# client-configs/modules/grafana.hob (inline in resource attributes)
 resources:
   - name: grafana-ini
     type: file
@@ -504,7 +534,7 @@ The server's own config (`server-configs/server.yaml`) also uses `secret:` refer
 ## Development
 
 ```bash
-make build          # Build server, agent, and hobcli
+make build          # Build server, agent, hobcli + hobvi symlink
 make proto          # Regenerate protobuf/gRPC code
 make certs          # Generate self-signed TLS certs
 make test           # Run all tests

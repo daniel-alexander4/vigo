@@ -8,13 +8,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 HOBNOB_DIR="/etc/hobnob"
+SERVER_CONFIGS_DIR="${HOBNOB_DIR}/server-configs"
 CLIENT_CONFIGS_DIR="${HOBNOB_DIR}/client-configs"
-CERTS_DIR="${HOBNOB_DIR}/server-configs/certs"
+CERTS_DIR="${SERVER_CONFIGS_DIR}/certs"
 MODULES_DIR="${CLIENT_CONFIGS_DIR}/modules"
 ROLES_DIR="${CLIENT_CONFIGS_DIR}/roles"
 TEMPLATES_DIR="${CLIENT_CONFIGS_DIR}/templates"
-SERVER_CONFIGS_DIR="${HOBNOB_DIR}/server-configs"
-ENV_FILE="${HOBNOB_DIR}/server-configs/.env"
+ENV_FILE="${SERVER_CONFIGS_DIR}/.env"
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -119,7 +119,6 @@ ok ".env ready"
 info "Populating ${CLIENT_CONFIGS_DIR}"
 
 # Server config
-SERVER_CONFIGS_DIR="${HOBNOB_DIR}/server-configs"
 sudo mkdir -p "$SERVER_CONFIGS_DIR"
 if [ -f "${SERVER_CONFIGS_DIR}/server.yaml" ]; then
   echo 'server.yaml already exists — skipping'
@@ -128,17 +127,17 @@ else
   echo 'Copied server.yaml'
 fi
 
-# clients.yaml
-if [ -f "${CLIENT_CONFIGS_DIR}/clients.yaml" ]; then
-  echo 'clients.yaml already exists — skipping'
+# clients.hob
+if [ -f "${CLIENT_CONFIGS_DIR}/clients.hob" ]; then
+  echo 'clients.hob already exists — skipping'
 else
-  sudo cp client-configs/clients.yaml "$CLIENT_CONFIGS_DIR/"
-  echo 'Copied clients.yaml'
+  sudo cp client-configs/clients.hob "$CLIENT_CONFIGS_DIR/"
+  echo 'Copied clients.hob'
 fi
 
 # Module definitions — copy any that don't already exist
 NEW_MODULES=0
-for src in client-configs/modules/*.yaml; do
+for src in client-configs/modules/*.hob; do
   [ -f "$src" ] || continue
   dest="${MODULES_DIR}/$(basename "$src")"
   if [ ! -f "$dest" ]; then
@@ -146,12 +145,12 @@ for src in client-configs/modules/*.yaml; do
     NEW_MODULES=$((NEW_MODULES + 1))
   fi
 done
-MODULE_COUNT=$(find "$MODULES_DIR" -name '*.yaml' 2>/dev/null | wc -l)
+MODULE_COUNT=$(find "$MODULES_DIR" -name '*.hob' 2>/dev/null | wc -l)
 echo "Module definitions: ${MODULE_COUNT} total (${NEW_MODULES} new)"
 
 # Role definitions — copy any that don't already exist
 NEW_ROLES=0
-for src in client-configs/roles/*.yaml; do
+for src in client-configs/roles/*.hob; do
   [ -f "$src" ] || continue
   dest="${ROLES_DIR}/$(basename "$src")"
   if [ ! -f "$dest" ]; then
@@ -159,7 +158,7 @@ for src in client-configs/roles/*.yaml; do
     NEW_ROLES=$((NEW_ROLES + 1))
   fi
 done
-ROLE_COUNT=$(find "$ROLES_DIR" -name '*.yaml' 2>/dev/null | wc -l)
+ROLE_COUNT=$(find "$ROLES_DIR" -name '*.hob' 2>/dev/null | wc -l)
 echo "Role definitions: ${ROLE_COUNT} total (${NEW_ROLES} new)"
 
 # Template files — recursively copy preserving directory structure
@@ -208,9 +207,9 @@ cat <<DONE
 
 Config directory: ${HOBNOB_DIR}
   ${HOBNOB_DIR}/server-configs/server.yaml
-  ${CLIENT_CONFIGS_DIR}/clients.yaml
-  ${MODULES_DIR}/*.yaml
-  ${ROLES_DIR}/*.yaml
+  ${CLIENT_CONFIGS_DIR}/clients.hob
+  ${MODULES_DIR}/*.hob
+  ${ROLES_DIR}/*.hob
   ${TEMPLATES_DIR}/
   ${CERTS_DIR}/
   ${ENV_FILE}
@@ -223,17 +222,18 @@ Services:
 Next steps:
 
   1. Open the dashboard:
-     http://<server-ip>:8080/
+     http://<server-ip>:8085/
 
   2. Generate an enrollment token:
      docker compose exec server hobcli tokens generate \\
        --pattern "*.example.com"
 
   3. On each managed node, run the printed curl command:
-     curl http://<server-ip>:8080/bootstrap?token=<TOKEN> | bash
+     curl http://<server-ip>:8085/bootstrap?token=<TOKEN> | bash
 
   4. Edit configs in ${CLIENT_CONFIGS_DIR}/
-     (modules, roles, clients.yaml — server hot-reloads automatically)
+     (modules, roles, clients.hob — server hot-reloads automatically)
+     Use 'hobvi' for syntax highlighting + idempotency validation on save.
 
   5. For production:
      - Replace ${CERTS_DIR}/ with real TLS certificates

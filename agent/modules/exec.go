@@ -57,8 +57,8 @@ func (e *ExecExecutor) Execute(ctx context.Context, params map[string]string, dr
 		}
 	}
 
-	// Guards 2 and 3 require running commands, which we do even during dry-run
-	// to accurately report whether the command would execute.
+	// Guards 2 and 3 require running commands. We skip them during dry-run
+	// to avoid side effects from guard commands.
 	if !dryRun {
 		// Guard 2: onlyif -- skip if command fails (non-zero exit)
 		if onlyif := params["onlyif"]; onlyif != "" {

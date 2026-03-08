@@ -37,5 +37,7 @@ func init() {
 		rollbackCmd,
 		packagesCmd,
 		envCmd,
+		validateCmd,
+		viCmd,
 	)
 }

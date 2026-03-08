@@ -44,8 +44,10 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 	}
 	ClientsActive.Set(float64(activeCount))
 
-	// Compliance percentage: non-revoked clients with a recent successful run
-	// vs total non-revoked clients. Simple heuristic until full compliance engine.
+	// Compliance heuristic: percentage of non-revoked clients that checked in
+	// recently. This approximates compliance — clients that aren't checking in
+	// can't be converging. For per-client compliance status (compliant/drifted/
+	// failing/stale), see the compliance package and ComplianceStatus gauge.
 	var totalActive, compliantCount int
 	for _, cl := range clients {
 		if cl.Revoked {

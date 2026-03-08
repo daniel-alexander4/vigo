@@ -72,7 +72,7 @@ clients:
     modules: [nginx]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -119,7 +119,7 @@ clients:
     roles: [webserver]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -159,7 +159,7 @@ clients:
       worker_processes: "4"
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -197,7 +197,7 @@ clients:
 		"hobnob/db/dsn":   "postgres://real:pw@db:5432/prod",
 		"myapp/db/config": "host=db port=5432 user=myapp",
 	}}
-	store, err := NewConfigStore(dir, mp)
+	store, err := NewConfigStore(dir, mp, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -224,7 +224,7 @@ clients:
       dsn: "postgres://plaintext@db/bad"
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for known-secret field without secret: prefix, got nil")
 	}
@@ -246,7 +246,7 @@ clients:
       db_conn: "secret:nonexistent/key"
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for unresolvable secret, got nil")
 	}
@@ -273,7 +273,7 @@ clients:
     modules: [base]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -313,7 +313,7 @@ clients:
     modules: [pattern]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -352,7 +352,7 @@ clients:
     modules: [postgres]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -371,7 +371,7 @@ clients:
 func TestUnconfiguredClient(t *testing.T) {
 	dir := setupDir(t)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -408,7 +408,7 @@ clients:
         app_port: "8443"
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -433,7 +433,7 @@ name: app
 resources: []
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -486,7 +486,7 @@ clients:
     modules: [app]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -524,7 +524,7 @@ clients:
     modules: [nonexistent]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for unknown module, got nil")
 	}
@@ -539,7 +539,7 @@ clients:
     roles: [nonexistent]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for unknown role, got nil")
 	}
@@ -553,7 +553,7 @@ name: bad
 modules: [nonexistent]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for role referencing unknown module, got nil")
 	}
@@ -577,7 +577,7 @@ clients:
     modules: [nginx]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -614,7 +614,7 @@ clients:
 	mp := &mockProvider{secrets: map[string]string{
 		"myapp/db/config": "resolved-value",
 	}}
-	store, err := NewConfigStore(dir, mp)
+	store, err := NewConfigStore(dir, mp, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -658,7 +658,7 @@ clients:
     modules: [nginx]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -705,7 +705,7 @@ clients:
     modules: [bad]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for both source and content set, got nil")
 	}
@@ -732,7 +732,7 @@ clients:
     modules: [bad]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for missing source file, got nil")
 	}
@@ -768,7 +768,7 @@ clients:
     modules: [nginx]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -944,7 +944,7 @@ clients:
     modules: [webserver]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -995,7 +995,7 @@ clients:
     modules: [bad]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for conditional var without trait field, got nil")
 	}
@@ -1022,7 +1022,7 @@ clients:
     modules: [bad]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for conditional var with invalid operator, got nil")
 	}
@@ -1058,7 +1058,7 @@ clients:
     modules: [mod_a, mod_b]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1103,7 +1103,7 @@ clients:
       is_debian: "manual_override"
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1151,7 +1151,7 @@ clients:
     modules: [debian-tools]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1208,7 +1208,7 @@ clients:
     modules: [mixed]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1266,7 +1266,7 @@ clients:
     modules: [cross-dep]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1311,7 +1311,7 @@ clients:
     modules: [dual-cond]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1346,7 +1346,7 @@ clients:
     modules: [bad-block]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for conditional_block with empty resources, got nil")
 	}
@@ -1389,7 +1389,7 @@ clients:
     roles: [webserver]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1429,7 +1429,7 @@ clients:
         when: "not is_container"
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1467,7 +1467,7 @@ clients:
     roles: [web]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1519,7 +1519,7 @@ clients:
     modules: [nginx]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}})
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
 	}
@@ -1538,6 +1538,115 @@ clients:
 	}
 	if cfg2.Modules[0].Name != "nginx" {
 		t.Errorf("web02: module = %q, want nginx", cfg2.Modules[0].Name)
+	}
+}
+
+func TestIdempotencyValidation_BlocksUnguardedExec(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "bad.hob"), `
+name: bad
+resources:
+  - name: yolo-exec
+    type: exec
+    command: "echo hello"
+`)
+	writeFile(t, filepath.Join(dir, "clients.hob"), `
+clients:
+  - match: "test.example.com"
+    modules: [bad]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err == nil {
+		t.Fatal("expected error for unguarded exec, got nil")
+	}
+	if !strings.Contains(err.Error(), "idempotency") {
+		t.Errorf("error should mention idempotency, got: %v", err)
+	}
+}
+
+func TestIdempotencyValidation_DangerousModeAllowsUnguardedExec(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "bad.hob"), `
+name: bad
+resources:
+  - name: yolo-exec
+    type: exec
+    command: "echo hello"
+`)
+	writeFile(t, filepath.Join(dir, "clients.hob"), `
+clients:
+  - match: "test.example.com"
+    modules: [bad]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("dangerous mode should allow unguarded exec, got: %v", err)
+	}
+	cfg := store.Get("test.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	}
+}
+
+func TestIdempotencyValidation_GuardedExecPasses(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "good.hob"), `
+name: good
+resources:
+  - name: guarded-exec
+    type: exec
+    command: "touch /tmp/done"
+    creates: "/tmp/done"
+`)
+	writeFile(t, filepath.Join(dir, "clients.hob"), `
+clients:
+  - match: "test.example.com"
+    modules: [good]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("guarded exec should pass validation, got: %v", err)
+	}
+}
+
+func TestHobFileExtension_LoadedByConfigStore(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.hob"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "roles", "web.hob"), `
+name: web
+modules: [nginx]
+`)
+	writeFile(t, filepath.Join(dir, "clients.hob"), `
+clients:
+  - match: "test.example.com"
+    roles: [web]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("test.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	}
+	if cfg.Modules[0].Name != "nginx" {
+		t.Errorf("expected module nginx, got %q", cfg.Modules[0].Name)
 	}
 }
 

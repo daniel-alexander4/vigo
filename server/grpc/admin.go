@@ -276,7 +276,7 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	}
 
 	cfg := s.configStore.Get(client.Hostname)
-	if cfg == nil {
+	if len(cfg.Modules) == 0 {
 		return &pb.DryRunResponse{}, nil
 	}
 
@@ -612,7 +612,7 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 
 	// Compute diff by reading all client configs that contain the module.
 	// PromoteEnv is read-only audit -- never writes config files.
-	diff := make(map[string]string)
+	diff := s.configStore.ComputeEnvDiff(req.ModuleName, req.FromEnv, req.ToEnv)
 
 	// Record the promotion in the database for audit trail.
 	diffJSON, err := json.Marshal(diff)
