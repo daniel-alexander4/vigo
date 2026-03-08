@@ -10,6 +10,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// LoadSecretsConfig reads just the secrets section from server.yaml.
+// This is called before the secrets provider exists, so no secret: resolution
+// is performed. Returns the secrets.Config needed to create a provider.
+func LoadSecretsConfig(path string) (secrets.Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return secrets.Config{}, fmt.Errorf("reading config %s: %w", path, err)
+	}
+
+	var raw struct {
+		Secrets secrets.Config `yaml:"secrets"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return secrets.Config{}, fmt.Errorf("parsing config: %w", err)
+	}
+
+	return raw.Secrets, nil
+}
+
 // LoadServerConfig reads server.yaml from the given path and resolves any
 // secret: prefixed values using the provided secrets provider.
 func LoadServerConfig(path string, provider secrets.Provider) (*ServerConfig, error) {

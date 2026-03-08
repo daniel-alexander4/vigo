@@ -79,6 +79,18 @@ clients:
         mysql_max_connections: "50"
         mysql_innodb_buffer_pool_size: "512M"
 
+  - match: "plex01.example.com"
+    environment: production
+    roles: [mediaserver]
+    vars:
+      plex_media_dir: "/mnt/storage/media"
+      plex_transcode_dir: "/mnt/nvme/plex-transcode"
+    env_vars:
+      production:
+        plex_max_transcode_sessions: "5"
+      staging:
+        plex_max_transcode_sessions: "2"
+
   - match: "dev01.example.com"
     environment: production
     modules: [charm-tools, github-tools]
@@ -116,6 +128,10 @@ clients:
   - match: "bastion-*"
     environment: production
     roles: [bastion]
+
+  - match: "plex-*"
+    environment: production
+    roles: [mediaserver]
 
   - match: "*.staging.example.com"
     environment: staging

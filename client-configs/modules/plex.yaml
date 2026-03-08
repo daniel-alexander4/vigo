@@ -1,0 +1,97 @@
+name: plex
+
+vars:
+  plex_claim_token: ""
+  plex_media_dir: "/srv/media"
+  plex_transcode_dir: "/tmp/plex-transcode"
+  plex_data_dir: "/var/lib/plexmediaserver"
+  plex_user: "plex"
+  plex_group: "plex"
+  plex_max_transcode_sessions: "3"
+
+resources:
+  - name: plex-repo-key
+    type: exec
+    command: "curl -fsSL https://downloads.plex.tv/plex-keys/PlexSign.key | gpg --dearmor -o /usr/share/keyrings/plex-archive-keyring.gpg"
+    unless: "test -f /usr/share/keyrings/plex-archive-keyring.gpg"
+
+  - name: plex-repo
+    type: file
+    targetpath: /etc/apt/sources.list.d/plexmediaserver.list
+    content: "deb [signed-by=/usr/share/keyrings/plex-archive-keyring.gpg] https://downloads.plex.tv/repo/deb public main"
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [plex-repo-key]
+
+  - name: install-plex
+    type: package
+    package: plexmediaserver
+    state: present
+    depends_on: [plex-repo]
+
+  - name: plex-media-dir
+    type: file
+    targetpath: "{{ .Vars.plex_media_dir }}"
+    state: directory
+    owner: "{{ .Vars.plex_user }}"
+    group: "{{ .Vars.plex_group }}"
+    mode: "0755"
+
+  - name: plex-movies-dir
+    type: file
+    targetpath: "{{ .Vars.plex_media_dir }}/movies"
+    state: directory
+    owner: "{{ .Vars.plex_user }}"
+    group: "{{ .Vars.plex_group }}"
+    mode: "0755"
+    depends_on: [plex-media-dir]
+
+  - name: plex-tv-dir
+    type: file
+    targetpath: "{{ .Vars.plex_media_dir }}/tv"
+    state: directory
+    owner: "{{ .Vars.plex_user }}"
+    group: "{{ .Vars.plex_group }}"
+    mode: "0755"
+    depends_on: [plex-media-dir]
+
+  - name: plex-music-dir
+    type: file
+    targetpath: "{{ .Vars.plex_media_dir }}/music"
+    state: directory
+    owner: "{{ .Vars.plex_user }}"
+    group: "{{ .Vars.plex_group }}"
+    mode: "0755"
+    depends_on: [plex-media-dir]
+
+  - name: plex-transcode-dir
+    type: file
+    targetpath: "{{ .Vars.plex_transcode_dir }}"
+    state: directory
+    owner: "{{ .Vars.plex_user }}"
+    group: "{{ .Vars.plex_group }}"
+    mode: "0755"
+
+  - name: plex-env
+    type: file
+    targetpath: /etc/default/plexmediaserver
+    content: |
+      PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR={{ .Vars.plex_data_dir }}/Library/Application Support
+      PLEX_MEDIA_SERVER_HOME=/usr/lib/plexmediaserver
+      PLEX_MEDIA_SERVER_MAX_PLUGIN_PROCS=6
+      PLEX_MEDIA_SERVER_TMPDIR={{ .Vars.plex_transcode_dir }}
+      PLEX_MEDIA_SERVER_USER={{ .Vars.plex_user }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-plex]
+    notify: [plex-service]
+
+  - name: plex-service
+    type: service
+    service: plexmediaserver
+    enabled: true
+    state: running
+    depends_on: [install-plex, plex-env]
+    subscribes: [plex-env]

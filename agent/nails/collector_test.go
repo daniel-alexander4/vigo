@@ -222,10 +222,10 @@ func TestPackageCollector_ReturnsInstalledMap(t *testing.T) {
 	_ = installed
 }
 
-func TestDefaultCollectors_ReturnsFourCollectors(t *testing.T) {
+func TestDefaultCollectors_ReturnsFiveCollectors(t *testing.T) {
 	collectors := DefaultCollectors()
-	if len(collectors) != 4 {
-		t.Fatalf("DefaultCollectors() returned %d collectors, want 4", len(collectors))
+	if len(collectors) != 5 {
+		t.Fatalf("DefaultCollectors() returned %d collectors, want 5", len(collectors))
 	}
 
 	names := make(map[string]bool)
@@ -233,7 +233,7 @@ func TestDefaultCollectors_ReturnsFourCollectors(t *testing.T) {
 		names[c.Name()] = true
 	}
 
-	for _, expected := range []string{"os", "hardware", "network", "packages"} {
+	for _, expected := range []string{"os", "hardware", "network", "packages", "time"} {
 		if !names[expected] {
 			t.Errorf("missing collector %q", expected)
 		}

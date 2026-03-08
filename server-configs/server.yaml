@@ -1,3 +1,7 @@
+secrets:
+  backend: static
+  env_file: "server-configs/.env"
+
 server:
   grpc_listen: ":9090"
   api_listen: ":8080"

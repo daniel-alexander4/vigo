@@ -97,6 +97,7 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"user":       &modules.UserExecutor{},
 		"exec":       &modules.ExecExecutor{},
 		"archive":    &modules.ArchiveExecutor{},
+		"cron":       &modules.CronExecutor{},
 	}
 
 	// Auto-detect package manager. Non-fatal if detection fails.

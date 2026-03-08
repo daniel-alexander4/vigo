@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/hobnob/hobnob/server/conditionals"
+	"github.com/hobnob/hobnob/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 
@@ -16,6 +17,7 @@ type ServerConfig struct {
 	Database DatabaseSection `yaml:"database"`
 	CheckIn  CheckInSection  `yaml:"checkin"`
 	Watcher  WatcherSection  `yaml:"watcher"`
+	Secrets  secrets.Config  `yaml:"secrets"`
 }
 
 // WatcherSection holds secret rotation watcher configuration.

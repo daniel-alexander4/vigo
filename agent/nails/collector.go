@@ -11,27 +11,27 @@ import (
 // Collector is the interface for pluggable nail collectors. Each collector
 // gathers a category of system nails and returns them as a flat map.
 type Collector interface {
-	// Name returns the top-level key under which this collector's facts are stored.
+	// Name returns the top-level key under which this collector's nails are stored.
 	Name() string
-	// Collect gathers facts and returns them as a string-keyed map.
+	// Collect gathers nails and returns them as a string-keyed map.
 	Collect(ctx context.Context) (map[string]any, error)
 }
 
-// CollectAll aggregates facts from all provided collectors into a nested map
+// CollectAll aggregates nails from all provided collectors into a nested map
 // keyed by each collector's Name(). If a collector fails, its error is logged
 // and collection continues with the remaining collectors.
 func CollectAll(ctx context.Context, collectors []Collector) (map[string]any, error) {
 	result := make(map[string]any)
 	for _, c := range collectors {
-		facts, err := c.Collect(ctx)
+		nails, err := c.Collect(ctx)
 		if err != nil {
-			slog.Warn("fact collector failed",
+			slog.Warn("nail collector failed",
 				"collector", c.Name(),
 				"error", err,
 			)
 			continue
 		}
-		result[c.Name()] = facts
+		result[c.Name()] = nails
 	}
 	return result, nil
 }
@@ -43,5 +43,6 @@ func DefaultCollectors() []Collector {
 		&HardwareCollector{},
 		&NetworkCollector{},
 		&PackageCollector{},
+		&TimeCollector{},
 	}
 }

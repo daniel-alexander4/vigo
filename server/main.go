@@ -39,20 +39,27 @@ func run() error {
 	defer cancel()
 
 	// Determine config paths relative to working directory.
-	envFile := envOrDefault("HOBNOB_ENV_FILE", "server-configs/.env")
 	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server-configs/server.yaml")
 	clientConfigsDir := envOrDefault("HOBNOB_CLIENT_CONFIGS_DIR", "client-configs")
 	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
 	traitsDir := envOrDefault("HOBNOB_TRAITS_DIR", "traits")
 
-	// Initialize secrets provider (StaticProvider for dev, IsopassProvider for prod in Phase 3).
-	provider, err := secrets.NewStaticProvider(envFile)
+	// Load secrets backend config (first pass — no secret resolution).
+	secretsCfg, err := config.LoadSecretsConfig(configFile)
+	if err != nil {
+		return fmt.Errorf("loading secrets config: %w", err)
+	}
+
+	// Initialize secrets provider from config.
+	provider, err := secrets.NewFromConfig(secretsCfg)
 	if err != nil {
 		return fmt.Errorf("initializing secrets provider: %w", err)
 	}
 	defer provider.Close()
 
-	// Load server config with secret resolution.
+	slog.Info("secrets provider initialized", "backend", secretsCfg.Backend)
+
+	// Load full server config with secret resolution (second pass).
 	cfg, err := config.LoadServerConfig(configFile, provider)
 	if err != nil {
 		return fmt.Errorf("loading server config: %w", err)
