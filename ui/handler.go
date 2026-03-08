@@ -273,15 +273,15 @@ func (h *Handler) Clients(w http.ResponseWriter, r *http.Request) {
 // ClientDetail renders the client detail page with runs, facts, and drift history.
 func (h *Handler) ClientDetail(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	clientID, err := uuid.Parse(idStr)
+	nodeID, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, "invalid client ID", http.StatusBadRequest)
+		http.Error(w, "invalid node ID", http.StatusBadRequest)
 		return
 	}
 
-	data, err := h.dataSource.ClientDetailData(clientID, h.baseInterval)
+	data, err := h.dataSource.ClientDetailData(nodeID, h.baseInterval)
 	if err != nil {
-		http.Error(w, "client not found", http.StatusNotFound)
+		http.Error(w, "node not found", http.StatusNotFound)
 		return
 	}
 	data.Version = h.version
@@ -358,16 +358,16 @@ type dbDataSource struct {
 	configStore *config.ConfigStore
 }
 
-// clientComplianceInfo computes compliance status for a client using its latest run.
-func (ds *dbDataSource) clientComplianceInfo(ctx context.Context, c db.Client, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
+// clientComplianceInfo computes compliance status for a node using its latest run.
+func (ds *dbDataSource) clientComplianceInfo(ctx context.Context, c db.Node, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
 	lastSeen := time.Time{}
 	if c.LastSeen.Valid {
 		lastSeen = c.LastSeen.Time
 	}
 
-	latestRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-		ClientID: c.ID,
-		Limit:    1,
+	latestRuns, err := ds.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+		NodeID: c.ID,
+		Limit:  1,
 	})
 	if err != nil {
 		return compliance.ComputeStatus(nil, lastSeen, baseInterval), nil
@@ -385,26 +385,26 @@ func (ds *dbDataSource) clientComplianceInfo(ctx context.Context, c db.Client, b
 
 func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
 	ctx := context.Background()
-	clients, err := ds.queries.ListClients(ctx)
+	nodes, err := ds.queries.ListNodes(ctx)
 	if err != nil {
-		slog.Error("failed to list clients", "error", err)
+		slog.Error("failed to list nodes", "error", err)
 		return DashboardPageData{PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"}}
 	}
 
-	totalClients := len(clients)
+	totalNodes := len(nodes)
 	activeCount := 0
 	driftedCount := 0
 	failureCount := 0
 
-	for _, c := range clients {
-		if c.Revoked {
+	for _, n := range nodes {
+		if n.Revoked {
 			continue
 		}
-		if c.LastSeen.Valid && time.Since(c.LastSeen.Time) < time.Hour {
+		if n.LastSeen.Valid && time.Since(n.LastSeen.Time) < time.Hour {
 			activeCount++
 		}
 
-		status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
+		status, _ := ds.clientComplianceInfo(ctx, n, baseInterval)
 		switch status {
 		case "drifted":
 			driftedCount++
@@ -414,8 +414,8 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 	}
 
 	driftRate := float64(0)
-	if totalClients > 0 {
-		driftRate = float64(driftedCount) / float64(totalClients) * 100
+	if totalNodes > 0 {
+		driftRate = float64(driftedCount) / float64(totalNodes) * 100
 	}
 
 	allRuns, err := ds.queries.ListAllRuns(ctx, 10)
@@ -423,16 +423,16 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		slog.Error("failed to list runs", "error", err)
 	}
 
-	clientMap := make(map[uuid.UUID]string, len(clients))
-	for _, c := range clients {
-		clientMap[c.ID] = c.Hostname
+	nodeMap := make(map[uuid.UUID]string, len(nodes))
+	for _, n := range nodes {
+		nodeMap[n.ID] = n.Hostname
 	}
 
 	recentRuns := make([]RunRow, 0, len(allRuns))
 	for _, r := range allRuns {
 		recentRuns = append(recentRuns, RunRow{
 			ID:           r.ID,
-			Hostname:     clientMap[r.ClientID],
+			Hostname:     nodeMap[r.NodeID],
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
@@ -443,7 +443,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 	return DashboardPageData{
 		PageData:       PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalClients:   totalClients,
+		TotalClients:   totalNodes,
 		ActiveClients:  activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
@@ -453,38 +453,38 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
 	ctx := context.Background()
-	clients, err := ds.queries.ListClients(ctx)
+	nodes, err := ds.queries.ListNodes(ctx)
 	if err != nil {
-		slog.Error("failed to list clients", "error", err)
+		slog.Error("failed to list nodes", "error", err)
 		return CompliancePageData{PageData: PageData{Title: "Compliance", ActiveNav: "compliance"}}
 	}
 
 	var statuses []string
 	var nonCompliant []ComplianceRow
 
-	for _, c := range clients {
-		if c.Revoked {
+	for _, n := range nodes {
+		if n.Revoked {
 			continue
 		}
 		lastSeen := time.Time{}
-		if c.LastSeen.Valid {
-			lastSeen = c.LastSeen.Time
+		if n.LastSeen.Valid {
+			lastSeen = n.LastSeen.Time
 		}
 
-		status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
+		status, _ := ds.clientComplianceInfo(ctx, n, baseInterval)
 		statuses = append(statuses, status)
 
 		if status != "compliant" {
 			lastRunStatus := ""
-			latestRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-				ClientID: c.ID,
-				Limit:    1,
+			latestRuns, err := ds.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+				NodeID: n.ID,
+				Limit:  1,
 			})
 			if err == nil && len(latestRuns) > 0 {
 				lastRunStatus = latestRuns[0].Status
 			}
 			nonCompliant = append(nonCompliant, ComplianceRow{
-				Hostname:      c.Hostname,
+				Hostname:      n.Hostname,
 				Status:        status,
 				LastSeen:      lastSeen,
 				LastRunStatus: lastRunStatus,
@@ -538,33 +538,33 @@ func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) Dashboard
 
 func (ds *dbDataSource) ClientsData(baseInterval time.Duration, statusFilter string) ClientsPageData {
 	ctx := context.Background()
-	clients, err := ds.queries.ListClients(ctx)
+	nodes, err := ds.queries.ListNodes(ctx)
 	if err != nil {
-		slog.Error("failed to list clients", "error", err)
+		slog.Error("failed to list nodes", "error", err)
 		return ClientsPageData{PageData: PageData{Title: "Clients", ActiveNav: "clients"}}
 	}
 
 	var rows []ClientRow
-	for _, c := range clients {
-		if c.Revoked {
+	for _, n := range nodes {
+		if n.Revoked {
 			continue
 		}
-		status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
+		status, _ := ds.clientComplianceInfo(ctx, n, baseInterval)
 
 		if statusFilter != "" && status != statusFilter {
 			continue
 		}
 
 		lastSeen := time.Time{}
-		if c.LastSeen.Valid {
-			lastSeen = c.LastSeen.Time
+		if n.LastSeen.Valid {
+			lastSeen = n.LastSeen.Time
 		}
 
 		rows = append(rows, ClientRow{
-			ID:         c.ID,
-			Hostname:   c.Hostname,
-			IPAddress:  c.IpAddress,
-			EnrolledAt: c.EnrolledAt,
+			ID:         n.ID,
+			Hostname:   n.Hostname,
+			IPAddress:  n.IpAddress,
+			EnrolledAt: n.EnrolledAt,
 			LastSeen:   lastSeen,
 			Status:     status,
 		})
@@ -580,34 +580,34 @@ func (ds *dbDataSource) ClientsData(baseInterval time.Duration, statusFilter str
 
 func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.Duration) (ClientDetailPageData, error) {
 	ctx := context.Background()
-	c, err := ds.queries.GetClientByID(ctx, clientID)
+	node, err := ds.queries.GetNodeByID(ctx, clientID)
 	if err != nil {
-		return ClientDetailPageData{}, fmt.Errorf("client not found: %w", err)
+		return ClientDetailPageData{}, fmt.Errorf("node not found: %w", err)
 	}
 
 	lastSeen := time.Time{}
-	if c.LastSeen.Valid {
-		lastSeen = c.LastSeen.Time
+	if node.LastSeen.Valid {
+		lastSeen = node.LastSeen.Time
 	}
 
-	status, _ := ds.clientComplianceInfo(ctx, c, baseInterval)
+	status, _ := ds.clientComplianceInfo(ctx, node, baseInterval)
 
 	client := ClientRow{
-		ID:         c.ID,
-		Hostname:   c.Hostname,
-		IPAddress:  c.IpAddress,
-		EnrolledAt: c.EnrolledAt,
+		ID:         node.ID,
+		Hostname:   node.Hostname,
+		IPAddress:  node.IpAddress,
+		EnrolledAt: node.EnrolledAt,
 		LastSeen:   lastSeen,
 		Status:     status,
 	}
 
 	// Fetch last 20 runs with results
-	dbRuns, err := ds.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-		ClientID: clientID,
-		Limit:    20,
+	dbRuns, err := ds.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+		NodeID: clientID,
+		Limit:  20,
 	})
 	if err != nil {
-		slog.Error("failed to list runs for client", "error", err)
+		slog.Error("failed to list runs for node", "error", err)
 	}
 
 	var runs []ClientDetailRunRow
@@ -638,7 +638,7 @@ func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.D
 		runs = append(runs, ClientDetailRunRow{
 			RunRow: RunRow{
 				ID:           r.ID,
-				Hostname:     c.Hostname,
+				Hostname:     node.Hostname,
 				StartedAt:    r.StartedAt,
 				Status:       r.Status,
 				ModuleCount:  r.ModuleCount,
@@ -658,13 +658,13 @@ func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.D
 
 	// Fetch latest facts
 	facts := make(map[string]any)
-	cf, err := ds.queries.GetLatestClientNails(ctx, clientID)
+	cf, err := ds.queries.GetLatestNodeNails(ctx, clientID)
 	if err == nil {
 		_ = json.Unmarshal(cf.Nails, &facts)
 	}
 
 	return ClientDetailPageData{
-		PageData:     PageData{Title: "Client: " + c.Hostname, ActiveNav: "clients"},
+		PageData:     PageData{Title: "Client: " + node.Hostname, ActiveNav: "clients"},
 		Client:       client,
 		Runs:         runs,
 		Facts:        facts,
@@ -680,14 +680,14 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 		return RunsPageData{PageData: PageData{Title: "Runs", ActiveNav: "runs"}}
 	}
 
-	// Build client hostname lookup to avoid N+1
-	clients, err := ds.queries.ListClients(ctx)
+	// Build node hostname lookup to avoid N+1
+	nodes, err := ds.queries.ListNodes(ctx)
 	if err != nil {
-		slog.Error("failed to list clients for hostname lookup", "error", err)
+		slog.Error("failed to list nodes for hostname lookup", "error", err)
 	}
-	clientMap := make(map[uuid.UUID]string, len(clients))
-	for _, c := range clients {
-		clientMap[c.ID] = c.Hostname
+	nodeMap := make(map[uuid.UUID]string, len(nodes))
+	for _, n := range nodes {
+		nodeMap[n.ID] = n.Hostname
 	}
 
 	var rows []RunRow
@@ -697,7 +697,7 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 		}
 		rows = append(rows, RunRow{
 			ID:           r.ID,
-			Hostname:     clientMap[r.ClientID],
+			Hostname:     nodeMap[r.NodeID],
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
@@ -721,9 +721,9 @@ func (ds *dbDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error
 		return RunDetailPageData{}, fmt.Errorf("run not found: %w", err)
 	}
 
-	c, err := ds.queries.GetClientByID(ctx, r.ClientID)
+	node, err := ds.queries.GetNodeByID(ctx, r.NodeID)
 	if err != nil {
-		return RunDetailPageData{}, fmt.Errorf("client not found: %w", err)
+		return RunDetailPageData{}, fmt.Errorf("node not found: %w", err)
 	}
 
 	dbResults, err := ds.queries.ListRunResults(ctx, runID)
@@ -752,7 +752,7 @@ func (ds *dbDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error
 		PageData: PageData{Title: "Run Detail", ActiveNav: "runs"},
 		Run: RunRow{
 			ID:           r.ID,
-			Hostname:     c.Hostname,
+			Hostname:     node.Hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
@@ -787,9 +787,9 @@ func (ds *dbDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, er
 		return PlanDetailPageData{}, fmt.Errorf("plan not found: %w", err)
 	}
 
-	c, err := ds.queries.GetClientByID(ctx, p.ClientID)
+	node, err := ds.queries.GetNodeByID(ctx, p.NodeID)
 	if err != nil {
-		return PlanDetailPageData{}, fmt.Errorf("client not found: %w", err)
+		return PlanDetailPageData{}, fmt.Errorf("node not found: %w", err)
 	}
 
 	dbResults, err := ds.queries.ListPlanResults(ctx, planID)
@@ -823,7 +823,7 @@ func (ds *dbDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, er
 	return PlanDetailPageData{
 		PageData:    PageData{Title: "Plan Detail", ActiveNav: "clients"},
 		PlanID:      p.ID,
-		Hostname:    c.Hostname,
+		Hostname:    node.Hostname,
 		CreatedAt:   p.CreatedAt,
 		Results:     results,
 		TotalCount:  len(results),

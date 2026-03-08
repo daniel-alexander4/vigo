@@ -16,9 +16,9 @@ import (
 // collected nails as JSONB in the database and prunes old entries to enforce
 // a 10-snapshot retention policy (DB-04).
 func (s *AgentService) ReportNails(ctx context.Context, req *pb.ReportNailsRequest) (*pb.ReportNailsResponse, error) {
-	clientID, err := uuid.Parse(req.GetClientId())
+	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client_id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 
 	nailsJSON := req.GetNailsJson()
@@ -32,29 +32,29 @@ func (s *AgentService) ReportNails(ctx context.Context, req *pb.ReportNailsReque
 	}
 
 	// Store the nails.
-	_, err = s.queries.InsertClientNails(ctx, db.InsertClientNailsParams{
-		ClientID: clientID,
-		Nails:    json.RawMessage(nailsJSON),
+	_, err = s.queries.InsertNodeNails(ctx, db.InsertNodeNailsParams{
+		NodeID: nodeID,
+		Nails:  json.RawMessage(nailsJSON),
 	})
 	if err != nil {
-		slog.Error("failed to insert client nails",
-			"client_id", clientID,
+		slog.Error("failed to insert node nails",
+			"node_id", nodeID,
 			"error", err,
 		)
 		return nil, status.Errorf(codes.Internal, "storing nails: %v", err)
 	}
 
 	// Prune old nails to enforce 10-snapshot retention.
-	if err := s.queries.PruneClientNails(ctx, clientID); err != nil {
-		slog.Error("failed to prune client nails",
-			"client_id", clientID,
+	if err := s.queries.PruneNodeNails(ctx, nodeID); err != nil {
+		slog.Error("failed to prune node nails",
+			"node_id", nodeID,
 			"error", err,
 		)
 		// Non-fatal: nails were stored successfully.
 	}
 
 	slog.Info("nails reported",
-		"client_id", clientID,
+		"node_id", nodeID,
 		"nails_size", len(nailsJSON),
 	)
 

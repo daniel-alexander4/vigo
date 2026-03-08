@@ -12,7 +12,7 @@ import (
 )
 
 const clearForcePush = `-- name: ClearForcePush :exec
-UPDATE clients
+UPDATE nodes
 SET force_push = false
 WHERE id = $1
 `
@@ -22,21 +22,21 @@ func (q *Queries) ClearForcePush(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const createClient = `-- name: CreateClient :one
-INSERT INTO clients (hostname, ip_address, pubkey_pem)
+const createNode = `-- name: CreateNode :one
+INSERT INTO nodes (hostname, ip_address, pubkey_pem)
 VALUES ($1, $2, $3)
 RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 `
 
-type CreateClientParams struct {
+type CreateNodeParams struct {
 	Hostname  string `json:"hostname"`
 	IpAddress string `json:"ip_address"`
 	PubkeyPem string `json:"pubkey_pem"`
 }
 
-func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (Client, error) {
-	row := q.db.QueryRow(ctx, createClient, arg.Hostname, arg.IpAddress, arg.PubkeyPem)
-	var i Client
+func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, error) {
+	row := q.db.QueryRow(ctx, createNode, arg.Hostname, arg.IpAddress, arg.PubkeyPem)
+	var i Node
 	err := row.Scan(
 		&i.ID,
 		&i.Hostname,
@@ -51,15 +51,15 @@ func (q *Queries) CreateClient(ctx context.Context, arg CreateClientParams) (Cli
 	return i, err
 }
 
-const getClientByHostname = `-- name: GetClientByHostname :one
+const getNodeByHostname = `-- name: GetNodeByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM clients
+FROM nodes
 WHERE hostname = $1
 `
 
-func (q *Queries) GetClientByHostname(ctx context.Context, hostname string) (Client, error) {
-	row := q.db.QueryRow(ctx, getClientByHostname, hostname)
-	var i Client
+func (q *Queries) GetNodeByHostname(ctx context.Context, hostname string) (Node, error) {
+	row := q.db.QueryRow(ctx, getNodeByHostname, hostname)
+	var i Node
 	err := row.Scan(
 		&i.ID,
 		&i.Hostname,
@@ -74,15 +74,15 @@ func (q *Queries) GetClientByHostname(ctx context.Context, hostname string) (Cli
 	return i, err
 }
 
-const getClientByID = `-- name: GetClientByID :one
+const getNodeByID = `-- name: GetNodeByID :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM clients
+FROM nodes
 WHERE id = $1
 `
 
-func (q *Queries) GetClientByID(ctx context.Context, id uuid.UUID) (Client, error) {
-	row := q.db.QueryRow(ctx, getClientByID, id)
-	var i Client
+func (q *Queries) GetNodeByID(ctx context.Context, id uuid.UUID) (Node, error) {
+	row := q.db.QueryRow(ctx, getNodeByID, id)
+	var i Node
 	err := row.Scan(
 		&i.ID,
 		&i.Hostname,
@@ -97,21 +97,21 @@ func (q *Queries) GetClientByID(ctx context.Context, id uuid.UUID) (Client, erro
 	return i, err
 }
 
-const listClients = `-- name: ListClients :many
+const listNodes = `-- name: ListNodes :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM clients
+FROM nodes
 ORDER BY enrolled_at DESC
 `
 
-func (q *Queries) ListClients(ctx context.Context) ([]Client, error) {
-	rows, err := q.db.Query(ctx, listClients)
+func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
+	rows, err := q.db.Query(ctx, listNodes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Client{}
+	items := []Node{}
 	for rows.Next() {
-		var i Client
+		var i Node
 		if err := rows.Scan(
 			&i.ID,
 			&i.Hostname,
@@ -133,21 +133,21 @@ func (q *Queries) ListClients(ctx context.Context) ([]Client, error) {
 	return items, nil
 }
 
-const listClientsWithForcePush = `-- name: ListClientsWithForcePush :many
+const listNodesWithForcePush = `-- name: ListNodesWithForcePush :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM clients
+FROM nodes
 WHERE force_push = true
 `
 
-func (q *Queries) ListClientsWithForcePush(ctx context.Context) ([]Client, error) {
-	rows, err := q.db.Query(ctx, listClientsWithForcePush)
+func (q *Queries) ListNodesWithForcePush(ctx context.Context) ([]Node, error) {
+	rows, err := q.db.Query(ctx, listNodesWithForcePush)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Client{}
+	items := []Node{}
 	for rows.Next() {
-		var i Client
+		var i Node
 		if err := rows.Scan(
 			&i.ID,
 			&i.Hostname,
@@ -169,19 +169,19 @@ func (q *Queries) ListClientsWithForcePush(ctx context.Context) ([]Client, error
 	return items, nil
 }
 
-const revokeClient = `-- name: RevokeClient :exec
-UPDATE clients
+const revokeNode = `-- name: RevokeNode :exec
+UPDATE nodes
 SET revoked = true, revoked_at = now()
 WHERE id = $1
 `
 
-func (q *Queries) RevokeClient(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, revokeClient, id)
+func (q *Queries) RevokeNode(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, revokeNode, id)
 	return err
 }
 
 const setForcePush = `-- name: SetForcePush :exec
-UPDATE clients
+UPDATE nodes
 SET force_push = true
 WHERE id = $1
 `
@@ -192,7 +192,7 @@ func (q *Queries) SetForcePush(ctx context.Context, id uuid.UUID) error {
 }
 
 const updateLastSeen = `-- name: UpdateLastSeen :exec
-UPDATE clients
+UPDATE nodes
 SET last_seen = now()
 WHERE id = $1
 `

@@ -19,7 +19,7 @@ func main() {
 var rootCmd = &cobra.Command{
 	Use:   "hobcli",
 	Short: "Hobnob admin CLI",
-	Long:  "hobcli is the administrative CLI for the Hobnob configuration management system.\nIt communicates with the server's REST API to manage enrollment, clients, and runs.",
+	Long:  "hobcli is the administrative CLI for the Hobnob configuration management system.\nIt communicates with the server's REST API to manage enrollment, nodes, and runs.",
 }
 
 func init() {
@@ -28,7 +28,7 @@ func init() {
 
 	rootCmd.AddCommand(
 		approvedCmd,
-		clientsCmd,
+		nodesCmd,
 		tokensCmd,
 		pushCmd,
 		runsCmd,

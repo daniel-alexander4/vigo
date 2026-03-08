@@ -338,6 +338,34 @@ func TestRunnerSubscribesEndToEnd(t *testing.T) {
 	}
 }
 
+func TestRunnerNoDepsDeclarationOrder(t *testing.T) {
+	mock := newMockExecutor()
+
+	// No depends_on, notify, or subscribes — should execute in declaration order
+	// without topological sort overhead.
+	mods := []*pb.Module{
+		makeModule("alpha", "file", []string{"alpha-res"}),
+		makeModule("beta", "file", []string{"beta-res"}),
+		makeModule("gamma", "file", []string{"gamma-res"}),
+	}
+
+	r := NewRunner(map[string]modules.Executor{"file": mock}, nil, false, "")
+	results, err := r.Run(context.Background(), mods)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+
+	// Verify declaration order preserved
+	calls := mock.callNames()
+	if calls[0] != "alpha-res" || calls[1] != "beta-res" || calls[2] != "gamma-res" {
+		t.Errorf("expected declaration order [alpha-res, beta-res, gamma-res], got %v", calls)
+	}
+}
+
 func TestRunnerContinuesOnError(t *testing.T) {
 	mock := newMockExecutor()
 	mock.errNames["first-res"] = true

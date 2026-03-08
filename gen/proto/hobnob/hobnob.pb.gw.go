@@ -257,30 +257,30 @@ func local_request_HobnobAdmin_RevokeApprovedPattern_0(ctx context.Context, mars
 	return msg, metadata, err
 }
 
-func request_HobnobAdmin_ListClients_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_HobnobAdmin_ListNodes_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq ListClientsRequest
+		protoReq ListNodesRequest
 		metadata runtime.ServerMetadata
 	)
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	msg, err := client.ListClients(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.ListNodes(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_HobnobAdmin_ListClients_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_HobnobAdmin_ListNodes_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq ListClientsRequest
+		protoReq ListNodesRequest
 		metadata runtime.ServerMetadata
 	)
-	msg, err := server.ListClients(ctx, &protoReq)
+	msg, err := server.ListNodes(ctx, &protoReq)
 	return msg, metadata, err
 }
 
-func request_HobnobAdmin_GetClient_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_HobnobAdmin_GetNode_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq GetClientRequest
+		protoReq GetNodeRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -295,13 +295,13 @@ func request_HobnobAdmin_GetClient_0(ctx context.Context, marshaler runtime.Mars
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-	msg, err := client.GetClient(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.GetNode(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_HobnobAdmin_GetClient_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_HobnobAdmin_GetNode_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq GetClientRequest
+		protoReq GetNodeRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -313,13 +313,13 @@ func local_request_HobnobAdmin_GetClient_0(ctx context.Context, marshaler runtim
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-	msg, err := server.GetClient(ctx, &protoReq)
+	msg, err := server.GetNode(ctx, &protoReq)
 	return msg, metadata, err
 }
 
-func request_HobnobAdmin_RevokeClient_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_HobnobAdmin_RevokeNode_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq RevokeClientRequest
+		protoReq RevokeNodeRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -337,13 +337,13 @@ func request_HobnobAdmin_RevokeClient_0(ctx context.Context, marshaler runtime.M
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-	msg, err := client.RevokeClient(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.RevokeNode(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_HobnobAdmin_RevokeClient_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_HobnobAdmin_RevokeNode_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq RevokeClientRequest
+		protoReq RevokeNodeRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -358,7 +358,7 @@ func local_request_HobnobAdmin_RevokeClient_0(ctx context.Context, marshaler run
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-	msg, err := server.RevokeClient(ctx, &protoReq)
+	msg, err := server.RevokeNode(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -401,13 +401,13 @@ func request_HobnobAdmin_DryRun_0(ctx context.Context, marshaler runtime.Marshal
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	val, ok := pathParams["client_id"]
+	val, ok := pathParams["node_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "client_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node_id")
 	}
-	protoReq.ClientId, err = runtime.String(val)
+	protoReq.NodeId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "client_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node_id", err)
 	}
 	msg, err := client.DryRun(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -422,13 +422,13 @@ func local_request_HobnobAdmin_DryRun_0(ctx context.Context, marshaler runtime.M
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	val, ok := pathParams["client_id"]
+	val, ok := pathParams["node_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "client_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node_id")
 	}
-	protoReq.ClientId, err = runtime.String(val)
+	protoReq.NodeId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "client_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node_id", err)
 	}
 	msg, err := server.DryRun(ctx, &protoReq)
 	return msg, metadata, err
@@ -532,41 +532,6 @@ func local_request_HobnobAdmin_GenerateToken_0(ctx context.Context, marshaler ru
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := server.GenerateToken(ctx, &protoReq)
-	return msg, metadata, err
-}
-
-var filter_HobnobAdmin_ListAllRuns_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
-
-func request_HobnobAdmin_ListAllRuns_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var (
-		protoReq ListAllRunsRequest
-		metadata runtime.ServerMetadata
-	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_HobnobAdmin_ListAllRuns_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	msg, err := client.ListAllRuns(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
-	return msg, metadata, err
-}
-
-func local_request_HobnobAdmin_ListAllRuns_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var (
-		protoReq ListAllRunsRequest
-		metadata runtime.ServerMetadata
-	)
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_HobnobAdmin_ListAllRuns_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	msg, err := server.ListAllRuns(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -678,9 +643,9 @@ func local_request_HobnobAdmin_GetComplianceSummary_0(ctx context.Context, marsh
 	return msg, metadata, err
 }
 
-func request_HobnobAdmin_GetClientCompliance_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_HobnobAdmin_GetNodeCompliance_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq GetClientComplianceRequest
+		protoReq GetNodeComplianceRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -695,13 +660,13 @@ func request_HobnobAdmin_GetClientCompliance_0(ctx context.Context, marshaler ru
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-	msg, err := client.GetClientCompliance(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.GetNodeCompliance(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_HobnobAdmin_GetClientCompliance_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_HobnobAdmin_GetNodeCompliance_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq GetClientComplianceRequest
+		protoReq GetNodeComplianceRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -713,7 +678,7 @@ func local_request_HobnobAdmin_GetClientCompliance_0(ctx context.Context, marsha
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-	msg, err := server.GetClientCompliance(ctx, &protoReq)
+	msg, err := server.GetNodeCompliance(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -729,13 +694,13 @@ func request_HobnobAdmin_Rollback_0(ctx context.Context, marshaler runtime.Marsh
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	val, ok := pathParams["client_id"]
+	val, ok := pathParams["node_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "client_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node_id")
 	}
-	protoReq.ClientId, err = runtime.String(val)
+	protoReq.NodeId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "client_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node_id", err)
 	}
 	msg, err := client.Rollback(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -750,13 +715,13 @@ func local_request_HobnobAdmin_Rollback_0(ctx context.Context, marshaler runtime
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	val, ok := pathParams["client_id"]
+	val, ok := pathParams["node_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "client_id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "node_id")
 	}
-	protoReq.ClientId, err = runtime.String(val)
+	protoReq.NodeId, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "client_id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "node_id", err)
 	}
 	msg, err := server.Rollback(ctx, &protoReq)
 	return msg, metadata, err
@@ -1021,65 +986,65 @@ func RegisterHobnobAdminHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_HobnobAdmin_RevokeApprovedPattern_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_ListClients_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_HobnobAdmin_ListNodes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/ListClients", runtime.WithHTTPPathPattern("/api/v1/clients"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/ListNodes", runtime.WithHTTPPathPattern("/api/v1/nodes"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_HobnobAdmin_ListClients_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_HobnobAdmin_ListNodes_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_ListClients_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_ListNodes_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetClient_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetNode_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetClient", runtime.WithHTTPPathPattern("/api/v1/clients/{id}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetNode", runtime.WithHTTPPathPattern("/api/v1/nodes/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_HobnobAdmin_GetClient_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_HobnobAdmin_GetNode_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_GetClient_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_GetNode_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_HobnobAdmin_RevokeClient_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_HobnobAdmin_RevokeNode_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/RevokeClient", runtime.WithHTTPPathPattern("/api/v1/clients/{id}/revoke"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/RevokeNode", runtime.WithHTTPPathPattern("/api/v1/nodes/{id}/revoke"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_HobnobAdmin_RevokeClient_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_HobnobAdmin_RevokeNode_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_RevokeClient_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_RevokeNode_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_HobnobAdmin_ForcePush_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -1107,7 +1072,7 @@ func RegisterHobnobAdminHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/DryRun", runtime.WithHTTPPathPattern("/api/v1/clients/{client_id}/dry-run"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/DryRun", runtime.WithHTTPPathPattern("/api/v1/nodes/{node_id}/dry-run"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1180,26 +1145,6 @@ func RegisterHobnobAdminHandlerServer(ctx context.Context, mux *runtime.ServeMux
 			return
 		}
 		forward_HobnobAdmin_GenerateToken_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_ListAllRuns_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
-		ctx, cancel := context.WithCancel(req.Context())
-		defer cancel()
-		var stream runtime.ServerTransportStream
-		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
-		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/ListAllRuns", runtime.WithHTTPPathPattern("/api/v1/runs/all"))
-		if err != nil {
-			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		resp, md, err := local_request_HobnobAdmin_ListAllRuns_0(annotatedContext, inboundMarshaler, server, req, pathParams)
-		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
-		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
-		if err != nil {
-			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		forward_HobnobAdmin_ListAllRuns_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_HobnobAdmin_AddWebhook_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -1281,25 +1226,25 @@ func RegisterHobnobAdminHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_HobnobAdmin_GetComplianceSummary_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetClientCompliance_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetNodeCompliance_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetClientCompliance", runtime.WithHTTPPathPattern("/api/v1/clients/{id}/compliance"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetNodeCompliance", runtime.WithHTTPPathPattern("/api/v1/nodes/{id}/compliance"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_HobnobAdmin_GetClientCompliance_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_HobnobAdmin_GetNodeCompliance_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_GetClientCompliance_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_GetNodeCompliance_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_HobnobAdmin_Rollback_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -1307,7 +1252,7 @@ func RegisterHobnobAdminHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/Rollback", runtime.WithHTTPPathPattern("/api/v1/clients/{client_id}/rollback"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/Rollback", runtime.WithHTTPPathPattern("/api/v1/nodes/{node_id}/rollback"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1612,56 +1557,56 @@ func RegisterHobnobAdminHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_HobnobAdmin_RevokeApprovedPattern_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_ListClients_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_HobnobAdmin_ListNodes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/ListClients", runtime.WithHTTPPathPattern("/api/v1/clients"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/ListNodes", runtime.WithHTTPPathPattern("/api/v1/nodes"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_HobnobAdmin_ListClients_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_HobnobAdmin_ListNodes_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_ListClients_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_ListNodes_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetClient_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetNode_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetClient", runtime.WithHTTPPathPattern("/api/v1/clients/{id}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetNode", runtime.WithHTTPPathPattern("/api/v1/nodes/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_HobnobAdmin_GetClient_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_HobnobAdmin_GetNode_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_GetClient_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_GetNode_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_HobnobAdmin_RevokeClient_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_HobnobAdmin_RevokeNode_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/RevokeClient", runtime.WithHTTPPathPattern("/api/v1/clients/{id}/revoke"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/RevokeNode", runtime.WithHTTPPathPattern("/api/v1/nodes/{id}/revoke"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_HobnobAdmin_RevokeClient_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_HobnobAdmin_RevokeNode_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_RevokeClient_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_RevokeNode_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_HobnobAdmin_ForcePush_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -1684,7 +1629,7 @@ func RegisterHobnobAdminHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/DryRun", runtime.WithHTTPPathPattern("/api/v1/clients/{client_id}/dry-run"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/DryRun", runtime.WithHTTPPathPattern("/api/v1/nodes/{node_id}/dry-run"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1747,23 +1692,6 @@ func RegisterHobnobAdminHandlerClient(ctx context.Context, mux *runtime.ServeMux
 			return
 		}
 		forward_HobnobAdmin_GenerateToken_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_ListAllRuns_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
-		ctx, cancel := context.WithCancel(req.Context())
-		defer cancel()
-		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/ListAllRuns", runtime.WithHTTPPathPattern("/api/v1/runs/all"))
-		if err != nil {
-			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		resp, md, err := request_HobnobAdmin_ListAllRuns_0(annotatedContext, inboundMarshaler, client, req, pathParams)
-		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
-		if err != nil {
-			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		forward_HobnobAdmin_ListAllRuns_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_HobnobAdmin_AddWebhook_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -1833,28 +1761,28 @@ func RegisterHobnobAdminHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_HobnobAdmin_GetComplianceSummary_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetClientCompliance_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_HobnobAdmin_GetNodeCompliance_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetClientCompliance", runtime.WithHTTPPathPattern("/api/v1/clients/{id}/compliance"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/GetNodeCompliance", runtime.WithHTTPPathPattern("/api/v1/nodes/{id}/compliance"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_HobnobAdmin_GetClientCompliance_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_HobnobAdmin_GetNodeCompliance_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAdmin_GetClientCompliance_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAdmin_GetNodeCompliance_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_HobnobAdmin_Rollback_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/Rollback", runtime.WithHTTPPathPattern("/api/v1/clients/{client_id}/rollback"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAdmin/Rollback", runtime.WithHTTPPathPattern("/api/v1/nodes/{node_id}/rollback"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1925,21 +1853,20 @@ var (
 	pattern_HobnobAdmin_AddApprovedPattern_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "approved"}, ""))
 	pattern_HobnobAdmin_ListApprovedPatterns_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "approved"}, ""))
 	pattern_HobnobAdmin_RevokeApprovedPattern_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "approved", "id"}, ""))
-	pattern_HobnobAdmin_ListClients_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "clients"}, ""))
-	pattern_HobnobAdmin_GetClient_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "clients", "id"}, ""))
-	pattern_HobnobAdmin_RevokeClient_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "clients", "id", "revoke"}, ""))
+	pattern_HobnobAdmin_ListNodes_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "nodes"}, ""))
+	pattern_HobnobAdmin_GetNode_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "nodes", "id"}, ""))
+	pattern_HobnobAdmin_RevokeNode_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "nodes", "id", "revoke"}, ""))
 	pattern_HobnobAdmin_ForcePush_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "push"}, ""))
-	pattern_HobnobAdmin_DryRun_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "clients", "client_id", "dry-run"}, ""))
+	pattern_HobnobAdmin_DryRun_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "nodes", "node_id", "dry-run"}, ""))
 	pattern_HobnobAdmin_ListRuns_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "runs"}, ""))
 	pattern_HobnobAdmin_GetRun_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "runs", "id"}, ""))
 	pattern_HobnobAdmin_GenerateToken_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "tokens"}, ""))
-	pattern_HobnobAdmin_ListAllRuns_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "runs", "all"}, ""))
 	pattern_HobnobAdmin_AddWebhook_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "webhooks"}, ""))
 	pattern_HobnobAdmin_ListWebhooks_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "webhooks"}, ""))
 	pattern_HobnobAdmin_DeleteWebhook_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "webhooks", "id"}, ""))
 	pattern_HobnobAdmin_GetComplianceSummary_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "compliance"}, ""))
-	pattern_HobnobAdmin_GetClientCompliance_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "clients", "id", "compliance"}, ""))
-	pattern_HobnobAdmin_Rollback_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "clients", "client_id", "rollback"}, ""))
+	pattern_HobnobAdmin_GetNodeCompliance_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "nodes", "id", "compliance"}, ""))
+	pattern_HobnobAdmin_Rollback_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "nodes", "node_id", "rollback"}, ""))
 	pattern_HobnobAdmin_ListPackages_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "packages"}, ""))
 	pattern_HobnobAdmin_ListPackageDrift_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "packages", "drift"}, ""))
 	pattern_HobnobAdmin_PromoteEnv_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "env", "promote"}, ""))
@@ -1949,20 +1876,19 @@ var (
 	forward_HobnobAdmin_AddApprovedPattern_0    = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_ListApprovedPatterns_0  = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_RevokeApprovedPattern_0 = runtime.ForwardResponseMessage
-	forward_HobnobAdmin_ListClients_0           = runtime.ForwardResponseMessage
-	forward_HobnobAdmin_GetClient_0             = runtime.ForwardResponseMessage
-	forward_HobnobAdmin_RevokeClient_0          = runtime.ForwardResponseMessage
+	forward_HobnobAdmin_ListNodes_0             = runtime.ForwardResponseMessage
+	forward_HobnobAdmin_GetNode_0               = runtime.ForwardResponseMessage
+	forward_HobnobAdmin_RevokeNode_0            = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_ForcePush_0             = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_DryRun_0                = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_ListRuns_0              = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_GetRun_0                = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_GenerateToken_0         = runtime.ForwardResponseMessage
-	forward_HobnobAdmin_ListAllRuns_0           = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_AddWebhook_0            = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_ListWebhooks_0          = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_DeleteWebhook_0         = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_GetComplianceSummary_0  = runtime.ForwardResponseMessage
-	forward_HobnobAdmin_GetClientCompliance_0   = runtime.ForwardResponseMessage
+	forward_HobnobAdmin_GetNodeCompliance_0     = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_Rollback_0              = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_ListPackages_0          = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_ListPackageDrift_0      = runtime.ForwardResponseMessage

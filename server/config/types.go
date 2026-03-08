@@ -13,11 +13,12 @@ import (
 
 // ServerConfig represents the top-level server configuration from server.yaml.
 type ServerConfig struct {
-	Server   ServerSection   `yaml:"server"`
-	Database DatabaseSection `yaml:"database"`
-	CheckIn  CheckInSection  `yaml:"checkin"`
-	Watcher  WatcherSection  `yaml:"watcher"`
-	Secrets  secrets.Config  `yaml:"secrets"`
+	Server    ServerSection   `yaml:"server"`
+	Database  DatabaseSection `yaml:"database"`
+	CheckIn   CheckInSection  `yaml:"checkin"`
+	Watcher   WatcherSection  `yaml:"watcher"`
+	Secrets   secrets.Config  `yaml:"secrets"`
+	Bootstrap BootstrapConfig `yaml:"bootstrap"`
 }
 
 // WatcherSection holds secret rotation watcher configuration.
@@ -35,9 +36,24 @@ type ServerSection struct {
 
 // TLSConfig holds TLS file paths.
 type TLSConfig struct {
-	CertFile string `yaml:"cert_file"`
-	KeyFile  string `yaml:"key_file"`
-	CAFile   string `yaml:"ca_file"`
+	CertFile  string `yaml:"cert_file"`
+	KeyFile   string `yaml:"key_file"`
+	CAFile    string `yaml:"ca_file"`
+	CAKeyFile string `yaml:"ca_key_file"`
+}
+
+// TrustedEnrollment defines a hostname/CIDR pattern for token-free enrollment.
+// Nodes matching the pattern and originating from an allowed CIDR are enrolled
+// without a one-time token (Puppet-style autosigning).
+type TrustedEnrollment struct {
+	Pattern string   `yaml:"pattern"`
+	CIDRs   []string `yaml:"cidrs,omitempty"`
+}
+
+// BootstrapConfig holds bootstrap enrollment settings.
+type BootstrapConfig struct {
+	TrustedPatterns []TrustedEnrollment `yaml:"trusted_enrollment"`
+	CertValidity    string              `yaml:"cert_validity"` // e.g. "8760h" (1 year)
 }
 
 // DatabaseSection holds database config.
@@ -58,10 +74,10 @@ type ConditionalBlock struct {
 	Resources []ResourceConfig `yaml:"resources"`
 }
 
-// ClientConfig represents the resolved per-client configuration.
+// NodeConfig represents the resolved per-client configuration.
 // This is the output type returned by ConfigStore.Get().
-type ClientConfig struct {
-	Client          string                    `yaml:"client"`
+type NodeConfig struct {
+	Node            string                    `yaml:"node"`
 	Environment     string                    `yaml:"environment"`
 	Modules         []ModuleConfig            `yaml:"modules"`
 	Vars            map[string]any            `yaml:"vars"`
@@ -182,8 +198,8 @@ type RoleDefinition struct {
 	Modules []ModuleRef `yaml:"modules"`
 }
 
-// ClientEntry is a single entry in config/clients.yaml.
-type ClientEntry struct {
+// NodeEntry is a single entry in config/clients.yaml.
+type NodeEntry struct {
 	Match       string                    `yaml:"match"`
 	Environment string                    `yaml:"environment"`
 	Roles       []string                  `yaml:"roles"`
@@ -192,7 +208,7 @@ type ClientEntry struct {
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
 }
 
-// ClientsConfig is the top-level structure of clients.yaml.
-type ClientsConfig struct {
-	Clients []ClientEntry `yaml:"clients"`
+// NodesConfig is the top-level structure of clients.yaml.
+type NodesConfig struct {
+	Nodes []NodeEntry `yaml:"clients"`
 }

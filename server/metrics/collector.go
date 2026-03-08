@@ -20,41 +20,41 @@ func NewCollector(queries *db.Queries) *Collector {
 
 // UpdateGauges queries the database and updates all gauge metrics.
 func (c *Collector) UpdateGauges(ctx context.Context) error {
-	clients, err := c.queries.ListClients(ctx)
+	nodes, err := c.queries.ListNodes(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Total enrolled clients.
-	ClientsTotal.Set(float64(len(clients)))
+	// Total enrolled nodes.
+	NodesTotal.Set(float64(len(nodes)))
 
-	// Active clients (last_seen within the last hour).
+	// Active nodes (last_seen within the last hour).
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
 	var activeCount int
-	for _, cl := range clients {
-		if cl.LastSeen.Valid && cl.LastSeen.Time.After(oneHourAgo) {
+	for _, n := range nodes {
+		if n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo) {
 			activeCount++
 		}
 
-		// Time since last check-in per client.
-		if cl.LastSeen.Valid {
-			TimeSinceCheckin.WithLabelValues(cl.Hostname).Set(now.Sub(cl.LastSeen.Time).Seconds())
+		// Time since last check-in per node.
+		if n.LastSeen.Valid {
+			TimeSinceCheckin.WithLabelValues(n.Hostname).Set(now.Sub(n.LastSeen.Time).Seconds())
 		}
 	}
-	ClientsActive.Set(float64(activeCount))
+	NodesActive.Set(float64(activeCount))
 
-	// Compliance heuristic: percentage of non-revoked clients that checked in
-	// recently. This approximates compliance — clients that aren't checking in
-	// can't be converging. For per-client compliance status (compliant/drifted/
+	// Compliance heuristic: percentage of non-revoked nodes that checked in
+	// recently. This approximates compliance — nodes that aren't checking in
+	// can't be converging. For per-node compliance status (compliant/drifted/
 	// failing/stale), see the compliance package and ComplianceStatus gauge.
 	var totalActive, compliantCount int
-	for _, cl := range clients {
-		if cl.Revoked {
+	for _, n := range nodes {
+		if n.Revoked {
 			continue
 		}
 		totalActive++
-		if cl.LastSeen.Valid && cl.LastSeen.Time.After(oneHourAgo) {
+		if n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo) {
 			compliantCount++
 		}
 	}

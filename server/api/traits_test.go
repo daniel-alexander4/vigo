@@ -39,21 +39,21 @@ func (r *mockRow) Scan(dest ...any) error {
 }
 
 func TestTraitsHandler_Success(t *testing.T) {
-	// Mock: GetClientByHostname returns a client, GetLatestClientNails returns nails.
+	// Mock: GetNodeByHostname returns a client, GetLatestNodeNails returns nails.
 	callCount := 0
 	collectedAt := time.Date(2026, 3, 7, 10, 30, 0, 0, time.UTC)
 	mockDB := &mockDBTX{
 		queryRowFn: func(sql string, args ...any) pgx.Row {
 			callCount++
 			if callCount == 1 {
-				// GetClientByHostname
+				// GetNodeByHostname
 				return &mockRow{scanFn: func(dest ...any) error {
 					// id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 					*dest[1].(*string) = "web01"
 					return nil
 				}}
 			}
-			// GetLatestClientNails
+			// GetLatestNodeNails
 			return &mockRow{scanFn: func(dest ...any) error {
 				// id, client_id, nails, collected_at
 				*dest[2].(*json.RawMessage) = json.RawMessage(`{"os":{"distro":"ubuntu","version":"22.04"}}`)
@@ -116,7 +116,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 	}
 }
 
-func TestTraitsHandler_ClientNotFound(t *testing.T) {
+func TestTraitsHandler_NodeNotFound(t *testing.T) {
 	mockDB := &mockDBTX{
 		queryRowFn: func(sql string, args ...any) pgx.Row {
 			return &mockRow{scanFn: func(dest ...any) error {
@@ -139,8 +139,8 @@ func TestTraitsHandler_ClientNotFound(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["error"] != "client 'nonexistent' not found" {
-		t.Errorf("expected client not found error, got %q", resp["error"])
+	if resp["error"] != "node 'nonexistent' not found" {
+		t.Errorf("expected node not found error, got %q", resp["error"])
 	}
 }
 
@@ -150,13 +150,13 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 		queryRowFn: func(sql string, args ...any) pgx.Row {
 			callCount++
 			if callCount == 1 {
-				// GetClientByHostname succeeds
+				// GetNodeByHostname succeeds
 				return &mockRow{scanFn: func(dest ...any) error {
 					*dest[1].(*string) = "web01"
 					return nil
 				}}
 			}
-			// GetLatestClientNails returns no rows
+			// GetLatestNodeNails returns no rows
 			return &mockRow{scanFn: func(dest ...any) error {
 				return pgx.ErrNoRows
 			}}
@@ -177,7 +177,7 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	expected := "no traits available for 'web01' -- client has not reported traits yet"
+	expected := "no traits available for 'web01' -- node has not reported traits yet"
 	if resp["error"] != expected {
 		t.Errorf("expected %q, got %q", expected, resp["error"])
 	}

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,9 +18,9 @@ import (
 
 	"github.com/hobnob/hobnob/agent/auth"
 	"github.com/hobnob/hobnob/agent/checkin"
-	"github.com/hobnob/hobnob/agent/nails"
 	"github.com/hobnob/hobnob/agent/modules"
 	"github.com/hobnob/hobnob/agent/modules/pkgmgr"
+	"github.com/hobnob/hobnob/agent/nails"
 	"github.com/hobnob/hobnob/agent/snapshots"
 	"github.com/spf13/cobra"
 )
@@ -57,17 +61,17 @@ func setupLogger() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 }
 
-// loadClientID reads the client UUID from <data-dir>/client.uuid.
-func loadClientID() (string, error) {
+// loadNodeID reads the node UUID from <data-dir>/client.uuid.
+func loadNodeID() (string, error) {
 	data, err := os.ReadFile(dataDir + "/client.uuid")
 	if err != nil {
-		return "", fmt.Errorf("read client UUID from %s/client.uuid: %w (have you run 'hob register'?)", dataDir, err)
+		return "", fmt.Errorf("read node UUID from %s/client.uuid: %w (have you run 'hob register'?)", dataDir, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
 
-// saveClientID writes the client UUID to <data-dir>/client.uuid.
-func saveClientID(id string) error {
+// saveNodeID writes the node UUID to <data-dir>/client.uuid.
+func saveNodeID(id string) error {
 	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
 }
 
@@ -119,8 +123,16 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 }
 
 // newGRPCClient creates a gRPC client with the configured TLS settings.
-func newGRPCClient(clientID string, privateKey []byte) (*checkin.Client, error) {
-	return checkin.NewClient(server, caFile, certFile, keyFile, clientID, privateKey)
+// If explicit cert/key/ca flags are empty, it checks for bootstrap-issued certs
+// in the data directory.
+func newGRPCClient(nodeID string, privateKey []byte) (*checkin.Client, error) {
+	ca, cert, key := caFile, certFile, keyFile
+	if ca == "" && auth.HasBootstrapCerts(dataDir) {
+		ca = auth.CACertPath(dataDir)
+		cert = auth.TLSCertPath(dataDir)
+		key = auth.TLSKeyPath(dataDir)
+	}
+	return checkin.NewClient(server, ca, cert, key, nodeID, privateKey)
 }
 
 // signalContext returns a context that is cancelled on SIGINT or SIGTERM.
@@ -160,14 +172,14 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("load or generate keypair: %w", err)
 		}
 
-		// Load client UUID.
-		clientID, err := loadClientID()
+		// Load node UUID.
+		nodeID, err := loadNodeID()
 		if err != nil {
 			return err
 		}
 
 		// Create gRPC client.
-		client, err := newGRPCClient(clientID, priv)
+		client, err := newGRPCClient(nodeID, priv)
 		if err != nil {
 			return fmt.Errorf("create gRPC client: %w", err)
 		}
@@ -221,14 +233,14 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("load or generate keypair: %w", err)
 		}
 
-		// Load client UUID.
-		clientID, err := loadClientID()
+		// Load node UUID.
+		nodeID, err := loadNodeID()
 		if err != nil {
 			return err
 		}
 
 		// Create gRPC client.
-		client, err := newGRPCClient(clientID, priv)
+		client, err := newGRPCClient(nodeID, priv)
 		if err != nil {
 			return fmt.Errorf("create gRPC client: %w", err)
 		}
@@ -251,13 +263,15 @@ var runCmd = &cobra.Command{
 			nailsMap = make(map[string]any)
 		}
 
-		// Report nails.
-		if err := client.ReportNails(ctx, nailsMap); err != nil {
-			logger.Warn("failed to report nails", "error", err)
+		// Marshal nails for inline delivery.
+		nailsJSON, marshalErr := json.Marshal(nailsMap)
+		if marshalErr != nil {
+			logger.Warn("failed to marshal nails", "error", marshalErr)
+			nailsJSON = nil
 		}
 
-		// Run once.
-		runResult, err := checkin.RunOnce(ctx, client, executors, nailsMap, dryRun, module)
+		// Run once with inline nails.
+		runResult, err := checkin.RunOnce(ctx, client, executors, nailsMap, dryRun, module, "", nailsJSON, nil, nil)
 		if err != nil {
 			return fmt.Errorf("convergence run failed: %w", err)
 		}
@@ -322,7 +336,7 @@ var registerCmd = &cobra.Command{
 			"data_dir", dataDir,
 		)
 
-		// Create gRPC client (no client UUID yet, use empty string).
+		// Create gRPC client (no node UUID yet, use empty string).
 		client, err := checkin.NewClient(server, caFile, certFile, keyFile, "", priv)
 		if err != nil {
 			return fmt.Errorf("create gRPC client: %w", err)
@@ -339,14 +353,131 @@ var registerCmd = &cobra.Command{
 			return fmt.Errorf("registration rejected: %s", resp.Message)
 		}
 
-		// Save client UUID.
-		if err := saveClientID(resp.ClientId); err != nil {
-			return fmt.Errorf("save client UUID: %w", err)
+		// Save node UUID.
+		if err := saveNodeID(resp.NodeId); err != nil {
+			return fmt.Errorf("save node UUID: %w", err)
 		}
 
 		logger.Info("registration successful",
-			"client_id", resp.ClientId,
+			"node_id", resp.NodeId,
 			"message", resp.Message,
+		)
+
+		return nil
+	},
+}
+
+var bootstrapCmd = &cobra.Command{
+	Use:   "bootstrap",
+	Short: "Bootstrap this agent with the Hobnob server",
+	Long: `Generates keys, creates a CSR, registers with the server, and receives
+signed TLS certificates. Supports both token-based and trusted enrollment.
+
+After bootstrap, the agent has everything it needs to connect via mTLS.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logger := slog.Default()
+
+		token, _ := cmd.Flags().GetString("token")
+		bootstrapServer, _ := cmd.Flags().GetString("server")
+
+		if bootstrapServer == "" {
+			return fmt.Errorf("--server is required (e.g. http://hobd.example.com:8080)")
+		}
+
+		// Load or generate ED25519 keypair (for request signing).
+		pub, _, err := auth.LoadOrGenerate(dataDir)
+		if err != nil {
+			return fmt.Errorf("load or generate keypair: %w", err)
+		}
+
+		pubPEM, err := auth.PublicKeyPEM(pub)
+		if err != nil {
+			return fmt.Errorf("export public key PEM: %w", err)
+		}
+
+		// Generate TLS keypair and CSR.
+		tlsKey, err := auth.GenerateTLSKey()
+		if err != nil {
+			return fmt.Errorf("generate TLS key: %w", err)
+		}
+
+		hostname, err := os.Hostname()
+		if err != nil {
+			return fmt.Errorf("get hostname: %w", err)
+		}
+
+		csrPEM, err := auth.GenerateCSR(tlsKey, hostname)
+		if err != nil {
+			return fmt.Errorf("generate CSR: %w", err)
+		}
+
+		ipAddr := getOutboundIP()
+
+		logger.Info("bootstrapping with server",
+			"server", bootstrapServer,
+			"hostname", hostname,
+			"ip", ipAddr,
+		)
+
+		// Call the bootstrap register endpoint.
+		type registerReq struct {
+			Hostname  string `json:"hostname"`
+			IPAddress string `json:"ip_address"`
+			PubkeyPEM string `json:"pubkey_pem"`
+			CSRPEM    string `json:"csr_pem"`
+			Token     string `json:"token,omitempty"`
+		}
+		type registerResp struct {
+			NodeID        string `json:"node_id"`
+			SignedCertPEM string `json:"signed_cert_pem"`
+			CACertPEM     string `json:"ca_cert_pem"`
+		}
+
+		reqBody := registerReq{
+			Hostname:  hostname,
+			IPAddress: ipAddr,
+			PubkeyPEM: pubPEM,
+			CSRPEM:    string(csrPEM),
+			Token:     token,
+		}
+		bodyJSON, _ := json.Marshal(reqBody)
+
+		url := strings.TrimRight(bootstrapServer, "/") + "/api/v1/bootstrap/register"
+		httpResp, err := http.Post(url, "application/json", bytes.NewReader(bodyJSON))
+		if err != nil {
+			return fmt.Errorf("bootstrap request failed: %w", err)
+		}
+		defer httpResp.Body.Close()
+
+		respBody, _ := io.ReadAll(httpResp.Body)
+
+		if httpResp.StatusCode != http.StatusOK {
+			return fmt.Errorf("bootstrap rejected (HTTP %d): %s", httpResp.StatusCode, strings.TrimSpace(string(respBody)))
+		}
+
+		var resp registerResp
+		if err := json.Unmarshal(respBody, &resp); err != nil {
+			return fmt.Errorf("parse bootstrap response: %w", err)
+		}
+
+		// Save everything to disk.
+		if err := auth.SaveTLSKey(dataDir, tlsKey); err != nil {
+			return fmt.Errorf("save TLS key: %w", err)
+		}
+		if err := auth.SaveTLSCert(dataDir, []byte(resp.SignedCertPEM)); err != nil {
+			return fmt.Errorf("save TLS cert: %w", err)
+		}
+		if err := auth.SaveCACert(dataDir, []byte(resp.CACertPEM)); err != nil {
+			return fmt.Errorf("save CA cert: %w", err)
+		}
+		if err := saveNodeID(resp.NodeID); err != nil {
+			return fmt.Errorf("save node UUID: %w", err)
+		}
+
+		logger.Info("bootstrap successful",
+			"node_id", resp.NodeID,
+			"tls_cert", auth.TLSCertPath(dataDir),
+			"ca_cert", auth.CACertPath(dataDir),
 		)
 
 		return nil
@@ -388,7 +519,11 @@ func init() {
 
 	registerCmd.Flags().String("token", "", "one-time registration token")
 
+	bootstrapCmd.Flags().String("token", "", "one-time registration token (optional for trusted enrollment)")
+	bootstrapCmd.Flags().String("server", "", "server REST API address (e.g. http://hobd.example.com:8080)")
+
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(registerCmd)
+	rootCmd.AddCommand(bootstrapCmd)
 	rootCmd.AddCommand(versionCmd)
 }

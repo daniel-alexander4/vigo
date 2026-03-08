@@ -13,23 +13,23 @@ import (
 )
 
 const createRun = `-- name: CreateRun :one
-INSERT INTO runs (client_id, status, module_count)
+INSERT INTO runs (node_id, status, module_count)
 VALUES ($1, $2, $3)
-RETURNING id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+RETURNING id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 `
 
 type CreateRunParams struct {
-	ClientID    uuid.UUID `json:"client_id"`
+	NodeID      uuid.UUID `json:"node_id"`
 	Status      string    `json:"status"`
 	ModuleCount int32     `json:"module_count"`
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
-	row := q.db.QueryRow(ctx, createRun, arg.ClientID, arg.Status, arg.ModuleCount)
+	row := q.db.QueryRow(ctx, createRun, arg.NodeID, arg.Status, arg.ModuleCount)
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.ClientID,
+		&i.NodeID,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
@@ -111,7 +111,7 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 WHERE id = $1
 `
@@ -121,7 +121,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.ClientID,
+		&i.NodeID,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
@@ -134,7 +134,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
 }
 
 const listAllRuns = `-- name: ListAllRuns :many
-SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 ORDER BY started_at DESC
 LIMIT $1
@@ -151,7 +151,7 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int32) ([]Run, error) {
 		var i Run
 		if err := rows.Scan(
 			&i.ID,
-			&i.ClientID,
+			&i.NodeID,
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
@@ -208,21 +208,21 @@ func (q *Queries) ListRunResults(ctx context.Context, runID uuid.UUID) ([]RunRes
 	return items, nil
 }
 
-const listRunsByClient = `-- name: ListRunsByClient :many
-SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+const listRunsByNode = `-- name: ListRunsByNode :many
+SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE client_id = $1
+WHERE node_id = $1
 ORDER BY started_at DESC
 LIMIT $2
 `
 
-type ListRunsByClientParams struct {
-	ClientID uuid.UUID `json:"client_id"`
-	Limit    int32     `json:"limit"`
+type ListRunsByNodeParams struct {
+	NodeID uuid.UUID `json:"node_id"`
+	Limit  int32     `json:"limit"`
 }
 
-func (q *Queries) ListRunsByClient(ctx context.Context, arg ListRunsByClientParams) ([]Run, error) {
-	rows, err := q.db.Query(ctx, listRunsByClient, arg.ClientID, arg.Limit)
+func (q *Queries) ListRunsByNode(ctx context.Context, arg ListRunsByNodeParams) ([]Run, error) {
+	rows, err := q.db.Query(ctx, listRunsByNode, arg.NodeID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (q *Queries) ListRunsByClient(ctx context.Context, arg ListRunsByClientPara
 		var i Run
 		if err := rows.Scan(
 			&i.ID,
-			&i.ClientID,
+			&i.NodeID,
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,

@@ -43,26 +43,6 @@ func TestJitteredDuration_NegativeJitter(t *testing.T) {
 	}
 }
 
-func TestStateFingerprint_Deterministic(t *testing.T) {
-	facts := map[string]any{
-		"os": map[string]any{
-			"family": "linux",
-			"distro": "ubuntu",
-		},
-	}
-
-	fp1 := stateFingerprint(facts)
-	fp2 := stateFingerprint(facts)
-
-	if fp1 != fp2 {
-		t.Errorf("stateFingerprint not deterministic: %q != %q", fp1, fp2)
-	}
-
-	if len(fp1) != 64 { // SHA256 hex = 64 chars
-		t.Errorf("stateFingerprint length = %d, want 64", len(fp1))
-	}
-}
-
 func TestResultsToProto(t *testing.T) {
 	results := []modules.ResourceResult{
 		{
@@ -142,7 +122,7 @@ func (m *mockAgentClient) DownloadCustomTrait(_ context.Context, _ *pb.DownloadC
 func newMockClient(mock *mockAgentClient) *Client {
 	return &Client{
 		agent:      mock,
-		clientID:   "test-client-id",
+		nodeID:     "test-node-id",
 		privateKey: make([]byte, 64), // fake key, signing will produce deterministic output
 	}
 }
@@ -160,7 +140,7 @@ func TestRunOnce_DryRun_DoesNotCallReportResult(t *testing.T) {
 	executors := map[string]modules.Executor{}
 	nailsMap := map[string]any{}
 
-	result, err := RunOnce(context.Background(), client, executors, nailsMap, true, "")
+	result, err := RunOnce(context.Background(), client, executors, nailsMap, true, "", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunOnce dry-run: %v", err)
 	}
@@ -177,7 +157,18 @@ func TestRunOnce_DryRun_DoesNotCallReportResult(t *testing.T) {
 func TestRunOnce_ReportsResults(t *testing.T) {
 	mock := &mockAgentClient{
 		checkInResp: &pb.CheckInResponse{
-			Modules:       nil,
+			PolicyBundle: &pb.PolicyBundle{
+				PolicyVersion: 1,
+				Modules: []*pb.PolicyModule{
+					{
+						Name: "test-mod",
+						Resources: []*pb.PolicyResource{
+							{Name: "test-res", Type: "file", Attributes: map[string]string{"path": "/tmp/test"}},
+						},
+					},
+				},
+			},
+			PolicyVersion: 1,
 			BaseInterval:  "30m",
 			JitterPercent: 10,
 		},
@@ -187,7 +178,7 @@ func TestRunOnce_ReportsResults(t *testing.T) {
 	executors := map[string]modules.Executor{}
 	nailsMap := map[string]any{}
 
-	_, err := RunOnce(context.Background(), client, executors, nailsMap, false, "")
+	_, err := RunOnce(context.Background(), client, executors, nailsMap, false, "", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -203,7 +194,7 @@ func TestRunOnce_CheckInError(t *testing.T) {
 	}
 
 	client := newMockClient(mock)
-	_, err := RunOnce(context.Background(), client, nil, nil, false, "")
+	_, err := RunOnce(context.Background(), client, nil, nil, false, "", "", nil, nil, nil)
 	if err == nil {
 		t.Fatal("RunOnce expected error on check-in failure")
 	}
@@ -219,7 +210,7 @@ func TestRunOnce_ParsesServerTiming(t *testing.T) {
 	}
 
 	client := newMockClient(mock)
-	result, err := RunOnce(context.Background(), client, map[string]modules.Executor{}, nil, true, "")
+	result, err := RunOnce(context.Background(), client, map[string]modules.Executor{}, nil, true, "", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -236,12 +227,11 @@ func TestRunOnce_DefaultTiming(t *testing.T) {
 	mock := &mockAgentClient{
 		checkInResp: &pb.CheckInResponse{
 			Modules: nil,
-			// No timing info -- use defaults.
 		},
 	}
 
 	client := newMockClient(mock)
-	result, err := RunOnce(context.Background(), client, map[string]modules.Executor{}, nil, true, "")
+	result, err := RunOnce(context.Background(), client, map[string]modules.Executor{}, nil, true, "", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -251,6 +241,33 @@ func TestRunOnce_DefaultTiming(t *testing.T) {
 	}
 	if result.JitterPct != 10 {
 		t.Errorf("JitterPct = %d, want 10 (default)", result.JitterPct)
+	}
+}
+
+func TestRunOnce_NoChange_SkipsExecution(t *testing.T) {
+	mock := &mockAgentClient{
+		checkInResp: &pb.CheckInResponse{
+			NoChange:      true,
+			PolicyVersion: 42,
+			BaseInterval:  "10m",
+			JitterPercent: 15,
+		},
+	}
+
+	client := newMockClient(mock)
+	result, err := RunOnce(context.Background(), client, map[string]modules.Executor{}, nil, false, "", "", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if !result.NoChange {
+		t.Error("expected NoChange=true")
+	}
+	if mock.reportCalled {
+		t.Error("ReportResult should not be called on no_change")
+	}
+	if result.PolicyVersion != 42 {
+		t.Errorf("PolicyVersion = %d, want 42", result.PolicyVersion)
 	}
 }
 
@@ -286,7 +303,7 @@ func TestLoop_BackoffOnError_DoesNotCrash(t *testing.T) {
 		t.Errorf("Loop error = %v, want context.DeadlineExceeded", err)
 	}
 
-	// Verify we attempted at least one iteration (fact reporting calls CheckIn indirectly).
+	// Verify we attempted at least one iteration.
 	if callCount < 1 {
 		t.Errorf("Loop made %d check-in attempts, expected >= 1", callCount)
 	}

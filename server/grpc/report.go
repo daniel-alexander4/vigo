@@ -23,9 +23,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.InvalidArgument, "invalid run_id: %v", err)
 	}
 
-	clientID, err := uuid.Parse(req.GetClientId())
+	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client_id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 
 	// Store each module result.
@@ -88,11 +88,11 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.Internal, "finishing run: %v", err)
 	}
 
-	// Look up client hostname for metric labels.
-	client, cErr := s.queries.GetClientByID(ctx, clientID)
-	hostname := clientID.String() // fallback if lookup fails
+	// Look up node hostname for metric labels.
+	node, cErr := s.queries.GetNodeByID(ctx, nodeID)
+	hostname := nodeID.String() // fallback if lookup fails
 	if cErr == nil {
-		hostname = client.Hostname
+		hostname = node.Hostname
 	}
 
 	// Record metrics for each result.
@@ -112,7 +112,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 
 	slog.Info("run completed",
 		"run_id", runID,
-		"client_id", clientID,
+		"node_id", nodeID,
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
@@ -123,8 +123,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	if s.dispatcher != nil {
 		event := webhook.FormatRunEvent(runStatus)
 		s.dispatcher.Dispatch(ctx, event, webhook.EventPayload{
-			Client: &webhook.ClientInfo{
-				ID:       clientID.String(),
+			Node: &webhook.NodeInfo{
+				ID:       nodeID.String(),
 				Hostname: hostname,
 			},
 			Run: &webhook.RunInfo{
@@ -138,8 +138,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		// Also fire drift.detected if any changes detected.
 		if changedCount > 0 {
 			s.dispatcher.Dispatch(ctx, "drift.detected", webhook.EventPayload{
-				Client: &webhook.ClientInfo{
-					ID:       clientID.String(),
+				Node: &webhook.NodeInfo{
+					ID:       nodeID.String(),
 					Hostname: hostname,
 				},
 				Run: &webhook.RunInfo{

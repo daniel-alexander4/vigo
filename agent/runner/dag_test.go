@@ -286,6 +286,31 @@ func TestBuildDAGMultipleResourcesPerModule(t *testing.T) {
 	}
 }
 
+func TestNeedsTopoSort(t *testing.T) {
+	// No deps -> false
+	noDeps := []ResourceNode{
+		{Name: "a", Type: "file"},
+		{Name: "b", Type: "package"},
+	}
+	if needsTopoSort(noDeps) {
+		t.Error("expected false for nodes without dependencies")
+	}
+
+	// Has deps -> true
+	withDeps := []ResourceNode{
+		{Name: "a", Type: "file"},
+		{Name: "b", Type: "package", DependsOn: []string{"a"}},
+	}
+	if !needsTopoSort(withDeps) {
+		t.Error("expected true for nodes with dependencies")
+	}
+
+	// Empty -> false
+	if needsTopoSort(nil) {
+		t.Error("expected false for nil slice")
+	}
+}
+
 func TestBuildDAGEmptyModules(t *testing.T) {
 	nodes, notifyMap, err := BuildDAG(nil)
 	if err != nil {

@@ -12,16 +12,16 @@ import (
 )
 
 const createSecretRotationEvent = `-- name: CreateSecretRotationEvent :one
-INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_clients)
+INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_nodes)
 VALUES ($1, $2, $3, $4)
-RETURNING id, secret_path, old_version, new_version, rotated_at, affected_clients
+RETURNING id, secret_path, old_version, new_version, rotated_at, affected_nodes
 `
 
 type CreateSecretRotationEventParams struct {
-	SecretPath      string      `json:"secret_path"`
-	OldVersion      pgtype.Text `json:"old_version"`
-	NewVersion      pgtype.Text `json:"new_version"`
-	AffectedClients int32       `json:"affected_clients"`
+	SecretPath    string      `json:"secret_path"`
+	OldVersion    pgtype.Text `json:"old_version"`
+	NewVersion    pgtype.Text `json:"new_version"`
+	AffectedNodes int32       `json:"affected_nodes"`
 }
 
 func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecretRotationEventParams) (SecretRotationEvent, error) {
@@ -29,7 +29,7 @@ func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecre
 		arg.SecretPath,
 		arg.OldVersion,
 		arg.NewVersion,
-		arg.AffectedClients,
+		arg.AffectedNodes,
 	)
 	var i SecretRotationEvent
 	err := row.Scan(
@@ -38,13 +38,13 @@ func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecre
 		&i.OldVersion,
 		&i.NewVersion,
 		&i.RotatedAt,
-		&i.AffectedClients,
+		&i.AffectedNodes,
 	)
 	return i, err
 }
 
 const listSecretRotationEvents = `-- name: ListSecretRotationEvents :many
-SELECT id, secret_path, old_version, new_version, rotated_at, affected_clients
+SELECT id, secret_path, old_version, new_version, rotated_at, affected_nodes
 FROM secret_rotation_events
 ORDER BY rotated_at DESC
 LIMIT $1
@@ -65,7 +65,7 @@ func (q *Queries) ListSecretRotationEvents(ctx context.Context, limit int32) ([]
 			&i.OldVersion,
 			&i.NewVersion,
 			&i.RotatedAt,
-			&i.AffectedClients,
+			&i.AffectedNodes,
 		); err != nil {
 			return nil, err
 		}

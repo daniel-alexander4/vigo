@@ -33,12 +33,12 @@ func (m *mockVersionProvider) setVersion(key string, v int) {
 	m.versions[key] = v
 }
 
-// mockClientStore implements ClientStore for testing.
-type mockClientStore struct {
+// mockNodeStore implements NodeStore for testing.
+type mockNodeStore struct {
 	refs map[string][]string // secret path -> hostnames
 }
 
-func (m *mockClientStore) ClientsReferencingSecret(path string) []string {
+func (m *mockNodeStore) NodesReferencingSecret(path string) []string {
 	return m.refs[path]
 }
 
@@ -47,7 +47,7 @@ type mockDB struct {
 	mu              sync.Mutex
 	forcePushed     []uuid.UUID
 	rotationEvents  []RotationRecord
-	clientsByHost   map[string]uuid.UUID
+	nodesByHost   map[string]uuid.UUID
 }
 
 func (m *mockDB) SetForcePush(ctx context.Context, id uuid.UUID) error {
@@ -64,10 +64,10 @@ func (m *mockDB) CreateSecretRotationEvent(ctx context.Context, params RotationR
 	return nil
 }
 
-func (m *mockDB) GetClientByHostname(ctx context.Context, hostname string) (uuid.UUID, error) {
+func (m *mockDB) GetNodeByHostname(ctx context.Context, hostname string) (uuid.UUID, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	id, ok := m.clientsByHost[hostname]
+	id, ok := m.nodesByHost[hostname]
 	if !ok {
 		return uuid.Nil, nil
 	}
@@ -87,14 +87,14 @@ func (m *mockDispatcher) DispatchRotation(ctx context.Context, event string, sec
 }
 
 func TestRotationTrigger(t *testing.T) {
-	clientID := uuid.New()
+	nodeID := uuid.New()
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockClientStore{refs: map[string][]string{
+	store := &mockNodeStore{refs: map[string][]string{
 		"hobnob/db/dsn": {"web-01.example.com"},
 	}}
 	database := &mockDB{
-		clientsByHost: map[string]uuid.UUID{
-			"web-01.example.com": clientID,
+		nodesByHost: map[string]uuid.UUID{
+			"web-01.example.com": nodeID,
 		},
 	}
 	dispatcher := &mockDispatcher{}
@@ -115,7 +115,7 @@ func TestRotationTrigger(t *testing.T) {
 
 	// Verify force push was triggered.
 	database.mu.Lock()
-	assert.Contains(t, database.forcePushed, clientID)
+	assert.Contains(t, database.forcePushed, nodeID)
 	assert.Len(t, database.rotationEvents, 1)
 	assert.Equal(t, "hobnob/db/dsn", database.rotationEvents[0].SecretPath)
 	database.mu.Unlock()
@@ -128,8 +128,8 @@ func TestRotationTrigger(t *testing.T) {
 
 func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockClientStore{refs: map[string][]string{}}
-	database := &mockDB{clientsByHost: map[string]uuid.UUID{}}
+	store := &mockNodeStore{refs: map[string][]string{}}
+	database := &mockDB{nodesByHost: map[string]uuid.UUID{}}
 	dispatcher := &mockDispatcher{}
 
 	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
@@ -148,8 +148,8 @@ func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 
 func TestWatcherRunLoop(t *testing.T) {
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockClientStore{refs: map[string][]string{}}
-	database := &mockDB{clientsByHost: map[string]uuid.UUID{}}
+	store := &mockNodeStore{refs: map[string][]string{}}
+	database := &mockDB{nodesByHost: map[string]uuid.UUID{}}
 	dispatcher := &mockDispatcher{}
 
 	w := NewWatcher(provider, database, store, dispatcher, 50*time.Millisecond, []string{"hobnob/db/dsn"})
@@ -161,18 +161,18 @@ func TestWatcherRunLoop(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-func TestMultipleAffectedClients(t *testing.T) {
-	client1 := uuid.New()
-	client2 := uuid.New()
+func TestMultipleAffectedNodes(t *testing.T) {
+	node1 := uuid.New()
+	node2 := uuid.New()
 
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/tls/cert": 1}}
-	store := &mockClientStore{refs: map[string][]string{
+	store := &mockNodeStore{refs: map[string][]string{
 		"hobnob/tls/cert": {"web-01.example.com", "web-02.example.com"},
 	}}
 	database := &mockDB{
-		clientsByHost: map[string]uuid.UUID{
-			"web-01.example.com": client1,
-			"web-02.example.com": client2,
+		nodesByHost: map[string]uuid.UUID{
+			"web-01.example.com": node1,
+			"web-02.example.com": node2,
 		},
 	}
 	dispatcher := &mockDispatcher{}
@@ -187,7 +187,7 @@ func TestMultipleAffectedClients(t *testing.T) {
 
 	database.mu.Lock()
 	assert.Len(t, database.forcePushed, 2)
-	assert.Contains(t, database.forcePushed, client1)
-	assert.Contains(t, database.forcePushed, client2)
+	assert.Contains(t, database.forcePushed, node1)
+	assert.Contains(t, database.forcePushed, node2)
 	database.mu.Unlock()
 }

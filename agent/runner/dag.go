@@ -178,6 +178,18 @@ func TopoSort(nodes []ResourceNode) ([]ResourceNode, error) {
 	return sorted, nil
 }
 
+// needsTopoSort returns true if any node has dependencies that require
+// topological sorting. When no depends_on relationships exist, resources
+// can be executed in declaration order, saving the sort overhead.
+func needsTopoSort(nodes []ResourceNode) bool {
+	for i := range nodes {
+		if len(nodes[i].DependsOn) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // copyStrings returns a copy of a string slice (nil-safe).
 func copyStrings(s []string) []string {
 	if len(s) == 0 {

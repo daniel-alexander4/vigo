@@ -8,33 +8,33 @@ import (
 
 var pushCmd = &cobra.Command{
 	Use:   "push [hostname-or-uuid]",
-	Short: "Trigger an immediate check-in for a client or all clients",
+	Short: "Trigger an immediate check-in for a node or all nodes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
-		clientID := ""
+		nodeID := ""
 		if !all {
 			if len(args) < 1 {
 				return fmt.Errorf("specify a hostname or UUID, or use --all")
 			}
-			clientID = args[0]
+			nodeID = args[0]
 		}
 
 		client := newAPIClient()
 		var resp struct {
-			ClientsNotified int32 `json:"clientsNotified"`
+			NodesNotified int32 `json:"nodesNotified"`
 		}
 		err := client.post("/api/v1/push", map[string]string{
-			"client_id": clientID,
+			"node_id": nodeID,
 		}, &resp)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Force push sent — %d client(s) notified\n", resp.ClientsNotified)
+		fmt.Printf("Force push sent — %d node(s) notified\n", resp.NodesNotified)
 		return nil
 	},
 }
 
 func init() {
-	pushCmd.Flags().Bool("all", false, "Push to all clients")
+	pushCmd.Flags().Bool("all", false, "Push to all nodes")
 }

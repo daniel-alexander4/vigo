@@ -10,33 +10,33 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var clientsCmd = &cobra.Command{
-	Use:   "clients",
-	Short: "Manage enrolled clients",
+var nodesCmd = &cobra.Command{
+	Use:   "nodes",
+	Short: "Manage enrolled nodes",
 }
 
-var clientsListCmd = &cobra.Command{
+var nodesListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all enrolled clients",
+	Short: "List all enrolled nodes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
-			Clients []struct {
+			Nodes []struct {
 				ID         string `json:"id"`
 				Hostname   string `json:"hostname"`
 				IPAddress  string `json:"ipAddress"`
 				EnrolledAt string `json:"enrolledAt"`
 				LastSeen   string `json:"lastSeen"`
 				Revoked    bool   `json:"revoked"`
-			} `json:"clients"`
+			} `json:"nodes"`
 		}
-		if err := client.get("/api/v1/clients", &resp); err != nil {
+		if err := client.get("/api/v1/nodes", &resp); err != nil {
 			return err
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "HOSTNAME\tIP\tENROLLED\tLAST SEEN\tSTATUS")
-		for _, c := range resp.Clients {
+		for _, c := range resp.Nodes {
 			status := "active"
 			if c.Revoked {
 				status = "revoked"
@@ -51,14 +51,14 @@ var clientsListCmd = &cobra.Command{
 	},
 }
 
-var clientsShowCmd = &cobra.Command{
+var nodesShowCmd = &cobra.Command{
 	Use:   "show <id>",
-	Short: "Show details for a client",
+	Short: "Show details for a node",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
-			Client struct {
+			Node struct {
 				ID         string `json:"id"`
 				Hostname   string `json:"hostname"`
 				IPAddress  string `json:"ipAddress"`
@@ -66,13 +66,13 @@ var clientsShowCmd = &cobra.Command{
 				LastSeen   string `json:"lastSeen"`
 				Revoked    bool   `json:"revoked"`
 				RevokedAt  string `json:"revokedAt"`
-			} `json:"client"`
+			} `json:"node"`
 		}
-		if err := client.get("/api/v1/clients/"+args[0], &resp); err != nil {
+		if err := client.get("/api/v1/nodes/"+args[0], &resp); err != nil {
 			return err
 		}
 
-		c := resp.Client
+		c := resp.Node
 		fmt.Printf("ID:         %s\n", c.ID)
 		fmt.Printf("Hostname:   %s\n", c.Hostname)
 		fmt.Printf("IP:         %s\n", c.IPAddress)
@@ -88,7 +88,7 @@ var clientsShowCmd = &cobra.Command{
 		var compResp struct {
 			Status string `json:"status"`
 		}
-		if err := client.get("/api/v1/clients/"+args[0]+"/compliance", &compResp); err == nil {
+		if err := client.get("/api/v1/nodes/"+args[0]+"/compliance", &compResp); err == nil {
 			fmt.Printf("Compliance: %s\n", compResp.Status)
 		}
 
@@ -96,23 +96,23 @@ var clientsShowCmd = &cobra.Command{
 	},
 }
 
-var clientsRevokeCmd = &cobra.Command{
+var nodesRevokeCmd = &cobra.Command{
 	Use:   "revoke <id>",
-	Short: "Revoke an enrolled client",
+	Short: "Revoke an enrolled node",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		if err := client.post("/api/v1/clients/"+args[0]+"/revoke", nil, nil); err != nil {
+		if err := client.post("/api/v1/nodes/"+args[0]+"/revoke", nil, nil); err != nil {
 			return err
 		}
-		fmt.Printf("Revoked client %s\n", args[0])
+		fmt.Printf("Revoked node %s\n", args[0])
 		return nil
 	},
 }
 
-var clientsTraitsCmd = &cobra.Command{
+var nodesTraitsCmd = &cobra.Command{
 	Use:   "traits <hostname> [dot.path]",
-	Short: "View collected traits for a client",
+	Short: "View collected traits for a node",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hostname := args[0]
@@ -123,7 +123,7 @@ var clientsTraitsCmd = &cobra.Command{
 			CollectedAt string         `json:"collected_at"`
 			Traits      map[string]any `json:"traits"`
 		}
-		if err := client.get("/api/v1/clients/"+hostname+"/traits", &resp); err != nil {
+		if err := client.get("/api/v1/nodes/"+hostname+"/traits", &resp); err != nil {
 			return err
 		}
 
@@ -181,5 +181,5 @@ func formatTraitValue(v any) string {
 }
 
 func init() {
-	clientsCmd.AddCommand(clientsListCmd, clientsShowCmd, clientsRevokeCmd, clientsTraitsCmd)
+	nodesCmd.AddCommand(nodesListCmd, nodesShowCmd, nodesRevokeCmd, nodesTraitsCmd)
 }

@@ -12,12 +12,12 @@ func TestAPIClientGet(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/clients" {
-			t.Errorf("expected /api/v1/clients, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/nodes" {
+			t.Errorf("expected /api/v1/nodes, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"clients": []map[string]any{
+			"nodes": []map[string]any{
 				{"id": "abc-123", "hostname": "web1.example.com"},
 			},
 		})
@@ -28,19 +28,19 @@ func TestAPIClientGet(t *testing.T) {
 	c := newAPIClient()
 
 	var resp struct {
-		Clients []struct {
+		Nodes []struct {
 			ID       string `json:"id"`
 			Hostname string `json:"hostname"`
-		} `json:"clients"`
+		} `json:"nodes"`
 	}
-	if err := c.get("/api/v1/clients", &resp); err != nil {
+	if err := c.get("/api/v1/nodes", &resp); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(resp.Clients) != 1 {
-		t.Fatalf("expected 1 client, got %d", len(resp.Clients))
+	if len(resp.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(resp.Nodes))
 	}
-	if resp.Clients[0].ID != "abc-123" {
-		t.Errorf("expected id abc-123, got %s", resp.Clients[0].ID)
+	if resp.Nodes[0].ID != "abc-123" {
+		t.Errorf("expected id abc-123, got %s", resp.Nodes[0].ID)
 	}
 }
 
@@ -108,7 +108,7 @@ func TestAPIClientErrorResponse(t *testing.T) {
 	serverURL = ts.URL
 	c := newAPIClient()
 
-	err := c.get("/api/v1/clients/missing", nil)
+	err := c.get("/api/v1/nodes/missing", nil)
 	if err == nil {
 		t.Fatal("expected error for 404 response")
 	}

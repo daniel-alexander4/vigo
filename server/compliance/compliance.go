@@ -1,4 +1,4 @@
-// Package compliance computes compliance status for managed clients based on
+// Package compliance computes compliance status for managed nodes based on
 // their last run results and last-seen timestamps.
 package compliance
 
@@ -11,11 +11,11 @@ type RunInfo struct {
 	ChangedCount int32
 }
 
-// ComputeStatus determines the compliance status for a single client.
+// ComputeStatus determines the compliance status for a single node.
 // Returns one of: "compliant", "drifted", "failing", "stale", "unknown".
 //
 // Priority order:
-//  1. Stale — client hasn't checked in within 2x base interval
+//  1. Stale — node hasn't checked in within 2x base interval
 //  2. Unknown — no run data available
 //  3. Compliant — last run succeeded with no changes
 //  4. Drifted — last run succeeded but applied changes

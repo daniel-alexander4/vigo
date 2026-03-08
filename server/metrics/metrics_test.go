@@ -28,8 +28,8 @@ func TestAllMetricsRegistered(t *testing.T) {
 	}
 
 	required := []string{
-		"hobnob_clients_total",
-		"hobnob_clients_active_total",
+		"hobnob_nodes_total",
+		"hobnob_nodes_active_total",
 		"hobnob_checkins_total",
 		"hobnob_run_duration_seconds",
 		"hobnob_drift_detected_total",
@@ -49,16 +49,16 @@ func TestAllMetricsRegistered(t *testing.T) {
 func TestMetricsCanBeIncremented(t *testing.T) {
 	// Verify counters can be incremented without panic.
 	CheckinsTotal.WithLabelValues("success").Inc()
-	DriftDetected.WithLabelValues("testclient", "testmodule").Inc()
+	DriftDetected.WithLabelValues("testnode", "testmodule").Inc()
 	ModuleActions.WithLabelValues("file", "create").Inc()
 
 	// Verify gauges can be set.
-	ClientsTotal.Set(5)
-	ClientsActive.Set(3)
+	NodesTotal.Set(5)
+	NodesActive.Set(3)
 	CompliancePct.Set(0.85)
-	ComplianceStatus.WithLabelValues("testclient", "compliant").Set(1)
-	TimeSinceCheckin.WithLabelValues("testclient").Set(30.0)
+	ComplianceStatus.WithLabelValues("testnode", "compliant").Set(1)
+	TimeSinceCheckin.WithLabelValues("testnode").Set(30.0)
 
 	// Verify histogram can observe.
-	RunDuration.WithLabelValues("testclient").Observe(1.5)
+	RunDuration.WithLabelValues("testnode").Observe(1.5)
 }

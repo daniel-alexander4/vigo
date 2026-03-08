@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -12,6 +15,9 @@ import (
 )
 
 const keyFilename = "agent.key"
+const tlsKeyFilename = "tls.key"
+const tlsCertFilename = "tls.crt"
+const caCertFilename = "ca.crt"
 
 // GenerateKeypair generates a new ED25519 keypair.
 func GenerateKeypair() (ed25519.PublicKey, ed25519.PrivateKey, error) {
@@ -88,6 +94,77 @@ func PublicKeyPEM(pub ed25519.PublicKey) (string, error) {
 	}
 
 	return string(pem.EncodeToMemory(block)), nil
+}
+
+// GenerateTLSKey generates an ECDSA P-256 private key for TLS client certs.
+func GenerateTLSKey() (*ecdsa.PrivateKey, error) {
+	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+}
+
+// GenerateCSR creates a PEM-encoded X.509 certificate signing request
+// for the given hostname using an ECDSA key.
+func GenerateCSR(key *ecdsa.PrivateKey, hostname string) ([]byte, error) {
+	template := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: hostname,
+		},
+		DNSNames: []string{hostname},
+	}
+
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, key)
+	if err != nil {
+		return nil, fmt.Errorf("create CSR: %w", err)
+	}
+
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrDER,
+	}), nil
+}
+
+// SaveTLSKey saves an ECDSA private key in PKCS8 PEM format to {dir}/tls.key.
+func SaveTLSKey(dir string, key *ecdsa.PrivateKey) error {
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return fmt.Errorf("marshal TLS key: %w", err)
+	}
+
+	block := &pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: der,
+	}
+
+	path := filepath.Join(dir, tlsKeyFilename)
+	return os.WriteFile(path, pem.EncodeToMemory(block), 0600)
+}
+
+// SaveTLSCert saves a PEM-encoded certificate to {dir}/tls.crt.
+func SaveTLSCert(dir string, certPEM []byte) error {
+	return os.WriteFile(filepath.Join(dir, tlsCertFilename), certPEM, 0644)
+}
+
+// SaveCACert saves a PEM-encoded CA certificate to {dir}/ca.crt.
+func SaveCACert(dir string, caPEM []byte) error {
+	return os.WriteFile(filepath.Join(dir, caCertFilename), caPEM, 0644)
+}
+
+// TLSKeyPath returns the path to the TLS private key in the data directory.
+func TLSKeyPath(dir string) string { return filepath.Join(dir, tlsKeyFilename) }
+
+// TLSCertPath returns the path to the TLS certificate in the data directory.
+func TLSCertPath(dir string) string { return filepath.Join(dir, tlsCertFilename) }
+
+// CACertPath returns the path to the CA certificate in the data directory.
+func CACertPath(dir string) string { return filepath.Join(dir, caCertFilename) }
+
+// HasBootstrapCerts checks if TLS cert, key, and CA cert exist in the data directory.
+func HasBootstrapCerts(dir string) bool {
+	for _, f := range []string{tlsKeyFilename, tlsCertFilename, caCertFilename} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // LoadOrGenerate attempts to load an existing keypair from the directory.

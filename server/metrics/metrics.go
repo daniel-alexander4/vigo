@@ -7,16 +7,16 @@ import (
 )
 
 var (
-	// ClientsTotal is the total number of enrolled clients (gauge).
-	ClientsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "hobnob_clients_total",
-		Help: "Total number of enrolled clients.",
+	// NodesTotal is the total number of enrolled nodes (gauge).
+	NodesTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hobnob_nodes_total",
+		Help: "Total number of enrolled nodes.",
 	})
 
-	// ClientsActive is the number of clients seen in the last hour (gauge).
-	ClientsActive = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "hobnob_clients_active_total",
-		Help: "Number of clients that checked in within the last hour.",
+	// NodesActive is the number of nodes seen in the last hour (gauge).
+	NodesActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hobnob_nodes_active_total",
+		Help: "Number of nodes that checked in within the last hour.",
 	})
 
 	// CheckinsTotal counts check-in RPCs by status (counter).
@@ -25,18 +25,18 @@ var (
 		Help: "Total number of agent check-ins.",
 	}, []string{"status"})
 
-	// RunDuration observes run durations in seconds by client (histogram).
+	// RunDuration observes run durations in seconds by node (histogram).
 	RunDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "hobnob_run_duration_seconds",
 		Help:    "Duration of agent runs in seconds.",
 		Buckets: prometheus.DefBuckets,
-	}, []string{"client"})
+	}, []string{"node"})
 
-	// DriftDetected counts drift detection events by client and module (counter).
+	// DriftDetected counts drift detection events by node and module (counter).
 	DriftDetected = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "hobnob_drift_detected_total",
 		Help: "Total number of drift detection events.",
-	}, []string{"client", "module"})
+	}, []string{"node", "module"})
 
 	// ModuleActions counts module actions by resource type and action (counter).
 	ModuleActions = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -44,11 +44,11 @@ var (
 		Help: "Total number of module actions taken.",
 	}, []string{"type", "action"})
 
-	// ComplianceStatus tracks per-client compliance status (gauge, 1=current status).
+	// ComplianceStatus tracks per-node compliance status (gauge, 1=current status).
 	ComplianceStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hobnob_compliance_status",
-		Help: "Client compliance status (1 for current status).",
-	}, []string{"client", "status"})
+		Help: "Node compliance status (1 for current status).",
+	}, []string{"node", "status"})
 
 	// CompliancePct is the fleet-wide compliance percentage (gauge, 0-1).
 	CompliancePct = promauto.NewGauge(prometheus.GaugeOpts{
@@ -56,9 +56,9 @@ var (
 		Help: "Fleet-wide compliance percentage (0.0 to 1.0).",
 	})
 
-	// TimeSinceCheckin tracks seconds since each client's last check-in (gauge).
+	// TimeSinceCheckin tracks seconds since each node's last check-in (gauge).
 	TimeSinceCheckin = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hobnob_time_since_checkin_seconds",
-		Help: "Seconds since last check-in per client.",
-	}, []string{"client"})
+		Help: "Seconds since last check-in per node.",
+	}, []string{"node"})
 )

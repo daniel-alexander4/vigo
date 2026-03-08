@@ -1,17 +1,17 @@
 -- name: CreatePlan :one
-INSERT INTO plans (client_id, modules)
+INSERT INTO plans (node_id, modules)
 VALUES ($1, $2)
-RETURNING id, client_id, created_at, modules;
+RETURNING id, node_id, created_at, modules;
 
 -- name: GetPlanByID :one
-SELECT id, client_id, created_at, modules
+SELECT id, node_id, created_at, modules
 FROM plans
 WHERE id = $1;
 
--- name: ListPlansByClient :many
-SELECT id, client_id, created_at, modules
+-- name: ListPlansByNode :many
+SELECT id, node_id, created_at, modules
 FROM plans
-WHERE client_id = $1
+WHERE node_id = $1
 ORDER BY created_at DESC
 LIMIT $2;
 

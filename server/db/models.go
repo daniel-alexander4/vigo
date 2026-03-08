@@ -21,25 +21,6 @@ type ApprovedPattern struct {
 	UsedBy    pgtype.UUID        `json:"used_by"`
 }
 
-type Client struct {
-	ID         uuid.UUID          `json:"id"`
-	Hostname   string             `json:"hostname"`
-	IpAddress  string             `json:"ip_address"`
-	PubkeyPem  string             `json:"pubkey_pem"`
-	EnrolledAt time.Time          `json:"enrolled_at"`
-	LastSeen   pgtype.Timestamptz `json:"last_seen"`
-	Revoked    bool               `json:"revoked"`
-	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
-	ForcePush  bool               `json:"force_push"`
-}
-
-type ClientNail struct {
-	ID          uuid.UUID       `json:"id"`
-	ClientID    uuid.UUID       `json:"client_id"`
-	Nails       json.RawMessage `json:"nails"`
-	CollectedAt time.Time       `json:"collected_at"`
-}
-
 type ComplianceHistory struct {
 	ID         uuid.UUID   `json:"id"`
 	RecordedAt pgtype.Date `json:"recorded_at"`
@@ -62,7 +43,7 @@ type EnvPromotion struct {
 
 type FileSnapshot struct {
 	ID          uuid.UUID   `json:"id"`
-	ClientID    uuid.UUID   `json:"client_id"`
+	NodeID      uuid.UUID   `json:"node_id"`
 	FilePath    string      `json:"file_path"`
 	ContentHash string      `json:"content_hash"`
 	Content     []byte      `json:"content"`
@@ -70,9 +51,28 @@ type FileSnapshot struct {
 	RunID       pgtype.UUID `json:"run_id"`
 }
 
+type Node struct {
+	ID         uuid.UUID          `json:"id"`
+	Hostname   string             `json:"hostname"`
+	IpAddress  string             `json:"ip_address"`
+	PubkeyPem  string             `json:"pubkey_pem"`
+	EnrolledAt time.Time          `json:"enrolled_at"`
+	LastSeen   pgtype.Timestamptz `json:"last_seen"`
+	Revoked    bool               `json:"revoked"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+	ForcePush  bool               `json:"force_push"`
+}
+
+type NodeNail struct {
+	ID          uuid.UUID       `json:"id"`
+	NodeID      uuid.UUID       `json:"node_id"`
+	Nails       json.RawMessage `json:"nails"`
+	CollectedAt time.Time       `json:"collected_at"`
+}
+
 type PackageAudit struct {
 	ID               uuid.UUID   `json:"id"`
-	ClientID         uuid.UUID   `json:"client_id"`
+	NodeID           uuid.UUID   `json:"node_id"`
 	PackageName      string      `json:"package_name"`
 	InstalledVersion pgtype.Text `json:"installed_version"`
 	DesiredVersion   pgtype.Text `json:"desired_version"`
@@ -81,7 +81,7 @@ type PackageAudit struct {
 
 type Plan struct {
 	ID        uuid.UUID       `json:"id"`
-	ClientID  uuid.UUID       `json:"client_id"`
+	NodeID    uuid.UUID       `json:"node_id"`
 	CreatedAt time.Time       `json:"created_at"`
 	Modules   json.RawMessage `json:"modules"`
 }
@@ -97,7 +97,7 @@ type PlanResult struct {
 
 type Run struct {
 	ID           uuid.UUID          `json:"id"`
-	ClientID     uuid.UUID          `json:"client_id"`
+	NodeID       uuid.UUID          `json:"node_id"`
 	StartedAt    time.Time          `json:"started_at"`
 	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
 	Status       string             `json:"status"`
@@ -121,12 +121,12 @@ type RunResult struct {
 }
 
 type SecretRotationEvent struct {
-	ID              uuid.UUID   `json:"id"`
-	SecretPath      string      `json:"secret_path"`
-	OldVersion      pgtype.Text `json:"old_version"`
-	NewVersion      pgtype.Text `json:"new_version"`
-	RotatedAt       time.Time   `json:"rotated_at"`
-	AffectedClients int32       `json:"affected_clients"`
+	ID            uuid.UUID   `json:"id"`
+	SecretPath    string      `json:"secret_path"`
+	OldVersion    pgtype.Text `json:"old_version"`
+	NewVersion    pgtype.Text `json:"new_version"`
+	RotatedAt     time.Time   `json:"rotated_at"`
+	AffectedNodes int32       `json:"affected_nodes"`
 }
 
 type Webhook struct {

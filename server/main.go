@@ -19,12 +19,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/hobnob/hobnob/server/api"
+	"github.com/hobnob/hobnob/server/bootstrap"
+	"github.com/hobnob/hobnob/server/ca"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/hobnob/hobnob/server/selfmanage"
+	"github.com/hobnob/hobnob/server/watcher"
 	"github.com/hobnob/hobnob/server/webhook"
 )
 
@@ -41,7 +45,7 @@ func run() error {
 
 	// Determine config paths relative to working directory.
 	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server-configs/server.yaml")
-	clientConfigsDir := envOrDefault("HOBNOB_CLIENT_CONFIGS_DIR", "client-configs")
+	nodeConfigsDir := envOrDefault("HOBNOB_NODE_CONFIGS_DIR", "node-configs")
 	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
 	traitsDir := envOrDefault("HOBNOB_TRAITS_DIR", "traits")
 
@@ -110,7 +114,7 @@ func run() error {
 	reg := registry.NewRegistry(queries)
 
 	dangerous := os.Getenv("HOBNOB_DANGEROUS") == "1" || hasFlag("--dangerous")
-	configStore, err := config.NewConfigStore(clientConfigsDir, provider, dangerous)
+	configStore, err := config.NewConfigStore(nodeConfigsDir, provider, dangerous)
 	if err != nil {
 		return fmt.Errorf("initializing config store: %w", err)
 	}
@@ -134,7 +138,7 @@ func run() error {
 	dispatcher := webhook.NewDispatcher(queries)
 
 	// Create and start gRPC server.
-	grpcSrv, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, certCache, lastSeenBatch, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:     cfg.Server.TLS.CertFile,
 		KeyFile:      cfg.Server.TLS.KeyFile,
 		CAFile:       cfg.Server.TLS.CAFile,
@@ -149,6 +153,33 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
 	}
+
+	// Start async last_seen batcher (flushes every 10s).
+	go lastSeenBatch.Start(ctx, 10*time.Second)
+
+	// Start secret rotation watcher if enabled and provider supports versioning.
+	if cfg.Watcher.Enabled {
+		if vp, ok := provider.(watcher.VersionProvider); ok {
+			watchPaths := configStore.SecretPaths()
+			pollInterval := 5 * time.Minute
+			if cfg.Watcher.PollInterval != "" {
+				if parsed, err := time.ParseDuration(cfg.Watcher.PollInterval); err == nil {
+					pollInterval = parsed
+				}
+			}
+			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, dispatcher, pollInterval, watchPaths)
+			go func() {
+				if err := w.Run(ctx); err != nil && ctx.Err() == nil {
+					slog.Error("secret watcher error", "error", err)
+				}
+			}()
+		} else {
+			slog.Warn("secret watcher enabled but provider does not support versioning")
+		}
+	}
+
+	// Store certCache for potential TLS hot-reload (watcher integration).
+	_ = certCache
 
 	grpcLis, err := net.Listen("tcp", cfg.Server.GRPCListen)
 	if err != nil {
@@ -166,10 +197,60 @@ func run() error {
 	metricsCollector := metrics.NewCollector(queries)
 	go metricsCollector.Run(ctx, 30*time.Second)
 
+	// Start self-management if self.hob exists and is enabled.
+	selfConfigFile := envOrDefault("HOBNOB_SELF_CONFIG", "server-configs/self.hob")
+	selfCfg, err := selfmanage.Load(selfConfigFile)
+	if err != nil {
+		return fmt.Errorf("loading self.hob: %w", err)
+	}
+	if selfCfg != nil && selfCfg.Enabled {
+		mgr, err := selfmanage.NewManager(ctx, selfCfg, queries)
+		if err != nil {
+			return fmt.Errorf("initializing self-management: %w", err)
+		}
+		go func() {
+			if err := mgr.Run(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("self-management error", "error", err)
+			}
+		}()
+	}
+
+	// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
+	var gwOpts []api.GatewayOption
+	if cfg.Server.TLS.CAKeyFile != "" {
+		certAuthority, err := ca.Load(cfg.Server.TLS.CAFile, cfg.Server.TLS.CAKeyFile)
+		if err != nil {
+			return fmt.Errorf("loading CA for bootstrap: %w", err)
+		}
+		slog.Info("bootstrap CA loaded, CSR signing enabled")
+
+		// Parse cert validity duration.
+		certValidity := 365 * 24 * time.Hour
+		if cfg.Bootstrap.CertValidity != "" {
+			if parsed, err := time.ParseDuration(cfg.Bootstrap.CertValidity); err == nil {
+				certValidity = parsed
+			}
+		}
+
+		gwOpts = append(gwOpts, func(bh *bootstrap.Handler) {
+			bh.SetCA(certAuthority)
+			bh.SetRegistry(reg)
+			bh.SetTrustedPatterns(cfg.Bootstrap.TrustedPatterns)
+			bh.SetCertValidity(certValidity)
+			bh.SetDispatcher(dispatcher)
+		})
+
+		if len(cfg.Bootstrap.TrustedPatterns) > 0 {
+			for _, tp := range cfg.Bootstrap.TrustedPatterns {
+				slog.Info("trusted enrollment pattern", "pattern", tp.Pattern, "cidrs", tp.CIDRs)
+			}
+		}
+	}
+
 	// Start REST gateway with UI.
 	version := envOrDefault("HOBNOB_VERSION", "dev")
 	agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
-	gwMux, err := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version)
+	gwMux, err := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, gwOpts...)
 	if err != nil {
 		return fmt.Errorf("creating REST gateway: %w", err)
 	}

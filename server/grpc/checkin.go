@@ -4,225 +4,130 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/conditionals"
-	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// CheckIn handles the HobnobAgent.CheckIn RPC. It validates the client is not
-// revoked, looks up its configuration, renders templates with nails, and
-// returns the compiled module list.
+// CheckIn handles the HobnobAgent.CheckIn RPC. It validates the client,
+// stores inline nails for admin queries, and returns a policy bundle for
+// agent-side evaluation. The server never renders templates or evaluates
+// conditionals — the agent does that locally with its own nails.
 func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
-	clientID, err := uuid.Parse(req.GetClientId())
+	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client_id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 
-	// Validate client is not revoked.
-	if err := s.registry.ValidateClient(ctx, clientID); err != nil {
+	// Validate node is not revoked.
+	if err := s.registry.ValidateNode(ctx, nodeID); err != nil {
 		metrics.CheckinsTotal.WithLabelValues("error").Inc()
-		if errors.Is(err, registry.ErrClientRevoked) {
-			return nil, status.Error(codes.PermissionDenied, "client is revoked")
+		if errors.Is(err, registry.ErrNodeRevoked) {
+			return nil, status.Error(codes.PermissionDenied, "node is revoked")
 		}
-		if errors.Is(err, registry.ErrClientNotFound) {
-			return nil, status.Error(codes.NotFound, "client not found")
+		if errors.Is(err, registry.ErrNodeNotFound) {
+			return nil, status.Error(codes.NotFound, "node not found")
 		}
-		return nil, status.Errorf(codes.Internal, "validating client: %v", err)
+		return nil, status.Errorf(codes.Internal, "validating node: %v", err)
 	}
 
-	// Update last-seen timestamp.
-	if err := s.queries.UpdateLastSeen(ctx, clientID); err != nil {
-		slog.Error("failed to update last_seen", "client_id", clientID, "error", err)
-		// Non-fatal: continue with check-in.
-	}
-
-	// Look up client by ID to get hostname for config resolution.
-	client, err := s.queries.GetClientByID(ctx, clientID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "looking up client: %v", err)
-	}
-
-	// Resolve client config -- explicit YAML -> classification -> empty modules.
-	cfg := s.configStore.Get(client.Hostname)
-
-	// Load latest nails from DB for template rendering. If no nails exist yet
-	// (first check-in before ReportNails), use an empty map.
-	nails := make(map[string]any)
-	latestFacts, err := s.queries.GetLatestClientNails(ctx, clientID)
-	if err == nil {
-		if err := json.Unmarshal(latestFacts.Nails, &nails); err != nil {
-			slog.Error("failed to unmarshal stored nails",
-				"client_id", clientID,
-				"error", err,
-			)
-			// Non-fatal: continue with empty nails.
-			nails = make(map[string]any)
+	// Batch last-seen update (async flush every 10s).
+	if s.lastSeenBatch != nil {
+		s.lastSeenBatch.Mark(nodeID)
+	} else {
+		if err := s.queries.UpdateLastSeen(ctx, nodeID); err != nil {
+			slog.Error("failed to update last_seen", "node_id", nodeID, "error", err)
 		}
 	}
-	// If err != nil (e.g., no rows found), we continue with empty nails -- expected
-	// on first check-in before the agent has reported nails.
-	vars := cfg.Vars
-	if vars == nil {
-		vars = make(map[string]any)
+
+	// Reuse node from interceptor context if available, otherwise cache lookup.
+	var node db.Node
+	if n := db.NodeFromContext(ctx); n != nil {
+		node = *n
+	} else if s.nodeCache != nil {
+		var nErr error
+		node, nErr = s.nodeCache.GetByID(ctx, nodeID)
+		if nErr != nil {
+			return nil, status.Errorf(codes.Internal, "looking up node: %v", nErr)
+		}
+	} else {
+		var nErr error
+		node, nErr = s.queries.GetNodeByID(ctx, nodeID)
+		if nErr != nil {
+			return nil, status.Errorf(codes.Internal, "looking up node: %v", nErr)
+		}
 	}
 
-	// Evaluate conditional vars against client traits. Results are set as
-	// "true"/"false" strings in the vars map, inserted before regular vars
-	// in varOrder so they're available for Go template rendering.
-	vars, cfg.VarOrder = evaluateConditionalVars(cfg, nails, vars, cfg.VarOrder)
+	// Store inline nails for admin queries.
+	inlineNails := req.GetNailsJson()
+	if len(inlineNails) > 0 && json.Valid(inlineNails) {
+		if _, dbErr := s.queries.InsertNodeNails(ctx, db.InsertNodeNailsParams{
+			NodeID: nodeID,
+			Nails:  json.RawMessage(inlineNails),
+		}); dbErr != nil {
+			slog.Error("failed to store inline nails", "node_id", nodeID, "error", dbErr)
+		} else {
+			if pruneErr := s.queries.PruneNodeNails(ctx, nodeID); pruneErr != nil {
+				slog.Error("failed to prune node nails", "node_id", nodeID, "error", pruneErr)
+			}
+		}
+	}
 
-	// Render Go template syntax in var values (e.g., .Nails references)
-	// before resource attribute rendering so rendered vars are available.
-	vars, err = config.RenderVars(vars, nails, cfg.VarOrder)
+	configVersion := s.configStore.Version()
+
+	// Short-circuit: agent has a cached bundle with matching config version.
+	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion {
+		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
+		slog.Info("check-in no change",
+			"node_id", nodeID,
+			"hostname", node.Hostname,
+			"policy_version", configVersion,
+		)
+		return &pb.CheckInResponse{
+			NoChange:      true,
+			PolicyVersion: configVersion,
+		}, nil
+	}
+
+	// Build policy bundle: secrets resolved, vars merged, templates and
+	// conditionals left raw for agent-side evaluation.
+	cfg := s.configStore.Get(node.Hostname)
+
+	bundle, err := buildPolicyBundle(cfg, configVersion)
 	if err != nil {
-		slog.Error("failed to render vars", "client_id", clientID, "error", err)
-		return nil, status.Errorf(codes.Internal, "rendering vars: %v", err)
+		slog.Error("failed to build policy bundle", "node_id", nodeID, "error", err)
+		return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 	}
 
-	modules, err := configToProtoModules(cfg, nails, vars)
-	if err != nil {
-		slog.Error("failed to compile modules", "client_id", clientID, "error", err)
-		return nil, status.Errorf(codes.Internal, "compiling modules: %v", err)
-	}
-
-	// Scan traits directory and build manifest for custom trait sync.
-	var customTraits []*pb.CustomTraitEntry
+	// Include custom traits manifest.
 	traitEntries, traitErr := s.traitsScanner.ScanDir()
 	if traitErr != nil {
 		slog.Warn("failed to scan traits directory", "error", traitErr)
-		// Non-fatal: continue without custom traits.
 	} else {
 		for _, te := range traitEntries {
-			customTraits = append(customTraits, &pb.CustomTraitEntry{
+			bundle.CustomTraits = append(bundle.CustomTraits, &pb.CustomTraitEntry{
 				Name:   te.Name,
 				Sha256: te.SHA256,
 			})
 		}
 	}
 
-	metrics.CheckinsTotal.WithLabelValues("success").Inc()
-
+	metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
 	slog.Info("check-in",
-		"client_id", clientID,
-		"hostname", client.Hostname,
-		"modules", len(modules),
-		"custom_traits", len(customTraits),
+		"node_id", nodeID,
+		"hostname", node.Hostname,
+		"policy_version", configVersion,
+		"modules", len(bundle.Modules),
 	)
 
 	return &pb.CheckInResponse{
-		Modules:      modules,
-		CustomTraits: customTraits,
+		PolicyBundle:  bundle,
+		PolicyVersion: configVersion,
 	}, nil
-}
-
-// evaluateConditionalVars evaluates each ConditionalVar against the client's
-// traits map and sets the result as a "true" or "false" string in the vars map.
-// Conditional var names are prepended to varOrder so they are available for
-// template rendering in regular vars.
-func evaluateConditionalVars(cfg *config.ClientConfig, nails, vars map[string]any, varOrder []string) (map[string]any, []string) {
-	if len(cfg.ConditionalVars) == 0 {
-		return vars, varOrder
-	}
-
-	// Prepend conditional var names to varOrder so they render first.
-	var condNames []string
-	for _, cv := range cfg.ConditionalVars {
-		result := conditionals.Evaluate(cv, nails)
-		if result {
-			vars[cv.Name] = "true"
-		} else {
-			vars[cv.Name] = "false"
-		}
-		condNames = append(condNames, cv.Name)
-	}
-
-	// Insert conditional var names before existing varOrder entries.
-	newOrder := make([]string, 0, len(condNames)+len(varOrder))
-	newOrder = append(newOrder, condNames...)
-	newOrder = append(newOrder, varOrder...)
-
-	return vars, newOrder
-}
-
-// configToProtoModules converts a ClientConfig's modules into proto Module
-// messages, rendering any Go template strings with the provided nails and vars.
-func configToProtoModules(cfg *config.ClientConfig, nails, vars map[string]any) ([]*pb.Module, error) {
-	if len(cfg.Modules) == 0 {
-		return nil, nil
-	}
-
-	modules := make([]*pb.Module, 0, len(cfg.Modules))
-	for _, mod := range cfg.Modules {
-		// Evaluate module-level conditionals. If the module is skipped,
-		// none of its resources are sent to the agent.
-		if !config.ShouldIncludeModule(mod, vars) {
-			continue
-		}
-
-		pbMod := &pb.Module{
-			Name:      mod.Name,
-			DependsOn: mod.DependsOn,
-		}
-
-		for _, res := range mod.Resources {
-			// Evaluate resource when expression. Server-side filtering removes
-			// resources that are definitively false. Expressions with builtins
-			// that can't be resolved server-side are passed to the agent.
-			shouldInclude, agentWhen, err := config.EvaluateResourceWhen(res.When, vars)
-			if err != nil {
-				return nil, fmt.Errorf("evaluating when for resource %q: %w", res.Name, err)
-			}
-			if !shouldInclude {
-				continue
-			}
-
-			params := make(map[string]string)
-			for k, v := range res.Attributes {
-				strVal := fmt.Sprintf("%v", v)
-				// Render template if it contains Go template syntax.
-				rendered, err := config.RenderTemplate(strVal, nails, vars)
-				if err != nil {
-					return nil, fmt.Errorf("rendering template for resource %q attr %q: %w",
-						res.Name, k, err)
-				}
-				params[k] = rendered
-			}
-
-			pbRes := &pb.Resource{
-				Name:   res.Name,
-				Type:   res.Type,
-				Params: params,
-			}
-			if agentWhen != "" {
-				pbRes.When = agentWhen
-			}
-			pbMod.Resources = append(pbMod.Resources, pbRes)
-
-			// Set module-level resource type from first resource if not set.
-			if pbMod.ResourceType == "" {
-				pbMod.ResourceType = res.Type
-			}
-
-			// Copy resource-level notify/subscribes to module level.
-			pbMod.Notify = append(pbMod.Notify, res.Notify...)
-			pbMod.Subscribes = append(pbMod.Subscribes, res.Subscribes...)
-		}
-
-		// Skip empty modules (all resources were filtered out by conditionals).
-		if len(pbMod.Resources) == 0 {
-			continue
-		}
-
-		modules = append(modules, pbMod)
-	}
-
-	return modules, nil
 }

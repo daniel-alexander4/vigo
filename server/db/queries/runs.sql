@@ -1,17 +1,17 @@
 -- name: CreateRun :one
-INSERT INTO runs (client_id, status, module_count)
+INSERT INTO runs (node_id, status, module_count)
 VALUES ($1, $2, $3)
-RETURNING id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count;
+RETURNING id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count;
 
 -- name: GetRunByID :one
-SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 WHERE id = $1;
 
--- name: ListRunsByClient :many
-SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+-- name: ListRunsByNode :many
+SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE client_id = $1
+WHERE node_id = $1
 ORDER BY started_at DESC
 LIMIT $2;
 
@@ -32,7 +32,7 @@ WHERE run_id = $1
 ORDER BY created_at ASC;
 
 -- name: ListAllRuns :many
-SELECT id, client_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 ORDER BY started_at DESC
 LIMIT $1;

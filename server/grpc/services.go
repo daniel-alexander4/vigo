@@ -19,6 +19,8 @@ type AgentService struct {
 	queries        *db.Queries
 	dispatcher     *webhook.Dispatcher
 	traitsScanner  *traits.Scanner
+	nodeCache      *db.NodeCache
+	lastSeenBatch  *db.LastSeenBatcher
 }
 
 // AdminService implements the HobnobAdmin gRPC service.

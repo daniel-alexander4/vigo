@@ -126,7 +126,7 @@ func findMigrationsDir() string {
 func startTestServer(t *testing.T) (string, func()) {
 	t.Helper()
 	ctx := context.Background()
-	_, err := testPool.Exec(ctx, "TRUNCATE approved_patterns, clients CASCADE")
+	_, err := testPool.Exec(ctx, "TRUNCATE approved_patterns, nodes CASCADE")
 	if err != nil {
 		t.Fatalf("failed to truncate tables: %v", err)
 	}
@@ -134,20 +134,20 @@ func startTestServer(t *testing.T) (string, func()) {
 	queries := db.New(testPool)
 	reg := registry.NewRegistry(queries)
 
-	// Create a minimal config store (empty client-configs dir with modules/ and roles/ subdirs).
-	clientConfigsDir := filepath.Join(t.TempDir(), "client-configs")
+	// Create a minimal config store (empty node-configs dir with modules/ and roles/ subdirs).
+	nodeConfigsDir := filepath.Join(t.TempDir(), "node-configs")
 	for _, sub := range []string{"modules", "roles"} {
-		if err := os.MkdirAll(filepath.Join(clientConfigsDir, sub), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(nodeConfigsDir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	configStore, err := config.NewConfigStore(clientConfigsDir, &noopProvider{}, true)
+	configStore, err := config.NewConfigStore(nodeConfigsDir, &noopProvider{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	srv, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	srv, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:    filepath.Join(testCertDir, "server.crt"),
 		KeyFile:     filepath.Join(testCertDir, "server.key"),
 		CAFile:      filepath.Join(testCertDir, "ca.crt"),
@@ -279,14 +279,14 @@ func TestRegisterFlow(t *testing.T) {
 	if !resp.GetSuccess() {
 		t.Fatalf("Register returned success=false: %s", resp.GetMessage())
 	}
-	if resp.GetClientId() == "" {
-		t.Fatal("expected non-empty client_id")
+	if resp.GetNodeId() == "" {
+		t.Fatal("expected non-empty node_id")
 	}
 
 	// Verify UUID is valid.
-	_, err = uuid.Parse(resp.GetClientId())
+	_, err = uuid.Parse(resp.GetNodeId())
 	if err != nil {
-		t.Fatalf("client_id is not a valid UUID: %v", err)
+		t.Fatalf("node_id is not a valid UUID: %v", err)
 	}
 }
 
@@ -317,17 +317,17 @@ func TestCheckInRevoked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clientID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token)
+	nodeID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Revoke the client.
-	if err := reg.RevokeClient(ctx, clientID); err != nil {
+	// Revoke the node.
+	if err := reg.RevokeNode(ctx, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
-	// CheckIn should fail for revoked client.
+	// CheckIn should fail for revoked node.
 	agentClient := pb.NewHobnobAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
@@ -335,7 +335,7 @@ func TestCheckInRevoked(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ClientId:         clientID.String(),
+		NodeId:         nodeID.String(),
 		StateFingerprint: "test-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -380,7 +380,7 @@ func TestCheckInSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clientID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token)
+	nodeID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestCheckInSuccess(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, priv)
 
 	resp, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ClientId:         clientID.String(),
+		NodeId:         nodeID.String(),
 		StateFingerprint: "some-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -434,7 +434,7 @@ func TestCheckInBadSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clientID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token)
+	nodeID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +452,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, wrongPriv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ClientId:         clientID.String(),
+		NodeId:         nodeID.String(),
 		StateFingerprint: "fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),

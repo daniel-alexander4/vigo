@@ -13,22 +13,22 @@ import (
 )
 
 const createPlan = `-- name: CreatePlan :one
-INSERT INTO plans (client_id, modules)
+INSERT INTO plans (node_id, modules)
 VALUES ($1, $2)
-RETURNING id, client_id, created_at, modules
+RETURNING id, node_id, created_at, modules
 `
 
 type CreatePlanParams struct {
-	ClientID uuid.UUID       `json:"client_id"`
-	Modules  json.RawMessage `json:"modules"`
+	NodeID  uuid.UUID       `json:"node_id"`
+	Modules json.RawMessage `json:"modules"`
 }
 
 func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, error) {
-	row := q.db.QueryRow(ctx, createPlan, arg.ClientID, arg.Modules)
+	row := q.db.QueryRow(ctx, createPlan, arg.NodeID, arg.Modules)
 	var i Plan
 	err := row.Scan(
 		&i.ID,
-		&i.ClientID,
+		&i.NodeID,
 		&i.CreatedAt,
 		&i.Modules,
 	)
@@ -70,7 +70,7 @@ func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultPara
 }
 
 const getPlanByID = `-- name: GetPlanByID :one
-SELECT id, client_id, created_at, modules
+SELECT id, node_id, created_at, modules
 FROM plans
 WHERE id = $1
 `
@@ -80,7 +80,7 @@ func (q *Queries) GetPlanByID(ctx context.Context, id uuid.UUID) (Plan, error) {
 	var i Plan
 	err := row.Scan(
 		&i.ID,
-		&i.ClientID,
+		&i.NodeID,
 		&i.CreatedAt,
 		&i.Modules,
 	)
@@ -121,21 +121,21 @@ func (q *Queries) ListPlanResults(ctx context.Context, planID uuid.UUID) ([]Plan
 	return items, nil
 }
 
-const listPlansByClient = `-- name: ListPlansByClient :many
-SELECT id, client_id, created_at, modules
+const listPlansByNode = `-- name: ListPlansByNode :many
+SELECT id, node_id, created_at, modules
 FROM plans
-WHERE client_id = $1
+WHERE node_id = $1
 ORDER BY created_at DESC
 LIMIT $2
 `
 
-type ListPlansByClientParams struct {
-	ClientID uuid.UUID `json:"client_id"`
-	Limit    int32     `json:"limit"`
+type ListPlansByNodeParams struct {
+	NodeID uuid.UUID `json:"node_id"`
+	Limit  int32     `json:"limit"`
 }
 
-func (q *Queries) ListPlansByClient(ctx context.Context, arg ListPlansByClientParams) ([]Plan, error) {
-	rows, err := q.db.Query(ctx, listPlansByClient, arg.ClientID, arg.Limit)
+func (q *Queries) ListPlansByNode(ctx context.Context, arg ListPlansByNodeParams) ([]Plan, error) {
+	rows, err := q.db.Query(ctx, listPlansByNode, arg.NodeID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (q *Queries) ListPlansByClient(ctx context.Context, arg ListPlansByClientPa
 		var i Plan
 		if err := rows.Scan(
 			&i.ID,
-			&i.ClientID,
+			&i.NodeID,
 			&i.CreatedAt,
 			&i.Modules,
 		); err != nil {

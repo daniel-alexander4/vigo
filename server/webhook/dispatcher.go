@@ -21,13 +21,13 @@ import (
 type EventPayload struct {
 	Event     string      `json:"event"`
 	Timestamp time.Time   `json:"timestamp"`
-	Client    *ClientInfo `json:"client,omitempty"`
+	Node      *NodeInfo   `json:"node,omitempty"`
 	Run       *RunInfo    `json:"run,omitempty"`
 	Details   any         `json:"details,omitempty"`
 }
 
-// ClientInfo contains client metadata included in webhook payloads.
-type ClientInfo struct {
+// NodeInfo contains node metadata included in webhook payloads.
+type NodeInfo struct {
 	ID       string `json:"id"`
 	Hostname string `json:"hostname"`
 	IP       string `json:"ip,omitempty"`
@@ -82,6 +82,17 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event string, payload EventPa
 	for _, wh := range webhooks {
 		go d.deliver(wh, event, body)
 	}
+}
+
+// DispatchRotation fires a secret.rotated webhook event with the secret path
+// and count of affected nodes.
+func (d *Dispatcher) DispatchRotation(ctx context.Context, event string, secretPath string, affected int) {
+	d.Dispatch(ctx, event, EventPayload{
+		Details: map[string]any{
+			"secret_path":    secretPath,
+			"affected_nodes": affected,
+		},
+	})
 }
 
 // deliver sends the payload to a single webhook endpoint with retries.

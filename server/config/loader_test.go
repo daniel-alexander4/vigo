@@ -32,10 +32,10 @@ func (m *mockProvider) Close() error { return nil }
 
 // --- helpers ---
 
-// setupDir creates a client-configs directory with modules/ and roles/ subdirs.
+// setupDir creates a node-configs directory with modules/ and roles/ subdirs.
 func setupDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "client-configs")
+	dir := filepath.Join(t.TempDir(), "node-configs")
 	for _, sub := range []string{"modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
@@ -78,8 +78,8 @@ clients:
 	}
 
 	cfg := store.Get("test.example.com")
-	if cfg.Client != "test.example.com" {
-		t.Errorf("Client = %q, want test.example.com", cfg.Client)
+	if cfg.Node != "test.example.com" {
+		t.Errorf("Client = %q, want test.example.com", cfg.Node)
 	}
 	if len(cfg.Modules) != 1 {
 		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
@@ -588,7 +588,7 @@ clients:
 	}
 }
 
-func TestClientsReferencingSecret(t *testing.T) {
+func TestNodesReferencingSecret(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
@@ -619,12 +619,12 @@ clients:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	patterns := store.ClientsReferencingSecret("myapp/db/config")
+	patterns := store.NodesReferencingSecret("myapp/db/config")
 	if len(patterns) != 1 || patterns[0] != "web-*" {
 		t.Errorf("expected [web-*], got %v", patterns)
 	}
 
-	patterns = store.ClientsReferencingSecret("nonexistent")
+	patterns = store.NodesReferencingSecret("nonexistent")
 	if len(patterns) != 0 {
 		t.Errorf("expected empty, got %v", patterns)
 	}

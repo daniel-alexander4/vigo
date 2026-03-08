@@ -70,18 +70,22 @@ type ServerConfig struct {
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
 // TLS 1.3 minimum, client certificate required and verified against CA.
-// Returns the server and a CertCache that can be used for TLS hot reload.
-func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, error) {
+// Returns the server, a CertCache for TLS hot reload, and a LastSeenBatcher
+// whose Start method should be called in a goroutine by the caller.
+func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher, error) {
 	tlsCfg, certCache, err := buildTLSConfig(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("building TLS config: %w", err)
+		return nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
 
 	creds := credentials.NewTLS(tlsCfg)
 
+	nodeCache := db.NewNodeCache(cfg.Queries, 60*time.Second)
+	lastSeenBatch := db.NewLastSeenBatcher(cfg.Queries)
+
 	srv := grpc.NewServer(
 		grpc.Creds(creds),
-		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries)),
+		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, nodeCache)),
 	)
 
 	agentSvc := &AgentService{
@@ -90,6 +94,8 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, error) {
 		queries:       cfg.Queries,
 		dispatcher:    cfg.Dispatcher,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir),
+		nodeCache:     nodeCache,
+		lastSeenBatch: lastSeenBatch,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
@@ -101,7 +107,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, error) {
 	}
 	pb.RegisterHobnobAdminServer(srv, adminSvc)
 
-	return srv, certCache, nil
+	return srv, certCache, lastSeenBatch, nil
 }
 
 // buildTLSConfig creates a tls.Config requiring client certificates verified

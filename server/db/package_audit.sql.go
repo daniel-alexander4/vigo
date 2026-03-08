@@ -7,19 +7,20 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createPackageAudit = `-- name: CreatePackageAudit :one
-INSERT INTO package_audit (client_id, package_name, installed_version, desired_version)
+INSERT INTO package_audit (node_id, package_name, installed_version, desired_version)
 VALUES ($1, $2, $3, $4)
-RETURNING id, client_id, package_name, installed_version, desired_version, detected_at
+RETURNING id, node_id, package_name, installed_version, desired_version, detected_at
 `
 
 type CreatePackageAuditParams struct {
-	ClientID         uuid.UUID   `json:"client_id"`
+	NodeID           uuid.UUID   `json:"node_id"`
 	PackageName      string      `json:"package_name"`
 	InstalledVersion pgtype.Text `json:"installed_version"`
 	DesiredVersion   pgtype.Text `json:"desired_version"`
@@ -27,7 +28,7 @@ type CreatePackageAuditParams struct {
 
 func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAuditParams) (PackageAudit, error) {
 	row := q.db.QueryRow(ctx, createPackageAudit,
-		arg.ClientID,
+		arg.NodeID,
 		arg.PackageName,
 		arg.InstalledVersion,
 		arg.DesiredVersion,
@@ -35,7 +36,7 @@ func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAudit
 	var i PackageAudit
 	err := row.Scan(
 		&i.ID,
-		&i.ClientID,
+		&i.NodeID,
 		&i.PackageName,
 		&i.InstalledVersion,
 		&i.DesiredVersion,
@@ -45,28 +46,41 @@ func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAudit
 }
 
 const listAllPackageAudit = `-- name: ListAllPackageAudit :many
-SELECT id, client_id, package_name, installed_version, desired_version, detected_at
-FROM package_audit
-ORDER BY detected_at DESC
+SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+       n.hostname
+FROM package_audit pa
+JOIN nodes n ON n.id = pa.node_id
+ORDER BY pa.detected_at DESC
 LIMIT $1
 `
 
-func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int32) ([]PackageAudit, error) {
+type ListAllPackageAuditRow struct {
+	ID               uuid.UUID   `json:"id"`
+	NodeID           uuid.UUID   `json:"node_id"`
+	PackageName      string      `json:"package_name"`
+	InstalledVersion pgtype.Text `json:"installed_version"`
+	DesiredVersion   pgtype.Text `json:"desired_version"`
+	DetectedAt       time.Time   `json:"detected_at"`
+	Hostname         string      `json:"hostname"`
+}
+
+func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int32) ([]ListAllPackageAuditRow, error) {
 	rows, err := q.db.Query(ctx, listAllPackageAudit, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []PackageAudit{}
+	items := []ListAllPackageAuditRow{}
 	for rows.Next() {
-		var i PackageAudit
+		var i ListAllPackageAuditRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ClientID,
+			&i.NodeID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,
 			&i.DetectedAt,
+			&i.Hostname,
 		); err != nil {
 			return nil, err
 		}
@@ -78,29 +92,42 @@ func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int32) ([]Packa
 	return items, nil
 }
 
-const listPackageAuditByClient = `-- name: ListPackageAuditByClient :many
-SELECT id, client_id, package_name, installed_version, desired_version, detected_at
-FROM package_audit
-WHERE client_id = $1
-ORDER BY detected_at DESC
+const listPackageAuditByNode = `-- name: ListPackageAuditByNode :many
+SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+       n.hostname
+FROM package_audit pa
+JOIN nodes n ON n.id = pa.node_id
+WHERE pa.node_id = $1
+ORDER BY pa.detected_at DESC
 `
 
-func (q *Queries) ListPackageAuditByClient(ctx context.Context, clientID uuid.UUID) ([]PackageAudit, error) {
-	rows, err := q.db.Query(ctx, listPackageAuditByClient, clientID)
+type ListPackageAuditByNodeRow struct {
+	ID               uuid.UUID   `json:"id"`
+	NodeID           uuid.UUID   `json:"node_id"`
+	PackageName      string      `json:"package_name"`
+	InstalledVersion pgtype.Text `json:"installed_version"`
+	DesiredVersion   pgtype.Text `json:"desired_version"`
+	DetectedAt       time.Time   `json:"detected_at"`
+	Hostname         string      `json:"hostname"`
+}
+
+func (q *Queries) ListPackageAuditByNode(ctx context.Context, nodeID uuid.UUID) ([]ListPackageAuditByNodeRow, error) {
+	rows, err := q.db.Query(ctx, listPackageAuditByNode, nodeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []PackageAudit{}
+	items := []ListPackageAuditByNodeRow{}
 	for rows.Next() {
-		var i PackageAudit
+		var i ListPackageAuditByNodeRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ClientID,
+			&i.NodeID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,
 			&i.DetectedAt,
+			&i.Hostname,
 		); err != nil {
 			return nil, err
 		}
@@ -113,28 +140,41 @@ func (q *Queries) ListPackageAuditByClient(ctx context.Context, clientID uuid.UU
 }
 
 const listPackageDrift = `-- name: ListPackageDrift :many
-SELECT id, client_id, package_name, installed_version, desired_version, detected_at
-FROM package_audit
-WHERE installed_version IS DISTINCT FROM desired_version
-ORDER BY detected_at DESC
+SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+       n.hostname
+FROM package_audit pa
+JOIN nodes n ON n.id = pa.node_id
+WHERE pa.installed_version IS DISTINCT FROM pa.desired_version
+ORDER BY pa.detected_at DESC
 `
 
-func (q *Queries) ListPackageDrift(ctx context.Context) ([]PackageAudit, error) {
+type ListPackageDriftRow struct {
+	ID               uuid.UUID   `json:"id"`
+	NodeID           uuid.UUID   `json:"node_id"`
+	PackageName      string      `json:"package_name"`
+	InstalledVersion pgtype.Text `json:"installed_version"`
+	DesiredVersion   pgtype.Text `json:"desired_version"`
+	DetectedAt       time.Time   `json:"detected_at"`
+	Hostname         string      `json:"hostname"`
+}
+
+func (q *Queries) ListPackageDrift(ctx context.Context) ([]ListPackageDriftRow, error) {
 	rows, err := q.db.Query(ctx, listPackageDrift)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []PackageAudit{}
+	items := []ListPackageDriftRow{}
 	for rows.Next() {
-		var i PackageAudit
+		var i ListPackageDriftRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ClientID,
+			&i.NodeID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,
 			&i.DetectedAt,
+			&i.Hostname,
 		); err != nil {
 			return nil, err
 		}

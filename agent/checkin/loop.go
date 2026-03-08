@@ -2,7 +2,6 @@ package checkin
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,8 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hobnob/hobnob/agent/nails"
 	"github.com/hobnob/hobnob/agent/modules"
+	"github.com/hobnob/hobnob/agent/nails"
+	"github.com/hobnob/hobnob/agent/policy"
 	"github.com/hobnob/hobnob/agent/runner"
 	"github.com/hobnob/hobnob/agent/snapshots"
 	"github.com/hobnob/hobnob/agent/traits"
@@ -37,14 +37,6 @@ func jitteredDuration(base time.Duration, jitterPct int) time.Duration {
 	}
 	jitter := (rand.Float64()*2 - 1) * float64(base) * float64(jitterPct) / 100.0
 	return base + time.Duration(jitter)
-}
-
-// stateFingerprint computes a SHA256 hex digest of the nails map for use as
-// the check-in state fingerprint.
-func stateFingerprint(nailsMap map[string]any) string {
-	data, _ := json.Marshal(nailsMap)
-	h := sha256.Sum256(data)
-	return fmt.Sprintf("%x", h)
 }
 
 // resultsToProto converts agent ResourceResults to protobuf ModuleResults.
@@ -71,18 +63,39 @@ func resultsToProto(results []modules.ResourceResult) []*pb.ModuleResult {
 // RunResult holds the outcome of a single convergence run plus timing info
 // from the server's CheckIn response.
 type RunResult struct {
-	Results      []modules.ResourceResult
-	BaseInterval time.Duration
-	JitterPct    int
+	Results             []modules.ResourceResult
+	BaseInterval        time.Duration
+	JitterPct           int
+	NoChange            bool   // server indicated nothing changed
+	ResponseFingerprint string // hash of response for next check-in
+	PolicyVersion       uint64           // config version from server
+	PolicyBundle        *pb.PolicyBundle // new bundle (nil if no_change or legacy)
+}
+
+// PolicyState tracks the agent's cached policy bundle across check-in cycles.
+type PolicyState struct {
+	Version uint64
+	Bundle  *pb.PolicyBundle
 }
 
 // RunOnce performs a single check-in, executes the returned modules, and reports
 // results. It is used by both the one-shot "run" command and the daemon loop.
 // If dryRun is true, results are not reported back to the server.
-func RunOnce(ctx context.Context, client *Client, executors map[string]modules.Executor, nailsMap map[string]any, dryRun bool, module string) (*RunResult, error) {
-	fp := stateFingerprint(nailsMap)
+//
+// stateFingerprint is the response fingerprint from the previous check-in
+// (empty on first run). nailsJSON is the pre-marshaled nails for inline
+// delivery (nil falls back to legacy separate-RPC mode).
+//
+// policyState holds the cached policy bundle. If the server confirms the
+// version is current (no_change), the cached bundle is evaluated locally
+// with fresh nails. Pass nil for one-shot commands.
+func RunOnce(ctx context.Context, client *Client, executors map[string]modules.Executor, nailsMap map[string]any, dryRun bool, module string, stateFingerprint string, nailsJSON []byte, cache *runner.ResultCache, policyState *PolicyState) (*RunResult, error) {
+	var policyVersion uint64
+	if policyState != nil {
+		policyVersion = policyState.Version
+	}
 
-	resp, err := client.CheckIn(ctx, fp)
+	resp, err := client.CheckIn(ctx, stateFingerprint, nailsJSON, policyVersion)
 	if err != nil {
 		return nil, fmt.Errorf("check-in: %w", err)
 	}
@@ -99,11 +112,37 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 		jitterPct = 10 // default 10%
 	}
 
+	// Determine which policy bundle to evaluate.
+	var protoModules []*pb.Module
+	bundle := resp.PolicyBundle
+
+	if resp.NoChange && policyState != nil && policyState.Bundle != nil {
+		// Config unchanged — evaluate cached bundle with fresh nails.
+		bundle = policyState.Bundle
+	}
+
+	if bundle == nil {
+		// First check-in with no cached bundle and server said no_change
+		// (shouldn't happen, but handle gracefully).
+		return &RunResult{
+			BaseInterval:  baseInterval,
+			JitterPct:     jitterPct,
+			NoChange:      true,
+			PolicyVersion: resp.PolicyVersion,
+		}, nil
+	}
+
+	protoModules, err = policy.EvalBundle(bundle, nailsMap)
+	if err != nil {
+		return nil, fmt.Errorf("evaluating policy bundle: %w", err)
+	}
+
 	// Generate a run ID from current timestamp.
 	runID := fmt.Sprintf("run-%d", time.Now().UnixNano())
 
 	r := runner.NewRunner(executors, nailsMap, dryRun, module)
-	results, err := r.Run(ctx, resp.Modules)
+	r.Cache = cache
+	results, err := r.Run(ctx, protoModules)
 	if err != nil {
 		return nil, fmt.Errorf("run modules: %w", err)
 	}
@@ -117,21 +156,28 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 	}
 
 	return &RunResult{
-		Results:      results,
-		BaseInterval: baseInterval,
-		JitterPct:    jitterPct,
+		Results:             results,
+		BaseInterval:        baseInterval,
+		JitterPct:           jitterPct,
+		ResponseFingerprint: resp.ResponseFingerprint,
+		PolicyVersion:       resp.PolicyVersion,
+		PolicyBundle:        resp.PolicyBundle,
 	}, nil
 }
 
 // Loop runs the daemon pull loop until the context is cancelled. On each
 // iteration it syncs custom traits (if traitsCacheDir is non-empty), collects
-// facts, reports them, checks in, executes modules, and reports results.
+// nails, checks in with nails inline, executes modules, and reports results.
 // Server errors trigger exponential backoff; successful runs reset the backoff
 // and sleep with jitter per the server's response.
 //
-// If updateCfg is non-nil, the agent checks for a newer version after each
-// successful convergence run and self-updates via atomic binary replacement
-// and exec restart.
+// The agent sends nails inline with the CheckIn RPC, eliminating the separate
+// ReportNails round-trip. It also tracks the server's response fingerprint
+// to enable short-circuit on subsequent check-ins when nothing has changed.
+//
+// Stable nails (OS, hardware, network, packages, etc.) are cached and only
+// refreshed every 10 cycles. Volatile nails (time, uptime, loadavg,
+// mountpoints) are collected every cycle.
 func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, traitsCacheDir string) error {
 	logger := slog.Default()
 	bo := NewBackoff()
@@ -142,6 +188,19 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			fileExec.SnapshotMgr = snapshotMgr
 		}
 	}
+
+	// Track response fingerprint across iterations for short-circuit.
+	var lastFingerprint string
+
+	// Policy state: cached policy bundle + version for agent-side evaluation.
+	policyState := &PolicyState{}
+
+	// Cached collector set: stable nails refresh every 10 cycles.
+	collectors := nails.NewCachedCollectors(10)
+
+	// Result cache: skip re-executing resources whose params haven't changed
+	// and whose last execution was a no-op. Expires after 5 cycles.
+	resultCache := runner.NewResultCache(5)
 
 	for {
 		select {
@@ -154,7 +213,7 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		// 0. Pre-check-in to get custom traits manifest.
 		var customTraits map[string]any
 		if traitsCacheDir != "" {
-			preResp, preErr := client.CheckIn(ctx, "")
+			preResp, preErr := client.CheckIn(ctx, "", nil, 0)
 			if preErr != nil {
 				logger.Warn("pre-check-in for traits manifest failed", "error", preErr)
 			} else if len(preResp.CustomTraits) > 0 {
@@ -166,11 +225,10 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			}
 		}
 
-		// 1. Collect nails.
-		nailsMap, err := nails.CollectAll(ctx, nails.DefaultCollectors())
+		// 1. Collect nails (volatile every cycle, stable every 10 cycles).
+		nailsMap, err := collectors.CollectAll(ctx)
 		if err != nil {
 			logger.Warn("fact collection failed", "error", err)
-			// Use empty nails -- collection is best-effort.
 			nailsMap = make(map[string]any)
 		}
 
@@ -181,16 +239,16 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			}
 		}
 
-		// 2. Report nails to server.
-		if err := client.ReportNails(ctx, nailsMap); err != nil {
-			logger.Warn("failed to report nails", "error", err)
-			// Continue -- nails reporting is non-fatal for convergence.
+		// 2. Marshal nails for inline delivery (replaces separate ReportNails RPC).
+		nailsJSON, marshalErr := json.Marshal(nailsMap)
+		if marshalErr != nil {
+			logger.Warn("failed to marshal nails", "error", marshalErr)
+			nailsJSON = nil
 		}
 
-		// 3. Run once (check-in + execute + report).
-		runResult, err := RunOnce(ctx, client, executors, nailsMap, false, "")
+		// 3. Run once (check-in with inline nails + execute + report).
+		runResult, err := RunOnce(ctx, client, executors, nailsMap, false, "", lastFingerprint, nailsJSON, resultCache, policyState)
 		if err != nil {
-			// Server error -- apply backoff.
 			wait := bo.NextBackOff()
 			logger.Warn("convergence run failed, backing off",
 				"error", err,
@@ -204,25 +262,38 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			continue
 		}
 
-		// Success -- reset backoff.
+		// Success -- reset backoff and update fingerprint + policy state.
 		bo.Reset()
-
-		// Log summary.
-		changed := 0
-		errCount := 0
-		for _, r := range runResult.Results {
-			if r.Changed {
-				changed++
-			}
-			if r.Error != nil {
-				errCount++
-			}
+		if runResult.ResponseFingerprint != "" {
+			lastFingerprint = runResult.ResponseFingerprint
 		}
-		logger.Info("convergence run complete",
-			"total", len(runResult.Results),
-			"changed", changed,
-			"errors", errCount,
-		)
+		if runResult.PolicyVersion > 0 {
+			policyState.Version = runResult.PolicyVersion
+		}
+		if runResult.PolicyBundle != nil {
+			policyState.Bundle = runResult.PolicyBundle
+		}
+
+		if runResult.NoChange {
+			logger.Info("no change detected, skipping execution")
+		} else {
+			// Log summary.
+			changed := 0
+			errCount := 0
+			for _, r := range runResult.Results {
+				if r.Changed {
+					changed++
+				}
+				if r.Error != nil {
+					errCount++
+				}
+			}
+			logger.Info("convergence run complete",
+				"total", len(runResult.Results),
+				"changed", changed,
+				"errors", errCount,
+			)
+		}
 
 		// 4. Check for self-update after successful convergence.
 		if updateCfg != nil && updateCfg.APIAddr != "" && updateCfg.CurrentVersion != "" {
@@ -274,7 +345,4 @@ func checkSelfUpdate(ctx context.Context, logger *slog.Logger, cfg *UpdateConfig
 		logger.Warn("self-update apply failed, continuing with current version", "error", err)
 		return
 	}
-
-	// If Apply + exec succeeded, this line is never reached (process replaced).
-	// If execFn returned an error, it was caught above.
 }

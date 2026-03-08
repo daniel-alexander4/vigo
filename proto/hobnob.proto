@@ -55,29 +55,29 @@ service HobnobAdmin {
     };
   }
 
-  // ListClients lists all enrolled clients.
-  rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {
+  // ListNodes lists all enrolled nodes.
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse) {
     option (google.api.http) = {
-      get: "/api/v1/clients"
+      get: "/api/v1/nodes"
     };
   }
 
-  // GetClient returns details for a single client.
-  rpc GetClient(GetClientRequest) returns (GetClientResponse) {
+  // GetNode returns details for a single node.
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {
     option (google.api.http) = {
-      get: "/api/v1/clients/{id}"
+      get: "/api/v1/nodes/{id}"
     };
   }
 
-  // RevokeClient revokes an enrolled client, blocking future check-ins.
-  rpc RevokeClient(RevokeClientRequest) returns (RevokeClientResponse) {
+  // RevokeNode revokes an enrolled node, blocking future check-ins.
+  rpc RevokeNode(RevokeNodeRequest) returns (RevokeNodeResponse) {
     option (google.api.http) = {
-      post: "/api/v1/clients/{id}/revoke"
+      post: "/api/v1/nodes/{id}/revoke"
       body: "*"
     };
   }
 
-  // ForcePush triggers an immediate check-in for a client or all clients.
+  // ForcePush triggers an immediate check-in for a node or all nodes.
   rpc ForcePush(ForcePushRequest) returns (ForcePushResponse) {
     option (google.api.http) = {
       post: "/api/v1/push"
@@ -88,12 +88,12 @@ service HobnobAdmin {
   // DryRun computes a plan without applying changes.
   rpc DryRun(DryRunRequest) returns (DryRunResponse) {
     option (google.api.http) = {
-      post: "/api/v1/clients/{client_id}/dry-run"
+      post: "/api/v1/nodes/{node_id}/dry-run"
       body: "*"
     };
   }
 
-  // ListRuns lists recent runs, optionally filtered by client.
+  // ListRuns lists recent runs, optionally filtered by node.
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse) {
     option (google.api.http) = {
       get: "/api/v1/runs"
@@ -112,13 +112,6 @@ service HobnobAdmin {
     option (google.api.http) = {
       post: "/api/v1/tokens"
       body: "*"
-    };
-  }
-
-  // ListAllRuns lists recent runs across all clients.
-  rpc ListAllRuns(ListAllRunsRequest) returns (ListRunsResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/runs/all"
     };
   }
 
@@ -144,29 +137,29 @@ service HobnobAdmin {
     };
   }
 
-  // GetComplianceSummary returns aggregate compliance status across all clients.
+  // GetComplianceSummary returns aggregate compliance status across all nodes.
   rpc GetComplianceSummary(GetComplianceSummaryRequest) returns (GetComplianceSummaryResponse) {
     option (google.api.http) = {
       get: "/api/v1/compliance"
     };
   }
 
-  // GetClientCompliance returns compliance details for a single client.
-  rpc GetClientCompliance(GetClientComplianceRequest) returns (GetClientComplianceResponse) {
+  // GetNodeCompliance returns compliance details for a single node.
+  rpc GetNodeCompliance(GetNodeComplianceRequest) returns (GetNodeComplianceResponse) {
     option (google.api.http) = {
-      get: "/api/v1/clients/{id}/compliance"
+      get: "/api/v1/nodes/{id}/compliance"
     };
   }
 
-  // Rollback reverts a client to a previous run's state.
+  // Rollback reverts a node to a previous run's state.
   rpc Rollback(RollbackRequest) returns (RollbackResponse) {
     option (google.api.http) = {
-      post: "/api/v1/clients/{client_id}/rollback"
+      post: "/api/v1/nodes/{node_id}/rollback"
       body: "*"
     };
   }
 
-  // ListPackages lists package audit records, optionally filtered by client.
+  // ListPackages lists package audit records, optionally filtered by node.
   rpc ListPackages(ListPackagesRequest) returns (ListPackagesResponse) {
     option (google.api.http) = {
       get: "/api/v1/packages"
@@ -202,15 +195,18 @@ message RegisterRequest {
 
 message RegisterResponse {
   bool success = 1;
-  string client_id = 2;     // UUID assigned by the server
+  string node_id = 2;       // UUID assigned by the server
   string message = 3;
 }
 
 message CheckInRequest {
-  string client_id = 1;
+  string node_id = 1;
   string state_fingerprint = 2;
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
+  bytes nails_json = 5;           // inline nails (avoids separate ReportNails RPC)
+  uint64 policy_version = 6;     // agent's cached policy version (0 = no cache, send full bundle)
+  bool policy_mode = 7;          // true = agent supports policy bundles
 }
 
 message CheckInResponse {
@@ -218,6 +214,10 @@ message CheckInResponse {
   string base_interval = 2;   // e.g. "30m"
   int32 jitter_percent = 3;
   repeated CustomTraitEntry custom_traits = 4;
+  bool no_change = 5;                    // true = fingerprint matched, skip execution
+  string response_fingerprint = 6;       // hash of this response for next check-in
+  PolicyBundle policy_bundle = 7;        // raw policy for agent-side evaluation
+  uint64 policy_version = 8;            // current config version, always set
 }
 
 // CustomTraitEntry describes a custom trait executable in the server's traits directory.
@@ -253,9 +253,47 @@ message Resource {
   string when = 4;            // when expression for agent-side eval (builtins)
 }
 
+// PolicyBundle contains the raw policy for agent-side evaluation. Secrets are
+// already resolved, vars are merged, but templates are NOT rendered and
+// conditionals are NOT evaluated — the agent does that locally with its nails.
+message PolicyBundle {
+  uint64 policy_version = 1;
+  repeated PolicyModule modules = 2;
+  bytes vars_json = 3;                 // JSON-encoded merged vars map[string]any
+  repeated string var_order = 4;       // deterministic rendering order
+  repeated ConditionalVarDef conditional_vars = 5;
+  repeated CustomTraitEntry custom_traits = 6;
+}
+
+// PolicyModule is a module definition with raw templates and conditionals.
+message PolicyModule {
+  string name = 1;
+  repeated PolicyResource resources = 2;
+  repeated string depends_on = 3;
+  string when = 4;                     // module-level when expression (unevaluated)
+}
+
+// PolicyResource is a resource with raw template strings in attributes.
+message PolicyResource {
+  string name = 1;
+  string type = 2;
+  map<string, string> attributes = 3;  // raw template strings (secrets resolved)
+  string when = 4;                     // when expression (unevaluated)
+  repeated string notify = 5;
+  repeated string subscribes = 6;
+}
+
+// ConditionalVarDef defines a trait-based conditional variable.
+message ConditionalVarDef {
+  string name = 1;
+  string trait = 2;                    // dot-path: "os.distro"
+  string operator = 3;                 // in, not_in, gt, lt, gte, lte, regex
+  string operand_json = 4;            // JSON-encoded operand
+}
+
 message ReportResultRequest {
   string run_id = 1;
-  string client_id = 2;
+  string node_id = 2;
   repeated ModuleResult results = 3;
   bytes signature = 4;
   google.protobuf.Timestamp timestamp = 5;
@@ -276,7 +314,7 @@ message ReportResultResponse {
 }
 
 message ReportNailsRequest {
-  string client_id = 1;
+  string node_id = 1;
   bytes nails_json = 2;       // JSON-encoded nails map
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
@@ -312,7 +350,7 @@ message ApprovedPattern {
   string pattern = 2;
   google.protobuf.Timestamp created_at = 3;
   bool used = 4;
-  string used_by = 5;          // client UUID if used
+  string used_by = 5;          // node UUID if used
 }
 
 message RevokeApprovedPatternRequest {
@@ -321,13 +359,13 @@ message RevokeApprovedPatternRequest {
 
 message RevokeApprovedPatternResponse {}
 
-message ListClientsRequest {}
+message ListNodesRequest {}
 
-message ListClientsResponse {
-  repeated Client clients = 1;
+message ListNodesResponse {
+  repeated Node nodes = 1;
 }
 
-message Client {
+message Node {
   string id = 1;
   string hostname = 2;
   string ip_address = 3;
@@ -337,30 +375,30 @@ message Client {
   google.protobuf.Timestamp revoked_at = 7;
 }
 
-message GetClientRequest {
+message GetNodeRequest {
   string id = 1;
 }
 
-message GetClientResponse {
-  Client client = 1;
+message GetNodeResponse {
+  Node node = 1;
 }
 
-message RevokeClientRequest {
+message RevokeNodeRequest {
   string id = 1;
 }
 
-message RevokeClientResponse {}
+message RevokeNodeResponse {}
 
 message ForcePushRequest {
-  string client_id = 1;       // empty = all clients
+  string node_id = 1;         // empty = all nodes
 }
 
 message ForcePushResponse {
-  int32 clients_notified = 1;
+  int32 nodes_notified = 1;
 }
 
 message DryRunRequest {
-  string client_id = 1;
+  string node_id = 1;
 }
 
 message DryRunResponse {
@@ -375,7 +413,7 @@ message PlannedAction {
 }
 
 message ListRunsRequest {
-  string client_id = 1;       // optional filter
+  string node_id = 1;         // optional filter
   int32 limit = 2;            // default 20
 }
 
@@ -385,7 +423,7 @@ message ListRunsResponse {
 
 message Run {
   string id = 1;
-  string client_id = 2;
+  string node_id = 2;
   google.protobuf.Timestamp started_at = 3;
   google.protobuf.Timestamp finished_at = 4;
   string status = 5;          // running, success, failure, partial
@@ -411,15 +449,7 @@ message GenerateTokenResponse {
 }
 
 // =============================================================================
-// Phase 3: ListAllRuns messages
-// =============================================================================
-
-message ListAllRunsRequest {
-  int32 limit = 1;              // default 20
-}
-
-// =============================================================================
-// Phase 3: Webhook messages
+// Webhook messages
 // =============================================================================
 
 message AddWebhookRequest {
@@ -453,7 +483,7 @@ message WebhookInfo {
 }
 
 // =============================================================================
-// Phase 3: Compliance messages
+// Compliance messages
 // =============================================================================
 
 message GetComplianceSummaryRequest {}
@@ -468,11 +498,11 @@ message GetComplianceSummaryResponse {
   float compliance_pct = 7;
 }
 
-message GetClientComplianceRequest {
+message GetNodeComplianceRequest {
   string id = 1;
 }
 
-message GetClientComplianceResponse {
+message GetNodeComplianceResponse {
   string status = 1;
   Run last_run = 2;
   repeated ComplianceSnapshot history = 3;
@@ -489,11 +519,11 @@ message ComplianceSnapshot {
 }
 
 // =============================================================================
-// Phase 3: Rollback messages
+// Rollback messages
 // =============================================================================
 
 message RollbackRequest {
-  string client_id = 1;
+  string node_id = 1;
   string run_id = 2;            // optional: rollback to specific run
   string file_path = 3;         // optional: rollback a single file
 }
@@ -504,11 +534,11 @@ message RollbackResponse {
 }
 
 // =============================================================================
-// Phase 3: Package audit messages
+// Package audit messages
 // =============================================================================
 
 message ListPackagesRequest {
-  string client_id = 1;         // optional filter
+  string node_id = 1;           // optional filter
 }
 
 message ListPackagesResponse {
@@ -522,7 +552,7 @@ message ListPackageDriftResponse {
 }
 
 message PackageInfo {
-  string client_id = 1;
+  string node_id = 1;
   string hostname = 2;
   string package_name = 3;
   string installed_version = 4;
@@ -530,7 +560,7 @@ message PackageInfo {
 }
 
 message PackageDrift {
-  string client_id = 1;
+  string node_id = 1;
   string hostname = 2;
   string package_name = 3;
   string installed_version = 4;
@@ -539,7 +569,7 @@ message PackageDrift {
 }
 
 // =============================================================================
-// Phase 3: Env promote messages
+// Env promote messages
 // =============================================================================
 
 message PromoteEnvRequest {

@@ -48,11 +48,11 @@ var previewCmd = &cobra.Command{
 			return fmt.Errorf("specify a hostname or UUID, or use --all / --env")
 		}
 
-		return previewClient(args[0])
+		return previewNode(args[0])
 	},
 }
 
-func previewClient(clientID string) error {
+func previewNode(nodeID string) error {
 	client := newAPIClient()
 	var resp struct {
 		Actions []struct {
@@ -62,12 +62,12 @@ func previewClient(clientID string) error {
 			PlannedAction string `json:"plannedAction"`
 		} `json:"actions"`
 	}
-	if err := client.post("/api/v1/clients/"+clientID+"/dry-run", map[string]any{}, &resp); err != nil {
+	if err := client.post("/api/v1/nodes/"+nodeID+"/dry-run", map[string]any{}, &resp); err != nil {
 		return err
 	}
 
 	if len(resp.Actions) == 0 {
-		fmt.Printf("No changes planned for %s\n", clientID)
+		fmt.Printf("No changes planned for %s\n", nodeID)
 		return nil
 	}
 
@@ -83,18 +83,18 @@ func previewClient(clientID string) error {
 func previewMultiple(envFilter string) error {
 	client := newAPIClient()
 	var listResp struct {
-		Clients []struct {
+		Nodes []struct {
 			ID       string `json:"id"`
 			Hostname string `json:"hostname"`
-		} `json:"clients"`
+		} `json:"nodes"`
 	}
-	if err := client.get("/api/v1/clients", &listResp); err != nil {
+	if err := client.get("/api/v1/nodes", &listResp); err != nil {
 		return err
 	}
 
-	for _, c := range listResp.Clients {
+	for _, c := range listResp.Nodes {
 		fmt.Printf("--- %s (%s) ---\n", c.Hostname, c.ID)
-		if err := previewClient(c.ID); err != nil {
+		if err := previewNode(c.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "Error previewing %s: %v\n", c.Hostname, err)
 		}
 		fmt.Println()
@@ -103,6 +103,6 @@ func previewMultiple(envFilter string) error {
 }
 
 func init() {
-	previewCmd.Flags().Bool("all", false, "Preview all clients")
-	previewCmd.Flags().String("env", "", "Filter clients by environment")
+	previewCmd.Flags().Bool("all", false, "Preview all nodes")
+	previewCmd.Flags().String("env", "", "Filter nodes by environment")
 }

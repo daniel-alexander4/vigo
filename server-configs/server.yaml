@@ -9,6 +9,7 @@ server:
     cert_file: "secret:hobnob/tls/cert"
     key_file: "secret:hobnob/tls/key"
     ca_file: "secret:hobnob/tls/ca"
+    ca_key_file: "secret:hobnob/tls/ca_key"  # enables CSR signing for bootstrap
 
 database:
   dsn: "secret:hobnob/db/dsn"
@@ -24,3 +25,14 @@ webhooks:
 watcher:
   enabled: true
   poll_interval: "5m"
+
+# Bootstrap enrollment settings.
+# trusted_enrollment patterns allow nodes to enroll without a token.
+# CIDRs restrict which source IPs can use each pattern.
+bootstrap:
+  cert_validity: "8760h"  # 1 year
+  # trusted_enrollment:
+  #   - pattern: "*.web.example.com"
+  #     cidrs: ["10.0.1.0/24"]
+  #   - pattern: "*.db.internal"
+  #     cidrs: ["10.0.2.0/24", "172.16.0.0/16"]

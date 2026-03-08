@@ -1,11 +1,12 @@
 // Package registry implements the enrollment registry for agent registration,
-// approved pattern management, and client revocation.
+// approved pattern management, and node revocation.
 package registry
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 )
 
@@ -22,14 +24,14 @@ const bcryptCost = 10
 // Sentinel errors returned by Registry methods.
 var (
 	ErrNoMatchingPattern = errors.New("no matching approved pattern found for hostname or IP")
-	ErrClientRevoked     = errors.New("client is revoked")
-	ErrClientNotFound    = errors.New("client not found")
-	ErrHostnameRevoked   = errors.New("hostname belongs to a revoked client and cannot re-enroll")
+	ErrNodeRevoked       = errors.New("node is revoked")
+	ErrNodeNotFound      = errors.New("node not found")
+	ErrHostnameRevoked   = errors.New("hostname belongs to a revoked node and cannot re-enroll")
 )
 
-// Registry manages client enrollment: approved pattern creation, agent
+// Registry manages node enrollment: approved pattern creation, agent
 // registration with glob matching and bcrypt token validation, and
-// client revocation.
+// node revocation.
 type Registry struct {
 	queries *db.Queries
 }
@@ -67,15 +69,15 @@ func (r *Registry) AddApprovedPattern(ctx context.Context, pattern, token string
 
 // Register enrolls a new agent. It validates the hostname/IP against unused
 // approved patterns using glob matching, verifies the token via bcrypt, creates
-// a client record, marks the pattern as used, and returns the client UUID.
+// a node record, marks the pattern as used, and returns the node UUID.
 //
 // The flow is:
 //  1. Validate inputs
-//  2. Check ENRL-07: reject if hostname belongs to a revoked client
+//  2. Check ENRL-07: reject if hostname belongs to a revoked node
 //  3. Fetch all unused approved patterns
 //  4. Filter by glob match on hostname OR IP (avoid bcrypt on non-matching patterns)
 //  5. For glob-matched patterns, compare token via bcrypt
-//  6. On match: create client, mark pattern used, return client UUID
+//  6. On match: create node, mark pattern used, return node UUID
 func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token string) (uuid.UUID, error) {
 	if hostname == "" {
 		return uuid.Nil, fmt.Errorf("hostname must not be empty")
@@ -87,8 +89,8 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 		return uuid.Nil, fmt.Errorf("token must not be empty")
 	}
 
-	// ENRL-07: Check if hostname belongs to a revoked client.
-	existing, err := r.queries.GetClientByHostname(ctx, hostname)
+	// ENRL-07: Check if hostname belongs to a revoked node.
+	existing, err := r.queries.GetNodeByHostname(ctx, hostname)
 	if err == nil && existing.Revoked {
 		return uuid.Nil, ErrHostnameRevoked
 	}
@@ -118,21 +120,21 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 			continue
 		}
 
-		// Token matched. Create client.
-		client, err := r.queries.CreateClient(ctx, db.CreateClientParams{
+		// Token matched. Create node.
+		node, err := r.queries.CreateNode(ctx, db.CreateNodeParams{
 			Hostname:  hostname,
 			IpAddress: ip,
 			PubkeyPem: pubkeyPEM,
 		})
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("creating client: %w", err)
+			return uuid.Nil, fmt.Errorf("creating node: %w", err)
 		}
 
 		// Mark pattern as used.
 		err = r.queries.MarkPatternUsed(ctx, db.MarkPatternUsedParams{
 			ID: p.ID,
 			UsedBy: pgtype.UUID{
-				Bytes: client.ID,
+				Bytes: node.ID,
 				Valid: true,
 			},
 		})
@@ -140,43 +142,108 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 			return uuid.Nil, fmt.Errorf("marking pattern used: %w", err)
 		}
 
-		return client.ID, nil
+		return node.ID, nil
 	}
 
 	return uuid.Nil, ErrNoMatchingPattern
 }
 
-// RevokeClient marks a client as revoked, blocking all future check-ins.
-func (r *Registry) RevokeClient(ctx context.Context, clientID uuid.UUID) error {
-	// Verify client exists first.
-	_, err := r.queries.GetClientByID(ctx, clientID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrClientNotFound
-		}
-		return fmt.Errorf("looking up client: %w", err)
+// TrustedRegister enrolls a node without a token by validating the hostname
+// and source IP against trusted enrollment patterns. This is the Puppet-style
+// autosigning path: if the node's hostname matches a trusted pattern and its
+// IP falls within an allowed CIDR, it is enrolled without a one-time token.
+func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM string, trustedPatterns []config.TrustedEnrollment, peerIP string) (uuid.UUID, error) {
+	if hostname == "" {
+		return uuid.Nil, fmt.Errorf("hostname must not be empty")
+	}
+	if pubkeyPEM == "" {
+		return uuid.Nil, fmt.Errorf("public key must not be empty")
 	}
 
-	if err := r.queries.RevokeClient(ctx, clientID); err != nil {
-		return fmt.Errorf("revoking client: %w", err)
+	// ENRL-07: Check if hostname belongs to a revoked node.
+	existing, err := r.queries.GetNodeByHostname(ctx, hostname)
+	if err == nil && existing.Revoked {
+		return uuid.Nil, ErrHostnameRevoked
+	}
+
+	for _, tp := range trustedPatterns {
+		hostnameMatch, _ := filepath.Match(tp.Pattern, hostname)
+		ipMatch, _ := filepath.Match(tp.Pattern, ip)
+
+		if !hostnameMatch && !ipMatch {
+			continue
+		}
+
+		// Check CIDR restrictions if specified.
+		if len(tp.CIDRs) > 0 && !matchesCIDR(peerIP, tp.CIDRs) {
+			continue
+		}
+
+		// Trusted match. Create node.
+		node, err := r.queries.CreateNode(ctx, db.CreateNodeParams{
+			Hostname:  hostname,
+			IpAddress: ip,
+			PubkeyPem: pubkeyPEM,
+		})
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("creating node: %w", err)
+		}
+
+		return node.ID, nil
+	}
+
+	return uuid.Nil, ErrNoMatchingPattern
+}
+
+// matchesCIDR checks if an IP address falls within any of the given CIDRs.
+func matchesCIDR(ipStr string, cidrs []string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	for _, cidr := range cidrs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// RevokeNode marks a node as revoked, blocking all future check-ins.
+func (r *Registry) RevokeNode(ctx context.Context, nodeID uuid.UUID) error {
+	// Verify node exists first.
+	_, err := r.queries.GetNodeByID(ctx, nodeID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNodeNotFound
+		}
+		return fmt.Errorf("looking up node: %w", err)
+	}
+
+	if err := r.queries.RevokeNode(ctx, nodeID); err != nil {
+		return fmt.Errorf("revoking node: %w", err)
 	}
 
 	return nil
 }
 
-// ValidateClient checks if a client exists and is not revoked. Returns an error
-// if the client is revoked or does not exist.
-func (r *Registry) ValidateClient(ctx context.Context, clientID uuid.UUID) error {
-	client, err := r.queries.GetClientByID(ctx, clientID)
+// ValidateNode checks if a node exists and is not revoked. Returns an error
+// if the node is revoked or does not exist.
+func (r *Registry) ValidateNode(ctx context.Context, nodeID uuid.UUID) error {
+	node, err := r.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrClientNotFound
+			return ErrNodeNotFound
 		}
-		return fmt.Errorf("looking up client: %w", err)
+		return fmt.Errorf("looking up node: %w", err)
 	}
 
-	if client.Revoked {
-		return ErrClientRevoked
+	if node.Revoked {
+		return ErrNodeRevoked
 	}
 
 	return nil

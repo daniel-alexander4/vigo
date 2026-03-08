@@ -12,61 +12,61 @@ import (
 	"github.com/google/uuid"
 )
 
-const getLatestClientNails = `-- name: GetLatestClientNails :one
-SELECT id, client_id, facts, collected_at
-FROM client_nails
-WHERE client_id = $1
+const getLatestNodeNails = `-- name: GetLatestNodeNails :one
+SELECT id, node_id, nails, collected_at
+FROM node_nails
+WHERE node_id = $1
 ORDER BY collected_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetLatestClientNails(ctx context.Context, clientID uuid.UUID) (ClientNail, error) {
-	row := q.db.QueryRow(ctx, getLatestClientNails, clientID)
-	var i ClientNail
+func (q *Queries) GetLatestNodeNails(ctx context.Context, nodeID uuid.UUID) (NodeNail, error) {
+	row := q.db.QueryRow(ctx, getLatestNodeNails, nodeID)
+	var i NodeNail
 	err := row.Scan(
 		&i.ID,
-		&i.ClientID,
+		&i.NodeID,
 		&i.Nails,
 		&i.CollectedAt,
 	)
 	return i, err
 }
 
-const insertClientNails = `-- name: InsertClientNails :one
-INSERT INTO client_nails (client_id, facts)
+const insertNodeNails = `-- name: InsertNodeNails :one
+INSERT INTO node_nails (node_id, nails)
 VALUES ($1, $2)
-RETURNING id, client_id, facts, collected_at
+RETURNING id, node_id, nails, collected_at
 `
 
-type InsertClientNailsParams struct {
-	ClientID uuid.UUID       `json:"client_id"`
-	Nails    json.RawMessage `json:"nails"`
+type InsertNodeNailsParams struct {
+	NodeID uuid.UUID       `json:"node_id"`
+	Nails  json.RawMessage `json:"nails"`
 }
 
-func (q *Queries) InsertClientNails(ctx context.Context, arg InsertClientNailsParams) (ClientNail, error) {
-	row := q.db.QueryRow(ctx, insertClientNails, arg.ClientID, arg.Nails)
-	var i ClientNail
+func (q *Queries) InsertNodeNails(ctx context.Context, arg InsertNodeNailsParams) (NodeNail, error) {
+	row := q.db.QueryRow(ctx, insertNodeNails, arg.NodeID, arg.Nails)
+	var i NodeNail
 	err := row.Scan(
 		&i.ID,
-		&i.ClientID,
+		&i.NodeID,
 		&i.Nails,
 		&i.CollectedAt,
 	)
 	return i, err
 }
 
-const pruneClientNails = `-- name: PruneClientNails :exec
-DELETE FROM client_nails cf
-WHERE cf.client_id = $1
-AND cf.id NOT IN (
-  SELECT sub.id FROM client_nails sub
-  WHERE sub.client_id = cf.client_id
+const pruneNodeNails = `-- name: PruneNodeNails :exec
+DELETE FROM node_nails nn
+WHERE nn.node_id = $1
+AND nn.id NOT IN (
+  SELECT sub.id FROM node_nails sub
+  WHERE sub.node_id = nn.node_id
   ORDER BY sub.collected_at DESC
   LIMIT 10
 )
 `
 
-func (q *Queries) PruneClientNails(ctx context.Context, clientID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, pruneClientNails, clientID)
+func (q *Queries) PruneNodeNails(ctx context.Context, nodeID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, pruneNodeNails, nodeID)
 	return err
 }

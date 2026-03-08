@@ -3,10 +3,18 @@ package bootstrap
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
 	"text/template"
+	"time"
+
+	"github.com/hobnob/hobnob/server/ca"
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/registry"
+	"github.com/hobnob/hobnob/server/webhook"
 )
 
 // validOS is the set of supported operating systems for agent binaries.
@@ -21,32 +29,56 @@ var validArch = map[string]bool{
 	"arm64": true,
 }
 
-// Handler serves the bootstrap script, agent latest version info, and agent
-// binary downloads.
+// Handler serves the bootstrap script, agent latest version info, agent
+// binary downloads, and bootstrap registration with CSR signing.
 type Handler struct {
-	serverAddr string
-	caFile     string
-	agentDir   string
-	version    string
-	cache      *checksumCache
+	serverAddr      string
+	caFile          string
+	agentDir        string
+	version         string
+	cache           *checksumCache
+	ca              *ca.CA
+	registry        *registry.Registry
+	trustedPatterns []config.TrustedEnrollment
+	certValidity    time.Duration
+	dispatcher      *webhook.Dispatcher
 }
 
 // NewHandler creates a Handler for serving bootstrap and agent distribution endpoints.
 func NewHandler(serverAddr, caFile, agentDir, version string) *Handler {
 	return &Handler{
-		serverAddr: serverAddr,
-		caFile:     caFile,
-		agentDir:   agentDir,
-		version:    version,
-		cache:      newChecksumCache(),
+		serverAddr:   serverAddr,
+		caFile:       caFile,
+		agentDir:     agentDir,
+		version:      version,
+		cache:        newChecksumCache(),
+		certValidity: 365 * 24 * time.Hour, // default 1 year
 	}
 }
+
+// SetCA configures the certificate authority for CSR signing during bootstrap.
+func (h *Handler) SetCA(c *ca.CA) { h.ca = c }
+
+// SetRegistry configures the enrollment registry for bootstrap registration.
+func (h *Handler) SetRegistry(r *registry.Registry) { h.registry = r }
+
+// SetTrustedPatterns configures trusted enrollment patterns for token-free registration.
+func (h *Handler) SetTrustedPatterns(patterns []config.TrustedEnrollment) {
+	h.trustedPatterns = patterns
+}
+
+// SetCertValidity sets the validity duration for signed client certificates.
+func (h *Handler) SetCertValidity(d time.Duration) { h.certValidity = d }
+
+// SetDispatcher configures the webhook dispatcher for enrollment events.
+func (h *Handler) SetDispatcher(d *webhook.Dispatcher) { h.dispatcher = d }
 
 // RegisterRoutes registers the bootstrap and agent distribution routes on the mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /bootstrap", h.BootstrapScript)
 	mux.HandleFunc("GET /api/v1/agent/latest", h.AgentLatest)
 	mux.HandleFunc("GET /api/v1/agent/download/{os}/{arch}", h.AgentDownload)
+	mux.HandleFunc("POST /api/v1/bootstrap/register", h.BootstrapRegister)
 }
 
 // bootstrapData is the template data for the bootstrap shell script.
@@ -56,7 +88,8 @@ type bootstrapData struct {
 	CACert     string
 }
 
-// bootstrapTmpl is the shell script served at GET /bootstrap?token=TOKEN.
+// bootstrapTmpl is the shell script served at GET /bootstrap.
+// Token is optional — if empty, the agent uses trusted enrollment (CSR-only).
 // All interpolated values are single-quoted to prevent shell injection.
 var bootstrapTmpl = template.Must(template.New("bootstrap").Parse(`#!/bin/sh
 set -eu
@@ -82,86 +115,183 @@ echo "Server: ${SERVER_ADDR}"
 # Create directories.
 INSTALL_DIR="/usr/local/bin"
 DATA_DIR="/etc/hobnob"
-CA_DIR="/etc/hobnob/certs"
-mkdir -p "$DATA_DIR" "$CA_DIR"
-
-# Install CA certificate.
-cat > "${CA_DIR}/ca.crt" << 'CACERT'
-{{.CACert}}CACERT
+mkdir -p "$DATA_DIR"
 
 # Download agent binary.
 echo "Downloading agent binary..."
-curl -sSf "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/hob" \
-    --cacert "${CA_DIR}/ca.crt"
+curl -sSf "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/hob"
 chmod +x "${INSTALL_DIR}/hob"
 
-# Register with server.
-echo "Registering agent..."
-"${INSTALL_DIR}/hob" register \
-    --server "$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||'):9090" \
-    --data-dir "$DATA_DIR" \
-    --ca-file "${CA_DIR}/ca.crt" \
-    --token "$TOKEN"
+# Bootstrap the agent (generates keys, CSR, registers with server, receives certs).
+echo "Bootstrapping agent..."
+BOOTSTRAP_ARGS="--server ${SERVER_ADDR} --data-dir ${DATA_DIR}"
+if [ -n "$TOKEN" ]; then
+    BOOTSTRAP_ARGS="${BOOTSTRAP_ARGS} --token ${TOKEN}"
+fi
+"${INSTALL_DIR}/hob" bootstrap ${BOOTSTRAP_ARGS}
+
+# Extract gRPC server address (strip protocol and port, add :9090).
+GRPC_HOST="$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')"
 
 # Install systemd service (if systemd is available).
 if command -v systemctl > /dev/null 2>&1; then
-    cat > /etc/systemd/system/hob.service << 'SYSTEMD'
+    cat > /etc/systemd/system/hob.service << SYSTEMD
 [Unit]
 Description=Hobnob Configuration Management Agent
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hob --server SERVER_PLACEHOLDER:9090 --data-dir /etc/hobnob --ca-file /etc/hobnob/certs/ca.crt
+ExecStart=/usr/local/bin/hob --server ${GRPC_HOST}:9090 --data-dir /etc/hobnob
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 SYSTEMD
-    # Replace placeholder with actual server address.
-    sed -i "s|SERVER_PLACEHOLDER|$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')|g" \
-        /etc/systemd/system/hob.service
     systemctl daemon-reload
     systemctl enable hob
     systemctl start hob
     echo "Hobnob agent service installed and started."
 else
     echo "systemd not found. Start the agent manually:"
-    echo "  hob --server <grpc-addr> --data-dir $DATA_DIR --ca-file ${CA_DIR}/ca.crt"
+    echo "  hob --server ${GRPC_HOST}:9090 --data-dir $DATA_DIR"
 fi
 
 echo "Bootstrap complete."
 `))
 
-// BootstrapScript serves a shell script that installs the agent, generates a
-// keypair, and enrolls the node with the Hobnob server.
+// BootstrapScript serves a shell script that installs the agent and enrolls
+// the node. Token is optional — if omitted, the agent uses trusted enrollment.
 func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
-	if token == "" {
-		http.Error(w, "missing required 'token' query parameter", http.StatusBadRequest)
-		return
-	}
 
-	// Read CA certificate content.
-	caCert, err := os.ReadFile(h.caFile)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("read CA cert: %v", err), http.StatusInternalServerError)
-		return
+	// Read CA certificate content for embedding (if agent needs it for
+	// initial HTTPS to the REST API, the bootstrap command fetches it).
+	var caCertStr string
+	if caCert, err := os.ReadFile(h.caFile); err == nil {
+		caCertStr = string(caCert)
 	}
 
 	data := bootstrapData{
 		ServerAddr: h.serverAddr,
 		Token:      token,
-		CACert:     string(caCert),
+		CACert:     caCertStr,
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Content-Disposition", "inline")
 	if err := bootstrapTmpl.Execute(w, data); err != nil {
-		// Headers already sent, log the error.
 		fmt.Fprintf(os.Stderr, "bootstrap template execute: %v\n", err)
 	}
+}
+
+// bootstrapRegisterRequest is the JSON body for POST /api/v1/bootstrap/register.
+type bootstrapRegisterRequest struct {
+	Hostname  string `json:"hostname"`
+	IPAddress string `json:"ip_address"`
+	PubkeyPEM string `json:"pubkey_pem"`
+	CSRPEM    string `json:"csr_pem"`
+	Token     string `json:"token,omitempty"`
+}
+
+// bootstrapRegisterResponse is the JSON response for POST /api/v1/bootstrap/register.
+type bootstrapRegisterResponse struct {
+	NodeID        string `json:"node_id"`
+	SignedCertPEM string `json:"signed_cert_pem"`
+	CACertPEM     string `json:"ca_cert_pem"`
+}
+
+// BootstrapRegister handles agent enrollment with CSR signing. If a token is
+// provided, it uses the standard token+pattern flow. If no token is provided,
+// it checks trusted enrollment patterns with CIDR validation.
+func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
+	var req bootstrapRegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if req.Hostname == "" || req.PubkeyPEM == "" || req.CSRPEM == "" {
+		http.Error(w, "hostname, pubkey_pem, and csr_pem are required", http.StatusBadRequest)
+		return
+	}
+
+	if h.ca == nil || h.registry == nil {
+		http.Error(w, "bootstrap registration not configured (CA key or registry not loaded)", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract peer IP for CIDR validation.
+	peerIP := extractIP(r.RemoteAddr)
+
+	slog.Info("bootstrap register request",
+		"hostname", req.Hostname,
+		"ip", req.IPAddress,
+		"peer_ip", peerIP,
+		"has_token", req.Token != "",
+	)
+
+	var nodeID fmt.Stringer
+	var err error
+
+	if req.Token != "" {
+		// Token-based enrollment (existing flow).
+		nodeID, err = h.registry.Register(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, req.Token)
+	} else {
+		// Trusted enrollment (no token — validate hostname+CIDR).
+		if len(h.trustedPatterns) == 0 {
+			http.Error(w, "no token provided and no trusted enrollment patterns configured", http.StatusForbidden)
+			return
+		}
+		nodeID, err = h.registry.TrustedRegister(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, h.trustedPatterns, peerIP)
+	}
+
+	if err != nil {
+		slog.Warn("bootstrap registration failed",
+			"hostname", req.Hostname,
+			"error", err,
+		)
+		code := http.StatusForbidden
+		if strings.Contains(err.Error(), "revoked") {
+			code = http.StatusForbidden
+		}
+		http.Error(w, err.Error(), code)
+		return
+	}
+
+	// Sign the CSR.
+	signedCert, err := h.ca.SignCSR([]byte(req.CSRPEM), req.Hostname, h.certValidity)
+	if err != nil {
+		slog.Error("CSR signing failed", "hostname", req.Hostname, "error", err)
+		http.Error(w, fmt.Sprintf("CSR signing failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("node bootstrapped",
+		"hostname", req.Hostname,
+		"node_id", nodeID.String(),
+	)
+
+	// Dispatch webhook event.
+	if h.dispatcher != nil {
+		h.dispatcher.Dispatch(r.Context(), "node.enrolled", webhook.EventPayload{
+			Node: &webhook.NodeInfo{
+				ID:       nodeID.String(),
+				Hostname: req.Hostname,
+				IP:       req.IPAddress,
+			},
+		})
+	}
+
+	resp := bootstrapRegisterResponse{
+		NodeID:        nodeID.String(),
+		SignedCertPEM: string(signedCert),
+		CACertPEM:     string(h.ca.CACertPEM()),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 // latestResponse is the JSON response for GET /api/v1/agent/latest.
@@ -227,4 +357,13 @@ func (h *Handler) AgentDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=hob-%s-%s", goos, goarch))
 	http.ServeFile(w, r, binPath)
+}
+
+// extractIP extracts the IP address from a host:port string.
+func extractIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return remoteAddr
+	}
+	return host
 }

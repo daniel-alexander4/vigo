@@ -286,20 +286,19 @@ const (
 	HobnobAdmin_AddApprovedPattern_FullMethodName    = "/hobnob.v1.HobnobAdmin/AddApprovedPattern"
 	HobnobAdmin_ListApprovedPatterns_FullMethodName  = "/hobnob.v1.HobnobAdmin/ListApprovedPatterns"
 	HobnobAdmin_RevokeApprovedPattern_FullMethodName = "/hobnob.v1.HobnobAdmin/RevokeApprovedPattern"
-	HobnobAdmin_ListClients_FullMethodName           = "/hobnob.v1.HobnobAdmin/ListClients"
-	HobnobAdmin_GetClient_FullMethodName             = "/hobnob.v1.HobnobAdmin/GetClient"
-	HobnobAdmin_RevokeClient_FullMethodName          = "/hobnob.v1.HobnobAdmin/RevokeClient"
+	HobnobAdmin_ListNodes_FullMethodName             = "/hobnob.v1.HobnobAdmin/ListNodes"
+	HobnobAdmin_GetNode_FullMethodName               = "/hobnob.v1.HobnobAdmin/GetNode"
+	HobnobAdmin_RevokeNode_FullMethodName            = "/hobnob.v1.HobnobAdmin/RevokeNode"
 	HobnobAdmin_ForcePush_FullMethodName             = "/hobnob.v1.HobnobAdmin/ForcePush"
 	HobnobAdmin_DryRun_FullMethodName                = "/hobnob.v1.HobnobAdmin/DryRun"
 	HobnobAdmin_ListRuns_FullMethodName              = "/hobnob.v1.HobnobAdmin/ListRuns"
 	HobnobAdmin_GetRun_FullMethodName                = "/hobnob.v1.HobnobAdmin/GetRun"
 	HobnobAdmin_GenerateToken_FullMethodName         = "/hobnob.v1.HobnobAdmin/GenerateToken"
-	HobnobAdmin_ListAllRuns_FullMethodName           = "/hobnob.v1.HobnobAdmin/ListAllRuns"
 	HobnobAdmin_AddWebhook_FullMethodName            = "/hobnob.v1.HobnobAdmin/AddWebhook"
 	HobnobAdmin_ListWebhooks_FullMethodName          = "/hobnob.v1.HobnobAdmin/ListWebhooks"
 	HobnobAdmin_DeleteWebhook_FullMethodName         = "/hobnob.v1.HobnobAdmin/DeleteWebhook"
 	HobnobAdmin_GetComplianceSummary_FullMethodName  = "/hobnob.v1.HobnobAdmin/GetComplianceSummary"
-	HobnobAdmin_GetClientCompliance_FullMethodName   = "/hobnob.v1.HobnobAdmin/GetClientCompliance"
+	HobnobAdmin_GetNodeCompliance_FullMethodName     = "/hobnob.v1.HobnobAdmin/GetNodeCompliance"
 	HobnobAdmin_Rollback_FullMethodName              = "/hobnob.v1.HobnobAdmin/Rollback"
 	HobnobAdmin_ListPackages_FullMethodName          = "/hobnob.v1.HobnobAdmin/ListPackages"
 	HobnobAdmin_ListPackageDrift_FullMethodName      = "/hobnob.v1.HobnobAdmin/ListPackageDrift"
@@ -316,37 +315,35 @@ type HobnobAdminClient interface {
 	ListApprovedPatterns(ctx context.Context, in *ListApprovedPatternsRequest, opts ...grpc.CallOption) (*ListApprovedPatternsResponse, error)
 	// RevokeApprovedPattern removes an approved pattern.
 	RevokeApprovedPattern(ctx context.Context, in *RevokeApprovedPatternRequest, opts ...grpc.CallOption) (*RevokeApprovedPatternResponse, error)
-	// ListClients lists all enrolled clients.
-	ListClients(ctx context.Context, in *ListClientsRequest, opts ...grpc.CallOption) (*ListClientsResponse, error)
-	// GetClient returns details for a single client.
-	GetClient(ctx context.Context, in *GetClientRequest, opts ...grpc.CallOption) (*GetClientResponse, error)
-	// RevokeClient revokes an enrolled client, blocking future check-ins.
-	RevokeClient(ctx context.Context, in *RevokeClientRequest, opts ...grpc.CallOption) (*RevokeClientResponse, error)
-	// ForcePush triggers an immediate check-in for a client or all clients.
+	// ListNodes lists all enrolled nodes.
+	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
+	// GetNode returns details for a single node.
+	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
+	// RevokeNode revokes an enrolled node, blocking future check-ins.
+	RevokeNode(ctx context.Context, in *RevokeNodeRequest, opts ...grpc.CallOption) (*RevokeNodeResponse, error)
+	// ForcePush triggers an immediate check-in for a node or all nodes.
 	ForcePush(ctx context.Context, in *ForcePushRequest, opts ...grpc.CallOption) (*ForcePushResponse, error)
 	// DryRun computes a plan without applying changes.
 	DryRun(ctx context.Context, in *DryRunRequest, opts ...grpc.CallOption) (*DryRunResponse, error)
-	// ListRuns lists recent runs, optionally filtered by client.
+	// ListRuns lists recent runs, optionally filtered by node.
 	ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
 	// GetRun returns details for a single run including per-module results.
 	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
 	// GenerateToken generates a cryptographically random one-time enrollment token.
 	GenerateToken(ctx context.Context, in *GenerateTokenRequest, opts ...grpc.CallOption) (*GenerateTokenResponse, error)
-	// ListAllRuns lists recent runs across all clients.
-	ListAllRuns(ctx context.Context, in *ListAllRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
 	// AddWebhook registers a new webhook endpoint.
 	AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error)
 	// ListWebhooks lists all registered webhooks.
 	ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error)
 	// DeleteWebhook removes a webhook by ID.
 	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error)
-	// GetComplianceSummary returns aggregate compliance status across all clients.
+	// GetComplianceSummary returns aggregate compliance status across all nodes.
 	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
-	// GetClientCompliance returns compliance details for a single client.
-	GetClientCompliance(ctx context.Context, in *GetClientComplianceRequest, opts ...grpc.CallOption) (*GetClientComplianceResponse, error)
-	// Rollback reverts a client to a previous run's state.
+	// GetNodeCompliance returns compliance details for a single node.
+	GetNodeCompliance(ctx context.Context, in *GetNodeComplianceRequest, opts ...grpc.CallOption) (*GetNodeComplianceResponse, error)
+	// Rollback reverts a node to a previous run's state.
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error)
-	// ListPackages lists package audit records, optionally filtered by client.
+	// ListPackages lists package audit records, optionally filtered by node.
 	ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
@@ -392,30 +389,30 @@ func (c *hobnobAdminClient) RevokeApprovedPattern(ctx context.Context, in *Revok
 	return out, nil
 }
 
-func (c *hobnobAdminClient) ListClients(ctx context.Context, in *ListClientsRequest, opts ...grpc.CallOption) (*ListClientsResponse, error) {
+func (c *hobnobAdminClient) ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListClientsResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_ListClients_FullMethodName, in, out, cOpts...)
+	out := new(ListNodesResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListNodes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *hobnobAdminClient) GetClient(ctx context.Context, in *GetClientRequest, opts ...grpc.CallOption) (*GetClientResponse, error) {
+func (c *hobnobAdminClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetClientResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_GetClient_FullMethodName, in, out, cOpts...)
+	out := new(GetNodeResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetNode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *hobnobAdminClient) RevokeClient(ctx context.Context, in *RevokeClientRequest, opts ...grpc.CallOption) (*RevokeClientResponse, error) {
+func (c *hobnobAdminClient) RevokeNode(ctx context.Context, in *RevokeNodeRequest, opts ...grpc.CallOption) (*RevokeNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RevokeClientResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_RevokeClient_FullMethodName, in, out, cOpts...)
+	out := new(RevokeNodeResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_RevokeNode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -472,16 +469,6 @@ func (c *hobnobAdminClient) GenerateToken(ctx context.Context, in *GenerateToken
 	return out, nil
 }
 
-func (c *hobnobAdminClient) ListAllRuns(ctx context.Context, in *ListAllRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRunsResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_ListAllRuns_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *hobnobAdminClient) AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddWebhookResponse)
@@ -522,10 +509,10 @@ func (c *hobnobAdminClient) GetComplianceSummary(ctx context.Context, in *GetCom
 	return out, nil
 }
 
-func (c *hobnobAdminClient) GetClientCompliance(ctx context.Context, in *GetClientComplianceRequest, opts ...grpc.CallOption) (*GetClientComplianceResponse, error) {
+func (c *hobnobAdminClient) GetNodeCompliance(ctx context.Context, in *GetNodeComplianceRequest, opts ...grpc.CallOption) (*GetNodeComplianceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetClientComplianceResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_GetClientCompliance_FullMethodName, in, out, cOpts...)
+	out := new(GetNodeComplianceResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetNodeCompliance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -582,37 +569,35 @@ type HobnobAdminServer interface {
 	ListApprovedPatterns(context.Context, *ListApprovedPatternsRequest) (*ListApprovedPatternsResponse, error)
 	// RevokeApprovedPattern removes an approved pattern.
 	RevokeApprovedPattern(context.Context, *RevokeApprovedPatternRequest) (*RevokeApprovedPatternResponse, error)
-	// ListClients lists all enrolled clients.
-	ListClients(context.Context, *ListClientsRequest) (*ListClientsResponse, error)
-	// GetClient returns details for a single client.
-	GetClient(context.Context, *GetClientRequest) (*GetClientResponse, error)
-	// RevokeClient revokes an enrolled client, blocking future check-ins.
-	RevokeClient(context.Context, *RevokeClientRequest) (*RevokeClientResponse, error)
-	// ForcePush triggers an immediate check-in for a client or all clients.
+	// ListNodes lists all enrolled nodes.
+	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
+	// GetNode returns details for a single node.
+	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
+	// RevokeNode revokes an enrolled node, blocking future check-ins.
+	RevokeNode(context.Context, *RevokeNodeRequest) (*RevokeNodeResponse, error)
+	// ForcePush triggers an immediate check-in for a node or all nodes.
 	ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error)
 	// DryRun computes a plan without applying changes.
 	DryRun(context.Context, *DryRunRequest) (*DryRunResponse, error)
-	// ListRuns lists recent runs, optionally filtered by client.
+	// ListRuns lists recent runs, optionally filtered by node.
 	ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error)
 	// GetRun returns details for a single run including per-module results.
 	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
 	// GenerateToken generates a cryptographically random one-time enrollment token.
 	GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error)
-	// ListAllRuns lists recent runs across all clients.
-	ListAllRuns(context.Context, *ListAllRunsRequest) (*ListRunsResponse, error)
 	// AddWebhook registers a new webhook endpoint.
 	AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error)
 	// ListWebhooks lists all registered webhooks.
 	ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error)
 	// DeleteWebhook removes a webhook by ID.
 	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
-	// GetComplianceSummary returns aggregate compliance status across all clients.
+	// GetComplianceSummary returns aggregate compliance status across all nodes.
 	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
-	// GetClientCompliance returns compliance details for a single client.
-	GetClientCompliance(context.Context, *GetClientComplianceRequest) (*GetClientComplianceResponse, error)
-	// Rollback reverts a client to a previous run's state.
+	// GetNodeCompliance returns compliance details for a single node.
+	GetNodeCompliance(context.Context, *GetNodeComplianceRequest) (*GetNodeComplianceResponse, error)
+	// Rollback reverts a node to a previous run's state.
 	Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error)
-	// ListPackages lists package audit records, optionally filtered by client.
+	// ListPackages lists package audit records, optionally filtered by node.
 	ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
@@ -637,14 +622,14 @@ func (UnimplementedHobnobAdminServer) ListApprovedPatterns(context.Context, *Lis
 func (UnimplementedHobnobAdminServer) RevokeApprovedPattern(context.Context, *RevokeApprovedPatternRequest) (*RevokeApprovedPatternResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeApprovedPattern not implemented")
 }
-func (UnimplementedHobnobAdminServer) ListClients(context.Context, *ListClientsRequest) (*ListClientsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListClients not implemented")
+func (UnimplementedHobnobAdminServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
 }
-func (UnimplementedHobnobAdminServer) GetClient(context.Context, *GetClientRequest) (*GetClientResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetClient not implemented")
+func (UnimplementedHobnobAdminServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNode not implemented")
 }
-func (UnimplementedHobnobAdminServer) RevokeClient(context.Context, *RevokeClientRequest) (*RevokeClientResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RevokeClient not implemented")
+func (UnimplementedHobnobAdminServer) RevokeNode(context.Context, *RevokeNodeRequest) (*RevokeNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeNode not implemented")
 }
 func (UnimplementedHobnobAdminServer) ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForcePush not implemented")
@@ -661,9 +646,6 @@ func (UnimplementedHobnobAdminServer) GetRun(context.Context, *GetRunRequest) (*
 func (UnimplementedHobnobAdminServer) GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GenerateToken not implemented")
 }
-func (UnimplementedHobnobAdminServer) ListAllRuns(context.Context, *ListAllRunsRequest) (*ListRunsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListAllRuns not implemented")
-}
 func (UnimplementedHobnobAdminServer) AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddWebhook not implemented")
 }
@@ -676,8 +658,8 @@ func (UnimplementedHobnobAdminServer) DeleteWebhook(context.Context, *DeleteWebh
 func (UnimplementedHobnobAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
 }
-func (UnimplementedHobnobAdminServer) GetClientCompliance(context.Context, *GetClientComplianceRequest) (*GetClientComplianceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetClientCompliance not implemented")
+func (UnimplementedHobnobAdminServer) GetNodeCompliance(context.Context, *GetNodeComplianceRequest) (*GetNodeComplianceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeCompliance not implemented")
 }
 func (UnimplementedHobnobAdminServer) Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Rollback not implemented")
@@ -766,56 +748,56 @@ func _HobnobAdmin_RevokeApprovedPattern_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_ListClients_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListClientsRequest)
+func _HobnobAdmin_ListNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).ListClients(ctx, in)
+		return srv.(HobnobAdminServer).ListNodes(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_ListClients_FullMethodName,
+		FullMethod: HobnobAdmin_ListNodes_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).ListClients(ctx, req.(*ListClientsRequest))
+		return srv.(HobnobAdminServer).ListNodes(ctx, req.(*ListNodesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_GetClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetClientRequest)
+func _HobnobAdmin_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).GetClient(ctx, in)
+		return srv.(HobnobAdminServer).GetNode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_GetClient_FullMethodName,
+		FullMethod: HobnobAdmin_GetNode_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).GetClient(ctx, req.(*GetClientRequest))
+		return srv.(HobnobAdminServer).GetNode(ctx, req.(*GetNodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_RevokeClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RevokeClientRequest)
+func _HobnobAdmin_RevokeNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeNodeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).RevokeClient(ctx, in)
+		return srv.(HobnobAdminServer).RevokeNode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_RevokeClient_FullMethodName,
+		FullMethod: HobnobAdmin_RevokeNode_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).RevokeClient(ctx, req.(*RevokeClientRequest))
+		return srv.(HobnobAdminServer).RevokeNode(ctx, req.(*RevokeNodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -910,24 +892,6 @@ func _HobnobAdmin_GenerateToken_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_ListAllRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListAllRunsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HobnobAdminServer).ListAllRuns(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: HobnobAdmin_ListAllRuns_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).ListAllRuns(ctx, req.(*ListAllRunsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _HobnobAdmin_AddWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddWebhookRequest)
 	if err := dec(in); err != nil {
@@ -1000,20 +964,20 @@ func _HobnobAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_GetClientCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetClientComplianceRequest)
+func _HobnobAdmin_GetNodeCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeComplianceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).GetClientCompliance(ctx, in)
+		return srv.(HobnobAdminServer).GetNodeCompliance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_GetClientCompliance_FullMethodName,
+		FullMethod: HobnobAdmin_GetNodeCompliance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).GetClientCompliance(ctx, req.(*GetClientComplianceRequest))
+		return srv.(HobnobAdminServer).GetNodeCompliance(ctx, req.(*GetNodeComplianceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1110,16 +1074,16 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAdmin_RevokeApprovedPattern_Handler,
 		},
 		{
-			MethodName: "ListClients",
-			Handler:    _HobnobAdmin_ListClients_Handler,
+			MethodName: "ListNodes",
+			Handler:    _HobnobAdmin_ListNodes_Handler,
 		},
 		{
-			MethodName: "GetClient",
-			Handler:    _HobnobAdmin_GetClient_Handler,
+			MethodName: "GetNode",
+			Handler:    _HobnobAdmin_GetNode_Handler,
 		},
 		{
-			MethodName: "RevokeClient",
-			Handler:    _HobnobAdmin_RevokeClient_Handler,
+			MethodName: "RevokeNode",
+			Handler:    _HobnobAdmin_RevokeNode_Handler,
 		},
 		{
 			MethodName: "ForcePush",
@@ -1142,10 +1106,6 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAdmin_GenerateToken_Handler,
 		},
 		{
-			MethodName: "ListAllRuns",
-			Handler:    _HobnobAdmin_ListAllRuns_Handler,
-		},
-		{
 			MethodName: "AddWebhook",
 			Handler:    _HobnobAdmin_AddWebhook_Handler,
 		},
@@ -1162,8 +1122,8 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAdmin_GetComplianceSummary_Handler,
 		},
 		{
-			MethodName: "GetClientCompliance",
-			Handler:    _HobnobAdmin_GetClientCompliance_Handler,
+			MethodName: "GetNodeCompliance",
+			Handler:    _HobnobAdmin_GetNodeCompliance_Handler,
 		},
 		{
 			MethodName: "Rollback",

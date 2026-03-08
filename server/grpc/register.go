@@ -21,7 +21,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		"ip", req.GetIpAddress(),
 	)
 
-	clientID, err := s.registry.Register(ctx,
+	nodeID, err := s.registry.Register(ctx,
 		req.GetHostname(),
 		req.GetIpAddress(),
 		req.GetPubkeyPem(),
@@ -41,22 +41,22 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 			}, nil
 		case errors.Is(err, registry.ErrHostnameRevoked):
 			return nil, status.Error(codes.PermissionDenied,
-				"hostname belongs to a revoked client and cannot re-enroll")
+				"hostname belongs to a revoked node and cannot re-enroll")
 		default:
 			return nil, status.Errorf(codes.Internal, "registration failed: %v", err)
 		}
 	}
 
-	slog.Info("client registered",
+	slog.Info("node registered",
 		"hostname", req.GetHostname(),
-		"client_id", clientID.String(),
+		"node_id", nodeID.String(),
 	)
 
-	// Dispatch client.enrolled webhook event.
+	// Dispatch node.enrolled webhook event.
 	if s.dispatcher != nil {
-		s.dispatcher.Dispatch(ctx, "client.enrolled", webhook.EventPayload{
-			Client: &webhook.ClientInfo{
-				ID:       clientID.String(),
+		s.dispatcher.Dispatch(ctx, "node.enrolled", webhook.EventPayload{
+			Node: &webhook.NodeInfo{
+				ID:       nodeID.String(),
 				Hostname: req.GetHostname(),
 				IP:       req.GetIpAddress(),
 			},
@@ -65,7 +65,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 
 	return &pb.RegisterResponse{
 		Success:  true,
-		ClientId: clientID.String(),
+		NodeId: nodeID.String(),
 		Message:  "registered successfully",
 	}, nil
 }

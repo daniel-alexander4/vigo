@@ -84,84 +84,84 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 	return &pb.RevokeApprovedPatternResponse{}, nil
 }
 
-// ---------- Clients ----------
+// ---------- Nodes ----------
 
-func (s *AdminService) ListClients(ctx context.Context, _ *pb.ListClientsRequest) (*pb.ListClientsResponse, error) {
-	clients, err := s.queries.ListClients(ctx)
+func (s *AdminService) ListNodes(ctx context.Context, _ *pb.ListNodesRequest) (*pb.ListNodesResponse, error) {
+	nodes, err := s.queries.ListNodes(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing clients: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
 	}
 
-	resp := &pb.ListClientsResponse{}
-	for _, c := range clients {
-		resp.Clients = append(resp.Clients, dbClientToProto(c))
+	resp := &pb.ListNodesResponse{}
+	for _, n := range nodes {
+		resp.Nodes = append(resp.Nodes, dbNodeToProto(n))
 	}
 
 	return resp, nil
 }
 
-func (s *AdminService) GetClient(ctx context.Context, req *pb.GetClientRequest) (*pb.GetClientResponse, error) {
+func (s *AdminService) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
 	id, err := uuid.Parse(req.Id)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	c, err := s.queries.GetClientByID(ctx, id)
+	n, err := s.queries.GetNodeByID(ctx, id)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "client not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
 	}
 
-	return &pb.GetClientResponse{
-		Client: dbClientToProto(c),
+	return &pb.GetNodeResponse{
+		Node: dbNodeToProto(n),
 	}, nil
 }
 
-func (s *AdminService) RevokeClient(ctx context.Context, req *pb.RevokeClientRequest) (*pb.RevokeClientResponse, error) {
+func (s *AdminService) RevokeNode(ctx context.Context, req *pb.RevokeNodeRequest) (*pb.RevokeNodeResponse, error) {
 	id, err := uuid.Parse(req.Id)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	if err := s.queries.RevokeClient(ctx, id); err != nil {
-		return nil, status.Errorf(codes.Internal, "revoking client: %v", err)
+	if err := s.queries.RevokeNode(ctx, id); err != nil {
+		return nil, status.Errorf(codes.Internal, "revoking node: %v", err)
 	}
 
-	return &pb.RevokeClientResponse{}, nil
+	return &pb.RevokeNodeResponse{}, nil
 }
 
 // ---------- ForcePush ----------
 
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
-	if req.ClientId != "" {
-		// Single client
-		id, err := uuid.Parse(req.ClientId)
+	if req.NodeId != "" {
+		// Single node
+		id, err := uuid.Parse(req.NodeId)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 		}
 		if err := s.queries.SetForcePush(ctx, id); err != nil {
 			return nil, status.Errorf(codes.Internal, "setting force push: %v", err)
 		}
-		return &pb.ForcePushResponse{ClientsNotified: 1}, nil
+		return &pb.ForcePushResponse{NodesNotified: 1}, nil
 	}
 
-	// All non-revoked clients
-	clients, err := s.queries.ListClients(ctx)
+	// All non-revoked nodes
+	nodes, err := s.queries.ListNodes(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing clients: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
 	}
 
 	var count int32
-	for _, c := range clients {
-		if c.Revoked {
+	for _, n := range nodes {
+		if n.Revoked {
 			continue
 		}
-		if err := s.queries.SetForcePush(ctx, c.ID); err != nil {
-			return nil, status.Errorf(codes.Internal, "setting force push for %s: %v", c.Hostname, err)
+		if err := s.queries.SetForcePush(ctx, n.ID); err != nil {
+			return nil, status.Errorf(codes.Internal, "setting force push for %s: %v", n.Hostname, err)
 		}
 		count++
 	}
 
-	return &pb.ForcePushResponse{ClientsNotified: count}, nil
+	return &pb.ForcePushResponse{NodesNotified: count}, nil
 }
 
 // ---------- Runs ----------
@@ -172,15 +172,15 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		limit = 20
 	}
 
-	if req.ClientId != "" {
-		id, err := uuid.Parse(req.ClientId)
+	if req.NodeId != "" {
+		id, err := uuid.Parse(req.NodeId)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 		}
 
-		runs, err := s.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-			ClientID: id,
-			Limit:    limit,
+		runs, err := s.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+			NodeID: id,
+			Limit:  limit,
 		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listing runs: %v", err)
@@ -192,20 +192,6 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 	runs, err := s.queries.ListAllRuns(ctx, limit)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing runs: %v", err)
-	}
-
-	return &pb.ListRunsResponse{Runs: dbRunsToProto(runs)}, nil
-}
-
-func (s *AdminService) ListAllRuns(ctx context.Context, req *pb.ListAllRunsRequest) (*pb.ListRunsResponse, error) {
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 20
-	}
-
-	runs, err := s.queries.ListAllRuns(ctx, limit)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing all runs: %v", err)
 	}
 
 	return &pb.ListRunsResponse{Runs: dbRunsToProto(runs)}, nil
@@ -265,17 +251,17 @@ func (s *AdminService) GenerateToken(ctx context.Context, _ *pb.GenerateTokenReq
 // ---------- DryRun ----------
 
 func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.DryRunResponse, error) {
-	clientID, err := uuid.Parse(req.ClientId)
+	nodeID, err := uuid.Parse(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	client, err := s.queries.GetClientByID(ctx, clientID)
+	node, err := s.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "client not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
 	}
 
-	cfg := s.configStore.Get(client.Hostname)
+	cfg := s.configStore.Get(node.Hostname)
 	if len(cfg.Modules) == 0 {
 		return &pb.DryRunResponse{}, nil
 	}
@@ -287,8 +273,8 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	}
 
 	plan, err := s.queries.CreatePlan(ctx, db.CreatePlanParams{
-		ClientID: clientID,
-		Modules:  modulesJSON,
+		NodeID:  nodeID,
+		Modules: modulesJSON,
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating plan: %v", err)
@@ -384,21 +370,21 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookR
 // ---------- Compliance ----------
 
 func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
-	clients, err := s.queries.ListClients(ctx)
+	nodes, err := s.queries.ListNodes(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing clients: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
 	}
 
 	var statuses []string
-	for _, c := range clients {
-		if c.Revoked {
+	for _, n := range nodes {
+		if n.Revoked {
 			continue
 		}
 
 		var runInfo *compliance.RunInfo
-		runs, err := s.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-			ClientID: c.ID,
-			Limit:    1,
+		runs, err := s.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+			NodeID: n.ID,
+			Limit:  1,
 		})
 		if err == nil && len(runs) > 0 {
 			runInfo = &compliance.RunInfo{
@@ -407,9 +393,9 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 			}
 		}
 
-		lastSeen := c.EnrolledAt
-		if c.LastSeen.Valid {
-			lastSeen = c.LastSeen.Time
+		lastSeen := n.EnrolledAt
+		if n.LastSeen.Valid {
+			lastSeen = n.LastSeen.Time
 		}
 
 		statuses = append(statuses, compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval))
@@ -434,22 +420,22 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	}, nil
 }
 
-func (s *AdminService) GetClientCompliance(ctx context.Context, req *pb.GetClientComplianceRequest) (*pb.GetClientComplianceResponse, error) {
+func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeComplianceRequest) (*pb.GetNodeComplianceResponse, error) {
 	id, err := uuid.Parse(req.Id)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	c, err := s.queries.GetClientByID(ctx, id)
+	n, err := s.queries.GetNodeByID(ctx, id)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "client not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
 	}
 
 	var runInfo *compliance.RunInfo
 	var lastRunProto *pb.Run
-	runs, err := s.queries.ListRunsByClient(ctx, db.ListRunsByClientParams{
-		ClientID: id,
-		Limit:    1,
+	runs, err := s.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+		NodeID: id,
+		Limit:  1,
 	})
 	if err == nil && len(runs) > 0 {
 		runInfo = &compliance.RunInfo{
@@ -459,9 +445,9 @@ func (s *AdminService) GetClientCompliance(ctx context.Context, req *pb.GetClien
 		lastRunProto = dbRunToProto(runs[0])
 	}
 
-	lastSeen := c.EnrolledAt
-	if c.LastSeen.Valid {
-		lastSeen = c.LastSeen.Time
+	lastSeen := n.EnrolledAt
+	if n.LastSeen.Valid {
+		lastSeen = n.LastSeen.Time
 	}
 
 	compStatus := compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval)
@@ -485,7 +471,7 @@ func (s *AdminService) GetClientCompliance(ctx context.Context, req *pb.GetClien
 		})
 	}
 
-	return &pb.GetClientComplianceResponse{
+	return &pb.GetNodeComplianceResponse{
 		Status:  compStatus,
 		LastRun: lastRunProto,
 		History: snapshots,
@@ -495,21 +481,21 @@ func (s *AdminService) GetClientCompliance(ctx context.Context, req *pb.GetClien
 // ---------- Rollback ----------
 
 func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*pb.RollbackResponse, error) {
-	clientID, err := uuid.Parse(req.ClientId)
+	nodeID, err := uuid.Parse(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	// Verify client exists.
-	_, err = s.queries.GetClientByID(ctx, clientID)
+	// Verify node exists.
+	_, err = s.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "client not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
 	}
 
 	// If a specific file_path is provided, verify snapshots exist.
 	if req.FilePath != "" {
 		snapshots, err := s.queries.ListFileSnapshots(ctx, db.ListFileSnapshotsParams{
-			ClientID: clientID,
+			NodeID:   nodeID,
 			FilePath: req.FilePath,
 		})
 		if err != nil {
@@ -533,7 +519,7 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 	}
 
 	// Set force_push flag so agent picks up rollback on next check-in.
-	if err := s.queries.SetForcePush(ctx, clientID); err != nil {
+	if err := s.queries.SetForcePush(ctx, nodeID); err != nil {
 		return nil, status.Errorf(codes.Internal, "setting force push for rollback: %v", err)
 	}
 
@@ -546,18 +532,33 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 // ---------- Packages ----------
 
 func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesRequest) (*pb.ListPackagesResponse, error) {
-	if req.ClientId != "" {
-		id, err := uuid.Parse(req.ClientId)
+	if req.NodeId != "" {
+		id, err := uuid.Parse(req.NodeId)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid client id: %v", err)
+			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 		}
 
-		pkgs, err := s.queries.ListPackageAuditByClient(ctx, id)
+		pkgs, err := s.queries.ListPackageAuditByNode(ctx, id)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listing package audit: %v", err)
 		}
 
-		return &pb.ListPackagesResponse{Packages: dbPackagesToProto(pkgs, s.queries, ctx)}, nil
+		result := make([]*pb.PackageInfo, 0, len(pkgs))
+		for _, p := range pkgs {
+			pi := &pb.PackageInfo{
+				NodeId:      p.NodeID.String(),
+				Hostname:    p.Hostname,
+				PackageName: p.PackageName,
+			}
+			if p.InstalledVersion.Valid {
+				pi.InstalledVersion = p.InstalledVersion.String
+			}
+			if p.DesiredVersion.Valid {
+				pi.DesiredVersion = p.DesiredVersion.String
+			}
+			result = append(result, pi)
+		}
+		return &pb.ListPackagesResponse{Packages: result}, nil
 	}
 
 	pkgs, err := s.queries.ListAllPackageAudit(ctx, 100)
@@ -565,7 +566,22 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 		return nil, status.Errorf(codes.Internal, "listing package audit: %v", err)
 	}
 
-	return &pb.ListPackagesResponse{Packages: dbPackagesToProto(pkgs, s.queries, ctx)}, nil
+	result := make([]*pb.PackageInfo, 0, len(pkgs))
+	for _, p := range pkgs {
+		pi := &pb.PackageInfo{
+			NodeId:      p.NodeID.String(),
+			Hostname:    p.Hostname,
+			PackageName: p.PackageName,
+		}
+		if p.InstalledVersion.Valid {
+			pi.InstalledVersion = p.InstalledVersion.String
+		}
+		if p.DesiredVersion.Valid {
+			pi.DesiredVersion = p.DesiredVersion.String
+		}
+		result = append(result, pi)
+	}
+	return &pb.ListPackagesResponse{Packages: result}, nil
 }
 
 func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDriftRequest) (*pb.ListPackageDriftResponse, error) {
@@ -577,7 +593,8 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	resp := &pb.ListPackageDriftResponse{}
 	for _, d := range drifts {
 		pd := &pb.PackageDrift{
-			ClientId:    d.ClientID.String(),
+			NodeId:      d.NodeID.String(),
+			Hostname:    d.Hostname,
 			PackageName: d.PackageName,
 			DetectedAt:  timestamppb.New(d.DetectedAt),
 		}
@@ -587,13 +604,6 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 		if d.DesiredVersion.Valid {
 			pd.DesiredVersion = d.DesiredVersion.String
 		}
-
-		// Resolve hostname from client.
-		c, err := s.queries.GetClientByID(ctx, d.ClientID)
-		if err == nil {
-			pd.Hostname = c.Hostname
-		}
-
 		resp.Drifts = append(resp.Drifts, pd)
 	}
 
@@ -610,7 +620,7 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 		return nil, status.Errorf(codes.InvalidArgument, "from_env and to_env are required")
 	}
 
-	// Compute diff by reading all client configs that contain the module.
+	// Compute diff by reading all node configs that contain the module.
 	// PromoteEnv is read-only audit -- never writes config files.
 	diff := s.configStore.ComputeEnvDiff(req.ModuleName, req.FromEnv, req.ToEnv)
 
@@ -638,27 +648,27 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 
 // ---------- Helpers ----------
 
-func dbClientToProto(c db.Client) *pb.Client {
-	pc := &pb.Client{
-		Id:         c.ID.String(),
-		Hostname:   c.Hostname,
-		IpAddress:  c.IpAddress,
-		EnrolledAt: timestamppb.New(c.EnrolledAt),
-		Revoked:    c.Revoked,
+func dbNodeToProto(n db.Node) *pb.Node {
+	pn := &pb.Node{
+		Id:         n.ID.String(),
+		Hostname:   n.Hostname,
+		IpAddress:  n.IpAddress,
+		EnrolledAt: timestamppb.New(n.EnrolledAt),
+		Revoked:    n.Revoked,
 	}
-	if c.LastSeen.Valid {
-		pc.LastSeen = timestamppb.New(c.LastSeen.Time)
+	if n.LastSeen.Valid {
+		pn.LastSeen = timestamppb.New(n.LastSeen.Time)
 	}
-	if c.RevokedAt.Valid {
-		pc.RevokedAt = timestamppb.New(c.RevokedAt.Time)
+	if n.RevokedAt.Valid {
+		pn.RevokedAt = timestamppb.New(n.RevokedAt.Time)
 	}
-	return pc
+	return pn
 }
 
 func dbRunToProto(r db.Run) *pb.Run {
 	pr := &pb.Run{
 		Id:           r.ID.String(),
-		ClientId:     r.ClientID.String(),
+		NodeId:       r.NodeID.String(),
 		StartedAt:    timestamppb.New(r.StartedAt),
 		Status:       r.Status,
 		ModuleCount:  r.ModuleCount,
@@ -680,27 +690,3 @@ func dbRunsToProto(runs []db.Run) []*pb.Run {
 	return result
 }
 
-func dbPackagesToProto(pkgs []db.PackageAudit, queries *db.Queries, ctx context.Context) []*pb.PackageInfo {
-	result := make([]*pb.PackageInfo, 0, len(pkgs))
-	for _, p := range pkgs {
-		pi := &pb.PackageInfo{
-			ClientId:    p.ClientID.String(),
-			PackageName: p.PackageName,
-		}
-		if p.InstalledVersion.Valid {
-			pi.InstalledVersion = p.InstalledVersion.String
-		}
-		if p.DesiredVersion.Valid {
-			pi.DesiredVersion = p.DesiredVersion.String
-		}
-
-		// Resolve hostname.
-		c, err := queries.GetClientByID(ctx, p.ClientID)
-		if err == nil {
-			pi.Hostname = c.Hostname
-		}
-
-		result = append(result, pi)
-	}
-	return result
-}

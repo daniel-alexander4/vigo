@@ -24,7 +24,7 @@ import (
 type Client struct {
 	conn       *grpc.ClientConn
 	agent      pb.HobnobAgentClient
-	clientID   string
+	nodeID     string
 	privateKey ed25519.PrivateKey
 }
 
@@ -32,7 +32,7 @@ type Client struct {
 // It loads TLS credentials for mTLS. If clientCertFile is empty, it connects
 // with only CA verification (dev mode) -- the server's signature interceptor
 // provides real auth via ED25519.
-func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, clientID string, privateKey ed25519.PrivateKey) (*Client, error) {
+func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, nodeID string, privateKey ed25519.PrivateKey) (*Client, error) {
 	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, fmt.Errorf("read CA cert: %w", err)
@@ -66,22 +66,28 @@ func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, clientID strin
 	return &Client{
 		conn:       conn,
 		agent:      pb.NewHobnobAgentClient(conn),
-		clientID:   clientID,
+		nodeID:     nodeID,
 		privateKey: privateKey,
 	}, nil
 }
 
 // CheckIn calls the server's CheckIn RPC with an ED25519-signed request.
-func (c *Client) CheckIn(ctx context.Context, stateFingerprint string) (*pb.CheckInResponse, error) {
+// If nailsJSON is non-nil, it is sent inline (replacing separate ReportNails).
+// If policyVersion > 0, the agent signals it has a cached policy bundle at
+// that version and the server can short-circuit.
+func (c *Client) CheckIn(ctx context.Context, stateFingerprint string, nailsJSON []byte, policyVersion uint64) (*pb.CheckInResponse, error) {
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
 	sig := auth.SignPayload([]byte(stateFingerprint), ts, c.privateKey)
 
 	resp, err := c.agent.CheckIn(ctx, &pb.CheckInRequest{
-		ClientId:         c.clientID,
+		NodeId:           c.nodeID,
 		StateFingerprint: stateFingerprint,
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
+		NailsJson:        nailsJSON,
+		PolicyVersion:    policyVersion,
+		PolicyMode:       true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("check-in RPC: %w", err)
@@ -112,7 +118,7 @@ func (c *Client) ReportResult(ctx context.Context, runID string, results []*pb.M
 
 	_, err := c.agent.ReportResult(ctx, &pb.ReportResultRequest{
 		RunId:     runID,
-		ClientId:  c.clientID,
+		NodeId:    c.nodeID,
 		Results:   results,
 		Signature: sig,
 		Timestamp: timestamppb.New(now),
@@ -136,7 +142,7 @@ func (c *Client) ReportNails(ctx context.Context, nailsMap map[string]any) error
 	sig := auth.SignPayload(nailsJSON, ts, c.privateKey)
 
 	_, err = c.agent.ReportNails(ctx, &pb.ReportNailsRequest{
-		ClientId:  c.clientID,
+		NodeId:    c.nodeID,
 		NailsJson: nailsJSON,
 		Signature: sig,
 		Timestamp: timestamppb.New(now),

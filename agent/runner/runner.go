@@ -29,6 +29,10 @@ type Runner struct {
 	// Module filters execution to only resources from the named module.
 	// If empty, all resources are executed.
 	Module string
+
+	// Cache holds no-op results from previous cycles to skip redundant
+	// executor calls. Nil disables caching.
+	Cache *ResultCache
 }
 
 // NewRunner creates a Runner with the given configuration.
@@ -56,10 +60,14 @@ func (r *Runner) Run(ctx context.Context, protoModules []*pb.Module) ([]modules.
 		return nil, fmt.Errorf("build DAG: %w", err)
 	}
 
-	// Topological sort.
-	sorted, err := TopoSort(nodes)
-	if err != nil {
-		return nil, fmt.Errorf("topological sort: %w", err)
+	// Only run topological sort when dependencies exist. Simple configs
+	// (the majority) skip this overhead and execute in declaration order.
+	sorted := nodes
+	if needsTopoSort(nodes) {
+		sorted, err = TopoSort(nodes)
+		if err != nil {
+			return nil, fmt.Errorf("topological sort: %w", err)
+		}
 	}
 
 	// Apply module filter if set.
@@ -113,6 +121,16 @@ func (r *Runner) executeResource(ctx context.Context, node ResourceNode) modules
 		}
 	}
 
+	// Check result cache for no-op resources (skip redundant checks).
+	if r.Cache != nil && !r.DryRun {
+		if cached, ok := r.Cache.Lookup(node.Name, node.Type, node.Params); ok {
+			cached.ModuleName = node.ModuleName
+			cached.ResourceType = node.Type
+			cached.ResourceName = node.Name
+			return cached
+		}
+	}
+
 	// Look up executor by resource type.
 	executor, ok := r.Executors[node.Type]
 	if !ok {
@@ -131,6 +149,11 @@ func (r *Runner) executeResource(ctx context.Context, node ResourceNode) modules
 	execResult.ResourceName = node.Name
 	if execResult.DurationMs == 0 {
 		execResult.DurationMs = int32(elapsed.Milliseconds())
+	}
+
+	// Store no-op results in cache for future cycles.
+	if r.Cache != nil && !r.DryRun {
+		r.Cache.Store(node.Name, node.Type, node.Params, execResult)
 	}
 
 	return execResult

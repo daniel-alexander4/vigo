@@ -26,7 +26,14 @@ const signatureTimestampWindow = 5 * time.Minute
 // SignatureVerifyInterceptor returns a unary server interceptor that verifies
 // ED25519 signatures on agent requests (SEC-03). The Register RPC is skipped
 // because the agent does not have a UUID yet during enrollment.
-func SignatureVerifyInterceptor(queries *db.Queries) grpc.UnaryServerInterceptor {
+//
+// When a NodeCache is provided, node lookups are served from cache,
+// avoiding a DB round-trip on every request. The looked-up node is stored
+// in the request context so downstream handlers can reuse it without another
+// lookup.
+//
+// If nodeCache is nil, falls back to direct DB queries (backward compat).
+func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req any,
@@ -41,15 +48,17 @@ func SignatureVerifyInterceptor(queries *db.Queries) grpc.UnaryServerInterceptor
 		// Only verify agent RPCs that carry signatures.
 		switch r := req.(type) {
 		case *pb.CheckInRequest:
-			if err := verifyCheckIn(ctx, queries, r); err != nil {
+			newCtx, err := verifyCheckIn(ctx, queries, nodeCache, r)
+			if err != nil {
 				return nil, err
 			}
+			ctx = newCtx
 		case *pb.ReportResultRequest:
-			if err := verifyReportResult(ctx, queries, r); err != nil {
+			if err := verifyReportResult(ctx, queries, nodeCache, r); err != nil {
 				return nil, err
 			}
 		case *pb.ReportNailsRequest:
-			if err := verifyReportNails(ctx, queries, r); err != nil {
+			if err := verifyReportNails(ctx, queries, nodeCache, r); err != nil {
 				return nil, err
 			}
 		default:
@@ -60,25 +69,26 @@ func SignatureVerifyInterceptor(queries *db.Queries) grpc.UnaryServerInterceptor
 	}
 }
 
-// verifyCheckIn validates the signature on a CheckInRequest.
-func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequest) error {
-	clientID, err := uuid.Parse(req.GetClientId())
+// verifyCheckIn validates the signature on a CheckInRequest. On success, it
+// returns a context enriched with the looked-up node for handler reuse.
+func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.CheckInRequest) (context.Context, error) {
+	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid client_id: %v", err)
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 
-	pubKey, err := lookupPubKey(ctx, queries, clientID)
+	node, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
 	if err != nil {
-		return err
+		return ctx, err
 	}
 
 	ts := req.GetTimestamp()
 	if ts == nil {
-		return status.Error(codes.InvalidArgument, "timestamp is required")
+		return ctx, status.Error(codes.InvalidArgument, "timestamp is required")
 	}
 	tsTime := ts.AsTime()
 	if err := checkTimestamp(tsTime); err != nil {
-		return err
+		return ctx, err
 	}
 
 	// The payload for CheckIn is the state fingerprint.
@@ -86,20 +96,21 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequ
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
-		return status.Error(codes.Unauthenticated, "signature verification failed")
+		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
-	return nil
+	// Store node in context for handler reuse (eliminates duplicate lookups).
+	return db.ContextWithNode(ctx, node), nil
 }
 
 // verifyReportResult validates the signature on a ReportResultRequest.
-func verifyReportResult(ctx context.Context, queries *db.Queries, req *pb.ReportResultRequest) error {
-	clientID, err := uuid.Parse(req.GetClientId())
+func verifyReportResult(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportResultRequest) error {
+	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid client_id: %v", err)
+		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 
-	pubKey, err := lookupPubKey(ctx, queries, clientID)
+	_, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
 	if err != nil {
 		return err
 	}
@@ -124,13 +135,13 @@ func verifyReportResult(ctx context.Context, queries *db.Queries, req *pb.Report
 }
 
 // verifyReportNails validates the signature on a ReportNailsRequest.
-func verifyReportNails(ctx context.Context, queries *db.Queries, req *pb.ReportNailsRequest) error {
-	clientID, err := uuid.Parse(req.GetClientId())
+func verifyReportNails(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportNailsRequest) error {
+	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid client_id: %v", err)
+		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 
-	pubKey, err := lookupPubKey(ctx, queries, clientID)
+	_, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
 	if err != nil {
 		return err
 	}
@@ -154,30 +165,38 @@ func verifyReportNails(ctx context.Context, queries *db.Queries, req *pb.ReportN
 	return nil
 }
 
-// lookupPubKey retrieves the ED25519 public key for a client from the database.
-func lookupPubKey(ctx context.Context, queries *db.Queries, clientID uuid.UUID) (ed25519.PublicKey, error) {
-	client, err := queries.GetClientByID(ctx, clientID)
+// lookupNodeAndPubKey retrieves a node and parses its ED25519 public key.
+// Uses the NodeCache if available, otherwise falls back to direct DB queries.
+func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.NodeCache, nodeID uuid.UUID) (db.Node, ed25519.PublicKey, error) {
+	var node db.Node
+	var err error
+
+	if cache != nil {
+		node, err = cache.GetByID(ctx, nodeID)
+	} else {
+		node, err = queries.GetNodeByID(ctx, nodeID)
+	}
 	if err != nil {
-		slog.Error("client lookup failed", "client_id", clientID, "error", err)
-		return nil, status.Error(codes.Unauthenticated, "client not found")
+		slog.Error("node lookup failed", "node_id", nodeID, "error", err)
+		return db.Node{}, nil, status.Error(codes.Unauthenticated, "node not found")
 	}
 
-	block, _ := pem.Decode([]byte(client.PubkeyPem))
+	block, _ := pem.Decode([]byte(node.PubkeyPem))
 	if block == nil {
-		return nil, status.Error(codes.Internal, "invalid stored public key")
+		return db.Node{}, nil, status.Error(codes.Internal, "invalid stored public key")
 	}
 
 	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
+		return db.Node{}, nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
 	}
 
 	pubKey, ok := parsed.(ed25519.PublicKey)
 	if !ok {
-		return nil, status.Error(codes.Internal, "stored key is not ED25519")
+		return db.Node{}, nil, status.Error(codes.Internal, "stored key is not ED25519")
 	}
 
-	return pubKey, nil
+	return node, pubKey, nil
 }
 
 // checkTimestamp verifies the timestamp is within the allowed window.

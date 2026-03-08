@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -28,26 +29,27 @@ var knownSecretFields = map[string]bool{
 
 const secretPrefix = "secret:"
 
-// resolvedEntry pairs a match pattern with a resolved client config.
+// resolvedEntry pairs a match pattern with a resolved node config.
 type resolvedEntry struct {
 	match  string
-	config *ClientConfig
+	config *NodeConfig
 }
 
-// ConfigStore loads, watches, and provides per-client configuration.
-// The clientsDir contains .hob/.yaml files with client entries at the top level,
+// ConfigStore loads, watches, and provides per-node configuration.
+// The nodesDir contains .hob/.yaml files with node entries at the top level,
 // plus modules/ and roles/ subdirectories. Secret references are resolved
 // via a secrets.Provider. Hot-reload via fsnotify.
 type ConfigStore struct {
 	mu         sync.RWMutex
 	entries    []resolvedEntry
 	rawModules map[string]*ModuleDefinition // unresolved, for secret ref scanning
-	dir        string                       // client-configs directory
+	dir        string                       // node-configs directory
 	provider   secrets.Provider
 	dangerous  bool // allow non-idempotent resources
+	version    atomic.Uint64 // incremented on each successful reload
 }
 
-// NewConfigStore creates a ConfigStore that scans clientsDir for client
+// NewConfigStore creates a ConfigStore that scans nodesDir for node
 // config files (.hob or .yaml), module definitions from clientsDir/modules/,
 // and role definitions from clientsDir/roles/. Secret references are resolved
 // using the given provider.
@@ -66,15 +68,21 @@ func NewConfigStore(clientsDir string, provider secrets.Provider, dangerous bool
 	return cs, nil
 }
 
-// Dir returns the client-configs directory path.
+// Dir returns the node-configs directory path.
 func (cs *ConfigStore) Dir() string {
 	return cs.dir
 }
 
+// Version returns the current config version. Incremented on each successful
+// reload, used by the response cache to detect config changes.
+func (cs *ConfigStore) Version() uint64 {
+	return cs.version.Load()
+}
+
 // Get returns the resolved config for the given hostname. Entries are
 // evaluated in order — first match wins. If no entry matches, an empty
-// config is returned (unconfigured client gets empty module list).
-func (cs *ConfigStore) Get(hostname string) *ClientConfig {
+// config is returned (unconfigured node gets empty module list).
+func (cs *ConfigStore) Get(hostname string) *NodeConfig {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
@@ -84,19 +92,19 @@ func (cs *ConfigStore) Get(hostname string) *ClientConfig {
 			continue
 		}
 		if matched {
-			cfg := cloneClientConfig(entry.config)
-			cfg.Client = hostname
+			cfg := cloneNodeConfig(entry.config)
+			cfg.Node = hostname
 			return cfg
 		}
 	}
 
-	return &ClientConfig{
-		Client:  hostname,
+	return &NodeConfig{
+		Node:    hostname,
 		Modules: []ModuleConfig{},
 	}
 }
 
-// Watch starts fsnotify watchers on the client-configs directory and its
+// Watch starts fsnotify watchers on the node-configs directory and its
 // modules/ and roles/ subdirectories. Config changes are reloaded with
 // ~500ms debounce. Blocks until ctx is cancelled.
 func (cs *ConfigStore) Watch(ctx context.Context) error {
@@ -193,7 +201,7 @@ func (cs *ConfigStore) loadAll() error {
 	for i, entry := range clientEntries {
 		cfg, err := cs.resolveEntry(entry, moduleDefs, roleDefs)
 		if err != nil {
-			return fmt.Errorf("resolving client entry %d (match=%q): %w", i, entry.Match, err)
+			return fmt.Errorf("resolving node entry %d (match=%q): %w", i, entry.Match, err)
 		}
 		entries = append(entries, resolvedEntry{match: entry.Match, config: cfg})
 	}
@@ -203,16 +211,19 @@ func (cs *ConfigStore) loadAll() error {
 	cs.rawModules = moduleDefs
 	cs.mu.Unlock()
 
+	v := cs.version.Add(1)
+
 	slog.Info("config loaded",
 		"modules", len(moduleDefs),
 		"roles", len(roleDefs),
-		"entries", len(entries))
+		"entries", len(entries),
+		"version", v)
 
 	return nil
 }
 
-// resolveEntry converts a ClientEntry into a fully resolved ClientConfig.
-func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*ClientConfig, error) {
+// resolveEntry converts a NodeEntry into a fully resolved NodeConfig.
+func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*NodeConfig, error) {
 	// Collect module refs: roles first, then direct modules. First ref wins
 	// for conditional fields (matching existing var merge behavior).
 	var moduleRefs []ModuleRef
@@ -294,8 +305,8 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 		vars[k] = v
 	}
 
-	cfg := &ClientConfig{
-		Client:          entry.Match,
+	cfg := &NodeConfig{
+		Node:            entry.Match,
 		Environment:     entry.Environment,
 		Modules:         modules,
 		Vars:            vars,
@@ -320,10 +331,10 @@ func (cs *ConfigStore) resolveEntry(entry ClientEntry, moduleDefs map[string]*Mo
 	return cfg, nil
 }
 
-// ClientsReferencingSecret returns the match patterns of all client entries
+// NodesReferencingSecret returns the match patterns of all node entries
 // whose configuration contains a "secret:<secretPath>" reference. Used by
 // the rotation watcher to identify which clients need force-push.
-func (cs *ConfigStore) ClientsReferencingSecret(secretPath string) []string {
+func (cs *ConfigStore) NodesReferencingSecret(secretPath string) []string {
 	needle := secretPrefix + secretPath
 
 	cs.mu.RLock()
@@ -347,6 +358,35 @@ func (cs *ConfigStore) ClientsReferencingSecret(secretPath string) []string {
 	return patterns
 }
 
+// SecretPaths returns the deduplicated set of secret paths referenced across
+// all raw module definitions. Used by the watcher to know which secrets to poll.
+func (cs *ConfigStore) SecretPaths() []string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	seen := make(map[string]bool)
+	for _, mod := range cs.rawModules {
+		for _, v := range mod.Vars {
+			if s, ok := v.(string); ok && strings.HasPrefix(s, secretPrefix) {
+				seen[strings.TrimPrefix(s, secretPrefix)] = true
+			}
+		}
+		for _, res := range mod.Resources {
+			for _, v := range res.Attributes {
+				if s, ok := v.(string); ok && strings.HasPrefix(s, secretPrefix) {
+					seen[strings.TrimPrefix(s, secretPrefix)] = true
+				}
+			}
+		}
+	}
+
+	paths := make([]string, 0, len(seen))
+	for p := range seen {
+		paths = append(paths, p)
+	}
+	return paths
+}
+
 // EffectiveConfigYAML returns the resolved config for hostname as YAML,
 // with secret values redacted. Used by the UI config viewer.
 func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
@@ -356,7 +396,7 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 	}
 
 	// Redact resolved secrets in vars.
-	redacted := cloneClientConfig(cfg)
+	redacted := cloneNodeConfig(cfg)
 	for k, v := range redacted.Vars {
 		if _, ok := v.(string); ok && knownSecretFields[k] {
 			redacted.Vars[k] = "[REDACTED]"
@@ -478,13 +518,13 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 
 // loadClientsDir reads all config files (.hob/.yaml) at the top level of dir
 // (not subdirs) and merges their client entries in filesystem order.
-func loadClientsDir(dir string) ([]ClientEntry, error) {
+func loadClientsDir(dir string) ([]NodeEntry, error) {
 	dirEntries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("reading clients dir: %w", err)
 	}
 
-	var allEntries []ClientEntry
+	var allEntries []NodeEntry
 	for _, de := range dirEntries {
 		if de.IsDir() || !isConfigFile(de.Name()) {
 			continue
@@ -494,22 +534,22 @@ func loadClientsDir(dir string) ([]ClientEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
 		}
-		var cfg ClientsConfig
+		var cfg NodesConfig
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", path, err)
 		}
-		for i, entry := range cfg.Clients {
+		for i, entry := range cfg.Nodes {
 			if entry.Match == "" {
 				return nil, fmt.Errorf("%s entry %d: missing required 'match' field", de.Name(), i)
 			}
 		}
-		allEntries = append(allEntries, cfg.Clients...)
+		allEntries = append(allEntries, cfg.Nodes...)
 	}
 	return allEntries, nil
 }
 
 // mergeEnvVars merges base vars with environment-specific overrides.
-func mergeEnvVars(cfg *ClientConfig) {
+func mergeEnvVars(cfg *NodeConfig) {
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]any)
 	}
@@ -578,7 +618,7 @@ func (cs *ConfigStore) resolveModuleSecrets(mod *ModuleConfig) error {
 }
 
 // resolveSourceFiles reads external template files referenced by the "source"
-// attribute on file resources. The source path is relative to the client-configs
+// attribute on file resources. The source path is relative to the node-configs
 // directory (e.g., "templates/nginx/nginx.conf.tmpl"). The file contents replace
 // the "source" attribute with "content".
 // It is an error to set both "source" and "content" on the same resource.
@@ -638,10 +678,10 @@ func moduleDefReferencesSecret(def *ModuleDefinition, needle string) bool {
 	return false
 }
 
-// entryReferencesSecret checks if a client entry uses any affected module
+// entryReferencesSecret checks if a node entry uses any affected module
 // or has the secret in its env_vars (non-active environment overrides retain
 // raw secret: prefixes since only the active environment is resolved).
-func entryReferencesSecret(cfg *ClientConfig, affectedModules map[string]bool, needle string) bool {
+func entryReferencesSecret(cfg *NodeConfig, affectedModules map[string]bool, needle string) bool {
 	// Check if any module is affected.
 	for _, mod := range cfg.Modules {
 		if affectedModules[mod.Name] {
@@ -706,9 +746,9 @@ func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[str
 	return diff
 }
 
-// cloneClientConfig returns a shallow copy of the ClientConfig with a
+// cloneNodeConfig returns a shallow copy of the NodeConfig with a
 // fresh Modules slice and Vars map, so modifications don't affect the original.
-func cloneClientConfig(cfg *ClientConfig) *ClientConfig {
+func cloneNodeConfig(cfg *NodeConfig) *NodeConfig {
 	clone := *cfg
 	clone.Modules = make([]ModuleConfig, len(cfg.Modules))
 	copy(clone.Modules, cfg.Modules)

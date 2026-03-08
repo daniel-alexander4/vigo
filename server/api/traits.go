@@ -47,21 +47,21 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 	hostname := r.PathValue("hostname")
 	ctx := r.Context()
 
-	client, err := h.queries.GetClientByHostname(ctx, hostname)
+	client, err := h.queries.GetNodeByHostname(ctx, hostname)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, fmt.Sprintf("client '%s' not found", hostname))
+			writeJSONError(w, http.StatusNotFound, fmt.Sprintf("node '%s' not found", hostname))
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	nails, err := h.queries.GetLatestClientNails(ctx, client.ID)
+	nails, err := h.queries.GetLatestNodeNails(ctx, client.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSONError(w, http.StatusNotFound,
-				fmt.Sprintf("no traits available for '%s' -- client has not reported traits yet", hostname))
+				fmt.Sprintf("no traits available for '%s' -- node has not reported traits yet", hostname))
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal error")

@@ -81,7 +81,7 @@ func TestForcePushValidation(t *testing.T) {
 	}
 
 	// Invalid UUID should return error
-	_, err := svc.ForcePush(context.Background(), &pb.ForcePushRequest{ClientId: "not-a-uuid"})
+	_, err := svc.ForcePush(context.Background(), &pb.ForcePushRequest{NodeId: "not-a-uuid"})
 	if err == nil {
 		t.Error("ForcePush() with invalid UUID should return error")
 	}

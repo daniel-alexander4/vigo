@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -97,7 +98,7 @@ func findMigrationsDir() string {
 func newTestRegistry(t *testing.T) *registry.Registry {
 	t.Helper()
 	ctx := context.Background()
-	_, err := testPool.Exec(ctx, "TRUNCATE approved_patterns, clients CASCADE")
+	_, err := testPool.Exec(ctx, "TRUNCATE approved_patterns, nodes CASCADE")
 	if err != nil {
 		t.Fatalf("failed to truncate tables: %v", err)
 	}
@@ -201,22 +202,22 @@ func TestRegisterSuccess(t *testing.T) {
 		t.Fatal("expected non-nil client ID")
 	}
 
-	// Verify client was created in DB
-	client, err := db.New(testPool).GetClientByID(ctx, clientID)
+	// Verify node was created in DB
+	node, err := db.New(testPool).GetNodeByID(ctx, clientID)
 	if err != nil {
-		t.Fatalf("GetClientByID failed: %v", err)
+		t.Fatalf("GetNodeByID failed: %v", err)
 	}
-	if client.Hostname != "app01.web.example.com" {
-		t.Errorf("hostname = %q, want %q", client.Hostname, "app01.web.example.com")
+	if node.Hostname != "app01.web.example.com" {
+		t.Errorf("hostname = %q, want %q", node.Hostname, "app01.web.example.com")
 	}
-	if client.IpAddress != "192.168.1.10" {
-		t.Errorf("ip_address = %q, want %q", client.IpAddress, "192.168.1.10")
+	if node.IpAddress != "192.168.1.10" {
+		t.Errorf("ip_address = %q, want %q", node.IpAddress, "192.168.1.10")
 	}
-	if client.PubkeyPem != "ed25519-pubkey" {
-		t.Errorf("pubkey_pem = %q, want %q", client.PubkeyPem, "ed25519-pubkey")
+	if node.PubkeyPem != "ed25519-pubkey" {
+		t.Errorf("pubkey_pem = %q, want %q", node.PubkeyPem, "ed25519-pubkey")
 	}
-	if client.Revoked {
-		t.Error("newly created client should not be revoked")
+	if node.Revoked {
+		t.Error("newly created node should not be revoked")
 	}
 }
 
@@ -344,67 +345,67 @@ func TestRegisterWrongToken(t *testing.T) {
 	}
 }
 
-func TestRevokeClient(t *testing.T) {
+func TestRevokeNode(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a client
+	// Create and register a node
 	token := "revoke-test-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	clientID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	// Revoke the client
-	err = reg.RevokeClient(ctx, clientID)
+	// Revoke the node
+	err = reg.RevokeNode(ctx, nodeID)
 	if err != nil {
-		t.Fatalf("RevokeClient failed: %v", err)
+		t.Fatalf("RevokeNode failed: %v", err)
 	}
 
 	// Verify revocation state in DB
-	client, err := db.New(testPool).GetClientByID(ctx, clientID)
+	node, err := db.New(testPool).GetNodeByID(ctx, nodeID)
 	if err != nil {
-		t.Fatalf("GetClientByID failed: %v", err)
+		t.Fatalf("GetNodeByID failed: %v", err)
 	}
-	if !client.Revoked {
-		t.Error("expected client to be revoked")
+	if !node.Revoked {
+		t.Error("expected node to be revoked")
 	}
-	if !client.RevokedAt.Valid {
+	if !node.RevokedAt.Valid {
 		t.Error("expected revoked_at to be set")
 	}
 }
 
-func TestRevokedClientCheckIn(t *testing.T) {
+func TestRevokedNodeCheckIn(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a client
+	// Create and register a node
 	token := "checkin-test-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	clientID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
 	// Revoke
-	err = reg.RevokeClient(ctx, clientID)
+	err = reg.RevokeNode(ctx, nodeID)
 	if err != nil {
-		t.Fatalf("RevokeClient failed: %v", err)
+		t.Fatalf("RevokeNode failed: %v", err)
 	}
 
-	// ValidateClient should return error for revoked client
-	err = reg.ValidateClient(ctx, clientID)
+	// ValidateNode should return error for revoked node
+	err = reg.ValidateNode(ctx, nodeID)
 	if err == nil {
-		t.Fatal("ValidateClient should return error for revoked client")
+		t.Fatal("ValidateNode should return error for revoked node")
 	}
 }
 
@@ -412,26 +413,26 @@ func TestRevokedCannotReenroll(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a client
+	// Create and register a node
 	token1 := "first-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	clientID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1)
+	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
-	_ = clientID
+	_ = nodeID
 
 	// Revoke
-	err = reg.RevokeClient(ctx, clientID)
+	err = reg.RevokeNode(ctx, nodeID)
 	if err != nil {
-		t.Fatalf("RevokeClient failed: %v", err)
+		t.Fatalf("RevokeNode failed: %v", err)
 	}
 
-	// Try to re-enroll the same hostname (ENRL-07: revoked clients cannot re-enroll)
+	// Try to re-enroll the same hostname (ENRL-07: revoked nodes cannot re-enroll)
 	token2 := "second-token"
 	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token2)
 	if err != nil {
@@ -440,39 +441,39 @@ func TestRevokedCannotReenroll(t *testing.T) {
 
 	_, err = reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-2", token2)
 	if err == nil {
-		t.Fatal("Register should fail for hostname of a revoked client (ENRL-07)")
+		t.Fatal("Register should fail for hostname of a revoked node (ENRL-07)")
 	}
 }
 
-func TestValidateClientNonExistent(t *testing.T) {
+func TestValidateNodeNonExistent(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	err := reg.ValidateClient(ctx, uuid.New())
+	err := reg.ValidateNode(ctx, uuid.New())
 	if err == nil {
-		t.Fatal("ValidateClient should return error for non-existent client")
+		t.Fatal("ValidateNode should return error for non-existent node")
 	}
 }
 
-func TestValidateClientActive(t *testing.T) {
+func TestValidateNodeActive(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	token := "active-client-token"
+	token := "active-node-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	clientID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	// Active client should validate successfully
-	err = reg.ValidateClient(ctx, clientID)
+	// Active node should validate successfully
+	err = reg.ValidateNode(ctx, nodeID)
 	if err != nil {
-		t.Fatalf("ValidateClient should succeed for active client: %v", err)
+		t.Fatalf("ValidateNode should succeed for active node: %v", err)
 	}
 }
 
@@ -557,15 +558,106 @@ func TestRegisterErrorMessages(t *testing.T) {
 	}
 }
 
-func TestRevokeNonExistentClient(t *testing.T) {
+func TestTrustedRegisterSuccess(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Revoking a non-existent client should not error (idempotent)
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.web.example.com", CIDRs: []string{"10.0.1.0/24"}},
+	}
+
+	nodeID, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.100")
+	if err != nil {
+		t.Fatalf("TrustedRegister should succeed: %v", err)
+	}
+	if nodeID == uuid.Nil {
+		t.Fatal("expected non-nil node ID")
+	}
+}
+
+func TestTrustedRegisterCIDRReject(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.web.example.com", CIDRs: []string{"10.0.1.0/24"}},
+	}
+
+	// Peer IP outside allowed CIDR.
+	_, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "192.168.1.100")
+	if err == nil {
+		t.Fatal("TrustedRegister should reject when peer IP is outside CIDR")
+	}
+}
+
+func TestTrustedRegisterNoCIDRsAllowsAny(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// No CIDRs means any source IP is allowed.
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.open.example.com"},
+	}
+
+	nodeID, err := reg.TrustedRegister(ctx, "app01.open.example.com", "anywhere", "ed25519-pubkey", patterns, "203.0.113.50")
+	if err != nil {
+		t.Fatalf("TrustedRegister should succeed with no CIDR restriction: %v", err)
+	}
+	if nodeID == uuid.Nil {
+		t.Fatal("expected non-nil node ID")
+	}
+}
+
+func TestTrustedRegisterNoMatch(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.web.example.com", CIDRs: []string{"10.0.0.0/8"}},
+	}
+
+	_, err := reg.TrustedRegister(ctx, "rogue-host.evil.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.5")
+	if err == nil {
+		t.Fatal("TrustedRegister should reject when hostname doesn't match pattern")
+	}
+}
+
+func TestTrustedRegisterRevokedHostname(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Create and revoke a node with token flow.
+	_, err := reg.AddApprovedPattern(ctx, "*.example.com", "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeID, err := reg.Register(ctx, "revoked.example.com", "10.0.1.1", "pk1", "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.RevokeNode(ctx, nodeID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to re-enroll the revoked hostname via trusted enrollment.
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.example.com"},
+	}
+	_, err = reg.TrustedRegister(ctx, "revoked.example.com", "10.0.1.1", "pk2", patterns, "10.0.1.1")
+	if err == nil {
+		t.Fatal("TrustedRegister should reject revoked hostname")
+	}
+}
+
+func TestRevokeNonExistentNode(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Revoking a non-existent node should not error (idempotent)
 	// or could return an error -- depends on design. Testing behavior.
-	err := reg.RevokeClient(ctx, uuid.New())
+	err := reg.RevokeNode(ctx, uuid.New())
 	// We accept either behavior but log it
 	if err != nil {
-		fmt.Printf("RevokeClient for non-existent client returned error: %v (acceptable)\n", err)
+		fmt.Printf("RevokeNode for non-existent node returned error: %v (acceptable)\n", err)
 	}
 }
