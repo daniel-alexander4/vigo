@@ -16,10 +16,10 @@ sudo mkdir -p /etc/hobnob/certs
 
 ```bash
 make certs
-sudo cp certs/* /etc/hobnob/certs/
+sudo cp server-configs/certs/* /etc/hobnob/certs/
 ```
 
-For production, replace with your own CA and server cert.
+For production, replace with your own CA and server cert. Keep the CA private key accessible to the server if you want bootstrap CSR signing (see [Bootstrap enrollment](#bootstrap-enrollment)).
 
 ### 3. Create the `.env` file
 
@@ -29,6 +29,7 @@ HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
 HOBNOB_TLS_CA=certs/ca.crt
+HOBNOB_TLS_CA_KEY=certs/ca.key
 EOF
 ```
 
@@ -36,7 +37,7 @@ EOF
 
 ```bash
 sudo cp -r server-configs /etc/hobnob/
-sudo cp -r client-configs /etc/hobnob/
+sudo cp -r node-configs /etc/hobnob/
 ```
 
 ### 5. Start the server
@@ -53,30 +54,77 @@ docker compose ps
 
 You should see `postgres` (healthy) and `server` (running). The dashboard is at `http://<server-ip>:8080/`.
 
-### 6. Create an approved pattern and enrollment token
+### 6. Bootstrap managed nodes
 
-```bash
-docker compose exec server hobcli tokens generate --pattern "*.example.com"
-```
+There are two enrollment modes: **trusted enrollment** (zero-touch, like Puppet autosigning) and **token-based** (explicit per-node approval).
 
-This prints a `curl` command with the enrollment token baked in.
+#### Trusted enrollment (recommended for fleets)
 
-### 7. Bootstrap a managed node
-
-On each target node, run the `curl` command from the previous step:
-
-```bash
-curl http://<server-ip>:8080/bootstrap?token=<TOKEN> | bash
-```
-
-The bootstrap script detects OS/arch, downloads the agent binary, installs it, copies the CA cert, generates an ED25519 keypair, and enrolls with the server.
-
-### 8. Define desired state
-
-Edit `client-configs/clients.hob` to map hostnames to modules and roles:
+Configure trusted hostname/CIDR patterns in `server-configs/server.yaml`:
 
 ```yaml
-# client-configs/clients.hob
+bootstrap:
+  cert_validity: "8760h"
+  trusted_enrollment:
+    - pattern: "*.web.example.com"
+      cidrs: ["10.0.1.0/24"]
+    - pattern: "*.db.internal"
+      cidrs: ["10.0.2.0/24"]
+```
+
+Then on each node, run:
+
+```bash
+curl -sSf http://<server-ip>:8080/bootstrap | HOBNOB_SERVER=http://<server-ip>:8080 sh
+```
+
+Or use the standalone bootstrap script:
+
+```bash
+HOBNOB_SERVER=http://<server-ip>:8080 sh scripts/bootstrap.sh
+```
+
+No token needed. The server validates the node's hostname and source IP against the trusted patterns, signs its CSR, and returns TLS certs. The agent is installed, enrolled, and started as a systemd service.
+
+#### Token-based enrollment
+
+For one-off nodes or untrusted networks, generate a token:
+
+```bash
+hobcli tokens generate
+hobcli approved add "web-01.example.com" --token <TOKEN>
+```
+
+Then on the node:
+
+```bash
+HOBNOB_SERVER=http://<server-ip>:8080 HOBNOB_TOKEN=<TOKEN> sh scripts/bootstrap.sh
+```
+
+Or use the server-generated bootstrap script:
+
+```bash
+curl -sSf "http://<server-ip>:8080/bootstrap?token=<TOKEN>" | sh
+```
+
+#### What bootstrap does
+
+1. Downloads the `hob` agent binary for the node's OS/arch
+2. Generates an ED25519 keypair (for request signing) and an ECDSA TLS keypair
+3. Creates a CSR and sends it to the server
+4. Server validates (trusted pattern + CIDR, or token + approved pattern)
+5. Server signs the CSR and returns the signed TLS cert + CA cert
+6. Agent saves certs, keypair, and node UUID to `/etc/hobnob`
+7. Installs and starts a systemd service
+
+After bootstrap, the agent connects to the server via mTLS automatically.
+
+### 7. Define desired state
+
+Edit `node-configs/clients.hob` to map hostnames to modules and roles:
+
+```yaml
+# node-configs/clients.hob
 clients:
   - match: "web01.example.com"
     environment: production
@@ -85,7 +133,7 @@ clients:
       doc_root: "/var/www/html"
 ```
 
-Modules are defined in `client-configs/modules/`. For example, `client-configs/modules/nginx.hob`:
+Modules are defined in `node-configs/modules/`. For example, `node-configs/modules/nginx.hob`:
 
 ```yaml
 name: nginx
@@ -114,7 +162,7 @@ resources:
     subscribes: [nginx-conf]
 ```
 
-The `source` field references a template file relative to `client-configs/` (e.g. `client-configs/templates/nginx.conf.tmpl`). You can also use inline `content` — the two are mutually exclusive. Templates use Go template syntax with `.Traits` and `.Vars` namespaces.
+The `source` field references a template file relative to `node-configs/` (e.g. `node-configs/templates/nginx.conf.tmpl`). You can also use inline `content` — the two are mutually exclusive. Templates use Go template syntax with `.Traits` and `.Vars` namespaces.
 
 Use `baseindent` to prepend a fixed number of spaces to every non-empty line of `content`. Relative indentation within the content block is preserved:
 
@@ -133,27 +181,27 @@ Use `baseindent` to prepend a fixed number of spaces to every non-empty line of 
 
 This writes each line with 2 extra leading spaces (4 for the already-indented lines), while empty lines remain empty. Defaults to 0 (no extra indent).
 
-Group modules into roles in `client-configs/roles/`:
+Group modules into roles in `node-configs/roles/`:
 
 ```yaml
-# client-configs/roles/webserver.hob
+# node-configs/roles/webserver.hob
 name: webserver
 modules: [nginx, certbot]
 ```
 
-The server watches `client-configs/` and hot-reloads automatically. On the next check-in, the agent converges to the desired state.
+The server watches `node-configs/` and hot-reloads automatically. On the next check-in, the agent converges to the desired state.
 
-### 9. Verify convergence
+### 8. Verify convergence
 
 ```bash
-# List enrolled clients
-docker compose exec server hobcli clients list
+# List enrolled nodes
+hobcli nodes list
 
 # View run results
-docker compose exec server hobcli runs list
+hobcli runs list
 
 # Check compliance
-docker compose exec server hobcli clients show web01.example.com
+hobcli nodes show web01.example.com
 ```
 
 Or open the web dashboard at `http://<server-ip>:8080/`.
@@ -161,7 +209,7 @@ Or open the web dashboard at `http://<server-ip>:8080/`.
 ## Config structure
 
 ```
-client-configs/
+node-configs/
 ├── clients.hob           # Maps hostnames/globs to roles and modules
 ├── modules/              # Reusable resource sets with default vars
 │   ├── nginx.hob
@@ -175,25 +223,25 @@ client-configs/
     └── nginx.conf.tmpl
 ```
 
-Config files use the `.hob` extension (YAML syntax). The server also accepts `.yaml`/`.yml` for backwards compatibility. `clients.hob` entries use glob patterns — first match wins. Client-level `vars` override module defaults. Clients matching no entry get an empty module list.
+Config files use the `.hob` extension (YAML syntax). The server also accepts `.yaml`/`.yml`. `clients.hob` entries use glob patterns — first match wins. Client-level `vars` override module defaults. Nodes matching no entry get an empty module list.
 
 ## Examples
 
-Ready-to-use module definitions in `client-configs/modules/` and role groupings in `client-configs/roles/`:
+Ready-to-use module definitions in `node-configs/modules/` and role groupings in `node-configs/roles/`:
 
 | Module | File | What it configures |
 |--------|------|--------------------|
-| Nginx | [`client-configs/modules/nginx.hob`](client-configs/modules/nginx.hob) | Virtual host, worker tuning, `source:` template |
-| PostgreSQL | [`client-configs/modules/postgresql.hob`](client-configs/modules/postgresql.hob) | `postgresql.conf` + `pg_hba.conf`, memory tuning |
-| MySQL | [`client-configs/modules/mysql.hob`](client-configs/modules/mysql.hob) | InnoDB tuning, slow query log, security hardening |
-| Redis | [`client-configs/modules/redis.hob`](client-configs/modules/redis.hob) | LRU eviction, AOF persistence, `secret:` password |
-| Docker | [`client-configs/modules/docker.hob`](client-configs/modules/docker.hob) | `daemon.json`, log rotation, containerd |
-| HAProxy | [`client-configs/modules/haproxy.hob`](client-configs/modules/haproxy.hob) | Stats page, roundrobin backend, health checks |
-| OpenSSH + fail2ban | [`client-configs/modules/openssh.hob`](client-configs/modules/openssh.hob), [`fail2ban.hob`](client-configs/modules/fail2ban.hob) | Hardened sshd, key-only auth, brute-force protection |
-| Prometheus + Grafana | [`client-configs/modules/prometheus.hob`](client-configs/modules/prometheus.hob), [`grafana.hob`](client-configs/modules/grafana.hob) | Prometheus, node-exporter, Grafana |
-| CLI tools | [`client-configs/modules/charm-tools.hob`](client-configs/modules/charm-tools.hob), [`github-tools.hob`](client-configs/modules/github-tools.hob) | `repository` for Charm repo, `archive` for GitHub releases |
+| Nginx | `node-configs/modules/nginx.hob` | Virtual host, worker tuning, `source:` template |
+| PostgreSQL | `node-configs/modules/postgresql.hob` | `postgresql.conf` + `pg_hba.conf`, memory tuning |
+| MySQL | `node-configs/modules/mysql.hob` | InnoDB tuning, slow query log, security hardening |
+| Redis | `node-configs/modules/redis.hob` | LRU eviction, AOF persistence, `secret:` password |
+| Docker | `node-configs/modules/docker.hob` | `daemon.json`, log rotation, containerd |
+| HAProxy | `node-configs/modules/haproxy.hob` | Stats page, roundrobin backend, health checks |
+| OpenSSH + fail2ban | `node-configs/modules/openssh.hob`, `node-configs/modules/fail2ban.hob` | Hardened sshd, key-only auth, brute-force protection |
+| Prometheus + Grafana | `node-configs/modules/prometheus.hob`, `node-configs/modules/grafana.hob` | Prometheus, node-exporter, Grafana |
+| CLI tools | `node-configs/modules/charm-tools.hob`, `node-configs/modules/github-tools.hob` | `repository` for Charm repo, `archive` for GitHub releases |
 
-Client-to-module mappings are in [`client-configs/clients.hob`](client-configs/clients.hob), with roles like `webserver`, `database`, `monitoring`, and `bastion` in [`client-configs/roles/`](client-configs/roles/).
+Node-to-module mappings are in `node-configs/clients.hob`, with roles like `webserver`, `database`, `monitoring`, and `bastion` in `node-configs/roles/`.
 
 Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`), Go template variables, per-environment overrides, and `secret:` references where appropriate.
 
@@ -214,11 +262,65 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
                        └────────┘   └──────────┘  └────────┘
 ```
 
-- **Server** — gRPC endpoint for agents, REST API + web UI for operators
-- **Agent** — daemon on each managed node, pulls config, converges idempotently
+- **Server (hobd)** — gRPC endpoint for agents, REST API + web UI for operators, built-in CA for bootstrap CSR signing
+- **Agent (hob)** — daemon on each managed node, pulls config, converges idempotently
 - **hobcli** — admin CLI, talks to server REST API
 - **Config** — `.hob` files (YAML syntax) on disk, hot-reloaded on change
 - **hobvi** — vim-based editor with syntax highlighting and idempotency validation on save
+
+## Bootstrap enrollment
+
+Hobnob supports two enrollment modes. Both use CSR signing — the server acts as a certificate authority, signs the agent's CSR, and returns TLS certificates for future mTLS connections.
+
+### Trusted enrollment (autosigning)
+
+Like Puppet's autosign, the server auto-enrolls nodes matching configured hostname patterns + CIDR ranges. Configure in `server-configs/server.yaml`:
+
+```yaml
+server:
+  tls:
+    ca_key_file: "secret:hobnob/tls/ca_key"  # required for CSR signing
+
+bootstrap:
+  cert_validity: "8760h"  # 1 year
+  trusted_enrollment:
+    - pattern: "*.web.example.com"
+      cidrs: ["10.0.1.0/24"]
+    - pattern: "*.db.internal"
+      cidrs: ["10.0.2.0/24", "172.16.0.0/16"]
+    - pattern: "monitoring-*"
+      # no cidrs = any source IP (less secure)
+```
+
+Security comes from two layers: hostname pattern matching and source IP CIDR validation. Omitting `cidrs` allows any source IP (use only on trusted networks).
+
+### Token-based enrollment
+
+For higher-security environments or one-off nodes. Requires an admin to generate a one-time token and approved pattern before the node can enroll.
+
+### Bootstrap flow
+
+```
+Node                              Server
+│                                 │
+├─ hob bootstrap --server <addr>  │
+│  ├─ Generate ED25519 keypair    │
+│  ├─ Generate ECDSA TLS key     │
+│  ├─ Create CSR                 │
+│  │                              │
+│  ├─ POST /api/v1/bootstrap/register ─────────►
+│  │   {hostname, ip, pubkey, csr, token?}      │
+│  │                              │  Validate:
+│  │                              │  ├─ Token + pattern match
+│  │                              │  │  OR trusted pattern + CIDR
+│  │                              │  ├─ Sign CSR with CA key
+│  │                              │  └─ Create node record
+│  │  ◄──────── {node_id, signed_cert, ca_cert} │
+│  │                              │
+│  ├─ Save cert, key, CA, UUID   │
+│  └─ Start mTLS daemon loop ────►│
+│                                 │
+```
 
 ## Resource types
 
@@ -247,34 +349,36 @@ Non-idempotent resources are rejected unless the server is started with `--dange
 
 ```bash
 # Validate .hob files for YAML correctness + idempotency
-hobcli validate client-configs/modules/*.hob
+hobcli validate node-configs/modules/*.hob
 
 # Allow non-idempotent resources (shows errors but exits 0)
 hobcli validate --dangerous modules/risky.hob
 
 # Edit with vim — syntax highlighting + validation on save
-hobcli vi client-configs/modules/nginx.hob
+hobcli vi node-configs/modules/nginx.hob
 # or via the hobvi symlink:
-hobvi client-configs/modules/nginx.hob
+hobvi node-configs/modules/nginx.hob
 ```
 
 `hobcli validate` checks: (1) YAML syntax, (2) required fields (`name`, resource `name`/`type`), (3) idempotency rules. `hobcli vi` opens vim with `.hob` syntax highlighting and blocks saves that fail validation.
 
 ## Key features
 
+- **Bootstrap enrollment** — CSR-based: server signs agent certs, no pre-distribution needed
+- **Trusted enrollment** — Puppet-style autosigning with hostname patterns + CIDR restrictions
 - **mTLS everywhere** — no plaintext gRPC connections
 - **ED25519 auth** — every agent request is signature-verified
 - **Dependency DAG** — resources declare `depends_on`, topologically sorted
 - **Notify/subscribe** — config change triggers service restart
 - **Conditional resources** — structured conditionals (`go_if_all_pass`, `skip_if_any_pass`, etc.) evaluated server-side
 - **Idempotency enforcement** — `exec` resources require guards; validated at config load time
-- **Nail collection** — OS, hardware, network, packages, identity, virtual, uptime, load, mountpoints, processors, DMI, cloud reported every check-in
-- **Compliance tracking** — compliant/drifted/failing/stale/unknown per client
-- **Secret rotation** — server polls isopass, force-runs affected clients
+- **Nail collection** — OS, hardware, network, packages, time, identity, virtual, uptime, load, mountpoints, processors, DMI, cloud reported every check-in
+- **Compliance tracking** — compliant/drifted/failing/stale/unknown per node
+- **Secret rotation** — server polls isopass, force-runs affected nodes
 - **Webhooks** — HMAC-signed events for runs, drift, enrollment, rotation
 - **Prometheus metrics** — `/metrics` endpoint with fleet-level gauges
 - **Agent self-update** — automatic binary updates with checksum verification
-- **Web dashboard** — fleet overview, client drill-down, compliance trends
+- **Web dashboard** — fleet overview, node drill-down, compliance trends
 
 ## Conditionals
 
@@ -362,7 +466,7 @@ Gates are checked first, then vetoes. Each field accepts a single string or a li
 The same four fields work on module references in `clients.hob` and role definitions, skipping entire modules:
 
 ```yaml
-# client-configs/clients.hob
+# node-configs/clients.hob
 clients:
   - match: "*.example.com"
     vars:
@@ -471,12 +575,12 @@ resources:
 
 Sensitive values in config files use the `secret:` prefix instead of plaintext. The server resolves these references at config load time before sending anything to agents — agents receive the resolved values, never the `secret:` references.
 
-### Using secrets in client configs
+### Using secrets in node configs
 
-Reference secrets by path in `client-configs/clients.yaml` or module definitions:
+Reference secrets by path in `node-configs/clients.hob` or module definitions:
 
 ```yaml
-# client-configs/clients.hob
+# node-configs/clients.hob
 clients:
   - match: "cache01.example.com"
     modules: [redis]
@@ -485,7 +589,7 @@ clients:
 ```
 
 ```yaml
-# client-configs/modules/grafana.hob (inline in resource attributes)
+# node-configs/modules/grafana.hob (inline in resource attributes)
 resources:
   - name: grafana-ini
     type: file
@@ -507,9 +611,9 @@ ISOPASS_URL=https://isopass.internal:8443
 ISOPASS_BEARER_TOKEN=<service-account-token>
 ```
 
-The server also polls isopass for secret version changes. When a secret rotates, all clients referencing it are automatically queued for re-convergence.
+The server also polls isopass for secret version changes. When a secret rotates, all nodes referencing it are automatically queued for re-convergence.
 
-**StaticProvider (development)** — reads from a `.env` file. Secret paths are converted to environment variable names: `secret:hobnob/db/dsn` → `HOBNOB_DB_DSN` (uppercase, slashes to underscores).
+**StaticProvider (development)** — reads from a `.env` file. Secret paths are converted to environment variable names: `secret:hobnob/db/dsn` -> `HOBNOB_DB_DSN` (uppercase, slashes to underscores).
 
 ### Security guarantees
 
@@ -527,6 +631,7 @@ The server's own config (`server-configs/server.yaml`) also uses `secret:` refer
 | `HOBNOB_TLS_CERT` | Yes | Path to server TLS certificate |
 | `HOBNOB_TLS_KEY` | Yes | Path to server TLS private key |
 | `HOBNOB_TLS_CA` | Yes | Path to CA certificate |
+| `HOBNOB_TLS_CA_KEY` | No | Path to CA private key (enables bootstrap CSR signing) |
 | `HOBNOB_WEBHOOK_SECRET` | No | HMAC secret for webhook signing |
 | `HOBNOB_VERSION` | No | Version string for agent self-update |
 | `HOBNOB_AGENT_DIR` | No | Directory with cross-compiled agent binaries |

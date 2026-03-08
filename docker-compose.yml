@@ -23,7 +23,7 @@ services:
       - "9095:9090"
       - "8085:8080"
     volumes:
-      - /etc/hobnob/client-configs:/client-configs:ro
+      - /etc/hobnob/node-configs:/node-configs:ro
       - /etc/hobnob/server-configs:/server-configs:ro
       - /etc/hobnob/server-configs/certs:/certs:ro
     env_file:
