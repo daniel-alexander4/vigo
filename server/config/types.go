@@ -198,7 +198,7 @@ type RoleDefinition struct {
 	Modules []ModuleRef `yaml:"modules"`
 }
 
-// NodeEntry is a single entry in config/clients.yaml.
+// NodeEntry is a single entry in nodes.hob.
 type NodeEntry struct {
 	Match       string                    `yaml:"match"`
 	Environment string                    `yaml:"environment"`
@@ -208,7 +208,7 @@ type NodeEntry struct {
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
 }
 
-// NodesConfig is the top-level structure of clients.yaml.
+// NodesConfig is the top-level structure of nodes.hob.
 type NodesConfig struct {
 	Nodes []NodeEntry `yaml:"clients"`
 }

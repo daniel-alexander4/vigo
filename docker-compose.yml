@@ -24,7 +24,7 @@ services:
       - "1530:1530"
       - "8085:8080"
     volumes:
-      - hobnob-data:/data
+      - /etc/hobnob:/etc/hobnob
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,4 +33,3 @@ services:
 
 volumes:
   pgdata:
-  hobnob-data:

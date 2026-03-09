@@ -1,6 +1,6 @@
-# Client-to-module mappings. First match wins.
-# Entries can reference roles (config/roles/) or modules (config/modules/) by name.
-# Client-level vars override module default vars.
+# Node-to-module mappings. First match wins.
+# Entries can reference roles (node-configs/roles/) or modules (node-configs/modules/) by name.
+# Node-level vars override module default vars.
 
 clients:
   # --- Explicit hosts (specific overrides before patterns) ---

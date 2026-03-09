@@ -2,16 +2,17 @@
 set -e
 
 # Hobnob server entrypoint — seeds config on first run, then starts hobd.
-# All persistent state lives under /data (mounted as a Docker volume).
+# All persistent state lives under /etc/hobnob (bind-mounted from host).
 
-DATA_DIR="/data"
-CERTS_DIR="${DATA_DIR}/certs"
+DATA_DIR="/etc/hobnob"
+SERVER_CONFIGS_DIR="${DATA_DIR}/server-configs"
+CERTS_DIR="${SERVER_CONFIGS_DIR}/certs"
 NODE_CONFIGS_DIR="${DATA_DIR}/node-configs"
 MODULES_DIR="${NODE_CONFIGS_DIR}/modules"
 ROLES_DIR="${NODE_CONFIGS_DIR}/roles"
 TEMPLATES_DIR="${NODE_CONFIGS_DIR}/templates"
-ENV_FILE="${DATA_DIR}/.env"
-SERVER_YAML="${DATA_DIR}/server.yaml"
+ENV_FILE="${SERVER_CONFIGS_DIR}/.env"
+SERVER_YAML="${SERVER_CONFIGS_DIR}/server.yaml"
 
 # Seed configs are baked into the image at /seed.
 SEED_DIR="/seed"
@@ -20,7 +21,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "$CERTS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
+mkdir -p "$SERVER_CONFIGS_DIR" "$CERTS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
 
 # ---------------------------------------------------------------------------
 # Generate TLS certificates if missing
@@ -49,14 +50,58 @@ fi
 
 if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" <<'ENVEOF'
-# Hobnob Environment — resolve secret: references in server.yaml.
-# Rule: secret:hobnob/db/dsn -> HOBNOB_DB_DSN (uppercase, slashes to underscores).
+# =============================================================================
+# Hobnob Environment Configuration
+# =============================================================================
+# The StaticProvider reads these values to resolve secret: references in
+# server-configs/server.yaml. Every secret:path/to/key maps to an env var:
+#   secret:hobnob/db/dsn  ->  HOBNOB_DB_DSN
+#   secret:hobnob/tls/cert -> HOBNOB_TLS_CERT
+# Rule: uppercase, slashes become underscores.
+#
+# REQUIRED — server will not start without these:
+# =============================================================================
 
 HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
-HOBNOB_TLS_CERT=certs/server.crt
-HOBNOB_TLS_KEY=certs/server.key
-HOBNOB_TLS_CA=certs/ca.crt
-HOBNOB_TLS_CA_KEY=certs/ca.key
+HOBNOB_TLS_CERT=server-configs/certs/server.crt
+HOBNOB_TLS_KEY=server-configs/certs/server.key
+HOBNOB_TLS_CA=server-configs/certs/ca.crt
+HOBNOB_TLS_CA_KEY=server-configs/certs/ca.key
+
+# =============================================================================
+# OPTIONAL — uncomment and edit as needed:
+# =============================================================================
+
+# Server config file path (default: server-configs/server.yaml)
+# HOBNOB_CONFIG_FILE=server-configs/server.yaml
+
+# Node configs directory (default: node-configs)
+# HOBNOB_NODE_CONFIGS_DIR=node-configs
+
+# Migrations directory (default: migrations)
+# HOBNOB_MIGRATIONS_DIR=migrations
+
+# Server version string reported to agents for self-update (default: dev)
+# HOBNOB_VERSION=1.0.0
+
+# Directory containing cross-compiled agent binaries for distribution
+# Used by GET /api/v1/agent/download/{os}/{arch} (default: dist/agent)
+# HOBNOB_AGENT_DIR=dist/agent
+
+# Webhook secret for HMAC-SHA256 payload signing
+# HOBNOB_WEBHOOK_SECRET=change-me-to-a-random-string
+
+# .env file path override (default: server-configs/.env)
+# HOBNOB_ENV_FILE=server-configs/.env
+
+# =============================================================================
+# MODULE SECRETS — uncomment when enabling the corresponding node entries.
+# Each maps to a secret: reference in node config vars.
+# =============================================================================
+
+# HOBNOB_REDIS_PASSWORD=changeme
+# HOBNOB_HAPROXY_STATS_PASSWORD=changeme
+# HOBNOB_MYSQL_ROOT_PASSWORD=changeme
 ENVEOF
     echo "Default .env created."
 fi
@@ -116,10 +161,10 @@ set -a
 . "$ENV_FILE"
 set +a
 
-# Run from /data so relative paths in .env (e.g. certs/server.crt) resolve correctly.
+# Run from /etc/hobnob so relative paths in .env and server.yaml resolve correctly.
 cd "$DATA_DIR"
 
-export HOBNOB_CONFIG_FILE="server.yaml"
+export HOBNOB_CONFIG_FILE="server-configs/server.yaml"
 export HOBNOB_NODE_CONFIGS_DIR="node-configs"
 
 exec hobd "$@"
