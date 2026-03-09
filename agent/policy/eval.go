@@ -169,7 +169,7 @@ func parseConditionalVarDef(def *pb.ConditionalVarDef) (conditionals.Conditional
 
 	return conditionals.ConditionalVar{
 		Name:     def.Name,
-		Trait:    def.Trait,
+		Nail:    def.Nail,
 		Operator: def.Operator,
 		Operand:  operand,
 	}, nil

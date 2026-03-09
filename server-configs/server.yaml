@@ -4,7 +4,7 @@ secrets:
 
 server:
   grpc_listen: ":1530"
-  api_listen: ":8080"
+  api_listen: ":8181"
   tls:
     cert_file: "secret:hobnob/tls/cert"
     key_file: "secret:hobnob/tls/key"

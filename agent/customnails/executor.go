@@ -1,6 +1,6 @@
-// Package traits implements custom trait executable sync, execution, and JSON
+// Package customnails implements custom nail executable sync, execution, and JSON
 // parsing for the Hobnob agent.
-package traits
+package customnails
 
 import (
 	"context"
@@ -19,10 +19,10 @@ import (
 
 // Downloader abstracts the gRPC download call for testability.
 type Downloader interface {
-	DownloadCustomTrait(ctx context.Context, name string) ([]byte, error)
+	DownloadCustomNail(ctx context.Context, name string) ([]byte, error)
 }
 
-// Executor manages custom trait sync, caching, execution, and JSON parsing.
+// Executor manages custom nail sync, caching, execution, and JSON parsing.
 type Executor struct {
 	cacheDir   string
 	downloader Downloader
@@ -40,9 +40,9 @@ func NewExecutor(cacheDir string, downloader Downloader, timeout time.Duration) 
 }
 
 // SyncAndRun compares the manifest against locally cached executables, downloads
-// new or changed ones, cleans up stale files, executes each trait with a timeout,
+// new or changed ones, cleans up stale files, executes each nail with a timeout,
 // and returns the merged results under a "custom" key.
-func (e *Executor) SyncAndRun(ctx context.Context, manifest []*pb.CustomTraitEntry) (map[string]any, error) {
+func (e *Executor) SyncAndRun(ctx context.Context, manifest []*pb.CustomNailEntry) (map[string]any, error) {
 	result := make(map[string]any)
 	if len(manifest) == 0 {
 		return result, nil
@@ -74,15 +74,15 @@ func (e *Executor) SyncAndRun(ctx context.Context, manifest []*pb.CustomTraitEnt
 			continue // up to date
 		}
 
-		data, dlErr := e.downloader.DownloadCustomTrait(ctx, entry.Name)
+		data, dlErr := e.downloader.DownloadCustomNail(ctx, entry.Name)
 		if dlErr != nil {
-			logger.Warn("failed to download custom trait", "name", entry.Name, "error", dlErr)
+			logger.Warn("failed to download custom nail", "name", entry.Name, "error", dlErr)
 			continue
 		}
 
 		path := filepath.Join(e.cacheDir, entry.Name)
 		if writeErr := os.WriteFile(path, data, 0755); writeErr != nil {
-			logger.Warn("failed to write custom trait", "name", entry.Name, "error", writeErr)
+			logger.Warn("failed to write custom nail", "name", entry.Name, "error", writeErr)
 			continue
 		}
 	}
@@ -100,7 +100,7 @@ func (e *Executor) SyncAndRun(ctx context.Context, manifest []*pb.CustomTraitEnt
 		}
 	}
 
-	// Execute each trait and collect results.
+	// Execute each nail and collect results.
 	customMap := make(map[string]any)
 	for _, entry := range manifest {
 		path := filepath.Join(e.cacheDir, entry.Name)
@@ -110,7 +110,7 @@ func (e *Executor) SyncAndRun(ctx context.Context, manifest []*pb.CustomTraitEnt
 
 		parsed, runErr := e.runOne(ctx, entry.Name, path)
 		if runErr != nil {
-			logger.Warn("custom trait execution failed", "name", entry.Name, "error", runErr)
+			logger.Warn("custom nail execution failed", "name", entry.Name, "error", runErr)
 			continue
 		}
 		customMap[entry.Name] = parsed
@@ -123,7 +123,7 @@ func (e *Executor) SyncAndRun(ctx context.Context, manifest []*pb.CustomTraitEnt
 	return result, nil
 }
 
-// runOne executes a single trait executable with a timeout and parses
+// runOne executes a single nail executable with a timeout and parses
 // its stdout as JSON. It uses a process group so the kill signal reaches
 // child processes spawned by shell scripts.
 func (e *Executor) runOne(ctx context.Context, name, path string) (map[string]any, error) {

@@ -38,7 +38,7 @@ func (r *mockRow) Scan(dest ...any) error {
 	return r.scanFn(dest...)
 }
 
-func TestTraitsHandler_Success(t *testing.T) {
+func TestNailsHandler_Success(t *testing.T) {
 	// Mock: GetNodeByHostname returns a client, GetLatestNodeNails returns nails.
 	callCount := 0
 	collectedAt := time.Date(2026, 3, 7, 10, 30, 0, 0, time.UTC)
@@ -63,11 +63,11 @@ func TestTraitsHandler_Success(t *testing.T) {
 		},
 	}
 
-	handler := newTraitsHandlerWithDB(mockDB)
+	handler := newNailsHandlerWithDB(mockDB)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/clients/web01/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/nodes/web01/nails", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -82,7 +82,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 	var resp struct {
 		Hostname    string          `json:"hostname"`
 		CollectedAt string          `json:"collected_at"`
-		Traits      json.RawMessage `json:"traits"`
+		Traits      json.RawMessage `json:"nails"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
@@ -116,7 +116,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 	}
 }
 
-func TestTraitsHandler_NodeNotFound(t *testing.T) {
+func TestNailsHandler_NodeNotFound(t *testing.T) {
 	mockDB := &mockDBTX{
 		queryRowFn: func(sql string, args ...any) pgx.Row {
 			return &mockRow{scanFn: func(dest ...any) error {
@@ -125,11 +125,11 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 		},
 	}
 
-	handler := newTraitsHandlerWithDB(mockDB)
+	handler := newNailsHandlerWithDB(mockDB)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/clients/nonexistent/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/nodes/nonexistent/nails", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -144,7 +144,7 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 	}
 }
 
-func TestTraitsHandler_NoFacts(t *testing.T) {
+func TestNailsHandler_NoFacts(t *testing.T) {
 	callCount := 0
 	mockDB := &mockDBTX{
 		queryRowFn: func(sql string, args ...any) pgx.Row {
@@ -163,11 +163,11 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 		},
 	}
 
-	handler := newTraitsHandlerWithDB(mockDB)
+	handler := newNailsHandlerWithDB(mockDB)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/clients/web01/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/nodes/web01/nails", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -177,7 +177,7 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	expected := "no traits available for 'web01' -- node has not reported traits yet"
+	expected := "no nails available for 'web01' -- node has not reported nails yet"
 	if resp["error"] != expected {
 		t.Errorf("expected %q, got %q", expected, resp["error"])
 	}

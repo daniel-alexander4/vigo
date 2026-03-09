@@ -154,14 +154,14 @@ func (c *Client) ReportNails(ctx context.Context, nailsMap map[string]any) error
 	return nil
 }
 
-// DownloadCustomTrait retrieves a custom trait executable's bytes from the
+// DownloadCustomNail retrieves a custom nail executable's bytes from the
 // server by name. The request travels over the mTLS-authenticated channel.
-func (c *Client) DownloadCustomTrait(ctx context.Context, name string) ([]byte, error) {
-	resp, err := c.agent.DownloadCustomTrait(ctx, &pb.DownloadCustomTraitRequest{
+func (c *Client) DownloadCustomNail(ctx context.Context, name string) ([]byte, error) {
+	resp, err := c.agent.DownloadCustomNail(ctx, &pb.DownloadCustomNailRequest{
 		Name: name,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("download custom trait %q: %w", name, err)
+		return nil, fmt.Errorf("download custom nail %q: %w", name, err)
 	}
 
 	return resp.Data, nil

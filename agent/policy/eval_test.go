@@ -100,7 +100,7 @@ func TestEvalBundle_ConditionalVars(t *testing.T) {
 		ConditionalVars: []*pb.ConditionalVarDef{
 			{
 				Name:        "is_debian",
-				Trait:       "os.distro",
+				Nail:       "os.distro",
 				Operator:    "in",
 				OperandJson: `["debian", "ubuntu"]`,
 			},

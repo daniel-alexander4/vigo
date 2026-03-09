@@ -1,7 +1,7 @@
 // Package conditionals provides parsing and evaluation of conditional var
-// definitions. A conditional var is a structured YAML map with a "trait:"
+// definitions. A conditional var is a structured YAML map with a "nail:"
 // field and exactly one operator field. It evaluates to a boolean based on
-// the value of the referenced trait.
+// the value of the referenced nail.
 package conditionals
 
 import (
@@ -25,20 +25,20 @@ var validOperators = map[string]bool{
 // ConditionalVar represents a parsed conditional variable definition.
 type ConditionalVar struct {
 	Name     string
-	Trait    string // dot-path into traits map (e.g. "os.distro")
+	Nail    string // dot-path into nails map (e.g. "os.distro")
 	Operator string // one of: in, not_in, gt, lt, gte, lte, regex
 	Operand  any    // type depends on operator
 }
 
-// IsConditionalVar returns true if v is a map with a "trait" key,
+// IsConditionalVar returns true if v is a map with a "nail" key,
 // distinguishing conditional vars from regular string vars.
 func IsConditionalVar(v any) bool {
 	m, ok := v.(map[string]any)
 	if !ok {
 		return false
 	}
-	_, hasTrait := m["trait"]
-	return hasTrait
+	_, hasNail := m["nail"]
+	return hasNail
 }
 
 // HasOperatorKey returns true if v is a map containing any known operator key.
@@ -58,24 +58,24 @@ func HasOperatorKey(v any) bool {
 }
 
 // ParseConditionalVar validates and parses a raw map[string]any (from YAML
-// unmarshaling) into a ConditionalVar. It returns an error if the trait field
+// unmarshaling) into a ConditionalVar. It returns an error if the nail field
 // is missing, no operator is present, multiple operators are present, the
 // operator name is invalid, or the operand is invalid (e.g. bad regex).
 func ParseConditionalVar(name string, raw map[string]any) (ConditionalVar, error) {
-	traitVal, ok := raw["trait"]
+	nailVal, ok := raw["nail"]
 	if !ok {
-		return ConditionalVar{}, fmt.Errorf("conditional var %q: missing required 'trait' field", name)
+		return ConditionalVar{}, fmt.Errorf("conditional var %q: missing required 'nail' field", name)
 	}
-	trait, ok := traitVal.(string)
+	nail, ok := nailVal.(string)
 	if !ok {
-		return ConditionalVar{}, fmt.Errorf("conditional var %q: 'trait' must be a string", name)
+		return ConditionalVar{}, fmt.Errorf("conditional var %q: 'nail' must be a string", name)
 	}
 
 	// Find exactly one operator field.
 	var operator string
 	var operand any
 	for key, val := range raw {
-		if key == "trait" {
+		if key == "nail" {
 			continue
 		}
 		if !validOperators[key] {
@@ -107,36 +107,36 @@ func ParseConditionalVar(name string, raw map[string]any) (ConditionalVar, error
 
 	return ConditionalVar{
 		Name:     name,
-		Trait:    trait,
+		Nail:    nail,
 		Operator: operator,
 		Operand:  operand,
 	}, nil
 }
 
-// Evaluate resolves the trait dot-path against the traits map and applies the
-// operator. Returns false if the trait is missing or cannot be coerced to the
+// Evaluate resolves the nail dot-path against the nails map and applies the
+// operator. Returns false if the nail is missing or cannot be coerced to the
 // required type.
-func Evaluate(cv ConditionalVar, traits map[string]any) bool {
-	traitVal := traverseDotPath(cv.Trait, traits)
-	if traitVal == nil {
+func Evaluate(cv ConditionalVar, nails map[string]any) bool {
+	nailVal := traverseDotPath(cv.Nail, nails)
+	if nailVal == nil {
 		return false
 	}
 
 	switch cv.Operator {
 	case "in":
-		return evalIn(traitVal, cv.Operand)
+		return evalIn(nailVal, cv.Operand)
 	case "not_in":
-		return evalNotIn(traitVal, cv.Operand)
+		return evalNotIn(nailVal, cv.Operand)
 	case "gt":
-		return evalNumeric(traitVal, cv.Operand, func(a, b float64) bool { return a > b })
+		return evalNumeric(nailVal, cv.Operand, func(a, b float64) bool { return a > b })
 	case "lt":
-		return evalNumeric(traitVal, cv.Operand, func(a, b float64) bool { return a < b })
+		return evalNumeric(nailVal, cv.Operand, func(a, b float64) bool { return a < b })
 	case "gte":
-		return evalNumeric(traitVal, cv.Operand, func(a, b float64) bool { return a >= b })
+		return evalNumeric(nailVal, cv.Operand, func(a, b float64) bool { return a >= b })
 	case "lte":
-		return evalNumeric(traitVal, cv.Operand, func(a, b float64) bool { return a <= b })
+		return evalNumeric(nailVal, cv.Operand, func(a, b float64) bool { return a <= b })
 	case "regex":
-		return evalRegex(traitVal, cv.Operand)
+		return evalRegex(nailVal, cv.Operand)
 	default:
 		return false
 	}
@@ -160,40 +160,40 @@ func traverseDotPath(path string, m map[string]any) any {
 	return current
 }
 
-// evalIn checks if the trait value (as string) is in the operand list.
-func evalIn(traitVal, operand any) bool {
+// evalIn checks if the nail value (as string) is in the operand list.
+func evalIn(nailVal, operand any) bool {
 	list, ok := operand.([]any)
 	if !ok {
 		return false
 	}
-	traitStr := fmt.Sprintf("%v", traitVal)
+	nailStr := fmt.Sprintf("%v", nailVal)
 	for _, item := range list {
-		if fmt.Sprintf("%v", item) == traitStr {
+		if fmt.Sprintf("%v", item) == nailStr {
 			return true
 		}
 	}
 	return false
 }
 
-// evalNotIn checks if the trait value (as string) is NOT in the operand list.
-func evalNotIn(traitVal, operand any) bool {
+// evalNotIn checks if the nail value (as string) is NOT in the operand list.
+func evalNotIn(nailVal, operand any) bool {
 	list, ok := operand.([]any)
 	if !ok {
 		return false
 	}
-	traitStr := fmt.Sprintf("%v", traitVal)
+	nailStr := fmt.Sprintf("%v", nailVal)
 	for _, item := range list {
-		if fmt.Sprintf("%v", item) == traitStr {
+		if fmt.Sprintf("%v", item) == nailStr {
 			return false
 		}
 	}
 	return true
 }
 
-// evalNumeric coerces both trait value and operand to float64, then applies cmp.
+// evalNumeric coerces both nail value and operand to float64, then applies cmp.
 // Returns false if either side cannot be coerced.
-func evalNumeric(traitVal, operand any, cmp func(a, b float64) bool) bool {
-	a, ok := toFloat64(traitVal)
+func evalNumeric(nailVal, operand any, cmp func(a, b float64) bool) bool {
+	a, ok := toFloat64(nailVal)
 	if !ok {
 		return false
 	}
@@ -230,12 +230,12 @@ func toFloat64(v any) (float64, bool) {
 	}
 }
 
-// evalRegex runs the pre-compiled regex against the string form of the trait value.
-func evalRegex(traitVal, operand any) bool {
+// evalRegex runs the pre-compiled regex against the string form of the nail value.
+func evalRegex(nailVal, operand any) bool {
 	re, ok := operand.(*regexp.Regexp)
 	if !ok {
 		return false
 	}
-	traitStr := fmt.Sprintf("%v", traitVal)
-	return re.MatchString(traitStr)
+	nailStr := fmt.Sprintf("%v", nailVal)
+	return re.MatchString(nailStr)
 }

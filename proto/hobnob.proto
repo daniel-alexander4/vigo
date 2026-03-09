@@ -24,12 +24,12 @@ service HobnobAgent {
   // ReportNails submits collected nails from the agent.
   rpc ReportNails(ReportNailsRequest) returns (ReportNailsResponse);
 
-  // DownloadCustomTrait retrieves a custom trait executable by name.
-  rpc DownloadCustomTrait(DownloadCustomTraitRequest) returns (DownloadCustomTraitResponse);
+  // DownloadCustomNail retrieves a custom nail executable by name.
+  rpc DownloadCustomNail(DownloadCustomNailRequest) returns (DownloadCustomNailResponse);
 }
 
 // =============================================================================
-// Admin-facing service (gRPC + grpc-gateway REST, port 8080)
+// Admin-facing service (gRPC + grpc-gateway REST, port 8181)
 // =============================================================================
 
 service HobnobAdmin {
@@ -220,26 +220,26 @@ message CheckInResponse {
   repeated Module modules = 1;
   string base_interval = 2;   // e.g. "30m"
   int32 jitter_percent = 3;
-  repeated CustomTraitEntry custom_traits = 4;
+  repeated CustomNailEntry custom_nails = 4;
   bool no_change = 5;                    // true = fingerprint matched, skip execution
   string response_fingerprint = 6;       // hash of this response for next check-in
   PolicyBundle policy_bundle = 7;        // raw policy for agent-side evaluation
   uint64 policy_version = 8;            // current config version, always set
 }
 
-// CustomTraitEntry describes a custom trait executable in the server's traits directory.
-message CustomTraitEntry {
-  string name = 1;            // trait name derived from filename (without extension)
+// CustomNailEntry describes a custom nail executable in the server's nails directory.
+message CustomNailEntry {
+  string name = 1;            // nail name derived from filename (without extension)
   string sha256 = 2;          // hex-encoded SHA256 checksum of the executable
 }
 
-// DownloadCustomTraitRequest asks the server for a custom trait executable's bytes.
-message DownloadCustomTraitRequest {
-  string name = 1;            // trait name (matches CustomTraitEntry.name)
+// DownloadCustomNailRequest asks the server for a custom nail executable's bytes.
+message DownloadCustomNailRequest {
+  string name = 1;            // nail name (matches CustomNailEntry.name)
 }
 
-// DownloadCustomTraitResponse returns the raw executable bytes.
-message DownloadCustomTraitResponse {
+// DownloadCustomNailResponse returns the raw executable bytes.
+message DownloadCustomNailResponse {
   bytes data = 1;
 }
 
@@ -269,7 +269,7 @@ message PolicyBundle {
   bytes vars_json = 3;                 // JSON-encoded merged vars map[string]any
   repeated string var_order = 4;       // deterministic rendering order
   repeated ConditionalVarDef conditional_vars = 5;
-  repeated CustomTraitEntry custom_traits = 6;
+  repeated CustomNailEntry custom_nails = 6;
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.
@@ -290,10 +290,10 @@ message PolicyResource {
   repeated string subscribes = 6;
 }
 
-// ConditionalVarDef defines a trait-based conditional variable.
+// ConditionalVarDef defines a nail-based conditional variable.
 message ConditionalVarDef {
   string name = 1;
-  string trait = 2;                    // dot-path: "os.distro"
+  string nail = 2;                     // dot-path: "os.distro"
   string operator = 3;                 // in, not_in, gt, lt, gte, lte, regex
   string operand_json = 4;            // JSON-encoded operand
 }

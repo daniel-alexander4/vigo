@@ -8,14 +8,14 @@ set -eu
 # and starts the agent as a systemd service.
 #
 # Usage:
-#   curl -sSf http://hobd.example.com:8080/bootstrap | sh
+#   curl -sSf http://hobd.example.com:8181/bootstrap | sh
 #
 #   # or with a token for non-trusted enrollment:
-#   curl -sSf "http://hobd.example.com:8080/bootstrap?token=TOKEN" | sh
+#   curl -sSf "http://hobd.example.com:8181/bootstrap?token=TOKEN" | sh
 #
 #   # or run directly with environment variables:
-#   HOBNOB_SERVER=http://hobd.example.com:8080 sh bootstrap.sh
-#   HOBNOB_SERVER=http://hobd.example.com:8080 HOBNOB_TOKEN=abc123 sh bootstrap.sh
+#   HOBNOB_SERVER=http://hobd.example.com:8181 sh bootstrap.sh
+#   HOBNOB_SERVER=http://hobd.example.com:8181 HOBNOB_TOKEN=abc123 sh bootstrap.sh
 
 # Configuration (override with environment variables).
 SERVER_ADDR="${HOBNOB_SERVER:-}"
@@ -43,7 +43,7 @@ need_cmd curl
 need_cmd uname
 
 if [ -z "$SERVER_ADDR" ]; then
-    die "HOBNOB_SERVER is not set. Usage: HOBNOB_SERVER=http://hobd:8080 sh bootstrap.sh"
+    die "HOBNOB_SERVER is not set. Usage: HOBNOB_SERVER=http://hobd:8181 sh bootstrap.sh"
 fi
 
 # ---- Detect platform ----

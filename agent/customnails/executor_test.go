@@ -1,4 +1,4 @@
-package traits
+package customnails
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 type mockDownloader struct {
 	data     map[string][]byte // name -> executable bytes
 	called   map[string]int    // name -> download call count
-	failName string            // if set, DownloadCustomTrait returns error for this name
+	failName string            // if set, DownloadCustomNail returns error for this name
 }
 
 func newMockDownloader() *mockDownloader {
@@ -25,14 +25,14 @@ func newMockDownloader() *mockDownloader {
 	}
 }
 
-func (m *mockDownloader) DownloadCustomTrait(ctx context.Context, name string) ([]byte, error) {
+func (m *mockDownloader) DownloadCustomNail(ctx context.Context, name string) ([]byte, error) {
 	m.called[name]++
 	if name == m.failName {
 		return nil, fmt.Errorf("download failed for %s", name)
 	}
 	data, ok := m.data[name]
 	if !ok {
-		return nil, fmt.Errorf("trait %q not found", name)
+		return nil, fmt.Errorf("nail %q not found", name)
 	}
 	return data, nil
 }
@@ -57,7 +57,7 @@ func checksumOf(data []byte) string {
 	return computeSHA256(data)
 }
 
-func TestSyncAndRun_NewTraits_DownloadsBothAndReturnsResults(t *testing.T) {
+func TestSyncAndRun_NewNails_DownloadsBothAndReturnsResults(t *testing.T) {
 	cacheDir := t.TempDir()
 	dl := newMockDownloader()
 
@@ -67,7 +67,7 @@ func TestSyncAndRun_NewTraits_DownloadsBothAndReturnsResults(t *testing.T) {
 	dl.data["health"] = script2
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "app-version", Sha256: checksumOf(script1)},
 		{Name: "health", Sha256: checksumOf(script2)},
 	}
@@ -77,7 +77,7 @@ func TestSyncAndRun_NewTraits_DownloadsBothAndReturnsResults(t *testing.T) {
 		t.Fatalf("SyncAndRun: %v", err)
 	}
 
-	// Both traits should have been downloaded.
+	// Both nails should have been downloaded.
 	if dl.called["app-version"] != 1 {
 		t.Errorf("app-version download count = %d, want 1", dl.called["app-version"])
 	}
@@ -108,7 +108,7 @@ func TestSyncAndRun_NewTraits_DownloadsBothAndReturnsResults(t *testing.T) {
 	}
 }
 
-func TestSyncAndRun_CachedTraits_NoRedownload(t *testing.T) {
+func TestSyncAndRun_CachedNails_NoRedownload(t *testing.T) {
 	cacheDir := t.TempDir()
 	dl := newMockDownloader()
 
@@ -122,7 +122,7 @@ func TestSyncAndRun_CachedTraits_NoRedownload(t *testing.T) {
 	}
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "mytrait", Sha256: checksumOf(script)},
 	}
 
@@ -162,7 +162,7 @@ func TestSyncAndRun_ChangedChecksum_DownloadsOnlyChanged(t *testing.T) {
 	os.WriteFile(filepath.Join(cacheDir, "unchanged"), unchangedScript, 0755)
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "changed", Sha256: checksumOf(newScript)},
 		{Name: "unchanged", Sha256: checksumOf(unchangedScript)},
 	}
@@ -188,7 +188,7 @@ func TestSyncAndRun_ValidJSON(t *testing.T) {
 	dl.data["app-version"] = script
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "app-version", Sha256: checksumOf(script)},
 	}
 
@@ -212,7 +212,7 @@ func TestSyncAndRun_NestedJSON(t *testing.T) {
 	dl.data["myapp"] = script
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "myapp", Sha256: checksumOf(script)},
 	}
 
@@ -245,7 +245,7 @@ func TestSyncAndRun_NonZeroExit_SkippedWithWarning(t *testing.T) {
 	dl.data["good-trait"] = goodScript
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "bad-trait", Sha256: checksumOf(failScript)},
 		{Name: "good-trait", Sha256: checksumOf(goodScript)},
 	}
@@ -276,7 +276,7 @@ func TestSyncAndRun_InvalidJSON_SkippedWithWarning(t *testing.T) {
 	dl.data["bad-json"] = badScript
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "bad-json", Sha256: checksumOf(badScript)},
 	}
 
@@ -302,7 +302,7 @@ func TestSyncAndRun_Timeout_KilledAndSkipped(t *testing.T) {
 
 	// Use a very short timeout for test speed.
 	exec := NewExecutor(cacheDir, dl, 500*time.Millisecond)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "slow-trait", Sha256: checksumOf(slowScript)},
 	}
 
@@ -332,7 +332,7 @@ func TestSyncAndRun_EmptyManifest(t *testing.T) {
 	// Result should have no custom key or an empty custom map.
 	if custom, ok := result["custom"]; ok {
 		if m, isMap := custom.(map[string]any); isMap && len(m) > 0 {
-			t.Errorf("expected no custom traits, got %v", m)
+			t.Errorf("expected no custom nails, got %v", m)
 		}
 	}
 }
@@ -350,7 +350,7 @@ func TestSyncAndRun_StaleFilesCleanedUp(t *testing.T) {
 	dl.data["active-trait"] = activeScript
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
-	manifest := []*pb.CustomTraitEntry{
+	manifest := []*pb.CustomNailEntry{
 		{Name: "active-trait", Sha256: checksumOf(activeScript)},
 	}
 
@@ -364,7 +364,7 @@ func TestSyncAndRun_StaleFilesCleanedUp(t *testing.T) {
 		t.Error("stale file 'old-trait' should have been deleted")
 	}
 
-	// Active trait file should exist.
+	// Active nail file should exist.
 	activePath := filepath.Join(cacheDir, "active-trait")
 	if _, err := os.Stat(activePath); os.IsNotExist(err) {
 		t.Error("active-trait should exist in cache")

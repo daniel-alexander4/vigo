@@ -213,9 +213,9 @@ var rootCmd = &cobra.Command{
 			CurrentVersion: version,
 		}
 
-		// Start the daemon loop with custom traits cache.
-		traitsCacheDir := filepath.Join(dataDir, "traits")
-		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg, traitsCacheDir)
+		// Start the daemon loop with custom nails cache.
+		nailsCacheDir := filepath.Join(dataDir, "nails")
+		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg, nailsCacheDir)
 	},
 }
 
@@ -383,7 +383,7 @@ After bootstrap, the agent has everything it needs to connect via mTLS.`,
 		bootstrapServer, _ := cmd.Flags().GetString("server")
 
 		if bootstrapServer == "" {
-			return fmt.Errorf("--server is required (e.g. http://hobd.example.com:8080)")
+			return fmt.Errorf("--server is required (e.g. http://hobd.example.com:8181)")
 		}
 
 		// Load or generate ED25519 keypair (for request signing).
@@ -640,7 +640,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "client certificate file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "client key file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
-	rootCmd.PersistentFlags().StringVar(&apiAddr, "api-addr", "http://localhost:8080", "server REST API address for self-update")
+	rootCmd.PersistentFlags().StringVar(&apiAddr, "api-addr", "http://localhost:8181", "server REST API address for self-update")
 
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview mode: show what would change without applying")
 
@@ -650,7 +650,7 @@ func init() {
 	registerCmd.Flags().String("token", "", "one-time registration token")
 
 	bootstrapCmd.Flags().String("token", "", "one-time registration token (optional for trusted enrollment)")
-	bootstrapCmd.Flags().String("server", "", "server REST API address (e.g. http://hobd.example.com:8080)")
+	bootstrapCmd.Flags().String("server", "", "server REST API address (e.g. http://hobd.example.com:8181)")
 	bootstrapCmd.Flags().Bool("install-service", false, "install and start a systemd service for the agent")
 	bootstrapCmd.Flags().String("grpc-port", "1530", "gRPC port for the systemd service (default 1530)")
 

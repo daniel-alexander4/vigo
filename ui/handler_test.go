@@ -35,7 +35,7 @@ func TestDashboardHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Stat cards should be present
-	for _, want := range []string{"Total Clients", "Active (1h)", "Recent Failures", "Drift Rate"} {
+	for _, want := range []string{"Total Nodes", "Active (1h)", "Recent Failures", "Drift Rate"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Dashboard missing stat card %q", want)
 		}
@@ -139,7 +139,7 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 
 	body := rec.Body.String()
 	if !strings.Contains(body, "drifted-node.example.com") {
-		t.Error("Compliance page should show non-compliant client hostname")
+		t.Error("Compliance page should show non-compliant node hostname")
 	}
 }
 
@@ -153,7 +153,7 @@ func TestAllPageHandlersContentType(t *testing.T) {
 	}{
 		{"Dashboard", "/", h.Dashboard},
 		{"Compliance", "/compliance", h.Compliance},
-		{"Clients", "/clients", h.Clients},
+		{"Nodes", "/nodes", h.Nodes},
 		{"Runs", "/runs", h.Runs},
 	}
 
@@ -173,16 +173,16 @@ func TestAllPageHandlersContentType(t *testing.T) {
 
 // --- Task 1: New page tests ---
 
-func TestClientsHandler(t *testing.T) {
+func TestNodesHandler(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/clients", nil)
+	req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
 	rec := httptest.NewRecorder()
 
-	h.Clients(rec, req)
+	h.Nodes(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Clients returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("Nodes returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
@@ -190,85 +190,85 @@ func TestClientsHandler(t *testing.T) {
 	// Table should have expected column headers
 	for _, col := range []string{"Hostname", "IP Address", "Enrolled", "Last Seen", "Status"} {
 		if !strings.Contains(body, col) {
-			t.Errorf("Clients page missing column header %q", col)
+			t.Errorf("Nodes page missing column header %q", col)
 		}
 	}
 
-	// Should contain test client hostnames
+	// Should contain test node hostnames
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("Clients page missing hostname web-01.example.com")
+		t.Error("Nodes page missing hostname web-01.example.com")
 	}
 
 	// Should show status badge
 	if !strings.Contains(body, "badge") {
-		t.Error("Clients page missing status badge")
+		t.Error("Nodes page missing status badge")
 	}
 }
 
-func TestClientsHandlerStatusFilter(t *testing.T) {
+func TestNodesHandlerStatusFilter(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/clients?status=stale", nil)
+	req := httptest.NewRequest(http.MethodGet, "/nodes?status=stale", nil)
 	rec := httptest.NewRecorder()
 
-	h.Clients(rec, req)
+	h.Nodes(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Clients filtered returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("Nodes filtered returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
 
-	// stale client should be present
+	// stale node should be present
 	if !strings.Contains(body, "web-02.example.com") {
-		t.Error("Filtered clients page should show stale client web-02.example.com")
+		t.Error("Filtered nodes page should show stale node web-02.example.com")
 	}
 
-	// compliant client should NOT be present
+	// compliant node should NOT be present
 	if strings.Contains(body, "web-01.example.com") {
-		t.Error("Filtered clients page should NOT show compliant client when filtering for stale")
+		t.Error("Filtered nodes page should NOT show compliant node when filtering for stale")
 	}
 }
 
-func TestClientDetailHandler(t *testing.T) {
+func TestNodeDetailHandler(t *testing.T) {
 	h := newTestHandler(t)
 
-	clientID := h.dataSource.(*mockDataSource).data.clients[0].id
-	req := httptest.NewRequest(http.MethodGet, "/clients/"+clientID.String(), nil)
-	req.SetPathValue("id", clientID.String())
+	nodeID := h.dataSource.(*mockDataSource).data.clients[0].id
+	req := httptest.NewRequest(http.MethodGet, "/nodes/"+nodeID.String(), nil)
+	req.SetPathValue("id", nodeID.String())
 	rec := httptest.NewRecorder()
 
-	h.ClientDetail(rec, req)
+	h.NodeDetail(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("ClientDetail returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("NodeDetail returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
 
-	// Should contain client hostname
+	// Should contain node hostname
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("ClientDetail page missing client hostname")
+		t.Error("NodeDetail page missing node hostname")
 	}
 
 	// Should contain facts panel
 	if !strings.Contains(body, "facts") {
-		t.Error("ClientDetail page missing facts panel")
+		t.Error("NodeDetail page missing facts panel")
 	}
 }
 
-func TestClientDetailHandler404(t *testing.T) {
+func TestNodeDetailHandler404(t *testing.T) {
 	h := newTestHandler(t)
 
 	nonExistent := uuid.New()
-	req := httptest.NewRequest(http.MethodGet, "/clients/"+nonExistent.String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/nodes/"+nonExistent.String(), nil)
 	req.SetPathValue("id", nonExistent.String())
 	rec := httptest.NewRecorder()
 
-	h.ClientDetail(rec, req)
+	h.NodeDetail(rec, req)
 
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("ClientDetail for non-existent returned %d, want %d", rec.Code, http.StatusNotFound)
+		t.Fatalf("NodeDetail for non-existent returned %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 
@@ -355,32 +355,32 @@ func TestRunDetailHandler(t *testing.T) {
 
 	// Should contain hostname
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("RunDetail page missing client hostname")
+		t.Error("RunDetail page missing node hostname")
 	}
 }
 
-func TestClientsTableFragment(t *testing.T) {
+func TestNodesTableFragment(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/clients-table", nil)
+	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/nodes-table", nil)
 	rec := httptest.NewRecorder()
 
-	h.ClientsTable(rec, req)
+	h.NodesTable(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("ClientsTable returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("NodesTable returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
 
 	// Fragment should NOT contain full HTML wrapper
 	if strings.Contains(body, "<!DOCTYPE") || strings.Contains(body, "<html") {
-		t.Error("ClientsTable fragment should not contain full HTML document")
+		t.Error("NodesTable fragment should not contain full HTML document")
 	}
 
-	// Should contain client hostnames
+	// Should contain node hostnames
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("ClientsTable fragment missing hostname")
+		t.Error("NodesTable fragment missing hostname")
 	}
 }
 
@@ -638,7 +638,7 @@ type mockDataSource struct {
 }
 
 func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
-	totalClients := len(m.data.clients)
+	totalNodes := len(m.data.clients)
 	activeCount := 0
 	failureCount := 0
 	driftedCount := 0
@@ -656,8 +656,8 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 	}
 
 	driftRate := float64(0)
-	if totalClients > 0 {
-		driftRate = float64(driftedCount) / float64(totalClients) * 100
+	if totalNodes > 0 {
+		driftRate = float64(driftedCount) / float64(totalNodes) * 100
 	}
 
 	runs := make([]RunRow, 0, len(m.data.runs))
@@ -679,8 +679,8 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 			ActiveNav: "dashboard",
 			Version:   "test",
 		},
-		TotalClients:   totalClients,
-		ActiveClients:  activeCount,
+		TotalNodes:     totalNodes,
+		ActiveNodes:    activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     runs,
@@ -738,20 +738,20 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 func (m *mockDataSource) DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData {
 	d := m.DashboardData(baseInterval)
 	return DashboardStatsFragmentData{
-		TotalClients:   d.TotalClients,
-		ActiveClients:  d.ActiveClients,
+		TotalNodes:     d.TotalNodes,
+		ActiveNodes:    d.ActiveNodes,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
 }
 
-func (m *mockDataSource) ClientsData(baseInterval time.Duration, statusFilter string) ClientsPageData {
-	var rows []ClientRow
+func (m *mockDataSource) NodesData(baseInterval time.Duration, statusFilter string) NodesPageData {
+	var rows []NodeRow
 	for _, c := range m.data.clients {
 		if statusFilter != "" && c.status != statusFilter {
 			continue
 		}
-		rows = append(rows, ClientRow{
+		rows = append(rows, NodeRow{
 			ID:         c.id,
 			Hostname:   c.hostname,
 			IPAddress:  c.ipAddress,
@@ -761,31 +761,31 @@ func (m *mockDataSource) ClientsData(baseInterval time.Duration, statusFilter st
 		})
 	}
 
-	return ClientsPageData{
+	return NodesPageData{
 		PageData: PageData{
-			Title:     "Clients",
-			ActiveNav: "clients",
+			Title:     "Nodes",
+			ActiveNav: "nodes",
 			Version:   "test",
 		},
-		Clients:      rows,
+		Nodes:        rows,
 		StatusFilter: statusFilter,
-		ClientCount:  len(rows),
+		NodeCount:    len(rows),
 	}
 }
 
-func (m *mockDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.Duration) (ClientDetailPageData, error) {
+func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Duration) (NodeDetailPageData, error) {
 	var found *testClient
 	for i := range m.data.clients {
-		if m.data.clients[i].id == clientID {
+		if m.data.clients[i].id == nodeID {
 			found = &m.data.clients[i]
 			break
 		}
 	}
 	if found == nil {
-		return ClientDetailPageData{}, fmt.Errorf("client not found")
+		return NodeDetailPageData{}, fmt.Errorf("node not found")
 	}
 
-	client := ClientRow{
+	nodeRow := NodeRow{
 		ID:         found.id,
 		Hostname:   found.hostname,
 		IPAddress:  found.ipAddress,
@@ -794,10 +794,10 @@ func (m *mockDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.
 		Status:     found.status,
 	}
 
-	var runs []ClientDetailRunRow
+	var runs []NodeDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range m.data.runs {
-		if r.clientID == clientID {
+		if r.clientID == nodeID {
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
@@ -810,7 +810,7 @@ func (m *mockDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.
 					DurationMs:   res.durationMs,
 				})
 			}
-			runs = append(runs, ClientDetailRunRow{
+			runs = append(runs, NodeDetailRunRow{
 				RunRow: RunRow{
 					ID:           r.id,
 					Hostname:     r.hostname,
@@ -831,18 +831,18 @@ func (m *mockDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.
 		}
 	}
 
-	facts := m.data.facts[clientID]
+	facts := m.data.facts[nodeID]
 	if facts == nil {
 		facts = map[string]any{}
 	}
 
-	return ClientDetailPageData{
+	return NodeDetailPageData{
 		PageData: PageData{
-			Title:     "Client: " + found.hostname,
-			ActiveNav: "clients",
+			Title:     "Node: " + found.hostname,
+			ActiveNav: "nodes",
 			Version:   "test",
 		},
-		Client:       client,
+		Node:         nodeRow,
 		Runs:         runs,
 		Facts:        facts,
 		DriftHistory: driftHistory,
@@ -927,7 +927,7 @@ func (m *mockDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 	return ConfigPageData{
 		PageData: PageData{
 			Title:     "Config: " + hostname,
-			ActiveNav: "clients",
+			ActiveNav: "nodes",
 			Version:   "test",
 		},
 		Hostname: hostname,
@@ -963,7 +963,7 @@ func (m *mockDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, e
 			return PlanDetailPageData{
 				PageData: PageData{
 					Title:     "Plan Detail",
-					ActiveNav: "clients",
+					ActiveNav: "nodes",
 					Version:   "test",
 				},
 				PlanID:      p.id,

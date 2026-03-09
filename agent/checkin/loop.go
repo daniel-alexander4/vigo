@@ -18,14 +18,14 @@ import (
 	"github.com/hobnob/hobnob/agent/policy"
 	"github.com/hobnob/hobnob/agent/runner"
 	"github.com/hobnob/hobnob/agent/snapshots"
-	"github.com/hobnob/hobnob/agent/traits"
+	"github.com/hobnob/hobnob/agent/customnails"
 	"github.com/hobnob/hobnob/agent/update"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
 // UpdateConfig holds configuration for the agent self-update mechanism.
 type UpdateConfig struct {
-	APIAddr        string // REST API base URL (e.g., "http://localhost:8080")
+	APIAddr        string // REST API base URL (e.g., "http://localhost:8181")
 	CurrentVersion string // Current agent version for comparison
 }
 
@@ -166,7 +166,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 }
 
 // Loop runs the daemon pull loop until the context is cancelled. On each
-// iteration it syncs custom traits (if traitsCacheDir is non-empty), collects
+// iteration it syncs custom nails (if nailsCacheDir is non-empty), collects
 // nails, checks in with nails inline, executes modules, and reports results.
 // Server errors trigger exponential backoff; successful runs reset the backoff
 // and sleep with jitter per the server's response.
@@ -178,7 +178,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 // Stable nails (OS, hardware, network, packages, etc.) are cached and only
 // refreshed every 10 cycles. Volatile nails (time, uptime, loadavg,
 // mountpoints) are collected every cycle.
-func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, traitsCacheDir string) error {
+func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, nailsCacheDir string) error {
 	logger := slog.Default()
 	bo := NewBackoff()
 
@@ -210,17 +210,17 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		default:
 		}
 
-		// 0. Pre-check-in to get custom traits manifest.
-		var customTraits map[string]any
-		if traitsCacheDir != "" {
+		// 0. Pre-check-in to get custom nails manifest.
+		var customNails map[string]any
+		if nailsCacheDir != "" {
 			preResp, preErr := client.CheckIn(ctx, "", nil, 0)
 			if preErr != nil {
-				logger.Warn("pre-check-in for traits manifest failed", "error", preErr)
-			} else if len(preResp.CustomTraits) > 0 {
-				traitsExec := traits.NewExecutor(traitsCacheDir, client, 10*time.Second)
-				customTraits, preErr = traitsExec.SyncAndRun(ctx, preResp.CustomTraits)
+				logger.Warn("pre-check-in for nails manifest failed", "error", preErr)
+			} else if len(preResp.CustomNails) > 0 {
+				nailsExec := customnails.NewExecutor(nailsCacheDir, client, 10*time.Second)
+				customNails, preErr = nailsExec.SyncAndRun(ctx, preResp.CustomNails)
 				if preErr != nil {
-					logger.Warn("custom traits sync/run failed", "error", preErr)
+					logger.Warn("custom nails sync/run failed", "error", preErr)
 				}
 			}
 		}
@@ -232,9 +232,9 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			nailsMap = make(map[string]any)
 		}
 
-		// 1b. Merge custom traits into nails map.
-		if customTraits != nil {
-			for k, v := range customTraits {
+		// 1b. Merge custom nails into nails map.
+		if customNails != nil {
+			for k, v := range customNails {
 				nailsMap[k] = v
 			}
 		}

@@ -114,8 +114,8 @@ func (m *mockAgentClient) ReportNails(_ context.Context, _ *pb.ReportNailsReques
 	return &pb.ReportNailsResponse{Acknowledged: true}, m.nailsErr
 }
 
-func (m *mockAgentClient) DownloadCustomTrait(_ context.Context, _ *pb.DownloadCustomTraitRequest, _ ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
-	return &pb.DownloadCustomTraitResponse{}, nil
+func (m *mockAgentClient) DownloadCustomNail(_ context.Context, _ *pb.DownloadCustomNailRequest, _ ...grpc.CallOption) (*pb.DownloadCustomNailResponse, error) {
+	return &pb.DownloadCustomNailResponse{}, nil
 }
 
 // newMockClient creates a Client with a mock gRPC agent for testing.
@@ -332,6 +332,6 @@ func (c *countingMockAgent) ReportNails(ctx context.Context, req *pb.ReportNails
 	return c.inner.ReportNails(ctx, req, opts...)
 }
 
-func (c *countingMockAgent) DownloadCustomTrait(ctx context.Context, req *pb.DownloadCustomTraitRequest, opts ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
-	return c.inner.DownloadCustomTrait(ctx, req, opts...)
+func (c *countingMockAgent) DownloadCustomNail(ctx context.Context, req *pb.DownloadCustomNailRequest, opts ...grpc.CallOption) (*pb.DownloadCustomNailResponse, error) {
+	return c.inner.DownloadCustomNail(ctx, req, opts...)
 }

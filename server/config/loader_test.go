@@ -66,7 +66,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "webservers.yaml"), `
-clients:
+nodes:
   - match: "test.example.com"
     environment: production
     modules: [nginx]
@@ -113,7 +113,7 @@ name: webserver
 modules: [nginx, certbot]
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web01.example.com"
     environment: production
     roles: [webserver]
@@ -151,7 +151,7 @@ resources:
     state: present
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web01.example.com"
     environment: production
     modules: [nginx]
@@ -185,7 +185,7 @@ resources:
     content: "secret:myapp/db/config"
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web.example.com"
     environment: production
     modules: [app]
@@ -216,7 +216,7 @@ name: app
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "bad.example.com"
     environment: production
     modules: [app]
@@ -238,7 +238,7 @@ name: app
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "fail.example.com"
     environment: production
     modules: [app]
@@ -264,7 +264,7 @@ name: nginx
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "*.prod.example.com"
     environment: production
     modules: [base, nginx]
@@ -304,7 +304,7 @@ name: pattern
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web01.prod.example.com"
     environment: staging
     modules: [explicit]
@@ -340,13 +340,13 @@ resources: []
 `)
 	// Two separate client files
 	writeFile(t, filepath.Join(dir, "webservers.yaml"), `
-clients:
+nodes:
   - match: "web-*"
     environment: production
     modules: [nginx]
 `)
 	writeFile(t, filepath.Join(dir, "databases.yaml"), `
-clients:
+nodes:
   - match: "db-*"
     environment: production
     modules: [postgres]
@@ -393,7 +393,7 @@ name: app
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "envtest.example.com"
     environment: production
     modules: [app]
@@ -451,7 +451,7 @@ resources: []
 
 	// Write a new client file
 	writeFile(t, filepath.Join(dir, "new-hosts.yaml"), `
-clients:
+nodes:
   - match: "new.example.com"
     environment: staging
     modules: [app]
@@ -480,7 +480,7 @@ name: app
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "good.example.com"
     environment: production
     modules: [app]
@@ -503,7 +503,7 @@ clients:
 
 	// Write invalid YAML
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   invalid yaml: [[[
 `)
 
@@ -519,7 +519,7 @@ func TestUnknownModuleError(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "bad.example.com"
     modules: [nonexistent]
 `)
@@ -534,7 +534,7 @@ func TestUnknownRoleError(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "bad.example.com"
     roles: [nonexistent]
 `)
@@ -571,7 +571,7 @@ name: web
 modules: [nginx]
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "dup.example.com"
     roles: [web]
     modules: [nginx]
@@ -604,7 +604,7 @@ name: other
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web-*"
     modules: [app]
   - match: "db-*"
@@ -653,7 +653,7 @@ resources:
     mode: "0644"
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web.example.com"
     modules: [nginx]
 `)
@@ -700,7 +700,7 @@ resources:
     content: "inline content"
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -727,7 +727,7 @@ resources:
     source: templates/nonexistent.tmpl
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -763,7 +763,7 @@ resources:
     mode: "0644"
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web.example.com"
     modules: [nginx]
 `)
@@ -929,7 +929,7 @@ name: webserver
 vars:
   port: "8080"
   is_debian:
-    trait: "os.distro"
+    nail: "os.distro"
     in: [debian, ubuntu]
 resources:
   - name: install-nginx
@@ -939,7 +939,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web.example.com"
     modules: [webserver]
 `)
@@ -969,8 +969,8 @@ clients:
 	if cv.Name != "is_debian" {
 		t.Errorf("ConditionalVar name = %q, want 'is_debian'", cv.Name)
 	}
-	if cv.Trait != "os.distro" {
-		t.Errorf("ConditionalVar trait = %q, want 'os.distro'", cv.Trait)
+	if cv.Nail != "os.distro" {
+		t.Errorf("ConditionalVar nail = %q, want 'os.distro'", cv.Nail)
 	}
 	if cv.Operator != "in" {
 		t.Errorf("ConditionalVar operator = %q, want 'in'", cv.Operator)
@@ -980,7 +980,7 @@ clients:
 func TestLoadModuleInvalidConditionalVar(t *testing.T) {
 	dir := setupDir(t)
 
-	// Module with a bad conditional var (no trait field).
+	// Module with a bad conditional var (no nail field).
 	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
 name: bad
 vars:
@@ -990,17 +990,17 @@ resources: []
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "test.example.com"
     modules: [bad]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
-		t.Fatal("expected error for conditional var without trait field, got nil")
+		t.Fatal("expected error for conditional var without nail field, got nil")
 	}
-	if !strings.Contains(err.Error(), "missing required 'trait' field") {
-		t.Errorf("error = %q, want it to mention missing trait field", err)
+	if !strings.Contains(err.Error(), "missing required 'nail' field") {
+		t.Errorf("error = %q, want it to mention missing nail field", err)
 	}
 }
 
@@ -1011,13 +1011,13 @@ func TestLoadModuleInvalidConditionalVarBadOperator(t *testing.T) {
 name: bad
 vars:
   broken_cond:
-    trait: "os.distro"
+    nail: "os.distro"
     invalid_op: [debian]
 resources: []
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1039,7 +1039,7 @@ func TestResolveEntryWithConditionalVars(t *testing.T) {
 name: mod_a
 vars:
   is_ubuntu:
-    trait: "os.distro"
+    nail: "os.distro"
     in: [ubuntu]
   port: "80"
 resources: []
@@ -1048,12 +1048,12 @@ resources: []
 name: mod_b
 vars:
   has_enough_mem:
-    trait: "hardware.memory_mb"
+    nail: "hardware.memory_mb"
     gte: 4096
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "multi.example.com"
     modules: [mod_a, mod_b]
 `)
@@ -1091,12 +1091,12 @@ func TestConditionalVarsNotOverridableByClientVars(t *testing.T) {
 name: mod
 vars:
   is_debian:
-    trait: "os.distro"
+    nail: "os.distro"
     in: [debian, ubuntu]
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "override.example.com"
     modules: [mod]
     vars:
@@ -1146,7 +1146,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "deb.example.com"
     modules: [debian-tools]
 `)
@@ -1203,7 +1203,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "mix.example.com"
     modules: [mixed]
 `)
@@ -1261,7 +1261,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "dep.example.com"
     modules: [cross-dep]
 `)
@@ -1306,7 +1306,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "dual.example.com"
     modules: [dual-cond]
 `)
@@ -1341,7 +1341,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "bad.example.com"
     modules: [bad-block]
 `)
@@ -1384,7 +1384,7 @@ modules:
   - certbot
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web.example.com"
     roles: [webserver]
 `)
@@ -1422,7 +1422,7 @@ resources:
     state: present
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "db.example.com"
     modules:
       - name: redis
@@ -1462,7 +1462,7 @@ modules:
     when: "is_debian or is_ubuntu"
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "mix.example.com"
     roles: [web]
 `)
@@ -1512,7 +1512,7 @@ name: webserver
 modules: [nginx, certbot]
 `)
 	writeFile(t, filepath.Join(dir, "clients.yaml"), `
-clients:
+nodes:
   - match: "web01.example.com"
     roles: [webserver]
   - match: "web02.example.com"
@@ -1552,7 +1552,7 @@ resources:
     command: "echo hello"
 `)
 	writeFile(t, filepath.Join(dir, "clients.hob"), `
-clients:
+nodes:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1577,7 +1577,7 @@ resources:
     command: "echo hello"
 `)
 	writeFile(t, filepath.Join(dir, "clients.hob"), `
-clients:
+nodes:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1604,7 +1604,7 @@ resources:
     creates: "/tmp/done"
 `)
 	writeFile(t, filepath.Join(dir, "clients.hob"), `
-clients:
+nodes:
   - match: "test.example.com"
     modules: [good]
 `)
@@ -1631,7 +1631,7 @@ name: web
 modules: [nginx]
 `)
 	writeFile(t, filepath.Join(dir, "clients.hob"), `
-clients:
+nodes:
   - match: "test.example.com"
     roles: [web]
 `)

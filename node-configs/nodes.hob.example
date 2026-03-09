@@ -2,7 +2,7 @@
 # Entries can reference roles (node-configs/roles/) or modules (node-configs/modules/) by name.
 # Node-level vars override module default vars.
 
-clients:
+nodes:
   # --- Explicit hosts (specific overrides before patterns) ---
 
   - match: "web01.example.com"

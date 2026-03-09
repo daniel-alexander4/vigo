@@ -36,7 +36,7 @@ func buildPolicyBundle(cfg *config.NodeConfig, version uint64) (*pb.PolicyBundle
 		}
 		bundle.ConditionalVars = append(bundle.ConditionalVars, &pb.ConditionalVarDef{
 			Name:        cv.Name,
-			Trait:       cv.Trait,
+			Nail:       cv.Nail,
 			Operator:    cv.Operator,
 			OperandJson: string(operandJSON),
 		})

@@ -19,11 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	HobnobAgent_Register_FullMethodName            = "/hobnob.v1.HobnobAgent/Register"
-	HobnobAgent_CheckIn_FullMethodName             = "/hobnob.v1.HobnobAgent/CheckIn"
-	HobnobAgent_ReportResult_FullMethodName        = "/hobnob.v1.HobnobAgent/ReportResult"
-	HobnobAgent_ReportNails_FullMethodName         = "/hobnob.v1.HobnobAgent/ReportNails"
-	HobnobAgent_DownloadCustomTrait_FullMethodName = "/hobnob.v1.HobnobAgent/DownloadCustomTrait"
+	HobnobAgent_Register_FullMethodName           = "/hobnob.v1.HobnobAgent/Register"
+	HobnobAgent_CheckIn_FullMethodName            = "/hobnob.v1.HobnobAgent/CheckIn"
+	HobnobAgent_ReportResult_FullMethodName       = "/hobnob.v1.HobnobAgent/ReportResult"
+	HobnobAgent_ReportNails_FullMethodName        = "/hobnob.v1.HobnobAgent/ReportNails"
+	HobnobAgent_DownloadCustomNail_FullMethodName = "/hobnob.v1.HobnobAgent/DownloadCustomNail"
 )
 
 // HobnobAgentClient is the client API for HobnobAgent service.
@@ -38,8 +38,8 @@ type HobnobAgentClient interface {
 	ReportResult(ctx context.Context, in *ReportResultRequest, opts ...grpc.CallOption) (*ReportResultResponse, error)
 	// ReportNails submits collected nails from the agent.
 	ReportNails(ctx context.Context, in *ReportNailsRequest, opts ...grpc.CallOption) (*ReportNailsResponse, error)
-	// DownloadCustomTrait retrieves a custom trait executable by name.
-	DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error)
+	// DownloadCustomNail retrieves a custom nail executable by name.
+	DownloadCustomNail(ctx context.Context, in *DownloadCustomNailRequest, opts ...grpc.CallOption) (*DownloadCustomNailResponse, error)
 }
 
 type hobnobAgentClient struct {
@@ -90,10 +90,10 @@ func (c *hobnobAgentClient) ReportNails(ctx context.Context, in *ReportNailsRequ
 	return out, nil
 }
 
-func (c *hobnobAgentClient) DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error) {
+func (c *hobnobAgentClient) DownloadCustomNail(ctx context.Context, in *DownloadCustomNailRequest, opts ...grpc.CallOption) (*DownloadCustomNailResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DownloadCustomTraitResponse)
-	err := c.cc.Invoke(ctx, HobnobAgent_DownloadCustomTrait_FullMethodName, in, out, cOpts...)
+	out := new(DownloadCustomNailResponse)
+	err := c.cc.Invoke(ctx, HobnobAgent_DownloadCustomNail_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +112,8 @@ type HobnobAgentServer interface {
 	ReportResult(context.Context, *ReportResultRequest) (*ReportResultResponse, error)
 	// ReportNails submits collected nails from the agent.
 	ReportNails(context.Context, *ReportNailsRequest) (*ReportNailsResponse, error)
-	// DownloadCustomTrait retrieves a custom trait executable by name.
-	DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error)
+	// DownloadCustomNail retrieves a custom nail executable by name.
+	DownloadCustomNail(context.Context, *DownloadCustomNailRequest) (*DownloadCustomNailResponse, error)
 	mustEmbedUnimplementedHobnobAgentServer()
 }
 
@@ -136,8 +136,8 @@ func (UnimplementedHobnobAgentServer) ReportResult(context.Context, *ReportResul
 func (UnimplementedHobnobAgentServer) ReportNails(context.Context, *ReportNailsRequest) (*ReportNailsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportNails not implemented")
 }
-func (UnimplementedHobnobAgentServer) DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DownloadCustomTrait not implemented")
+func (UnimplementedHobnobAgentServer) DownloadCustomNail(context.Context, *DownloadCustomNailRequest) (*DownloadCustomNailResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DownloadCustomNail not implemented")
 }
 func (UnimplementedHobnobAgentServer) mustEmbedUnimplementedHobnobAgentServer() {}
 func (UnimplementedHobnobAgentServer) testEmbeddedByValue()                     {}
@@ -232,20 +232,20 @@ func _HobnobAgent_ReportNails_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAgent_DownloadCustomTrait_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DownloadCustomTraitRequest)
+func _HobnobAgent_DownloadCustomNail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DownloadCustomNailRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAgentServer).DownloadCustomTrait(ctx, in)
+		return srv.(HobnobAgentServer).DownloadCustomNail(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAgent_DownloadCustomTrait_FullMethodName,
+		FullMethod: HobnobAgent_DownloadCustomNail_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAgentServer).DownloadCustomTrait(ctx, req.(*DownloadCustomTraitRequest))
+		return srv.(HobnobAgentServer).DownloadCustomNail(ctx, req.(*DownloadCustomNailRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -274,8 +274,8 @@ var HobnobAgent_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAgent_ReportNails_Handler,
 		},
 		{
-			MethodName: "DownloadCustomTrait",
-			Handler:    _HobnobAgent_DownloadCustomTrait_Handler,
+			MethodName: "DownloadCustomNail",
+			Handler:    _HobnobAgent_DownloadCustomNail_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

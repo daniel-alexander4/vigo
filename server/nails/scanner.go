@@ -1,7 +1,7 @@
-// Package traits provides a scanner for custom trait executables.
+// Package nails provides a scanner for custom nail executables.
 // The server distributes these executables to agents, which run them
-// and merge their JSON output into the traits map under the custom.* namespace.
-package traits
+// and merge their JSON output into the nails map under the custom.* namespace.
+package nails
 
 import (
 	"crypto/sha256"
@@ -14,16 +14,16 @@ import (
 	"strings"
 )
 
-// Entry represents a single custom trait executable with its name and checksum.
+// Entry represents a single custom nail executable with its name and checksum.
 type Entry struct {
-	Name   string // trait name derived from filename (extension stripped)
+	Name   string // nail name derived from filename (extension stripped)
 	SHA256 string // hex-encoded SHA256 checksum
 }
 
-// Scanner scans a directory for executable trait files.
+// Scanner scans a directory for executable nail files.
 type Scanner struct {
 	dir string
-	// nameToFile maps trait name -> actual filename on disk (cached from last ScanDir).
+	// nameToFile maps nail name -> actual filename on disk (cached from last ScanDir).
 	nameToFile map[string]string
 }
 
@@ -32,9 +32,9 @@ func NewScanner(dir string) *Scanner {
 	return &Scanner{dir: dir}
 }
 
-// ScanDir reads the traits directory and returns entries for each executable file.
+// ScanDir reads the custom nails directory and returns entries for each executable file.
 // Non-executable files and subdirectories are silently skipped.
-// If the directory does not exist, returns nil, nil (traits are optional).
+// If the directory does not exist, returns nil, nil (custom nails are optional).
 // Results are sorted by name for deterministic ordering.
 func (s *Scanner) ScanDir() ([]Entry, error) {
 	dirEntries, err := os.ReadDir(s.dir)
@@ -43,7 +43,7 @@ func (s *Scanner) ScanDir() ([]Entry, error) {
 			s.nameToFile = nil
 			return nil, nil
 		}
-		return nil, fmt.Errorf("reading traits directory %s: %w", s.dir, err)
+		return nil, fmt.Errorf("reading nails directory %s: %w", s.dir, err)
 	}
 
 	var entries []Entry
@@ -93,17 +93,17 @@ func (s *Scanner) ScanDir() ([]Entry, error) {
 	return entries, nil
 }
 
-// ReadFile returns the raw bytes of a trait executable identified by its
-// trait name (extension-stripped). ScanDir must be called first to build
+// ReadFile returns the raw bytes of a nail executable identified by its
+// nail name (extension-stripped). ScanDir must be called first to build
 // the name-to-filename mapping.
 func (s *Scanner) ReadFile(name string) ([]byte, error) {
 	if s.nameToFile == nil {
-		return nil, fmt.Errorf("trait %q not found (no scan performed)", name)
+		return nil, fmt.Errorf("nail %q not found (no scan performed)", name)
 	}
 
 	filename, ok := s.nameToFile[name]
 	if !ok {
-		return nil, fmt.Errorf("trait %q not found", name)
+		return nil, fmt.Errorf("nail %q not found", name)
 	}
 
 	return os.ReadFile(filepath.Join(s.dir, filename))

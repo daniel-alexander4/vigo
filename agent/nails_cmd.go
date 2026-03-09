@@ -13,20 +13,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var traitsCmd = &cobra.Command{
-	Use:   "traits [collector...] or traits <dot.path>",
-	Short: "Print collected system traits as JSON",
-	Long: `Collect and print system traits to stdout as pretty-printed JSON.
+var nailsCmd = &cobra.Command{
+	Use:   "nails [collector...] or nails <dot.path>",
+	Short: "Print collected system nails as JSON",
+	Long: `Collect and print system nails to stdout as pretty-printed JSON.
 
-With no arguments, prints all traits from every collector.
+With no arguments, prints all nails from every collector.
 With collector names (e.g. "os", "hardware"), prints only those categories.
 With a dot-path (e.g. "os.distro"), prints just that value.
 
 Examples:
-  hob traits                  # all traits
-  hob traits os               # only OS traits
-  hob traits os hardware      # OS and hardware traits
-  hob traits os.distro        # just the distro value`,
+  hob nails                  # all nails
+  hob nails os               # only OS nails
+  hob nails os hardware      # OS and hardware nails
+  hob nails os.distro        # just the distro value`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Suppress slog output for clean JSON-only stdout.
@@ -53,7 +53,7 @@ Examples:
 			}
 			val, ok := traverseDotPath(traits, dotPath)
 			if !ok {
-				fmt.Fprintf(os.Stderr, "trait path '%s' not found\n", dotPath)
+				fmt.Fprintf(os.Stderr, "nail path '%s' not found\n", dotPath)
 				os.Exit(1)
 			}
 			fmt.Println(formatValue(val))
@@ -164,5 +164,5 @@ func printJSON(v any) error {
 }
 
 func init() {
-	rootCmd.AddCommand(traitsCmd)
+	rootCmd.AddCommand(nailsCmd)
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/registry"
-	"github.com/hobnob/hobnob/server/traits"
+	"github.com/hobnob/hobnob/server/nails"
 	"github.com/hobnob/hobnob/server/webhook"
 )
 
@@ -18,7 +18,7 @@ type AgentService struct {
 	configStore    *config.ConfigStore
 	queries        *db.Queries
 	dispatcher     *webhook.Dispatcher
-	traitsScanner  *traits.Scanner
+	nailsScanner   *nails.Scanner
 	nodeCache      *db.NodeCache
 	lastSeenBatch  *db.LastSeenBatcher
 }

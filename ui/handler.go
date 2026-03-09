@@ -21,8 +21,8 @@ type DataSource interface {
 	DashboardData(baseInterval time.Duration) DashboardPageData
 	ComplianceData(baseInterval time.Duration) CompliancePageData
 	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
-	ClientsData(baseInterval time.Duration, statusFilter string) ClientsPageData
-	ClientDetailData(clientID uuid.UUID, baseInterval time.Duration) (ClientDetailPageData, error)
+	NodesData(baseInterval time.Duration, statusFilter string) NodesPageData
+	NodeDetailData(nodeID uuid.UUID, baseInterval time.Duration) (NodeDetailPageData, error)
 	RunsData(statusFilter string) RunsPageData
 	RunDetailData(runID uuid.UUID) (RunDetailPageData, error)
 	ConfigData(hostname string) (ConfigPageData, error)
@@ -70,8 +70,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Page routes
 	mux.HandleFunc("GET /{$}", h.Dashboard)
-	mux.HandleFunc("GET /clients", h.Clients)
-	mux.HandleFunc("GET /clients/{id}", h.ClientDetail)
+	mux.HandleFunc("GET /nodes", h.Nodes)
+	mux.HandleFunc("GET /nodes/{id}", h.NodeDetail)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
@@ -80,7 +80,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
-	mux.HandleFunc("GET /ui/fragments/clients-table", h.ClientsTable)
+	mux.HandleFunc("GET /ui/fragments/nodes-table", h.NodesTable)
 }
 
 // --- Page data types ---
@@ -95,8 +95,8 @@ type PageData struct {
 // DashboardPageData holds data for the dashboard page.
 type DashboardPageData struct {
 	PageData
-	TotalClients   int
-	ActiveClients  int
+	TotalNodes     int
+	ActiveNodes    int
 	RecentFailures int
 	DriftRate      float64
 	RecentRuns     []RunRow
@@ -127,7 +127,7 @@ type CompliancePageData struct {
 	NonCompliant  []ComplianceRow
 }
 
-// ComplianceRow is a non-compliant client displayed in the table.
+// ComplianceRow is a non-compliant node displayed in the table.
 type ComplianceRow struct {
 	Hostname      string
 	Status        string
@@ -137,14 +137,14 @@ type ComplianceRow struct {
 
 // DashboardStatsFragmentData holds data for the stats fragment (HTMX auto-refresh).
 type DashboardStatsFragmentData struct {
-	TotalClients   int
-	ActiveClients  int
+	TotalNodes     int
+	ActiveNodes    int
 	RecentFailures int
 	DriftRate      float64
 }
 
-// ClientRow is a single client displayed in the clients table.
-type ClientRow struct {
+// NodeRow is a single node displayed in the nodes table.
+type NodeRow struct {
 	ID         uuid.UUID
 	Hostname   string
 	IPAddress  string
@@ -153,16 +153,16 @@ type ClientRow struct {
 	Status     string
 }
 
-// ClientsPageData holds data for the clients list page.
-type ClientsPageData struct {
+// NodesPageData holds data for the nodes list page.
+type NodesPageData struct {
 	PageData
-	Clients      []ClientRow
+	Nodes        []NodeRow
 	StatusFilter string
-	ClientCount  int
+	NodeCount    int
 }
 
-// ClientDetailRunRow is a run with its per-module results for the client detail page.
-type ClientDetailRunRow struct {
+// NodeDetailRunRow is a run with its per-module results for the node detail page.
+type NodeDetailRunRow struct {
 	RunRow
 	Results []RunResultRow
 }
@@ -178,11 +178,11 @@ type RunResultRow struct {
 	DurationMs   int32
 }
 
-// ClientDetailPageData holds data for the client detail page.
-type ClientDetailPageData struct {
+// NodeDetailPageData holds data for the node detail page.
+type NodeDetailPageData struct {
 	PageData
-	Client       ClientRow
-	Runs         []ClientDetailRunRow
+	Node         NodeRow
+	Runs         []NodeDetailRunRow
 	Facts        map[string]any
 	DriftHistory []DriftPoint
 }
@@ -262,16 +262,16 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "compliance", data)
 }
 
-// Clients renders the clients list page with optional status filter.
-func (h *Handler) Clients(w http.ResponseWriter, r *http.Request) {
+// Nodes renders the nodes list page with optional status filter.
+func (h *Handler) Nodes(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	data := h.dataSource.ClientsData(h.baseInterval, statusFilter)
+	data := h.dataSource.NodesData(h.baseInterval, statusFilter)
 	data.Version = h.version
-	h.renderer.Render(w, "clients", data)
+	h.renderer.Render(w, "nodes", data)
 }
 
-// ClientDetail renders the client detail page with runs, facts, and drift history.
-func (h *Handler) ClientDetail(w http.ResponseWriter, r *http.Request) {
+// NodeDetail renders the node detail page with runs, facts, and drift history.
+func (h *Handler) NodeDetail(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	nodeID, err := uuid.Parse(idStr)
 	if err != nil {
@@ -279,13 +279,13 @@ func (h *Handler) ClientDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.dataSource.ClientDetailData(nodeID, h.baseInterval)
+	data, err := h.dataSource.NodeDetailData(nodeID, h.baseInterval)
 	if err != nil {
 		http.Error(w, "node not found", http.StatusNotFound)
 		return
 	}
 	data.Version = h.version
-	h.renderer.Render(w, "client-detail", data)
+	h.renderer.Render(w, "node-detail", data)
 }
 
 // Runs renders the runs list page with optional status filter.
@@ -344,11 +344,11 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "plans", data)
 }
 
-// ClientsTable renders the clients table fragment for HTMX polling.
-func (h *Handler) ClientsTable(w http.ResponseWriter, r *http.Request) {
+// NodesTable renders the nodes table fragment for HTMX polling.
+func (h *Handler) NodesTable(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	data := h.dataSource.ClientsData(h.baseInterval, statusFilter)
-	h.renderer.RenderFragment(w, "clients", "clients-table", data)
+	data := h.dataSource.NodesData(h.baseInterval, statusFilter)
+	h.renderer.RenderFragment(w, "nodes", "nodes-table", data)
 }
 
 // --- Production data source ---
@@ -358,8 +358,8 @@ type dbDataSource struct {
 	configStore *config.ConfigStore
 }
 
-// clientComplianceInfo computes compliance status for a node using its latest run.
-func (ds *dbDataSource) clientComplianceInfo(ctx context.Context, c db.Node, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
+// nodeComplianceInfo computes compliance status for a node using its latest run.
+func (ds *dbDataSource) nodeComplianceInfo(ctx context.Context, c db.Node, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
 	lastSeen := time.Time{}
 	if c.LastSeen.Valid {
 		lastSeen = c.LastSeen.Time
@@ -404,7 +404,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 			activeCount++
 		}
 
-		status, _ := ds.clientComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.nodeComplianceInfo(ctx, n, baseInterval)
 		switch status {
 		case "drifted":
 			driftedCount++
@@ -443,8 +443,8 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 	return DashboardPageData{
 		PageData:       PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalClients:   totalNodes,
-		ActiveClients:  activeCount,
+		TotalNodes:     totalNodes,
+		ActiveNodes:    activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     recentRuns,
@@ -471,7 +471,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 			lastSeen = n.LastSeen.Time
 		}
 
-		status, _ := ds.clientComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.nodeComplianceInfo(ctx, n, baseInterval)
 		statuses = append(statuses, status)
 
 		if status != "compliant" {
@@ -529,27 +529,27 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData {
 	d := ds.DashboardData(baseInterval)
 	return DashboardStatsFragmentData{
-		TotalClients:   d.TotalClients,
-		ActiveClients:  d.ActiveClients,
+		TotalNodes:     d.TotalNodes,
+		ActiveNodes:    d.ActiveNodes,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
 }
 
-func (ds *dbDataSource) ClientsData(baseInterval time.Duration, statusFilter string) ClientsPageData {
+func (ds *dbDataSource) NodesData(baseInterval time.Duration, statusFilter string) NodesPageData {
 	ctx := context.Background()
 	nodes, err := ds.queries.ListNodes(ctx)
 	if err != nil {
 		slog.Error("failed to list nodes", "error", err)
-		return ClientsPageData{PageData: PageData{Title: "Clients", ActiveNav: "clients"}}
+		return NodesPageData{PageData: PageData{Title: "Nodes", ActiveNav: "nodes"}}
 	}
 
-	var rows []ClientRow
+	var rows []NodeRow
 	for _, n := range nodes {
 		if n.Revoked {
 			continue
 		}
-		status, _ := ds.clientComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.nodeComplianceInfo(ctx, n, baseInterval)
 
 		if statusFilter != "" && status != statusFilter {
 			continue
@@ -560,7 +560,7 @@ func (ds *dbDataSource) ClientsData(baseInterval time.Duration, statusFilter str
 			lastSeen = n.LastSeen.Time
 		}
 
-		rows = append(rows, ClientRow{
+		rows = append(rows, NodeRow{
 			ID:         n.ID,
 			Hostname:   n.Hostname,
 			IPAddress:  n.IpAddress,
@@ -570,19 +570,19 @@ func (ds *dbDataSource) ClientsData(baseInterval time.Duration, statusFilter str
 		})
 	}
 
-	return ClientsPageData{
-		PageData:     PageData{Title: "Clients", ActiveNav: "clients"},
-		Clients:      rows,
+	return NodesPageData{
+		PageData:     PageData{Title: "Nodes", ActiveNav: "nodes"},
+		Nodes:        rows,
 		StatusFilter: statusFilter,
-		ClientCount:  len(rows),
+		NodeCount:    len(rows),
 	}
 }
 
-func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.Duration) (ClientDetailPageData, error) {
+func (ds *dbDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Duration) (NodeDetailPageData, error) {
 	ctx := context.Background()
-	node, err := ds.queries.GetNodeByID(ctx, clientID)
+	node, err := ds.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
-		return ClientDetailPageData{}, fmt.Errorf("node not found: %w", err)
+		return NodeDetailPageData{}, fmt.Errorf("node not found: %w", err)
 	}
 
 	lastSeen := time.Time{}
@@ -590,9 +590,9 @@ func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.D
 		lastSeen = node.LastSeen.Time
 	}
 
-	status, _ := ds.clientComplianceInfo(ctx, node, baseInterval)
+	status, _ := ds.nodeComplianceInfo(ctx, node, baseInterval)
 
-	client := ClientRow{
+	nodeRow := NodeRow{
 		ID:         node.ID,
 		Hostname:   node.Hostname,
 		IPAddress:  node.IpAddress,
@@ -603,14 +603,14 @@ func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.D
 
 	// Fetch last 20 runs with results
 	dbRuns, err := ds.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-		NodeID: clientID,
+		NodeID: nodeID,
 		Limit:  20,
 	})
 	if err != nil {
 		slog.Error("failed to list runs for node", "error", err)
 	}
 
-	var runs []ClientDetailRunRow
+	var runs []NodeDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range dbRuns {
 		dbResults, err := ds.queries.ListRunResults(ctx, r.ID)
@@ -635,7 +635,7 @@ func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.D
 			})
 		}
 
-		runs = append(runs, ClientDetailRunRow{
+		runs = append(runs, NodeDetailRunRow{
 			RunRow: RunRow{
 				ID:           r.ID,
 				Hostname:     node.Hostname,
@@ -658,14 +658,14 @@ func (ds *dbDataSource) ClientDetailData(clientID uuid.UUID, baseInterval time.D
 
 	// Fetch latest facts
 	facts := make(map[string]any)
-	cf, err := ds.queries.GetLatestNodeNails(ctx, clientID)
+	cf, err := ds.queries.GetLatestNodeNails(ctx, nodeID)
 	if err == nil {
 		_ = json.Unmarshal(cf.Nails, &facts)
 	}
 
-	return ClientDetailPageData{
-		PageData:     PageData{Title: "Client: " + node.Hostname, ActiveNav: "clients"},
-		Client:       client,
+	return NodeDetailPageData{
+		PageData:     PageData{Title: "Node: " + node.Hostname, ActiveNav: "nodes"},
+		Node:         nodeRow,
 		Runs:         runs,
 		Facts:        facts,
 		DriftHistory: driftHistory,
@@ -774,7 +774,7 @@ func (ds *dbDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 	}
 
 	return ConfigPageData{
-		PageData: PageData{Title: "Config: " + hostname, ActiveNav: "clients"},
+		PageData: PageData{Title: "Config: " + hostname, ActiveNav: "nodes"},
 		Hostname: hostname,
 		RawYAML:  yamlStr,
 	}, nil
@@ -821,7 +821,7 @@ func (ds *dbDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, er
 	}
 
 	return PlanDetailPageData{
-		PageData:    PageData{Title: "Plan Detail", ActiveNav: "clients"},
+		PageData:    PageData{Title: "Plan Detail", ActiveNav: "nodes"},
 		PlanID:      p.ID,
 		Hostname:    node.Hostname,
 		CreatedAt:   p.CreatedAt,

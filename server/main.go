@@ -46,7 +46,7 @@ func run() error {
 	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server-configs/server.yaml")
 	nodeConfigsDir := envOrDefault("HOBNOB_NODE_CONFIGS_DIR", "node-configs")
 	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
-	traitsDir := envOrDefault("HOBNOB_TRAITS_DIR", "traits")
+	nailsDir := envOrDefault("HOBNOB_CUSTOM_NAILS_DIR", "custom-nails")
 
 	// Load secrets backend config (first pass — no secret resolution).
 	secretsCfg, err := config.LoadSecretsConfig(configFile)
@@ -147,7 +147,7 @@ func run() error {
 		Queries:      queries,
 		BaseInterval: baseInterval,
 		Dispatcher:   dispatcher,
-		TraitsDir:    traitsDir,
+		NailsDir:    nailsDir,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)

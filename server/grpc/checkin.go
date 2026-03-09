@@ -105,13 +105,13 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 	}
 
-	// Include custom traits manifest.
-	traitEntries, traitErr := s.traitsScanner.ScanDir()
-	if traitErr != nil {
-		slog.Warn("failed to scan traits directory", "error", traitErr)
+	// Include custom nails manifest.
+	nailEntries, nailErr := s.nailsScanner.ScanDir()
+	if nailErr != nil {
+		slog.Warn("failed to scan nails directory", "error", nailErr)
 	} else {
-		for _, te := range traitEntries {
-			bundle.CustomTraits = append(bundle.CustomTraits, &pb.CustomTraitEntry{
+		for _, te := range nailEntries {
+			bundle.CustomNails = append(bundle.CustomNails, &pb.CustomNailEntry{
 				Name:   te.Name,
 				Sha256: te.SHA256,
 			})

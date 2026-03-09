@@ -50,8 +50,8 @@ type ConfigStore struct {
 }
 
 // NewConfigStore creates a ConfigStore that scans nodesDir for node
-// config files (.hob or .yaml), module definitions from clientsDir/modules/,
-// and role definitions from clientsDir/roles/. Secret references are resolved
+// config files (.hob or .yaml), module definitions from nodesDir/modules/,
+// and role definitions from nodesDir/roles/. Secret references are resolved
 // using the given provider.
 //
 // By default, all resources must pass idempotency validation. Set dangerous
@@ -114,7 +114,7 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 	}
 	defer watcher.Close()
 
-	// Watch the top-level dir (client YAML files) and subdirectories.
+	// Watch the top-level dir (node config files) and subdirectories.
 	for _, dir := range []string{cs.dir, cs.modulesDir(), cs.rolesDir()} {
 		if err := watcher.Add(dir); err != nil {
 			return fmt.Errorf("watching %s: %w", dir, err)
@@ -166,7 +166,7 @@ func (cs *ConfigStore) rolesDir() string { return filepath.Join(cs.dir, "roles")
 // templatesDir returns the path to the templates subdirectory.
 func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
 
-// loadAll reads module defs, role defs, and client YAML files, resolves
+// loadAll reads module defs, role defs, and node YAML files, resolves
 // all entries, and atomically swaps the config.
 func (cs *ConfigStore) loadAll() error {
 	moduleDefs, err := loadModuleDefs(cs.modulesDir(), cs.dangerous)
@@ -183,9 +183,9 @@ func (cs *ConfigStore) loadAll() error {
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	clientEntries, err := loadClientsDir(cs.dir)
+	nodeEntries, err := loadNodesDir(cs.dir)
 	if err != nil {
-		return fmt.Errorf("loading clients: %w", err)
+		return fmt.Errorf("loading nodes: %w", err)
 	}
 
 	// Validate role references.
@@ -198,7 +198,7 @@ func (cs *ConfigStore) loadAll() error {
 	}
 
 	var entries []resolvedEntry
-	for i, entry := range clientEntries {
+	for i, entry := range nodeEntries {
 		cfg, err := cs.resolveEntry(entry, moduleDefs, roleDefs)
 		if err != nil {
 			return fmt.Errorf("resolving node entry %d (match=%q): %w", i, entry.Match, err)
@@ -444,9 +444,9 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 		}
 
 		// Separate conditional vars from regular vars.
-		// A conditional var is any map value with a "trait" key or any
+		// A conditional var is any map value with a "nail" key or any
 		// known operator key (in, not_in, gt, lt, gte, lte, regex).
-		// Maps with operator keys but no trait are caught as validation
+		// Maps with operator keys but no nail are caught as validation
 		// errors by ParseConditionalVar.
 		var condVars []conditionals.ConditionalVar
 		for name, v := range def.Vars {
@@ -516,12 +516,12 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 	return defs, nil
 }
 
-// loadClientsDir reads all config files (.hob/.yaml) at the top level of dir
-// (not subdirs) and merges their client entries in filesystem order.
-func loadClientsDir(dir string) ([]NodeEntry, error) {
+// loadNodesDir reads all config files (.hob/.yaml) at the top level of dir
+// (not subdirs) and merges their node entries in filesystem order.
+func loadNodesDir(dir string) ([]NodeEntry, error) {
 	dirEntries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("reading clients dir: %w", err)
+		return nil, fmt.Errorf("reading nodes dir: %w", err)
 	}
 
 	var allEntries []NodeEntry
@@ -702,7 +702,7 @@ func entryReferencesSecret(cfg *NodeConfig, affectedModules map[string]bool, nee
 	return false
 }
 
-// ComputeEnvDiff compares env_vars between two environments across all client
+// ComputeEnvDiff compares env_vars between two environments across all node
 // entries that include the given module. Returns a map of var_name -> "old → new".
 func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[string]string {
 	cs.mu.RLock()

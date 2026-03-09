@@ -86,7 +86,7 @@ type NodeConfig struct {
 	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
 }
 
-// ModuleConfig describes a module assigned to a client.
+// ModuleConfig describes a module assigned to a node.
 type ModuleConfig struct {
 	Name      string           `yaml:"name"`
 	DependsOn []string         `yaml:"depends_on"`
@@ -158,7 +158,7 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// ModuleRef is a reference to a module in a role or client entry. It supports
+// ModuleRef is a reference to a module in a role or node entry. It supports
 // two YAML forms:
 //
 //	modules: [nginx]               # plain string -> ModuleRef{Name: "nginx"}
@@ -210,5 +210,5 @@ type NodeEntry struct {
 
 // NodesConfig is the top-level structure of nodes.hob.
 type NodesConfig struct {
-	Nodes []NodeEntry `yaml:"clients"`
+	Nodes []NodeEntry `yaml:"nodes"`
 }

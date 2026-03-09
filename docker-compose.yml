@@ -22,7 +22,7 @@ services:
       dockerfile: Dockerfile.server
     ports:
       - "1530:1530"
-      - "8085:8080"
+      - "8181:8181"
     volumes:
       - /etc/hobnob:/etc/hobnob
     depends_on:

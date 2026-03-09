@@ -1,4 +1,4 @@
-package traits
+package nails
 
 import (
 	"crypto/sha256"
@@ -93,7 +93,7 @@ func TestScanDir_NameDerivation(t *testing.T) {
 	want := []string{"app-version", "cpu.check", "disk-check", "memory"}
 	for _, w := range want {
 		if !names[w] {
-			t.Errorf("expected trait name %q in results", w)
+			t.Errorf("expected nail name %q in results", w)
 		}
 	}
 }
@@ -153,7 +153,7 @@ func TestReadFile_NonExistent(t *testing.T) {
 
 	_, err := scanner.ReadFile("nonexistent")
 	if err == nil {
-		t.Error("expected error for non-existent trait, got nil")
+		t.Error("expected error for non-existent nail, got nil")
 	}
 }
 

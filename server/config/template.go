@@ -15,15 +15,15 @@ type templateContext struct {
 
 // RenderTemplate renders a Go template string with .Traits and .Vars namespaces.
 // Templates are rendered at check-in time (not at config load time) so that
-// traits from the requesting agent are available.
-func RenderTemplate(tmpl string, traits map[string]any, vars map[string]any) (string, error) {
+// nails from the requesting agent are available.
+func RenderTemplate(tmpl string, nails map[string]any, vars map[string]any) (string, error) {
 	t, err := template.New("").Parse(tmpl)
 	if err != nil {
 		return "", fmt.Errorf("parsing template: %w", err)
 	}
 	var buf bytes.Buffer
 	ctx := templateContext{
-		Traits: traits,
+		Traits: nails,
 		Vars:   vars,
 	}
 	if err := t.Execute(&buf, ctx); err != nil {
@@ -35,7 +35,7 @@ func RenderTemplate(tmpl string, traits map[string]any, vars map[string]any) (st
 // RenderVars renders Go template syntax in var values in declaration order.
 // Only string values are rendered; non-string values (int, bool, map, etc.)
 // pass through unchanged. Vars are rendered top-down per varOrder so that
-// later vars can reference earlier rendered vars via .Vars. Traits are
+// later vars can reference earlier rendered vars via .Vars. Nails are
 // available as .Traits. If varOrder is nil, all vars are still rendered but
 // in non-deterministic map order. Call this BEFORE resource attribute
 // rendering so that rendered vars are available to resource templates.

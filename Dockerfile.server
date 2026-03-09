@@ -21,6 +21,6 @@ COPY node-configs/ /seed/node-configs/
 
 COPY entrypoint.sh /entrypoint.sh
 
-EXPOSE 1530 8080
+EXPOSE 1530 8181
 
 ENTRYPOINT ["/entrypoint.sh"]
