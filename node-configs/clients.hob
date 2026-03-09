@@ -35,18 +35,14 @@ clients:
         pg_effective_cache_size: "1GB"
         pg_work_mem: "16MB"
 
-  - match: "cache01.example.com"
-    environment: production
-    modules: [redis]
-    vars:
-      redis_password: "secret:hobnob/redis/password"
-    env_vars:
-      production:
-        redis_maxmemory: "4gb"
-        redis_bind: "0.0.0.0"
-      staging:
-        redis_maxmemory: "256mb"
-        redis_bind: "127.0.0.1"
+  # - match: "cache01.example.com"
+  #   environment: production
+  #   modules: [redis]
+  #   vars:
+  #     redis_password: "secret:hobnob/redis/password"  # add HOBNOB_REDIS_PASSWORD to .env
+  #   env_vars:
+  #     production:
+  #       redis_maxmemory: "4gb"
 
   - match: "docker01.example.com"
     environment: production
@@ -56,28 +52,21 @@ clients:
     environment: production
     roles: [monitoring]
 
-  - match: "lb01.example.com"
-    environment: production
-    modules: [haproxy]
-    vars:
-      haproxy_stats_password: "secret:hobnob/haproxy/stats_password"
+  # - match: "lb01.example.com"
+  #   environment: production
+  #   modules: [haproxy]
+  #   vars:
+  #     haproxy_stats_password: "secret:hobnob/haproxy/stats_password"  # add HOBNOB_HAPROXY_STATS_PASSWORD to .env
 
   - match: "bastion01.example.com"
     environment: production
     roles: [bastion]
 
-  - match: "mysql01.example.com"
-    environment: production
-    modules: [mysql]
-    vars:
-      mysql_root_password: "secret:hobnob/mysql/root_password"
-    env_vars:
-      production:
-        mysql_max_connections: "500"
-        mysql_innodb_buffer_pool_size: "8G"
-      staging:
-        mysql_max_connections: "50"
-        mysql_innodb_buffer_pool_size: "512M"
+  # - match: "mysql01.example.com"
+  #   environment: production
+  #   modules: [mysql]
+  #   vars:
+  #     mysql_root_password: "secret:hobnob/mysql/root_password"  # add HOBNOB_MYSQL_ROOT_PASSWORD to .env
 
   - match: "plex01.example.com"
     environment: production

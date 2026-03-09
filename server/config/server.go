@@ -57,6 +57,7 @@ func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider) error {
 		&cfg.Server.TLS.CertFile,
 		&cfg.Server.TLS.KeyFile,
 		&cfg.Server.TLS.CAFile,
+		&cfg.Server.TLS.CAKeyFile,
 	}
 
 	for _, field := range fields {

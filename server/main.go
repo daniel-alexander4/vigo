@@ -27,7 +27,6 @@ import (
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/secrets"
-	"github.com/hobnob/hobnob/server/selfmanage"
 	"github.com/hobnob/hobnob/server/watcher"
 	"github.com/hobnob/hobnob/server/webhook"
 )
@@ -196,24 +195,6 @@ func run() error {
 	// Start metrics collector in background.
 	metricsCollector := metrics.NewCollector(queries)
 	go metricsCollector.Run(ctx, 30*time.Second)
-
-	// Start self-management if self.hob exists and is enabled.
-	selfConfigFile := envOrDefault("HOBNOB_SELF_CONFIG", "server-configs/self.hob")
-	selfCfg, err := selfmanage.Load(selfConfigFile)
-	if err != nil {
-		return fmt.Errorf("loading self.hob: %w", err)
-	}
-	if selfCfg != nil && selfCfg.Enabled {
-		mgr, err := selfmanage.NewManager(ctx, selfCfg, queries)
-		if err != nil {
-			return fmt.Errorf("initializing self-management: %w", err)
-		}
-		go func() {
-			if err := mgr.Run(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("self-management error", "error", err)
-			}
-		}()
-	}
 
 	// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
 	var gwOpts []api.GatewayOption

@@ -18,15 +18,21 @@ import (
 // ReportResult handles the HobnobAgent.ReportResult RPC. It stores per-module
 // execution results in the database and marks the run as finished.
 func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultRequest) (*pb.ReportResultResponse, error) {
-	runID, err := uuid.Parse(req.GetRunId())
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid run_id: %v", err)
-	}
-
 	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
+
+	// Create the run record (server generates the UUID).
+	run, err := s.queries.CreateRun(ctx, db.CreateRunParams{
+		NodeID:      nodeID,
+		Status:      "running",
+		ModuleCount: int32(len(req.GetResults())),
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "creating run: %v", err)
+	}
+	runID := run.ID
 
 	// Store each module result.
 	var changedCount, failedCount, skippedCount int32

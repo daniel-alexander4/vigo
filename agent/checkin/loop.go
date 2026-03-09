@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hobnob/hobnob/agent/modules"
 	"github.com/hobnob/hobnob/agent/nails"
 	"github.com/hobnob/hobnob/agent/policy"
@@ -137,8 +138,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 		return nil, fmt.Errorf("evaluating policy bundle: %w", err)
 	}
 
-	// Generate a run ID from current timestamp.
-	runID := fmt.Sprintf("run-%d", time.Now().UnixNano())
+	runID := uuid.New().String()
 
 	r := runner.NewRunner(executors, nailsMap, dryRun, module)
 	r.Cache = cache

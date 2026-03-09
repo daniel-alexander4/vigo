@@ -16,12 +16,23 @@ func Detect(osFamily, osDistro string) (PackageManager, error) {
 		return &BrewManager{}, nil
 	}
 
+	// gopsutil may return the distro name (e.g. "debian") as PlatformFamily
+	// instead of "linux". Normalize by checking the distro list directly.
 	if family != "linux" {
-		return nil, fmt.Errorf("unsupported OS family: %s", family)
+		switch family {
+		case "debian", "ubuntu", "mint", "linuxmint", "fedora", "rhel", "rocky", "alma",
+			"centos", "alpine", "arch", "manjaro", "opensuse", "sles":
+			// family is actually a distro name; treat as Linux.
+			if distro == "" {
+				distro = family
+			}
+		default:
+			return nil, fmt.Errorf("unsupported OS family: %s", family)
+		}
 	}
 
 	switch distro {
-	case "ubuntu", "debian", "mint":
+	case "ubuntu", "debian", "mint", "linuxmint":
 		return &AptManager{}, nil
 	case "fedora", "rhel", "rocky", "alma":
 		return &DnfManager{}, nil
@@ -46,11 +57,20 @@ func DetectRepoManager(osFamily, osDistro string) RepoManager {
 	distro := strings.ToLower(osDistro)
 
 	if family != "linux" {
-		return nil
+		// Normalize: gopsutil may report distro as family.
+		switch family {
+		case "debian", "ubuntu", "mint", "linuxmint", "fedora", "rhel", "rocky", "alma",
+			"centos", "opensuse", "sles":
+			if distro == "" {
+				distro = family
+			}
+		default:
+			return nil
+		}
 	}
 
 	switch distro {
-	case "ubuntu", "debian", "mint":
+	case "ubuntu", "debian", "mint", "linuxmint":
 		return &AptRepoManager{}
 	case "fedora", "rhel", "rocky", "alma", "centos":
 		return &DnfRepoManager{}

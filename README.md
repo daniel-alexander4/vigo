@@ -29,7 +29,7 @@ HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
 HOBNOB_TLS_CA=certs/ca.crt
-HOBNOB_TLS_CA_KEY=certs/ca.key
+HOBNOB_TLS_CA_KEY=certs/ca.key   # enables bootstrap CSR signing
 EOF
 ```
 
@@ -52,7 +52,7 @@ This starts PostgreSQL and the hobnob server. Migrations run automatically. Veri
 docker compose ps
 ```
 
-You should see `postgres` (healthy) and `server` (running). The dashboard is at `http://<server-ip>:8080/`.
+You should see `postgres` (healthy) and `server` (running). The dashboard is at `http://<server-ip>:8085/`.
 
 ### 6. Bootstrap managed nodes
 
@@ -75,13 +75,13 @@ bootstrap:
 Then on each node, run:
 
 ```bash
-curl -sSf http://<server-ip>:8080/bootstrap | HOBNOB_SERVER=http://<server-ip>:8080 sh
+curl -sSf http://<server-ip>:8085/bootstrap | sh
 ```
 
 Or use the standalone bootstrap script:
 
 ```bash
-HOBNOB_SERVER=http://<server-ip>:8080 sh scripts/bootstrap.sh
+HOBNOB_SERVER=http://<server-ip>:8085 sh scripts/bootstrap.sh
 ```
 
 No token needed. The server validates the node's hostname and source IP against the trusted patterns, signs its CSR, and returns TLS certs. The agent is installed, enrolled, and started as a systemd service.
@@ -98,13 +98,13 @@ hobcli approved add "web-01.example.com" --token <TOKEN>
 Then on the node:
 
 ```bash
-HOBNOB_SERVER=http://<server-ip>:8080 HOBNOB_TOKEN=<TOKEN> sh scripts/bootstrap.sh
+HOBNOB_SERVER=http://<server-ip>:8085 HOBNOB_TOKEN=<TOKEN> sh scripts/bootstrap.sh
 ```
 
 Or use the server-generated bootstrap script:
 
 ```bash
-curl -sSf "http://<server-ip>:8080/bootstrap?token=<TOKEN>" | sh
+curl -sSf "http://<server-ip>:8085/bootstrap?token=<TOKEN>" | sh
 ```
 
 #### What bootstrap does
@@ -204,7 +204,7 @@ hobcli runs list
 hobcli nodes show web01.example.com
 ```
 
-Or open the web dashboard at `http://<server-ip>:8080/`.
+Or open the web dashboard at `http://<server-ip>:8085/`.
 
 ## Config structure
 
@@ -250,8 +250,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 ```
 ┌──────────────┐     gRPC/mTLS     ┌──────────────┐
 │   Agent       │◄─────────────────►│   Server      │
-│  (per node)   │     pull loop     │  :9090 gRPC   │
-│               │                   │  :8080 REST   │
+│  (per node)   │     pull loop     │  :9095 gRPC   │
+│               │                   │  :8085 REST   │
 └──────────────┘                   └──────┬───────┘
                                           │
                             ┌─────────────┼─────────────┐

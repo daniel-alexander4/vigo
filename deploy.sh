@@ -9,11 +9,11 @@ cd "$SCRIPT_DIR"
 
 HOBNOB_DIR="/etc/hobnob"
 SERVER_CONFIGS_DIR="${HOBNOB_DIR}/server-configs"
-CLIENT_CONFIGS_DIR="${HOBNOB_DIR}/client-configs"
+NODE_CONFIGS_DIR="${HOBNOB_DIR}/node-configs"
 CERTS_DIR="${SERVER_CONFIGS_DIR}/certs"
-MODULES_DIR="${CLIENT_CONFIGS_DIR}/modules"
-ROLES_DIR="${CLIENT_CONFIGS_DIR}/roles"
-TEMPLATES_DIR="${CLIENT_CONFIGS_DIR}/templates"
+MODULES_DIR="${NODE_CONFIGS_DIR}/modules"
+ROLES_DIR="${NODE_CONFIGS_DIR}/roles"
+TEMPLATES_DIR="${NODE_CONFIGS_DIR}/templates"
 ENV_FILE="${SERVER_CONFIGS_DIR}/.env"
 
 # ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ fail()  { printf '\033[1;31m[FAIL]\033[0m  %s\n' "$*" >&2; exit 1; }
 
 info "Creating ${HOBNOB_DIR} directory structure"
 
-sudo mkdir -p "$CLIENT_CONFIGS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "$CERTS_DIR"
+sudo mkdir -p "$NODE_CONFIGS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "$CERTS_DIR"
 
 ok "Directory structure ready"
 
@@ -41,14 +41,14 @@ ok "Directory structure ready"
 
 info "Checking TLS certificates"
 
-if [ -f "${CERTS_DIR}/server.crt" ] && [ -f "${CERTS_DIR}/server.key" ] && [ -f "${CERTS_DIR}/ca.crt" ]; then
+if [ -f "${CERTS_DIR}/server.crt" ] && [ -f "${CERTS_DIR}/server.key" ] && [ -f "${CERTS_DIR}/ca.crt" ] && [ -f "${CERTS_DIR}/ca.key" ]; then
   echo 'Certs already exist — skipping'
 else
   if [ ! -f server-configs/certs/server.crt ] || [ ! -f server-configs/certs/server.key ] || [ ! -f server-configs/certs/ca.crt ]; then
     echo 'Generating self-signed CA + server certs...'
     make certs
   fi
-  sudo cp server-configs/certs/server.crt server-configs/certs/server.key server-configs/certs/ca.crt "$CERTS_DIR/"
+  sudo cp server-configs/certs/server.crt server-configs/certs/server.key server-configs/certs/ca.crt server-configs/certs/ca.key "$CERTS_DIR/"
   echo "Copied certs to ${CERTS_DIR}"
 fi
 
@@ -80,6 +80,7 @@ HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
 HOBNOB_TLS_CA=certs/ca.crt
+HOBNOB_TLS_CA_KEY=certs/ca.key
 
 # =============================================================================
 # OPTIONAL — uncomment and edit as needed:
@@ -88,8 +89,8 @@ HOBNOB_TLS_CA=certs/ca.crt
 # Server config file path (default: server-configs/server.yaml)
 # HOBNOB_CONFIG_FILE=server-configs/server.yaml
 
-# Client configs directory (default: client-configs)
-# HOBNOB_CLIENT_CONFIGS_DIR=client-configs
+# Node configs directory (default: node-configs)
+# HOBNOB_NODE_CONFIGS_DIR=node-configs
 
 # Migrations directory (default: migrations)
 # HOBNOB_MIGRATIONS_DIR=migrations
@@ -106,6 +107,15 @@ HOBNOB_TLS_CA=certs/ca.crt
 
 # .env file path override (default: server-configs/.env)
 # HOBNOB_ENV_FILE=server-configs/.env
+
+# =============================================================================
+# MODULE SECRETS — uncomment when enabling the corresponding clients.hob entries.
+# Each maps to a secret: reference in node config vars.
+# =============================================================================
+
+# HOBNOB_REDIS_PASSWORD=changeme
+# HOBNOB_HAPROXY_STATS_PASSWORD=changeme
+# HOBNOB_MYSQL_ROOT_PASSWORD=changeme
 ENVFILE
   echo "${ENV_FILE} created with defaults"
 fi
@@ -116,7 +126,7 @@ ok ".env ready"
 # Step 4: Copy config files to /etc/hobnob/config
 # ---------------------------------------------------------------------------
 
-info "Populating ${CLIENT_CONFIGS_DIR}"
+info "Populating ${NODE_CONFIGS_DIR}"
 
 # Server config
 sudo mkdir -p "$SERVER_CONFIGS_DIR"
@@ -128,16 +138,16 @@ else
 fi
 
 # clients.hob
-if [ -f "${CLIENT_CONFIGS_DIR}/clients.hob" ]; then
+if [ -f "${NODE_CONFIGS_DIR}/clients.hob" ]; then
   echo 'clients.hob already exists — skipping'
 else
-  sudo cp client-configs/clients.hob "$CLIENT_CONFIGS_DIR/"
+  sudo cp node-configs/clients.hob "$NODE_CONFIGS_DIR/"
   echo 'Copied clients.hob'
 fi
 
 # Module definitions — copy any that don't already exist
 NEW_MODULES=0
-for src in client-configs/modules/*.hob; do
+for src in node-configs/modules/*.hob; do
   [ -f "$src" ] || continue
   dest="${MODULES_DIR}/$(basename "$src")"
   if [ ! -f "$dest" ]; then
@@ -150,7 +160,7 @@ echo "Module definitions: ${MODULE_COUNT} total (${NEW_MODULES} new)"
 
 # Role definitions — copy any that don't already exist
 NEW_ROLES=0
-for src in client-configs/roles/*.hob; do
+for src in node-configs/roles/*.hob; do
   [ -f "$src" ] || continue
   dest="${ROLES_DIR}/$(basename "$src")"
   if [ ! -f "$dest" ]; then
@@ -162,10 +172,10 @@ ROLE_COUNT=$(find "$ROLES_DIR" -name '*.hob' 2>/dev/null | wc -l)
 echo "Role definitions: ${ROLE_COUNT} total (${NEW_ROLES} new)"
 
 # Template files — recursively copy preserving directory structure
-if [ -d "client-configs/templates" ]; then
+if [ -d "node-configs/templates" ]; then
   NEW_TEMPLATES=0
   while IFS= read -r src; do
-    rel="${src#client-configs/templates/}"
+    rel="${src#node-configs/templates/}"
     dest="${TEMPLATES_DIR}/${rel}"
     dest_dir="$(dirname "$dest")"
     if [ ! -f "$dest" ]; then
@@ -173,7 +183,7 @@ if [ -d "client-configs/templates" ]; then
       sudo cp "$src" "$dest"
       NEW_TEMPLATES=$((NEW_TEMPLATES + 1))
     fi
-  done < <(find client-configs/templates -type f)
+  done < <(find node-configs/templates -type f)
   TEMPLATE_COUNT=$(find "$TEMPLATES_DIR" -type f 2>/dev/null | wc -l)
   echo "Template files: ${TEMPLATE_COUNT} total (${NEW_TEMPLATES} new)"
 fi
@@ -207,7 +217,7 @@ cat <<DONE
 
 Config directory: ${HOBNOB_DIR}
   ${HOBNOB_DIR}/server-configs/server.yaml
-  ${CLIENT_CONFIGS_DIR}/clients.hob
+  ${NODE_CONFIGS_DIR}/clients.hob
   ${MODULES_DIR}/*.hob
   ${ROLES_DIR}/*.hob
   ${TEMPLATES_DIR}/
@@ -216,7 +226,7 @@ Config directory: ${HOBNOB_DIR}
 
 Services:
   - PostgreSQL:  port 5432 (internal)
-  - gRPC (mTLS): port 9090 (agent traffic)
+  - gRPC (mTLS): port 9095 (agent traffic)
   - REST + UI:   port 8085 (hobcli, dashboard, bootstrap)
 
 Next steps:
@@ -224,14 +234,25 @@ Next steps:
   1. Open the dashboard:
      http://<server-ip>:8085/
 
-  2. Generate an enrollment token:
-     docker compose exec server hobcli tokens generate \\
-       --pattern "*.example.com"
+  2. Configure trusted enrollment in server.yaml:
+     Edit ${SERVER_CONFIGS_DIR}/server.yaml and add trusted_enrollment
+     patterns with CIDR restrictions under the bootstrap: section:
 
-  3. On each managed node, run the printed curl command:
-     curl http://<server-ip>:8085/bootstrap?token=<TOKEN> | bash
+       bootstrap:
+         trusted_enrollment:
+           - pattern: "*.example.com"
+             cidrs: ["10.0.0.0/8"]
 
-  4. Edit configs in ${CLIENT_CONFIGS_DIR}/
+     Then restart: docker compose restart server
+
+  3. On each managed node, bootstrap the agent:
+     curl -sSf http://<server-ip>:8085/bootstrap | sh
+
+     No token needed — the server validates the node's hostname and
+     source IP against trusted_enrollment patterns, signs its CSR,
+     and returns TLS certs.
+
+  4. Edit configs in ${NODE_CONFIGS_DIR}/
      (modules, roles, clients.hob — server hot-reloads automatically)
      Use 'hobvi' for syntax highlighting + idempotency validation on save.
 
