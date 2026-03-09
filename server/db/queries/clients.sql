@@ -38,6 +38,10 @@ UPDATE nodes
 SET force_push = false
 WHERE id = $1;
 
+-- name: DeleteNode :exec
+DELETE FROM nodes
+WHERE id = $1;
+
 -- name: ListNodesWithForcePush :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM nodes

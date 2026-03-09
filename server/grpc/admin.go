@@ -129,6 +129,21 @@ func (s *AdminService) RevokeNode(ctx context.Context, req *pb.RevokeNodeRequest
 	return &pb.RevokeNodeResponse{}, nil
 }
 
+// ---------- DeleteNode ----------
+
+func (s *AdminService) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest) (*pb.DeleteNodeResponse, error) {
+	id, err := uuid.Parse(req.Id)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+	}
+
+	if err := s.queries.DeleteNode(ctx, id); err != nil {
+		return nil, status.Errorf(codes.Internal, "deleting node: %v", err)
+	}
+
+	return &pb.DeleteNodeResponse{}, nil
+}
+
 // ---------- ForcePush ----------
 
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {

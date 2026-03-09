@@ -10,11 +10,17 @@ RUN CGO_ENABLED=0 go build -o hobd ./server
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates openssl
 
 COPY --from=builder /build/hobd /usr/local/bin/hobd
 COPY --from=builder /build/migrations /migrations
 
+# Seed configs — copied to /data on first run by entrypoint.
+COPY server-configs/server.yaml /seed/server.yaml
+COPY node-configs/ /seed/node-configs/
+
+COPY entrypoint.sh /entrypoint.sh
+
 EXPOSE 1530 8080
 
-ENTRYPOINT ["hobd"]
+ENTRYPOINT ["/entrypoint.sh"]

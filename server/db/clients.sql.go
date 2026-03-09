@@ -51,6 +51,16 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 	return i, err
 }
 
+const deleteNode = `-- name: DeleteNode :exec
+DELETE FROM nodes
+WHERE id = $1
+`
+
+func (q *Queries) DeleteNode(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteNode, id)
+	return err
+}
+
 const getNodeByHostname = `-- name: GetNodeByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM nodes

@@ -289,6 +289,7 @@ const (
 	HobnobAdmin_ListNodes_FullMethodName             = "/hobnob.v1.HobnobAdmin/ListNodes"
 	HobnobAdmin_GetNode_FullMethodName               = "/hobnob.v1.HobnobAdmin/GetNode"
 	HobnobAdmin_RevokeNode_FullMethodName            = "/hobnob.v1.HobnobAdmin/RevokeNode"
+	HobnobAdmin_DeleteNode_FullMethodName            = "/hobnob.v1.HobnobAdmin/DeleteNode"
 	HobnobAdmin_ForcePush_FullMethodName             = "/hobnob.v1.HobnobAdmin/ForcePush"
 	HobnobAdmin_DryRun_FullMethodName                = "/hobnob.v1.HobnobAdmin/DryRun"
 	HobnobAdmin_ListRuns_FullMethodName              = "/hobnob.v1.HobnobAdmin/ListRuns"
@@ -321,6 +322,8 @@ type HobnobAdminClient interface {
 	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
 	// RevokeNode revokes an enrolled node, blocking future check-ins.
 	RevokeNode(ctx context.Context, in *RevokeNodeRequest, opts ...grpc.CallOption) (*RevokeNodeResponse, error)
+	// DeleteNode permanently removes a node and all its history from the database.
+	DeleteNode(ctx context.Context, in *DeleteNodeRequest, opts ...grpc.CallOption) (*DeleteNodeResponse, error)
 	// ForcePush triggers an immediate check-in for a node or all nodes.
 	ForcePush(ctx context.Context, in *ForcePushRequest, opts ...grpc.CallOption) (*ForcePushResponse, error)
 	// DryRun computes a plan without applying changes.
@@ -413,6 +416,16 @@ func (c *hobnobAdminClient) RevokeNode(ctx context.Context, in *RevokeNodeReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RevokeNodeResponse)
 	err := c.cc.Invoke(ctx, HobnobAdmin_RevokeNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hobnobAdminClient) DeleteNode(ctx context.Context, in *DeleteNodeRequest, opts ...grpc.CallOption) (*DeleteNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteNodeResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_DeleteNode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -575,6 +588,8 @@ type HobnobAdminServer interface {
 	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
 	// RevokeNode revokes an enrolled node, blocking future check-ins.
 	RevokeNode(context.Context, *RevokeNodeRequest) (*RevokeNodeResponse, error)
+	// DeleteNode permanently removes a node and all its history from the database.
+	DeleteNode(context.Context, *DeleteNodeRequest) (*DeleteNodeResponse, error)
 	// ForcePush triggers an immediate check-in for a node or all nodes.
 	ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error)
 	// DryRun computes a plan without applying changes.
@@ -630,6 +645,9 @@ func (UnimplementedHobnobAdminServer) GetNode(context.Context, *GetNodeRequest) 
 }
 func (UnimplementedHobnobAdminServer) RevokeNode(context.Context, *RevokeNodeRequest) (*RevokeNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeNode not implemented")
+}
+func (UnimplementedHobnobAdminServer) DeleteNode(context.Context, *DeleteNodeRequest) (*DeleteNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNode not implemented")
 }
 func (UnimplementedHobnobAdminServer) ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForcePush not implemented")
@@ -798,6 +816,24 @@ func _HobnobAdmin_RevokeNode_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HobnobAdminServer).RevokeNode(ctx, req.(*RevokeNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HobnobAdmin_DeleteNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HobnobAdminServer).DeleteNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HobnobAdmin_DeleteNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HobnobAdminServer).DeleteNode(ctx, req.(*DeleteNodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1084,6 +1120,10 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeNode",
 			Handler:    _HobnobAdmin_RevokeNode_Handler,
+		},
+		{
+			MethodName: "DeleteNode",
+			Handler:    _HobnobAdmin_DeleteNode_Handler,
 		},
 		{
 			MethodName: "ForcePush",

@@ -1,266 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Hobnob deployment script — run on the Docker server after rsync.
-# Usage: cd /path/to/hobnob && ./deploy.sh
+# Hobnob deployment — build and start.
+# All config seeding happens inside the container entrypoint.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$(dirname "$0")"
 
-HOBNOB_DIR="/etc/hobnob"
-SERVER_CONFIGS_DIR="${HOBNOB_DIR}/server-configs"
-NODE_CONFIGS_DIR="${HOBNOB_DIR}/node-configs"
-CERTS_DIR="${SERVER_CONFIGS_DIR}/certs"
-MODULES_DIR="${NODE_CONFIGS_DIR}/modules"
-ROLES_DIR="${NODE_CONFIGS_DIR}/roles"
-TEMPLATES_DIR="${NODE_CONFIGS_DIR}/templates"
-ENV_FILE="${SERVER_CONFIGS_DIR}/.env"
-
-# ---------------------------------------------------------------------------
-# Helper functions
-# ---------------------------------------------------------------------------
-
-info()  { printf '\033[1;34m[INFO]\033[0m  %s\n' "$*"; }
-ok()    { printf '\033[1;32m[OK]\033[0m    %s\n' "$*"; }
-warn()  { printf '\033[1;33m[WARN]\033[0m  %s\n' "$*"; }
-fail()  { printf '\033[1;31m[FAIL]\033[0m  %s\n' "$*" >&2; exit 1; }
-
-# ---------------------------------------------------------------------------
-# Step 1: Create /etc/hobnob directory structure
-# ---------------------------------------------------------------------------
-
-info "Creating ${HOBNOB_DIR} directory structure"
-
-sudo mkdir -p "$NODE_CONFIGS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "$CERTS_DIR"
-
-ok "Directory structure ready"
-
-# ---------------------------------------------------------------------------
-# Step 2: Generate TLS certs (if missing) and copy to server-configs/certs
-# ---------------------------------------------------------------------------
-
-info "Checking TLS certificates"
-
-if [ -f "${CERTS_DIR}/server.crt" ] && [ -f "${CERTS_DIR}/server.key" ] && [ -f "${CERTS_DIR}/ca.crt" ] && [ -f "${CERTS_DIR}/ca.key" ]; then
-  echo 'Certs already exist — skipping'
-else
-  if [ ! -f server-configs/certs/server.crt ] || [ ! -f server-configs/certs/server.key ] || [ ! -f server-configs/certs/ca.crt ]; then
-    echo 'Generating self-signed CA + server certs...'
-    make certs
-  fi
-  sudo cp server-configs/certs/server.crt server-configs/certs/server.key server-configs/certs/ca.crt server-configs/certs/ca.key "$CERTS_DIR/"
-  echo "Copied certs to ${CERTS_DIR}"
-fi
-
-ok "TLS certificates ready"
-
-# ---------------------------------------------------------------------------
-# Step 3: Write .env file (if missing)
-# ---------------------------------------------------------------------------
-
-info "Checking .env file"
-
-if [ -f "$ENV_FILE" ]; then
-  echo "${ENV_FILE} already exists — skipping"
-else
-  sudo tee "$ENV_FILE" > /dev/null <<'ENVFILE'
-# =============================================================================
-# Hobnob Environment Configuration
-# =============================================================================
-# The StaticProvider reads these values to resolve secret: references in
-# server-configs/server.yaml. Every secret:path/to/key maps to an env var:
-#   secret:hobnob/db/dsn  ->  HOBNOB_DB_DSN
-#   secret:hobnob/tls/cert -> HOBNOB_TLS_CERT
-# Rule: uppercase, slashes become underscores.
-#
-# REQUIRED — server will not start without these:
-# =============================================================================
-
-HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
-HOBNOB_TLS_CERT=certs/server.crt
-HOBNOB_TLS_KEY=certs/server.key
-HOBNOB_TLS_CA=certs/ca.crt
-HOBNOB_TLS_CA_KEY=certs/ca.key
-
-# =============================================================================
-# OPTIONAL — uncomment and edit as needed:
-# =============================================================================
-
-# Server config file path (default: server-configs/server.yaml)
-# HOBNOB_CONFIG_FILE=server-configs/server.yaml
-
-# Node configs directory (default: node-configs)
-# HOBNOB_NODE_CONFIGS_DIR=node-configs
-
-# Migrations directory (default: migrations)
-# HOBNOB_MIGRATIONS_DIR=migrations
-
-# Server version string reported to agents for self-update (default: dev)
-# HOBNOB_VERSION=1.0.0
-
-# Directory containing cross-compiled agent binaries for distribution
-# Used by GET /api/v1/agent/download/{os}/{arch} (default: dist/agent)
-# HOBNOB_AGENT_DIR=dist/agent
-
-# Webhook secret for HMAC-SHA256 payload signing
-# HOBNOB_WEBHOOK_SECRET=change-me-to-a-random-string
-
-# .env file path override (default: server-configs/.env)
-# HOBNOB_ENV_FILE=server-configs/.env
-
-# =============================================================================
-# MODULE SECRETS — uncomment when enabling the corresponding node entries.
-# Each maps to a secret: reference in node config vars.
-# =============================================================================
-
-# HOBNOB_REDIS_PASSWORD=changeme
-# HOBNOB_HAPROXY_STATS_PASSWORD=changeme
-# HOBNOB_MYSQL_ROOT_PASSWORD=changeme
-ENVFILE
-  echo "${ENV_FILE} created with defaults"
-fi
-
-ok ".env ready"
-
-# ---------------------------------------------------------------------------
-# Step 4: Copy config files to /etc/hobnob/config
-# ---------------------------------------------------------------------------
-
-info "Populating ${NODE_CONFIGS_DIR}"
-
-# Server config
-sudo mkdir -p "$SERVER_CONFIGS_DIR"
-if [ -f "${SERVER_CONFIGS_DIR}/server.yaml" ]; then
-  echo 'server.yaml already exists — skipping'
-else
-  sudo cp server-configs/server.yaml "$SERVER_CONFIGS_DIR/"
-  echo 'Copied server.yaml'
-fi
-
-# clients.hob.example
-if [ -f "${NODE_CONFIGS_DIR}/clients.hob.example" ]; then
-  echo 'clients.hob.example already exists — skipping'
-else
-  sudo cp node-configs/clients.hob.example "$NODE_CONFIGS_DIR/"
-  echo 'Copied clients.hob.example'
-fi
-
-# Module examples — copy any that don't already exist
-NEW_MODULES=0
-for src in node-configs/modules/*.hob.example; do
-  [ -f "$src" ] || continue
-  dest="${MODULES_DIR}/$(basename "$src")"
-  if [ ! -f "$dest" ]; then
-    sudo cp "$src" "$dest"
-    NEW_MODULES=$((NEW_MODULES + 1))
-  fi
-done
-MODULE_COUNT=$(find "$MODULES_DIR" -name '*.hob.example' 2>/dev/null | wc -l)
-echo "Module examples: ${MODULE_COUNT} total (${NEW_MODULES} new)"
-
-# Role examples — copy any that don't already exist
-NEW_ROLES=0
-for src in node-configs/roles/*.hob.example; do
-  [ -f "$src" ] || continue
-  dest="${ROLES_DIR}/$(basename "$src")"
-  if [ ! -f "$dest" ]; then
-    sudo cp "$src" "$dest"
-    NEW_ROLES=$((NEW_ROLES + 1))
-  fi
-done
-ROLE_COUNT=$(find "$ROLES_DIR" -name '*.hob.example' 2>/dev/null | wc -l)
-echo "Role definitions: ${ROLE_COUNT} total (${NEW_ROLES} new)"
-
-# Template files — recursively copy preserving directory structure
-if [ -d "node-configs/templates" ]; then
-  NEW_TEMPLATES=0
-  while IFS= read -r src; do
-    rel="${src#node-configs/templates/}"
-    dest="${TEMPLATES_DIR}/${rel}"
-    dest_dir="$(dirname "$dest")"
-    if [ ! -f "$dest" ]; then
-      sudo mkdir -p "$dest_dir"
-      sudo cp "$src" "$dest"
-      NEW_TEMPLATES=$((NEW_TEMPLATES + 1))
-    fi
-  done < <(find node-configs/templates -type f)
-  TEMPLATE_COUNT=$(find "$TEMPLATES_DIR" -type f 2>/dev/null | wc -l)
-  echo "Template files: ${TEMPLATE_COUNT} total (${NEW_TEMPLATES} new)"
-fi
-
-ok "Config files ready"
-
-# ---------------------------------------------------------------------------
-# Step 5: Build and start containers
-# ---------------------------------------------------------------------------
-
-info "Building and starting containers"
-
+echo "Building and starting containers..."
 docker compose build
 docker compose up -d
-echo '---'
-echo 'Waiting for services to be healthy...'
+
+echo "Waiting for services..."
 sleep 5
 docker compose ps
 
-ok "Containers running"
-
-# ---------------------------------------------------------------------------
-# Step 6: Print status and next steps
-# ---------------------------------------------------------------------------
-
-cat <<DONE
+cat <<'DONE'
 
 ============================================================
-  Hobnob deployed successfully
+  Hobnob deployed
 ============================================================
 
-Config directory: ${HOBNOB_DIR}
-  ${HOBNOB_DIR}/server-configs/server.yaml
-  ${NODE_CONFIGS_DIR}/clients.hob
-  ${MODULES_DIR}/*.hob
-  ${ROLES_DIR}/*.hob
-  ${TEMPLATES_DIR}/
-  ${CERTS_DIR}/
-  ${ENV_FILE}
+All config lives inside the hobnob-data Docker volume at /data.
+On first run, the entrypoint seeds default configs and generates
+TLS certificates automatically.
+
+To edit configs:
+  docker compose exec hobnob sh
+  vi /data/node-configs/modules/nginx.hob
+  # Server hot-reloads .hob files automatically.
 
 Services:
-  - PostgreSQL:  port 5432 (internal)
   - gRPC (mTLS): port 1530 (agent traffic)
   - REST + UI:   port 8085 (hobcli, dashboard, bootstrap)
 
 Next steps:
-
-  1. Open the dashboard:
-     http://<server-ip>:8085/
-
-  2. Configure trusted enrollment in server.yaml:
-     Edit ${SERVER_CONFIGS_DIR}/server.yaml and add trusted_enrollment
-     patterns with CIDR restrictions under the bootstrap: section:
-
-       bootstrap:
-         trusted_enrollment:
-           - pattern: "*.example.com"
-             cidrs: ["10.0.0.0/8"]
-
-     Then restart: docker compose restart server
-
-  3. On each managed node, bootstrap the agent:
-     curl -sSf http://<server-ip>:8085/bootstrap | sh
-
-     No token needed — the server validates the node's hostname and
-     source IP against trusted_enrollment patterns, signs its CSR,
-     and returns TLS certs.
-
-  4. Edit configs in ${NODE_CONFIGS_DIR}/
-     (modules, roles, clients.hob — server hot-reloads automatically)
-     Use 'hobvi' for syntax highlighting + idempotency validation on save.
-
-  5. For production:
-     - Replace ${CERTS_DIR}/ with real TLS certificates
-     - Change POSTGRES_PASSWORD in docker-compose.yml + ${ENV_FILE}
-     - Set HOBNOB_WEBHOOK_SECRET in ${ENV_FILE}
-     - Set HOBNOB_VERSION to your release tag
+  1. Open the dashboard: http://<server-ip>:8085/
+  2. Bootstrap nodes:    curl -sSf http://<server-ip>:8085/bootstrap | sh
 
 ============================================================
 DONE

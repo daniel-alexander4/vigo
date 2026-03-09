@@ -24,11 +24,7 @@ services:
       - "1530:1530"
       - "8085:8080"
     volumes:
-      - /etc/hobnob/node-configs:/node-configs:ro
-      - /etc/hobnob/server-configs:/server-configs:ro
-      - /etc/hobnob/server-configs/certs:/certs:ro
-    env_file:
-      - /etc/hobnob/server-configs/.env
+      - hobnob-data:/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,3 +33,4 @@ services:
 
 volumes:
   pgdata:
+  hobnob-data:

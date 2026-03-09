@@ -77,6 +77,13 @@ service HobnobAdmin {
     };
   }
 
+  // DeleteNode permanently removes a node and all its history from the database.
+  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/nodes/{id}"
+    };
+  }
+
   // ForcePush triggers an immediate check-in for a node or all nodes.
   rpc ForcePush(ForcePushRequest) returns (ForcePushResponse) {
     option (google.api.http) = {
@@ -388,6 +395,12 @@ message RevokeNodeRequest {
 }
 
 message RevokeNodeResponse {}
+
+message DeleteNodeRequest {
+  string id = 1;
+}
+
+message DeleteNodeResponse {}
 
 message ForcePushRequest {
   string node_id = 1;         // empty = all nodes

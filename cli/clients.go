@@ -35,14 +35,14 @@ var nodesListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "HOSTNAME\tIP\tENROLLED\tLAST SEEN\tSTATUS")
+		fmt.Fprintln(w, "ID\tHOSTNAME\tIP\tENROLLED\tLAST SEEN\tSTATUS")
 		for _, c := range resp.Nodes {
 			status := "active"
 			if c.Revoked {
 				status = "revoked"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-				c.Hostname, c.IPAddress,
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				c.ID, c.Hostname, c.IPAddress,
 				formatTimestamp(c.EnrolledAt),
 				formatTimestamp(c.LastSeen),
 				status)
@@ -106,6 +106,20 @@ var nodesRevokeCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Revoked node %s\n", args[0])
+		return nil
+	},
+}
+
+var nodesDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Permanently delete a node and all its history",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+		if err := client.delete("/api/v1/nodes/"+args[0], nil); err != nil {
+			return err
+		}
+		fmt.Printf("Deleted node %s\n", args[0])
 		return nil
 	},
 }
@@ -181,5 +195,5 @@ func formatTraitValue(v any) string {
 }
 
 func init() {
-	nodesCmd.AddCommand(nodesListCmd, nodesShowCmd, nodesRevokeCmd, nodesTraitsCmd)
+	nodesCmd.AddCommand(nodesListCmd, nodesShowCmd, nodesRevokeCmd, nodesDeleteCmd, nodesTraitsCmd)
 }
