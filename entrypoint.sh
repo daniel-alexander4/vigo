@@ -166,5 +166,6 @@ cd "$DATA_DIR"
 
 export HOBNOB_CONFIG_FILE="server-configs/server.yaml"
 export HOBNOB_NODE_CONFIGS_DIR="node-configs"
+export HOBNOB_MIGRATIONS_DIR="/migrations"
 
 exec hobd "$@"
