@@ -8,7 +8,7 @@ import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
 
 // =============================================================================
-// Agent-facing service (gRPC-only, port 9090)
+// Agent-facing service (gRPC-only, port 1530)
 // =============================================================================
 
 service HobnobAgent {

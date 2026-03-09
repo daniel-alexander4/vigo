@@ -15,12 +15,13 @@ services:
       timeout: 5s
       retries: 5
 
-  server:
+  hobnob:
+    container_name: hobnob
     build:
       context: .
       dockerfile: Dockerfile.server
     ports:
-      - "9095:9090"
+      - "1530:1530"
       - "8085:8080"
     volumes:
       - /etc/hobnob/node-configs:/node-configs:ro

@@ -787,8 +787,11 @@ func cloneResources(resources []ResourceConfig) []ResourceConfig {
 
 
 // isConfigFile checks if a filename has a recognized config extension.
-// Accepts .hob (preferred), .yaml, and .yml.
+// Accepts .hob (preferred), .yaml, and .yml. Ignores .example files.
 func isConfigFile(name string) bool {
+	if strings.HasSuffix(name, ".example") {
+		return false
+	}
 	ext := filepath.Ext(name)
 	return ext == ".hob" || ext == ".yaml" || ext == ".yml"
 }

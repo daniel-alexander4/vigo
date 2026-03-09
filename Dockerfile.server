@@ -15,6 +15,6 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /build/hobd /usr/local/bin/hobd
 COPY --from=builder /build/migrations /migrations
 
-EXPOSE 9090 8080
+EXPOSE 1530 8080
 
 ENTRYPOINT ["hobd"]

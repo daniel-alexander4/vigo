@@ -250,7 +250,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 ```
 ┌──────────────┐     gRPC/mTLS     ┌──────────────┐
 │   Agent       │◄─────────────────►│   Server      │
-│  (per node)   │     pull loop     │  :9095 gRPC   │
+│  (per node)   │     pull loop     │  :1530 gRPC   │
 │               │                   │  :8085 REST   │
 └──────────────┘                   └──────┬───────┘
                                           │
@@ -261,6 +261,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
                        │  :5432 │   │  (YAML)   │  │(secrets)│
                        └────────┘   └──────────┘  └────────┘
 ```
+
+**Port 1530** — approximate first recorded written use of "hobgoblin" in English. Clean, short, historically grounded.
 
 - **Server (hobd)** — gRPC endpoint for agents, REST API + web UI for operators, built-in CA for bootstrap CSR signing
 - **Agent (hob)** — daemon on each managed node, pulls config, converges idempotently

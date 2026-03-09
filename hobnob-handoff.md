@@ -195,7 +195,7 @@ CREATE TABLE webhooks (
 
 ```yaml
 server:
-  grpc_listen: ":9090"
+  grpc_listen: ":1530"
   api_listen: ":8080"
   tls:
     cert_file: "/certs/server.crt"
@@ -312,7 +312,7 @@ Always record `action_taken: none` in run results when no change was needed.
 ### Agent Config (`/etc/hobnob/agent.yaml`)
 
 ```yaml
-server: "hobnob.example.com:9090"
+server: "hobnob.example.com:1530"
 tls:
   ca_file: "/etc/hobnob/ca.crt"
 key_file: "/etc/hobnob/agent.key"
@@ -421,7 +421,7 @@ services:
     build:
       dockerfile: Dockerfile.server
     ports:
-      - "9090:9090"   # gRPC
+      - "1530:1530"   # gRPC
       - "8080:8080"   # REST API + UI + metrics
     volumes:
       - ./config:/config:ro

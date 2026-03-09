@@ -109,7 +109,7 @@ HOBNOB_TLS_CA_KEY=certs/ca.key
 # HOBNOB_ENV_FILE=server-configs/.env
 
 # =============================================================================
-# MODULE SECRETS — uncomment when enabling the corresponding clients.hob entries.
+# MODULE SECRETS — uncomment when enabling the corresponding node entries.
 # Each maps to a secret: reference in node config vars.
 # =============================================================================
 
@@ -137,17 +137,17 @@ else
   echo 'Copied server.yaml'
 fi
 
-# clients.hob
-if [ -f "${NODE_CONFIGS_DIR}/clients.hob" ]; then
-  echo 'clients.hob already exists — skipping'
+# clients.hob.example
+if [ -f "${NODE_CONFIGS_DIR}/clients.hob.example" ]; then
+  echo 'clients.hob.example already exists — skipping'
 else
-  sudo cp node-configs/clients.hob "$NODE_CONFIGS_DIR/"
-  echo 'Copied clients.hob'
+  sudo cp node-configs/clients.hob.example "$NODE_CONFIGS_DIR/"
+  echo 'Copied clients.hob.example'
 fi
 
-# Module definitions — copy any that don't already exist
+# Module examples — copy any that don't already exist
 NEW_MODULES=0
-for src in node-configs/modules/*.hob; do
+for src in node-configs/modules/*.hob.example; do
   [ -f "$src" ] || continue
   dest="${MODULES_DIR}/$(basename "$src")"
   if [ ! -f "$dest" ]; then
@@ -155,12 +155,12 @@ for src in node-configs/modules/*.hob; do
     NEW_MODULES=$((NEW_MODULES + 1))
   fi
 done
-MODULE_COUNT=$(find "$MODULES_DIR" -name '*.hob' 2>/dev/null | wc -l)
-echo "Module definitions: ${MODULE_COUNT} total (${NEW_MODULES} new)"
+MODULE_COUNT=$(find "$MODULES_DIR" -name '*.hob.example' 2>/dev/null | wc -l)
+echo "Module examples: ${MODULE_COUNT} total (${NEW_MODULES} new)"
 
-# Role definitions — copy any that don't already exist
+# Role examples — copy any that don't already exist
 NEW_ROLES=0
-for src in node-configs/roles/*.hob; do
+for src in node-configs/roles/*.hob.example; do
   [ -f "$src" ] || continue
   dest="${ROLES_DIR}/$(basename "$src")"
   if [ ! -f "$dest" ]; then
@@ -168,7 +168,7 @@ for src in node-configs/roles/*.hob; do
     NEW_ROLES=$((NEW_ROLES + 1))
   fi
 done
-ROLE_COUNT=$(find "$ROLES_DIR" -name '*.hob' 2>/dev/null | wc -l)
+ROLE_COUNT=$(find "$ROLES_DIR" -name '*.hob.example' 2>/dev/null | wc -l)
 echo "Role definitions: ${ROLE_COUNT} total (${NEW_ROLES} new)"
 
 # Template files — recursively copy preserving directory structure
@@ -226,7 +226,7 @@ Config directory: ${HOBNOB_DIR}
 
 Services:
   - PostgreSQL:  port 5432 (internal)
-  - gRPC (mTLS): port 9095 (agent traffic)
+  - gRPC (mTLS): port 1530 (agent traffic)
   - REST + UI:   port 8085 (hobcli, dashboard, bootstrap)
 
 Next steps:

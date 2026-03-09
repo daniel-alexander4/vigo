@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -375,6 +376,7 @@ signed TLS certificates. Supports both token-based and trusted enrollment.
 
 After bootstrap, the agent has everything it needs to connect via mTLS.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		logger := slog.Default()
 
 		token, _ := cmd.Flags().GetString("token")
@@ -480,6 +482,26 @@ After bootstrap, the agent has everything it needs to connect via mTLS.`,
 			"ca_cert", auth.CACertPath(dataDir),
 		)
 
+		// Install and start systemd service if requested.
+		installService, _ := cmd.Flags().GetBool("install-service")
+		if installService {
+			grpcAddr, err := installSystemdService(cmd, bootstrapServer, dataDir)
+			if err != nil {
+				logger.Warn("systemd service installation failed", "error", err)
+				fmt.Fprintf(os.Stderr, "Service install failed: %v\nStart the agent manually:\n  hob --server <grpc-host>:1530 --data-dir %s\n", err, dataDir)
+				return nil
+			}
+
+			// Verify connectivity with a single check-in before exiting.
+			logger.Info("verifying agent check-in...")
+			if err := verifyCheckIn(ctx, grpcAddr, dataDir, resp.NodeID); err != nil {
+				logger.Warn("verification check-in failed", "error", err)
+				fmt.Fprintf(os.Stderr, "Check-in verification failed: %v\nThe service is installed but may not be able to reach the server.\n", err)
+			} else {
+				logger.Info("check-in verified, hobnob-node service is running")
+			}
+		}
+
 		return nil
 	},
 }
@@ -503,9 +525,117 @@ func getOutboundIP() string {
 	return localAddr.IP.String()
 }
 
+// installSystemdService creates, enables, and starts a systemd service for hob.
+// Returns the gRPC address used in the service unit.
+func installSystemdService(cmd *cobra.Command, bootstrapServer, dataDir string) (string, error) {
+	// Check for systemctl.
+	if _, err := os.Stat("/usr/bin/systemctl"); os.IsNotExist(err) {
+		if _, err := os.Stat("/bin/systemctl"); os.IsNotExist(err) {
+			return "", fmt.Errorf("systemctl not found")
+		}
+	}
+
+	// Derive gRPC host from bootstrap server URL.
+	grpcPort, _ := cmd.Flags().GetString("grpc-port")
+	host := bootstrapServer
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	grpcAddr := net.JoinHostPort(host, grpcPort)
+
+	// Copy the running binary to /usr/local/bin/hob.
+	const installPath = "/usr/local/bin/hob"
+	srcPath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolving executable path: %w", err)
+	}
+	srcPath, err = filepath.EvalSymlinks(srcPath)
+	if err != nil {
+		return "", fmt.Errorf("resolving symlinks: %w", err)
+	}
+	if srcPath != installPath {
+		src, err := os.ReadFile(srcPath)
+		if err != nil {
+			return "", fmt.Errorf("reading binary: %w", err)
+		}
+		if err := os.WriteFile(installPath, src, 0755); err != nil {
+			return "", fmt.Errorf("installing binary to %s: %w", installPath, err)
+		}
+		fmt.Printf("Installed hob to %s\n", installPath)
+	}
+
+	unit := fmt.Sprintf(`[Unit]
+Description=Hobnob Configuration Management Agent
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%s --server %s --data-dir %s
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+`, installPath, grpcAddr, dataDir)
+
+	if err := os.WriteFile("/etc/systemd/system/hobnob-node.service", []byte(unit), 0644); err != nil {
+		return "", fmt.Errorf("writing unit file: %w", err)
+	}
+
+	// daemon-reload, enable, start.
+	for _, args := range [][]string{
+		{"systemctl", "daemon-reload"},
+		{"systemctl", "enable", "hobnob-node"},
+		{"systemctl", "start", "hobnob-node"},
+	} {
+		c := exec.Command(args[0], args[1:]...)
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		if err := c.Run(); err != nil {
+			return "", fmt.Errorf("%s: %w", strings.Join(args, " "), err)
+		}
+	}
+
+	fmt.Println("Hobnob agent service installed and started.")
+	fmt.Println("  systemctl status hobnob-node    # check status")
+	fmt.Println("  journalctl -u hobnob-node -f    # follow logs")
+	return grpcAddr, nil
+}
+
+// verifyCheckIn does a single gRPC check-in to confirm the agent can reach the server.
+func verifyCheckIn(ctx context.Context, grpcAddr, dataDir, nodeID string) error {
+	_, privKey, err := auth.LoadOrGenerate(dataDir)
+	if err != nil {
+		return fmt.Errorf("loading keypair: %w", err)
+	}
+
+	client, err := checkin.NewClient(
+		grpcAddr,
+		auth.CACertPath(dataDir),
+		auth.TLSCertPath(dataDir),
+		auth.TLSKeyPath(dataDir),
+		nodeID,
+		privKey,
+	)
+	if err != nil {
+		return fmt.Errorf("connecting to server: %w", err)
+	}
+	defer client.Close()
+
+	_, err = client.CheckIn(ctx, "", nil, 0)
+	if err != nil {
+		return fmt.Errorf("check-in failed: %w", err)
+	}
+	return nil
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/hobnob", "directory for agent data (keypair, UUID)")
-	rootCmd.PersistentFlags().StringVar(&server, "server", "localhost:9090", "server gRPC address")
+	rootCmd.PersistentFlags().StringVar(&server, "server", "localhost:1530", "server gRPC address")
 	rootCmd.PersistentFlags().StringVar(&caFile, "ca-file", "", "CA certificate file for server verification")
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "client certificate file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "client key file for mTLS (optional in dev)")
@@ -521,6 +651,8 @@ func init() {
 
 	bootstrapCmd.Flags().String("token", "", "one-time registration token (optional for trusted enrollment)")
 	bootstrapCmd.Flags().String("server", "", "server REST API address (e.g. http://hobd.example.com:8080)")
+	bootstrapCmd.Flags().Bool("install-service", false, "install and start a systemd service for the agent")
+	bootstrapCmd.Flags().String("grpc-port", "1530", "gRPC port for the systemd service (default 1530)")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(registerCmd)

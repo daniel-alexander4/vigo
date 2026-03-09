@@ -3,7 +3,7 @@ secrets:
   env_file: "server-configs/.env"
 
 server:
-  grpc_listen: ":9090"
+  grpc_listen: ":1530"
   api_listen: ":8080"
   tls:
     cert_file: "secret:hobnob/tls/cert"
@@ -31,8 +31,8 @@ watcher:
 # CIDRs restrict which source IPs can use each pattern.
 bootstrap:
   cert_validity: "8760h"  # 1 year
-  # trusted_enrollment:
-  #   - pattern: "*.web.example.com"
-  #     cidrs: ["10.0.1.0/24"]
-  #   - pattern: "*.db.internal"
-  #     cidrs: ["10.0.2.0/24", "172.16.0.0/16"]
+  # Accept any hostname from RFC 1918 / loopback private IP space.
+  # Tighten patterns and CIDRs for production.
+  trusted_enrollment:
+    - pattern: "*"
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8"]

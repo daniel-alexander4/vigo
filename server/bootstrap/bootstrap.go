@@ -130,19 +130,19 @@ if [ -n "$TOKEN" ]; then
 fi
 "${INSTALL_DIR}/hob" bootstrap ${BOOTSTRAP_ARGS}
 
-# Extract gRPC server address (strip protocol and port, add :9090).
+# Extract gRPC server address (strip protocol and port, add :1530).
 GRPC_HOST="$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')"
 
 # Install systemd service (if systemd is available).
 if command -v systemctl > /dev/null 2>&1; then
-    cat > /etc/systemd/system/hob.service << SYSTEMD
+    cat > /etc/systemd/system/hobnob-node.service << SYSTEMD
 [Unit]
 Description=Hobnob Configuration Management Agent
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hob --server ${GRPC_HOST}:9090 --data-dir /etc/hobnob
+ExecStart=/usr/local/bin/hob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob
 Restart=always
 RestartSec=10
 
@@ -150,12 +150,12 @@ RestartSec=10
 WantedBy=multi-user.target
 SYSTEMD
     systemctl daemon-reload
-    systemctl enable hob
-    systemctl start hob
+    systemctl enable hobnob-node
+    systemctl start hobnob-node
     echo "Hobnob agent service installed and started."
 else
     echo "systemd not found. Start the agent manually:"
-    echo "  hob --server ${GRPC_HOST}:9090 --data-dir $DATA_DIR"
+    echo "  hob --server ${GRPC_HOST}:1530 --data-dir $DATA_DIR"
 fi
 
 echo "Bootstrap complete."
