@@ -105,6 +105,7 @@ type ResourceConfig struct {
 	Notify     []string       `yaml:"notify"`
 	Subscribes []string       `yaml:"subscribes"`
 	DependsOn  []string       `yaml:"depends_on"`
+	Before     []string       `yaml:"before"`
 }
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
@@ -113,6 +114,7 @@ type ResourceConfig struct {
 type ModuleDefinition struct {
 	Name            string                        `yaml:"name"`
 	DependsOn       []string                      `yaml:"depends_on"`
+	Before          []string                      `yaml:"before"`
 	Resources       []ResourceConfig              `yaml:"resources"`
 	Vars            map[string]any                `yaml:"vars"`
 	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
@@ -137,9 +139,13 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 			if err := val.Decode(&m.Name); err != nil {
 				return fmt.Errorf("decoding name: %w", err)
 			}
-		case "depends_on":
+		case "depends_on", "require":
 			if err := val.Decode(&m.DependsOn); err != nil {
-				return fmt.Errorf("decoding depends_on: %w", err)
+				return fmt.Errorf("decoding %s: %w", key, err)
+			}
+		case "before":
+			if err := val.Decode(&m.Before); err != nil {
+				return fmt.Errorf("decoding before: %w", err)
 			}
 		case "vars":
 			if err := val.Decode(&m.Vars); err != nil {

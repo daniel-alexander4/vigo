@@ -33,9 +33,13 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 		switch key {
 		case "name":
 			def.Name = val.Value
-		case "depends_on":
+		case "depends_on", "require":
 			if err := val.Decode(&def.DependsOn); err != nil {
-				return nil, fmt.Errorf("decoding depends_on: %w", err)
+				return nil, fmt.Errorf("decoding %s: %w", key, err)
+			}
+		case "before":
+			if err := val.Decode(&def.Before); err != nil {
+				return nil, fmt.Errorf("decoding before: %w", err)
 			}
 		case "vars":
 			if err := val.Decode(&def.Vars); err != nil {
@@ -137,6 +141,10 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 		case key == "depends_on" || key == "require":
 			if err := val.Decode(&res.DependsOn); err != nil {
 				return res, fmt.Errorf("decoding %s: %w", key, err)
+			}
+		case key == "before":
+			if err := val.Decode(&res.Before); err != nil {
+				return res, fmt.Errorf("decoding before: %w", err)
 			}
 		default:
 			var v any

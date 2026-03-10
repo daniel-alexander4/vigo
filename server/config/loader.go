@@ -259,6 +259,22 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 		})
 	}
 
+	// Resolve "before" into reverse "depends_on". Module A with before: [B]
+	// means B depends on A — so we add A to B's DependsOn list.
+	modulesByName := make(map[string]int, len(modules))
+	for i, mod := range modules {
+		modulesByName[mod.Name] = i
+	}
+	for _, mod := range modules {
+		for _, target := range moduleDefs[mod.Name].Before {
+			idx, ok := modulesByName[target]
+			if !ok {
+				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this node", mod.Name, target, target)
+			}
+			modules[idx].DependsOn = appendUnique(modules[idx].DependsOn, mod.Name)
+		}
+	}
+
 	// Extract module names for var collection below.
 	moduleNames := make([]string, len(moduleRefs))
 	for i, ref := range moduleRefs {
@@ -762,6 +778,9 @@ func cloneResources(resources []ResourceConfig) []ResourceConfig {
 		if r.Subscribes != nil {
 			cloned[i].Subscribes = append([]string(nil), r.Subscribes...)
 		}
+		if r.Before != nil {
+			cloned[i].Before = append([]string(nil), r.Before...)
+		}
 	}
 	return cloned
 }
@@ -811,6 +830,16 @@ func isConfigFile(name string) bool {
 	}
 	ext := filepath.Ext(name)
 	return ext == ".hnb" || ext == ".yaml" || ext == ".yml"
+}
+
+// appendUnique appends val to slice if not already present.
+func appendUnique(slice []string, val string) []string {
+	for _, s := range slice {
+		if s == val {
+			return slice
+		}
+	}
+	return append(slice, val)
 }
 
 // moduleToValidate converts a ModuleDefinition to a validate.Module.

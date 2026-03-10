@@ -72,6 +72,17 @@ var knownTypes = map[string]bool{
 	"repository": true,
 	"archive":    true,
 	"cron":       true,
+	"process":       true,
+	"file_line":     true,
+	"group":         true,
+	"host":          true,
+	"sysctl":        true,
+	"mount":         true,
+	"hostname":      true,
+	"timezone":      true,
+	"sshkey":        true,
+	"firewall":      true,
+	"kernel_module": true,
 }
 
 // ValidateModule checks all resources in a module for idempotency.
@@ -133,9 +144,10 @@ func validateResource(moduleName string, res Resource) []Finding {
 
 	if !knownTypes[res.Type] {
 		f := base
-		f.Severity = SeverityError
-		f.Message = fmt.Sprintf("unknown resource type %q", res.Type)
-		return append(findings, f)
+		f.Severity = SeverityWarning
+		f.Message = fmt.Sprintf("unknown resource type %q (custom executor required on agent)", res.Type)
+		findings = append(findings, f)
+		return findings
 	}
 
 	switch res.Type {

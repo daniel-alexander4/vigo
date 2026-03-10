@@ -30,14 +30,15 @@ import (
 var version = "dev"
 
 var (
-	dataDir  string
-	server   string
-	caFile   string
-	certFile string
-	keyFile  string
-	apiAddr  string
-	dryRun   bool
-	logLevel string
+	dataDir      string
+	server       string
+	caFile       string
+	certFile     string
+	keyFile      string
+	apiAddr      string
+	dryRun       bool
+	logLevel     string
+	executorsDir string
 )
 
 func main() {
@@ -95,13 +96,22 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"file": &modules.FileExecutor{
 			SnapshotMgr: snapshotMgr,
 		},
-		"service":    &modules.ServiceExecutor{},
-		"user":       &modules.UserExecutor{},
-		"exec":       &modules.ExecExecutor{},
-		"archive":    &modules.ArchiveExecutor{},
-		"cron":       &modules.CronExecutor{},
-		"process":    &modules.ProcessExecutor{},
-		"file_line":  &modules.FileLineExecutor{},
+		"service":       &modules.ServiceExecutor{},
+		"user":          &modules.UserExecutor{},
+		"exec":          &modules.ExecExecutor{},
+		"archive":       &modules.ArchiveExecutor{},
+		"cron":          &modules.CronExecutor{},
+		"process":       &modules.ProcessExecutor{},
+		"file_line":     &modules.FileLineExecutor{},
+		"group":         &modules.GroupExecutor{},
+		"host":          &modules.HostExecutor{},
+		"sysctl":        &modules.SysctlExecutor{},
+		"mount":         &modules.MountExecutor{},
+		"hostname":      &modules.HostnameExecutor{},
+		"timezone":      &modules.TimezoneExecutor{},
+		"sshkey":        &modules.SSHKeyExecutor{},
+		"firewall":      &modules.FirewallExecutor{},
+		"kernel_module": &modules.KernelModuleExecutor{},
 	}
 
 	osFamily, osDistro := detectOSInfo()
@@ -122,7 +132,50 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		executors["repository"] = &modules.RepositoryExecutor{RepoMgr: rm}
 	}
 
+	// Load custom executors from the executors directory.
+	loadCustomExecutors(executors, executorsDir)
+
 	return executors
+}
+
+// loadCustomExecutors scans dir for executable files and registers each as a
+// CustomExecutor keyed by filename (without extension). Built-in types are
+// never overridden.
+func loadCustomExecutors(executors map[string]modules.Executor, dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		// Directory doesn't exist or unreadable — not an error.
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		// Must be executable.
+		if info.Mode()&0111 == 0 {
+			continue
+		}
+
+		name := entry.Name()
+		// Strip extension if present.
+		if ext := filepath.Ext(name); ext != "" {
+			name = name[:len(name)-len(ext)]
+		}
+
+		if _, builtin := executors[name]; builtin {
+			slog.Warn("custom executor ignored: name conflicts with built-in type", "type", name)
+			continue
+		}
+
+		path := filepath.Join(dir, entry.Name())
+		executors[name] = &modules.CustomExecutor{ScriptPath: path}
+		slog.Info("loaded custom executor", "type", name, "path", path)
+	}
 }
 
 // newGRPCClient creates a gRPC client with the configured TLS settings.
@@ -697,6 +750,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "client key file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().StringVar(&apiAddr, "api-addr", "http://localhost:8181", "server REST API address for self-update")
+	rootCmd.PersistentFlags().StringVar(&executorsDir, "executors-dir", "/etc/hobnob-node/executors", "directory for custom executor scripts")
 
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview mode: show what would change without applying")
 

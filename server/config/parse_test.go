@@ -103,6 +103,81 @@ resources:
 	}
 }
 
+func TestParseModuleFile_BeforeAtModuleLevel(t *testing.T) {
+	data := []byte(`
+name: base-packages
+before: [app-config]
+resources:
+  - name: install-curl
+    type: package
+    package: curl
+    state: present
+`)
+
+	def, err := ParseModuleFile(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if def.Name != "base-packages" {
+		t.Errorf("name = %q, want base-packages", def.Name)
+	}
+	if len(def.Before) != 1 || def.Before[0] != "app-config" {
+		t.Errorf("before = %v, want [app-config]", def.Before)
+	}
+}
+
+func TestParseModuleFile_BeforeAtResourceLevel(t *testing.T) {
+	data := []byte(`
+name: setup
+resources:
+  - name: create-dir
+    type: exec
+    command: "mkdir -p /opt/app"
+    creates: /opt/app
+    before: [install-app]
+  - name: install-app
+    type: package
+    package: myapp
+    state: present
+`)
+
+	def, err := ParseModuleFile(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(def.Resources) != 2 {
+		t.Fatalf("expected 2 resources, got %d", len(def.Resources))
+	}
+	r0 := def.Resources[0]
+	if len(r0.Before) != 1 || r0.Before[0] != "install-app" {
+		t.Errorf("resource before = %v, want [install-app]", r0.Before)
+	}
+}
+
+func TestParseModuleFile_RequireAlias(t *testing.T) {
+	data := []byte(`
+name: app
+require: [base]
+resources:
+  - name: app-config
+    type: file
+    path: /etc/app.conf
+    content: "config"
+    state: present
+`)
+
+	def, err := ParseModuleFile(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(def.DependsOn) != 1 || def.DependsOn[0] != "base" {
+		t.Errorf("depends_on = %v, want [base]", def.DependsOn)
+	}
+}
+
 func TestParseModuleFile_EmptyDocument(t *testing.T) {
 	_, err := ParseModuleFile([]byte(""))
 	if err == nil {

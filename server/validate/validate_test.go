@@ -156,7 +156,7 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 	}
 }
 
-func TestUnknownType_IsError(t *testing.T) {
+func TestUnknownType_IsWarning(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -165,8 +165,29 @@ func TestUnknownType_IsError(t *testing.T) {
 	}
 
 	findings := ValidateModule(mod)
-	if !HasErrors(findings) {
-		t.Fatal("expected error for unknown type")
+	if HasErrors(findings) {
+		t.Fatal("unknown types should be warnings (for custom executors), not errors")
+	}
+	if len(findings) == 0 {
+		t.Fatal("expected a warning for unknown type")
+	}
+	if findings[0].Severity != SeverityWarning {
+		t.Errorf("expected warning severity, got %d", findings[0].Severity)
+	}
+}
+
+func TestProcessAndFileLineTypes_AreClean(t *testing.T) {
+	for _, typ := range []string{"process", "file_line"} {
+		mod := Module{
+			Name: "test-mod",
+			Resources: []Resource{
+				{Name: "test-" + typ, Type: typ, Attributes: map[string]any{"name": "foo"}},
+			},
+		}
+		findings := ValidateModule(mod)
+		if HasErrors(findings) {
+			t.Errorf("type %q should be known, got: %s", typ, FormatFindings(findings))
+		}
 	}
 }
 

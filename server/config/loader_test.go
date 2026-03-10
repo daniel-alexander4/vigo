@@ -1761,3 +1761,126 @@ func TestTemplateRendering(t *testing.T) {
 		t.Errorf("got %q, want 'port=8080 os=ubuntu'", result)
 	}
 }
+
+func TestBeforeResolvesToDependsOn(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+name: base-packages
+before: [app-config]
+resources:
+  - name: install-curl
+    type: package
+    package: curl
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app-config
+resources:
+  - name: app-conf
+    type: file
+    path: /etc/app.conf
+    content: "test"
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
+nodes:
+  - match: "app.example.com"
+    modules: [base-packages, app-config]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("app.example.com")
+	if len(cfg.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	}
+
+	// base-packages has before: [app-config], so app-config should have
+	// depends_on: [base-packages] after resolution.
+	appMod := cfg.Modules[1]
+	if appMod.Name != "app-config" {
+		t.Fatalf("Module[1] = %q, want app-config", appMod.Name)
+	}
+	if len(appMod.DependsOn) != 1 || appMod.DependsOn[0] != "base-packages" {
+		t.Errorf("app-config DependsOn = %v, want [base-packages]", appMod.DependsOn)
+	}
+
+	// base-packages should have no depends_on.
+	baseMod := cfg.Modules[0]
+	if len(baseMod.DependsOn) != 0 {
+		t.Errorf("base-packages DependsOn = %v, want []", baseMod.DependsOn)
+	}
+}
+
+func TestBeforeUnknownTargetErrors(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+name: base-packages
+before: [missing-module]
+resources:
+  - name: install-curl
+    type: package
+    package: curl
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
+nodes:
+  - match: "app.example.com"
+    modules: [base-packages]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for before referencing unknown module")
+	}
+	if !strings.Contains(err.Error(), "missing-module") {
+		t.Errorf("error should mention missing-module, got: %v", err)
+	}
+}
+
+func TestBeforeNoDuplicateDependsOn(t *testing.T) {
+	dir := setupDir(t)
+
+	// app-config already depends_on base-packages, and base-packages also
+	// declares before: [app-config]. Should not duplicate the dependency.
+	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+name: base-packages
+before: [app-config]
+resources:
+  - name: install-curl
+    type: package
+    package: curl
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app-config
+depends_on: [base-packages]
+resources:
+  - name: app-conf
+    type: file
+    path: /etc/app.conf
+    content: "test"
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
+nodes:
+  - match: "app.example.com"
+    modules: [base-packages, app-config]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("app.example.com")
+	appMod := cfg.Modules[1]
+	if len(appMod.DependsOn) != 1 {
+		t.Errorf("expected 1 dependency, got %d: %v", len(appMod.DependsOn), appMod.DependsOn)
+	}
+}
