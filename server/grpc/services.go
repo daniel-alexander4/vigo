@@ -17,6 +17,7 @@ type AgentService struct {
 	registry       *registry.Registry
 	configStore    *config.ConfigStore
 	queries        *db.Queries
+	runStore       db.RunStore
 	dispatcher     *webhook.Dispatcher
 	traitsScanner   *traits.Scanner
 	nodeCache      *db.NodeCache
@@ -29,6 +30,7 @@ type AdminService struct {
 	pb.UnimplementedHobnobAdminServer
 	registry     *registry.Registry
 	queries      *db.Queries
+	runStore     db.RunStore
 	configStore  *config.ConfigStore
 	baseInterval time.Duration
 }

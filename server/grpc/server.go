@@ -50,6 +50,7 @@ type ServerConfig struct {
 	Registry        *registry.Registry
 	ConfigStore     *config.ConfigStore
 	Queries         *db.Queries
+	RunStore        db.RunStore
 	BaseInterval    time.Duration
 	Dispatcher      *webhook.Dispatcher
 	TraitsDir       string
@@ -92,6 +93,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		registry:      cfg.Registry,
 		configStore:   cfg.ConfigStore,
 		queries:       cfg.Queries,
+		runStore:      cfg.RunStore,
 		dispatcher:    cfg.Dispatcher,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		nodeCache:     nodeCache,
@@ -103,6 +105,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 	adminSvc := &AdminService{
 		registry:     cfg.Registry,
 		queries:      cfg.Queries,
+		runStore:     cfg.RunStore,
 		configStore:  cfg.ConfigStore,
 		baseInterval: cfg.BaseInterval,
 	}

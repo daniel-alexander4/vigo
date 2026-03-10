@@ -143,6 +143,17 @@ func run() error {
 	whTimeout := parseDuration(cfg.Tuning.Webhook.Timeout, 0)
 	whRetryDelay := parseDuration(cfg.Tuning.Webhook.RetryDelay, 0)
 
+	// Create run store backend.
+	var runStore db.RunStore
+	switch cfg.Tuning.RunStore {
+	case "memory":
+		runStore = db.NewMemRunStore(cfg.Tuning.RunStoreCapacity)
+		slog.Info("run store backend: memory", "capacity", cfg.Tuning.RunStoreCapacity)
+	default:
+		runStore = db.NewDBRunStore(queries)
+		slog.Info("run store backend: database")
+	}
+
 	// Create webhook dispatcher.
 	dispatcher := webhook.NewDispatcher(queries, webhook.DispatcherConfig{
 		Timeout:       whTimeout,
@@ -160,6 +171,7 @@ func run() error {
 		Registry:         reg,
 		ConfigStore:      configStore,
 		Queries:          queries,
+		RunStore:         runStore,
 		BaseInterval:     baseInterval,
 		Dispatcher:       dispatcher,
 		TraitsDir:        traitsDir,

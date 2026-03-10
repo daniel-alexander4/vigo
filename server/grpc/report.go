@@ -24,7 +24,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	}
 
 	// Create the run record (server generates the UUID).
-	run, err := s.queries.CreateRun(ctx, db.CreateRunParams{
+	run, err := s.runStore.CreateRun(ctx, db.CreateRunParams{
 		NodeID:      nodeID,
 		Status:      "running",
 		ModuleCount: int32(len(req.GetResults())),
@@ -42,7 +42,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			errMsg = pgtype.Text{String: result.GetErrorMessage(), Valid: true}
 		}
 
-		_, err := s.queries.CreateRunResult(ctx, db.CreateRunResultParams{
+		_, err := s.runStore.CreateRunResult(ctx, db.CreateRunResultParams{
 			RunID:        runID,
 			ModuleName:   result.GetModuleName(),
 			ResourceType: result.GetResourceType(),
@@ -79,7 +79,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	}
 
 	// Finish the run with computed counts.
-	err = s.queries.FinishRun(ctx, db.FinishRunParams{
+	err = s.runStore.FinishRun(ctx, db.FinishRunParams{
 		ID:           runID,
 		Status:       runStatus,
 		ChangedCount: changedCount,

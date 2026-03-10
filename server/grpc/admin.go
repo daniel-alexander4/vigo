@@ -193,7 +193,7 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 		}
 
-		runs, err := s.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+		runs, err := s.runStore.ListRunsByNode(ctx, db.ListRunsByNodeParams{
 			NodeID: id,
 			Limit:  limit,
 		})
@@ -204,7 +204,7 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		return &pb.ListRunsResponse{Runs: dbRunsToProto(runs)}, nil
 	}
 
-	runs, err := s.queries.ListAllRuns(ctx, limit)
+	runs, err := s.runStore.ListAllRuns(ctx, limit)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing runs: %v", err)
 	}
@@ -218,12 +218,12 @@ func (s *AdminService) GetRun(ctx context.Context, req *pb.GetRunRequest) (*pb.G
 		return nil, status.Errorf(codes.InvalidArgument, "invalid run id: %v", err)
 	}
 
-	run, err := s.queries.GetRunByID(ctx, id)
+	run, err := s.runStore.GetRunByID(ctx, id)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "run not found: %v", err)
 	}
 
-	results, err := s.queries.ListRunResults(ctx, id)
+	results, err := s.runStore.ListRunResults(ctx, id)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing run results: %v", err)
 	}
@@ -394,31 +394,41 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookR
 // ---------- Compliance ----------
 
 func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
-	// Single query with LATERAL JOIN — replaces N+1 per-node run lookups.
-	rows, err := s.queries.ListNodesWithLatestRun(ctx)
+	// Get all nodes from DB, then look up latest runs via RunStore.
+	nodes, err := s.queries.ListNodes(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing nodes with runs: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
+	}
+
+	nodeIDs := make([]uuid.UUID, len(nodes))
+	for i, n := range nodes {
+		nodeIDs[i] = n.ID
+	}
+
+	latestRuns, err := s.runStore.LatestRunPerNode(ctx, nodeIDs)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fetching latest runs: %v", err)
 	}
 
 	counts := make(map[string]int32)
-	for _, r := range rows {
+	for _, n := range nodes {
 		var runInfo *compliance.RunInfo
-		if r.LatestRunStatus.Valid {
+		if run, ok := latestRuns[n.ID]; ok {
 			runInfo = &compliance.RunInfo{
-				Status:       r.LatestRunStatus.String,
-				ChangedCount: r.LatestRunChangedCount.Int32,
+				Status:       run.Status,
+				ChangedCount: run.ChangedCount,
 			}
 		}
 
-		lastSeen := r.EnrolledAt
-		if r.LastSeen.Valid {
-			lastSeen = r.LastSeen.Time
+		lastSeen := n.EnrolledAt
+		if n.LastSeen.Valid {
+			lastSeen = n.LastSeen.Time
 		}
 
 		counts[compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval)]++
 	}
 
-	total := int32(len(rows))
+	total := int32(len(nodes))
 
 	var pct float32
 	if total > 0 {
@@ -449,7 +459,7 @@ func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeCom
 
 	var runInfo *compliance.RunInfo
 	var lastRunProto *pb.Run
-	runs, err := s.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
+	runs, err := s.runStore.ListRunsByNode(ctx, db.ListRunsByNodeParams{
 		NodeID: id,
 		Limit:  1,
 	})
@@ -528,7 +538,7 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid run id: %v", err)
 		}
-		_, err = s.queries.GetRunByID(ctx, runID)
+		_, err = s.runStore.GetRunByID(ctx, runID)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, "run not found: %v", err)
 		}

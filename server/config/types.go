@@ -31,6 +31,8 @@ type TuningSection struct {
 	TraitsPruneInterval string        `yaml:"traits_prune_interval"` // default "5m"
 	MetricsInterval     string        `yaml:"metrics_interval"`      // default "30s"
 	TraitsScannerTTL    string        `yaml:"traits_scanner_ttl"`    // default "30s"
+	RunStore            string        `yaml:"run_store"`             // "database" (default) or "memory"
+	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-node run history depth for memory mode (default 20)
 	Webhook             WebhookTuning `yaml:"webhook"`
 }
 
