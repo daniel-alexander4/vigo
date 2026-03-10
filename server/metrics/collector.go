@@ -25,41 +25,32 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		return err
 	}
 
-	// Total enrolled nodes.
+	// Single pass: compute all node metrics.
 	NodesTotal.Set(float64(len(nodes)))
 
-	// Active nodes (last_seen within the last hour).
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
-	var activeCount int
+	var activeCount, totalNonRevoked, compliantCount int
 	for _, n := range nodes {
-		if n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo) {
+		recentlyActive := n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo)
+
+		if recentlyActive {
 			activeCount++
 		}
-
-		// Time since last check-in per node.
 		if n.LastSeen.Valid {
 			TimeSinceCheckin.WithLabelValues(n.Hostname).Set(now.Sub(n.LastSeen.Time).Seconds())
+		}
+		if !n.Revoked {
+			totalNonRevoked++
+			if recentlyActive {
+				compliantCount++
+			}
 		}
 	}
 	NodesActive.Set(float64(activeCount))
 
-	// Compliance heuristic: percentage of non-revoked nodes that checked in
-	// recently. This approximates compliance — nodes that aren't checking in
-	// can't be converging. For per-node compliance status (compliant/drifted/
-	// failing/stale), see the compliance package and ComplianceStatus gauge.
-	var totalActive, compliantCount int
-	for _, n := range nodes {
-		if n.Revoked {
-			continue
-		}
-		totalActive++
-		if n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo) {
-			compliantCount++
-		}
-	}
-	if totalActive > 0 {
-		CompliancePct.Set(float64(compliantCount) / float64(totalActive))
+	if totalNonRevoked > 0 {
+		CompliancePct.Set(float64(compliantCount) / float64(totalNonRevoked))
 	} else {
 		CompliancePct.Set(0)
 	}

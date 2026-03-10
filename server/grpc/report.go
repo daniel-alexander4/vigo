@@ -94,11 +94,10 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.Internal, "finishing run: %v", err)
 	}
 
-	// Look up node hostname for metric labels.
-	node, cErr := s.queries.GetNodeByID(ctx, nodeID)
-	hostname := nodeID.String() // fallback if lookup fails
-	if cErr == nil {
-		hostname = node.Hostname
+	// Reuse node from interceptor context (avoids redundant DB lookup).
+	hostname := nodeID.String() // fallback
+	if n := db.NodeFromContext(ctx); n != nil {
+		hostname = n.Hostname
 	}
 
 	// Record metrics for each result.
@@ -109,12 +108,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		}
 	}
 
-	// Record run duration (approximate from run start to now).
-	run, runErr := s.queries.GetRunByID(ctx, runID)
-	if runErr == nil {
-		duration := time.Since(run.StartedAt).Seconds()
-		metrics.RunDuration.WithLabelValues(hostname).Observe(duration)
-	}
+	// Record run duration (use the run we already created — no re-fetch needed).
+	duration := time.Since(run.StartedAt).Seconds()
+	metrics.RunDuration.WithLabelValues(hostname).Observe(duration)
 
 	slog.Info("run completed",
 		"run_id", runID,

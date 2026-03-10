@@ -54,9 +54,11 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache) gr
 			}
 			ctx = newCtx
 		case *pb.ReportResultRequest:
-			if err := verifyReportResult(ctx, queries, nodeCache, r); err != nil {
+			newCtx, err := verifyReportResultCtx(ctx, queries, nodeCache, r)
+			if err != nil {
 				return nil, err
 			}
+			ctx = newCtx
 		case *pb.ReportNailsRequest:
 			if err := verifyReportNails(ctx, queries, nodeCache, r); err != nil {
 				return nil, err
@@ -103,35 +105,36 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache
 	return db.ContextWithNode(ctx, node), nil
 }
 
-// verifyReportResult validates the signature on a ReportResultRequest.
-func verifyReportResult(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportResultRequest) error {
+// verifyReportResultCtx validates the signature on a ReportResultRequest and
+// stores the node in context for handler reuse.
+func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportResultRequest) (context.Context, error) {
 	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 
-	_, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
+	node, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
 	if err != nil {
-		return err
+		return ctx, err
 	}
 
 	ts := req.GetTimestamp()
 	if ts == nil {
-		return status.Error(codes.InvalidArgument, "timestamp is required")
+		return ctx, status.Error(codes.InvalidArgument, "timestamp is required")
 	}
 	tsTime := ts.AsTime()
 	if err := checkTimestamp(tsTime); err != nil {
-		return err
+		return ctx, err
 	}
 
 	payload := []byte(req.GetRunId())
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
-		return status.Error(codes.Unauthenticated, "signature verification failed")
+		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
-	return nil
+	return db.ContextWithNode(ctx, node), nil
 }
 
 // verifyReportNails validates the signature on a ReportNailsRequest.

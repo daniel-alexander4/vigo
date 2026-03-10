@@ -47,6 +47,7 @@ type Dispatcher struct {
 	httpClient     *http.Client
 	maxRetries     int
 	retryBaseDelay time.Duration
+	sem            chan struct{} // bounds concurrent deliveries
 }
 
 // NewDispatcher creates a new webhook dispatcher.
@@ -58,6 +59,7 @@ func NewDispatcher(queries *db.Queries) *Dispatcher {
 		},
 		maxRetries:     3,
 		retryBaseDelay: 5 * time.Second,
+		sem:            make(chan struct{}, 20), // max 20 concurrent deliveries
 	}
 }
 
@@ -80,7 +82,12 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event string, payload EventPa
 	}
 
 	for _, wh := range webhooks {
-		go d.deliver(wh, event, body)
+		wh := wh
+		go func() {
+			d.sem <- struct{}{}        // acquire
+			defer func() { <-d.sem }() // release
+			d.deliver(wh, event, body)
+		}()
 	}
 }
 
