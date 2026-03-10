@@ -4,19 +4,19 @@ Pull-based configuration management for Linux and macOS. Agents on managed nodes
 
 ## Quickstart
 
-### 1. Create `/etc/hobnob`
+### 1. Create `/etc/hobnob-server`
 
-All server config lives in `/etc/hobnob` on the host. The container bind-mounts it read-only.
+All server config lives in `/etc/hobnob-server` on the host. The container bind-mounts it.
 
 ```bash
-sudo mkdir -p /etc/hobnob/certs
+sudo mkdir -p /etc/hobnob-server/certs
 ```
 
 ### 2. Generate TLS certificates
 
 ```bash
 make certs
-sudo cp server-configs/certs/* /etc/hobnob/certs/
+sudo cp certs/* /etc/hobnob-server/certs/
 ```
 
 For production, replace with your own CA and server cert. Keep the CA private key accessible to the server if you want bootstrap CSR signing (see [Bootstrap enrollment](#bootstrap-enrollment)).
@@ -24,7 +24,7 @@ For production, replace with your own CA and server cert. Keep the CA private ke
 ### 3. Create the `.env` file
 
 ```bash
-sudo tee /etc/hobnob/.env <<'EOF'
+sudo tee /etc/hobnob-server/.env <<'EOF'
 HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
@@ -36,8 +36,8 @@ EOF
 ### 4. Copy config files
 
 ```bash
-sudo cp -r server-configs /etc/hobnob/
-sudo cp -r node-configs /etc/hobnob/
+sudo cp server-configs/server.yaml /etc/hobnob-server/
+sudo cp -r node-configs/modules node-configs/roles node-configs/templates /etc/hobnob-server/
 ```
 
 ### 5. Start the server
@@ -62,16 +62,16 @@ On each node you want to manage, run:
 curl -sSf http://<server-ip>:8181/bootstrap | sudo sh
 ```
 
-That's it. The server generates a shell script on the fly that downloads the `hob` agent binary for the node's OS/arch, enrolls it, and starts it as a systemd service. No Go, no source code, no package manager needed on the node.
+That's it. The server generates a shell script on the fly that downloads the `hobnob` agent binary for the node's OS/arch, enrolls it, and starts it as a systemd service. No Go, no source code, no package manager needed on the node.
 
 #### What the bootstrap curl does
 
-1. Downloads the pre-built `hob` binary from the server to `/usr/local/bin/hob`
-2. Runs `hob bootstrap` which generates an ED25519 keypair + ECDSA TLS keypair
+1. Downloads the pre-built `hobnob` binary from the server to `/usr/local/bin/hobnob`
+2. Runs `hobnob bootstrap` which generates an ED25519 keypair + ECDSA TLS keypair
 3. Sends a CSR to the server
 4. Server validates the node (trusted pattern + CIDR, or token)
 5. Server signs the CSR and returns the signed TLS cert + CA cert
-6. Agent saves certs, keypair, and node UUID to `/etc/hobnob`
+6. Agent saves certs, keypair, and node UUID to `/etc/hobnob-node`
 7. Creates and starts the `hobnob-node` systemd service
 
 After bootstrap, the agent checks in with the server via mTLS every 5 minutes.
@@ -111,14 +111,14 @@ To wipe all agent state and re-bootstrap from scratch:
 sudo scripts/reset-node.sh
 ```
 
-This stops the service, removes the binary, and deletes `/etc/hobnob`. Then bootstrap again with `curl`.
+This stops the service, removes the binary, and deletes `/etc/hobnob-node`. Then bootstrap again with `curl`.
 
 ### 7. Define desired state
 
-Edit `node-configs/clients.hob` to map hostnames to modules and roles:
+Edit `node-configs/clients.hnb` to map hostnames to modules and roles:
 
 ```yaml
-# node-configs/clients.hob
+# node-configs/clients.hnb
 clients:
   - match: "web01.example.com"
     environment: production
@@ -127,7 +127,7 @@ clients:
       doc_root: "/var/www/html"
 ```
 
-Modules are defined in `node-configs/modules/`. For example, `node-configs/modules/nginx.hob`:
+Modules are defined in `node-configs/modules/`. For example, `node-configs/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -178,7 +178,7 @@ This writes each line with 2 extra leading spaces (4 for the already-indented li
 Group modules into roles in `node-configs/roles/`:
 
 ```yaml
-# node-configs/roles/webserver.hob
+# node-configs/roles/webserver.hnb
 name: webserver
 modules: [nginx, certbot]
 ```
@@ -204,20 +204,20 @@ Or open the web dashboard at `http://<server-ip>:8181/`.
 
 ```
 node-configs/
-├── clients.hob           # Maps hostnames/globs to roles and modules
+├── clients.hnb          # Maps hostnames/globs to roles and modules
 ├── modules/              # Reusable resource sets with default vars
-│   ├── nginx.hob
-│   ├── postgresql.hob
+│   ├── nginx.hnb
+│   ├── postgresql.hnb
 │   └── ...
 ├── roles/                # Named groups of modules
-│   ├── webserver.hob
-│   ├── database.hob
+│   ├── webserver.hnb
+│   ├── database.hnb
 │   └── ...
 └── templates/            # External template files (referenced via source:)
     └── nginx.conf.tmpl
 ```
 
-Config files use the `.hob` extension (YAML syntax). The server also accepts `.yaml`/`.yml`. `clients.hob` entries use glob patterns — first match wins. Client-level `vars` override module defaults. Nodes matching no entry get an empty module list.
+Config files use the `.hnb` extension (YAML syntax). The server also accepts `.yaml`/`.yml`. `clients.hnb` entries use glob patterns — first match wins. Client-level `vars` override module defaults. Nodes matching no entry get an empty module list.
 
 ## Examples
 
@@ -225,17 +225,17 @@ Ready-to-use module definitions in `node-configs/modules/` and role groupings in
 
 | Module | File | What it configures |
 |--------|------|--------------------|
-| Nginx | `node-configs/modules/nginx.hob` | Virtual host, worker tuning, `source:` template |
-| PostgreSQL | `node-configs/modules/postgresql.hob` | `postgresql.conf` + `pg_hba.conf`, memory tuning |
-| MySQL | `node-configs/modules/mysql.hob` | InnoDB tuning, slow query log, security hardening |
-| Redis | `node-configs/modules/redis.hob` | LRU eviction, AOF persistence, `secret:` password |
-| Docker | `node-configs/modules/docker.hob` | `daemon.json`, log rotation, containerd |
-| HAProxy | `node-configs/modules/haproxy.hob` | Stats page, roundrobin backend, health checks |
-| OpenSSH + fail2ban | `node-configs/modules/openssh.hob`, `node-configs/modules/fail2ban.hob` | Hardened sshd, key-only auth, brute-force protection |
-| Prometheus + Grafana | `node-configs/modules/prometheus.hob`, `node-configs/modules/grafana.hob` | Prometheus, node-exporter, Grafana |
-| CLI tools | `node-configs/modules/charm-tools.hob`, `node-configs/modules/github-tools.hob` | `repository` for Charm repo, `archive` for GitHub releases |
+| Nginx | `node-configs/modules/nginx.hnb` | Virtual host, worker tuning, `source:` template |
+| PostgreSQL | `node-configs/modules/postgresql.hnb` | `postgresql.conf` + `pg_hba.conf`, memory tuning |
+| MySQL | `node-configs/modules/mysql.hnb` | InnoDB tuning, slow query log, security hardening |
+| Redis | `node-configs/modules/redis.hnb` | LRU eviction, AOF persistence, `secret:` password |
+| Docker | `node-configs/modules/docker.hnb` | `daemon.json`, log rotation, containerd |
+| HAProxy | `node-configs/modules/haproxy.hnb` | Stats page, roundrobin backend, health checks |
+| OpenSSH + fail2ban | `node-configs/modules/openssh.hnb`, `node-configs/modules/fail2ban.hnb` | Hardened sshd, key-only auth, brute-force protection |
+| Prometheus + Grafana | `node-configs/modules/prometheus.hnb`, `node-configs/modules/grafana.hnb` | Prometheus, node-exporter, Grafana |
+| CLI tools | `node-configs/modules/charm-tools.hnb`, `node-configs/modules/github-tools.hnb` | `repository` for Charm repo, `archive` for GitHub releases |
 
-Node-to-module mappings are in `node-configs/clients.hob`, with roles like `webserver`, `database`, `monitoring`, and `bastion` in `node-configs/roles/`.
+Node-to-module mappings are in `node-configs/clients.hnb`, with roles like `webserver`, `database`, `monitoring`, and `bastion` in `node-configs/roles/`.
 
 Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`), Go template variables, per-environment overrides, and `secret:` references where appropriate.
 
@@ -261,8 +261,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 - **Server (hobd)** — gRPC endpoint for agents, REST API + web UI for operators, built-in CA for bootstrap CSR signing
 - **Agent (hob)** — daemon on each managed node, pulls config, converges idempotently
 - **hobcli** — admin CLI, talks to server REST API
-- **Config** — `.hob` files (YAML syntax) on disk, hot-reloaded on change
-- **hobvi** — vim-based editor with syntax highlighting and idempotency validation on save
+- **Config** — `.hnb` files (YAML syntax) on disk, hot-reloaded on change
+- **hnbvi** — vim-based editor with syntax highlighting and idempotency validation on save
 
 ## Bootstrap enrollment
 
@@ -299,7 +299,7 @@ For higher-security environments or one-off nodes. Requires an admin to generate
 ```
 Node                              Server
 │                                 │
-├─ hob bootstrap --server <addr>  │
+├─ hobnob bootstrap --server <addr>  │
 │  ├─ Generate ED25519 keypair    │
 │  ├─ Generate ECDSA TLS key     │
 │  ├─ Create CSR                 │
@@ -344,19 +344,19 @@ Non-idempotent resources are rejected unless the server is started with `--dange
 ### Validation tools
 
 ```bash
-# Validate .hob files for YAML correctness + idempotency
-hobcli validate node-configs/modules/*.hob
+# Validate .hnbfiles for YAML correctness + idempotency
+hobcli validate node-configs/modules/*.hnb
 
 # Allow non-idempotent resources (shows errors but exits 0)
-hobcli validate --dangerous modules/risky.hob
+hobcli validate --dangerous modules/risky.hnb
 
 # Edit with vim — syntax highlighting + validation on save
-hobcli vi node-configs/modules/nginx.hob
-# or via the hobvi symlink:
-hobvi node-configs/modules/nginx.hob
+hobcli vi node-configs/modules/nginx.hnb
+# or via the hnbvi symlink:
+hnbvi node-configs/modules/nginx.hnb
 ```
 
-`hobcli validate` checks: (1) YAML syntax, (2) required fields (`name`, resource `name`/`type`), (3) idempotency rules. `hobcli vi` opens vim with `.hob` syntax highlighting and blocks saves that fail validation.
+`hobcli validate` checks: (1) YAML syntax, (2) required fields (`name`, resource `name`/`type`), (3) idempotency rules. `hobcli vi` opens vim with `.hnb` syntax highlighting and blocks saves that fail validation.
 
 ## Key features
 
@@ -459,10 +459,10 @@ Gates are checked first, then vetoes. Each field accepts a single string or a li
 
 ### Module conditionals
 
-The same four fields work on module references in `clients.hob` and role definitions, skipping entire modules:
+The same four fields work on module references in `clients.hnb` and role definitions, skipping entire modules:
 
 ```yaml
-# node-configs/clients.hob
+# node-configs/clients.hnb
 clients:
   - match: "*.example.com"
     vars:
@@ -573,10 +573,10 @@ Sensitive values in config files use the `secret:` prefix instead of plaintext. 
 
 ### Using secrets in node configs
 
-Reference secrets by path in `node-configs/clients.hob` or module definitions:
+Reference secrets by path in `node-configs/clients.hnb` or module definitions:
 
 ```yaml
-# node-configs/clients.hob
+# node-configs/clients.hnb
 clients:
   - match: "cache01.example.com"
     modules: [redis]
@@ -585,7 +585,7 @@ clients:
 ```
 
 ```yaml
-# node-configs/modules/grafana.hob (inline in resource attributes)
+# node-configs/modules/grafana.hnb(inline in resource attributes)
 resources:
   - name: grafana-ini
     type: file
@@ -635,7 +635,7 @@ The server's own config (`server-configs/server.yaml`) also uses `secret:` refer
 ## Development
 
 ```bash
-make build          # Build server, agent, hobcli + hobvi symlink
+make build          # Build server, agent, hobcli + hnbvi symlink
 make proto          # Regenerate protobuf/gRPC code
 make certs          # Generate self-signed TLS certs
 make test           # Run all tests

@@ -4,7 +4,8 @@ package pkgmgr
 
 import (
 	"context"
-	"os/exec"
+
+	"github.com/hobnob/hobnob/agent/internal/cmdrun"
 )
 
 // PackageManager abstracts package install/remove/query operations across
@@ -24,15 +25,8 @@ type PackageManager interface {
 	Upgrade(ctx context.Context, name, version string) error
 }
 
-// CommandRunner abstracts command execution for testability.
-type CommandRunner interface {
-	Run(ctx context.Context, name string, args ...string) ([]byte, error)
-}
+// CommandRunner is an alias for the shared command runner interface.
+type CommandRunner = cmdrun.Runner
 
-// DefaultRunner executes commands via os/exec.
-type DefaultRunner struct{}
-
-// Run executes a command and returns combined output.
-func (d *DefaultRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).CombinedOutput()
-}
+// DefaultRunner is an alias for the shared default command runner.
+type DefaultRunner = cmdrun.Default

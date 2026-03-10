@@ -11,15 +11,15 @@ import (
 )
 
 var viCmd = &cobra.Command{
-	Use:   "vi <file.hob>",
-	Short: "Edit a .hob file with syntax highlighting and validation",
-	Long: `Opens a .hob file in vim with hobnob-aware syntax highlighting.
+	Use:   "vi <file.hnb>",
+	Short: "Edit a .hnb file with syntax highlighting and validation",
+	Long: `Opens a .hnb file in vim with hobnob-aware syntax highlighting.
 
 On save, the file is checked for YAML correctness and idempotency. If
 validation fails, the write is aborted and errors are shown. Use --dangerous
 to skip validation on save.
 
-Can also be invoked as 'hobvi' for convenience.`,
+Can also be invoked as 'hnbvi' for convenience.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dangerous, _ := cmd.Flags().GetBool("dangerous")
@@ -38,7 +38,7 @@ func runEditor(filePath string, dangerous bool) error {
 	}
 
 	// Create temp directory for vim config files.
-	tmpDir, err := os.MkdirTemp("", "hobvi-*")
+	tmpDir, err := os.MkdirTemp("", "hnbvi-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
@@ -49,7 +49,7 @@ func runEditor(filePath string, dangerous bool) error {
 	if err := os.MkdirAll(syntaxDir, 0755); err != nil {
 		return fmt.Errorf("creating syntax dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(syntaxDir, "hob.vim"), []byte(hobSyntax), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(syntaxDir, "hnb.vim"), []byte(hobSyntax), 0644); err != nil {
 		return fmt.Errorf("writing syntax file: %w", err)
 	}
 
@@ -58,7 +58,7 @@ func runEditor(filePath string, dangerous bool) error {
 	if err := os.MkdirAll(ftdetectDir, 0755); err != nil {
 		return fmt.Errorf("creating ftdetect dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(ftdetectDir, "hob.vim"), []byte(hobFtdetect), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(ftdetectDir, "hnb.vim"), []byte(hobFtdetect), 0644); err != nil {
 		return fmt.Errorf("writing ftdetect file: %w", err)
 	}
 
@@ -107,9 +107,9 @@ func runEditor(filePath string, dangerous bool) error {
 	return nil
 }
 
-// hobSyntax is a vim syntax file for .hob files. It extends YAML with
+// hobSyntax is a vim syntax file for .hnb files. It extends YAML with
 // hobnob-specific keyword highlighting.
-const hobSyntax = `" Vim syntax file for Hobnob .hob configuration files
+const hobSyntax = `" Vim syntax file for Hobnob .hnb configuration files
 " Language: Hobnob Configuration (YAML-based)
 
 " Start with YAML as the base syntax
@@ -144,8 +144,8 @@ syn match hobGuard     /^\s*\(creates\|onlyif\|unless\)\s*:/he=e-1 contained con
 hi def link hobGuard   Special
 `
 
-// hobFtdetect sets up filetype detection for .hob files.
-const hobFtdetect = `au BufRead,BufNewFile *.hob set filetype=hob`
+// hobFtdetect sets up filetype detection for .hnb files.
+const hobFtdetect = `au BufRead,BufNewFile *.hnb set filetype=hnb`
 
 // hobVimrc is the custom vimrc template. %s placeholders:
 // 1: tmpDir (runtimepath), 2: hobcli path, 3: --dangerous flag or ""
@@ -177,10 +177,10 @@ endfunction
 
 augroup hobnob_validate
   autocmd!
-  autocmd BufWritePre *.hob call HobValidate()
+  autocmd BufWritePre *.hnb call HobValidate()
 augroup END
 
 " Status line shows file type
 set laststatus=2
-set statusline=%%f\ [hob]\ %%m%%=%%l:%%c\ %%P
+set statusline=%%f\ [hnb]\ %%m%%=%%l:%%c\ %%P
 `

@@ -6,12 +6,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o hob ./agent
+RUN CGO_ENABLED=0 go build -o hobnob ./agent
 
 FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /build/hob /usr/local/bin/hob
+COPY --from=builder /build/hobnob /usr/local/bin/hobnob
 
-ENTRYPOINT ["hob"]
+ENTRYPOINT ["hobnob"]

@@ -80,7 +80,7 @@ func Apply(info *VersionInfo, currentBinary string, httpClient *http.Client, exe
 
 	// Download to temp file in same directory (same filesystem for atomic rename).
 	dir := filepath.Dir(currentBinary)
-	tmpFile, err := os.CreateTemp(dir, ".hob-update-*")
+	tmpFile, err := os.CreateTemp(dir, ".hobnob-update-*")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}

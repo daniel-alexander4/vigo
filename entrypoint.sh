@@ -2,17 +2,15 @@
 set -e
 
 # Hobnob server entrypoint — seeds config on first run, then starts hobd.
-# All persistent state lives under /etc/hobnob (bind-mounted from host).
+# All persistent state lives under /etc/hobnob-server (bind-mounted from host).
 
-DATA_DIR="/etc/hobnob"
-SERVER_CONFIGS_DIR="${DATA_DIR}/server-configs"
-CERTS_DIR="${SERVER_CONFIGS_DIR}/certs"
-NODE_CONFIGS_DIR="${DATA_DIR}/node-configs"
-MODULES_DIR="${NODE_CONFIGS_DIR}/modules"
-ROLES_DIR="${NODE_CONFIGS_DIR}/roles"
-TEMPLATES_DIR="${NODE_CONFIGS_DIR}/templates"
-ENV_FILE="${SERVER_CONFIGS_DIR}/.env"
-SERVER_YAML="${SERVER_CONFIGS_DIR}/server.yaml"
+DATA_DIR="/etc/hobnob-server"
+CERTS_DIR="${DATA_DIR}/certs"
+MODULES_DIR="${DATA_DIR}/modules"
+ROLES_DIR="${DATA_DIR}/roles"
+TEMPLATES_DIR="${DATA_DIR}/templates"
+ENV_FILE="${DATA_DIR}/.env"
+SERVER_YAML="${DATA_DIR}/server.yaml"
 
 # Seed configs are baked into the image at /seed.
 SEED_DIR="/seed"
@@ -21,7 +19,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "$SERVER_CONFIGS_DIR" "$CERTS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
+mkdir -p "$CERTS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
 
 # ---------------------------------------------------------------------------
 # Generate TLS certificates if missing
@@ -54,7 +52,7 @@ if [ ! -f "$ENV_FILE" ]; then
 # Hobnob Environment Configuration
 # =============================================================================
 # The StaticProvider reads these values to resolve secret: references in
-# server-configs/server.yaml. Every secret:path/to/key maps to an env var:
+# server.yaml. Every secret:path/to/key maps to an env var:
 #   secret:hobnob/db/dsn  ->  HOBNOB_DB_DSN
 #   secret:hobnob/tls/cert -> HOBNOB_TLS_CERT
 # Rule: uppercase, slashes become underscores.
@@ -63,20 +61,20 @@ if [ ! -f "$ENV_FILE" ]; then
 # =============================================================================
 
 HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
-HOBNOB_TLS_CERT=server-configs/certs/server.crt
-HOBNOB_TLS_KEY=server-configs/certs/server.key
-HOBNOB_TLS_CA=server-configs/certs/ca.crt
-HOBNOB_TLS_CA_KEY=server-configs/certs/ca.key
+HOBNOB_TLS_CERT=certs/server.crt
+HOBNOB_TLS_KEY=certs/server.key
+HOBNOB_TLS_CA=certs/ca.crt
+HOBNOB_TLS_CA_KEY=certs/ca.key
 
 # =============================================================================
 # OPTIONAL — uncomment and edit as needed:
 # =============================================================================
 
-# Server config file path (default: server-configs/server.yaml)
-# HOBNOB_CONFIG_FILE=server-configs/server.yaml
+# Server config file path (default: server.yaml)
+# HOBNOB_CONFIG_FILE=server.yaml
 
-# Node configs directory (default: node-configs)
-# HOBNOB_NODE_CONFIGS_DIR=node-configs
+# Node configs directory (default: . i.e. same as server dir)
+# HOBNOB_NODE_CONFIGS_DIR=.
 
 # Migrations directory (default: migrations)
 # HOBNOB_MIGRATIONS_DIR=migrations
@@ -91,8 +89,8 @@ HOBNOB_TLS_CA_KEY=server-configs/certs/ca.key
 # Webhook secret for HMAC-SHA256 payload signing
 # HOBNOB_WEBHOOK_SECRET=change-me-to-a-random-string
 
-# .env file path override (default: server-configs/.env)
-# HOBNOB_ENV_FILE=server-configs/.env
+# .env file path override (default: .env)
+# HOBNOB_ENV_FILE=.env
 
 # =============================================================================
 # MODULE SECRETS — uncomment when enabling the corresponding node entries.
@@ -119,20 +117,20 @@ fi
 # Seed example configs (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# nodes.hob.example
-if [ ! -f "${NODE_CONFIGS_DIR}/nodes.hob.example" ]; then
-    cp "${SEED_DIR}/node-configs/nodes.hob.example" "${NODE_CONFIGS_DIR}/"
+# nodes.hnb.example
+if [ ! -f "${DATA_DIR}/nodes.hnb.example" ]; then
+    cp "${SEED_DIR}/node-configs/nodes.hnb.example" "${DATA_DIR}/"
 fi
 
 # Module examples
-for src in "${SEED_DIR}/node-configs/modules/"*.hob.example; do
+for src in "${SEED_DIR}/node-configs/modules/"*.hnb.example; do
     [ -f "$src" ] || continue
     dest="${MODULES_DIR}/$(basename "$src")"
     [ -f "$dest" ] || cp "$src" "$dest"
 done
 
 # Role examples
-for src in "${SEED_DIR}/node-configs/roles/"*.hob.example; do
+for src in "${SEED_DIR}/node-configs/roles/"*.hnb.example; do
     [ -f "$src" ] || continue
     dest="${ROLES_DIR}/$(basename "$src")"
     [ -f "$dest" ] || cp "$src" "$dest"
@@ -161,11 +159,11 @@ set -a
 . "$ENV_FILE"
 set +a
 
-# Run from /etc/hobnob so relative paths in .env and server.yaml resolve correctly.
+# Run from /etc/hobnob-server so relative paths in .env and server.yaml resolve correctly.
 cd "$DATA_DIR"
 
-export HOBNOB_CONFIG_FILE="server-configs/server.yaml"
-export HOBNOB_NODE_CONFIGS_DIR="node-configs"
+export HOBNOB_CONFIG_FILE="server.yaml"
+export HOBNOB_NODE_CONFIGS_DIR="."
 export HOBNOB_MIGRATIONS_DIR="/migrations"
 export HOBNOB_AGENT_DIR="/dist/agent"
 

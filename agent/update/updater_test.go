@@ -85,7 +85,7 @@ func TestApply_DownloadsVerifiesAndReplaces(t *testing.T) {
 	defer srv.Close()
 
 	dir := t.TempDir()
-	currentBinary := filepath.Join(dir, "hob")
+	currentBinary := filepath.Join(dir, "hobnob")
 	if err := os.WriteFile(currentBinary, []byte("old-agent-binary-v1"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestApply_ReturnsError_WhenChecksumMismatches(t *testing.T) {
 	defer srv.Close()
 
 	dir := t.TempDir()
-	currentBinary := filepath.Join(dir, "hob")
+	currentBinary := filepath.Join(dir, "hobnob")
 	if err := os.WriteFile(currentBinary, []byte("old"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestApply_ReturnsError_WhenDownloadFails(t *testing.T) {
 	defer srv.Close()
 
 	dir := t.TempDir()
-	currentBinary := filepath.Join(dir, "hob")
+	currentBinary := filepath.Join(dir, "hobnob")
 	if err := os.WriteFile(currentBinary, []byte("old"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestApply_CleansUpTempFileOnError(t *testing.T) {
 	defer srv.Close()
 
 	dir := t.TempDir()
-	currentBinary := filepath.Join(dir, "hob")
+	currentBinary := filepath.Join(dir, "hobnob")
 	if err := os.WriteFile(currentBinary, []byte("old"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestApply_CleansUpTempFileOnError(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.Name() != "hob" {
+		if e.Name() != "hobnob" {
 			t.Errorf("leftover temp file found: %s", e.Name())
 		}
 	}

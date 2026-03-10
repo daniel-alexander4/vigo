@@ -41,19 +41,6 @@ func (cc *CertCache) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, e
 	return cc.cert, nil
 }
 
-// Reload parses new PEM-encoded cert and key data and atomically replaces
-// the cached certificate. Returns an error if the PEM is invalid.
-func (cc *CertCache) Reload(certPEM, keyPEM []byte) error {
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return fmt.Errorf("parsing reloaded cert/key: %w", err)
-	}
-	cc.mu.Lock()
-	cc.cert = &cert
-	cc.mu.Unlock()
-	return nil
-}
-
 // ServerConfig holds everything needed to construct the gRPC server.
 type ServerConfig struct {
 	CertFile     string

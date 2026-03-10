@@ -3,7 +3,7 @@ set -eu
 
 # Hobnob Agent Bootstrap Script
 # ==============================
-# Self-contained script that installs the hob agent on a new node,
+# Self-contained script that installs the hobnob agent on a new node,
 # bootstraps it with the server (generates keys, CSR, receives signed certs),
 # and starts the agent as a systemd service.
 #
@@ -21,7 +21,7 @@ set -eu
 SERVER_ADDR="${HOBNOB_SERVER:-}"
 TOKEN="${HOBNOB_TOKEN:-}"
 INSTALL_DIR="${HOBNOB_INSTALL_DIR:-/usr/local/bin}"
-DATA_DIR="${HOBNOB_DATA_DIR:-/etc/hobnob}"
+DATA_DIR="${HOBNOB_DATA_DIR:-/etc/hobnob-node}"
 GRPC_PORT="${HOBNOB_GRPC_PORT:-1530}"
 
 # ---- Helpers ----
@@ -72,20 +72,20 @@ mkdir -p "$DATA_DIR"
 
 # ---- Download agent binary ----
 
-echo "Downloading hob agent binary..."
+echo "Downloading hobnob agent binary..."
 DOWNLOAD_URL="${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}"
-HTTP_CODE=$(curl -sSf -w '%{http_code}' -o "${INSTALL_DIR}/hob" "$DOWNLOAD_URL" 2>/dev/null) || true
+HTTP_CODE=$(curl -sSf -w '%{http_code}' -o "${INSTALL_DIR}/hobnob" "$DOWNLOAD_URL" 2>/dev/null) || true
 
-if [ ! -f "${INSTALL_DIR}/hob" ] || [ "$HTTP_CODE" != "200" ]; then
+if [ ! -f "${INSTALL_DIR}/hobnob" ] || [ "$HTTP_CODE" != "200" ]; then
     die "failed to download agent binary from ${DOWNLOAD_URL} (HTTP ${HTTP_CODE})"
 fi
-chmod +x "${INSTALL_DIR}/hob"
-echo "Installed: ${INSTALL_DIR}/hob"
+chmod +x "${INSTALL_DIR}/hobnob"
+echo "Installed: ${INSTALL_DIR}/hobnob"
 
 # ---- Bootstrap agent (generates keys, CSR, registers, receives certs) ----
 
 echo "Bootstrapping agent..."
-BOOTSTRAP_CMD="${INSTALL_DIR}/hob bootstrap --server ${SERVER_ADDR} --data-dir ${DATA_DIR}"
+BOOTSTRAP_CMD="${INSTALL_DIR}/hobnob bootstrap --server ${SERVER_ADDR} --data-dir ${DATA_DIR}"
 if [ -n "$TOKEN" ]; then
     BOOTSTRAP_CMD="${BOOTSTRAP_CMD} --token ${TOKEN}"
 fi
@@ -99,7 +99,7 @@ GRPC_HOST="$(echo "$SERVER_ADDR" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')"
 # ---- Install systemd service ----
 
 if command -v systemctl > /dev/null 2>&1; then
-    cat > /etc/systemd/system/hob.service << EOF
+    cat > /etc/systemd/system/hobnob-node.service << EOF
 [Unit]
 Description=Hobnob Configuration Management Agent
 After=network.target
@@ -107,7 +107,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/hob --server ${GRPC_HOST}:${GRPC_PORT} --data-dir ${DATA_DIR}
+ExecStart=${INSTALL_DIR}/hobnob --server ${GRPC_HOST}:${GRPC_PORT} --data-dir ${DATA_DIR}
 Restart=always
 RestartSec=10
 LimitNOFILE=65536
@@ -117,16 +117,16 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable hob
-    systemctl start hob
+    systemctl enable hobnob-node
+    systemctl start hobnob-node
     echo ""
     echo "Hobnob agent service installed and started."
-    echo "  systemctl status hob    # check status"
-    echo "  journalctl -u hob -f    # follow logs"
+    echo "  systemctl status hobnob-node    # check status"
+    echo "  journalctl -u hobnob-node -f    # follow logs"
 else
     echo ""
     echo "systemd not found. Start the agent manually:"
-    echo "  ${INSTALL_DIR}/hob --server ${GRPC_HOST}:${GRPC_PORT} --data-dir ${DATA_DIR}"
+    echo "  ${INSTALL_DIR}/hobnob --server ${GRPC_HOST}:${GRPC_PORT} --data-dir ${DATA_DIR}"
 fi
 
 echo ""

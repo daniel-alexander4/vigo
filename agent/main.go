@@ -66,7 +66,7 @@ func setupLogger() {
 func loadNodeID() (string, error) {
 	data, err := os.ReadFile(dataDir + "/client.uuid")
 	if err != nil {
-		return "", fmt.Errorf("read node UUID from %s/client.uuid: %w (have you run 'hob register'?)", dataDir, err)
+		return "", fmt.Errorf("read node UUID from %s/client.uuid: %w (have you run 'hobnob register'?)", dataDir, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
@@ -153,7 +153,7 @@ func signalContext() (context.Context, context.CancelFunc) {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "hob",
+	Use:   "hobnob",
 	Short: "Hobnob configuration management agent",
 	Long:  "Agent daemon that pulls desired state from the Hobnob server and applies idempotent resource changes.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -488,7 +488,7 @@ After bootstrap, the agent has everything it needs to connect via mTLS.`,
 			grpcAddr, err := installSystemdService(cmd, bootstrapServer, dataDir)
 			if err != nil {
 				logger.Warn("systemd service installation failed", "error", err)
-				fmt.Fprintf(os.Stderr, "Service install failed: %v\nStart the agent manually:\n  hob --server <grpc-host>:1530 --data-dir %s\n", err, dataDir)
+				fmt.Fprintf(os.Stderr, "Service install failed: %v\nStart the agent manually:\n  hobnob --server <grpc-host>:1530 --data-dir %s\n", err, dataDir)
 				return nil
 			}
 
@@ -525,7 +525,7 @@ func getOutboundIP() string {
 	return localAddr.IP.String()
 }
 
-// installSystemdService creates, enables, and starts a systemd service for hob.
+// installSystemdService creates, enables, and starts a systemd service for hobnob.
 // Returns the gRPC address used in the service unit.
 func installSystemdService(cmd *cobra.Command, bootstrapServer, dataDir string) (string, error) {
 	// Check for systemctl.
@@ -545,8 +545,8 @@ func installSystemdService(cmd *cobra.Command, bootstrapServer, dataDir string) 
 	}
 	grpcAddr := net.JoinHostPort(host, grpcPort)
 
-	// Copy the running binary to /usr/local/bin/hob.
-	const installPath = "/usr/local/bin/hob"
+	// Copy the running binary to /usr/local/bin/hobnob.
+	const installPath = "/usr/local/bin/hobnob"
 	srcPath, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("resolving executable path: %w", err)
@@ -563,7 +563,7 @@ func installSystemdService(cmd *cobra.Command, bootstrapServer, dataDir string) 
 		if err := os.WriteFile(installPath, src, 0755); err != nil {
 			return "", fmt.Errorf("installing binary to %s: %w", installPath, err)
 		}
-		fmt.Printf("Installed hob to %s\n", installPath)
+		fmt.Printf("Installed hobnob to %s\n", installPath)
 	}
 
 	unit := fmt.Sprintf(`[Unit]
@@ -634,7 +634,7 @@ func verifyCheckIn(ctx context.Context, grpcAddr, dataDir, nodeID string) error 
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/hobnob", "directory for agent data (keypair, UUID)")
+	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/hobnob-node", "directory for agent data (keypair, UUID, certs)")
 	rootCmd.PersistentFlags().StringVar(&server, "server", "localhost:1530", "server gRPC address")
 	rootCmd.PersistentFlags().StringVar(&caFile, "ca-file", "", "CA certificate file for server verification")
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "client certificate file for mTLS (optional in dev)")

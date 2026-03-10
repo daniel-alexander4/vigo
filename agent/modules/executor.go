@@ -3,7 +3,8 @@ package modules
 
 import (
 	"context"
-	"os/exec"
+
+	"github.com/hobnob/hobnob/agent/internal/cmdrun"
 )
 
 // ActionTaken describes what action an executor performed on a resource.
@@ -33,15 +34,8 @@ type Executor interface {
 	Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult
 }
 
-// CommandRunner abstracts command execution for testability.
-type CommandRunner interface {
-	Run(ctx context.Context, name string, args ...string) ([]byte, error)
-}
+// CommandRunner is an alias for the shared command runner interface.
+type CommandRunner = cmdrun.Runner
 
-// DefaultRunner executes commands via os/exec.
-type DefaultRunner struct{}
-
-// Run executes a command and returns combined output.
-func (d *DefaultRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).CombinedOutput()
-}
+// DefaultRunner is an alias for the shared default command runner.
+type DefaultRunner = cmdrun.Default

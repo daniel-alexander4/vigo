@@ -114,13 +114,13 @@ echo "Server: ${SERVER_ADDR}"
 
 # Create directories.
 INSTALL_DIR="/usr/local/bin"
-DATA_DIR="/etc/hobnob"
+DATA_DIR="/etc/hobnob-node"
 mkdir -p "$DATA_DIR"
 
 # Download agent binary.
 echo "Downloading agent binary..."
-curl -sSf "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/hob"
-chmod +x "${INSTALL_DIR}/hob"
+curl -sSf "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/hobnob"
+chmod +x "${INSTALL_DIR}/hobnob"
 
 # Bootstrap the agent (generates keys, CSR, registers with server, receives certs).
 echo "Bootstrapping agent..."
@@ -128,7 +128,7 @@ BOOTSTRAP_ARGS="--server ${SERVER_ADDR} --data-dir ${DATA_DIR}"
 if [ -n "$TOKEN" ]; then
     BOOTSTRAP_ARGS="${BOOTSTRAP_ARGS} --token ${TOKEN}"
 fi
-"${INSTALL_DIR}/hob" bootstrap ${BOOTSTRAP_ARGS}
+"${INSTALL_DIR}/hobnob" bootstrap ${BOOTSTRAP_ARGS}
 
 # Extract gRPC server address (strip protocol and port, add :1530).
 GRPC_HOST="$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')"
@@ -142,7 +142,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob
+ExecStart=/usr/local/bin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-node
 Restart=always
 RestartSec=10
 
@@ -155,7 +155,7 @@ SYSTEMD
     echo "Hobnob agent service installed and started."
 else
     echo "systemd not found. Start the agent manually:"
-    echo "  hob --server ${GRPC_HOST}:1530 --data-dir $DATA_DIR"
+    echo "  hobnob --server ${GRPC_HOST}:1530 --data-dir $DATA_DIR"
 fi
 
 echo "Bootstrap complete."
@@ -362,7 +362,7 @@ func (h *Handler) AgentDownload(w http.ResponseWriter, r *http.Request) {
 	binPath = strings.ReplaceAll(binPath, "..", "")
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=hob-%s-%s", goos, goarch))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=hobnob-%s-%s", goos, goarch))
 	http.ServeFile(w, r, binPath)
 }
 

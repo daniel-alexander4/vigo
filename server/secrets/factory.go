@@ -27,7 +27,7 @@ func NewFromConfig(cfg Config) (Provider, error) {
 	case "static":
 		envFile := cfg.EnvFile
 		if envFile == "" {
-			envFile = "server-configs/.env"
+			envFile = ".env"
 		}
 		return NewStaticProvider(envFile)
 	case "isopass":

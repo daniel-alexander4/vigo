@@ -12,9 +12,9 @@ import (
 )
 
 var validateCmd = &cobra.Command{
-	Use:   "validate <file.hob> [file2.hob ...]",
-	Short: "Check .hob files for YAML correctness and idempotency",
-	Long: `Validate one or more .hob files.
+	Use:   "validate <file.hnb> [file2.hnb ...]",
+	Short: "Check .hnb files for YAML correctness and idempotency",
+	Long: `Validate one or more .hnb files.
 
 Checks performed:
   1. YAML syntax correctness (valid YAML, proper indentation, no tabs, etc.)
@@ -63,8 +63,8 @@ func validateFile(path string) ([]validate.Finding, error) {
 	}
 
 	ext := filepath.Ext(path)
-	if ext != ".hob" && ext != ".yaml" && ext != ".yml" {
-		return nil, fmt.Errorf("unsupported file type %q (expected .hob, .yaml, or .yml)", ext)
+	if ext != ".hnb" && ext != ".yaml" && ext != ".yml" {
+		return nil, fmt.Errorf("unsupported file type %q (expected .hnb, .yaml, or .yml)", ext)
 	}
 
 	// Phase 1: YAML syntax check — catch malformed YAML before anything else.

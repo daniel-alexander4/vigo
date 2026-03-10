@@ -15,6 +15,7 @@ import (
 )
 
 const keyFilename = "agent.key"
+const certsSubdir = "certs"
 const tlsKeyFilename = "tls.key"
 const tlsCertFilename = "tls.crt"
 const caCertFilename = "ca.crt"
@@ -122,7 +123,10 @@ func GenerateCSR(key *ecdsa.PrivateKey, hostname string) ([]byte, error) {
 	}), nil
 }
 
-// SaveTLSKey saves an ECDSA private key in PKCS8 PEM format to {dir}/tls.key.
+// certsDir returns the certs subdirectory path within a data directory.
+func certsDir(dir string) string { return filepath.Join(dir, certsSubdir) }
+
+// SaveTLSKey saves an ECDSA private key in PKCS8 PEM format to {dir}/certs/tls.key.
 func SaveTLSKey(dir string, key *ecdsa.PrivateKey) error {
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
@@ -134,33 +138,45 @@ func SaveTLSKey(dir string, key *ecdsa.PrivateKey) error {
 		Bytes: der,
 	}
 
-	path := filepath.Join(dir, tlsKeyFilename)
-	return os.WriteFile(path, pem.EncodeToMemory(block), 0600)
+	cd := certsDir(dir)
+	if err := os.MkdirAll(cd, 0700); err != nil {
+		return fmt.Errorf("create certs dir: %w", err)
+	}
+	return os.WriteFile(filepath.Join(cd, tlsKeyFilename), pem.EncodeToMemory(block), 0600)
 }
 
-// SaveTLSCert saves a PEM-encoded certificate to {dir}/tls.crt.
+// SaveTLSCert saves a PEM-encoded certificate to {dir}/certs/tls.crt.
 func SaveTLSCert(dir string, certPEM []byte) error {
-	return os.WriteFile(filepath.Join(dir, tlsCertFilename), certPEM, 0644)
+	cd := certsDir(dir)
+	if err := os.MkdirAll(cd, 0700); err != nil {
+		return fmt.Errorf("create certs dir: %w", err)
+	}
+	return os.WriteFile(filepath.Join(cd, tlsCertFilename), certPEM, 0644)
 }
 
-// SaveCACert saves a PEM-encoded CA certificate to {dir}/ca.crt.
+// SaveCACert saves a PEM-encoded CA certificate to {dir}/certs/ca.crt.
 func SaveCACert(dir string, caPEM []byte) error {
-	return os.WriteFile(filepath.Join(dir, caCertFilename), caPEM, 0644)
+	cd := certsDir(dir)
+	if err := os.MkdirAll(cd, 0700); err != nil {
+		return fmt.Errorf("create certs dir: %w", err)
+	}
+	return os.WriteFile(filepath.Join(cd, caCertFilename), caPEM, 0644)
 }
 
-// TLSKeyPath returns the path to the TLS private key in the data directory.
-func TLSKeyPath(dir string) string { return filepath.Join(dir, tlsKeyFilename) }
+// TLSKeyPath returns the path to the TLS private key.
+func TLSKeyPath(dir string) string { return filepath.Join(certsDir(dir), tlsKeyFilename) }
 
-// TLSCertPath returns the path to the TLS certificate in the data directory.
-func TLSCertPath(dir string) string { return filepath.Join(dir, tlsCertFilename) }
+// TLSCertPath returns the path to the TLS certificate.
+func TLSCertPath(dir string) string { return filepath.Join(certsDir(dir), tlsCertFilename) }
 
-// CACertPath returns the path to the CA certificate in the data directory.
-func CACertPath(dir string) string { return filepath.Join(dir, caCertFilename) }
+// CACertPath returns the path to the CA certificate.
+func CACertPath(dir string) string { return filepath.Join(certsDir(dir), caCertFilename) }
 
-// HasBootstrapCerts checks if TLS cert, key, and CA cert exist in the data directory.
+// HasBootstrapCerts checks if TLS cert, key, and CA cert exist in the certs subdirectory.
 func HasBootstrapCerts(dir string) bool {
+	cd := certsDir(dir)
 	for _, f := range []string{tlsKeyFilename, tlsCertFilename, caCertFilename} {
-		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+		if _, err := os.Stat(filepath.Join(cd, f)); err != nil {
 			return false
 		}
 	}

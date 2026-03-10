@@ -7,10 +7,10 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 go build -o hobd ./server
-RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/linux/amd64/hob ./agent
-RUN GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/linux/arm64/hob ./agent
-RUN GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/darwin/amd64/hob ./agent
-RUN GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/darwin/arm64/hob ./agent
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/linux/amd64/hobnob ./agent
+RUN GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/linux/arm64/hobnob ./agent
+RUN GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/darwin/amd64/hobnob ./agent
+RUN GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/darwin/arm64/hobnob ./agent
 
 FROM alpine:3.21
 

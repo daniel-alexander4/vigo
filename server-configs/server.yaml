@@ -1,6 +1,6 @@
 secrets:
   backend: static
-  env_file: "server-configs/.env"
+  env_file: ".env"
 
 server:
   grpc_listen: ":1530"

@@ -24,7 +24,7 @@ services:
       - "1530:1530"
       - "8181:8181"
     volumes:
-      - /etc/hobnob:/etc/hobnob
+      - /etc/hobnob-server:/etc/hobnob-server
     depends_on:
       postgres:
         condition: service_healthy

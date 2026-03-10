@@ -43,8 +43,8 @@ func run() error {
 	defer cancel()
 
 	// Determine config paths relative to working directory.
-	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server-configs/server.yaml")
-	nodeConfigsDir := envOrDefault("HOBNOB_NODE_CONFIGS_DIR", "node-configs")
+	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server.yaml")
+	nodeConfigsDir := envOrDefault("HOBNOB_NODE_CONFIGS_DIR", ".")
 	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
 	nailsDir := envOrDefault("HOBNOB_CUSTOM_NAILS_DIR", "custom-nails")
 
@@ -137,7 +137,7 @@ func run() error {
 	dispatcher := webhook.NewDispatcher(queries)
 
 	// Create and start gRPC server.
-	grpcSrv, certCache, lastSeenBatch, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, _, lastSeenBatch, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:     cfg.Server.TLS.CertFile,
 		KeyFile:      cfg.Server.TLS.KeyFile,
 		CAFile:       cfg.Server.TLS.CAFile,
@@ -176,9 +176,6 @@ func run() error {
 			slog.Warn("secret watcher enabled but provider does not support versioning")
 		}
 	}
-
-	// Store certCache for potential TLS hot-reload (watcher integration).
-	_ = certCache
 
 	grpcLis, err := net.Listen("tcp", cfg.Server.GRPCListen)
 	if err != nil {

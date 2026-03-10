@@ -23,10 +23,10 @@ With collector names (e.g. "os", "hardware"), prints only those categories.
 With a dot-path (e.g. "os.distro"), prints just that value.
 
 Examples:
-  hob nails                  # all nails
-  hob nails os               # only OS nails
-  hob nails os hardware      # OS and hardware nails
-  hob nails os.distro        # just the distro value`,
+  hobnob nails                  # all nails
+  hobnob nails os               # only OS nails
+  hobnob nails os hardware      # OS and hardware nails
+  hobnob nails os.distro        # just the distro value`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Suppress slog output for clean JSON-only stdout.

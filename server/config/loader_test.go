@@ -1544,14 +1544,14 @@ nodes:
 func TestIdempotencyValidation_BlocksUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.hob"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.hnb"), `
 name: bad
 resources:
   - name: yolo-exec
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "clients.hob"), `
+	writeFile(t, filepath.Join(dir, "clients.hnb"), `
 nodes:
   - match: "test.example.com"
     modules: [bad]
@@ -1569,14 +1569,14 @@ nodes:
 func TestIdempotencyValidation_DangerousModeAllowsUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.hob"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.hnb"), `
 name: bad
 resources:
   - name: yolo-exec
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "clients.hob"), `
+	writeFile(t, filepath.Join(dir, "clients.hnb"), `
 nodes:
   - match: "test.example.com"
     modules: [bad]
@@ -1595,7 +1595,7 @@ nodes:
 func TestIdempotencyValidation_GuardedExecPasses(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "good.hob"), `
+	writeFile(t, filepath.Join(dir, "modules", "good.hnb"), `
 name: good
 resources:
   - name: guarded-exec
@@ -1603,7 +1603,7 @@ resources:
     command: "touch /tmp/done"
     creates: "/tmp/done"
 `)
-	writeFile(t, filepath.Join(dir, "clients.hob"), `
+	writeFile(t, filepath.Join(dir, "clients.hnb"), `
 nodes:
   - match: "test.example.com"
     modules: [good]
@@ -1615,10 +1615,10 @@ nodes:
 	}
 }
 
-func TestHobFileExtension_LoadedByConfigStore(t *testing.T) {
+func TestHnbFileExtension_LoadedByConfigStore(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.hob"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.hnb"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1626,11 +1626,11 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "roles", "web.hob"), `
+	writeFile(t, filepath.Join(dir, "roles", "web.hnb"), `
 name: web
 modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "clients.hob"), `
+	writeFile(t, filepath.Join(dir, "clients.hnb"), `
 nodes:
   - match: "test.example.com"
     roles: [web]

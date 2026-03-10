@@ -36,7 +36,7 @@ type resolvedEntry struct {
 }
 
 // ConfigStore loads, watches, and provides per-node configuration.
-// The nodesDir contains .hob/.yaml files with node entries at the top level,
+// The nodesDir contains .hnb/.yaml files with node entries at the top level,
 // plus modules/ and roles/ subdirectories. Secret references are resolved
 // via a secrets.Provider. Hot-reload via fsnotify.
 type ConfigStore struct {
@@ -50,7 +50,7 @@ type ConfigStore struct {
 }
 
 // NewConfigStore creates a ConfigStore that scans nodesDir for node
-// config files (.hob or .yaml), module definitions from nodesDir/modules/,
+// config files (.hnb or .yaml), module definitions from nodesDir/modules/,
 // and role definitions from nodesDir/roles/. Secret references are resolved
 // using the given provider.
 //
@@ -516,7 +516,7 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 	return defs, nil
 }
 
-// loadNodesDir reads all config files (.hob/.yaml) at the top level of dir
+// loadNodesDir reads all config files (.hnb/.yaml) at the top level of dir
 // (not subdirs) and merges their node entries in filesystem order.
 func loadNodesDir(dir string) ([]NodeEntry, error) {
 	dirEntries, err := os.ReadDir(dir)
@@ -787,13 +787,13 @@ func cloneResources(resources []ResourceConfig) []ResourceConfig {
 
 
 // isConfigFile checks if a filename has a recognized config extension.
-// Accepts .hob (preferred), .yaml, and .yml. Ignores .example files.
+// Accepts .hnb (preferred), .yaml, and .yml. Ignores .example files.
 func isConfigFile(name string) bool {
 	if strings.HasSuffix(name, ".example") {
 		return false
 	}
 	ext := filepath.Ext(name)
-	return ext == ".hob" || ext == ".yaml" || ext == ".yml"
+	return ext == ".hnb" || ext == ".yaml" || ext == ".yml"
 }
 
 // moduleToValidate converts a ModuleDefinition to a validate.Module.

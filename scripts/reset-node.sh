@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Factory reset a hobnob node: stop service, remove all agent state,
+# Factory reset a hobnob node: stop service, remove all agent and server state,
 # so the node can be re-bootstrapped from scratch.
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -17,9 +17,12 @@ systemctl daemon-reload
 systemctl reset-failed hobnob-node 2>/dev/null || true
 
 echo "Removing agent binary..."
-rm -f /usr/local/bin/hob
+rm -f /usr/local/bin/hobnob
 
-echo "Removing agent data (/etc/hobnob)..."
-rm -rf /etc/hobnob
+echo "Removing agent data (/etc/hobnob-node)..."
+rm -rf /etc/hobnob-node
+
+echo "Removing server data (/etc/hobnob-server)..."
+rm -rf /etc/hobnob-server
 
 echo "Done. Node is clean — ready to re-bootstrap."

@@ -134,7 +134,7 @@ func TestAgentLatest_ReturnsVersionJSON(t *testing.T) {
 	if err := os.MkdirAll(osDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(osDir, "hob"), []byte("binary-content"), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(osDir, "hobnob"), []byte("binary-content"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,7 +177,7 @@ func TestAgentDownload_ServesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := []byte("fake-agent-binary-v1")
-	if err := os.WriteFile(filepath.Join(osDir, "hob"), content, 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(osDir, "hobnob"), content, 0755); err != nil {
 		t.Fatal(err)
 	}
 
