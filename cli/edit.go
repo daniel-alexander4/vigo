@@ -49,7 +49,7 @@ func runEditor(filePath string, dangerous bool) error {
 	if err := os.MkdirAll(syntaxDir, 0755); err != nil {
 		return fmt.Errorf("creating syntax dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(syntaxDir, "hnb.vim"), []byte(hobSyntax), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(syntaxDir, "hnb.vim"), []byte(hobSyntax), 0600); err != nil {
 		return fmt.Errorf("writing syntax file: %w", err)
 	}
 
@@ -58,7 +58,7 @@ func runEditor(filePath string, dangerous bool) error {
 	if err := os.MkdirAll(ftdetectDir, 0755); err != nil {
 		return fmt.Errorf("creating ftdetect dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(ftdetectDir, "hnb.vim"), []byte(hobFtdetect), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(ftdetectDir, "hnb.vim"), []byte(hobFtdetect), 0600); err != nil {
 		return fmt.Errorf("writing ftdetect file: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func runEditor(filePath string, dangerous bool) error {
 	}
 	vimrc := fmt.Sprintf(hobVimrc, tmpDir, cliPath, dangerousFlag)
 	vimrcPath := filepath.Join(tmpDir, "vimrc")
-	if err := os.WriteFile(vimrcPath, []byte(vimrc), 0644); err != nil {
+	if err := os.WriteFile(vimrcPath, []byte(vimrc), 0600); err != nil {
 		return fmt.Errorf("writing vimrc: %w", err)
 	}
 

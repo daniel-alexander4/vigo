@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -327,6 +329,9 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 func (s *AdminService) AddWebhook(ctx context.Context, req *pb.AddWebhookRequest) (*pb.AddWebhookResponse, error) {
 	if req.Url == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "url is required")
+	}
+	if err := validateWebhookURL(req.Url); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid webhook URL: %v", err)
 	}
 
 	wh, err := s.queries.CreateWebhook(ctx, db.CreateWebhookParams{
@@ -703,5 +708,30 @@ func dbRunsToProto(runs []db.Run) []*pb.Run {
 		result = append(result, dbRunToProto(r))
 	}
 	return result
+}
+
+// validateWebhookURL checks that a webhook URL is safe to deliver to.
+func validateWebhookURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("malformed URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("unsupported scheme %q (must be http or https)", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("missing host")
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("cannot resolve host %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return fmt.Errorf("host %q resolves to private/loopback address %s", host, ip)
+		}
+	}
+	return nil
 }
 

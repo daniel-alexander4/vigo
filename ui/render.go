@@ -87,6 +87,9 @@ func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
 		slog.Error("template execution error", "name", name, "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -103,6 +106,7 @@ func (r *Renderer) RenderFragment(w http.ResponseWriter, page, fragment string, 
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if err := tmpl.ExecuteTemplate(w, fragment, data); err != nil {
 		slog.Error("fragment execution error", "page", page, "fragment", fragment, "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)

@@ -261,13 +261,13 @@ func (a *ArchiveExecutor) download(ctx context.Context, url, dest string) error 
 func (a *ArchiveExecutor) extract(ctx context.Context, archivePath, destDir, urlLower string) error {
 	switch {
 	case strings.HasSuffix(urlLower, ".tar.gz") || strings.HasSuffix(urlLower, ".tgz"):
-		_, err := a.runner().Run(ctx, "tar", "-xzf", archivePath, "-C", destDir)
+		_, err := a.runner().Run(ctx, "tar", "--no-same-owner", "--no-absolute-names", "-xzf", archivePath, "-C", destDir)
 		return err
 	case strings.HasSuffix(urlLower, ".tar.bz2"):
-		_, err := a.runner().Run(ctx, "tar", "-xjf", archivePath, "-C", destDir)
+		_, err := a.runner().Run(ctx, "tar", "--no-same-owner", "--no-absolute-names", "-xjf", archivePath, "-C", destDir)
 		return err
 	case strings.HasSuffix(urlLower, ".tar.xz"):
-		_, err := a.runner().Run(ctx, "tar", "-xJf", archivePath, "-C", destDir)
+		_, err := a.runner().Run(ctx, "tar", "--no-same-owner", "--no-absolute-names", "-xJf", archivePath, "-C", destDir)
 		return err
 	case strings.HasSuffix(urlLower, ".zip"):
 		_, err := a.runner().Run(ctx, "unzip", "-o", archivePath, "-d", destDir)

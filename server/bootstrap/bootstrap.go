@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -177,7 +178,13 @@ func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 	// is just a port (e.g. ":8181"). The node needs a full URL to curl from.
 	serverAddr := h.serverAddr
 	if strings.HasPrefix(serverAddr, ":") {
-		serverAddr = "http://" + r.Host
+		// Derive from request Host header, but only use the hostname portion
+		// to prevent header injection.
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		serverAddr = "http://" + host + h.serverAddr
 	}
 
 	data := bootstrapData{
@@ -263,7 +270,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), "revoked") {
 			code = http.StatusForbidden
 		}
-		http.Error(w, err.Error(), code)
+		http.Error(w, "registration failed", code)
 		return
 	}
 
@@ -271,7 +278,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	signedCert, err := h.ca.SignCSR([]byte(req.CSRPEM), req.Hostname, h.certValidity)
 	if err != nil {
 		slog.Error("CSR signing failed", "hostname", req.Hostname, "error", err)
-		http.Error(w, fmt.Sprintf("CSR signing failed: %v", err), http.StatusInternalServerError)
+		http.Error(w, "registration failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -350,16 +357,13 @@ func (h *Handler) AgentDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	binPath := BinaryPath(h.agentDir, goos, goarch)
+	binPath := filepath.Clean(BinaryPath(h.agentDir, goos, goarch))
 
 	// Check existence before serving.
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		http.Error(w, "agent binary not found", http.StatusNotFound)
 		return
 	}
-
-	// Clean the path to prevent directory traversal (defense in depth).
-	binPath = strings.ReplaceAll(binPath, "..", "")
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=hobnob-%s-%s", goos, goarch))

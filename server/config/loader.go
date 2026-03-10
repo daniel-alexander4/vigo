@@ -643,7 +643,11 @@ func resolveSourceFiles(defs map[string]*ModuleDefinition, baseDir string) error
 					def.Name, def.Resources[i].Name)
 			}
 
-			fullPath := filepath.Join(baseDir, sourcePath)
+			fullPath := filepath.Clean(filepath.Join(baseDir, sourcePath))
+			if !strings.HasPrefix(fullPath, baseDir+string(filepath.Separator)) && fullPath != baseDir {
+				return fmt.Errorf("module %q resource %q: source path %q escapes config directory",
+					def.Name, def.Resources[i].Name, sourcePath)
+			}
 			data, err := os.ReadFile(fullPath)
 			if err != nil {
 				return fmt.Errorf("module %q resource %q: reading source %q: %w",

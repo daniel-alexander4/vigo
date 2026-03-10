@@ -415,6 +415,14 @@ func (u *UserExecutor) writeAuthorizedKeys(ctx context.Context, name, home, keys
 	}
 
 	akPath := filepath.Join(sshDir, "authorized_keys")
+
+	// Prevent symlink attacks: remove any existing symlink before writing.
+	if fi, err := os.Lstat(akPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if err := os.Remove(akPath); err != nil {
+			return fmt.Errorf("remove symlink %s: %w", akPath, err)
+		}
+	}
+
 	if err := os.WriteFile(akPath, []byte(keys), 0600); err != nil {
 		return fmt.Errorf("write %s: %w", akPath, err)
 	}
