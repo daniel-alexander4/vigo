@@ -16,15 +16,16 @@ type NetworkCollector struct{}
 func (c *NetworkCollector) Name() string { return "network" }
 
 // Collect returns network traits using os.Hostname and gopsutil net.Interfaces.
-func (c *NetworkCollector) Collect(_ context.Context) (map[string]any, error) {
+func (c *NetworkCollector) Collect(ctx context.Context) (map[string]any, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, err
 	}
 
-	// Attempt FQDN lookup; fall back to hostname.
+	// Attempt FQDN lookup with context; fall back to hostname on timeout.
 	fqdn := hostname
-	addrs, err := net.LookupAddr(hostname)
+	resolver := &net.Resolver{}
+	addrs, err := resolver.LookupAddr(ctx, hostname)
 	if err == nil && len(addrs) > 0 {
 		// LookupAddr returns names with trailing dot — trim it.
 		name := addrs[0]

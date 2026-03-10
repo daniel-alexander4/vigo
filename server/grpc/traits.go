@@ -44,13 +44,9 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		return nil, status.Errorf(codes.Internal, "storing traits: %v", err)
 	}
 
-	// Prune old traits to enforce 10-snapshot retention.
-	if err := s.queries.PruneNodeTraits(ctx, nodeID); err != nil {
-		slog.Error("failed to prune node traits",
-			"node_id", nodeID,
-			"error", err,
-		)
-		// Non-fatal: traits were stored successfully.
+	// Schedule async pruning to enforce 10-snapshot retention.
+	if s.traitsPruner != nil {
+		s.traitsPruner.Mark(nodeID)
 	}
 
 	slog.Info("traits reported",

@@ -230,6 +230,9 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 	// and whose last execution was a no-op. Expires after 5 cycles.
 	resultCache := runner.NewResultCache(5)
 
+	// Custom traits manifest cached from previous cycle's response.
+	var cachedCustomTraits []*pb.CustomTraitEntry
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -238,18 +241,14 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		default:
 		}
 
-		// 0. Pre-check-in to get custom traits manifest.
+		// 0. Sync custom traits using manifest cached from previous response.
 		var customTraits map[string]any
-		if traitsCacheDir != "" {
-			preResp, preErr := client.CheckIn(ctx, "", nil, 0, nil)
-			if preErr != nil {
-				logger.Warn("pre-check-in for traits manifest failed", "error", preErr)
-			} else if len(preResp.CustomTraits) > 0 {
-				traitsExec := customtraits.NewExecutor(traitsCacheDir, client, 10*time.Second)
-				customTraits, preErr = traitsExec.SyncAndRun(ctx, preResp.CustomTraits)
-				if preErr != nil {
-					logger.Warn("custom traits sync/run failed", "error", preErr)
-				}
+		if traitsCacheDir != "" && len(cachedCustomTraits) > 0 {
+			traitsExec := customtraits.NewExecutor(traitsCacheDir, client, 10*time.Second)
+			var syncErr error
+			customTraits, syncErr = traitsExec.SyncAndRun(ctx, cachedCustomTraits)
+			if syncErr != nil {
+				logger.Warn("custom traits sync/run failed", "error", syncErr)
 			}
 		}
 
@@ -300,6 +299,10 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		}
 		if runResult.PolicyBundle != nil {
 			policyState.Bundle = runResult.PolicyBundle
+			// Cache custom traits manifest for next cycle (eliminates pre-check-in RPC).
+			if len(runResult.PolicyBundle.CustomTraits) > 0 {
+				cachedCustomTraits = runResult.PolicyBundle.CustomTraits
+			}
 		}
 
 		if runResult.NoChange {

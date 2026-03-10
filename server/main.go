@@ -137,7 +137,7 @@ func run() error {
 	dispatcher := webhook.NewDispatcher(queries)
 
 	// Create and start gRPC server.
-	grpcSrv, _, lastSeenBatch, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, _, lastSeenBatch, traitsPruner, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:     cfg.Server.TLS.CertFile,
 		KeyFile:      cfg.Server.TLS.KeyFile,
 		CAFile:       cfg.Server.TLS.CAFile,
@@ -155,6 +155,9 @@ func run() error {
 
 	// Start async last_seen batcher (flushes every 10s).
 	go lastSeenBatch.Start(ctx, 10*time.Second)
+
+	// Start async traits pruner (flushes every 5m).
+	go traitsPruner.Start(ctx, 5*time.Minute)
 
 	// Start secret rotation watcher if enabled and provider supports versioning.
 	if cfg.Watcher.Enabled {

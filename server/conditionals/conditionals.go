@@ -5,6 +5,7 @@
 package conditionals
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -24,10 +25,11 @@ var validOperators = map[string]bool{
 
 // ConditionalVar represents a parsed conditional variable definition.
 type ConditionalVar struct {
-	Name     string
-	Trait    string // dot-path into traits map (e.g. "os.distro")
-	Operator string // one of: in, not_in, gt, lt, gte, lte, regex
-	Operand  any    // type depends on operator
+	Name        string
+	Trait       string // dot-path into traits map (e.g. "os.distro")
+	Operator    string // one of: in, not_in, gt, lt, gte, lte, regex
+	Operand     any    // type depends on operator
+	OperandJSON string // pre-serialized JSON of the raw operand (before regex compilation)
 }
 
 // IsConditionalVar returns true if v is a map with a "trait" key,
@@ -91,6 +93,13 @@ func ParseConditionalVar(name string, raw map[string]any) (ConditionalVar, error
 		return ConditionalVar{}, fmt.Errorf("conditional var %q: no operator field found (need one of: in, not_in, gt, lt, gte, lte, regex)", name)
 	}
 
+	// Pre-serialize the raw operand before any transformation (e.g. regex
+	// compilation). This avoids json.Marshal on the hot path during check-in.
+	operandJSON, err := json.Marshal(operand)
+	if err != nil {
+		return ConditionalVar{}, fmt.Errorf("conditional var %q: marshaling operand: %w", name, err)
+	}
+
 	// Validate and transform operand based on operator.
 	switch operator {
 	case "regex":
@@ -106,10 +115,11 @@ func ParseConditionalVar(name string, raw map[string]any) (ConditionalVar, error
 	}
 
 	return ConditionalVar{
-		Name:     name,
-		Trait:    trait,
-		Operator: operator,
-		Operand:  operand,
+		Name:        name,
+		Trait:       trait,
+		Operator:    operator,
+		Operand:     operand,
+		OperandJSON: string(operandJSON),
 	}, nil
 }
 

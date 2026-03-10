@@ -38,17 +38,13 @@ func buildPolicyBundle(cfg *config.NodeConfig, version uint64, cachedHashes map[
 
 	bundle.VarOrder = cfg.VarOrder
 
-	// Convert conditional vars to proto.
+	// Convert conditional vars to proto (OperandJSON pre-serialized at config load).
 	for _, cv := range cfg.ConditionalVars {
-		operandJSON, err := json.Marshal(cv.Operand)
-		if err != nil {
-			return nil, fmt.Errorf("marshaling operand for conditional var %q: %w", cv.Name, err)
-		}
 		bundle.ConditionalVars = append(bundle.ConditionalVars, &pb.ConditionalVarDef{
 			Name:        cv.Name,
 			Trait:        cv.Trait,
 			Operator:    cv.Operator,
-			OperandJson: string(operandJSON),
+			OperandJson: cv.OperandJSON,
 		})
 	}
 

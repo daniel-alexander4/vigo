@@ -1,0 +1,68 @@
+package db
+
+import (
+	"context"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// TraitsPruner accumulates node UUIDs that had traits inserted and
+// periodically prunes old trait snapshots, removing per-check-in DELETE
+// latency from the hot path.
+type TraitsPruner struct {
+	mu      sync.Mutex
+	pending map[uuid.UUID]struct{}
+	queries *Queries
+}
+
+// NewTraitsPruner creates a pruner backed by the given Queries.
+func NewTraitsPruner(queries *Queries) *TraitsPruner {
+	return &TraitsPruner{
+		pending: make(map[uuid.UUID]struct{}),
+		queries: queries,
+	}
+}
+
+// Mark records a node as needing trait pruning.
+func (p *TraitsPruner) Mark(id uuid.UUID) {
+	p.mu.Lock()
+	p.pending[id] = struct{}{}
+	p.mu.Unlock()
+}
+
+// Start runs the prune loop at the given interval. Blocks until ctx is cancelled.
+func (p *TraitsPruner) Start(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			p.Flush(context.Background())
+			return
+		case <-ticker.C:
+			p.Flush(ctx)
+		}
+	}
+}
+
+// Flush prunes trait snapshots for all pending nodes and clears the set.
+func (p *TraitsPruner) Flush(ctx context.Context) {
+	p.mu.Lock()
+	if len(p.pending) == 0 {
+		p.mu.Unlock()
+		return
+	}
+	batch := p.pending
+	p.pending = make(map[uuid.UUID]struct{})
+	p.mu.Unlock()
+
+	for id := range batch {
+		if err := p.queries.PruneNodeTraits(ctx, id); err != nil {
+			slog.Error("failed to prune node traits", "node_id", id, "error", err)
+		}
+	}
+}

@@ -18,14 +18,14 @@ func (c *PackageCollector) Name() string { return "packages" }
 // Collect returns installed packages as {"installed": {"name": "version", ...}}.
 // Returns an empty map on unsupported platforms or if the query fails.
 // Package collection is informational and non-fatal.
-func (c *PackageCollector) Collect(_ context.Context) (map[string]any, error) {
+func (c *PackageCollector) Collect(ctx context.Context) (map[string]any, error) {
 	installed := make(map[string]string)
 
 	switch runtime.GOOS {
 	case "linux":
-		installed = c.collectLinux()
+		installed = c.collectLinux(ctx)
 	case "darwin":
-		installed = c.collectDarwin()
+		installed = c.collectDarwin(ctx)
 	}
 
 	return map[string]any{
@@ -34,29 +34,29 @@ func (c *PackageCollector) Collect(_ context.Context) (map[string]any, error) {
 }
 
 // collectLinux tries dpkg-query first (Debian/Ubuntu), then rpm (RHEL/Fedora).
-func (c *PackageCollector) collectLinux() map[string]string {
+func (c *PackageCollector) collectLinux(ctx context.Context) map[string]string {
 	// Try dpkg-query (Debian/Ubuntu family).
-	if pkgs := c.runDpkg(); pkgs != nil {
+	if pkgs := c.runDpkg(ctx); pkgs != nil {
 		return pkgs
 	}
 	// Try rpm (RHEL/Fedora family).
-	if pkgs := c.runRpm(); pkgs != nil {
+	if pkgs := c.runRpm(ctx); pkgs != nil {
 		return pkgs
 	}
 	return make(map[string]string)
 }
 
 // collectDarwin tries brew list.
-func (c *PackageCollector) collectDarwin() map[string]string {
-	if pkgs := c.runBrew(); pkgs != nil {
+func (c *PackageCollector) collectDarwin(ctx context.Context) map[string]string {
+	if pkgs := c.runBrew(ctx); pkgs != nil {
 		return pkgs
 	}
 	return make(map[string]string)
 }
 
 // runDpkg queries installed packages via dpkg-query.
-func (c *PackageCollector) runDpkg() map[string]string {
-	cmd := exec.Command("dpkg-query", "-W", "-f", "${Package}\t${Version}\n")
+func (c *PackageCollector) runDpkg(ctx context.Context) map[string]string {
+	cmd := exec.CommandContext(ctx, "dpkg-query", "-W", "-f", "${Package}\t${Version}\n")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -65,8 +65,8 @@ func (c *PackageCollector) runDpkg() map[string]string {
 }
 
 // runRpm queries installed packages via rpm.
-func (c *PackageCollector) runRpm() map[string]string {
-	cmd := exec.Command("rpm", "-qa", "--queryformat", "%{NAME}\t%{VERSION}-%{RELEASE}\n")
+func (c *PackageCollector) runRpm(ctx context.Context) map[string]string {
+	cmd := exec.CommandContext(ctx, "rpm", "-qa", "--queryformat", "%{NAME}\t%{VERSION}-%{RELEASE}\n")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -75,8 +75,8 @@ func (c *PackageCollector) runRpm() map[string]string {
 }
 
 // runBrew queries installed packages via brew.
-func (c *PackageCollector) runBrew() map[string]string {
-	cmd := exec.Command("brew", "list", "--versions")
+func (c *PackageCollector) runBrew(ctx context.Context) map[string]string {
+	cmd := exec.CommandContext(ctx, "brew", "list", "--versions")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil

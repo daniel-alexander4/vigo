@@ -72,10 +72,8 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 			Traits:  json.RawMessage(inlineTraits),
 		}); dbErr != nil {
 			slog.Error("failed to store inline traits", "node_id", nodeID, "error", dbErr)
-		} else {
-			if pruneErr := s.queries.PruneNodeTraits(ctx, nodeID); pruneErr != nil {
-				slog.Error("failed to prune node traits", "node_id", nodeID, "error", pruneErr)
-			}
+		} else if s.traitsPruner != nil {
+			s.traitsPruner.Mark(nodeID)
 		}
 	}
 

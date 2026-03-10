@@ -8,11 +8,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sync"
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/conditionals"
 	"github.com/hobnob/hobnob/server/config"
 )
+
+// regexCache caches compiled regexes by pattern string, avoiding recompilation
+// on every policy evaluation cycle.
+var regexCache sync.Map // map[string]*regexp.Regexp
 
 // EvalBundle evaluates a policy bundle using the agent's traits. It performs
 // the same computation the server would do in legacy mode:
@@ -154,17 +159,22 @@ func parseConditionalVarDef(def *pb.ConditionalVarDef) (conditionals.Conditional
 		return conditionals.ConditionalVar{}, fmt.Errorf("parsing operand for %q: %w", def.Name, err)
 	}
 
-	// For regex operator, compile the pattern.
+	// For regex operator, compile the pattern (cached across cycles).
 	if def.Operator == "regex" {
 		pattern, ok := operand.(string)
 		if !ok {
 			return conditionals.ConditionalVar{}, fmt.Errorf("regex operand for %q must be a string", def.Name)
 		}
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return conditionals.ConditionalVar{}, fmt.Errorf("invalid regex for %q: %w", def.Name, err)
+		if cached, ok := regexCache.Load(pattern); ok {
+			operand = cached.(*regexp.Regexp)
+		} else {
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				return conditionals.ConditionalVar{}, fmt.Errorf("invalid regex for %q: %w", def.Name, err)
+			}
+			regexCache.Store(pattern, re)
+			operand = re
 		}
-		operand = re
 	}
 
 	return conditionals.ConditionalVar{

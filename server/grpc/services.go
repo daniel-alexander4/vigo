@@ -21,6 +21,7 @@ type AgentService struct {
 	traitsScanner   *traits.Scanner
 	nodeCache      *db.NodeCache
 	lastSeenBatch  *db.LastSeenBatcher
+	traitsPruner   *db.TraitsPruner
 }
 
 // AdminService implements the HobnobAdmin gRPC service.

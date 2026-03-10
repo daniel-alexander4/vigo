@@ -7,7 +7,11 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 )
+
+// collectorTimeout is the maximum time a single trait collector may run.
+const collectorTimeout = 5 * time.Second
 
 // Collector is the interface for pluggable trait collectors. Each collector
 // gathers a category of system traits and returns them as a flat map.
@@ -35,7 +39,9 @@ func CollectAll(ctx context.Context, collectors []Collector) (map[string]any, er
 		wg.Add(1)
 		go func(c Collector) {
 			defer wg.Done()
-			traits, err := c.Collect(ctx)
+			collCtx, cancel := context.WithTimeout(ctx, collectorTimeout)
+			defer cancel()
+			traits, err := c.Collect(collCtx)
 			if err != nil {
 				slog.Warn("trait collector failed",
 					"collector", c.Name(),
