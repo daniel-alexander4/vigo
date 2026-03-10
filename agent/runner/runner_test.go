@@ -392,3 +392,211 @@ func TestRunnerContinuesOnError(t *testing.T) {
 		t.Errorf("expected 2 calls (continues past error), got %d: %v", len(calls), calls)
 	}
 }
+
+// --- When builtin tests ---
+
+func TestEvaluateAgentWhen_OsFamily(t *testing.T) {
+	nails := map[string]any{
+		"os": map[string]any{"family": "debian", "distro": "ubuntu", "version": "22.04", "arch": "amd64"},
+	}
+
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{"os_family('debian')", true},
+		{"os_family('Debian')", true},
+		{"os_family('rhel')", false},
+	}
+	for _, tt := range tests {
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		if err != nil {
+			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
+		}
+		if got != tt.want {
+			t.Errorf("evaluateAgentWhen(%q) = %v, want %v", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestEvaluateAgentWhen_Distro(t *testing.T) {
+	nails := map[string]any{
+		"os": map[string]any{"distro": "ubuntu"},
+	}
+
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{"distro('ubuntu')", true},
+		{"distro('Ubuntu')", true},
+		{"distro('centos')", false},
+	}
+	for _, tt := range tests {
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		if err != nil {
+			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
+		}
+		if got != tt.want {
+			t.Errorf("evaluateAgentWhen(%q) = %v, want %v", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestEvaluateAgentWhen_Arch(t *testing.T) {
+	nails := map[string]any{
+		"os": map[string]any{"arch": "amd64"},
+	}
+
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{"arch('amd64')", true},
+		{"arch('AMD64')", true},
+		{"arch('arm64')", false},
+	}
+	for _, tt := range tests {
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		if err != nil {
+			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
+		}
+		if got != tt.want {
+			t.Errorf("evaluateAgentWhen(%q) = %v, want %v", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestEvaluateAgentWhen_VersionGe(t *testing.T) {
+	nails := map[string]any{
+		"os": map[string]any{"version": "22.04"},
+	}
+
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{"version_ge('20.04')", true},
+		{"version_ge('22.04')", true},  // equal
+		{"version_ge('22.10')", false}, // 04 < 10
+		{"version_ge('24.04')", false},
+	}
+	for _, tt := range tests {
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		if err != nil {
+			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
+		}
+		if got != tt.want {
+			t.Errorf("evaluateAgentWhen(%q) = %v, want %v", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestCompareVersionGE(t *testing.T) {
+	tests := []struct {
+		actual, required string
+		want             bool
+	}{
+		{"22.04", "20.04", true},
+		{"22.04", "22.04", true},
+		{"22.04", "22.10", false},
+		{"22.04", "24.04", false},
+		{"9", "8", true},
+		{"8", "9", false},
+		{"1.2.3", "1.2.3", true},
+		{"1.2.4", "1.2.3", true},
+		{"1.2.2", "1.2.3", false},
+		{"", "1.0", false},
+		{"1.0", "1.0.0", true},
+	}
+	for _, tt := range tests {
+		got := compareVersionGE(tt.actual, tt.required)
+		if got != tt.want {
+			t.Errorf("compareVersionGE(%q, %q) = %v, want %v", tt.actual, tt.required, got, tt.want)
+		}
+	}
+}
+
+func TestEvaluateAgentWhen_InGroup(t *testing.T) {
+	nails := map[string]any{
+		"identity": map[string]any{
+			"user":  "testuser",
+			"group": "staff",
+			"groups": []string{"staff", "docker", "sudo"},
+		},
+	}
+
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{"in_group('staff')", true},   // primary group
+		{"in_group('docker')", true},  // supplementary
+		{"in_group('sudo')", true},    // supplementary
+		{"in_group('wheel')", false},  // not a member
+	}
+	for _, tt := range tests {
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		if err != nil {
+			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
+		}
+		if got != tt.want {
+			t.Errorf("evaluateAgentWhen(%q) = %v, want %v", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestEvaluateAgentWhen_CombinedNailsBuiltins(t *testing.T) {
+	nails := map[string]any{
+		"os": map[string]any{"family": "debian", "arch": "amd64", "version": "22.04"},
+	}
+
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{"os_family('debian') and arch('amd64')", true},
+		{"os_family('debian') and arch('arm64')", false},
+		{"os_family('rhel') or arch('amd64')", true},
+		{"not os_family('rhel')", true},
+		{"os_family('debian') and version_ge('20.04')", true},
+	}
+	for _, tt := range tests {
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		if err != nil {
+			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
+		}
+		if got != tt.want {
+			t.Errorf("evaluateAgentWhen(%q) = %v, want %v", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestEvaluateAgentWhen_NilNails(t *testing.T) {
+	// Should not panic with nil nails.
+	got, err := evaluateAgentWhen(context.Background(), "os_family('debian')", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got {
+		t.Error("expected false with nil nails")
+	}
+}
+
+func TestNailStr(t *testing.T) {
+	nails := map[string]any{
+		"os": map[string]any{"family": "debian"},
+	}
+	if got := nailStr(nails, "os", "family"); got != "debian" {
+		t.Errorf("nailStr(os, family) = %q, want debian", got)
+	}
+	if got := nailStr(nails, "os", "missing"); got != "" {
+		t.Errorf("nailStr(os, missing) = %q, want empty", got)
+	}
+	if got := nailStr(nails, "missing", "family"); got != "" {
+		t.Errorf("nailStr(missing, family) = %q, want empty", got)
+	}
+	if got := nailStr(nil, "os", "family"); got != "" {
+		t.Errorf("nailStr(nil) = %q, want empty", got)
+	}
+}

@@ -112,7 +112,7 @@ func (r *Runner) executeResource(ctx context.Context, node ResourceNode) modules
 
 	// Evaluate agent-side when expression if present.
 	if node.When != "" {
-		shouldRun, err := evaluateAgentWhen(ctx, node.When)
+		shouldRun, err := evaluateAgentWhen(ctx, node.When, r.Nails)
 		if err != nil {
 			result.Error = fmt.Errorf("evaluating when expression: %w", err)
 			return result
@@ -242,7 +242,7 @@ func (r *Runner) executeNotifyPass(
 // evaluateAgentWhen evaluates a when expression on the agent side. Only
 // builtin function calls should remain in agent-side expressions; var
 // references have been substituted to true/false by the server.
-func evaluateAgentWhen(ctx context.Context, when string) (bool, error) {
+func evaluateAgentWhen(ctx context.Context, when string, nails map[string]any) (bool, error) {
 	expr, err := conditionals.ParseWhenExpr(when)
 	if err != nil {
 		return false, fmt.Errorf("parsing when expression %q: %w", when, err)
@@ -323,8 +323,125 @@ func evaluateAgentWhen(ctx context.Context, when string) (bool, error) {
 			info, err := os.Stat(args[0])
 			return err == nil && info.IsDir(), nil
 
+		// Nails-based builtins
+		case "os_family":
+			if len(args) != 1 {
+				return false, fmt.Errorf("os_family requires exactly 1 argument")
+			}
+			return strings.EqualFold(nailStr(nails, "os", "family"), args[0]), nil
+		case "distro":
+			if len(args) != 1 {
+				return false, fmt.Errorf("distro requires exactly 1 argument")
+			}
+			return strings.EqualFold(nailStr(nails, "os", "distro"), args[0]), nil
+		case "arch":
+			if len(args) != 1 {
+				return false, fmt.Errorf("arch requires exactly 1 argument")
+			}
+			return strings.EqualFold(nailStr(nails, "os", "arch"), args[0]), nil
+		case "version_ge":
+			if len(args) != 1 {
+				return false, fmt.Errorf("version_ge requires exactly 1 argument")
+			}
+			return compareVersionGE(nailStr(nails, "os", "version"), args[0]), nil
+		case "in_group":
+			if len(args) != 1 {
+				return false, fmt.Errorf("in_group requires exactly 1 argument")
+			}
+			return userInGroup(nails, args[0]), nil
+
 		default:
 			return false, fmt.Errorf("unknown builtin function %q", name)
 		}
 	})
+}
+
+// nailStr retrieves a nested nail value as a string.
+// e.g., nailStr(nails, "os", "family") → nails["os"]["family"]
+func nailStr(nails map[string]any, keys ...string) string {
+	var current any = nails
+	for _, key := range keys {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return ""
+		}
+		current = m[key]
+	}
+	s, _ := current.(string)
+	return s
+}
+
+// compareVersionGE returns true if actual >= required using simple
+// numeric segment comparison (e.g., "22.04" >= "20.04").
+func compareVersionGE(actual, required string) bool {
+	if actual == "" {
+		return false
+	}
+	aParts := strings.Split(actual, ".")
+	rParts := strings.Split(required, ".")
+
+	maxLen := len(aParts)
+	if len(rParts) > maxLen {
+		maxLen = len(rParts)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		a, r := 0, 0
+		if i < len(aParts) {
+			a, _ = strconv.Atoi(aParts[i])
+		}
+		if i < len(rParts) {
+			r, _ = strconv.Atoi(rParts[i])
+		}
+		if a > r {
+			return true
+		}
+		if a < r {
+			return false
+		}
+	}
+	return true // equal
+}
+
+// userInGroup checks if the current user belongs to the specified group.
+// Reads from identity nails (identity.groups) if available, otherwise
+// falls back to checking /etc/group.
+func userInGroup(nails map[string]any, group string) bool {
+	// Check identity nails first.
+	if identity, ok := nails["identity"].(map[string]any); ok {
+		// Primary group.
+		if g, ok := identity["group"].(string); ok && g == group {
+			return true
+		}
+		// Supplementary groups list.
+		if groups, ok := identity["groups"].([]string); ok {
+			for _, g := range groups {
+				if g == group {
+					return true
+				}
+			}
+		}
+	}
+
+	// Fallback: check /etc/group for current user.
+	data, err := os.ReadFile("/etc/group")
+	if err != nil {
+		return false
+	}
+	user := nailStr(nails, "identity", "user")
+	if user == "" {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		parts := strings.SplitN(line, ":", 4)
+		if len(parts) < 4 || parts[0] != group {
+			continue
+		}
+		for _, member := range strings.Split(parts[3], ",") {
+			if strings.TrimSpace(member) == user {
+				return true
+			}
+		}
+	}
+	return false
 }
