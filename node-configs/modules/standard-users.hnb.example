@@ -1,0 +1,41 @@
+name: standard-users
+
+resources:
+  # --- Admin user with SSH access and sudo ---
+  - name: dan
+    type: user
+    username: dan
+    comment: "Dan Smith"
+    password: "secret:hobnob/users/dan-password-hash"
+    shell: /bin/bash
+    groups: "sudo,docker"
+    authorized_keys: |
+      ssh-ed25519 AAAA... dan@workstation
+      ssh-ed25519 AAAA... dan@phone
+    state: present
+
+  # --- Deploy user for CI/CD (no interactive login) ---
+  - name: deploy
+    type: user
+    username: deploy
+    comment: "CI/CD Deploy"
+    shell: /usr/sbin/nologin
+    groups: "docker"
+    authorized_keys: |
+      ssh-ed25519 AAAA... ci@github-actions
+    state: present
+
+  # --- System user for an application (no home, no login) ---
+  - name: appuser
+    type: user
+    username: appuser
+    uid: "900"
+    shell: /usr/sbin/nologin
+    group: nogroup
+    state: present
+
+  # --- Remove a former employee ---
+  - name: olduser
+    type: user
+    username: olduser
+    state: absent

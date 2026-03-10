@@ -8,7 +8,7 @@ vars:
 resources:
   - name: prometheus-user
     type: user
-    name: prometheus
+    username: prometheus
     shell: /usr/sbin/nologin
 
   - name: install-prometheus

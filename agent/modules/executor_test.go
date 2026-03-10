@@ -11,7 +11,7 @@ func TestActionTakenConstants(t *testing.T) {
 		action   ActionTaken
 		expected string
 	}{
-		{"none", ActionNone, "none"},
+		{"already in desired state", ActionNone, "already in desired state"},
 		{"created", ActionCreated, "created"},
 		{"updated", ActionUpdated, "updated"},
 		{"deleted", ActionDeleted, "deleted"},

@@ -67,7 +67,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		if result.GetErrorMessage() != "" {
 			failedCount++
 		}
-		if result.GetActionTaken() == "none" && !result.GetChanged() {
+		if result.GetActionTaken() == "already in desired state" && !result.GetChanged() {
 			skippedCount++
 		}
 	}

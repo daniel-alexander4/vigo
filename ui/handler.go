@@ -207,6 +207,7 @@ type RunsPageData struct {
 type RunDetailPageData struct {
 	PageData
 	Run     RunRow
+	NodeID  uuid.UUID
 	Results []RunResultRow
 }
 
@@ -230,6 +231,7 @@ type PlanResultRow struct {
 type PlanDetailPageData struct {
 	PageData
 	PlanID      uuid.UUID
+	NodeID      uuid.UUID
 	Hostname    string
 	CreatedAt   time.Time
 	Results     []PlanResultRow
@@ -750,6 +752,7 @@ func (ds *dbDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error
 
 	return RunDetailPageData{
 		PageData: PageData{Title: "Run Detail", ActiveNav: "runs"},
+		NodeID:   node.ID,
 		Run: RunRow{
 			ID:           r.ID,
 			Hostname:     node.Hostname,
@@ -823,6 +826,7 @@ func (ds *dbDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, er
 	return PlanDetailPageData{
 		PageData:    PageData{Title: "Plan Detail", ActiveNav: "nodes"},
 		PlanID:      p.ID,
+		NodeID:      node.ID,
 		Hostname:    node.Hostname,
 		CreatedAt:   p.CreatedAt,
 		Results:     results,

@@ -11,7 +11,7 @@ import (
 type ActionTaken string
 
 const (
-	ActionNone    ActionTaken = "none"
+	ActionNone    ActionTaken = "already in desired state"
 	ActionCreated ActionTaken = "created"
 	ActionUpdated ActionTaken = "updated"
 	ActionDeleted ActionTaken = "deleted"

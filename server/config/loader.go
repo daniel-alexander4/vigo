@@ -114,16 +114,10 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 	}
 	defer watcher.Close()
 
-	// Watch the nodes, modules, and roles subdirectories.
-	for _, dir := range []string{cs.nodesDir(), cs.modulesDir(), cs.rolesDir()} {
-		if err := watcher.Add(dir); err != nil {
+	// Watch the nodes, modules, roles, and templates trees recursively.
+	for _, dir := range []string{cs.nodesDir(), cs.modulesDir(), cs.rolesDir(), cs.templatesDir()} {
+		if err := watchRecursive(watcher, dir); err != nil {
 			return fmt.Errorf("watching %s: %w", dir, err)
-		}
-	}
-	// Watch templates dir if it exists (template files aren't YAML).
-	if _, err := os.Stat(cs.templatesDir()); err == nil {
-		if err := watcher.Add(cs.templatesDir()); err != nil {
-			return fmt.Errorf("watching %s: %w", cs.templatesDir(), err)
 		}
 	}
 
@@ -419,20 +413,13 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 
 // loadModuleDefs reads all config files from the modules directory.
 func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, error) {
-	entries, err := os.ReadDir(dir)
+	paths, err := walkConfigFiles(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return make(map[string]*ModuleDefinition), nil
-		}
 		return nil, fmt.Errorf("reading modules dir: %w", err)
 	}
 
 	defs := make(map[string]*ModuleDefinition)
-	for _, entry := range entries {
-		if entry.IsDir() || !isConfigFile(entry.Name()) {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
+	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
@@ -488,20 +475,13 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 
 // loadRoleDefs reads all config files from the roles directory.
 func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
-	entries, err := os.ReadDir(dir)
+	paths, err := walkConfigFiles(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return make(map[string]*RoleDefinition), nil
-		}
 		return nil, fmt.Errorf("reading roles dir: %w", err)
 	}
 
 	defs := make(map[string]*RoleDefinition)
-	for _, entry := range entries {
-		if entry.IsDir() || !isConfigFile(entry.Name()) {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
+	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
@@ -524,17 +504,13 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 // loadNodesDir reads all config files (.hnb/.yaml) from the nodes directory
 // and merges their node entries in filesystem order.
 func loadNodesDir(dir string) ([]NodeEntry, error) {
-	dirEntries, err := os.ReadDir(dir)
+	paths, err := walkConfigFiles(dir)
 	if err != nil {
 		return nil, fmt.Errorf("reading nodes dir: %w", err)
 	}
 
 	var allEntries []NodeEntry
-	for _, de := range dirEntries {
-		if de.IsDir() || !isConfigFile(de.Name()) {
-			continue
-		}
-		path := filepath.Join(dir, de.Name())
+	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
@@ -545,7 +521,7 @@ func loadNodesDir(dir string) ([]NodeEntry, error) {
 		}
 		for i, entry := range cfg.Nodes {
 			if entry.Match == "" {
-				return nil, fmt.Errorf("%s entry %d: missing required 'match' field", de.Name(), i)
+				return nil, fmt.Errorf("%s entry %d: missing required 'match' field", path, i)
 			}
 		}
 		allEntries = append(allEntries, cfg.Nodes...)
@@ -790,6 +766,42 @@ func cloneResources(resources []ResourceConfig) []ResourceConfig {
 	return cloned
 }
 
+
+// watchRecursive adds dir and all its subdirectories to the watcher.
+// Silently skips directories that don't exist.
+func watchRecursive(watcher *fsnotify.Watcher, dir string) error {
+	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			return watcher.Add(path)
+		}
+		return nil
+	})
+}
+
+// walkConfigFiles returns all config file paths under dir, recursively.
+// Skips .example files and non-config extensions.
+func walkConfigFiles(dir string) ([]string, error) {
+	var paths []string
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if !d.IsDir() && isConfigFile(d.Name()) {
+			paths = append(paths, path)
+		}
+		return nil
+	})
+	return paths, err
+}
 
 // isConfigFile checks if a filename has a recognized config extension.
 // Accepts .hnb (preferred), .yaml, and .yml. Ignores .example files.

@@ -5,7 +5,7 @@
     </div>
     <h1>Run {{truncUUID .Run.ID}}</h1>
     <p>
-        Client: <a href="/clients/{{.Run.ID}}">{{.Run.Hostname}}</a>
+        Node: <a href="/nodes/{{.NodeID}}">{{.Run.Hostname}}</a>
         &middot; {{template "status-badge" dict "Status" .Run.Status}}
         &middot; {{formatTime .Run.StartedAt}}
     </p>

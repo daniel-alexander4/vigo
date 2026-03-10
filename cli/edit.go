@@ -120,7 +120,7 @@ syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|nodes\|depe
 hi hobTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes
-syn match hobResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|owner\|group\|package\|service\|enabled\|command\|creates\|onlyif\|unless\|cwd\|user\|username\|notify\|subscribes\|depends_on\|baseindent\|job\|schedule\|minute\|hour\|day\|month\|weekday\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+syn match hobResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|owner\|group\|groups\|package\|service\|enabled\|command\|creates\|onlyif\|unless\|cwd\|user\|username\|authorized_keys\|notify\|subscribes\|depends_on\|baseindent\|job\|schedule\|minute\|hour\|day\|month\|weekday\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi hobResKey  ctermfg=33  guifg=#0087ff
 
 " Resource type values
@@ -142,6 +142,15 @@ hi hobTemplate ctermfg=171 guifg=#d75fff
 " Idempotency guard keywords (highlighted to draw attention)
 syn match hobGuard     /^\s*\(creates\|onlyif\|unless\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi hobGuard   ctermfg=208 guifg=#ff8700 cterm=bold gui=bold
+
+" Environment names
+syn match hobEnv       /\<\(production\|staging\|development\|testing\)\>/
+hi hobEnv     ctermfg=75  guifg=#5fafff
+
+" Match patterns (quoted string after match:)
+syn match hobMatch     /\(match:\s*\)\@<="[^"]*"/ containedin=yamlFlowString,yamlString
+syn match hobMatch     /\(match:\s*\)\@<=\S\+/ containedin=yamlPlainScalar
+hi hobMatch   ctermfg=15  guifg=#ffffff cterm=bold gui=bold
 
 " Comments
 hi! yamlComment ctermfg=34 guifg=#00af00

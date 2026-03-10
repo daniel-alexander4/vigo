@@ -253,26 +253,35 @@ func runOnceWithTrace(client *checkin.Client, executors map[string]modules.Execu
 		return fmt.Errorf("convergence run failed: %w", err)
 	}
 
+	// ANSI color helpers.
+	bold := "\033[1m"
+	dim := "\033[2m"
+	red := "\033[31m"
+	green := "\033[32m"
+	yellow := "\033[33m"
+	cyan := "\033[36m"
+	reset := "\033[0m"
+
 	// Print trace header.
 	if runResult.PolicyBundle != nil {
 		b := runResult.PolicyBundle
 		if isDryRun {
-			fmt.Fprintf(os.Stderr, "\n--- Dry Run ---\n")
+			fmt.Fprintf(os.Stderr, "\n%s--- Dry Run ---%s\n", bold+cyan, reset)
 		} else {
-			fmt.Fprintf(os.Stderr, "\n--- Run ---\n")
+			fmt.Fprintf(os.Stderr, "\n%s--- Run ---%s\n", bold+green, reset)
 		}
-		fmt.Fprintf(os.Stderr, "Match:       %s\n", b.MatchedPattern)
+		fmt.Fprintf(os.Stderr, "%sMatch:%s       %s\n", bold, reset, b.MatchedPattern)
 		if b.Environment != "" {
-			fmt.Fprintf(os.Stderr, "Environment: %s\n", b.Environment)
+			fmt.Fprintf(os.Stderr, "%sEnvironment:%s %s\n", bold, reset, b.Environment)
 		}
 		if len(b.Roles) > 0 {
-			fmt.Fprintf(os.Stderr, "Roles:       %s\n", strings.Join(b.Roles, ", "))
+			fmt.Fprintf(os.Stderr, "%sRoles:%s       %s\n", bold, reset, strings.Join(b.Roles, ", "))
 		}
 		var modNames []string
 		for _, m := range b.Modules {
 			modNames = append(modNames, m.Name)
 		}
-		fmt.Fprintf(os.Stderr, "Modules:     %s\n", strings.Join(modNames, ", "))
+		fmt.Fprintf(os.Stderr, "%sModules:%s     %s\n", bold, reset, strings.Join(modNames, ", "))
 		fmt.Fprintln(os.Stderr)
 	}
 
@@ -282,14 +291,26 @@ func runOnceWithTrace(client *checkin.Client, executors map[string]modules.Execu
 	for _, r := range runResult.Results {
 		if r.ModuleName != curModule {
 			curModule = r.ModuleName
-			fmt.Fprintf(os.Stderr, "  Module: %s\n", curModule)
+			fmt.Fprintf(os.Stderr, "  %sModule: %s%s\n", bold, curModule, reset)
 		}
 		status := string(r.Action)
+		statusColor := dim // "already in desired state"
+		switch r.Action {
+		case modules.ActionCreated:
+			statusColor = green
+		case modules.ActionUpdated:
+			statusColor = yellow
+		case modules.ActionDeleted:
+			statusColor = red
+		case modules.ActionSkipped:
+			statusColor = cyan
+		}
 		if r.Error != nil {
 			status = "ERROR: " + r.Error.Error()
+			statusColor = bold + red
 			hasError = true
 		}
-		fmt.Fprintf(os.Stderr, "    %-12s %-24s %s\n", "["+r.ResourceType+"]", r.ResourceName, status)
+		fmt.Fprintf(os.Stderr, "    %s%-12s%s %-24s %s%s%s\n", dim, "["+r.ResourceType+"]", reset, r.ResourceName, statusColor, status, reset)
 	}
 
 	if hasError {

@@ -553,14 +553,14 @@ body {
     text-decoration: underline;
 }
 
-/* === Client Detail Layout === */
-.client-layout {
+/* === Node Detail Layout === */
+.node-layout {
     display: grid;
     grid-template-columns: 1fr 300px;
     gap: 28px;
 }
 
-.client-header {
+.node-header {
     display: flex;
     align-items: center;
     gap: 12px;

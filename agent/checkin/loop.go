@@ -138,6 +138,17 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 		return nil, fmt.Errorf("evaluating policy bundle: %w", err)
 	}
 
+	if len(protoModules) == 0 {
+		slog.Warn("server returned zero modules — check that this node is matched in nodes.hnb")
+		return &RunResult{
+			BaseInterval:        baseInterval,
+			JitterPct:           jitterPct,
+			ResponseFingerprint: resp.ResponseFingerprint,
+			PolicyVersion:       resp.PolicyVersion,
+			PolicyBundle:        resp.PolicyBundle,
+		}, nil
+	}
+
 	runID := uuid.New().String()
 
 	r := runner.NewRunner(executors, nailsMap, dryRun, module)

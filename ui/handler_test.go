@@ -899,6 +899,7 @@ func (m *mockDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, erro
 					ActiveNav: "runs",
 					Version:   "test",
 				},
+				NodeID: r.nodeID,
 				Run: RunRow{
 					ID:           r.id,
 					Hostname:     r.hostname,
@@ -967,6 +968,7 @@ func (m *mockDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, e
 					Version:   "test",
 				},
 				PlanID:      p.id,
+				NodeID:      p.nodeID,
 				Hostname:    p.hostname,
 				CreatedAt:   p.created,
 				Results:     results,
