@@ -7,24 +7,22 @@ package db
 
 import (
 	"context"
-
-	"github.com/google/uuid"
 )
 
 const createWebhook = `-- name: CreateWebhook :one
 INSERT INTO webhooks (url, secret, events)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, url, secret, events, created_at, active
 `
 
 type CreateWebhookParams struct {
-	Url    string   `json:"url"`
-	Secret string   `json:"secret"`
-	Events []string `json:"events"`
+	Url    string `json:"url"`
+	Secret string `json:"secret"`
+	Events string `json:"events"`
 }
 
 func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error) {
-	row := q.db.QueryRow(ctx, createWebhook, arg.Url, arg.Secret, arg.Events)
+	row := q.db.QueryRowContext(ctx, createWebhook, arg.Url, arg.Secret, arg.Events)
 	var i Webhook
 	err := row.Scan(
 		&i.ID,
@@ -40,32 +38,32 @@ func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (W
 const deactivateWebhook = `-- name: DeactivateWebhook :exec
 UPDATE webhooks
 SET active = false
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) DeactivateWebhook(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deactivateWebhook, id)
+func (q *Queries) DeactivateWebhook(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deactivateWebhook, id)
 	return err
 }
 
 const deleteWebhook = `-- name: DeleteWebhook :exec
 DELETE FROM webhooks
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) DeleteWebhook(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteWebhook, id)
+func (q *Queries) DeleteWebhook(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteWebhook, id)
 	return err
 }
 
 const getWebhookByID = `-- name: GetWebhookByID :one
 SELECT id, url, secret, events, created_at, active
 FROM webhooks
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) GetWebhookByID(ctx context.Context, id uuid.UUID) (Webhook, error) {
-	row := q.db.QueryRow(ctx, getWebhookByID, id)
+func (q *Queries) GetWebhookByID(ctx context.Context, id string) (Webhook, error) {
+	row := q.db.QueryRowContext(ctx, getWebhookByID, id)
 	var i Webhook
 	err := row.Scan(
 		&i.ID,
@@ -86,7 +84,7 @@ ORDER BY created_at DESC
 `
 
 func (q *Queries) ListActiveWebhooks(ctx context.Context) ([]Webhook, error) {
-	rows, err := q.db.Query(ctx, listActiveWebhooks)
+	rows, err := q.db.QueryContext(ctx, listActiveWebhooks)
 	if err != nil {
 		return nil, err
 	}
@@ -106,38 +104,8 @@ func (q *Queries) ListActiveWebhooks(ctx context.Context) ([]Webhook, error) {
 		}
 		items = append(items, i)
 	}
-	if err := rows.Err(); err != nil {
+	if err := rows.Close(); err != nil {
 		return nil, err
-	}
-	return items, nil
-}
-
-const listActiveWebhooksByEvent = `-- name: ListActiveWebhooksByEvent :many
-SELECT id, url, secret, events, created_at, active
-FROM webhooks
-WHERE active = true AND $1::text = ANY(events)
-`
-
-func (q *Queries) ListActiveWebhooksByEvent(ctx context.Context, dollar_1 string) ([]Webhook, error) {
-	rows, err := q.db.Query(ctx, listActiveWebhooksByEvent, dollar_1)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Webhook{}
-	for rows.Next() {
-		var i Webhook
-		if err := rows.Scan(
-			&i.ID,
-			&i.Url,
-			&i.Secret,
-			&i.Events,
-			&i.CreatedAt,
-			&i.Active,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

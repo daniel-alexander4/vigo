@@ -1,38 +1,38 @@
 -- name: CreateRun :one
 INSERT INTO runs (node_id, status, module_count)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count;
 
 -- name: GetRunByID :one
 SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE id = $1;
+WHERE id = ?;
 
 -- name: ListRunsByNode :many
 SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE node_id = $1
+WHERE node_id = ?1
 ORDER BY started_at DESC
-LIMIT $2;
+LIMIT ?2;
 
 -- name: FinishRun :exec
 UPDATE runs
-SET finished_at = now(), status = $2, changed_count = $3, failed_count = $4, skipped_count = $5
-WHERE id = $1;
+SET finished_at = datetime('now'), status = ?2, changed_count = ?3, failed_count = ?4, skipped_count = ?5
+WHERE id = ?1;
 
 -- name: CreateRunResult :one
 INSERT INTO run_results (run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at;
 
 -- name: ListRunResults :many
 SELECT id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
 FROM run_results
-WHERE run_id = $1
+WHERE run_id = ?
 ORDER BY created_at ASC;
 
 -- name: ListAllRuns :many
 SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 ORDER BY started_at DESC
-LIMIT $1;
+LIMIT ?;

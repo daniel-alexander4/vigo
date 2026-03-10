@@ -5,135 +5,132 @@
 package db
 
 import (
-	"encoding/json"
+	"database/sql"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ApprovedPattern struct {
-	ID        uuid.UUID          `json:"id"`
-	Pattern   string             `json:"pattern"`
-	TokenHash string             `json:"token_hash"`
-	CreatedAt time.Time          `json:"created_at"`
-	UsedAt    pgtype.Timestamptz `json:"used_at"`
-	UsedBy    pgtype.UUID        `json:"used_by"`
+	ID        string         `json:"id"`
+	Pattern   string         `json:"pattern"`
+	TokenHash string         `json:"token_hash"`
+	CreatedAt time.Time      `json:"created_at"`
+	UsedAt    sql.NullTime   `json:"used_at"`
+	UsedBy    sql.NullString `json:"used_by"`
 }
 
 type ComplianceHistory struct {
-	ID         uuid.UUID   `json:"id"`
-	RecordedAt pgtype.Date `json:"recorded_at"`
-	Total      int32       `json:"total"`
-	Compliant  int32       `json:"compliant"`
-	Drifted    int32       `json:"drifted"`
-	Failing    int32       `json:"failing"`
-	Stale      int32       `json:"stale"`
-	Unknown    int32       `json:"unknown"`
+	ID         string `json:"id"`
+	RecordedAt string `json:"recorded_at"`
+	Total      int64  `json:"total"`
+	Compliant  int64  `json:"compliant"`
+	Drifted    int64  `json:"drifted"`
+	Failing    int64  `json:"failing"`
+	Stale      int64  `json:"stale"`
+	Unknown    int64  `json:"unknown"`
 }
 
 type EnvPromotion struct {
-	ID         uuid.UUID       `json:"id"`
-	ModuleName string          `json:"module_name"`
-	FromEnv    string          `json:"from_env"`
-	ToEnv      string          `json:"to_env"`
-	Diff       json.RawMessage `json:"diff"`
-	PromotedAt time.Time       `json:"promoted_at"`
+	ID         string    `json:"id"`
+	ModuleName string    `json:"module_name"`
+	FromEnv    string    `json:"from_env"`
+	ToEnv      string    `json:"to_env"`
+	Diff       string    `json:"diff"`
+	PromotedAt time.Time `json:"promoted_at"`
 }
 
 type FileSnapshot struct {
-	ID          uuid.UUID   `json:"id"`
-	NodeID      uuid.UUID   `json:"node_id"`
-	FilePath    string      `json:"file_path"`
-	ContentHash string      `json:"content_hash"`
-	Content     []byte      `json:"content"`
-	CreatedAt   time.Time   `json:"created_at"`
-	RunID       pgtype.UUID `json:"run_id"`
+	ID          string         `json:"id"`
+	NodeID      string         `json:"node_id"`
+	FilePath    string         `json:"file_path"`
+	ContentHash string         `json:"content_hash"`
+	Content     []byte         `json:"content"`
+	CreatedAt   time.Time      `json:"created_at"`
+	RunID       sql.NullString `json:"run_id"`
 }
 
 type Node struct {
-	ID         uuid.UUID          `json:"id"`
-	Hostname   string             `json:"hostname"`
-	IpAddress  string             `json:"ip_address"`
-	PubkeyPem  string             `json:"pubkey_pem"`
-	EnrolledAt time.Time          `json:"enrolled_at"`
-	LastSeen   pgtype.Timestamptz `json:"last_seen"`
-	Revoked    bool               `json:"revoked"`
-	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
-	ForcePush  bool               `json:"force_push"`
+	ID         string       `json:"id"`
+	Hostname   string       `json:"hostname"`
+	IpAddress  string       `json:"ip_address"`
+	PubkeyPem  string       `json:"pubkey_pem"`
+	EnrolledAt time.Time    `json:"enrolled_at"`
+	LastSeen   sql.NullTime `json:"last_seen"`
+	Revoked    int64        `json:"revoked"`
+	RevokedAt  sql.NullTime `json:"revoked_at"`
+	ForcePush  int64        `json:"force_push"`
 }
 
 type NodeTrait struct {
-	ID          uuid.UUID       `json:"id"`
-	NodeID      uuid.UUID       `json:"node_id"`
-	Traits       json.RawMessage `json:"traits"`
-	CollectedAt time.Time       `json:"collected_at"`
+	ID          string    `json:"id"`
+	NodeID      string    `json:"node_id"`
+	Traits      string    `json:"traits"`
+	CollectedAt time.Time `json:"collected_at"`
 }
 
 type PackageAudit struct {
-	ID               uuid.UUID   `json:"id"`
-	NodeID           uuid.UUID   `json:"node_id"`
-	PackageName      string      `json:"package_name"`
-	InstalledVersion pgtype.Text `json:"installed_version"`
-	DesiredVersion   pgtype.Text `json:"desired_version"`
-	DetectedAt       time.Time   `json:"detected_at"`
+	ID               string         `json:"id"`
+	NodeID           string         `json:"node_id"`
+	PackageName      string         `json:"package_name"`
+	InstalledVersion sql.NullString `json:"installed_version"`
+	DesiredVersion   sql.NullString `json:"desired_version"`
+	DetectedAt       time.Time      `json:"detected_at"`
 }
 
 type Plan struct {
-	ID        uuid.UUID       `json:"id"`
-	NodeID    uuid.UUID       `json:"node_id"`
-	CreatedAt time.Time       `json:"created_at"`
-	Modules   json.RawMessage `json:"modules"`
+	ID        string    `json:"id"`
+	NodeID    string    `json:"node_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Modules   string    `json:"modules"`
 }
 
 type PlanResult struct {
-	ID            uuid.UUID `json:"id"`
-	PlanID        uuid.UUID `json:"plan_id"`
-	ModuleName    string    `json:"module_name"`
-	ResourceType  string    `json:"resource_type"`
-	ResourceName  string    `json:"resource_name"`
-	PlannedAction string    `json:"planned_action"`
+	ID            string `json:"id"`
+	PlanID        string `json:"plan_id"`
+	ModuleName    string `json:"module_name"`
+	ResourceType  string `json:"resource_type"`
+	ResourceName  string `json:"resource_name"`
+	PlannedAction string `json:"planned_action"`
 }
 
 type Run struct {
-	ID           uuid.UUID          `json:"id"`
-	NodeID       uuid.UUID          `json:"node_id"`
-	StartedAt    time.Time          `json:"started_at"`
-	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
-	Status       string             `json:"status"`
-	ModuleCount  int32              `json:"module_count"`
-	ChangedCount int32              `json:"changed_count"`
-	FailedCount  int32              `json:"failed_count"`
-	SkippedCount int32              `json:"skipped_count"`
+	ID           string       `json:"id"`
+	NodeID       string       `json:"node_id"`
+	StartedAt    time.Time    `json:"started_at"`
+	FinishedAt   sql.NullTime `json:"finished_at"`
+	Status       string       `json:"status"`
+	ModuleCount  int64        `json:"module_count"`
+	ChangedCount int64        `json:"changed_count"`
+	FailedCount  int64        `json:"failed_count"`
+	SkippedCount int64        `json:"skipped_count"`
 }
 
 type RunResult struct {
-	ID           uuid.UUID   `json:"id"`
-	RunID        uuid.UUID   `json:"run_id"`
-	ModuleName   string      `json:"module_name"`
-	ResourceType string      `json:"resource_type"`
-	ResourceName string      `json:"resource_name"`
-	ActionTaken  string      `json:"action_taken"`
-	Changed      bool        `json:"changed"`
-	ErrorMessage pgtype.Text `json:"error_message"`
-	DurationMs   int32       `json:"duration_ms"`
-	CreatedAt    time.Time   `json:"created_at"`
+	ID           string         `json:"id"`
+	RunID        string         `json:"run_id"`
+	ModuleName   string         `json:"module_name"`
+	ResourceType string         `json:"resource_type"`
+	ResourceName string         `json:"resource_name"`
+	ActionTaken  string         `json:"action_taken"`
+	Changed      int64          `json:"changed"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	DurationMs   int64          `json:"duration_ms"`
+	CreatedAt    time.Time      `json:"created_at"`
 }
 
 type SecretRotationEvent struct {
-	ID            uuid.UUID   `json:"id"`
-	SecretPath    string      `json:"secret_path"`
-	OldVersion    pgtype.Text `json:"old_version"`
-	NewVersion    pgtype.Text `json:"new_version"`
-	RotatedAt     time.Time   `json:"rotated_at"`
-	AffectedNodes int32       `json:"affected_nodes"`
+	ID            string         `json:"id"`
+	SecretPath    string         `json:"secret_path"`
+	OldVersion    sql.NullString `json:"old_version"`
+	NewVersion    sql.NullString `json:"new_version"`
+	RotatedAt     time.Time      `json:"rotated_at"`
+	AffectedNodes int64          `json:"affected_nodes"`
 }
 
 type Webhook struct {
-	ID        uuid.UUID `json:"id"`
+	ID        string    `json:"id"`
 	Url       string    `json:"url"`
 	Secret    string    `json:"secret"`
-	Events    []string  `json:"events"`
+	Events    string    `json:"events"`
 	CreatedAt time.Time `json:"created_at"`
-	Active    bool      `json:"active"`
+	Active    int64     `json:"active"`
 }

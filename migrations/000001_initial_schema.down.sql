@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS env_promotions;
+DROP TABLE IF EXISTS compliance_history;
+DROP TABLE IF EXISTS webhooks;
+DROP TABLE IF EXISTS package_audit;
+DROP TABLE IF EXISTS secret_rotation_events;
+DROP TABLE IF EXISTS file_snapshots;
+DROP TABLE IF EXISTS plan_results;
+DROP TABLE IF EXISTS plans;
+DROP TABLE IF EXISTS node_traits;
+DROP TABLE IF EXISTS run_results;
+DROP TABLE IF EXISTS runs;
+DROP TABLE IF EXISTS approved_patterns;
+DROP TABLE IF EXISTS nodes;

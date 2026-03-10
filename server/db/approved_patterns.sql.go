@@ -7,14 +7,12 @@ package db
 
 import (
 	"context"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const createApprovedPattern = `-- name: CreateApprovedPattern :one
 INSERT INTO approved_patterns (pattern, token_hash)
-VALUES ($1, $2)
+VALUES (?, ?)
 RETURNING id, pattern, token_hash, created_at, used_at, used_by
 `
 
@@ -24,7 +22,7 @@ type CreateApprovedPatternParams struct {
 }
 
 func (q *Queries) CreateApprovedPattern(ctx context.Context, arg CreateApprovedPatternParams) (ApprovedPattern, error) {
-	row := q.db.QueryRow(ctx, createApprovedPattern, arg.Pattern, arg.TokenHash)
+	row := q.db.QueryRowContext(ctx, createApprovedPattern, arg.Pattern, arg.TokenHash)
 	var i ApprovedPattern
 	err := row.Scan(
 		&i.ID,
@@ -39,22 +37,22 @@ func (q *Queries) CreateApprovedPattern(ctx context.Context, arg CreateApprovedP
 
 const deleteApprovedPattern = `-- name: DeleteApprovedPattern :exec
 DELETE FROM approved_patterns
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) DeleteApprovedPattern(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteApprovedPattern, id)
+func (q *Queries) DeleteApprovedPattern(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteApprovedPattern, id)
 	return err
 }
 
 const getApprovedPatternsByPattern = `-- name: GetApprovedPatternsByPattern :many
 SELECT id, pattern, token_hash, created_at, used_at, used_by
 FROM approved_patterns
-WHERE pattern = $1 AND used_at IS NULL
+WHERE pattern = ? AND used_at IS NULL
 `
 
 func (q *Queries) GetApprovedPatternsByPattern(ctx context.Context, pattern string) ([]ApprovedPattern, error) {
-	rows, err := q.db.Query(ctx, getApprovedPatternsByPattern, pattern)
+	rows, err := q.db.QueryContext(ctx, getApprovedPatternsByPattern, pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +71,9 @@ func (q *Queries) GetApprovedPatternsByPattern(ctx context.Context, pattern stri
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -87,7 +88,7 @@ ORDER BY created_at DESC
 `
 
 func (q *Queries) ListApprovedPatterns(ctx context.Context) ([]ApprovedPattern, error) {
-	rows, err := q.db.Query(ctx, listApprovedPatterns)
+	rows, err := q.db.QueryContext(ctx, listApprovedPatterns)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +107,9 @@ func (q *Queries) ListApprovedPatterns(ctx context.Context) ([]ApprovedPattern, 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -121,7 +125,7 @@ ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUnusedApprovedPatterns(ctx context.Context) ([]ApprovedPattern, error) {
-	rows, err := q.db.Query(ctx, listUnusedApprovedPatterns)
+	rows, err := q.db.QueryContext(ctx, listUnusedApprovedPatterns)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +145,9 @@ func (q *Queries) ListUnusedApprovedPatterns(ctx context.Context) ([]ApprovedPat
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -149,16 +156,16 @@ func (q *Queries) ListUnusedApprovedPatterns(ctx context.Context) ([]ApprovedPat
 
 const markPatternUsed = `-- name: MarkPatternUsed :exec
 UPDATE approved_patterns
-SET used_at = now(), used_by = $2
-WHERE id = $1
+SET used_at = datetime('now'), used_by = ?2
+WHERE id = ?1
 `
 
 type MarkPatternUsedParams struct {
-	ID     uuid.UUID   `json:"id"`
-	UsedBy pgtype.UUID `json:"used_by"`
+	ID     string         `json:"id"`
+	UsedBy sql.NullString `json:"used_by"`
 }
 
 func (q *Queries) MarkPatternUsed(ctx context.Context, arg MarkPatternUsedParams) error {
-	_, err := q.db.Exec(ctx, markPatternUsed, arg.ID, arg.UsedBy)
+	_, err := q.db.ExecContext(ctx, markPatternUsed, arg.ID, arg.UsedBy)
 	return err
 }

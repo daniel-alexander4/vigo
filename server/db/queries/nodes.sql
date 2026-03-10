@@ -1,17 +1,17 @@
 -- name: CreateNode :one
 INSERT INTO nodes (hostname, ip_address, pubkey_pem)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push;
 
 -- name: GetNodeByID :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM nodes
-WHERE id = $1;
+WHERE id = ?;
 
 -- name: GetNodeByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM nodes
-WHERE hostname = $1;
+WHERE hostname = ?;
 
 -- name: ListNodes :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
@@ -20,27 +20,27 @@ ORDER BY enrolled_at DESC;
 
 -- name: RevokeNode :exec
 UPDATE nodes
-SET revoked = true, revoked_at = now()
-WHERE id = $1;
+SET revoked = true, revoked_at = datetime('now')
+WHERE id = ?;
 
 -- name: UpdateLastSeen :exec
 UPDATE nodes
-SET last_seen = now()
-WHERE id = $1;
+SET last_seen = datetime('now')
+WHERE id = ?;
 
 -- name: SetForcePush :exec
 UPDATE nodes
 SET force_push = true
-WHERE id = $1;
+WHERE id = ?;
 
 -- name: ClearForcePush :exec
 UPDATE nodes
 SET force_push = false
-WHERE id = $1;
+WHERE id = ?;
 
 -- name: DeleteNode :exec
 DELETE FROM nodes
-WHERE id = $1;
+WHERE id = ?;
 
 -- name: ListNodesWithForcePush :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push

@@ -7,25 +7,24 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const createSecretRotationEvent = `-- name: CreateSecretRotationEvent :one
 INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_nodes)
-VALUES ($1, $2, $3, $4)
+VALUES (?, ?, ?, ?)
 RETURNING id, secret_path, old_version, new_version, rotated_at, affected_nodes
 `
 
 type CreateSecretRotationEventParams struct {
-	SecretPath    string      `json:"secret_path"`
-	OldVersion    pgtype.Text `json:"old_version"`
-	NewVersion    pgtype.Text `json:"new_version"`
-	AffectedNodes int32       `json:"affected_nodes"`
+	SecretPath    string         `json:"secret_path"`
+	OldVersion    sql.NullString `json:"old_version"`
+	NewVersion    sql.NullString `json:"new_version"`
+	AffectedNodes int64          `json:"affected_nodes"`
 }
 
 func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecretRotationEventParams) (SecretRotationEvent, error) {
-	row := q.db.QueryRow(ctx, createSecretRotationEvent,
+	row := q.db.QueryRowContext(ctx, createSecretRotationEvent,
 		arg.SecretPath,
 		arg.OldVersion,
 		arg.NewVersion,
@@ -47,11 +46,11 @@ const listSecretRotationEvents = `-- name: ListSecretRotationEvents :many
 SELECT id, secret_path, old_version, new_version, rotated_at, affected_nodes
 FROM secret_rotation_events
 ORDER BY rotated_at DESC
-LIMIT $1
+LIMIT ?
 `
 
-func (q *Queries) ListSecretRotationEvents(ctx context.Context, limit int32) ([]SecretRotationEvent, error) {
-	rows, err := q.db.Query(ctx, listSecretRotationEvents, limit)
+func (q *Queries) ListSecretRotationEvents(ctx context.Context, limit int64) ([]SecretRotationEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listSecretRotationEvents, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +69,9 @@ func (q *Queries) ListSecretRotationEvents(ctx context.Context, limit int32) ([]
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

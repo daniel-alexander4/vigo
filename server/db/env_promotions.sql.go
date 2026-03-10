@@ -7,24 +7,23 @@ package db
 
 import (
 	"context"
-	"encoding/json"
 )
 
 const createEnvPromotion = `-- name: CreateEnvPromotion :one
 INSERT INTO env_promotions (module_name, from_env, to_env, diff)
-VALUES ($1, $2, $3, $4)
+VALUES (?, ?, ?, ?)
 RETURNING id, module_name, from_env, to_env, diff, promoted_at
 `
 
 type CreateEnvPromotionParams struct {
-	ModuleName string          `json:"module_name"`
-	FromEnv    string          `json:"from_env"`
-	ToEnv      string          `json:"to_env"`
-	Diff       json.RawMessage `json:"diff"`
+	ModuleName string `json:"module_name"`
+	FromEnv    string `json:"from_env"`
+	ToEnv      string `json:"to_env"`
+	Diff       string `json:"diff"`
 }
 
 func (q *Queries) CreateEnvPromotion(ctx context.Context, arg CreateEnvPromotionParams) (EnvPromotion, error) {
-	row := q.db.QueryRow(ctx, createEnvPromotion,
+	row := q.db.QueryRowContext(ctx, createEnvPromotion,
 		arg.ModuleName,
 		arg.FromEnv,
 		arg.ToEnv,
@@ -46,11 +45,11 @@ const listEnvPromotions = `-- name: ListEnvPromotions :many
 SELECT id, module_name, from_env, to_env, diff, promoted_at
 FROM env_promotions
 ORDER BY promoted_at DESC
-LIMIT $1
+LIMIT ?
 `
 
-func (q *Queries) ListEnvPromotions(ctx context.Context, limit int32) ([]EnvPromotion, error) {
-	rows, err := q.db.Query(ctx, listEnvPromotions, limit)
+func (q *Queries) ListEnvPromotions(ctx context.Context, limit int64) ([]EnvPromotion, error) {
+	rows, err := q.db.QueryContext(ctx, listEnvPromotions, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +68,9 @@ func (q *Queries) ListEnvPromotions(ctx context.Context, limit int32) ([]EnvProm
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

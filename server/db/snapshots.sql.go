@@ -7,27 +7,25 @@ package db
 
 import (
 	"context"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const insertFileSnapshot = `-- name: InsertFileSnapshot :one
 INSERT INTO file_snapshots (node_id, file_path, content_hash, content, run_id)
-VALUES ($1, $2, $3, $4, $5)
+VALUES (?, ?, ?, ?, ?)
 RETURNING id, node_id, file_path, content_hash, content, created_at, run_id
 `
 
 type InsertFileSnapshotParams struct {
-	NodeID      uuid.UUID   `json:"node_id"`
-	FilePath    string      `json:"file_path"`
-	ContentHash string      `json:"content_hash"`
-	Content     []byte      `json:"content"`
-	RunID       pgtype.UUID `json:"run_id"`
+	NodeID      string         `json:"node_id"`
+	FilePath    string         `json:"file_path"`
+	ContentHash string         `json:"content_hash"`
+	Content     []byte         `json:"content"`
+	RunID       sql.NullString `json:"run_id"`
 }
 
 func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshotParams) (FileSnapshot, error) {
-	row := q.db.QueryRow(ctx, insertFileSnapshot,
+	row := q.db.QueryRowContext(ctx, insertFileSnapshot,
 		arg.NodeID,
 		arg.FilePath,
 		arg.ContentHash,
@@ -50,17 +48,17 @@ func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshot
 const listFileSnapshots = `-- name: ListFileSnapshots :many
 SELECT id, node_id, file_path, content_hash, content, created_at, run_id
 FROM file_snapshots
-WHERE node_id = $1 AND file_path = $2
+WHERE node_id = ?1 AND file_path = ?2
 ORDER BY created_at DESC
 `
 
 type ListFileSnapshotsParams struct {
-	NodeID   uuid.UUID `json:"node_id"`
-	FilePath string    `json:"file_path"`
+	NodeID   string `json:"node_id"`
+	FilePath string `json:"file_path"`
 }
 
 func (q *Queries) ListFileSnapshots(ctx context.Context, arg ListFileSnapshotsParams) ([]FileSnapshot, error) {
-	rows, err := q.db.Query(ctx, listFileSnapshots, arg.NodeID, arg.FilePath)
+	rows, err := q.db.QueryContext(ctx, listFileSnapshots, arg.NodeID, arg.FilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +78,9 @@ func (q *Queries) ListFileSnapshots(ctx context.Context, arg ListFileSnapshotsPa
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

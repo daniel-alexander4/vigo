@@ -7,19 +7,17 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const listComplianceHistory = `-- name: ListComplianceHistory :many
 SELECT id, recorded_at, total, compliant, drifted, failing, stale, unknown
 FROM compliance_history
 ORDER BY recorded_at DESC
-LIMIT $1
+LIMIT ?
 `
 
-func (q *Queries) ListComplianceHistory(ctx context.Context, limit int32) ([]ComplianceHistory, error) {
-	rows, err := q.db.Query(ctx, listComplianceHistory, limit)
+func (q *Queries) ListComplianceHistory(ctx context.Context, limit int64) ([]ComplianceHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listComplianceHistory, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +39,9 @@ func (q *Queries) ListComplianceHistory(ctx context.Context, limit int32) ([]Com
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -49,7 +50,7 @@ func (q *Queries) ListComplianceHistory(ctx context.Context, limit int32) ([]Com
 
 const upsertComplianceSnapshot = `-- name: UpsertComplianceSnapshot :one
 INSERT INTO compliance_history (recorded_at, total, compliant, drifted, failing, stale, unknown)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (recorded_at) DO UPDATE
 SET total = EXCLUDED.total,
     compliant = EXCLUDED.compliant,
@@ -61,17 +62,17 @@ RETURNING id, recorded_at, total, compliant, drifted, failing, stale, unknown
 `
 
 type UpsertComplianceSnapshotParams struct {
-	RecordedAt pgtype.Date `json:"recorded_at"`
-	Total      int32       `json:"total"`
-	Compliant  int32       `json:"compliant"`
-	Drifted    int32       `json:"drifted"`
-	Failing    int32       `json:"failing"`
-	Stale      int32       `json:"stale"`
-	Unknown    int32       `json:"unknown"`
+	RecordedAt string `json:"recorded_at"`
+	Total      int64  `json:"total"`
+	Compliant  int64  `json:"compliant"`
+	Drifted    int64  `json:"drifted"`
+	Failing    int64  `json:"failing"`
+	Stale      int64  `json:"stale"`
+	Unknown    int64  `json:"unknown"`
 }
 
 func (q *Queries) UpsertComplianceSnapshot(ctx context.Context, arg UpsertComplianceSnapshotParams) (ComplianceHistory, error) {
-	row := q.db.QueryRow(ctx, upsertComplianceSnapshot,
+	row := q.db.QueryRowContext(ctx, upsertComplianceSnapshot,
 		arg.RecordedAt,
 		arg.Total,
 		arg.Compliant,

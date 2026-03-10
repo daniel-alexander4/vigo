@@ -1,1 +1,0 @@
-ALTER TABLE clients ADD COLUMN force_push BOOLEAN NOT NULL DEFAULT false;

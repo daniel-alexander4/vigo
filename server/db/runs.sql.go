@@ -7,25 +7,23 @@ package db
 
 import (
 	"context"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (node_id, status, module_count)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 `
 
 type CreateRunParams struct {
-	NodeID      uuid.UUID `json:"node_id"`
-	Status      string    `json:"status"`
-	ModuleCount int32     `json:"module_count"`
+	NodeID      string `json:"node_id"`
+	Status      string `json:"status"`
+	ModuleCount int64  `json:"module_count"`
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
-	row := q.db.QueryRow(ctx, createRun, arg.NodeID, arg.Status, arg.ModuleCount)
+	row := q.db.QueryRowContext(ctx, createRun, arg.NodeID, arg.Status, arg.ModuleCount)
 	var i Run
 	err := row.Scan(
 		&i.ID,
@@ -43,23 +41,23 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 
 const createRunResult = `-- name: CreateRunResult :one
 INSERT INTO run_results (run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
 `
 
 type CreateRunResultParams struct {
-	RunID        uuid.UUID   `json:"run_id"`
-	ModuleName   string      `json:"module_name"`
-	ResourceType string      `json:"resource_type"`
-	ResourceName string      `json:"resource_name"`
-	ActionTaken  string      `json:"action_taken"`
-	Changed      bool        `json:"changed"`
-	ErrorMessage pgtype.Text `json:"error_message"`
-	DurationMs   int32       `json:"duration_ms"`
+	RunID        string         `json:"run_id"`
+	ModuleName   string         `json:"module_name"`
+	ResourceType string         `json:"resource_type"`
+	ResourceName string         `json:"resource_name"`
+	ActionTaken  string         `json:"action_taken"`
+	Changed      int64          `json:"changed"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	DurationMs   int64          `json:"duration_ms"`
 }
 
 func (q *Queries) CreateRunResult(ctx context.Context, arg CreateRunResultParams) (RunResult, error) {
-	row := q.db.QueryRow(ctx, createRunResult,
+	row := q.db.QueryRowContext(ctx, createRunResult,
 		arg.RunID,
 		arg.ModuleName,
 		arg.ResourceType,
@@ -87,20 +85,20 @@ func (q *Queries) CreateRunResult(ctx context.Context, arg CreateRunResultParams
 
 const finishRun = `-- name: FinishRun :exec
 UPDATE runs
-SET finished_at = now(), status = $2, changed_count = $3, failed_count = $4, skipped_count = $5
-WHERE id = $1
+SET finished_at = datetime('now'), status = ?2, changed_count = ?3, failed_count = ?4, skipped_count = ?5
+WHERE id = ?1
 `
 
 type FinishRunParams struct {
-	ID           uuid.UUID `json:"id"`
-	Status       string    `json:"status"`
-	ChangedCount int32     `json:"changed_count"`
-	FailedCount  int32     `json:"failed_count"`
-	SkippedCount int32     `json:"skipped_count"`
+	ID           string `json:"id"`
+	Status       string `json:"status"`
+	ChangedCount int64  `json:"changed_count"`
+	FailedCount  int64  `json:"failed_count"`
+	SkippedCount int64  `json:"skipped_count"`
 }
 
 func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
-	_, err := q.db.Exec(ctx, finishRun,
+	_, err := q.db.ExecContext(ctx, finishRun,
 		arg.ID,
 		arg.Status,
 		arg.ChangedCount,
@@ -113,11 +111,11 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 const getRunByID = `-- name: GetRunByID :one
 SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
-	row := q.db.QueryRow(ctx, getRunByID, id)
+func (q *Queries) GetRunByID(ctx context.Context, id string) (Run, error) {
+	row := q.db.QueryRowContext(ctx, getRunByID, id)
 	var i Run
 	err := row.Scan(
 		&i.ID,
@@ -137,11 +135,11 @@ const listAllRuns = `-- name: ListAllRuns :many
 SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 ORDER BY started_at DESC
-LIMIT $1
+LIMIT ?
 `
 
-func (q *Queries) ListAllRuns(ctx context.Context, limit int32) ([]Run, error) {
-	rows, err := q.db.Query(ctx, listAllRuns, limit)
+func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listAllRuns, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +162,9 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int32) ([]Run, error) {
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -173,12 +174,12 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int32) ([]Run, error) {
 const listRunResults = `-- name: ListRunResults :many
 SELECT id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
 FROM run_results
-WHERE run_id = $1
+WHERE run_id = ?
 ORDER BY created_at ASC
 `
 
-func (q *Queries) ListRunResults(ctx context.Context, runID uuid.UUID) ([]RunResult, error) {
-	rows, err := q.db.Query(ctx, listRunResults, runID)
+func (q *Queries) ListRunResults(ctx context.Context, runID string) ([]RunResult, error) {
+	rows, err := q.db.QueryContext(ctx, listRunResults, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +203,9 @@ func (q *Queries) ListRunResults(ctx context.Context, runID uuid.UUID) ([]RunRes
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -211,18 +215,18 @@ func (q *Queries) ListRunResults(ctx context.Context, runID uuid.UUID) ([]RunRes
 const listRunsByNode = `-- name: ListRunsByNode :many
 SELECT id, node_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE node_id = $1
+WHERE node_id = ?1
 ORDER BY started_at DESC
-LIMIT $2
+LIMIT ?2
 `
 
 type ListRunsByNodeParams struct {
-	NodeID uuid.UUID `json:"node_id"`
-	Limit  int32     `json:"limit"`
+	NodeID string `json:"node_id"`
+	Limit  int64  `json:"limit"`
 }
 
 func (q *Queries) ListRunsByNode(ctx context.Context, arg ListRunsByNodeParams) ([]Run, error) {
-	rows, err := q.db.Query(ctx, listRunsByNode, arg.NodeID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, listRunsByNode, arg.NodeID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +248,9 @@ func (q *Queries) ListRunsByNode(ctx context.Context, arg ListRunsByNodeParams) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

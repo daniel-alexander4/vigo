@@ -7,27 +7,25 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createPackageAudit = `-- name: CreatePackageAudit :one
 INSERT INTO package_audit (node_id, package_name, installed_version, desired_version)
-VALUES ($1, $2, $3, $4)
+VALUES (?, ?, ?, ?)
 RETURNING id, node_id, package_name, installed_version, desired_version, detected_at
 `
 
 type CreatePackageAuditParams struct {
-	NodeID           uuid.UUID   `json:"node_id"`
-	PackageName      string      `json:"package_name"`
-	InstalledVersion pgtype.Text `json:"installed_version"`
-	DesiredVersion   pgtype.Text `json:"desired_version"`
+	NodeID           string         `json:"node_id"`
+	PackageName      string         `json:"package_name"`
+	InstalledVersion sql.NullString `json:"installed_version"`
+	DesiredVersion   sql.NullString `json:"desired_version"`
 }
 
 func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAuditParams) (PackageAudit, error) {
-	row := q.db.QueryRow(ctx, createPackageAudit,
+	row := q.db.QueryRowContext(ctx, createPackageAudit,
 		arg.NodeID,
 		arg.PackageName,
 		arg.InstalledVersion,
@@ -51,21 +49,21 @@ SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_vers
 FROM package_audit pa
 JOIN nodes n ON n.id = pa.node_id
 ORDER BY pa.detected_at DESC
-LIMIT $1
+LIMIT ?
 `
 
 type ListAllPackageAuditRow struct {
-	ID               uuid.UUID   `json:"id"`
-	NodeID           uuid.UUID   `json:"node_id"`
-	PackageName      string      `json:"package_name"`
-	InstalledVersion pgtype.Text `json:"installed_version"`
-	DesiredVersion   pgtype.Text `json:"desired_version"`
-	DetectedAt       time.Time   `json:"detected_at"`
-	Hostname         string      `json:"hostname"`
+	ID               string         `json:"id"`
+	NodeID           string         `json:"node_id"`
+	PackageName      string         `json:"package_name"`
+	InstalledVersion sql.NullString `json:"installed_version"`
+	DesiredVersion   sql.NullString `json:"desired_version"`
+	DetectedAt       time.Time      `json:"detected_at"`
+	Hostname         string         `json:"hostname"`
 }
 
-func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int32) ([]ListAllPackageAuditRow, error) {
-	rows, err := q.db.Query(ctx, listAllPackageAudit, limit)
+func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int64) ([]ListAllPackageAuditRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllPackageAudit, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +84,9 @@ func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int32) ([]ListA
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -97,22 +98,22 @@ SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_vers
        n.hostname
 FROM package_audit pa
 JOIN nodes n ON n.id = pa.node_id
-WHERE pa.node_id = $1
+WHERE pa.node_id = ?
 ORDER BY pa.detected_at DESC
 `
 
 type ListPackageAuditByNodeRow struct {
-	ID               uuid.UUID   `json:"id"`
-	NodeID           uuid.UUID   `json:"node_id"`
-	PackageName      string      `json:"package_name"`
-	InstalledVersion pgtype.Text `json:"installed_version"`
-	DesiredVersion   pgtype.Text `json:"desired_version"`
-	DetectedAt       time.Time   `json:"detected_at"`
-	Hostname         string      `json:"hostname"`
+	ID               string         `json:"id"`
+	NodeID           string         `json:"node_id"`
+	PackageName      string         `json:"package_name"`
+	InstalledVersion sql.NullString `json:"installed_version"`
+	DesiredVersion   sql.NullString `json:"desired_version"`
+	DetectedAt       time.Time      `json:"detected_at"`
+	Hostname         string         `json:"hostname"`
 }
 
-func (q *Queries) ListPackageAuditByNode(ctx context.Context, nodeID uuid.UUID) ([]ListPackageAuditByNodeRow, error) {
-	rows, err := q.db.Query(ctx, listPackageAuditByNode, nodeID)
+func (q *Queries) ListPackageAuditByNode(ctx context.Context, nodeID string) ([]ListPackageAuditByNodeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPackageAuditByNode, nodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +134,9 @@ func (q *Queries) ListPackageAuditByNode(ctx context.Context, nodeID uuid.UUID) 
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -144,22 +148,22 @@ SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_vers
        n.hostname
 FROM package_audit pa
 JOIN nodes n ON n.id = pa.node_id
-WHERE pa.installed_version IS DISTINCT FROM pa.desired_version
+WHERE (pa.installed_version != pa.desired_version OR (pa.installed_version IS NULL AND pa.desired_version IS NOT NULL) OR (pa.installed_version IS NOT NULL AND pa.desired_version IS NULL))
 ORDER BY pa.detected_at DESC
 `
 
 type ListPackageDriftRow struct {
-	ID               uuid.UUID   `json:"id"`
-	NodeID           uuid.UUID   `json:"node_id"`
-	PackageName      string      `json:"package_name"`
-	InstalledVersion pgtype.Text `json:"installed_version"`
-	DesiredVersion   pgtype.Text `json:"desired_version"`
-	DetectedAt       time.Time   `json:"detected_at"`
-	Hostname         string      `json:"hostname"`
+	ID               string         `json:"id"`
+	NodeID           string         `json:"node_id"`
+	PackageName      string         `json:"package_name"`
+	InstalledVersion sql.NullString `json:"installed_version"`
+	DesiredVersion   sql.NullString `json:"desired_version"`
+	DetectedAt       time.Time      `json:"detected_at"`
+	Hostname         string         `json:"hostname"`
 }
 
 func (q *Queries) ListPackageDrift(ctx context.Context) ([]ListPackageDriftRow, error) {
-	rows, err := q.db.Query(ctx, listPackageDrift)
+	rows, err := q.db.QueryContext(ctx, listPackageDrift)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +183,9 @@ func (q *Queries) ListPackageDrift(ctx context.Context) ([]ListPackageDriftRow, 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

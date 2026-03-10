@@ -7,24 +7,22 @@ package db
 
 import (
 	"context"
-
-	"github.com/google/uuid"
 )
 
 const clearForcePush = `-- name: ClearForcePush :exec
 UPDATE nodes
 SET force_push = false
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) ClearForcePush(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, clearForcePush, id)
+func (q *Queries) ClearForcePush(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, clearForcePush, id)
 	return err
 }
 
 const createNode = `-- name: CreateNode :one
 INSERT INTO nodes (hostname, ip_address, pubkey_pem)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 `
 
@@ -35,7 +33,7 @@ type CreateNodeParams struct {
 }
 
 func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, error) {
-	row := q.db.QueryRow(ctx, createNode, arg.Hostname, arg.IpAddress, arg.PubkeyPem)
+	row := q.db.QueryRowContext(ctx, createNode, arg.Hostname, arg.IpAddress, arg.PubkeyPem)
 	var i Node
 	err := row.Scan(
 		&i.ID,
@@ -53,22 +51,22 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 
 const deleteNode = `-- name: DeleteNode :exec
 DELETE FROM nodes
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) DeleteNode(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteNode, id)
+func (q *Queries) DeleteNode(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteNode, id)
 	return err
 }
 
 const getNodeByHostname = `-- name: GetNodeByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM nodes
-WHERE hostname = $1
+WHERE hostname = ?
 `
 
 func (q *Queries) GetNodeByHostname(ctx context.Context, hostname string) (Node, error) {
-	row := q.db.QueryRow(ctx, getNodeByHostname, hostname)
+	row := q.db.QueryRowContext(ctx, getNodeByHostname, hostname)
 	var i Node
 	err := row.Scan(
 		&i.ID,
@@ -87,11 +85,11 @@ func (q *Queries) GetNodeByHostname(ctx context.Context, hostname string) (Node,
 const getNodeByID = `-- name: GetNodeByID :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
 FROM nodes
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) GetNodeByID(ctx context.Context, id uuid.UUID) (Node, error) {
-	row := q.db.QueryRow(ctx, getNodeByID, id)
+func (q *Queries) GetNodeByID(ctx context.Context, id string) (Node, error) {
+	row := q.db.QueryRowContext(ctx, getNodeByID, id)
 	var i Node
 	err := row.Scan(
 		&i.ID,
@@ -114,7 +112,7 @@ ORDER BY enrolled_at DESC
 `
 
 func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
-	rows, err := q.db.Query(ctx, listNodes)
+	rows, err := q.db.QueryContext(ctx, listNodes)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +134,9 @@ func (q *Queries) ListNodes(ctx context.Context) ([]Node, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -150,7 +151,7 @@ WHERE force_push = true
 `
 
 func (q *Queries) ListNodesWithForcePush(ctx context.Context) ([]Node, error) {
-	rows, err := q.db.Query(ctx, listNodesWithForcePush)
+	rows, err := q.db.QueryContext(ctx, listNodesWithForcePush)
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +174,9 @@ func (q *Queries) ListNodesWithForcePush(ctx context.Context) ([]Node, error) {
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -181,33 +185,33 @@ func (q *Queries) ListNodesWithForcePush(ctx context.Context) ([]Node, error) {
 
 const revokeNode = `-- name: RevokeNode :exec
 UPDATE nodes
-SET revoked = true, revoked_at = now()
-WHERE id = $1
+SET revoked = true, revoked_at = datetime('now')
+WHERE id = ?
 `
 
-func (q *Queries) RevokeNode(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, revokeNode, id)
+func (q *Queries) RevokeNode(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, revokeNode, id)
 	return err
 }
 
 const setForcePush = `-- name: SetForcePush :exec
 UPDATE nodes
 SET force_push = true
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) SetForcePush(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, setForcePush, id)
+func (q *Queries) SetForcePush(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, setForcePush, id)
 	return err
 }
 
 const updateLastSeen = `-- name: UpdateLastSeen :exec
 UPDATE nodes
-SET last_seen = now()
-WHERE id = $1
+SET last_seen = datetime('now')
+WHERE id = ?
 `
 
-func (q *Queries) UpdateLastSeen(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, updateLastSeen, id)
+func (q *Queries) UpdateLastSeen(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, updateLastSeen, id)
 	return err
 }

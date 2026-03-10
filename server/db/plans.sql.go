@@ -7,24 +7,21 @@ package db
 
 import (
 	"context"
-	"encoding/json"
-
-	"github.com/google/uuid"
 )
 
 const createPlan = `-- name: CreatePlan :one
 INSERT INTO plans (node_id, modules)
-VALUES ($1, $2)
+VALUES (?, ?)
 RETURNING id, node_id, created_at, modules
 `
 
 type CreatePlanParams struct {
-	NodeID  uuid.UUID       `json:"node_id"`
-	Modules json.RawMessage `json:"modules"`
+	NodeID  string `json:"node_id"`
+	Modules string `json:"modules"`
 }
 
 func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, error) {
-	row := q.db.QueryRow(ctx, createPlan, arg.NodeID, arg.Modules)
+	row := q.db.QueryRowContext(ctx, createPlan, arg.NodeID, arg.Modules)
 	var i Plan
 	err := row.Scan(
 		&i.ID,
@@ -37,20 +34,20 @@ func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, e
 
 const createPlanResult = `-- name: CreatePlanResult :one
 INSERT INTO plan_results (plan_id, module_name, resource_type, resource_name, planned_action)
-VALUES ($1, $2, $3, $4, $5)
+VALUES (?, ?, ?, ?, ?)
 RETURNING id, plan_id, module_name, resource_type, resource_name, planned_action
 `
 
 type CreatePlanResultParams struct {
-	PlanID        uuid.UUID `json:"plan_id"`
-	ModuleName    string    `json:"module_name"`
-	ResourceType  string    `json:"resource_type"`
-	ResourceName  string    `json:"resource_name"`
-	PlannedAction string    `json:"planned_action"`
+	PlanID        string `json:"plan_id"`
+	ModuleName    string `json:"module_name"`
+	ResourceType  string `json:"resource_type"`
+	ResourceName  string `json:"resource_name"`
+	PlannedAction string `json:"planned_action"`
 }
 
 func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultParams) (PlanResult, error) {
-	row := q.db.QueryRow(ctx, createPlanResult,
+	row := q.db.QueryRowContext(ctx, createPlanResult,
 		arg.PlanID,
 		arg.ModuleName,
 		arg.ResourceType,
@@ -72,11 +69,11 @@ func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultPara
 const getPlanByID = `-- name: GetPlanByID :one
 SELECT id, node_id, created_at, modules
 FROM plans
-WHERE id = $1
+WHERE id = ?
 `
 
-func (q *Queries) GetPlanByID(ctx context.Context, id uuid.UUID) (Plan, error) {
-	row := q.db.QueryRow(ctx, getPlanByID, id)
+func (q *Queries) GetPlanByID(ctx context.Context, id string) (Plan, error) {
+	row := q.db.QueryRowContext(ctx, getPlanByID, id)
 	var i Plan
 	err := row.Scan(
 		&i.ID,
@@ -90,12 +87,12 @@ func (q *Queries) GetPlanByID(ctx context.Context, id uuid.UUID) (Plan, error) {
 const listPlanResults = `-- name: ListPlanResults :many
 SELECT id, plan_id, module_name, resource_type, resource_name, planned_action
 FROM plan_results
-WHERE plan_id = $1
+WHERE plan_id = ?
 ORDER BY id ASC
 `
 
-func (q *Queries) ListPlanResults(ctx context.Context, planID uuid.UUID) ([]PlanResult, error) {
-	rows, err := q.db.Query(ctx, listPlanResults, planID)
+func (q *Queries) ListPlanResults(ctx context.Context, planID string) ([]PlanResult, error) {
+	rows, err := q.db.QueryContext(ctx, listPlanResults, planID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +112,9 @@ func (q *Queries) ListPlanResults(ctx context.Context, planID uuid.UUID) ([]Plan
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -124,18 +124,18 @@ func (q *Queries) ListPlanResults(ctx context.Context, planID uuid.UUID) ([]Plan
 const listPlansByNode = `-- name: ListPlansByNode :many
 SELECT id, node_id, created_at, modules
 FROM plans
-WHERE node_id = $1
+WHERE node_id = ?1
 ORDER BY created_at DESC
-LIMIT $2
+LIMIT ?2
 `
 
 type ListPlansByNodeParams struct {
-	NodeID uuid.UUID `json:"node_id"`
-	Limit  int32     `json:"limit"`
+	NodeID string `json:"node_id"`
+	Limit  int64  `json:"limit"`
 }
 
 func (q *Queries) ListPlansByNode(ctx context.Context, arg ListPlansByNodeParams) ([]Plan, error) {
-	rows, err := q.db.Query(ctx, listPlansByNode, arg.NodeID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, listPlansByNode, arg.NodeID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +152,9 @@ func (q *Queries) ListPlansByNode(ctx context.Context, arg ListPlansByNodeParams
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -7,21 +7,18 @@ package db
 
 import (
 	"context"
-	"encoding/json"
-
-	"github.com/google/uuid"
 )
 
 const getLatestNodeTraits = `-- name: GetLatestNodeTraits :one
 SELECT id, node_id, traits, collected_at
 FROM node_traits
-WHERE node_id = $1
+WHERE node_id = ?
 ORDER BY collected_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetLatestNodeTraits(ctx context.Context, nodeID uuid.UUID) (NodeTrait, error) {
-	row := q.db.QueryRow(ctx, getLatestNodeTraits, nodeID)
+func (q *Queries) GetLatestNodeTraits(ctx context.Context, nodeID string) (NodeTrait, error) {
+	row := q.db.QueryRowContext(ctx, getLatestNodeTraits, nodeID)
 	var i NodeTrait
 	err := row.Scan(
 		&i.ID,
@@ -34,17 +31,17 @@ func (q *Queries) GetLatestNodeTraits(ctx context.Context, nodeID uuid.UUID) (No
 
 const insertNodeTraits = `-- name: InsertNodeTraits :one
 INSERT INTO node_traits (node_id, traits)
-VALUES ($1, $2)
+VALUES (?, ?)
 RETURNING id, node_id, traits, collected_at
 `
 
 type InsertNodeTraitsParams struct {
-	NodeID uuid.UUID       `json:"node_id"`
-	Traits  json.RawMessage `json:"traits"`
+	NodeID string `json:"node_id"`
+	Traits string `json:"traits"`
 }
 
 func (q *Queries) InsertNodeTraits(ctx context.Context, arg InsertNodeTraitsParams) (NodeTrait, error) {
-	row := q.db.QueryRow(ctx, insertNodeTraits, arg.NodeID, arg.Traits)
+	row := q.db.QueryRowContext(ctx, insertNodeTraits, arg.NodeID, arg.Traits)
 	var i NodeTrait
 	err := row.Scan(
 		&i.ID,
@@ -56,17 +53,21 @@ func (q *Queries) InsertNodeTraits(ctx context.Context, arg InsertNodeTraitsPara
 }
 
 const pruneNodeTraits = `-- name: PruneNodeTraits :exec
-DELETE FROM node_traits nn
-WHERE nn.node_id = $1
-AND nn.id NOT IN (
-  SELECT sub.id FROM node_traits sub
-  WHERE sub.node_id = nn.node_id
-  ORDER BY sub.collected_at DESC
-  LIMIT 10
+DELETE FROM node_traits
+WHERE id IN (
+  SELECT nt.id FROM node_traits nt
+  WHERE nt.node_id = ?
+  ORDER BY nt.collected_at ASC
+  LIMIT max(0, (SELECT count(*) FROM node_traits nt2 WHERE nt2.node_id = ?) - 10)
 )
 `
 
-func (q *Queries) PruneNodeTraits(ctx context.Context, nodeID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, pruneNodeTraits, nodeID)
+type PruneNodeTraitsParams struct {
+	NodeID   string `json:"node_id"`
+	NodeID_2 string `json:"node_id_2"`
+}
+
+func (q *Queries) PruneNodeTraits(ctx context.Context, arg PruneNodeTraitsParams) error {
+	_, err := q.db.ExecContext(ctx, pruneNodeTraits, arg.NodeID, arg.NodeID_2)
 	return err
 }
