@@ -75,8 +75,9 @@ type RunResult struct {
 
 // PolicyState tracks the agent's cached policy bundle across check-in cycles.
 type PolicyState struct {
-	Version uint64
-	Bundle  *pb.PolicyBundle
+	Version     uint64
+	Bundle      *pb.PolicyBundle
+	ModuleCache *ModuleCache // per-module content-addressable cache for delta transfer
 }
 
 // RunOnce performs a single check-in, executes the returned modules, and reports
@@ -92,11 +93,15 @@ type PolicyState struct {
 // with fresh nails. Pass nil for one-shot commands.
 func RunOnce(ctx context.Context, client *Client, executors map[string]modules.Executor, nailsMap map[string]any, dryRun bool, module string, stateFingerprint string, nailsJSON []byte, cache *runner.ResultCache, policyState *PolicyState) (*RunResult, error) {
 	var policyVersion uint64
+	var cachedModuleHashes map[string]string
 	if policyState != nil {
 		policyVersion = policyState.Version
+		if policyState.ModuleCache != nil {
+			cachedModuleHashes = policyState.ModuleCache.Hashes()
+		}
 	}
 
-	resp, err := client.CheckIn(ctx, stateFingerprint, nailsJSON, policyVersion)
+	resp, err := client.CheckIn(ctx, stateFingerprint, nailsJSON, policyVersion, cachedModuleHashes)
 	if err != nil {
 		return nil, fmt.Errorf("check-in: %w", err)
 	}
@@ -131,6 +136,16 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 			NoChange:      true,
 			PolicyVersion: resp.PolicyVersion,
 		}, nil
+	}
+
+	// Delta transfer: fill in stub modules from the module cache.
+	if policyState != nil && policyState.ModuleCache != nil {
+		bundle.Modules = MergeStubs(bundle.Modules, policyState.ModuleCache)
+	}
+
+	// Update the module cache with fully resolved modules.
+	if policyState != nil && policyState.ModuleCache != nil {
+		policyState.ModuleCache.Update(bundle.Modules)
 	}
 
 	protoModules, err = policy.EvalBundle(bundle, nailsMap)
@@ -204,7 +219,9 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 	var lastFingerprint string
 
 	// Policy state: cached policy bundle + version for agent-side evaluation.
-	policyState := &PolicyState{}
+	policyState := &PolicyState{
+		ModuleCache: NewModuleCache(),
+	}
 
 	// Cached collector set: stable nails refresh every 10 cycles.
 	collectors := nails.NewCachedCollectors(10)
@@ -224,7 +241,7 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		// 0. Pre-check-in to get custom nails manifest.
 		var customNails map[string]any
 		if nailsCacheDir != "" {
-			preResp, preErr := client.CheckIn(ctx, "", nil, 0)
+			preResp, preErr := client.CheckIn(ctx, "", nil, 0, nil)
 			if preErr != nil {
 				logger.Warn("pre-check-in for nails manifest failed", "error", preErr)
 			} else if len(preResp.CustomNails) > 0 {

@@ -99,7 +99,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// conditionals left raw for agent-side evaluation.
 	cfg := s.configStore.Get(node.Hostname)
 
-	bundle, err := buildPolicyBundle(cfg, configVersion)
+	bundle, err := buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes())
 	if err != nil {
 		slog.Error("failed to build policy bundle", "node_id", nodeID, "error", err)
 		return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)

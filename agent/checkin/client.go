@@ -75,19 +75,22 @@ func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, nodeID string,
 // If nailsJSON is non-nil, it is sent inline (replacing separate ReportNails).
 // If policyVersion > 0, the agent signals it has a cached policy bundle at
 // that version and the server can short-circuit.
-func (c *Client) CheckIn(ctx context.Context, stateFingerprint string, nailsJSON []byte, policyVersion uint64) (*pb.CheckInResponse, error) {
+// If cachedModuleHashes is non-nil, the server sends stubs for unchanged
+// modules (delta transfer).
+func (c *Client) CheckIn(ctx context.Context, stateFingerprint string, nailsJSON []byte, policyVersion uint64, cachedModuleHashes map[string]string) (*pb.CheckInResponse, error) {
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
 	sig := auth.SignPayload([]byte(stateFingerprint), ts, c.privateKey)
 
 	resp, err := c.agent.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:           c.nodeID,
-		StateFingerprint: stateFingerprint,
-		Signature:        sig,
-		Timestamp:        timestamppb.New(now),
-		NailsJson:        nailsJSON,
-		PolicyVersion:    policyVersion,
-		PolicyMode:       true,
+		NodeId:             c.nodeID,
+		StateFingerprint:   stateFingerprint,
+		Signature:          sig,
+		Timestamp:          timestamppb.New(now),
+		NailsJson:          nailsJSON,
+		PolicyVersion:      policyVersion,
+		PolicyMode:         true,
+		CachedModuleHashes: cachedModuleHashes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("check-in RPC: %w", err)

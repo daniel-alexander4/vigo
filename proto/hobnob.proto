@@ -214,6 +214,7 @@ message CheckInRequest {
   bytes nails_json = 5;           // inline nails (avoids separate ReportNails RPC)
   uint64 policy_version = 6;     // agent's cached policy version (0 = no cache, send full bundle)
   bool policy_mode = 7;          // true = agent supports policy bundles
+  map<string, string> cached_module_hashes = 8;  // module name → content hash for delta transfer
 }
 
 message CheckInResponse {
@@ -278,11 +279,15 @@ message PolicyBundle {
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.
+// For delta transfer: if stub=true, only name + content_hash are set —
+// the agent fills in resources from its local cache.
 message PolicyModule {
   string name = 1;
   repeated PolicyResource resources = 2;
   repeated string depends_on = 3;
   string when = 4;                     // module-level when expression (unevaluated)
+  string content_hash = 5;            // SHA256 of canonical module content
+  bool stub = 6;                      // true = content omitted, use cached version
 }
 
 // PolicyResource is a resource with raw template strings in attributes.

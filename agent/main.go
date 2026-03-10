@@ -739,7 +739,7 @@ func verifyCheckIn(ctx context.Context, grpcAddr, dataDir, nodeID string) error 
 	}
 	defer client.Close()
 
-	_, err = client.CheckIn(ctx, "", nil, 0)
+	_, err = client.CheckIn(ctx, "", nil, 0, nil)
 	if err != nil {
 		return fmt.Errorf("check-in failed: %w", err)
 	}
