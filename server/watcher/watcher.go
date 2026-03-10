@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 )
 
 // VersionProvider retrieves version information for a secret path.
@@ -24,9 +23,9 @@ type NodeStore interface {
 
 // DB abstracts the database operations needed by the watcher.
 type DB interface {
-	SetForcePush(ctx context.Context, id uuid.UUID) error
+	SetForcePush(ctx context.Context, id string) error
 	CreateSecretRotationEvent(ctx context.Context, params RotationRecord) error
-	GetNodeByHostname(ctx context.Context, hostname string) (uuid.UUID, error)
+	GetNodeByHostname(ctx context.Context, hostname string) (string, error)
 }
 
 // EventDispatcher fires webhook events for secret rotation.
@@ -163,7 +162,7 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 
 		// Identify affected nodes.
 		hostnames := w.configStore.NodesReferencingSecret(path)
-		var affectedIDs []uuid.UUID
+		var affectedIDs []string
 		for _, hostname := range hostnames {
 			nodeID, err := w.db.GetNodeByHostname(ctx, hostname)
 			if err != nil {
@@ -171,7 +170,7 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 					"hostname", hostname, "error", err)
 				continue
 			}
-			if nodeID == uuid.Nil {
+			if nodeID == "" {
 				continue
 			}
 			affectedIDs = append(affectedIDs, nodeID)

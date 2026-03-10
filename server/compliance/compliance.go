@@ -8,7 +8,7 @@ import "time"
 // Decoupled from db.Run to avoid package coupling.
 type RunInfo struct {
 	Status       string
-	ChangedCount int32
+	ChangedCount int64
 }
 
 // ComputeStatus determines the compliance status for a single node.

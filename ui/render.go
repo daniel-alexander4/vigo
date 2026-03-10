@@ -158,12 +158,11 @@ func highlightYAML(source string) template.HTML {
 }
 
 // truncUUID returns the first 8 characters of a UUID string.
-func truncUUID(id fmt.Stringer) string {
-	s := id.String()
-	if len(s) > 8 {
-		return s[:8]
+func truncUUID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
 	}
-	return s
+	return id
 }
 
 // dict creates a map from key-value pairs for use in templates.

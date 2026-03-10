@@ -2,9 +2,7 @@ package watcher
 
 import (
 	"context"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 
 	"github.com/hobnob/hobnob/server/db"
 )
@@ -21,14 +19,14 @@ func NewDBAdapter(q *db.Queries) *DBAdapter {
 	return &DBAdapter{q: q}
 }
 
-func (a *DBAdapter) SetForcePush(ctx context.Context, id uuid.UUID) error {
+func (a *DBAdapter) SetForcePush(ctx context.Context, id string) error {
 	return a.q.SetForcePush(ctx, id)
 }
 
-func (a *DBAdapter) GetNodeByHostname(ctx context.Context, hostname string) (uuid.UUID, error) {
+func (a *DBAdapter) GetNodeByHostname(ctx context.Context, hostname string) (string, error) {
 	node, err := a.q.GetNodeByHostname(ctx, hostname)
 	if err != nil {
-		return uuid.Nil, err
+		return "", err
 	}
 	return node.ID, nil
 }
@@ -36,9 +34,9 @@ func (a *DBAdapter) GetNodeByHostname(ctx context.Context, hostname string) (uui
 func (a *DBAdapter) CreateSecretRotationEvent(ctx context.Context, params RotationRecord) error {
 	_, err := a.q.CreateSecretRotationEvent(ctx, db.CreateSecretRotationEventParams{
 		SecretPath:    params.SecretPath,
-		OldVersion:    pgtype.Text{String: params.OldVersion, Valid: true},
-		NewVersion:    pgtype.Text{String: params.NewVersion, Valid: true},
-		AffectedNodes: params.AffectedNodes,
+		OldVersion:    sql.NullString{String: params.OldVersion, Valid: true},
+		NewVersion:    sql.NullString{String: params.NewVersion, Valid: true},
+		AffectedNodes: int64(params.AffectedNodes),
 	})
 	return err
 }

@@ -1,13 +1,12 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/hobnob/hobnob/server/db"
 )
@@ -49,7 +48,7 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 
 	node, err := h.queries.GetNodeByHostname(ctx, hostname)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			writeJSONError(w, http.StatusNotFound, fmt.Sprintf("node '%s' not found", hostname))
 			return
 		}
@@ -59,7 +58,7 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 
 	traits, err := h.queries.GetLatestNodeTraits(ctx, node.ID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			writeJSONError(w, http.StatusNotFound,
 				fmt.Sprintf("no traits available for '%s' -- node has not reported traits yet", hostname))
 			return
@@ -71,7 +70,7 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 	resp := traitsResponse{
 		Hostname:    hostname,
 		CollectedAt: traits.CollectedAt.Format(time.RFC3339),
-		Traits:       traits.Traits,
+		Traits:       json.RawMessage(traits.Traits),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

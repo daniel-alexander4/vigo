@@ -49,14 +49,14 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 
 	slog.Info("node registered",
 		"hostname", req.GetHostname(),
-		"node_id", nodeID.String(),
+		"node_id", nodeID,
 	)
 
 	// Dispatch node.enrolled webhook event.
 	if s.dispatcher != nil {
 		s.dispatcher.Dispatch(ctx, "node.enrolled", webhook.EventPayload{
 			Node: &webhook.NodeInfo{
-				ID:       nodeID.String(),
+				ID:       nodeID,
 				Hostname: req.GetHostname(),
 				IP:       req.GetIpAddress(),
 			},
@@ -65,7 +65,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 
 	return &pb.RegisterResponse{
 		Success:  true,
-		NodeId: nodeID.String(),
+		NodeId: nodeID,
 		Message:  "registered successfully",
 	}, nil
 }

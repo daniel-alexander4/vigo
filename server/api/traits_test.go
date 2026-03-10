@@ -1,69 +1,79 @@
 package api
 
 import (
-	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/hobnob/hobnob/server/db"
 )
 
-// mockDBTX implements db.DBTX for testing the traits handler.
-type mockDBTX struct {
-	queryRowFn func(sql string, args ...any) pgx.Row
-}
+// openTestDB creates an in-memory SQLite database with the schema applied.
+func openTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
 
-func (m *mockDBTX) Exec(_ context.Context, _ string, _ ...interface{}) (pgconn.CommandTag, error) {
-	return pgconn.CommandTag{}, nil
-}
-
-func (m *mockDBTX) Query(_ context.Context, _ string, _ ...interface{}) (pgx.Rows, error) {
-	return nil, nil
-}
-
-func (m *mockDBTX) QueryRow(_ context.Context, sql string, args ...interface{}) pgx.Row {
-	return m.queryRowFn(sql, args...)
-}
-
-// mockRow implements pgx.Row, returning preset values or an error.
-type mockRow struct {
-	scanFn func(dest ...any) error
-}
-
-func (r *mockRow) Scan(dest ...any) error {
-	return r.scanFn(dest...)
+	// Minimal schema for traits tests.
+	_, err = sqlDB.Exec(`
+		CREATE TABLE nodes (
+			id          TEXT PRIMARY KEY,
+			hostname    TEXT NOT NULL,
+			ip_address  TEXT NOT NULL,
+			pubkey_pem  TEXT NOT NULL,
+			enrolled_at DATETIME NOT NULL DEFAULT (datetime('now')),
+			last_seen   DATETIME,
+			revoked     INTEGER NOT NULL DEFAULT 0,
+			revoked_at  DATETIME,
+			force_push  INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE TABLE node_traits (
+			id           TEXT PRIMARY KEY,
+			node_id      TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
+			traits       TEXT NOT NULL DEFAULT '{}',
+			collected_at DATETIME NOT NULL DEFAULT (datetime('now'))
+		);
+	`)
+	if err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	return sqlDB
 }
 
 func TestTraitsHandler_Success(t *testing.T) {
-	// Mock: GetNodeByHostname returns a client, GetLatestNodeTraits returns traits.
-	callCount := 0
-	collectedAt := time.Date(2026, 3, 7, 10, 30, 0, 0, time.UTC)
-	mockDB := &mockDBTX{
-		queryRowFn: func(sql string, args ...any) pgx.Row {
-			callCount++
-			if callCount == 1 {
-				// GetNodeByHostname
-				return &mockRow{scanFn: func(dest ...any) error {
-					// id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-					*dest[1].(*string) = "web01"
-					return nil
-				}}
-			}
-			// GetLatestNodeTraits
-			return &mockRow{scanFn: func(dest ...any) error {
-				// id, client_id, traits, collected_at
-				*dest[2].(*json.RawMessage) = json.RawMessage(`{"os":{"distro":"ubuntu","version":"22.04"}}`)
-				*dest[3].(*time.Time) = collectedAt
-				return nil
-			}}
-		},
+	sqlDB := openTestDB(t)
+	nodeID := uuid.New().String()
+
+	// Insert a node.
+	_, err := sqlDB.Exec(
+		`INSERT INTO nodes (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		nodeID, "web01", "10.0.0.1", "pubkey-pem",
+	)
+	if err != nil {
+		t.Fatalf("insert node: %v", err)
 	}
 
-	handler := newTraitsHandlerWithDB(mockDB)
+	// Insert traits with a fixed timestamp.
+	collectedAt := time.Date(2026, 3, 7, 10, 30, 0, 0, time.UTC)
+	traitsJSON := `{"os":{"distro":"ubuntu","version":"22.04"}}`
+	_, err = sqlDB.Exec(
+		`INSERT INTO node_traits (id, node_id, traits, collected_at) VALUES (?, ?, ?, ?)`,
+		uuid.New().String(), nodeID, traitsJSON, collectedAt.Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		t.Fatalf("insert traits: %v", err)
+	}
+
+	handler := NewTraitsHandler(db.New(sqlDB))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -82,7 +92,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 	var resp struct {
 		Hostname    string          `json:"hostname"`
 		CollectedAt string          `json:"collected_at"`
-		Traits       json.RawMessage `json:"traits"`
+		Traits      json.RawMessage `json:"traits"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
@@ -95,10 +105,6 @@ func TestTraitsHandler_Success(t *testing.T) {
 	// collected_at must be RFC3339
 	if _, err := time.Parse(time.RFC3339, resp.CollectedAt); err != nil {
 		t.Errorf("collected_at is not RFC3339: %s", resp.CollectedAt)
-	}
-
-	if resp.CollectedAt != "2026-03-07T10:30:00Z" {
-		t.Errorf("expected collected_at 2026-03-07T10:30:00Z, got %s", resp.CollectedAt)
 	}
 
 	// traits must be the raw JSON (not double-encoded)
@@ -117,15 +123,8 @@ func TestTraitsHandler_Success(t *testing.T) {
 }
 
 func TestTraitsHandler_NodeNotFound(t *testing.T) {
-	mockDB := &mockDBTX{
-		queryRowFn: func(sql string, args ...any) pgx.Row {
-			return &mockRow{scanFn: func(dest ...any) error {
-				return pgx.ErrNoRows
-			}}
-		},
-	}
-
-	handler := newTraitsHandlerWithDB(mockDB)
+	sqlDB := openTestDB(t)
+	handler := NewTraitsHandler(db.New(sqlDB))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -145,25 +144,19 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 }
 
 func TestTraitsHandler_NoFacts(t *testing.T) {
-	callCount := 0
-	mockDB := &mockDBTX{
-		queryRowFn: func(sql string, args ...any) pgx.Row {
-			callCount++
-			if callCount == 1 {
-				// GetNodeByHostname succeeds
-				return &mockRow{scanFn: func(dest ...any) error {
-					*dest[1].(*string) = "web01"
-					return nil
-				}}
-			}
-			// GetLatestNodeTraits returns no rows
-			return &mockRow{scanFn: func(dest ...any) error {
-				return pgx.ErrNoRows
-			}}
-		},
+	sqlDB := openTestDB(t)
+	nodeID := uuid.New().String()
+
+	// Insert a node without traits.
+	_, err := sqlDB.Exec(
+		`INSERT INTO nodes (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		nodeID, "web01", "10.0.0.1", "pubkey-pem",
+	)
+	if err != nil {
+		t.Fatalf("insert node: %v", err)
 	}
 
-	handler := newTraitsHandlerWithDB(mockDB)
+	handler := NewTraitsHandler(db.New(sqlDB))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

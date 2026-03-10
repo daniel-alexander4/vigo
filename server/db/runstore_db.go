@@ -2,8 +2,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/google/uuid"
 )
 
 // DBRunStore delegates run storage to the database via Queries.
@@ -29,15 +27,15 @@ func (s *DBRunStore) FinishRun(ctx context.Context, arg FinishRunParams) error {
 	return s.q.FinishRun(ctx, arg)
 }
 
-func (s *DBRunStore) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
+func (s *DBRunStore) GetRunByID(ctx context.Context, id string) (Run, error) {
 	return s.q.GetRunByID(ctx, id)
 }
 
-func (s *DBRunStore) ListAllRuns(ctx context.Context, limit int32) ([]Run, error) {
+func (s *DBRunStore) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 	return s.q.ListAllRuns(ctx, limit)
 }
 
-func (s *DBRunStore) ListRunResults(ctx context.Context, runID uuid.UUID) ([]RunResult, error) {
+func (s *DBRunStore) ListRunResults(ctx context.Context, runID string) ([]RunResult, error) {
 	return s.q.ListRunResults(ctx, runID)
 }
 
@@ -45,19 +43,19 @@ func (s *DBRunStore) ListRunsByNode(ctx context.Context, arg ListRunsByNodeParam
 	return s.q.ListRunsByNode(ctx, arg)
 }
 
-func (s *DBRunStore) LatestRunPerNode(ctx context.Context, nodeIDs []uuid.UUID) (map[uuid.UUID]*Run, error) {
-	// Use the optimized LATERAL JOIN query.
+func (s *DBRunStore) LatestRunPerNode(ctx context.Context, nodeIDs []string) (map[string]*Run, error) {
+	// Use the optimized correlated subquery.
 	rows, err := s.q.ListNodesWithLatestRun(ctx)
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[uuid.UUID]*Run, len(rows))
+	result := make(map[string]*Run, len(rows))
 	for _, r := range rows {
 		if r.LatestRunStatus.Valid {
 			run := Run{
 				NodeID:       r.ID,
 				Status:       r.LatestRunStatus.String,
-				ChangedCount: r.LatestRunChangedCount.Int32,
+				ChangedCount: r.LatestRunChangedCount.Int64,
 			}
 			result[r.ID] = &run
 		}

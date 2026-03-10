@@ -58,7 +58,9 @@ type mockWebhookQuerier struct {
 func (m *mockWebhookQuerier) ListActiveWebhooksByEvent(_ interface{}, event string) ([]db.Webhook, error) {
 	var result []db.Webhook
 	for _, wh := range m.webhooks {
-		for _, e := range wh.Events {
+		var events []string
+		json.Unmarshal([]byte(wh.Events), &events)
+		for _, e := range events {
 			if e == event {
 				result = append(result, wh)
 				break
@@ -84,11 +86,11 @@ func TestDispatchSendsCorrectHeaders(t *testing.T) {
 
 	secret := "test-secret-123"
 	wh := db.Webhook{
-		ID:     uuid.New(),
+		ID:     uuid.New().String(),
 		Url:    ts.URL,
 		Secret: secret,
-		Events: []string{"run.success"},
-		Active: true,
+		Events: `["run.success"]`,
+		Active: 1,
 	}
 
 	d := NewDispatcher(nil, DispatcherConfig{})
@@ -155,11 +157,11 @@ func TestDeliverRetriesOnServerError(t *testing.T) {
 	defer ts.Close()
 
 	wh := db.Webhook{
-		ID:     uuid.New(),
+		ID:     uuid.New().String(),
 		Url:    ts.URL,
 		Secret: "secret",
-		Events: []string{"run.failure"},
-		Active: true,
+		Events: `["run.failure"]`,
+		Active: 1,
 	}
 
 	d := NewDispatcher(nil, DispatcherConfig{})

@@ -9,14 +9,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
+	"database/sql"
+
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/hobnob/hobnob/server/api"
 	"github.com/hobnob/hobnob/server/bootstrap"
@@ -74,14 +75,22 @@ func run() error {
 		"api_listen", cfg.Server.APIListen,
 	)
 
-	// Connect to PostgreSQL.
-	pool, err := pgxpool.New(ctx, cfg.Database.DSN)
+	// Connect to SQLite.
+	sqlDB, err := sql.Open("sqlite3", cfg.Database.DSN)
 	if err != nil {
-		return fmt.Errorf("connecting to database: %w", err)
+		return fmt.Errorf("opening database: %w", err)
 	}
-	defer pool.Close()
+	defer sqlDB.Close()
 
-	if err := pool.Ping(ctx); err != nil {
+	// Enable SQLite features.
+	if _, err := sqlDB.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("enabling foreign keys: %w", err)
+	}
+	if _, err := sqlDB.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
+		return fmt.Errorf("setting WAL mode: %w", err)
+	}
+
+	if err := sqlDB.PingContext(ctx); err != nil {
 		return fmt.Errorf("pinging database: %w", err)
 	}
 	slog.Info("database connected")
@@ -91,7 +100,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("resolving migrations path: %w", err)
 	}
-	migDSN := dsnToMigrateScheme(cfg.Database.DSN)
+	migDSN := "sqlite3://" + cfg.Database.DSN
 	mig, err := migrate.New("file://"+absPath, migDSN)
 	if err != nil {
 		return fmt.Errorf("creating migrate instance: %w", err)
@@ -109,7 +118,7 @@ func run() error {
 	slog.Info("migrations complete")
 
 	// Initialize subsystems.
-	queries := db.New(pool)
+	queries := db.New(sqlDB)
 	reg := registry.NewRegistry(queries)
 
 	dangerous := os.Getenv("HOBNOB_DANGEROUS") == "1" || hasFlag("--dangerous")
@@ -306,18 +315,6 @@ func hasFlag(flag string) bool {
 	return false
 }
 
-// dsnToMigrateScheme converts a postgres DSN to the pgx5 scheme used by
-// golang-migrate. Handles both postgres:// and postgresql:// prefixes.
-func dsnToMigrateScheme(dsn string) string {
-	switch {
-	case strings.HasPrefix(dsn, "postgres://"):
-		return "pgx5://" + dsn[len("postgres://"):]
-	case strings.HasPrefix(dsn, "postgresql://"):
-		return "pgx5://" + dsn[len("postgresql://"):]
-	default:
-		return dsn
-	}
-}
 
 // envOrDefault returns the environment variable value or a default.
 func envOrDefault(key, def string) string {

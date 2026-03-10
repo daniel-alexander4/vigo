@@ -20,10 +20,10 @@ import (
 // agent-side evaluation. The server never renders templates or evaluates
 // conditionals — the agent does that locally with its own traits.
 func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
-	nodeID, err := uuid.Parse(req.GetNodeId())
-	if err != nil {
+	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
+	nodeID := req.GetNodeId()
 
 	// Validate node is not revoked.
 	if err := s.registry.ValidateNode(ctx, nodeID); err != nil {
@@ -69,7 +69,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	if len(inlineTraits) > 0 && json.Valid(inlineTraits) {
 		if _, dbErr := s.queries.InsertNodeTraits(ctx, db.InsertNodeTraitsParams{
 			NodeID: nodeID,
-			Traits:  json.RawMessage(inlineTraits),
+			Traits: string(inlineTraits),
 		}); dbErr != nil {
 			slog.Error("failed to store inline traits", "node_id", nodeID, "error", dbErr)
 		} else if s.traitsPruner != nil {

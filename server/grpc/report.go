@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/webhook"
-	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -18,16 +18,16 @@ import (
 // ReportResult handles the HobnobAgent.ReportResult RPC. It stores per-module
 // execution results in the database and marks the run as finished.
 func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultRequest) (*pb.ReportResultResponse, error) {
-	nodeID, err := uuid.Parse(req.GetNodeId())
-	if err != nil {
+	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
+	nodeID := req.GetNodeId()
 
 	// Create the run record (server generates the UUID).
 	run, err := s.runStore.CreateRun(ctx, db.CreateRunParams{
 		NodeID:      nodeID,
 		Status:      "running",
-		ModuleCount: int32(len(req.GetResults())),
+		ModuleCount: int64(len(req.GetResults())),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating run: %v", err)
@@ -35,11 +35,16 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	runID := run.ID
 
 	// Store each module result.
-	var changedCount, failedCount, skippedCount int32
+	var changedCount, failedCount, skippedCount int64
 	for _, result := range req.GetResults() {
-		errMsg := pgtype.Text{}
+		errMsg := sql.NullString{}
 		if result.GetErrorMessage() != "" {
-			errMsg = pgtype.Text{String: result.GetErrorMessage(), Valid: true}
+			errMsg = sql.NullString{String: result.GetErrorMessage(), Valid: true}
+		}
+
+		var changed int64
+		if result.GetChanged() {
+			changed = 1
 		}
 
 		_, err := s.runStore.CreateRunResult(ctx, db.CreateRunResultParams{
@@ -48,9 +53,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			ResourceType: result.GetResourceType(),
 			ResourceName: result.GetResourceName(),
 			ActionTaken:  result.GetActionTaken(),
-			Changed:      result.GetChanged(),
+			Changed:      changed,
 			ErrorMessage: errMsg,
-			DurationMs:   result.GetDurationMs(),
+			DurationMs:   int64(result.GetDurationMs()),
 		})
 		if err != nil {
 			slog.Error("failed to store run result",
@@ -95,7 +100,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	}
 
 	// Reuse node from interceptor context (avoids redundant DB lookup).
-	hostname := nodeID.String() // fallback
+	hostname := nodeID // fallback
 	if n := db.NodeFromContext(ctx); n != nil {
 		hostname = n.Hostname
 	}
@@ -126,14 +131,14 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		event := webhook.FormatRunEvent(runStatus)
 		s.dispatcher.Dispatch(ctx, event, webhook.EventPayload{
 			Node: &webhook.NodeInfo{
-				ID:       nodeID.String(),
+				ID:       nodeID,
 				Hostname: hostname,
 			},
 			Run: &webhook.RunInfo{
-				ID:      runID.String(),
+				ID:      runID,
 				Status:  runStatus,
-				Changed: changedCount,
-				Failed:  failedCount,
+				Changed: int32(changedCount),
+				Failed:  int32(failedCount),
 			},
 		})
 
@@ -141,13 +146,13 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		if changedCount > 0 {
 			s.dispatcher.Dispatch(ctx, "drift.detected", webhook.EventPayload{
 				Node: &webhook.NodeInfo{
-					ID:       nodeID.String(),
+					ID:       nodeID,
 					Hostname: hostname,
 				},
 				Run: &webhook.RunInfo{
-					ID:      runID.String(),
+					ID:      runID,
 					Status:  runStatus,
-					Changed: changedCount,
+					Changed: int32(changedCount),
 				},
 			})
 		}

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestDashboardHandler(t *testing.T) {
@@ -474,13 +472,13 @@ type testNode struct {
 
 type testRun struct {
 	id           uuid.UUID
-	nodeID     uuid.UUID
+	nodeID       uuid.UUID
 	hostname     string
 	startedAt    time.Time
 	status       string
-	moduleCount  int32
-	changedCount int32
-	failedCount  int32
+	moduleCount  int64
+	changedCount int64
+	failedCount  int64
 	results      []testRunResult
 }
 
@@ -491,7 +489,7 @@ type testRunResult struct {
 	actionTaken  string
 	changed      bool
 	errorMessage string
-	durationMs   int32
+	durationMs   int64
 }
 
 type testPlan struct {
@@ -519,9 +517,9 @@ type testData struct {
 }
 
 type testComplianceHistory struct {
-	recordedAt pgtype.Date
-	total      int32
-	compliant  int32
+	recordedAt string
+	total      int64
+	compliant  int64
 }
 
 // defaultTestData builds the standard test dataset.
@@ -663,7 +661,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 	runs := make([]RunRow, 0, len(m.data.runs))
 	for _, r := range m.data.runs {
 		runs = append(runs, RunRow{
-			ID:           r.id,
+			ID:           r.id.String(),
 			Hostname:     r.hostname,
 			StartedAt:    r.startedAt,
 			Status:       r.status,
@@ -689,7 +687,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 
 func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
 	total := len(m.data.nodes)
-	counts := map[string]int32{
+	counts := map[string]int64{
 		"compliant": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
 	}
 
@@ -724,7 +722,7 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 			Version:   "test",
 		},
 		CompliancePct: pct,
-		Total:         int32(total),
+		Total:         int64(total),
 		Compliant:     counts["compliant"],
 		Drifted:       counts["drifted"],
 		Failing:       counts["failing"],
@@ -752,7 +750,7 @@ func (m *mockDataSource) NodesData(baseInterval time.Duration, statusFilter stri
 			continue
 		}
 		rows = append(rows, NodeRow{
-			ID:         c.id,
+			ID:         c.id.String(),
 			Hostname:   c.hostname,
 			IPAddress:  c.ipAddress,
 			EnrolledAt: c.enrolled,
@@ -773,10 +771,10 @@ func (m *mockDataSource) NodesData(baseInterval time.Duration, statusFilter stri
 	}
 }
 
-func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Duration) (NodeDetailPageData, error) {
+func (m *mockDataSource) NodeDetailData(nodeID string, baseInterval time.Duration) (NodeDetailPageData, error) {
 	var found *testNode
 	for i := range m.data.nodes {
-		if m.data.nodes[i].id == nodeID {
+		if m.data.nodes[i].id.String() == nodeID {
 			found = &m.data.nodes[i]
 			break
 		}
@@ -786,7 +784,7 @@ func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Dura
 	}
 
 	nodeRow := NodeRow{
-		ID:         found.id,
+		ID:         found.id.String(),
 		Hostname:   found.hostname,
 		IPAddress:  found.ipAddress,
 		EnrolledAt: found.enrolled,
@@ -797,7 +795,7 @@ func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Dura
 	var runs []NodeDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range m.data.runs {
-		if r.nodeID == nodeID {
+		if r.nodeID.String() == nodeID {
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
@@ -812,7 +810,7 @@ func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Dura
 			}
 			runs = append(runs, NodeDetailRunRow{
 				RunRow: RunRow{
-					ID:           r.id,
+					ID:           r.id.String(),
 					Hostname:     r.hostname,
 					StartedAt:    r.startedAt,
 					Status:       r.status,
@@ -831,7 +829,8 @@ func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Dura
 		}
 	}
 
-	facts := m.data.facts[nodeID]
+	parsedID, _ := uuid.Parse(nodeID)
+	facts := m.data.facts[parsedID]
 	if facts == nil {
 		facts = map[string]any{}
 	}
@@ -856,7 +855,7 @@ func (m *mockDataSource) RunsData(statusFilter string) RunsPageData {
 			continue
 		}
 		rows = append(rows, RunRow{
-			ID:           r.id,
+			ID:           r.id.String(),
 			Hostname:     r.hostname,
 			StartedAt:    r.startedAt,
 			Status:       r.status,
@@ -878,9 +877,9 @@ func (m *mockDataSource) RunsData(statusFilter string) RunsPageData {
 	}
 }
 
-func (m *mockDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error) {
+func (m *mockDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 	for _, r := range m.data.runs {
-		if r.id == runID {
+		if r.id.String() == runID {
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
@@ -899,9 +898,9 @@ func (m *mockDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, erro
 					ActiveNav: "runs",
 					Version:   "test",
 				},
-				NodeID: r.nodeID,
+				NodeID: r.nodeID.String(),
 				Run: RunRow{
-					ID:           r.id,
+					ID:           r.id.String(),
 					Hostname:     r.hostname,
 					StartedAt:    r.startedAt,
 					Status:       r.status,
@@ -936,9 +935,9 @@ func (m *mockDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 	}, nil
 }
 
-func (m *mockDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, error) {
+func (m *mockDataSource) PlanDetailData(planID string) (PlanDetailPageData, error) {
 	for _, p := range m.data.plans {
-		if p.id == planID {
+		if p.id.String() == planID {
 			var results []PlanResultRow
 			createCount, updateCount, deleteCount, skipCount := 0, 0, 0, 0
 			for _, r := range p.results {
@@ -967,8 +966,8 @@ func (m *mockDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, e
 					ActiveNav: "nodes",
 					Version:   "test",
 				},
-				PlanID:      p.id,
-				NodeID:      p.nodeID,
+				PlanID:      p.id.String(),
+				NodeID:      p.nodeID.String(),
 				Hostname:    p.hostname,
 				CreatedAt:   p.created,
 				Results:     results,
@@ -995,10 +994,4 @@ func actionColor(action string) string {
 	default:
 		return "muted"
 	}
-}
-
-// traitsJSON helper for test validation.
-func traitsJSON(facts map[string]any) json.RawMessage {
-	b, _ := json.Marshal(facts)
-	return b
 }

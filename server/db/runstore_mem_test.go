@@ -2,16 +2,16 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestMemRunStore_CreateAndGet(t *testing.T) {
 	s := NewMemRunStore(10)
 	ctx := context.Background()
-	nodeID := uuid.New()
+	nodeID := uuid.New().String()
 
 	run, err := s.CreateRun(ctx, CreateRunParams{
 		NodeID:      nodeID,
@@ -21,8 +21,8 @@ func TestMemRunStore_CreateAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
 	}
-	if run.ID == uuid.Nil {
-		t.Fatal("expected non-nil run ID")
+	if run.ID == "" {
+		t.Fatal("expected non-empty run ID")
 	}
 	if run.NodeID != nodeID {
 		t.Fatalf("expected node %s, got %s", nodeID, run.NodeID)
@@ -45,7 +45,7 @@ func TestMemRunStore_CreateRunResult(t *testing.T) {
 	ctx := context.Background()
 
 	run, _ := s.CreateRun(ctx, CreateRunParams{
-		NodeID:      uuid.New(),
+		NodeID:      uuid.New().String(),
 		Status:      "running",
 		ModuleCount: 1,
 	})
@@ -56,8 +56,8 @@ func TestMemRunStore_CreateRunResult(t *testing.T) {
 		ResourceType: "package",
 		ResourceName: "nginx",
 		ActionTaken:  "created",
-		Changed:      true,
-		ErrorMessage: pgtype.Text{},
+		Changed:      1,
+		ErrorMessage: sql.NullString{},
 		DurationMs:   42,
 	})
 	if err != nil {
@@ -81,7 +81,7 @@ func TestMemRunStore_FinishRun(t *testing.T) {
 	ctx := context.Background()
 
 	run, _ := s.CreateRun(ctx, CreateRunParams{
-		NodeID:      uuid.New(),
+		NodeID:      uuid.New().String(),
 		Status:      "running",
 		ModuleCount: 2,
 	})
@@ -111,7 +111,7 @@ func TestMemRunStore_FinishRun(t *testing.T) {
 
 func TestMemRunStore_FinishRun_NotFound(t *testing.T) {
 	s := NewMemRunStore(10)
-	err := s.FinishRun(context.Background(), FinishRunParams{ID: uuid.New()})
+	err := s.FinishRun(context.Background(), FinishRunParams{ID: uuid.New().String()})
 	if err == nil {
 		t.Fatal("expected error for missing run")
 	}
@@ -120,7 +120,7 @@ func TestMemRunStore_FinishRun_NotFound(t *testing.T) {
 func TestMemRunStore_ListRunsByNode(t *testing.T) {
 	s := NewMemRunStore(10)
 	ctx := context.Background()
-	nodeID := uuid.New()
+	nodeID := uuid.New().String()
 
 	for i := 0; i < 5; i++ {
 		s.CreateRun(ctx, CreateRunParams{NodeID: nodeID, Status: "success", ModuleCount: 1})
@@ -137,7 +137,7 @@ func TestMemRunStore_ListRunsByNode(t *testing.T) {
 
 func TestMemRunStore_ListRunsByNode_Empty(t *testing.T) {
 	s := NewMemRunStore(10)
-	runs, err := s.ListRunsByNode(context.Background(), ListRunsByNodeParams{NodeID: uuid.New(), Limit: 10})
+	runs, err := s.ListRunsByNode(context.Background(), ListRunsByNodeParams{NodeID: uuid.New().String(), Limit: 10})
 	if err != nil {
 		t.Fatalf("ListRunsByNode: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestMemRunStore_ListAllRuns(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		s.CreateRun(ctx, CreateRunParams{NodeID: uuid.New(), Status: "success", ModuleCount: 1})
+		s.CreateRun(ctx, CreateRunParams{NodeID: uuid.New().String(), Status: "success", ModuleCount: 1})
 	}
 
 	runs, err := s.ListAllRuns(ctx, 3)
@@ -167,9 +167,9 @@ func TestMemRunStore_Eviction(t *testing.T) {
 	capacity := 3
 	s := NewMemRunStore(capacity)
 	ctx := context.Background()
-	nodeID := uuid.New()
+	nodeID := uuid.New().String()
 
-	var firstRunID uuid.UUID
+	var firstRunID string
 	for i := 0; i < 5; i++ {
 		run, _ := s.CreateRun(ctx, CreateRunParams{NodeID: nodeID, Status: "success", ModuleCount: 1})
 		if i == 0 {
@@ -194,14 +194,14 @@ func TestMemRunStore_LatestRunPerNode(t *testing.T) {
 	s := NewMemRunStore(10)
 	ctx := context.Background()
 
-	node1, node2, node3 := uuid.New(), uuid.New(), uuid.New()
+	node1, node2, node3 := uuid.New().String(), uuid.New().String(), uuid.New().String()
 
 	// Create runs for node1 and node2 only.
 	s.CreateRun(ctx, CreateRunParams{NodeID: node1, Status: "success", ModuleCount: 1})
 	run1b, _ := s.CreateRun(ctx, CreateRunParams{NodeID: node1, Status: "failure", ModuleCount: 2})
 	run2, _ := s.CreateRun(ctx, CreateRunParams{NodeID: node2, Status: "success", ModuleCount: 1})
 
-	result, err := s.LatestRunPerNode(ctx, []uuid.UUID{node1, node2, node3})
+	result, err := s.LatestRunPerNode(ctx, []string{node1, node2, node3})
 	if err != nil {
 		t.Fatalf("LatestRunPerNode: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestMemRunStore_DefaultCapacity(t *testing.T) {
 
 func TestMemRunStore_GetRunByID_NotFound(t *testing.T) {
 	s := NewMemRunStore(10)
-	_, err := s.GetRunByID(context.Background(), uuid.New())
+	_, err := s.GetRunByID(context.Background(), uuid.New().String())
 	if err == nil {
 		t.Fatal("expected error for missing run")
 	}
@@ -242,7 +242,7 @@ func TestMemRunStore_GetRunByID_NotFound(t *testing.T) {
 
 func TestMemRunStore_ListRunResults_NotFound(t *testing.T) {
 	s := NewMemRunStore(10)
-	_, err := s.ListRunResults(context.Background(), uuid.New())
+	_, err := s.ListRunResults(context.Background(), uuid.New().String())
 	if err == nil {
 		t.Fatal("expected error for missing run")
 	}

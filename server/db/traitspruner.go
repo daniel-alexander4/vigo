@@ -5,29 +5,27 @@ import (
 	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-// TraitsPruner accumulates node UUIDs that had traits inserted and
+// TraitsPruner accumulates node IDs that had traits inserted and
 // periodically prunes old trait snapshots, removing per-check-in DELETE
 // latency from the hot path.
 type TraitsPruner struct {
 	mu      sync.Mutex
-	pending map[uuid.UUID]struct{}
+	pending map[string]struct{}
 	queries *Queries
 }
 
 // NewTraitsPruner creates a pruner backed by the given Queries.
 func NewTraitsPruner(queries *Queries) *TraitsPruner {
 	return &TraitsPruner{
-		pending: make(map[uuid.UUID]struct{}),
+		pending: make(map[string]struct{}),
 		queries: queries,
 	}
 }
 
 // Mark records a node as needing trait pruning.
-func (p *TraitsPruner) Mark(id uuid.UUID) {
+func (p *TraitsPruner) Mark(id string) {
 	p.mu.Lock()
 	p.pending[id] = struct{}{}
 	p.mu.Unlock()
@@ -57,11 +55,14 @@ func (p *TraitsPruner) Flush(ctx context.Context) {
 		return
 	}
 	batch := p.pending
-	p.pending = make(map[uuid.UUID]struct{})
+	p.pending = make(map[string]struct{})
 	p.mu.Unlock()
 
 	for id := range batch {
-		if err := p.queries.PruneNodeTraits(ctx, id); err != nil {
+		if err := p.queries.PruneNodeTraits(ctx, PruneNodeTraitsParams{
+			NodeID:   id,
+			NodeID_2: id,
+		}); err != nil {
 			slog.Error("failed to prune node traits", "node_id", id, "error", err)
 		}
 	}

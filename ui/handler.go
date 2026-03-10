@@ -22,11 +22,11 @@ type DataSource interface {
 	ComplianceData(baseInterval time.Duration) CompliancePageData
 	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
 	NodesData(baseInterval time.Duration, statusFilter string) NodesPageData
-	NodeDetailData(nodeID uuid.UUID, baseInterval time.Duration) (NodeDetailPageData, error)
+	NodeDetailData(nodeID string, baseInterval time.Duration) (NodeDetailPageData, error)
 	RunsData(statusFilter string) RunsPageData
-	RunDetailData(runID uuid.UUID) (RunDetailPageData, error)
+	RunDetailData(runID string) (RunDetailPageData, error)
 	ConfigData(hostname string) (ConfigPageData, error)
-	PlanDetailData(planID uuid.UUID) (PlanDetailPageData, error)
+	PlanDetailData(planID string) (PlanDetailPageData, error)
 }
 
 // Handler serves all UI pages.
@@ -114,25 +114,25 @@ type DashboardPageData struct {
 
 // RunRow is a single run displayed in a table.
 type RunRow struct {
-	ID           uuid.UUID
+	ID           string
 	Hostname     string
 	StartedAt    time.Time
 	Status       string
-	ModuleCount  int32
-	ChangedCount int32
-	FailedCount  int32
+	ModuleCount  int64
+	ChangedCount int64
+	FailedCount  int64
 }
 
 // CompliancePageData holds data for the compliance page.
 type CompliancePageData struct {
 	PageData
 	CompliancePct float64
-	Total         int32
-	Compliant     int32
-	Drifted       int32
-	Failing       int32
-	Stale         int32
-	Unknown       int32
+	Total         int64
+	Compliant     int64
+	Drifted       int64
+	Failing       int64
+	Stale         int64
+	Unknown       int64
 	SparklineData []float64
 	NonCompliant  []ComplianceRow
 }
@@ -155,7 +155,7 @@ type DashboardStatsFragmentData struct {
 
 // NodeRow is a single node displayed in the nodes table.
 type NodeRow struct {
-	ID         uuid.UUID
+	ID         string
 	Hostname   string
 	IPAddress  string
 	EnrolledAt time.Time
@@ -185,7 +185,7 @@ type RunResultRow struct {
 	ActionTaken  string
 	Changed      bool
 	ErrorMessage string
-	DurationMs   int32
+	DurationMs   int64
 }
 
 // NodeDetailPageData holds data for the node detail page.
@@ -201,8 +201,8 @@ type NodeDetailPageData struct {
 type DriftPoint struct {
 	StartedAt    time.Time
 	Status       string
-	ChangedCount int32
-	FailedCount  int32
+	ChangedCount int64
+	FailedCount  int64
 }
 
 // RunsPageData holds data for the runs list page.
@@ -217,7 +217,7 @@ type RunsPageData struct {
 type RunDetailPageData struct {
 	PageData
 	Run     RunRow
-	NodeID  uuid.UUID
+	NodeID  string
 	Results []RunResultRow
 }
 
@@ -240,8 +240,8 @@ type PlanResultRow struct {
 // PlanDetailPageData holds data for the plan detail page.
 type PlanDetailPageData struct {
 	PageData
-	PlanID      uuid.UUID
-	NodeID      uuid.UUID
+	PlanID      string
+	NodeID      string
 	Hostname    string
 	CreatedAt   time.Time
 	Results     []PlanResultRow
@@ -285,13 +285,12 @@ func (h *Handler) Nodes(w http.ResponseWriter, r *http.Request) {
 // NodeDetail renders the node detail page with runs, facts, and drift history.
 func (h *Handler) NodeDetail(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	nodeID, err := uuid.Parse(idStr)
-	if err != nil {
+	if _, err := uuid.Parse(idStr); err != nil {
 		http.Error(w, "invalid node ID", http.StatusBadRequest)
 		return
 	}
 
-	data, err := h.dataSource.NodeDetailData(nodeID, h.baseInterval)
+	data, err := h.dataSource.NodeDetailData(idStr, h.baseInterval)
 	if err != nil {
 		http.Error(w, "node not found", http.StatusNotFound)
 		return
@@ -311,13 +310,12 @@ func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 // RunDetail renders the run detail page with per-module results.
 func (h *Handler) RunDetail(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	runID, err := uuid.Parse(idStr)
-	if err != nil {
+	if _, err := uuid.Parse(idStr); err != nil {
 		http.Error(w, "invalid run ID", http.StatusBadRequest)
 		return
 	}
 
-	data, err := h.dataSource.RunDetailData(runID)
+	data, err := h.dataSource.RunDetailData(idStr)
 	if err != nil {
 		http.Error(w, "run not found", http.StatusNotFound)
 		return
@@ -341,13 +339,12 @@ func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
 // Plans renders the plan detail page with color-coded actions.
 func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	planID, err := uuid.Parse(idStr)
-	if err != nil {
+	if _, err := uuid.Parse(idStr); err != nil {
 		http.Error(w, "invalid plan ID", http.StatusBadRequest)
 		return
 	}
 
-	data, err := h.dataSource.PlanDetailData(planID)
+	data, err := h.dataSource.PlanDetailData(idStr)
 	if err != nil {
 		http.Error(w, "plan not found", http.StatusNotFound)
 		return
@@ -409,7 +406,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 	failureCount := 0
 
 	for _, n := range nodes {
-		if n.Revoked {
+		if n.Revoked != 0 {
 			continue
 		}
 		if n.LastSeen.Valid && time.Since(n.LastSeen.Time) < time.Hour {
@@ -435,7 +432,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		slog.Error("failed to list runs", "error", err)
 	}
 
-	nodeMap := make(map[uuid.UUID]string, len(nodes))
+	nodeMap := make(map[string]string, len(nodes))
 	for _, n := range nodes {
 		nodeMap[n.ID] = n.Hostname
 	}
@@ -475,7 +472,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 	var nonCompliant []ComplianceRow
 
 	for _, n := range nodes {
-		if n.Revoked {
+		if n.Revoked != 0 {
 			continue
 		}
 		lastSeen := time.Time{}
@@ -505,7 +502,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 	}
 
 	summary := compliance.Summary(statuses)
-	total := int32(len(statuses))
+	total := int64(len(statuses))
 	compPct := float64(0)
 	if total > 0 {
 		compPct = float64(summary["compliant"]) / float64(total) * 100
@@ -528,11 +525,11 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 		PageData:      PageData{Title: "Compliance", ActiveNav: "compliance"},
 		CompliancePct: compPct,
 		Total:         total,
-		Compliant:     summary["compliant"],
-		Drifted:       summary["drifted"],
-		Failing:       summary["failing"],
-		Stale:         summary["stale"],
-		Unknown:       summary["unknown"],
+		Compliant:     int64(summary["compliant"]),
+		Drifted:       int64(summary["drifted"]),
+		Failing:       int64(summary["failing"]),
+		Stale:         int64(summary["stale"]),
+		Unknown:       int64(summary["unknown"]),
 		SparklineData: sparkData,
 		NonCompliant:  nonCompliant,
 	}
@@ -558,7 +555,7 @@ func (ds *dbDataSource) NodesData(baseInterval time.Duration, statusFilter strin
 
 	var rows []NodeRow
 	for _, n := range nodes {
-		if n.Revoked {
+		if n.Revoked != 0 {
 			continue
 		}
 		status, _ := ds.nodeComplianceInfo(ctx, n, baseInterval)
@@ -590,7 +587,7 @@ func (ds *dbDataSource) NodesData(baseInterval time.Duration, statusFilter strin
 	}
 }
 
-func (ds *dbDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Duration) (NodeDetailPageData, error) {
+func (ds *dbDataSource) NodeDetailData(nodeID string, baseInterval time.Duration) (NodeDetailPageData, error) {
 	ctx := context.Background()
 	node, err := ds.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
@@ -641,7 +638,7 @@ func (ds *dbDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Durat
 				ResourceType: res.ResourceType,
 				ResourceName: res.ResourceName,
 				ActionTaken:  res.ActionTaken,
-				Changed:      res.Changed,
+				Changed:      res.Changed != 0,
 				ErrorMessage: errMsg,
 				DurationMs:   res.DurationMs,
 			})
@@ -672,7 +669,7 @@ func (ds *dbDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Durat
 	facts := make(map[string]any)
 	cf, err := ds.queries.GetLatestNodeTraits(ctx, nodeID)
 	if err == nil {
-		_ = json.Unmarshal(cf.Traits, &facts)
+		_ = json.Unmarshal([]byte(cf.Traits), &facts)
 	}
 
 	return NodeDetailPageData{
@@ -697,7 +694,7 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 	if err != nil {
 		slog.Error("failed to list nodes for hostname lookup", "error", err)
 	}
-	nodeMap := make(map[uuid.UUID]string, len(nodes))
+	nodeMap := make(map[string]string, len(nodes))
 	for _, n := range nodes {
 		nodeMap[n.ID] = n.Hostname
 	}
@@ -726,7 +723,7 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 	}
 }
 
-func (ds *dbDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error) {
+func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 	ctx := context.Background()
 	r, err := ds.queries.GetRunByID(ctx, runID)
 	if err != nil {
@@ -754,7 +751,7 @@ func (ds *dbDataSource) RunDetailData(runID uuid.UUID) (RunDetailPageData, error
 			ResourceType: res.ResourceType,
 			ResourceName: res.ResourceName,
 			ActionTaken:  res.ActionTaken,
-			Changed:      res.Changed,
+			Changed:      res.Changed != 0,
 			ErrorMessage: errMsg,
 			DurationMs:   res.DurationMs,
 		})
@@ -793,7 +790,7 @@ func (ds *dbDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 	}, nil
 }
 
-func (ds *dbDataSource) PlanDetailData(planID uuid.UUID) (PlanDetailPageData, error) {
+func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error) {
 	ctx := context.Background()
 	p, err := ds.queries.GetPlanByID(ctx, planID)
 	if err != nil {

@@ -246,7 +246,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		"has_token", req.Token != "",
 	)
 
-	var nodeID fmt.Stringer
+	var nodeID string
 	var err error
 
 	if req.Token != "" {
@@ -284,14 +284,14 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("node bootstrapped",
 		"hostname", req.Hostname,
-		"node_id", nodeID.String(),
+		"node_id", nodeID,
 	)
 
 	// Dispatch webhook event.
 	if h.dispatcher != nil {
 		h.dispatcher.Dispatch(r.Context(), "node.enrolled", webhook.EventPayload{
 			Node: &webhook.NodeInfo{
-				ID:       nodeID.String(),
+				ID:       nodeID,
 				Hostname: req.Hostname,
 				IP:       req.IPAddress,
 			},
@@ -299,7 +299,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := bootstrapRegisterResponse{
-		NodeID:        nodeID.String(),
+		NodeID:        nodeID,
 		SignedCertPEM: string(signedCert),
 		CACertPEM:     string(h.ca.CACertPEM()),
 	}

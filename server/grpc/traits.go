@@ -16,10 +16,10 @@ import (
 // collected traits as JSONB in the database and prunes old entries to enforce
 // a 10-snapshot retention policy (DB-04).
 func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsRequest) (*pb.ReportTraitsResponse, error) {
-	nodeID, err := uuid.Parse(req.GetNodeId())
-	if err != nil {
+	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
+	nodeID := req.GetNodeId()
 
 	traitsJSON := req.GetTraitsJson()
 	if len(traitsJSON) == 0 {
@@ -32,9 +32,9 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	}
 
 	// Store the traits.
-	_, err = s.queries.InsertNodeTraits(ctx, db.InsertNodeTraitsParams{
+	_, err := s.queries.InsertNodeTraits(ctx, db.InsertNodeTraitsParams{
 		NodeID: nodeID,
-		Traits:  json.RawMessage(traitsJSON),
+		Traits: string(traitsJSON),
 	})
 	if err != nil {
 		slog.Error("failed to insert node traits",

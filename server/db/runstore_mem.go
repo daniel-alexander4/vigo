@@ -2,13 +2,13 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // MemRunStore stores runs in memory using per-node ring buffers.
@@ -16,9 +16,9 @@ import (
 // Enable via tuning.run_store: "memory" in server.yaml.
 type MemRunStore struct {
 	mu       sync.RWMutex
-	byID     map[uuid.UUID]*memRun        // run UUID → run + results
-	byNode   map[uuid.UUID]*nodeRunBuffer // node UUID → ring of run UUIDs
-	capacity int                          // max runs per node
+	byID     map[string]*memRun        // run UUID string → run + results
+	byNode   map[string]*nodeRunBuffer // node UUID string → ring of run IDs
+	capacity int                       // max runs per node
 }
 
 type memRun struct {
@@ -26,9 +26,9 @@ type memRun struct {
 	results []RunResult
 }
 
-// nodeRunBuffer is a bounded ring buffer of run UUIDs per node.
+// nodeRunBuffer is a bounded ring buffer of run IDs per node.
 type nodeRunBuffer struct {
-	runs []uuid.UUID // newest first
+	runs []string // newest first
 }
 
 // NewMemRunStore creates an in-memory run store keeping at most capacity
@@ -38,15 +38,15 @@ func NewMemRunStore(capacity int) *MemRunStore {
 		capacity = 20
 	}
 	return &MemRunStore{
-		byID:     make(map[uuid.UUID]*memRun),
-		byNode:   make(map[uuid.UUID]*nodeRunBuffer),
+		byID:     make(map[string]*memRun),
+		byNode:   make(map[string]*nodeRunBuffer),
 		capacity: capacity,
 	}
 }
 
 func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, error) {
 	run := Run{
-		ID:          uuid.New(),
+		ID:          uuid.New().String(),
 		NodeID:      arg.NodeID,
 		StartedAt:   time.Now(),
 		Status:      arg.Status,
@@ -61,7 +61,7 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 		s.byNode[arg.NodeID] = buf
 	}
 	// Prepend (newest first).
-	buf.runs = append([]uuid.UUID{run.ID}, buf.runs...)
+	buf.runs = append([]string{run.ID}, buf.runs...)
 	// Evict oldest if over capacity.
 	if len(buf.runs) > s.capacity {
 		evictID := buf.runs[len(buf.runs)-1]
@@ -75,7 +75,7 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 
 func (s *MemRunStore) CreateRunResult(_ context.Context, arg CreateRunResultParams) (RunResult, error) {
 	result := RunResult{
-		ID:           uuid.New(),
+		ID:           uuid.New().String(),
 		RunID:        arg.RunID,
 		ModuleName:   arg.ModuleName,
 		ResourceType: arg.ResourceType,
@@ -108,11 +108,11 @@ func (s *MemRunStore) FinishRun(_ context.Context, arg FinishRunParams) error {
 	mr.run.ChangedCount = arg.ChangedCount
 	mr.run.FailedCount = arg.FailedCount
 	mr.run.SkippedCount = arg.SkippedCount
-	mr.run.FinishedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	mr.run.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
 	return nil
 }
 
-func (s *MemRunStore) GetRunByID(_ context.Context, id uuid.UUID) (Run, error) {
+func (s *MemRunStore) GetRunByID(_ context.Context, id string) (Run, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -123,7 +123,7 @@ func (s *MemRunStore) GetRunByID(_ context.Context, id uuid.UUID) (Run, error) {
 	return mr.run, nil
 }
 
-func (s *MemRunStore) ListAllRuns(_ context.Context, limit int32) ([]Run, error) {
+func (s *MemRunStore) ListAllRuns(_ context.Context, limit int64) ([]Run, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -137,13 +137,13 @@ func (s *MemRunStore) ListAllRuns(_ context.Context, limit int32) ([]Run, error)
 		return runs[i].StartedAt.After(runs[j].StartedAt)
 	})
 
-	if int32(len(runs)) > limit {
+	if int64(len(runs)) > limit {
 		runs = runs[:limit]
 	}
 	return runs, nil
 }
 
-func (s *MemRunStore) ListRunResults(_ context.Context, runID uuid.UUID) ([]RunResult, error) {
+func (s *MemRunStore) ListRunResults(_ context.Context, runID string) ([]RunResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -184,11 +184,11 @@ func (s *MemRunStore) ListRunsByNode(_ context.Context, arg ListRunsByNodeParams
 	return runs, nil
 }
 
-func (s *MemRunStore) LatestRunPerNode(_ context.Context, nodeIDs []uuid.UUID) (map[uuid.UUID]*Run, error) {
+func (s *MemRunStore) LatestRunPerNode(_ context.Context, nodeIDs []string) (map[string]*Run, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make(map[uuid.UUID]*Run, len(nodeIDs))
+	result := make(map[string]*Run, len(nodeIDs))
 	for _, nodeID := range nodeIDs {
 		buf, ok := s.byNode[nodeID]
 		if !ok || len(buf.runs) == 0 {

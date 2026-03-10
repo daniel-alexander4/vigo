@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"database/sql"
 	"encoding/pem"
 	"fmt"
 	"log"
@@ -18,13 +19,10 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
+	_ "github.com/mattn/go-sqlite3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -41,41 +39,28 @@ import (
 )
 
 var (
-	testPool    *pgxpool.Pool
+	testDB      *sql.DB
 	testCertDir string
 )
 
 func TestMain(m *testing.M) {
-	ctx := context.Background()
-
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
-		postgres.WithDatabase("hobnob_test"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30*time.Second),
-		),
-	)
+	// Create a temp dir for the SQLite DB file and certs.
+	tmpDir, err := os.MkdirTemp("", "hobnob-grpc-test-*")
 	if err != nil {
-		log.Fatalf("failed to start postgres container: %v", err)
+		log.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer func() {
-		if err := pgContainer.Terminate(ctx); err != nil {
-			log.Fatalf("failed to terminate postgres container: %v", err)
-		}
-	}()
+	defer os.RemoveAll(tmpDir)
 
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	dbPath := filepath.Join(tmpDir, "test.db")
+	testDB, err = sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
 	if err != nil {
-		log.Fatalf("failed to get connection string: %v", err)
+		log.Fatalf("failed to open sqlite: %v", err)
 	}
+	defer testDB.Close()
 
 	// Run migrations.
 	migrationsPath := findMigrationsDir()
-	mig, err := migrate.New("file://"+migrationsPath, "pgx5://"+connStr[len("postgres://"):])
+	mig, err := migrate.New("file://"+migrationsPath, "sqlite3://"+dbPath)
 	if err != nil {
 		log.Fatalf("failed to create migrate instance: %v", err)
 	}
@@ -84,19 +69,11 @@ func TestMain(m *testing.M) {
 	}
 	mig.Close()
 
-	testPool, err = pgxpool.New(ctx, connStr)
-	if err != nil {
-		log.Fatalf("failed to create pool: %v", err)
-	}
-	defer testPool.Close()
-
 	// Generate test TLS certs.
-	testCertDir, err = os.MkdirTemp("", "hobnob-test-certs-*")
-	if err != nil {
-		log.Fatalf("failed to create temp cert dir: %v", err)
+	testCertDir = filepath.Join(tmpDir, "certs")
+	if err := os.MkdirAll(testCertDir, 0755); err != nil {
+		log.Fatalf("failed to create cert dir: %v", err)
 	}
-	defer os.RemoveAll(testCertDir)
-
 	if err := generateTestCerts(testCertDir); err != nil {
 		log.Fatalf("failed to generate test certs: %v", err)
 	}
@@ -126,12 +103,14 @@ func findMigrationsDir() string {
 func startTestServer(t *testing.T) (string, func()) {
 	t.Helper()
 	ctx := context.Background()
-	_, err := testPool.Exec(ctx, "TRUNCATE approved_patterns, nodes CASCADE")
-	if err != nil {
-		t.Fatalf("failed to truncate tables: %v", err)
+	// Clean tables in correct order for FK constraints.
+	for _, table := range []string{"run_results", "runs", "node_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "nodes"} {
+		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+			t.Fatalf("failed to delete from %s: %v", table, err)
+		}
 	}
 
-	queries := db.New(testPool)
+	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
 	// Create a minimal config store (empty node-configs dir with nodes/, modules/, and roles/ subdirs).
@@ -245,7 +224,7 @@ func TestRegisterFlow(t *testing.T) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	queries := db.New(testPool)
+	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
 	// Add an approved pattern.
@@ -298,7 +277,7 @@ func TestCheckInRevoked(t *testing.T) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	queries := db.New(testPool)
+	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
 	// Register a client.
@@ -335,7 +314,7 @@ func TestCheckInRevoked(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:         nodeID.String(),
+		NodeId:           nodeID,
 		StateFingerprint: "test-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -361,7 +340,7 @@ func TestCheckInSuccess(t *testing.T) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	queries := db.New(testPool)
+	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
 	// Register a client.
@@ -393,7 +372,7 @@ func TestCheckInSuccess(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, priv)
 
 	resp, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:         nodeID.String(),
+		NodeId:           nodeID,
 		StateFingerprint: "some-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -415,7 +394,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	defer conn.Close()
 
 	ctx := context.Background()
-	queries := db.New(testPool)
+	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
 	// Register a client.
@@ -452,7 +431,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, wrongPriv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:         nodeID.String(),
+		NodeId:           nodeID,
 		StateFingerprint: "fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),

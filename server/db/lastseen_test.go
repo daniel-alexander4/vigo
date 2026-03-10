@@ -2,43 +2,54 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // mockExecDBTX implements DBTX, capturing Exec calls and optionally returning errors.
 type mockExecDBTX struct {
-	execFn func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	execFn func(ctx context.Context, sql string, args ...any) (sql.Result, error)
 }
 
-func (m *mockExecDBTX) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-	return m.execFn(ctx, sql, args...)
+func (m *mockExecDBTX) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	return m.execFn(ctx, query, args...)
 }
 
-func (m *mockExecDBTX) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (m *mockExecDBTX) PrepareContext(context.Context, string) (*sql.Stmt, error) {
 	return nil, nil
 }
 
-func (m *mockExecDBTX) QueryRow(context.Context, string, ...any) pgx.Row {
+func (m *mockExecDBTX) QueryContext(context.Context, string, ...any) (*sql.Rows, error) {
+	return nil, nil
+}
+
+func (m *mockExecDBTX) QueryRowContext(context.Context, string, ...any) *sql.Row {
 	return nil
 }
+
+// mockResult implements sql.Result for tests.
+type mockResult struct {
+	rowsAffected int64
+}
+
+func (r mockResult) LastInsertId() (int64, error) { return 0, nil }
+func (r mockResult) RowsAffected() (int64, error) { return r.rowsAffected, nil }
 
 func TestLastSeenBatcher_FlushSuccess(t *testing.T) {
 	var execCalled int
 	mock := &mockExecDBTX{
-		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+		execFn: func(_ context.Context, _ string, _ ...any) (sql.Result, error) {
 			execCalled++
-			return pgconn.NewCommandTag("UPDATE 2"), nil
+			return mockResult{rowsAffected: 2}, nil
 		},
 	}
 
 	b := NewLastSeenBatcher(New(mock))
 
-	id1, id2 := uuid.New(), uuid.New()
+	id1, id2 := uuid.New().String(), uuid.New().String()
 	b.Mark(id1)
 	b.Mark(id2)
 	b.Flush(context.Background())
@@ -58,18 +69,18 @@ func TestLastSeenBatcher_FlushError_RetriesIDs(t *testing.T) {
 	callCount := 0
 	dbErr := errors.New("connection refused")
 	mock := &mockExecDBTX{
-		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+		execFn: func(_ context.Context, _ string, _ ...any) (sql.Result, error) {
 			callCount++
 			if callCount == 1 {
-				return pgconn.CommandTag{}, dbErr
+				return nil, dbErr
 			}
-			return pgconn.NewCommandTag("UPDATE 2"), nil
+			return mockResult{rowsAffected: 2}, nil
 		},
 	}
 
 	b := NewLastSeenBatcher(New(mock))
 
-	id1, id2 := uuid.New(), uuid.New()
+	id1, id2 := uuid.New().String(), uuid.New().String()
 	b.Mark(id1)
 	b.Mark(id2)
 
@@ -94,9 +105,9 @@ func TestLastSeenBatcher_FlushError_RetriesIDs(t *testing.T) {
 
 func TestLastSeenBatcher_EmptyFlush(t *testing.T) {
 	mock := &mockExecDBTX{
-		execFn: func(_ context.Context, _ string, _ ...any) (pgconn.CommandTag, error) {
+		execFn: func(_ context.Context, _ string, _ ...any) (sql.Result, error) {
 			t.Fatal("exec should not be called on empty flush")
-			return pgconn.CommandTag{}, nil
+			return nil, nil
 		},
 	}
 

@@ -40,7 +40,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		if n.LastSeen.Valid {
 			TimeSinceCheckin.WithLabelValues(n.Hostname).Set(now.Sub(n.LastSeen.Time).Seconds())
 		}
-		if !n.Revoked {
+		if n.Revoked == 0 {
 			totalNonRevoked++
 			if recentlyActive {
 				compliantCount++

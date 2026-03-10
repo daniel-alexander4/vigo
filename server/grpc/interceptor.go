@@ -78,10 +78,10 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache, si
 // verifyCheckIn validates the signature on a CheckInRequest. On success, it
 // returns a context enriched with the looked-up node for handler reuse.
 func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.CheckInRequest, sigWindow time.Duration) (context.Context, error) {
-	nodeID, err := uuid.Parse(req.GetNodeId())
-	if err != nil {
+	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
+	nodeID := req.GetNodeId()
 
 	node, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
 	if err != nil {
@@ -113,10 +113,10 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache
 // verifyReportResultCtx validates the signature on a ReportResultRequest and
 // stores the node in context for handler reuse.
 func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportResultRequest, sigWindow time.Duration) (context.Context, error) {
-	nodeID, err := uuid.Parse(req.GetNodeId())
-	if err != nil {
+	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
+	nodeID := req.GetNodeId()
 
 	node, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
 	if err != nil {
@@ -145,10 +145,10 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.N
 
 // verifyReportTraits validates the signature on a ReportTraitsRequest.
 func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportTraitsRequest, sigWindow time.Duration) error {
-	nodeID, err := uuid.Parse(req.GetNodeId())
-	if err != nil {
+	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
+	nodeID := req.GetNodeId()
 
 	_, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
 	if err != nil {
@@ -179,7 +179,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.Node
 // When a NodeCache is available, the parsed pubkey is served from cache,
 // eliminating PEM decode + x509 parse on every RPC. Falls back to direct
 // DB queries + on-the-fly parsing when no cache is configured.
-func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.NodeCache, nodeID uuid.UUID) (db.Node, ed25519.PublicKey, error) {
+func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.NodeCache, nodeID string) (db.Node, ed25519.PublicKey, error) {
 	// Fast path: cache returns both node and parsed pubkey.
 	if cache != nil {
 		node, pubKey, err := cache.GetByIDWithPubKey(ctx, nodeID)

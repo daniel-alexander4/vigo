@@ -4,13 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/x509"
+	"database/sql"
 	"encoding/pem"
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 // cachedNode pairs a DB node with its parsed pubkey and fetch time.
@@ -26,7 +24,7 @@ type cachedNode struct {
 // on every signature verification. Thread-safe for concurrent access.
 type NodeCache struct {
 	mu      sync.RWMutex
-	entries map[uuid.UUID]*cachedNode
+	entries map[string]*cachedNode
 	queries *Queries
 	ttl     time.Duration
 }
@@ -35,16 +33,16 @@ type NodeCache struct {
 // specified TTL. Entries are lazily evicted on access after TTL expires.
 func NewNodeCache(queries *Queries, ttl time.Duration) *NodeCache {
 	return &NodeCache{
-		entries: make(map[uuid.UUID]*cachedNode),
+		entries: make(map[string]*cachedNode),
 		queries: queries,
 		ttl:     ttl,
 	}
 }
 
-// GetByID returns the node for the given UUID, serving from cache if the
+// GetByID returns the node for the given UUID string, serving from cache if the
 // entry is fresh (within TTL). On cache miss or stale entry, fetches from DB
-// and updates the cache. Returns pgx.ErrNoRows if the node does not exist.
-func (nc *NodeCache) GetByID(ctx context.Context, id uuid.UUID) (Node, error) {
+// and updates the cache. Returns sql.ErrNoRows if the node does not exist.
+func (nc *NodeCache) GetByID(ctx context.Context, id string) (Node, error) {
 	nc.mu.RLock()
 	if entry, ok := nc.entries[id]; ok && time.Since(entry.fetchedAt) < nc.ttl {
 		n := entry.node
@@ -72,7 +70,7 @@ func (nc *NodeCache) GetByID(ctx context.Context, id uuid.UUID) (Node, error) {
 // GetByIDWithPubKey returns the node and its parsed ED25519 public key,
 // serving both from cache when available. Eliminates PEM decode + x509 parse
 // on every signature verification RPC.
-func (nc *NodeCache) GetByIDWithPubKey(ctx context.Context, id uuid.UUID) (Node, ed25519.PublicKey, error) {
+func (nc *NodeCache) GetByIDWithPubKey(ctx context.Context, id string) (Node, ed25519.PublicKey, error) {
 	nc.mu.RLock()
 	if entry, ok := nc.entries[id]; ok && time.Since(entry.fetchedAt) < nc.ttl {
 		nc.mu.RUnlock()
@@ -100,7 +98,7 @@ func (nc *NodeCache) GetByIDWithPubKey(ctx context.Context, id uuid.UUID) (Node,
 
 // Invalidate removes a node from the cache, forcing the next lookup to
 // hit the database. Used after revocation to ensure immediate effect.
-func (nc *NodeCache) Invalidate(id uuid.UUID) {
+func (nc *NodeCache) Invalidate(id string) {
 	nc.mu.Lock()
 	delete(nc.entries, id)
 	nc.mu.Unlock()
@@ -140,7 +138,7 @@ func NodeFromContext(ctx context.Context) *Node {
 	return n
 }
 
-// IsNotFound returns true if the error is pgx.ErrNoRows.
+// IsNotFound returns true if the error is sql.ErrNoRows.
 func IsNotFound(err error) bool {
-	return err == pgx.ErrNoRows
+	return err == sql.ErrNoRows
 }

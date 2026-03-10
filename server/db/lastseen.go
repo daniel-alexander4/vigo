@@ -5,29 +5,27 @@ import (
 	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-// LastSeenBatcher accumulates node UUIDs and flushes UpdateLastSeen writes
+// LastSeenBatcher accumulates node IDs and flushes UpdateLastSeen writes
 // periodically, removing per-check-in write latency from the hot path.
 type LastSeenBatcher struct {
 	mu      sync.Mutex
-	pending map[uuid.UUID]struct{}
+	pending map[string]struct{}
 	queries *Queries
 }
 
 // NewLastSeenBatcher creates a batcher backed by the given Queries.
 func NewLastSeenBatcher(queries *Queries) *LastSeenBatcher {
 	return &LastSeenBatcher{
-		pending: make(map[uuid.UUID]struct{}),
+		pending: make(map[string]struct{}),
 		queries: queries,
 	}
 }
 
 // Mark records a node as seen. This is a cheap in-memory operation that
 // replaces the synchronous UpdateLastSeen DB write on the check-in path.
-func (b *LastSeenBatcher) Mark(id uuid.UUID) {
+func (b *LastSeenBatcher) Mark(id string) {
 	b.mu.Lock()
 	b.pending[id] = struct{}{}
 	b.mu.Unlock()
@@ -62,10 +60,10 @@ func (b *LastSeenBatcher) Flush(ctx context.Context) {
 	}
 	// Swap out the pending map so we don't hold the lock during DB writes.
 	batch := b.pending
-	b.pending = make(map[uuid.UUID]struct{})
+	b.pending = make(map[string]struct{})
 	b.mu.Unlock()
 
-	ids := make([]uuid.UUID, 0, len(batch))
+	ids := make([]string, 0, len(batch))
 	for id := range batch {
 		ids = append(ids, id)
 	}

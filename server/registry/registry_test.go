@@ -2,61 +2,61 @@ package registry_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/google/uuid"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/registry"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
+	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/registry"
 )
 
-var testPool *pgxpool.Pool
+var testDB *sql.DB
 
 func TestMain(m *testing.M) {
-	ctx := context.Background()
-
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
-		postgres.WithDatabase("hobnob_test"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30*time.Second),
-		),
-	)
+	var err error
+	testDB, err = sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
-		log.Fatalf("failed to start postgres container: %v", err)
+		log.Fatalf("failed to open sqlite: %v", err)
 	}
-	defer func() {
-		if err := pgContainer.Terminate(ctx); err != nil {
-			log.Fatalf("failed to terminate postgres container: %v", err)
-		}
-	}()
+	defer testDB.Close()
 
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		log.Fatalf("failed to get connection string: %v", err)
-	}
+	// Enable WAL mode.
+	testDB.Exec("PRAGMA journal_mode = WAL")
 
-	// Run migrations
+	// Run migrations.
 	migrationsPath := findMigrationsDir()
-	mig, err := migrate.New("file://"+migrationsPath, "pgx5://"+connStr[len("postgres://"):])
+
+	// Write the DB to a temp file so golang-migrate can use the sqlite3 scheme.
+	// Actually, golang-migrate sqlite3 driver supports ":memory:" via the DSN.
+	// But it opens its own connection, which won't share the in-memory DB.
+	// Use a temp file instead.
+	tmpDir, err := os.MkdirTemp("", "hobnob-registry-test-*")
+	if err != nil {
+		log.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	testDB.Close()
+
+	testDB, err = sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
+	if err != nil {
+		log.Fatalf("failed to open sqlite file: %v", err)
+	}
+	defer testDB.Close()
+
+	mig, err := migrate.New("file://"+migrationsPath, "sqlite3://"+dbPath)
 	if err != nil {
 		log.Fatalf("failed to create migrate instance: %v", err)
 	}
@@ -64,12 +64,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 	mig.Close()
-
-	testPool, err = pgxpool.New(ctx, connStr)
-	if err != nil {
-		log.Fatalf("failed to create pool: %v", err)
-	}
-	defer testPool.Close()
 
 	os.Exit(m.Run())
 }
@@ -94,15 +88,17 @@ func findMigrationsDir() string {
 }
 
 // newTestRegistry creates a fresh Registry backed by the test database.
-// It truncates relevant tables before each test for isolation.
+// It deletes relevant rows before each test for isolation.
 func newTestRegistry(t *testing.T) *registry.Registry {
 	t.Helper()
 	ctx := context.Background()
-	_, err := testPool.Exec(ctx, "TRUNCATE approved_patterns, nodes CASCADE")
-	if err != nil {
-		t.Fatalf("failed to truncate tables: %v", err)
+	// Delete in correct order for foreign key constraints.
+	for _, table := range []string{"run_results", "runs", "node_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "nodes"} {
+		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+			t.Fatalf("failed to delete from %s: %v", table, err)
+		}
 	}
-	queries := db.New(testPool)
+	queries := db.New(testDB)
 	return registry.NewRegistry(queries)
 }
 
@@ -114,12 +110,12 @@ func TestAddApprovedPattern(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
-	if patternID == uuid.Nil {
-		t.Fatal("expected non-nil pattern ID")
+	if patternID == "" {
+		t.Fatal("expected non-empty pattern ID")
 	}
 
 	// Verify token is bcrypt-hashed (not stored plaintext)
-	patterns, err := db.New(testPool).ListUnusedApprovedPatterns(ctx)
+	patterns, err := db.New(testDB).ListUnusedApprovedPatterns(ctx)
 	if err != nil {
 		t.Fatalf("ListUnusedApprovedPatterns failed: %v", err)
 	}
@@ -149,8 +145,8 @@ func TestGlobMatchHostname(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register should succeed for matching hostname: %v", err)
 	}
-	if clientID == uuid.Nil {
-		t.Fatal("expected non-nil client ID")
+	if clientID == "" {
+		t.Fatal("expected non-empty client ID")
 	}
 
 	// Should NOT match staging
@@ -179,8 +175,8 @@ func TestGlobMatchIP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register should succeed for matching IP: %v", err)
 	}
-	if clientID == uuid.Nil {
-		t.Fatal("expected non-nil client ID")
+	if clientID == "" {
+		t.Fatal("expected non-empty client ID")
 	}
 }
 
@@ -198,12 +194,12 @@ func TestRegisterSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
-	if clientID == uuid.Nil {
-		t.Fatal("expected non-nil client ID")
+	if clientID == "" {
+		t.Fatal("expected non-empty client ID")
 	}
 
 	// Verify node was created in DB
-	node, err := db.New(testPool).GetNodeByID(ctx, clientID)
+	node, err := db.New(testDB).GetNodeByID(ctx, clientID)
 	if err != nil {
 		t.Fatalf("GetNodeByID failed: %v", err)
 	}
@@ -216,7 +212,7 @@ func TestRegisterSuccess(t *testing.T) {
 	if node.PubkeyPem != "ed25519-pubkey" {
 		t.Errorf("pubkey_pem = %q, want %q", node.PubkeyPem, "ed25519-pubkey")
 	}
-	if node.Revoked {
+	if node.Revoked != 0 {
 		t.Error("newly created node should not be revoked")
 	}
 }
@@ -236,8 +232,8 @@ func TestRegisterTokenBcrypt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register with correct token should succeed: %v", err)
 	}
-	if clientID == uuid.Nil {
-		t.Fatal("expected non-nil client ID")
+	if clientID == "" {
+		t.Fatal("expected non-empty client ID")
 	}
 
 	// Verify a wrong token is rejected (even with matching pattern)
@@ -267,7 +263,7 @@ func TestRegisterTokenMarkedUsed(t *testing.T) {
 	}
 
 	// Verify the pattern is now marked as used
-	patterns, err := db.New(testPool).ListApprovedPatterns(ctx)
+	patterns, err := db.New(testDB).ListApprovedPatterns(ctx)
 	if err != nil {
 		t.Fatalf("ListApprovedPatterns failed: %v", err)
 	}
@@ -279,7 +275,7 @@ func TestRegisterTokenMarkedUsed(t *testing.T) {
 			if !p.UsedAt.Valid {
 				t.Error("expected used_at to be set after registration")
 			}
-			if !p.UsedBy.Valid || p.UsedBy.Bytes != clientID {
+			if !p.UsedBy.Valid || p.UsedBy.String != clientID {
 				t.Errorf("expected used_by = %s, got %v", clientID, p.UsedBy)
 			}
 		}
@@ -368,11 +364,11 @@ func TestRevokeNode(t *testing.T) {
 	}
 
 	// Verify revocation state in DB
-	node, err := db.New(testPool).GetNodeByID(ctx, nodeID)
+	node, err := db.New(testDB).GetNodeByID(ctx, nodeID)
 	if err != nil {
 		t.Fatalf("GetNodeByID failed: %v", err)
 	}
-	if !node.Revoked {
+	if node.Revoked == 0 {
 		t.Error("expected node to be revoked")
 	}
 	if !node.RevokedAt.Valid {
@@ -424,7 +420,6 @@ func TestRevokedCannotReenroll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
-	_ = nodeID
 
 	// Revoke
 	err = reg.RevokeNode(ctx, nodeID)
@@ -449,7 +444,7 @@ func TestValidateNodeNonExistent(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	err := reg.ValidateNode(ctx, uuid.New())
+	err := reg.ValidateNode(ctx, "00000000-0000-0000-0000-000000000000")
 	if err == nil {
 		t.Fatal("ValidateNode should return error for non-existent node")
 	}
@@ -496,8 +491,8 @@ func TestRegisterMultiplePatternsFirstMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register should succeed with matching hostname pattern: %v", err)
 	}
-	if clientID == uuid.Nil {
-		t.Fatal("expected non-nil client ID")
+	if clientID == "" {
+		t.Fatal("expected non-empty client ID")
 	}
 }
 
@@ -570,8 +565,8 @@ func TestTrustedRegisterSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed: %v", err)
 	}
-	if nodeID == uuid.Nil {
-		t.Fatal("expected non-nil node ID")
+	if nodeID == "" {
+		t.Fatal("expected non-empty node ID")
 	}
 }
 
@@ -603,8 +598,8 @@ func TestTrustedRegisterNoCIDRsAllowsAny(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed with no CIDR restriction: %v", err)
 	}
-	if nodeID == uuid.Nil {
-		t.Fatal("expected non-nil node ID")
+	if nodeID == "" {
+		t.Fatal("expected non-empty node ID")
 	}
 }
 
@@ -655,7 +650,7 @@ func TestRevokeNonExistentNode(t *testing.T) {
 
 	// Revoking a non-existent node should not error (idempotent)
 	// or could return an error -- depends on design. Testing behavior.
-	err := reg.RevokeNode(ctx, uuid.New())
+	err := reg.RevokeNode(ctx, "00000000-0000-0000-0000-000000000000")
 	// We accept either behavior but log it
 	if err != nil {
 		fmt.Printf("RevokeNode for non-existent node returned error: %v (acceptable)\n", err)

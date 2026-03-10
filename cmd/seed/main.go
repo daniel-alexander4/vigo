@@ -7,11 +7,12 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -26,16 +27,16 @@ func run() error {
 
 	dsn := os.Getenv("HOBNOB_DB_DSN")
 	if dsn == "" {
-		dsn = "postgres://hobnob:secret@localhost:5432/hobnob?sslmode=disable"
+		dsn = "hobnob.db"
 	}
 
-	pool, err := pgxpool.New(ctx, dsn)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
-		return fmt.Errorf("connecting to database: %w", err)
+		return fmt.Errorf("opening database: %w", err)
 	}
-	defer pool.Close()
+	defer db.Close()
 
-	if err := pool.Ping(ctx); err != nil {
+	if err := db.Ping(); err != nil {
 		return fmt.Errorf("pinging database: %w", err)
 	}
 
@@ -61,9 +62,9 @@ func run() error {
 	}
 
 	for _, p := range patterns {
-		_, err := pool.Exec(ctx, `
+		_, err := db.ExecContext(ctx, `
 			INSERT INTO approved_patterns (pattern, token_hash)
-			VALUES ($1, $2)
+			VALUES (?, ?)
 			ON CONFLICT DO NOTHING
 		`, p.pattern, p.tokenHash)
 		if err != nil {
@@ -91,9 +92,9 @@ func run() error {
 	}
 
 	for _, n := range nodes {
-		_, err := pool.Exec(ctx, `
+		_, err := db.ExecContext(ctx, `
 			INSERT INTO nodes (hostname, ip_address, pubkey_pem)
-			VALUES ($1, $2, $3)
+			VALUES (?, ?, ?)
 			ON CONFLICT DO NOTHING
 		`, n.hostname, n.ipAddress, n.pubkeyPEM)
 		if err != nil {

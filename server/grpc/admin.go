@@ -47,7 +47,7 @@ func (s *AdminService) AddApprovedPattern(ctx context.Context, req *pb.AddApprov
 	slog.Info("approved pattern created", "id", ap.ID, "pattern", ap.Pattern)
 
 	return &pb.AddApprovedPatternResponse{
-		Id:        ap.ID.String(),
+		Id:        ap.ID,
 		Pattern:   ap.Pattern,
 		CreatedAt: timestamppb.New(ap.CreatedAt),
 	}, nil
@@ -62,13 +62,13 @@ func (s *AdminService) ListApprovedPatterns(ctx context.Context, _ *pb.ListAppro
 	resp := &pb.ListApprovedPatternsResponse{}
 	for _, p := range patterns {
 		ap := &pb.ApprovedPattern{
-			Id:        p.ID.String(),
+			Id:        p.ID,
 			Pattern:   p.Pattern,
 			CreatedAt: timestamppb.New(p.CreatedAt),
 			Used:      p.UsedAt.Valid,
 		}
 		if p.UsedBy.Valid {
-			ap.UsedBy = uuid.UUID(p.UsedBy.Bytes).String()
+			ap.UsedBy = p.UsedBy.String
 		}
 		resp.Patterns = append(resp.Patterns, ap)
 	}
@@ -77,16 +77,15 @@ func (s *AdminService) ListApprovedPatterns(ctx context.Context, _ *pb.ListAppro
 }
 
 func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.RevokeApprovedPatternRequest) (*pb.RevokeApprovedPatternResponse, error) {
-	id, err := uuid.Parse(req.Id)
-	if err != nil {
+	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid pattern id: %v", err)
 	}
 
-	if err := s.queries.DeleteApprovedPattern(ctx, id); err != nil {
+	if err := s.queries.DeleteApprovedPattern(ctx, req.Id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting approved pattern: %v", err)
 	}
 
-	slog.Info("approved pattern revoked", "id", id)
+	slog.Info("approved pattern revoked", "id", req.Id)
 
 	return &pb.RevokeApprovedPatternResponse{}, nil
 }
@@ -108,12 +107,11 @@ func (s *AdminService) ListNodes(ctx context.Context, _ *pb.ListNodesRequest) (*
 }
 
 func (s *AdminService) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
-	id, err := uuid.Parse(req.Id)
-	if err != nil {
+	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	n, err := s.queries.GetNodeByID(ctx, id)
+	n, err := s.queries.GetNodeByID(ctx, req.Id)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
 	}
@@ -124,16 +122,15 @@ func (s *AdminService) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb
 }
 
 func (s *AdminService) RevokeNode(ctx context.Context, req *pb.RevokeNodeRequest) (*pb.RevokeNodeResponse, error) {
-	id, err := uuid.Parse(req.Id)
-	if err != nil {
+	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	if err := s.queries.RevokeNode(ctx, id); err != nil {
+	if err := s.queries.RevokeNode(ctx, req.Id); err != nil {
 		return nil, status.Errorf(codes.Internal, "revoking node: %v", err)
 	}
 
-	slog.Warn("node revoked", "node_id", id)
+	slog.Warn("node revoked", "node_id", req.Id)
 
 	return &pb.RevokeNodeResponse{}, nil
 }
@@ -141,16 +138,15 @@ func (s *AdminService) RevokeNode(ctx context.Context, req *pb.RevokeNodeRequest
 // ---------- DeleteNode ----------
 
 func (s *AdminService) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest) (*pb.DeleteNodeResponse, error) {
-	id, err := uuid.Parse(req.Id)
-	if err != nil {
+	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
 
-	if err := s.queries.DeleteNode(ctx, id); err != nil {
+	if err := s.queries.DeleteNode(ctx, req.Id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting node: %v", err)
 	}
 
-	slog.Warn("node deleted", "node_id", id)
+	slog.Warn("node deleted", "node_id", req.Id)
 
 	return &pb.DeleteNodeResponse{}, nil
 }
@@ -160,11 +156,10 @@ func (s *AdminService) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
 	if req.NodeId != "" {
 		// Single node
-		id, err := uuid.Parse(req.NodeId)
-		if err != nil {
+		if _, err := uuid.Parse(req.NodeId); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 		}
-		if err := s.queries.SetForcePush(ctx, id); err != nil {
+		if err := s.queries.SetForcePush(ctx, req.NodeId); err != nil {
 			return nil, status.Errorf(codes.Internal, "setting force push: %v", err)
 		}
 		return &pb.ForcePushResponse{NodesNotified: 1}, nil
@@ -182,19 +177,18 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 // ---------- Runs ----------
 
 func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
-	limit := req.Limit
+	limit := int64(req.Limit)
 	if limit <= 0 {
 		limit = 20
 	}
 
 	if req.NodeId != "" {
-		id, err := uuid.Parse(req.NodeId)
-		if err != nil {
+		if _, err := uuid.Parse(req.NodeId); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 		}
 
 		runs, err := s.runStore.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-			NodeID: id,
+			NodeID: req.NodeId,
 			Limit:  limit,
 		})
 		if err != nil {
@@ -213,17 +207,16 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 }
 
 func (s *AdminService) GetRun(ctx context.Context, req *pb.GetRunRequest) (*pb.GetRunResponse, error) {
-	id, err := uuid.Parse(req.Id)
-	if err != nil {
+	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid run id: %v", err)
 	}
 
-	run, err := s.runStore.GetRunByID(ctx, id)
+	run, err := s.runStore.GetRunByID(ctx, req.Id)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "run not found: %v", err)
 	}
 
-	results, err := s.runStore.ListRunResults(ctx, id)
+	results, err := s.runStore.ListRunResults(ctx, req.Id)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing run results: %v", err)
 	}
@@ -235,8 +228,8 @@ func (s *AdminService) GetRun(ctx context.Context, req *pb.GetRunRequest) (*pb.G
 			ResourceType: r.ResourceType,
 			ResourceName: r.ResourceName,
 			ActionTaken:  r.ActionTaken,
-			Changed:      r.Changed,
-			DurationMs:   r.DurationMs,
+			Changed:      r.Changed != 0,
+			DurationMs:   int32(r.DurationMs),
 		}
 		if r.ErrorMessage.Valid {
 			mr.ErrorMessage = r.ErrorMessage.String
@@ -268,10 +261,10 @@ func (s *AdminService) GenerateToken(ctx context.Context, _ *pb.GenerateTokenReq
 // ---------- DryRun ----------
 
 func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.DryRunResponse, error) {
-	nodeID, err := uuid.Parse(req.NodeId)
-	if err != nil {
+	if _, err := uuid.Parse(req.NodeId); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
+	nodeID := req.NodeId
 
 	node, err := s.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
@@ -291,7 +284,7 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 
 	plan, err := s.queries.CreatePlan(ctx, db.CreatePlanParams{
 		NodeID:  nodeID,
-		Modules: modulesJSON,
+		Modules: string(modulesJSON),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating plan: %v", err)
@@ -334,10 +327,16 @@ func (s *AdminService) AddWebhook(ctx context.Context, req *pb.AddWebhookRequest
 		return nil, status.Errorf(codes.InvalidArgument, "invalid webhook URL: %v", err)
 	}
 
+	// JSON-encode events for SQLite TEXT storage.
+	eventsJSON, err := json.Marshal(req.Events)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "marshaling events: %v", err)
+	}
+
 	wh, err := s.queries.CreateWebhook(ctx, db.CreateWebhookParams{
 		Url:    req.Url,
 		Secret: req.Secret,
-		Events: req.Events,
+		Events: string(eventsJSON),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating webhook: %v", err)
@@ -345,13 +344,16 @@ func (s *AdminService) AddWebhook(ctx context.Context, req *pb.AddWebhookRequest
 
 	slog.Info("webhook created", "id", wh.ID, "url", wh.Url, "events", wh.Events)
 
+	var events []string
+	json.Unmarshal([]byte(wh.Events), &events)
+
 	return &pb.AddWebhookResponse{
 		Webhook: &pb.WebhookInfo{
-			Id:        wh.ID.String(),
+			Id:        wh.ID,
 			Url:       wh.Url,
-			Events:    wh.Events,
+			Events:    events,
 			CreatedAt: timestamppb.New(wh.CreatedAt),
-			Active:    wh.Active,
+			Active:    wh.Active != 0,
 		},
 	}, nil
 }
@@ -364,12 +366,15 @@ func (s *AdminService) ListWebhooks(ctx context.Context, _ *pb.ListWebhooksReque
 
 	resp := &pb.ListWebhooksResponse{}
 	for _, wh := range webhooks {
+		var events []string
+		json.Unmarshal([]byte(wh.Events), &events)
+
 		resp.Webhooks = append(resp.Webhooks, &pb.WebhookInfo{
-			Id:        wh.ID.String(),
+			Id:        wh.ID,
 			Url:       wh.Url,
-			Events:    wh.Events,
+			Events:    events,
 			CreatedAt: timestamppb.New(wh.CreatedAt),
-			Active:    wh.Active,
+			Active:    wh.Active != 0,
 		})
 	}
 
@@ -377,16 +382,15 @@ func (s *AdminService) ListWebhooks(ctx context.Context, _ *pb.ListWebhooksReque
 }
 
 func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookRequest) (*pb.DeleteWebhookResponse, error) {
-	id, err := uuid.Parse(req.Id)
-	if err != nil {
+	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid webhook id: %v", err)
 	}
 
-	if err := s.queries.DeleteWebhook(ctx, id); err != nil {
+	if err := s.queries.DeleteWebhook(ctx, req.Id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting webhook: %v", err)
 	}
 
-	slog.Warn("webhook deleted", "id", id)
+	slog.Warn("webhook deleted", "id", req.Id)
 
 	return &pb.DeleteWebhookResponse{}, nil
 }
@@ -400,7 +404,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
 	}
 
-	nodeIDs := make([]uuid.UUID, len(nodes))
+	nodeIDs := make([]string, len(nodes))
 	for i, n := range nodes {
 		nodeIDs[i] = n.ID
 	}
@@ -447,12 +451,12 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 }
 
 func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeComplianceRequest) (*pb.GetNodeComplianceResponse, error) {
-	id, err := uuid.Parse(req.Id)
-	if err != nil {
+	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
+	nodeID := req.Id
 
-	n, err := s.queries.GetNodeByID(ctx, id)
+	n, err := s.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
 	}
@@ -460,7 +464,7 @@ func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeCom
 	var runInfo *compliance.RunInfo
 	var lastRunProto *pb.Run
 	runs, err := s.runStore.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-		NodeID: id,
+		NodeID: nodeID,
 		Limit:  1,
 	})
 	if err == nil && len(runs) > 0 {
@@ -487,13 +491,13 @@ func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeCom
 	var snapshots []*pb.ComplianceSnapshot
 	for _, h := range history {
 		snapshots = append(snapshots, &pb.ComplianceSnapshot{
-			Date:      fmt.Sprintf("%04d-%02d-%02d", h.RecordedAt.Time.Year(), h.RecordedAt.Time.Month(), h.RecordedAt.Time.Day()),
-			Total:     h.Total,
-			Compliant: h.Compliant,
-			Drifted:   h.Drifted,
-			Failing:   h.Failing,
-			Stale:     h.Stale,
-			Unknown:   h.Unknown,
+			Date:      h.RecordedAt, // already a date string from SQLite
+			Total:     int32(h.Total),
+			Compliant: int32(h.Compliant),
+			Drifted:   int32(h.Drifted),
+			Failing:   int32(h.Failing),
+			Stale:     int32(h.Stale),
+			Unknown:   int32(h.Unknown),
 		})
 	}
 
@@ -507,13 +511,13 @@ func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeCom
 // ---------- Rollback ----------
 
 func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*pb.RollbackResponse, error) {
-	nodeID, err := uuid.Parse(req.NodeId)
-	if err != nil {
+	if _, err := uuid.Parse(req.NodeId); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 	}
+	nodeID := req.NodeId
 
 	// Verify node exists.
-	_, err = s.queries.GetNodeByID(ctx, nodeID)
+	_, err := s.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
 	}
@@ -534,11 +538,10 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 
 	// If run_id is provided, verify the run exists.
 	if req.RunId != "" {
-		runID, err := uuid.Parse(req.RunId)
-		if err != nil {
+		if _, err := uuid.Parse(req.RunId); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid run id: %v", err)
 		}
-		_, err = s.runStore.GetRunByID(ctx, runID)
+		_, err := s.runStore.GetRunByID(ctx, req.RunId)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, "run not found: %v", err)
 		}
@@ -559,12 +562,11 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 
 func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesRequest) (*pb.ListPackagesResponse, error) {
 	if req.NodeId != "" {
-		id, err := uuid.Parse(req.NodeId)
-		if err != nil {
+		if _, err := uuid.Parse(req.NodeId); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
 		}
 
-		pkgs, err := s.queries.ListPackageAuditByNode(ctx, id)
+		pkgs, err := s.queries.ListPackageAuditByNode(ctx, req.NodeId)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listing package audit: %v", err)
 		}
@@ -572,7 +574,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 		result := make([]*pb.PackageInfo, 0, len(pkgs))
 		for _, p := range pkgs {
 			pi := &pb.PackageInfo{
-				NodeId:      p.NodeID.String(),
+				NodeId:      p.NodeID,
 				Hostname:    p.Hostname,
 				PackageName: p.PackageName,
 			}
@@ -595,7 +597,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 	result := make([]*pb.PackageInfo, 0, len(pkgs))
 	for _, p := range pkgs {
 		pi := &pb.PackageInfo{
-			NodeId:      p.NodeID.String(),
+			NodeId:      p.NodeID,
 			Hostname:    p.Hostname,
 			PackageName: p.PackageName,
 		}
@@ -619,7 +621,7 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	resp := &pb.ListPackageDriftResponse{}
 	for _, d := range drifts {
 		pd := &pb.PackageDrift{
-			NodeId:      d.NodeID.String(),
+			NodeId:      d.NodeID,
 			Hostname:    d.Hostname,
 			PackageName: d.PackageName,
 			DetectedAt:  timestamppb.New(d.DetectedAt),
@@ -660,14 +662,14 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 		ModuleName: req.ModuleName,
 		FromEnv:    req.FromEnv,
 		ToEnv:      req.ToEnv,
-		Diff:       diffJSON,
+		Diff:       string(diffJSON),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating env promotion: %v", err)
 	}
 
 	return &pb.PromoteEnvResponse{
-		PromotionId: promo.ID.String(),
+		PromotionId: promo.ID,
 		Diff:        diff,
 	}, nil
 }
@@ -676,11 +678,11 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 
 func dbNodeToProto(n db.Node) *pb.Node {
 	pn := &pb.Node{
-		Id:         n.ID.String(),
+		Id:         n.ID,
 		Hostname:   n.Hostname,
 		IpAddress:  n.IpAddress,
 		EnrolledAt: timestamppb.New(n.EnrolledAt),
-		Revoked:    n.Revoked,
+		Revoked:    n.Revoked != 0,
 	}
 	if n.LastSeen.Valid {
 		pn.LastSeen = timestamppb.New(n.LastSeen.Time)
@@ -693,14 +695,14 @@ func dbNodeToProto(n db.Node) *pb.Node {
 
 func dbRunToProto(r db.Run) *pb.Run {
 	pr := &pb.Run{
-		Id:           r.ID.String(),
-		NodeId:       r.NodeID.String(),
+		Id:           r.ID,
+		NodeId:       r.NodeID,
 		StartedAt:    timestamppb.New(r.StartedAt),
 		Status:       r.Status,
-		ModuleCount:  r.ModuleCount,
-		ChangedCount: r.ChangedCount,
-		FailedCount:  r.FailedCount,
-		SkippedCount: r.SkippedCount,
+		ModuleCount:  int32(r.ModuleCount),
+		ChangedCount: int32(r.ChangedCount),
+		FailedCount:  int32(r.FailedCount),
+		SkippedCount: int32(r.SkippedCount),
 	}
 	if r.FinishedAt.Valid {
 		pr.FinishedAt = timestamppb.New(r.FinishedAt.Time)
@@ -740,4 +742,3 @@ func validateWebhookURL(rawURL string) error {
 	}
 	return nil
 }
-

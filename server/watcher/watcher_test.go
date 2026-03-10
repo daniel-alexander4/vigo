@@ -45,12 +45,12 @@ func (m *mockNodeStore) NodesReferencingSecret(path string) []string {
 // mockDB implements DB for testing.
 type mockDB struct {
 	mu              sync.Mutex
-	forcePushed     []uuid.UUID
+	forcePushed     []string
 	rotationEvents  []RotationRecord
-	nodesByHost   map[string]uuid.UUID
+	nodesByHost   map[string]string
 }
 
-func (m *mockDB) SetForcePush(ctx context.Context, id uuid.UUID) error {
+func (m *mockDB) SetForcePush(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.forcePushed = append(m.forcePushed, id)
@@ -64,12 +64,12 @@ func (m *mockDB) CreateSecretRotationEvent(ctx context.Context, params RotationR
 	return nil
 }
 
-func (m *mockDB) GetNodeByHostname(ctx context.Context, hostname string) (uuid.UUID, error) {
+func (m *mockDB) GetNodeByHostname(ctx context.Context, hostname string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	id, ok := m.nodesByHost[hostname]
 	if !ok {
-		return uuid.Nil, nil
+		return "", nil
 	}
 	return id, nil
 }
@@ -87,13 +87,13 @@ func (m *mockDispatcher) DispatchRotation(ctx context.Context, event string, sec
 }
 
 func TestRotationTrigger(t *testing.T) {
-	nodeID := uuid.New()
+	nodeID := uuid.New().String()
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
 	store := &mockNodeStore{refs: map[string][]string{
 		"hobnob/db/dsn": {"web-01.example.com"},
 	}}
 	database := &mockDB{
-		nodesByHost: map[string]uuid.UUID{
+		nodesByHost: map[string]string{
 			"web-01.example.com": nodeID,
 		},
 	}
@@ -129,7 +129,7 @@ func TestRotationTrigger(t *testing.T) {
 func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
 	store := &mockNodeStore{refs: map[string][]string{}}
-	database := &mockDB{nodesByHost: map[string]uuid.UUID{}}
+	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
 	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
@@ -149,7 +149,7 @@ func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 func TestWatcherRunLoop(t *testing.T) {
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
 	store := &mockNodeStore{refs: map[string][]string{}}
-	database := &mockDB{nodesByHost: map[string]uuid.UUID{}}
+	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
 	w := NewWatcher(provider, database, store, dispatcher, 50*time.Millisecond, []string{"hobnob/db/dsn"})
@@ -162,15 +162,15 @@ func TestWatcherRunLoop(t *testing.T) {
 }
 
 func TestMultipleAffectedNodes(t *testing.T) {
-	node1 := uuid.New()
-	node2 := uuid.New()
+	node1 := uuid.New().String()
+	node2 := uuid.New().String()
 
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/tls/cert": 1}}
 	store := &mockNodeStore{refs: map[string][]string{
 		"hobnob/tls/cert": {"web-01.example.com", "web-02.example.com"},
 	}}
 	database := &mockDB{
-		nodesByHost: map[string]uuid.UUID{
+		nodesByHost: map[string]string{
 			"web-01.example.com": node1,
 			"web-02.example.com": node2,
 		},
