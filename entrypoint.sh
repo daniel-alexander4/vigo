@@ -119,9 +119,9 @@ fi
 # Seed example configs (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# clients.hob.example
-if [ ! -f "${NODE_CONFIGS_DIR}/clients.hob.example" ]; then
-    cp "${SEED_DIR}/node-configs/clients.hob.example" "${NODE_CONFIGS_DIR}/"
+# nodes.hob.example
+if [ ! -f "${NODE_CONFIGS_DIR}/nodes.hob.example" ]; then
+    cp "${SEED_DIR}/node-configs/nodes.hob.example" "${NODE_CONFIGS_DIR}/"
 fi
 
 # Module examples
@@ -167,5 +167,6 @@ cd "$DATA_DIR"
 export HOBNOB_CONFIG_FILE="server-configs/server.yaml"
 export HOBNOB_NODE_CONFIGS_DIR="node-configs"
 export HOBNOB_MIGRATIONS_DIR="/migrations"
+export HOBNOB_AGENT_DIR="/dist/agent"
 
 exec hobd "$@"

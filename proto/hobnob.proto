@@ -218,7 +218,7 @@ message CheckInRequest {
 
 message CheckInResponse {
   repeated Module modules = 1;
-  string base_interval = 2;   // e.g. "30m"
+  string base_interval = 2;   // e.g. "5m"
   int32 jitter_percent = 3;
   repeated CustomNailEntry custom_nails = 4;
   bool no_change = 5;                    // true = fingerprint matched, skip execution

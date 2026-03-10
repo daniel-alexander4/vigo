@@ -126,7 +126,7 @@ func run() error {
 	}()
 
 	// Parse base interval for compliance stale threshold.
-	baseInterval := 30 * time.Minute // default
+	baseInterval := 5 * time.Minute // default
 	if cfg.CheckIn.BaseInterval != "" {
 		if parsed, err := time.ParseDuration(cfg.CheckIn.BaseInterval); err == nil {
 			baseInterval = parsed

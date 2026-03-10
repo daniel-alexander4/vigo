@@ -7,6 +7,10 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 go build -o hobd ./server
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/linux/amd64/hob ./agent
+RUN GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/linux/arm64/hob ./agent
+RUN GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/darwin/amd64/hob ./agent
+RUN GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/darwin/arm64/hob ./agent
 
 FROM alpine:3.21
 
@@ -14,6 +18,7 @@ RUN apk add --no-cache ca-certificates openssl
 
 COPY --from=builder /build/hobd /usr/local/bin/hobd
 COPY --from=builder /build/migrations /migrations
+COPY --from=builder /build/dist/agent /dist/agent
 
 # Seed configs — copied to /data on first run by entrypoint.
 COPY server-configs/server.yaml /seed/server.yaml

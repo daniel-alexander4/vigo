@@ -15,7 +15,7 @@ database:
   dsn: "secret:hobnob/db/dsn"
 
 checkin:
-  base_interval: "30m"
+  base_interval: "5m"
   jitter_percent: 20
 
 webhooks:

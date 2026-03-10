@@ -102,7 +102,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 	}
 
 	// Parse server-provided timing.
-	baseInterval := 30 * time.Minute // default
+	baseInterval := 5 * time.Minute // default
 	if resp.BaseInterval != "" {
 		if parsed, parseErr := time.ParseDuration(resp.BaseInterval); parseErr == nil {
 			baseInterval = parsed

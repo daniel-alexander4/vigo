@@ -6,7 +6,7 @@ import (
 )
 
 func TestComputeStatus(t *testing.T) {
-	baseInterval := 30 * time.Minute
+	baseInterval := 5 * time.Minute
 
 	tests := []struct {
 		name         string

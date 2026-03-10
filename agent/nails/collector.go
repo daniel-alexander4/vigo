@@ -1,6 +1,6 @@
 // Package nails provides pluggable nail collectors that gather system
-// information from managed nodes. Facts are used in Go templates as
-// .Traits.os.family, .Nails.hardware.cpu_count, etc.
+// information from managed nodes. Nails are used in Go templates as
+// .Nails.os.family, .Nails.hardware.cpu_count, etc.
 package nails
 
 import (

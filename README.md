@@ -52,15 +52,33 @@ This starts PostgreSQL and the hobnob server. Migrations run automatically. Veri
 docker compose ps
 ```
 
-You should see `postgres` (healthy) and `server` (running). The dashboard is at `http://<server-ip>:8085/`.
+You should see `postgres` (healthy) and `server` (running). The dashboard is at `http://<server-ip>:8181/`.
 
 ### 6. Bootstrap managed nodes
 
-There are two enrollment modes: **trusted enrollment** (zero-touch, like Puppet autosigning) and **token-based** (explicit per-node approval).
+On each node you want to manage, run:
 
-#### Trusted enrollment (recommended for fleets)
+```bash
+curl -sSf http://<server-ip>:8181/bootstrap | sudo sh
+```
 
-Configure trusted hostname/CIDR patterns in `server-configs/server.yaml`:
+That's it. The server generates a shell script on the fly that downloads the `hob` agent binary for the node's OS/arch, enrolls it, and starts it as a systemd service. No Go, no source code, no package manager needed on the node.
+
+#### What the bootstrap curl does
+
+1. Downloads the pre-built `hob` binary from the server to `/usr/local/bin/hob`
+2. Runs `hob bootstrap` which generates an ED25519 keypair + ECDSA TLS keypair
+3. Sends a CSR to the server
+4. Server validates the node (trusted pattern + CIDR, or token)
+5. Server signs the CSR and returns the signed TLS cert + CA cert
+6. Agent saves certs, keypair, and node UUID to `/etc/hobnob`
+7. Creates and starts the `hobnob-node` systemd service
+
+After bootstrap, the agent checks in with the server via mTLS every 5 minutes.
+
+#### Enrollment modes
+
+**Trusted enrollment (default)** — the server auto-enrolls nodes matching configured hostname patterns and CIDR ranges, no token needed. Configure in `server-configs/server.yaml`:
 
 ```yaml
 bootstrap:
@@ -72,52 +90,28 @@ bootstrap:
       cidrs: ["10.0.2.0/24"]
 ```
 
-Then on each node, run:
+The default config accepts any hostname from RFC 1918 / loopback addresses.
+
+**Token-based enrollment** — for untrusted networks or explicit per-node approval:
 
 ```bash
-curl -sSf http://<server-ip>:8085/bootstrap | sh
-```
-
-Or use the standalone bootstrap script:
-
-```bash
-HOBNOB_SERVER=http://<server-ip>:8085 sh scripts/bootstrap.sh
-```
-
-No token needed. The server validates the node's hostname and source IP against the trusted patterns, signs its CSR, and returns TLS certs. The agent is installed, enrolled, and started as a systemd service.
-
-#### Token-based enrollment
-
-For one-off nodes or untrusted networks, generate a token:
-
-```bash
+# On the server:
 hobcli tokens generate
 hobcli approved add "web-01.example.com" --token <TOKEN>
+
+# On the node:
+curl -sSf "http://<server-ip>:8181/bootstrap?token=<TOKEN>" | sudo sh
 ```
 
-Then on the node:
+#### Factory reset a node
+
+To wipe all agent state and re-bootstrap from scratch:
 
 ```bash
-HOBNOB_SERVER=http://<server-ip>:8085 HOBNOB_TOKEN=<TOKEN> sh scripts/bootstrap.sh
+sudo scripts/reset-node.sh
 ```
 
-Or use the server-generated bootstrap script:
-
-```bash
-curl -sSf "http://<server-ip>:8085/bootstrap?token=<TOKEN>" | sh
-```
-
-#### What bootstrap does
-
-1. Downloads the `hob` agent binary for the node's OS/arch
-2. Generates an ED25519 keypair (for request signing) and an ECDSA TLS keypair
-3. Creates a CSR and sends it to the server
-4. Server validates (trusted pattern + CIDR, or token + approved pattern)
-5. Server signs the CSR and returns the signed TLS cert + CA cert
-6. Agent saves certs, keypair, and node UUID to `/etc/hobnob`
-7. Installs and starts a systemd service
-
-After bootstrap, the agent connects to the server via mTLS automatically.
+This stops the service, removes the binary, and deletes `/etc/hobnob`. Then bootstrap again with `curl`.
 
 ### 7. Define desired state
 
@@ -204,7 +198,7 @@ hobcli runs list
 hobcli nodes show web01.example.com
 ```
 
-Or open the web dashboard at `http://<server-ip>:8085/`.
+Or open the web dashboard at `http://<server-ip>:8181/`.
 
 ## Config structure
 
@@ -251,7 +245,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 ┌──────────────┐     gRPC/mTLS     ┌──────────────┐
 │   Agent       │◄─────────────────►│   Server      │
 │  (per node)   │     pull loop     │  :1530 gRPC   │
-│               │                   │  :8085 REST   │
+│               │                   │  :8181 REST   │
 └──────────────┘                   └──────┬───────┘
                                           │
                             ┌─────────────┼─────────────┐
@@ -388,40 +382,40 @@ Conditionals control which resources and modules run on a given node. They are e
 
 ### Conditional vars
 
-A conditional var is a structured YAML variable that evaluates a node trait and produces a boolean (`"true"` or `"false"`). Define them in `vars` at the module, client, or environment level:
+A conditional var is a structured YAML variable that evaluates a node nail and produces a boolean (`"true"` or `"false"`). Define them in `vars` at the module, client, or environment level:
 
 ```yaml
 vars:
   is_debian:
-    trait: os.distro
+    nail: os.distro
     only: [debian, ubuntu]
 
   is_not_container:
-    trait: hardware.virtualization
+    nail: hardware.virtualization
     not: [docker, lxc]
 
   has_enough_ram:
-    trait: hardware.memory_mb
+    nail: hardware.memory_mb
     gte: 2048
 
   hostname_matches_web:
-    trait: os.hostname
+    nail: os.hostname
     match: "^web\\d+\\."
 ```
 
-Each conditional var requires a `trait` field (dot-path into the node's traits map) and exactly one operator:
+Each conditional var requires a `nail` field (dot-path into the node's nails map) and exactly one operator:
 
 | Operator | Operand type | True when |
 |----------|-------------|-----------|
-| `only` | list | trait value is in the list |
-| `not` | list | trait value is NOT in the list |
-| `gt` | number | trait > operand |
-| `lt` | number | trait < operand |
-| `gte` | number | trait >= operand |
-| `lte` | number | trait <= operand |
-| `match` | regex string | trait matches the regex |
+| `only` | list | nail value is in the list |
+| `not` | list | nail value is NOT in the list |
+| `gt` | number | nail > operand |
+| `lt` | number | nail < operand |
+| `gte` | number | nail >= operand |
+| `lte` | number | nail <= operand |
+| `match` | regex string | nail matches the regex |
 
-Missing traits evaluate to `false`. Conditional vars are evaluated before template rendering, so their boolean results are available to other vars and to conditional fields.
+Missing nails evaluate to `false`. Conditional vars are evaluated before template rendering, so their boolean results are available to other vars and to conditional fields.
 
 ### Resource conditionals
 
@@ -473,7 +467,7 @@ clients:
   - match: "*.example.com"
     vars:
       is_debian:
-        trait: os.distro
+        nail: os.distro
         only: [debian, ubuntu]
     modules:
       - nginx
@@ -527,13 +521,13 @@ name: webserver
 
 vars:
   is_debian:
-    trait: os.distro
+    nail: os.distro
     only: [debian, ubuntu]
   is_rhel:
-    trait: os.distro
+    nail: os.distro
     only: [rhel, centos, rocky, alma]
   has_enough_ram:
-    trait: hardware.memory_mb
+    nail: hardware.memory_mb
     gte: 1024
   worker_processes: "auto"
 

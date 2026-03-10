@@ -2,6 +2,7 @@ package nails
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -20,11 +21,14 @@ func (c *TimeCollector) Collect(_ context.Context) (map[string]any, error) {
 
 	return map[string]any{
 		"hour":     now.Hour(),
+		"minute":   now.Minute(),
 		"weekday":  strings.ToLower(now.Weekday().String()),
 		"day":      now.Day(),
 		"month":    int(now.Month()),
 		"year":     now.Year(),
 		"timezone": now.Location().String(),
 		"utc_hour": now.UTC().Hour(),
+		"clock":    fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()),
+		"date":     now.Format("2006-01-02"),
 	}, nil
 }

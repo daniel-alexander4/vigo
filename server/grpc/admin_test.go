@@ -11,7 +11,7 @@ import (
 
 func TestGenerateToken(t *testing.T) {
 	svc := &AdminService{
-		baseInterval: 30 * time.Minute,
+		baseInterval: 5 * time.Minute,
 	}
 
 	resp, err := svc.GenerateToken(context.Background(), &pb.GenerateTokenRequest{})
@@ -45,7 +45,7 @@ func TestGenerateToken(t *testing.T) {
 
 func TestAddApprovedPatternValidation(t *testing.T) {
 	svc := &AdminService{
-		baseInterval: 30 * time.Minute,
+		baseInterval: 5 * time.Minute,
 	}
 
 	tests := []struct {
@@ -77,7 +77,7 @@ func TestAddApprovedPatternValidation(t *testing.T) {
 
 func TestForcePushValidation(t *testing.T) {
 	svc := &AdminService{
-		baseInterval: 30 * time.Minute,
+		baseInterval: 5 * time.Minute,
 	}
 
 	// Invalid UUID should return error

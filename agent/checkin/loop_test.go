@@ -131,7 +131,7 @@ func TestRunOnce_DryRun_DoesNotCallReportResult(t *testing.T) {
 	mock := &mockAgentClient{
 		checkInResp: &pb.CheckInResponse{
 			Modules:       nil,
-			BaseInterval:  "30m",
+			BaseInterval:  "5m",
 			JitterPercent: 10,
 		},
 	}
@@ -169,7 +169,7 @@ func TestRunOnce_ReportsResults(t *testing.T) {
 				},
 			},
 			PolicyVersion: 1,
-			BaseInterval:  "30m",
+			BaseInterval:  "5m",
 			JitterPercent: 10,
 		},
 	}
@@ -236,8 +236,8 @@ func TestRunOnce_DefaultTiming(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if result.BaseInterval != 30*time.Minute {
-		t.Errorf("BaseInterval = %v, want 30m (default)", result.BaseInterval)
+	if result.BaseInterval != 5*time.Minute {
+		t.Errorf("BaseInterval = %v, want 5m (default)", result.BaseInterval)
 	}
 	if result.JitterPct != 10 {
 		t.Errorf("JitterPct = %d, want 10 (default)", result.JitterPct)

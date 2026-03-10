@@ -128,7 +128,7 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 	h := &Handler{
 		renderer:     renderer,
 		dataSource:   &mockDataSource{data: td},
-		baseInterval: 30 * time.Minute,
+		baseInterval: 5 * time.Minute,
 		version:      "test",
 	}
 
@@ -627,7 +627,7 @@ func newTestHandlerWithData(t *testing.T, td *testData) *Handler {
 	return &Handler{
 		renderer:     renderer,
 		dataSource:   &mockDataSource{data: td},
-		baseInterval: 30 * time.Minute,
+		baseInterval: 5 * time.Minute,
 		version:      "test",
 	}
 }

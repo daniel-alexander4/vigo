@@ -31,11 +31,11 @@ To edit configs:
 
 Services:
   - gRPC (mTLS): port 1530 (agent traffic)
-  - REST + UI:   port 8085 (hobcli, dashboard, bootstrap)
+  - REST + UI:   port 8181 (hobcli, dashboard, bootstrap)
 
 Next steps:
-  1. Open the dashboard: http://<server-ip>:8085/
-  2. Bootstrap nodes:    curl -sSf http://<server-ip>:8085/bootstrap | sh
+  1. Open the dashboard: http://<server-ip>:8181/
+  2. Bootstrap nodes:    curl -sSf http://<server-ip>:8181/bootstrap | sh
 
 ============================================================
 DONE

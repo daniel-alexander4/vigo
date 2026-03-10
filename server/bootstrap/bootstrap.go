@@ -173,8 +173,15 @@ func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 		caCertStr = string(caCert)
 	}
 
+	// Derive the server address from the request if the configured address
+	// is just a port (e.g. ":8181"). The node needs a full URL to curl from.
+	serverAddr := h.serverAddr
+	if strings.HasPrefix(serverAddr, ":") {
+		serverAddr = "http://" + r.Host
+	}
+
 	data := bootstrapData{
-		ServerAddr: h.serverAddr,
+		ServerAddr: serverAddr,
 		Token:      token,
 		CACert:     caCertStr,
 	}

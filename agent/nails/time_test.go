@@ -2,6 +2,7 @@ package nails
 
 import (
 	"context"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -73,5 +74,29 @@ func TestTimeCollector(t *testing.T) {
 	}
 	if utcHour < 0 || utcHour > 23 {
 		t.Errorf("utc_hour = %d, want 0-23", utcHour)
+	}
+
+	minute, ok := result["minute"].(int)
+	if !ok {
+		t.Fatal("minute is not int")
+	}
+	if minute < 0 || minute > 59 {
+		t.Errorf("minute = %d, want 0-59", minute)
+	}
+
+	clock, ok := result["clock"].(string)
+	if !ok {
+		t.Fatal("clock is not string")
+	}
+	if !regexp.MustCompile(`^\d{2}:\d{2}$`).MatchString(clock) {
+		t.Errorf("clock = %q, want HH:MM format", clock)
+	}
+
+	date, ok := result["date"].(string)
+	if !ok {
+		t.Fatal("date is not string")
+	}
+	if date != now.Format("2006-01-02") {
+		t.Errorf("date = %q, want %q", date, now.Format("2006-01-02"))
 	}
 }

@@ -196,7 +196,7 @@ CREATE TABLE webhooks (
 ```yaml
 server:
   grpc_listen: ":1530"
-  api_listen: ":8080"
+  api_listen: ":8181"
   tls:
     cert_file: "/certs/server.crt"
     key_file: "/certs/server.key"
@@ -206,7 +206,7 @@ database:
   dsn: "postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable"
 
 checkin:
-  base_interval: "30m"             # Clients should use this as their base interval
+  base_interval: "5m"              # Clients should use this as their base interval
   jitter_percent: 20               # ± 20%
 
 webhooks:
@@ -422,7 +422,7 @@ services:
       dockerfile: Dockerfile.server
     ports:
       - "1530:1530"   # gRPC
-      - "8080:8080"   # REST API + UI + metrics
+      - "8181:8181"   # REST API + UI + metrics
     volumes:
       - ./config:/config:ro
       - ./certs:/certs:ro

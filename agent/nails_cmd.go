@@ -37,21 +37,21 @@ Examples:
 
 		// No args: collect everything and print.
 		if len(args) == 0 {
-			traits, err := nails.CollectAll(ctx, allCollectors)
+			collected, err := nails.CollectAll(ctx, allCollectors)
 			if err != nil {
 				return err
 			}
-			return printJSON(traits)
+			return printJSON(collected)
 		}
 
 		// If first arg contains a dot, treat as dot-path query.
 		if strings.Contains(args[0], ".") {
 			dotPath := args[0]
-			traits, err := nails.CollectAll(ctx, allCollectors)
+			collected, err := nails.CollectAll(ctx, allCollectors)
 			if err != nil {
 				return err
 			}
-			val, ok := traverseDotPath(traits, dotPath)
+			val, ok := traverseDotPath(collected, dotPath)
 			if !ok {
 				fmt.Fprintf(os.Stderr, "nail path '%s' not found\n", dotPath)
 				os.Exit(1)
@@ -67,11 +67,11 @@ Examples:
 			os.Exit(1)
 		}
 
-		traits, err := nails.CollectAll(ctx, filtered)
+		collected, err := nails.CollectAll(ctx, filtered)
 		if err != nil {
 			return err
 		}
-		return printJSON(traits)
+		return printJSON(collected)
 	},
 }
 
