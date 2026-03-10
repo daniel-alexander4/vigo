@@ -517,20 +517,6 @@ body {
 .chroma .ld { color: #e6db74; }
 .chroma .ldi { color: #ae81ff; }
 
-/* === Coming Soon Placeholder === */
-.coming-soon {
-    text-align: center;
-    padding: 80px 40px;
-    color: var(--color-text-muted);
-}
-
-.coming-soon h2 {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: var(--color-text);
-}
-
 /* === Filter Bar === */
 .filter-bar {
     display: flex;

@@ -374,7 +374,7 @@ func SubstituteVars(expr WhenExpr, vars map[string]any) WhenExpr {
 	case *BoolLitExpr:
 		return e
 	case *VarRefExpr:
-		return &BoolLitExpr{Value: whenVarIsTrue(e.Name, vars)}
+		return &BoolLitExpr{Value: WhenVarIsTrue(e.Name, vars)}
 	case *NotWhenExpr:
 		return &NotWhenExpr{Operand: SubstituteVars(e.Operand, vars)}
 	case *AndWhenExpr:
@@ -388,8 +388,8 @@ func SubstituteVars(expr WhenExpr, vars map[string]any) WhenExpr {
 	}
 }
 
-// whenVarIsTrue returns true only if vars[name] == "true" (string).
-func whenVarIsTrue(name string, vars map[string]any) bool {
+// WhenVarIsTrue returns true only if vars[name] == "true" (string).
+func WhenVarIsTrue(name string, vars map[string]any) bool {
 	v, ok := vars[name]
 	if !ok {
 		return false

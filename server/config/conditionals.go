@@ -27,7 +27,7 @@ func EvaluateResourceWhen(when string, vars map[string]any) (shouldInclude bool,
 	if !conditionals.ContainsFuncCalls(expr) {
 		// Pure var expression — evaluate fully server-side.
 		result, err := conditionals.EvalWhenExpr(expr, func(name string) bool {
-			return whenVarIsTrue(name, vars)
+			return conditionals.WhenVarIsTrue(name, vars)
 		})
 		if err != nil {
 			return false, "", fmt.Errorf("evaluating when expression %q: %w", when, err)
@@ -59,24 +59,10 @@ func ShouldIncludeModule(mod ModuleConfig, vars map[string]any) bool {
 	}
 
 	result, err := conditionals.EvalWhenExpr(expr, func(name string) bool {
-		return whenVarIsTrue(name, vars)
+		return conditionals.WhenVarIsTrue(name, vars)
 	})
 	if err != nil {
 		return false
 	}
 	return result
-}
-
-// whenVarIsTrue returns true only if vars[name] == "true" (string).
-// Unknown var names or non-"true" values return false.
-func whenVarIsTrue(name string, vars map[string]any) bool {
-	v, ok := vars[name]
-	if !ok {
-		return false
-	}
-	s, ok := v.(string)
-	if !ok {
-		return false
-	}
-	return s == "true"
 }
