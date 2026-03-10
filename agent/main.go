@@ -114,6 +114,8 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"kernel_module": &modules.KernelModuleExecutor{},
 		"swap":          &modules.SwapExecutor{},
 		"tmpfile":       &modules.TmpfileExecutor{},
+		"ini":           &modules.INIExecutor{},
+		"json_file":     &modules.JSONFileExecutor{},
 	}
 
 	osFamily, osDistro := detectOSInfo()

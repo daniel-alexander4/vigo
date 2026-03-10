@@ -85,6 +85,8 @@ var knownTypes = map[string]bool{
 	"kernel_module": true,
 	"swap":          true,
 	"tmpfile":       true,
+	"ini":           true,
+	"json_file":     true,
 }
 
 // ValidateModule checks all resources in a module for idempotency.
