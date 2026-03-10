@@ -14,6 +14,9 @@ func VolatileCollectors() []Collector {
 		&UptimeCollector{},
 		&LoadAvgCollector{},
 		&MountpointsCollector{},
+		&FilesystemCollector{},
+		&UsersCollector{},
+		&MemoryCollector{},
 	}
 }
 
@@ -31,6 +34,8 @@ func StableCollectors() []Collector {
 		&ProcessorsCollector{},
 		&DMICollector{},
 		&CloudCollector{},
+		&KernelCollector{},
+		&BlockDevicesCollector{},
 	}
 }
 

@@ -52,5 +52,10 @@ func DefaultCollectors() []Collector {
 		&ProcessorsCollector{},
 		&DMICollector{},
 		&CloudCollector{},
+		&FilesystemCollector{},
+		&KernelCollector{},
+		&UsersCollector{},
+		&MemoryCollector{},
+		&BlockDevicesCollector{},
 	}
 }

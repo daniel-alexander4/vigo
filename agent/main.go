@@ -100,6 +100,8 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"exec":       &modules.ExecExecutor{},
 		"archive":    &modules.ArchiveExecutor{},
 		"cron":       &modules.CronExecutor{},
+		"process":    &modules.ProcessExecutor{},
+		"file_line":  &modules.FileLineExecutor{},
 	}
 
 	osFamily, osDistro := detectOSInfo()

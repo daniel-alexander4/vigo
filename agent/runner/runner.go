@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -264,6 +266,63 @@ func evaluateAgentWhen(ctx context.Context, when string) (bool, error) {
 			parts := strings.Fields(args[0])
 			cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 			return cmd.Run() == nil, nil
+
+		// Time-based conditionals
+		case "hour_range":
+			if len(args) != 2 {
+				return false, fmt.Errorf("hour_range requires 2 arguments (start, end)")
+			}
+			start, err1 := strconv.Atoi(args[0])
+			end, err2 := strconv.Atoi(args[1])
+			if err1 != nil || err2 != nil {
+				return false, fmt.Errorf("hour_range arguments must be integers")
+			}
+			h := time.Now().Hour()
+			if start <= end {
+				return h >= start && h <= end, nil
+			}
+			return h >= start || h <= end, nil // wraps midnight
+		case "day_of_week":
+			if len(args) != 1 {
+				return false, fmt.Errorf("day_of_week requires exactly 1 argument")
+			}
+			today := strings.ToLower(time.Now().Weekday().String())
+			return strings.EqualFold(args[0], today) || strings.EqualFold(args[0], today[:3]), nil
+		case "day_of_month":
+			if len(args) != 1 {
+				return false, fmt.Errorf("day_of_month requires exactly 1 argument")
+			}
+			d, err := strconv.Atoi(args[0])
+			if err != nil {
+				return false, fmt.Errorf("day_of_month argument must be integer")
+			}
+			return time.Now().Day() == d, nil
+
+		// Persistent flags
+		case "flag_set":
+			if len(args) != 1 {
+				return false, fmt.Errorf("flag_set requires exactly 1 argument")
+			}
+			flagPath := filepath.Join("/etc/hobnob-node/flags", args[0])
+			_, err := os.Stat(flagPath)
+			return err == nil, nil
+
+		// Process checks
+		case "process_running":
+			if len(args) != 1 {
+				return false, fmt.Errorf("process_running requires exactly 1 argument")
+			}
+			cmd := exec.CommandContext(ctx, "pgrep", "-x", args[0])
+			return cmd.Run() == nil, nil
+
+		// Directory check
+		case "dir_exists":
+			if len(args) != 1 {
+				return false, fmt.Errorf("dir_exists requires exactly 1 argument")
+			}
+			info, err := os.Stat(args[0])
+			return err == nil && info.IsDir(), nil
+
 		default:
 			return false, fmt.Errorf("unknown builtin function %q", name)
 		}

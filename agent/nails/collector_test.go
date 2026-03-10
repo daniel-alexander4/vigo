@@ -425,8 +425,8 @@ func TestCloudCollector_ReturnsProvider(t *testing.T) {
 
 func TestDefaultCollectors_ReturnsAllCollectors(t *testing.T) {
 	collectors := DefaultCollectors()
-	if len(collectors) != 13 {
-		t.Fatalf("DefaultCollectors() returned %d collectors, want 13", len(collectors))
+	if len(collectors) != 18 {
+		t.Fatalf("DefaultCollectors() returned %d collectors, want 18", len(collectors))
 	}
 
 	names := make(map[string]bool)
@@ -437,7 +437,8 @@ func TestDefaultCollectors_ReturnsAllCollectors(t *testing.T) {
 	expected := []string{
 		"os", "hardware", "network", "packages", "time",
 		"identity", "virtual", "uptime", "loadavg", "mountpoints",
-		"processors", "dmi", "cloud",
+		"processors", "dmi", "cloud", "filesystem", "kernel",
+		"users", "memory", "blockdevices",
 	}
 	for _, name := range expected {
 		if !names[name] {

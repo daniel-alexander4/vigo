@@ -134,9 +134,9 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 			if err := val.Decode(&res.Subscribes); err != nil {
 				return res, fmt.Errorf("decoding subscribes: %w", err)
 			}
-		case key == "depends_on":
+		case key == "depends_on" || key == "require":
 			if err := val.Decode(&res.DependsOn); err != nil {
-				return res, fmt.Errorf("decoding depends_on: %w", err)
+				return res, fmt.Errorf("decoding %s: %w", key, err)
 			}
 		default:
 			var v any
