@@ -13,6 +13,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/hobnob/hobnob/server/conditionals"
+	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/secrets"
 	"github.com/hobnob/hobnob/server/validate"
 	"gopkg.in/yaml.v3"
@@ -166,6 +167,18 @@ func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "tem
 // loadAll reads module defs, role defs, and node YAML files, resolves
 // all entries, and atomically swaps the config.
 func (cs *ConfigStore) loadAll() error {
+	start := time.Now()
+	err := cs.loadAllInner()
+	elapsed := time.Since(start)
+	if err != nil {
+		metrics.ConfigReloadErrors.Inc()
+		return err
+	}
+	metrics.ConfigReloadDuration.Observe(elapsed.Seconds())
+	return nil
+}
+
+func (cs *ConfigStore) loadAllInner() error {
 	moduleDefs, err := loadModuleDefs(cs.modulesDir(), cs.dangerous)
 	if err != nil {
 		return fmt.Errorf("loading modules: %w", err)

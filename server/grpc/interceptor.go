@@ -14,14 +14,14 @@ import (
 	"github.com/hobnob/hobnob/agent/auth"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// signatureTimestampWindow is the maximum age of a signed request before
-// it is rejected for replay prevention.
-const signatureTimestampWindow = 5 * time.Minute
+// defaultSignatureWindow is used when no custom window is provided.
+const defaultSignatureWindow = 5 * time.Minute
 
 // SignatureVerifyInterceptor returns a unary server interceptor that verifies
 // ED25519 signatures on agent requests (SEC-03). The Register RPC is skipped
@@ -32,8 +32,12 @@ const signatureTimestampWindow = 5 * time.Minute
 // in the request context so downstream handlers can reuse it without another
 // lookup.
 //
-// If nodeCache is nil, falls back to direct DB queries (backward compat).
-func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache) grpc.UnaryServerInterceptor {
+// sigWindow configures the maximum age of a signed request before rejection
+// for replay prevention. If zero, defaults to 5 minutes.
+func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache, sigWindow time.Duration) grpc.UnaryServerInterceptor {
+	if sigWindow == 0 {
+		sigWindow = defaultSignatureWindow
+	}
 	return func(
 		ctx context.Context,
 		req any,
@@ -48,19 +52,19 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache) gr
 		// Only verify agent RPCs that carry signatures.
 		switch r := req.(type) {
 		case *pb.CheckInRequest:
-			newCtx, err := verifyCheckIn(ctx, queries, nodeCache, r)
+			newCtx, err := verifyCheckIn(ctx, queries, nodeCache, r, sigWindow)
 			if err != nil {
 				return nil, err
 			}
 			ctx = newCtx
 		case *pb.ReportResultRequest:
-			newCtx, err := verifyReportResultCtx(ctx, queries, nodeCache, r)
+			newCtx, err := verifyReportResultCtx(ctx, queries, nodeCache, r, sigWindow)
 			if err != nil {
 				return nil, err
 			}
 			ctx = newCtx
 		case *pb.ReportTraitsRequest:
-			if err := verifyReportTraits(ctx, queries, nodeCache, r); err != nil {
+			if err := verifyReportTraits(ctx, queries, nodeCache, r, sigWindow); err != nil {
 				return nil, err
 			}
 		default:
@@ -73,7 +77,7 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache) gr
 
 // verifyCheckIn validates the signature on a CheckInRequest. On success, it
 // returns a context enriched with the looked-up node for handler reuse.
-func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.CheckInRequest) (context.Context, error) {
+func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.CheckInRequest, sigWindow time.Duration) (context.Context, error) {
 	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
@@ -89,7 +93,7 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache
 		return ctx, status.Error(codes.InvalidArgument, "timestamp is required")
 	}
 	tsTime := ts.AsTime()
-	if err := checkTimestamp(tsTime); err != nil {
+	if err := checkTimestamp(tsTime, sigWindow); err != nil {
 		return ctx, err
 	}
 
@@ -98,6 +102,7 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
@@ -107,7 +112,7 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache
 
 // verifyReportResultCtx validates the signature on a ReportResultRequest and
 // stores the node in context for handler reuse.
-func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportResultRequest) (context.Context, error) {
+func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportResultRequest, sigWindow time.Duration) (context.Context, error) {
 	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
@@ -123,7 +128,7 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.N
 		return ctx, status.Error(codes.InvalidArgument, "timestamp is required")
 	}
 	tsTime := ts.AsTime()
-	if err := checkTimestamp(tsTime); err != nil {
+	if err := checkTimestamp(tsTime, sigWindow); err != nil {
 		return ctx, err
 	}
 
@@ -131,6 +136,7 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.N
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
@@ -138,7 +144,7 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.N
 }
 
 // verifyReportTraits validates the signature on a ReportTraitsRequest.
-func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportTraitsRequest) error {
+func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportTraitsRequest, sigWindow time.Duration) error {
 	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
@@ -154,7 +160,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.Node
 		return status.Error(codes.InvalidArgument, "timestamp is required")
 	}
 	tsTime := ts.AsTime()
-	if err := checkTimestamp(tsTime); err != nil {
+	if err := checkTimestamp(tsTime, sigWindow); err != nil {
 		return err
 	}
 
@@ -162,6 +168,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.Node
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
@@ -177,6 +184,7 @@ func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.Nod
 	if cache != nil {
 		node, pubKey, err := cache.GetByIDWithPubKey(ctx, nodeID)
 		if err != nil {
+			metrics.SigVerifyFailed.WithLabelValues("node_not_found").Inc()
 			slog.Error("node lookup failed", "node_id", nodeID, "error", err)
 			return db.Node{}, nil, status.Error(codes.Unauthenticated, "node not found")
 		}
@@ -186,6 +194,7 @@ func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.Nod
 	// Slow path: direct DB query + parse.
 	node, err := queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
+		metrics.SigVerifyFailed.WithLabelValues("node_not_found").Inc()
 		slog.Error("node lookup failed", "node_id", nodeID, "error", err)
 		return db.Node{}, nil, status.Error(codes.Unauthenticated, "node not found")
 	}
@@ -209,12 +218,12 @@ func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.Nod
 }
 
 // checkTimestamp verifies the timestamp is within the allowed window.
-func checkTimestamp(ts time.Time) error {
+func checkTimestamp(ts time.Time, window time.Duration) error {
 	diff := time.Since(ts)
-	if math.Abs(float64(diff)) > float64(signatureTimestampWindow) {
+	if math.Abs(float64(diff)) > float64(window) {
 		return status.Errorf(codes.Unauthenticated,
 			"request timestamp too far from server time (diff: %v, window: %v) — ensure NTP is running on both server and agent (e.g. timedatectl set-ntp true)",
-			diff, signatureTimestampWindow)
+			diff, window)
 	}
 	return nil
 }

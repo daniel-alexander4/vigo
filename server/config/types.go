@@ -19,6 +19,27 @@ type ServerConfig struct {
 	Watcher   WatcherSection  `yaml:"watcher"`
 	Secrets   secrets.Config  `yaml:"secrets"`
 	Bootstrap BootstrapConfig `yaml:"bootstrap"`
+	Tuning    TuningSection   `yaml:"tuning"`
+}
+
+// TuningSection holds operational tuning parameters. All fields are optional
+// and default to sensible values when omitted from server.yaml.
+type TuningSection struct {
+	SignatureWindow     string        `yaml:"signature_window"`      // default "5m"
+	NodeCacheTTL        string        `yaml:"node_cache_ttl"`        // default "60s"
+	LastSeenFlush       string        `yaml:"last_seen_flush"`       // default "10s"
+	TraitsPruneInterval string        `yaml:"traits_prune_interval"` // default "5m"
+	MetricsInterval     string        `yaml:"metrics_interval"`      // default "30s"
+	TraitsScannerTTL    string        `yaml:"traits_scanner_ttl"`    // default "30s"
+	Webhook             WebhookTuning `yaml:"webhook"`
+}
+
+// WebhookTuning holds webhook dispatch tuning parameters.
+type WebhookTuning struct {
+	Timeout       string `yaml:"timeout"`        // default "10s"
+	MaxRetries    int    `yaml:"max_retries"`     // default 3
+	MaxConcurrent int    `yaml:"max_concurrent"`  // default 20
+	RetryDelay    string `yaml:"retry_delay"`     // default "5s"
 }
 
 // WatcherSection holds secret rotation watcher configuration.

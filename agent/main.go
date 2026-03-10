@@ -30,15 +30,19 @@ import (
 var version = "dev"
 
 var (
-	dataDir      string
-	server       string
-	caFile       string
-	certFile     string
-	keyFile      string
-	apiAddr      string
-	dryRun       bool
-	logLevel     string
-	executorsDir string
+	dataDir            string
+	server             string
+	caFile             string
+	certFile           string
+	keyFile            string
+	apiAddr            string
+	dryRun             bool
+	logLevel           string
+	executorsDir       string
+	snapshotDir        string
+	snapshotRetention  int
+	traitRefreshCycles int
+	resultCacheCycles  int
 )
 
 func main() {
@@ -247,8 +251,8 @@ var rootCmd = &cobra.Command{
 
 		// Initialize snapshot manager.
 		snapshotMgr := &snapshots.Manager{
-			BaseDir:    "/var/lib/hobnob/snapshots",
-			MaxPerPath: 5,
+			BaseDir:    snapshotDir,
+			MaxPerPath: snapshotRetention,
 		}
 
 		// Build executors.
@@ -278,7 +282,10 @@ var rootCmd = &cobra.Command{
 
 		// Start the daemon loop with custom traits cache.
 		traitsCacheDir := filepath.Join(dataDir, "traits")
-		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg, traitsCacheDir)
+		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg, traitsCacheDir, checkin.LoopConfig{
+			TraitRefreshCycles: traitRefreshCycles,
+			ResultCacheCycles:  resultCacheCycles,
+		})
 	},
 }
 
@@ -406,8 +413,8 @@ var runCmd = &cobra.Command{
 
 		// Build executors.
 		snapshotMgr := &snapshots.Manager{
-			BaseDir:    "/var/lib/hobnob/snapshots",
-			MaxPerPath: 5,
+			BaseDir:    snapshotDir,
+			MaxPerPath: snapshotRetention,
 		}
 		executors := buildExecutors(snapshotMgr)
 
@@ -755,6 +762,10 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().StringVar(&apiAddr, "api-addr", "http://localhost:8181", "server REST API address for self-update")
 	rootCmd.PersistentFlags().StringVar(&executorsDir, "executors-dir", "/etc/hobnob-node/executors", "directory for custom executor scripts")
+	rootCmd.PersistentFlags().StringVar(&snapshotDir, "snapshot-dir", "/var/lib/hobnob/snapshots", "directory for file snapshots (rollback)")
+	rootCmd.PersistentFlags().IntVar(&snapshotRetention, "snapshot-retention", 5, "max snapshots to keep per file path")
+	rootCmd.PersistentFlags().IntVar(&traitRefreshCycles, "trait-refresh-cycles", 10, "stable trait collectors refresh every N check-in cycles")
+	rootCmd.PersistentFlags().IntVar(&resultCacheCycles, "result-cache-cycles", 5, "no-op resource results cached for N check-in cycles")
 
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview mode: show what would change without applying")
 

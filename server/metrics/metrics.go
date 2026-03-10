@@ -61,4 +61,23 @@ var (
 		Name: "hobnob_time_since_checkin_seconds",
 		Help: "Seconds since last check-in per node.",
 	}, []string{"node"})
+
+	// SigVerifyFailed counts signature verification failures by reason (counter).
+	SigVerifyFailed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "hobnob_sig_verify_failed_total",
+		Help: "Signature verification failures.",
+	}, []string{"reason"})
+
+	// ConfigReloadDuration tracks config reload durations in seconds (histogram).
+	ConfigReloadDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "hobnob_config_reload_duration_seconds",
+		Help:    "Duration of config reloads in seconds.",
+		Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+	})
+
+	// ConfigReloadErrors counts config reload failures (counter).
+	ConfigReloadErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "hobnob_config_reload_errors_total",
+		Help: "Total number of config reload failures.",
+	})
 )

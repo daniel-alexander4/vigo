@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 
@@ -42,6 +43,8 @@ func (s *AdminService) AddApprovedPattern(ctx context.Context, req *pb.AddApprov
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating approved pattern: %v", err)
 	}
+
+	slog.Info("approved pattern created", "id", ap.ID, "pattern", ap.Pattern)
 
 	return &pb.AddApprovedPatternResponse{
 		Id:        ap.ID.String(),
@@ -82,6 +85,8 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 	if err := s.queries.DeleteApprovedPattern(ctx, id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting approved pattern: %v", err)
 	}
+
+	slog.Info("approved pattern revoked", "id", id)
 
 	return &pb.RevokeApprovedPatternResponse{}, nil
 }
@@ -128,6 +133,8 @@ func (s *AdminService) RevokeNode(ctx context.Context, req *pb.RevokeNodeRequest
 		return nil, status.Errorf(codes.Internal, "revoking node: %v", err)
 	}
 
+	slog.Warn("node revoked", "node_id", id)
+
 	return &pb.RevokeNodeResponse{}, nil
 }
 
@@ -142,6 +149,8 @@ func (s *AdminService) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest
 	if err := s.queries.DeleteNode(ctx, id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting node: %v", err)
 	}
+
+	slog.Warn("node deleted", "node_id", id)
 
 	return &pb.DeleteNodeResponse{}, nil
 }
@@ -249,6 +258,8 @@ func (s *AdminService) GenerateToken(ctx context.Context, _ *pb.GenerateTokenReq
 		return nil, status.Errorf(codes.Internal, "generating random token: %v", err)
 	}
 
+	slog.Info("enrollment token generated")
+
 	return &pb.GenerateTokenResponse{
 		Token: hex.EncodeToString(b),
 	}, nil
@@ -332,6 +343,8 @@ func (s *AdminService) AddWebhook(ctx context.Context, req *pb.AddWebhookRequest
 		return nil, status.Errorf(codes.Internal, "creating webhook: %v", err)
 	}
 
+	slog.Info("webhook created", "id", wh.ID, "url", wh.Url, "events", wh.Events)
+
 	return &pb.AddWebhookResponse{
 		Webhook: &pb.WebhookInfo{
 			Id:        wh.ID.String(),
@@ -372,6 +385,8 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookR
 	if err := s.queries.DeleteWebhook(ctx, id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting webhook: %v", err)
 	}
+
+	slog.Warn("webhook deleted", "id", id)
 
 	return &pb.DeleteWebhookResponse{}, nil
 }

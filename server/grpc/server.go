@@ -43,16 +43,19 @@ func (cc *CertCache) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, e
 
 // ServerConfig holds everything needed to construct the gRPC server.
 type ServerConfig struct {
-	CertFile     string
-	KeyFile      string
-	CAFile       string
-	GRPCPort     string
-	Registry     *registry.Registry
-	ConfigStore  *config.ConfigStore
-	Queries      *db.Queries
-	BaseInterval time.Duration
-	Dispatcher   *webhook.Dispatcher
-	TraitsDir     string
+	CertFile        string
+	KeyFile         string
+	CAFile          string
+	GRPCPort        string
+	Registry        *registry.Registry
+	ConfigStore     *config.ConfigStore
+	Queries         *db.Queries
+	BaseInterval    time.Duration
+	Dispatcher      *webhook.Dispatcher
+	TraitsDir       string
+	SignatureWindow time.Duration // 0 → default 5m
+	NodeCacheTTL    time.Duration // 0 → default 60s
+	TraitsScannerTTL time.Duration // 0 → default 30s
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -67,13 +70,22 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 
 	creds := credentials.NewTLS(tlsCfg)
 
-	nodeCache := db.NewNodeCache(cfg.Queries, 60*time.Second)
+	nodeCacheTTL := cfg.NodeCacheTTL
+	if nodeCacheTTL == 0 {
+		nodeCacheTTL = 60 * time.Second
+	}
+	traitsScannerTTL := cfg.TraitsScannerTTL
+	if traitsScannerTTL == 0 {
+		traitsScannerTTL = 30 * time.Second
+	}
+
+	nodeCache := db.NewNodeCache(cfg.Queries, nodeCacheTTL)
 	lastSeenBatch := db.NewLastSeenBatcher(cfg.Queries)
 	traitsPruner := db.NewTraitsPruner(cfg.Queries)
 
 	srv := grpc.NewServer(
 		grpc.Creds(creds),
-		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, nodeCache)),
+		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, nodeCache, cfg.SignatureWindow)),
 	)
 
 	agentSvc := &AgentService{
@@ -81,7 +93,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		configStore:   cfg.ConfigStore,
 		queries:       cfg.Queries,
 		dispatcher:    cfg.Dispatcher,
-		traitsScanner: traits.NewScanner(cfg.TraitsDir, 30*time.Second),
+		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		nodeCache:     nodeCache,
 		lastSeenBatch: lastSeenBatch,
 		traitsPruner:  traitsPruner,

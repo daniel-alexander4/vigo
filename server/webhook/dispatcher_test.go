@@ -91,7 +91,7 @@ func TestDispatchSendsCorrectHeaders(t *testing.T) {
 		Active: true,
 	}
 
-	d := NewDispatcher(nil)
+	d := NewDispatcher(nil, DispatcherConfig{})
 	d.httpClient = ts.Client()
 
 	// Deliver directly to test headers.
@@ -162,7 +162,7 @@ func TestDeliverRetriesOnServerError(t *testing.T) {
 		Active: true,
 	}
 
-	d := NewDispatcher(nil)
+	d := NewDispatcher(nil, DispatcherConfig{})
 	d.httpClient = ts.Client()
 	d.maxRetries = 3
 	d.retryBaseDelay = 1 * time.Millisecond // fast retries for test

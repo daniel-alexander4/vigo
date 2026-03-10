@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hobnob/hobnob/agent/modules"
@@ -19,7 +20,15 @@ import (
 // whenParseCache caches parsed when expressions to avoid re-parsing the same
 // expression string on every resource evaluation. Most resources in a module
 // share identical when conditions, so this eliminates 80-90% of parse overhead.
-var whenParseCache sync.Map // map[string]whenCacheEntry
+//
+// Bounded to maxWhenCacheEntries to prevent unbounded memory growth on
+// long-running agents with frequently changing policies.
+var (
+	whenParseCache   sync.Map // map[string]whenCacheEntry
+	whenCacheLen     atomic.Int64
+)
+
+const maxWhenCacheEntries = 1024
 
 type whenCacheEntry struct {
 	expr conditionals.WhenExpr
@@ -33,6 +42,18 @@ func parseWhenExprCached(when string) (conditionals.WhenExpr, error) {
 		return entry.expr, entry.err
 	}
 	expr, err := conditionals.ParseWhenExpr(when)
+
+	// Evict all entries when cache grows too large. The working set
+	// rebuilds quickly since a single policy bundle has far fewer
+	// unique expressions than the limit.
+	if whenCacheLen.Add(1) > maxWhenCacheEntries {
+		whenParseCache.Range(func(key, _ any) bool {
+			whenParseCache.Delete(key)
+			return true
+		})
+		whenCacheLen.Store(0)
+	}
+
 	whenParseCache.Store(when, whenCacheEntry{expr: expr, err: err})
 	return expr, err
 }

@@ -50,16 +50,37 @@ type Dispatcher struct {
 	sem            chan struct{} // bounds concurrent deliveries
 }
 
-// NewDispatcher creates a new webhook dispatcher.
-func NewDispatcher(queries *db.Queries) *Dispatcher {
+// DispatcherConfig holds configurable parameters for the webhook dispatcher.
+type DispatcherConfig struct {
+	Timeout       time.Duration
+	MaxRetries    int
+	MaxConcurrent int
+	RetryDelay    time.Duration
+}
+
+// NewDispatcher creates a new webhook dispatcher with the given config.
+// Zero-value fields in cfg use sensible defaults.
+func NewDispatcher(queries *db.Queries, cfg DispatcherConfig) *Dispatcher {
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 10 * time.Second
+	}
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = 3
+	}
+	if cfg.MaxConcurrent == 0 {
+		cfg.MaxConcurrent = 20
+	}
+	if cfg.RetryDelay == 0 {
+		cfg.RetryDelay = 5 * time.Second
+	}
 	return &Dispatcher{
 		queries: queries,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: cfg.Timeout,
 		},
-		maxRetries:     3,
-		retryBaseDelay: 5 * time.Second,
-		sem:            make(chan struct{}, 20), // max 20 concurrent deliveries
+		maxRetries:     cfg.MaxRetries,
+		retryBaseDelay: cfg.RetryDelay,
+		sem:            make(chan struct{}, cfg.MaxConcurrent),
 	}
 }
 

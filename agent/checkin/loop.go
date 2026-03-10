@@ -204,7 +204,21 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 // Stable traits (OS, hardware, network, packages, etc.) are cached and only
 // refreshed every 10 cycles. Volatile traits (time, uptime, loadavg,
 // mountpoints) are collected every cycle.
-func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, traitsCacheDir string) error {
+// LoopConfig holds tuning parameters for the daemon loop.
+type LoopConfig struct {
+	TraitRefreshCycles int // stable traits refresh every N cycles (default 10)
+	ResultCacheCycles  int // no-op results cached for N cycles (default 5)
+}
+
+func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, traitsCacheDir string, loopCfg LoopConfig) error {
+	traitRefreshCycles := loopCfg.TraitRefreshCycles
+	if traitRefreshCycles <= 0 {
+		traitRefreshCycles = 10
+	}
+	resultCacheCycles := loopCfg.ResultCacheCycles
+	if resultCacheCycles <= 0 {
+		resultCacheCycles = 5
+	}
 	logger := slog.Default()
 	bo := NewBackoff()
 
@@ -223,12 +237,12 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		ModuleCache: NewModuleCache(),
 	}
 
-	// Cached collector set: stable traits refresh every 10 cycles.
-	collectors := traits.NewCachedCollectors(10)
+	// Cached collector set: stable traits refresh every N cycles.
+	collectors := traits.NewCachedCollectors(traitRefreshCycles)
 
 	// Result cache: skip re-executing resources whose params haven't changed
-	// and whose last execution was a no-op. Expires after 5 cycles.
-	resultCache := runner.NewResultCache(5)
+	// and whose last execution was a no-op. Expires after N cycles.
+	resultCache := runner.NewResultCache(resultCacheCycles)
 
 	// Custom traits manifest cached from previous cycle's response.
 	var cachedCustomTraits []*pb.CustomTraitEntry

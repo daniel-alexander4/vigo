@@ -133,31 +133,49 @@ func run() error {
 		}
 	}
 
+	// Parse tuning parameters (all optional, zero values use defaults).
+	sigWindow := parseDuration(cfg.Tuning.SignatureWindow, 0)
+	nodeCacheTTL := parseDuration(cfg.Tuning.NodeCacheTTL, 0)
+	lastSeenFlush := parseDuration(cfg.Tuning.LastSeenFlush, 10*time.Second)
+	traitsPruneInterval := parseDuration(cfg.Tuning.TraitsPruneInterval, 5*time.Minute)
+	metricsInterval := parseDuration(cfg.Tuning.MetricsInterval, 30*time.Second)
+	traitsScannerTTL := parseDuration(cfg.Tuning.TraitsScannerTTL, 0)
+	whTimeout := parseDuration(cfg.Tuning.Webhook.Timeout, 0)
+	whRetryDelay := parseDuration(cfg.Tuning.Webhook.RetryDelay, 0)
+
 	// Create webhook dispatcher.
-	dispatcher := webhook.NewDispatcher(queries)
+	dispatcher := webhook.NewDispatcher(queries, webhook.DispatcherConfig{
+		Timeout:       whTimeout,
+		MaxRetries:    cfg.Tuning.Webhook.MaxRetries,
+		MaxConcurrent: cfg.Tuning.Webhook.MaxConcurrent,
+		RetryDelay:    whRetryDelay,
+	})
 
 	// Create and start gRPC server.
 	grpcSrv, _, lastSeenBatch, traitsPruner, err := isgrpc.NewServer(isgrpc.ServerConfig{
-		CertFile:     cfg.Server.TLS.CertFile,
-		KeyFile:      cfg.Server.TLS.KeyFile,
-		CAFile:       cfg.Server.TLS.CAFile,
-		GRPCPort:     cfg.Server.GRPCListen,
-		Registry:     reg,
-		ConfigStore:  configStore,
-		Queries:      queries,
-		BaseInterval: baseInterval,
-		Dispatcher:   dispatcher,
-		TraitsDir:    traitsDir,
+		CertFile:         cfg.Server.TLS.CertFile,
+		KeyFile:          cfg.Server.TLS.KeyFile,
+		CAFile:           cfg.Server.TLS.CAFile,
+		GRPCPort:         cfg.Server.GRPCListen,
+		Registry:         reg,
+		ConfigStore:      configStore,
+		Queries:          queries,
+		BaseInterval:     baseInterval,
+		Dispatcher:       dispatcher,
+		TraitsDir:        traitsDir,
+		SignatureWindow:  sigWindow,
+		NodeCacheTTL:     nodeCacheTTL,
+		TraitsScannerTTL: traitsScannerTTL,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
 	}
 
-	// Start async last_seen batcher (flushes every 10s).
-	go lastSeenBatch.Start(ctx, 10*time.Second)
+	// Start async last_seen batcher.
+	go lastSeenBatch.Start(ctx, lastSeenFlush)
 
-	// Start async traits pruner (flushes every 5m).
-	go traitsPruner.Start(ctx, 5*time.Minute)
+	// Start async traits pruner.
+	go traitsPruner.Start(ctx, traitsPruneInterval)
 
 	// Start secret rotation watcher if enabled and provider supports versioning.
 	if cfg.Watcher.Enabled {
@@ -194,7 +212,7 @@ func run() error {
 
 	// Start metrics collector in background.
 	metricsCollector := metrics.NewCollector(queries)
-	go metricsCollector.Run(ctx, 30*time.Second)
+	go metricsCollector.Run(ctx, metricsInterval)
 
 	// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
 	var gwOpts []api.GatewayOption
@@ -295,4 +313,16 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// parseDuration parses a duration string, returning def if s is empty or invalid.
+func parseDuration(s string, def time.Duration) time.Duration {
+	if s == "" {
+		return def
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return def
+	}
+	return d
 }
