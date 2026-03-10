@@ -1,8 +1,8 @@
 package runner
 
 import (
-	"crypto/sha256"
-	"fmt"
+	"encoding/hex"
+	"hash/fnv"
 	"sort"
 	"sync"
 
@@ -94,7 +94,8 @@ func (c *ResultCache) Store(name, resType string, params map[string]string, resu
 	c.mu.Unlock()
 }
 
-// hashParams produces a deterministic hash of resource params.
+// hashParams produces a deterministic hash of resource params using FNV-1a,
+// which is faster than SHA256 for non-cryptographic cache keys.
 func hashParams(params map[string]string) string {
 	keys := make([]string, 0, len(params))
 	for k := range params {
@@ -102,9 +103,12 @@ func hashParams(params map[string]string) string {
 	}
 	sort.Strings(keys)
 
-	h := sha256.New()
+	h := fnv.New128a()
 	for _, k := range keys {
-		fmt.Fprintf(h, "%s=%s\n", k, params[k])
+		h.Write([]byte(k))
+		h.Write([]byte{'='})
+		h.Write([]byte(params[k]))
+		h.Write([]byte{'\n'})
 	}
-	return fmt.Sprintf("%x", h.Sum(nil))
+	return hex.EncodeToString(h.Sum(nil))
 }

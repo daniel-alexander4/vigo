@@ -2,8 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -68,20 +66,16 @@ ORDER BY n.enrolled_at DESC`
 }
 
 // BatchUpdateLastSeen updates last_seen=now() for multiple node UUIDs in a
-// single UPDATE ... WHERE id = ANY($1), replacing the per-node loop in Flush.
+// single UPDATE ... WHERE id = ANY($1), replacing per-node loops.
 func (q *Queries) BatchUpdateLastSeen(ctx context.Context, ids []uuid.UUID) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	// Build $1, $2, ... placeholders.
-	placeholders := make([]string, len(ids))
-	args := make([]any, len(ids))
+	pgIDs := make([]pgtype.UUID, len(ids))
 	for i, id := range ids {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = id
+		pgIDs[i] = pgtype.UUID{Bytes: id, Valid: true}
 	}
-	query := "UPDATE nodes SET last_seen = now() WHERE id IN (" +
-		strings.Join(placeholders, ", ") + ")"
-	_, err := q.db.Exec(ctx, query, args...)
+	_, err := q.db.Exec(ctx,
+		"UPDATE nodes SET last_seen = now() WHERE id = ANY($1)", pgIDs)
 	return err
 }

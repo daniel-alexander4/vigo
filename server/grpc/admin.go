@@ -400,7 +400,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 		return nil, status.Errorf(codes.Internal, "listing nodes with runs: %v", err)
 	}
 
-	var statuses []string
+	counts := make(map[string]int32)
 	for _, r := range rows {
 		var runInfo *compliance.RunInfo
 		if r.LatestRunStatus.Valid {
@@ -415,11 +415,10 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 			lastSeen = r.LastSeen.Time
 		}
 
-		statuses = append(statuses, compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval))
+		counts[compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval)]++
 	}
 
-	counts := compliance.Summary(statuses)
-	total := int32(len(statuses))
+	total := int32(len(rows))
 
 	var pct float32
 	if total > 0 {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
@@ -106,22 +107,22 @@ func hashPolicyModule(mod *pb.PolicyModule) string {
 	h := sha256.New()
 
 	// Module-level fields.
-	h.Write([]byte("when:"))
-	h.Write([]byte(mod.When))
-	h.Write([]byte("\ndeps:"))
+	io.WriteString(h, "when:")
+	io.WriteString(h, mod.When)
+	io.WriteString(h, "\ndeps:")
 	for _, dep := range mod.DependsOn {
-		h.Write([]byte(dep))
-		h.Write([]byte(","))
+		io.WriteString(h, dep)
+		io.WriteString(h, ",")
 	}
 
 	// Resources in order.
 	for _, res := range mod.Resources {
-		h.Write([]byte("\nres:"))
-		h.Write([]byte(res.Name))
-		h.Write([]byte("|"))
-		h.Write([]byte(res.Type))
-		h.Write([]byte("|when:"))
-		h.Write([]byte(res.When))
+		io.WriteString(h, "\nres:")
+		io.WriteString(h, res.Name)
+		io.WriteString(h, "|")
+		io.WriteString(h, res.Type)
+		io.WriteString(h, "|when:")
+		io.WriteString(h, res.When)
 
 		// Sort attribute keys for deterministic hashing.
 		keys := make([]string, 0, len(res.Attributes))
@@ -130,22 +131,22 @@ func hashPolicyModule(mod *pb.PolicyModule) string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			h.Write([]byte("|"))
-			h.Write([]byte(k))
-			h.Write([]byte("="))
-			h.Write([]byte(res.Attributes[k]))
+			io.WriteString(h, "|")
+			io.WriteString(h, k)
+			io.WriteString(h, "=")
+			io.WriteString(h, res.Attributes[k])
 		}
 
 		// Notify and subscribes.
-		h.Write([]byte("|notify:"))
+		io.WriteString(h, "|notify:")
 		for _, n := range res.Notify {
-			h.Write([]byte(n))
-			h.Write([]byte(","))
+			io.WriteString(h, n)
+			io.WriteString(h, ",")
 		}
-		h.Write([]byte("|subscribes:"))
+		io.WriteString(h, "|subscribes:")
 		for _, s := range res.Subscribes {
-			h.Write([]byte(s))
-			h.Write([]byte(","))
+			io.WriteString(h, s)
+			io.WriteString(h, ",")
 		}
 	}
 

@@ -139,8 +139,8 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["error"] != "node 'nonexistent' not found" {
-		t.Errorf("expected node not found error, got %q", resp["error"])
+	if resp["message"] != "node 'nonexistent' not found" {
+		t.Errorf("expected node not found error, got %q", resp["message"])
 	}
 }
 
@@ -178,7 +178,7 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
 	expected := "no traits available for 'web01' -- node has not reported traits yet"
-	if resp["error"] != expected {
-		t.Errorf("expected %q, got %q", expected, resp["error"])
+	if resp["message"] != expected {
+		t.Errorf("expected %q, got %q", expected, resp["message"])
 	}
 }

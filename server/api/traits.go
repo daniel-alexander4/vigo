@@ -79,8 +79,9 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 }
 
 // writeJSONError writes a JSON error response with the given status code.
+// Uses {"message": "..."} to match grpc-gateway's error format.
 func writeJSONError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	json.NewEncoder(w).Encode(map[string]string{"message": message})
 }
