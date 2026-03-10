@@ -54,6 +54,7 @@ type Watcher struct {
 	watchPaths   []string
 	versions     map[string]int
 	mu           sync.Mutex
+	consecutiveFailures int // for exponential backoff on provider errors
 }
 
 // NewWatcher creates a watcher that monitors the given secret paths for
@@ -77,23 +78,38 @@ func NewWatcher(
 	}
 }
 
+// maxBackoffMultiplier caps exponential backoff at 32x the poll interval.
+const maxBackoffMultiplier = 32
+
 // Run starts the polling loop. It initializes the version map, then checks
-// for rotations on each tick. It blocks until the context is cancelled.
+// for rotations on each tick. On consecutive provider failures, it backs off
+// exponentially (2^failures * pollInterval, capped at 32x) to avoid hammering
+// an unreachable provider. Blocks until the context is cancelled.
 func (w *Watcher) Run(ctx context.Context) error {
 	w.initVersions(ctx)
-
-	ticker := time.NewTicker(w.pollInterval)
-	defer ticker.Stop()
 
 	slog.Info("secret watcher started",
 		"paths", w.watchPaths,
 		"interval", w.pollInterval)
 
 	for {
+		// Compute next sleep: normal interval or backed-off interval on failures.
+		sleep := w.pollInterval
+		if w.consecutiveFailures > 0 {
+			multiplier := 1 << w.consecutiveFailures // 2^failures
+			if multiplier > maxBackoffMultiplier {
+				multiplier = maxBackoffMultiplier
+			}
+			sleep = time.Duration(multiplier) * w.pollInterval
+			slog.Warn("watcher: backing off due to provider failures",
+				"consecutive_failures", w.consecutiveFailures,
+				"next_poll", sleep)
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
+		case <-time.After(sleep):
 			w.checkRotations(ctx)
 		}
 	}
@@ -118,11 +134,13 @@ func (w *Watcher) initVersions(ctx context.Context) {
 // checkRotations queries the current version for each watched path and
 // triggers force-push + audit record if a version bump is detected.
 func (w *Watcher) checkRotations(ctx context.Context) {
+	hadError := false
 	for _, path := range w.watchPaths {
 		currentVersion, err := w.provider.GetVersion(ctx, path)
 		if err != nil {
 			slog.Error("watcher: checking secret version",
 				"path", path, "error", err)
+			hadError = true
 			continue
 		}
 
@@ -182,5 +200,12 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 		if w.dispatcher != nil {
 			w.dispatcher.DispatchRotation(ctx, "secret.rotated", path, len(affectedIDs))
 		}
+	}
+
+	// Track consecutive failures for backoff in the Run loop.
+	if hadError {
+		w.consecutiveFailures++
+	} else {
+		w.consecutiveFailures = 0
 	}
 }

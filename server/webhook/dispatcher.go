@@ -86,7 +86,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event string, payload EventPa
 		go func() {
 			d.sem <- struct{}{}        // acquire
 			defer func() { <-d.sem }() // release
-			d.deliver(wh, event, body)
+			d.deliver(ctx, wh, event, body)
 		}()
 	}
 }
@@ -103,16 +103,22 @@ func (d *Dispatcher) DispatchRotation(ctx context.Context, event string, secretP
 }
 
 // deliver sends the payload to a single webhook endpoint with retries.
-func (d *Dispatcher) deliver(wh db.Webhook, event string, body []byte) {
+func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, body []byte) {
 	signature := "sha256=" + sign(wh.Secret, body)
 
 	for attempt := 0; attempt <= d.maxRetries; attempt++ {
 		if attempt > 0 {
 			delay := time.Duration(attempt) * d.retryBaseDelay
-			time.Sleep(delay)
+			select {
+			case <-ctx.Done():
+				slog.Warn("webhook: delivery cancelled during retry backoff",
+					"webhook_id", wh.ID, "event", event)
+				return
+			case <-time.After(delay):
+			}
 		}
 
-		req, err := http.NewRequest(http.MethodPost, wh.Url, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, wh.Url, bytes.NewReader(body))
 		if err != nil {
 			slog.Error("webhook: failed to create request",
 				"webhook_id", wh.ID, "url", wh.Url, "error", err)

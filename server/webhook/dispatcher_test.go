@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -100,7 +101,7 @@ func TestDispatchSendsCorrectHeaders(t *testing.T) {
 	}
 	body, _ := json.Marshal(payload)
 
-	d.deliver(wh, "run.success", body)
+	d.deliver(context.Background(), wh, "run.success", body)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -167,7 +168,7 @@ func TestDeliverRetriesOnServerError(t *testing.T) {
 	d.retryBaseDelay = 1 * time.Millisecond // fast retries for test
 
 	body := []byte(`{"event":"run.failure"}`)
-	d.deliver(wh, "run.failure", body)
+	d.deliver(context.Background(), wh, "run.failure", body)
 
 	mu.Lock()
 	defer mu.Unlock()

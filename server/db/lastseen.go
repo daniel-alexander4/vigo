@@ -71,5 +71,11 @@ func (b *LastSeenBatcher) Flush(ctx context.Context) {
 	}
 	if err := b.queries.BatchUpdateLastSeen(ctx, ids); err != nil {
 		slog.Error("failed to batch flush last_seen", "count", len(ids), "error", err)
+		// Re-add failed IDs so they're retried on next flush.
+		b.mu.Lock()
+		for id := range batch {
+			b.pending[id] = struct{}{}
+		}
+		b.mu.Unlock()
 	}
 }
