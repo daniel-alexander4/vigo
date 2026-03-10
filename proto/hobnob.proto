@@ -270,6 +270,11 @@ message PolicyBundle {
   repeated string var_order = 4;       // deterministic rendering order
   repeated ConditionalVarDef conditional_vars = 5;
   repeated CustomNailEntry custom_nails = 6;
+
+  // Trace fields for dry-run resolution visibility.
+  string matched_pattern = 7;          // node entry match pattern from nodes.hnb
+  string environment = 8;             // resolved environment
+  repeated string roles = 9;          // role names that were expanded
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.

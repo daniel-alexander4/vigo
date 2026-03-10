@@ -14,7 +14,10 @@ import (
 // them locally with its own nails.
 func buildPolicyBundle(cfg *config.NodeConfig, version uint64) (*pb.PolicyBundle, error) {
 	bundle := &pb.PolicyBundle{
-		PolicyVersion: version,
+		PolicyVersion:  version,
+		MatchedPattern: cfg.MatchPattern,
+		Environment:    cfg.Environment,
+		Roles:          cfg.Roles,
 	}
 
 	// Serialize vars as JSON (preserves types: int, string, bool, etc.).

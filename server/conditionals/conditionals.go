@@ -42,7 +42,7 @@ func IsConditionalVar(v any) bool {
 }
 
 // HasOperatorKey returns true if v is a map containing any known operator key.
-// This catches malformed conditional vars (e.g., missing "trait" field) so they
+// This catches malformed conditional vars (e.g., missing "nail" field) so they
 // can be reported as validation errors rather than silently treated as regular vars.
 func HasOperatorKey(v any) bool {
 	m, ok := v.(map[string]any)

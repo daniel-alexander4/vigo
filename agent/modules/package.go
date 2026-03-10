@@ -18,13 +18,16 @@ type PackageExecutor struct {
 
 // Execute applies the desired package state based on params.
 // Supported params:
-//   - name: package name or comma-separated list (required)
+//   - package (or name): package name or comma-separated list (required)
 //   - state: "present" (default) or "absent"
 //   - version: desired version (optional, triggers upgrade if different;
 //     applies to all packages when using a comma-separated list)
 func (p *PackageExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
 	start := time.Now()
-	nameParam := params["name"]
+	nameParam := params["package"]
+	if nameParam == "" {
+		nameParam = params["name"]
+	}
 	result := ResourceResult{
 		ResourceType: "package",
 		ResourceName: nameParam,

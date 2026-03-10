@@ -134,9 +134,9 @@ func startTestServer(t *testing.T) (string, func()) {
 	queries := db.New(testPool)
 	reg := registry.NewRegistry(queries)
 
-	// Create a minimal config store (empty node-configs dir with modules/ and roles/ subdirs).
+	// Create a minimal config store (empty node-configs dir with nodes/, modules/, and roles/ subdirs).
 	nodeConfigsDir := filepath.Join(t.TempDir(), "node-configs")
-	for _, sub := range []string{"modules", "roles"} {
+	for _, sub := range []string{"nodes", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(nodeConfigsDir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}

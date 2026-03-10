@@ -113,17 +113,17 @@ func TestSyncAndRun_CachedNails_NoRedownload(t *testing.T) {
 	dl := newMockDownloader()
 
 	script := makeScript(`{"cached":"yes"}`)
-	dl.data["mytrait"] = script
+	dl.data["mynail"] = script
 
 	// Pre-populate cache with the same content.
-	cachePath := filepath.Join(cacheDir, "mytrait")
+	cachePath := filepath.Join(cacheDir, "mynail")
 	if err := os.WriteFile(cachePath, script, 0755); err != nil {
 		t.Fatal(err)
 	}
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
 	manifest := []*pb.CustomNailEntry{
-		{Name: "mytrait", Sha256: checksumOf(script)},
+		{Name: "mynail", Sha256: checksumOf(script)},
 	}
 
 	result, err := exec.SyncAndRun(context.Background(), manifest)
@@ -132,8 +132,8 @@ func TestSyncAndRun_CachedNails_NoRedownload(t *testing.T) {
 	}
 
 	// Should NOT have downloaded (checksum matches cache).
-	if dl.called["mytrait"] != 0 {
-		t.Errorf("mytrait download count = %d, want 0 (cached)", dl.called["mytrait"])
+	if dl.called["mynail"] != 0 {
+		t.Errorf("mynail download count = %d, want 0 (cached)", dl.called["mynail"])
 	}
 
 	// But should still have executed.
@@ -141,8 +141,8 @@ func TestSyncAndRun_CachedNails_NoRedownload(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing custom key")
 	}
-	if _, ok := custom["mytrait"]; !ok {
-		t.Error("mytrait not in result despite being cached")
+	if _, ok := custom["mynail"]; !ok {
+		t.Error("mynail not in result despite being cached")
 	}
 }
 
@@ -241,13 +241,13 @@ func TestSyncAndRun_NonZeroExit_SkippedWithWarning(t *testing.T) {
 
 	failScript := makeFailScript()
 	goodScript := makeScript(`{"ok":true}`)
-	dl.data["bad-trait"] = failScript
-	dl.data["good-trait"] = goodScript
+	dl.data["bad-nail"] = failScript
+	dl.data["good-nail"] = goodScript
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
 	manifest := []*pb.CustomNailEntry{
-		{Name: "bad-trait", Sha256: checksumOf(failScript)},
-		{Name: "good-trait", Sha256: checksumOf(goodScript)},
+		{Name: "bad-nail", Sha256: checksumOf(failScript)},
+		{Name: "good-nail", Sha256: checksumOf(goodScript)},
 	}
 
 	result, err := exec.SyncAndRun(context.Background(), manifest)
@@ -257,14 +257,14 @@ func TestSyncAndRun_NonZeroExit_SkippedWithWarning(t *testing.T) {
 
 	custom := result["custom"].(map[string]any)
 
-	// bad-trait should be absent.
-	if _, ok := custom["bad-trait"]; ok {
-		t.Error("bad-trait should be absent from results")
+	// bad-nail should be absent.
+	if _, ok := custom["bad-nail"]; ok {
+		t.Error("bad-nail should be absent from results")
 	}
 
-	// good-trait should still be present.
-	if _, ok := custom["good-trait"]; !ok {
-		t.Error("good-trait should be present despite bad-trait failure")
+	// good-nail should still be present.
+	if _, ok := custom["good-nail"]; !ok {
+		t.Error("good-nail should be present despite bad-nail failure")
 	}
 }
 
@@ -298,12 +298,12 @@ func TestSyncAndRun_Timeout_KilledAndSkipped(t *testing.T) {
 	dl := newMockDownloader()
 
 	slowScript := makeSleepScript(15)
-	dl.data["slow-trait"] = slowScript
+	dl.data["slow-nail"] = slowScript
 
 	// Use a very short timeout for test speed.
 	exec := NewExecutor(cacheDir, dl, 500*time.Millisecond)
 	manifest := []*pb.CustomNailEntry{
-		{Name: "slow-trait", Sha256: checksumOf(slowScript)},
+		{Name: "slow-nail", Sha256: checksumOf(slowScript)},
 	}
 
 	result, err := exec.SyncAndRun(context.Background(), manifest)
@@ -313,8 +313,8 @@ func TestSyncAndRun_Timeout_KilledAndSkipped(t *testing.T) {
 
 	custom, ok := result["custom"].(map[string]any)
 	if ok {
-		if _, found := custom["slow-trait"]; found {
-			t.Error("slow-trait should be absent from results due to timeout")
+		if _, found := custom["slow-nail"]; found {
+			t.Error("slow-nail should be absent from results due to timeout")
 		}
 	}
 }
@@ -342,16 +342,16 @@ func TestSyncAndRun_StaleFilesCleanedUp(t *testing.T) {
 	dl := newMockDownloader()
 
 	// Create a stale file that is NOT in the manifest.
-	stalePath := filepath.Join(cacheDir, "old-trait")
+	stalePath := filepath.Join(cacheDir, "old-nail")
 	os.WriteFile(stalePath, makeScript(`{"stale":true}`), 0755)
 
-	// Manifest has only "active-trait".
+	// Manifest has only "active-nail".
 	activeScript := makeScript(`{"active":true}`)
-	dl.data["active-trait"] = activeScript
+	dl.data["active-nail"] = activeScript
 
 	exec := NewExecutor(cacheDir, dl, 10*time.Second)
 	manifest := []*pb.CustomNailEntry{
-		{Name: "active-trait", Sha256: checksumOf(activeScript)},
+		{Name: "active-nail", Sha256: checksumOf(activeScript)},
 	}
 
 	_, err := exec.SyncAndRun(context.Background(), manifest)
@@ -361,12 +361,12 @@ func TestSyncAndRun_StaleFilesCleanedUp(t *testing.T) {
 
 	// Stale file should be removed.
 	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
-		t.Error("stale file 'old-trait' should have been deleted")
+		t.Error("stale file 'old-nail' should have been deleted")
 	}
 
 	// Active nail file should exist.
-	activePath := filepath.Join(cacheDir, "active-trait")
+	activePath := filepath.Join(cacheDir, "active-nail")
 	if _, err := os.Stat(activePath); os.IsNotExist(err) {
-		t.Error("active-trait should exist in cache")
+		t.Error("active-nail should exist in cache")
 	}
 }

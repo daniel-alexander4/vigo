@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// LastSeenBatcher accumulates client UUIDs and flushes UpdateLastSeen writes
+// LastSeenBatcher accumulates node UUIDs and flushes UpdateLastSeen writes
 // periodically, removing per-check-in write latency from the hot path.
 type LastSeenBatcher struct {
 	mu      sync.Mutex
@@ -25,7 +25,7 @@ func NewLastSeenBatcher(queries *Queries) *LastSeenBatcher {
 	}
 }
 
-// Mark records a client as seen. This is a cheap in-memory operation that
+// Mark records a node as seen. This is a cheap in-memory operation that
 // replaces the synchronous UpdateLastSeen DB write on the check-in path.
 func (b *LastSeenBatcher) Mark(id uuid.UUID) {
 	b.mu.Lock()
@@ -52,7 +52,7 @@ func (b *LastSeenBatcher) Start(ctx context.Context, interval time.Duration) {
 }
 
 // Flush writes all pending last_seen updates to the database and clears
-// the pending set. Each client is updated individually since sqlc doesn't
+// the pending set. Each node is updated individually since sqlc doesn't
 // support array parameters; the batch is still a win because the writes
 // happen asynchronously rather than blocking check-in RPCs.
 func (b *LastSeenBatcher) Flush(ctx context.Context) {

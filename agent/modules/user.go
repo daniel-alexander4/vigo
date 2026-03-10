@@ -80,7 +80,10 @@ func (u *UserExecutor) lookupUser(name string) (*passwdEntry, error) {
 //   - group: desired primary group (optional)
 func (u *UserExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
 	start := time.Now()
-	name := params["name"]
+	name := params["username"]
+	if name == "" {
+		name = params["name"]
+	}
 	result := ResourceResult{
 		ResourceType: "user",
 		ResourceName: name,

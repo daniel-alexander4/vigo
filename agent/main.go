@@ -195,12 +195,16 @@ var rootCmd = &cobra.Command{
 		// Build executors.
 		executors := buildExecutors(snapshotMgr)
 
+		// Dry-run: single cycle with trace, then exit.
+		if dryRun {
+			return dryRunOnce(client, executors)
+		}
+
 		logger.Info("starting daemon loop",
 			"data_dir", dataDir,
 			"server", server,
 			"api_addr", apiAddr,
 			"version", version,
-			"dry_run", dryRun,
 		)
 
 		// Set up signal-aware context.
@@ -219,13 +223,86 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// dryRunOnce performs a single check-in with dry-run, prints the resolution
+// trace and per-resource results, and returns. Used by both `hobnob --dry-run`
+// and `hobnob run --dry-run`.
+func dryRunOnce(client *checkin.Client, executors map[string]modules.Executor) error {
+	return runOnceWithTrace(client, executors, true, "")
+}
+
+// runOnceWithTrace performs a single convergence run with optional dry-run
+// and prints a trace of the resolution chain and per-resource results.
+func runOnceWithTrace(client *checkin.Client, executors map[string]modules.Executor, isDryRun bool, module string) error {
+	logger := slog.Default()
+
+	ctx := context.Background()
+	nailsMap, err := nails.CollectAll(ctx, nails.DefaultCollectors())
+	if err != nil {
+		logger.Warn("fact collection failed", "error", err)
+		nailsMap = make(map[string]any)
+	}
+
+	nailsJSON, marshalErr := json.Marshal(nailsMap)
+	if marshalErr != nil {
+		logger.Warn("failed to marshal nails", "error", marshalErr)
+		nailsJSON = nil
+	}
+
+	runResult, err := checkin.RunOnce(ctx, client, executors, nailsMap, isDryRun, module, "", nailsJSON, nil, nil)
+	if err != nil {
+		return fmt.Errorf("convergence run failed: %w", err)
+	}
+
+	// Print trace header.
+	if runResult.PolicyBundle != nil {
+		b := runResult.PolicyBundle
+		if isDryRun {
+			fmt.Fprintf(os.Stderr, "\n--- Dry Run ---\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "\n--- Run ---\n")
+		}
+		fmt.Fprintf(os.Stderr, "Match:       %s\n", b.MatchedPattern)
+		if b.Environment != "" {
+			fmt.Fprintf(os.Stderr, "Environment: %s\n", b.Environment)
+		}
+		if len(b.Roles) > 0 {
+			fmt.Fprintf(os.Stderr, "Roles:       %s\n", strings.Join(b.Roles, ", "))
+		}
+		var modNames []string
+		for _, m := range b.Modules {
+			modNames = append(modNames, m.Name)
+		}
+		fmt.Fprintf(os.Stderr, "Modules:     %s\n", strings.Join(modNames, ", "))
+		fmt.Fprintln(os.Stderr)
+	}
+
+	// Print results grouped by module.
+	hasError := false
+	curModule := ""
+	for _, r := range runResult.Results {
+		if r.ModuleName != curModule {
+			curModule = r.ModuleName
+			fmt.Fprintf(os.Stderr, "  Module: %s\n", curModule)
+		}
+		status := string(r.Action)
+		if r.Error != nil {
+			status = "ERROR: " + r.Error.Error()
+			hasError = true
+		}
+		fmt.Fprintf(os.Stderr, "    %-12s %-24s %s\n", "["+r.ResourceType+"]", r.ResourceName, status)
+	}
+
+	if hasError {
+		return fmt.Errorf("one or more resources failed")
+	}
+	return nil
+}
+
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Run a single convergence cycle and exit",
 	Long:  "Performs one check-in, executes modules, reports results, and exits. Use --module to apply a single module.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logger := slog.Default()
-
 		module, _ := cmd.Flags().GetString("module")
 
 		// Load keypair.
@@ -247,58 +324,14 @@ var runCmd = &cobra.Command{
 		}
 		defer client.Close()
 
-		// Initialize snapshot manager.
+		// Build executors.
 		snapshotMgr := &snapshots.Manager{
 			BaseDir:    "/var/lib/hobnob/snapshots",
 			MaxPerPath: 5,
 		}
-
-		// Build executors.
 		executors := buildExecutors(snapshotMgr)
 
-		// Collect nails.
-		ctx := context.Background()
-		nailsMap, err := nails.CollectAll(ctx, nails.DefaultCollectors())
-		if err != nil {
-			logger.Warn("fact collection failed", "error", err)
-			nailsMap = make(map[string]any)
-		}
-
-		// Marshal nails for inline delivery.
-		nailsJSON, marshalErr := json.Marshal(nailsMap)
-		if marshalErr != nil {
-			logger.Warn("failed to marshal nails", "error", marshalErr)
-			nailsJSON = nil
-		}
-
-		// Run once with inline nails.
-		runResult, err := checkin.RunOnce(ctx, client, executors, nailsMap, dryRun, module, "", nailsJSON, nil, nil)
-		if err != nil {
-			return fmt.Errorf("convergence run failed: %w", err)
-		}
-
-		// Print summary.
-		hasError := false
-		for _, r := range runResult.Results {
-			status := string(r.Action)
-			if r.Error != nil {
-				status = "ERROR: " + r.Error.Error()
-				hasError = true
-			}
-			logger.Info("resource result",
-				"module", r.ModuleName,
-				"type", r.ResourceType,
-				"name", r.ResourceName,
-				"action", status,
-				"changed", r.Changed,
-			)
-		}
-
-		if hasError {
-			return fmt.Errorf("one or more resources failed")
-		}
-
-		return nil
+		return runOnceWithTrace(client, executors, dryRun, module)
 	},
 }
 

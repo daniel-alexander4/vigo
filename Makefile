@@ -5,8 +5,8 @@ VERSION ?= dev
 build:
 	go build -o bin/hobd ./server
 	go build -o bin/hobnob ./agent
-	go build -o bin/hobcli ./cli
-	ln -sf hobcli bin/hnbvi
+	go build -o bin/hobnobcli ./cli
+	ln -sf hobnobcli bin/hnbvi
 
 proto:
 	buf generate

@@ -36,9 +36,9 @@ type resolvedEntry struct {
 }
 
 // ConfigStore loads, watches, and provides per-node configuration.
-// The nodesDir contains .hnb/.yaml files with node entries at the top level,
-// plus modules/ and roles/ subdirectories. Secret references are resolved
-// via a secrets.Provider. Hot-reload via fsnotify.
+// The base dir contains nodes/, modules/, and roles/ subdirectories with
+// .hnb/.yaml config files. Secret references are resolved via a
+// secrets.Provider. Hot-reload via fsnotify.
 type ConfigStore struct {
 	mu         sync.RWMutex
 	entries    []resolvedEntry
@@ -56,9 +56,9 @@ type ConfigStore struct {
 //
 // By default, all resources must pass idempotency validation. Set dangerous
 // to true to allow non-idempotent resources (e.g., exec without guards).
-func NewConfigStore(clientsDir string, provider secrets.Provider, dangerous bool) (*ConfigStore, error) {
+func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (*ConfigStore, error) {
 	cs := &ConfigStore{
-		dir:       clientsDir,
+		dir:       baseDir,
 		provider:  provider,
 		dangerous: dangerous,
 	}
@@ -114,8 +114,8 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 	}
 	defer watcher.Close()
 
-	// Watch the top-level dir (node config files) and subdirectories.
-	for _, dir := range []string{cs.dir, cs.modulesDir(), cs.rolesDir()} {
+	// Watch the nodes, modules, and roles subdirectories.
+	for _, dir := range []string{cs.nodesDir(), cs.modulesDir(), cs.rolesDir()} {
 		if err := watcher.Add(dir); err != nil {
 			return fmt.Errorf("watching %s: %w", dir, err)
 		}
@@ -157,6 +157,9 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 	}
 }
 
+// nodesDir returns the path to the nodes subdirectory.
+func (cs *ConfigStore) nodesDir() string { return filepath.Join(cs.dir, "nodes") }
+
 // modulesDir returns the path to the modules subdirectory.
 func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "modules") }
 
@@ -183,7 +186,7 @@ func (cs *ConfigStore) loadAll() error {
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	nodeEntries, err := loadNodesDir(cs.dir)
+	nodeEntries, err := loadNodesDir(cs.nodesDir())
 	if err != nil {
 		return fmt.Errorf("loading nodes: %w", err)
 	}
@@ -281,7 +284,7 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 		}
 	}
 
-	// Build vars: module defaults first, then client-level overrides.
+	// Build vars: module defaults first, then node-level overrides.
 	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
 	var varOrder []string
@@ -294,7 +297,7 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 		}
 	}
 	for k, v := range entry.Vars {
-		// Skip client-level vars that would conflict with conditional var names.
+		// Skip node-level vars that would conflict with conditional var names.
 		// Conditional vars take precedence -- they are evaluated at check-in time.
 		if condVarNames[k] {
 			continue
@@ -307,7 +310,9 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 
 	cfg := &NodeConfig{
 		Node:            entry.Match,
+		MatchPattern:    entry.Match,
 		Environment:     entry.Environment,
+		Roles:           entry.Roles,
 		Modules:         modules,
 		Vars:            vars,
 		VarOrder:        varOrder,
@@ -333,7 +338,7 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 
 // NodesReferencingSecret returns the match patterns of all node entries
 // whose configuration contains a "secret:<secretPath>" reference. Used by
-// the rotation watcher to identify which clients need force-push.
+// the rotation watcher to identify which nodes need force-push.
 func (cs *ConfigStore) NodesReferencingSecret(secretPath string) []string {
 	needle := secretPrefix + secretPath
 
@@ -516,8 +521,8 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 	return defs, nil
 }
 
-// loadNodesDir reads all config files (.hnb/.yaml) at the top level of dir
-// (not subdirs) and merges their node entries in filesystem order.
+// loadNodesDir reads all config files (.hnb/.yaml) from the nodes directory
+// and merges their node entries in filesystem order.
 func loadNodesDir(dir string) ([]NodeEntry, error) {
 	dirEntries, err := os.ReadDir(dir)
 	if err != nil {

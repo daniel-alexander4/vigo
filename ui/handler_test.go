@@ -109,7 +109,7 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 	}
 
 	td := &testData{
-		clients: []testClient{
+		nodes: []testNode{
 			{
 				id:       uuid.New(),
 				hostname: "ok-node.example.com",
@@ -233,7 +233,7 @@ func TestNodesHandlerStatusFilter(t *testing.T) {
 func TestNodeDetailHandler(t *testing.T) {
 	h := newTestHandler(t)
 
-	nodeID := h.dataSource.(*mockDataSource).data.clients[0].id
+	nodeID := h.dataSource.(*mockDataSource).data.nodes[0].id
 	req := httptest.NewRequest(http.MethodGet, "/nodes/"+nodeID.String(), nil)
 	req.SetPathValue("id", nodeID.String())
 	rec := httptest.NewRecorder()
@@ -305,7 +305,7 @@ func TestRunsHandlerStatusFilter(t *testing.T) {
 	failRunID := uuid.New()
 	td.runs = append(td.runs, testRun{
 		id:          failRunID,
-		clientID:    td.clients[1].id,
+		nodeID:    td.nodes[1].id,
 		hostname:    "web-02.example.com",
 		startedAt:   time.Now().Add(-10 * time.Minute),
 		status:      "failure",
@@ -462,7 +462,7 @@ func TestServerBuildCompiles(t *testing.T) {
 
 // --- Test helpers ---
 
-type testClient struct {
+type testNode struct {
 	id        uuid.UUID
 	hostname  string
 	ipAddress string
@@ -474,7 +474,7 @@ type testClient struct {
 
 type testRun struct {
 	id           uuid.UUID
-	clientID     uuid.UUID
+	nodeID     uuid.UUID
 	hostname     string
 	startedAt    time.Time
 	status       string
@@ -496,7 +496,7 @@ type testRunResult struct {
 
 type testPlan struct {
 	id       uuid.UUID
-	clientID uuid.UUID
+	nodeID uuid.UUID
 	hostname string
 	created  time.Time
 	results  []testPlanResult
@@ -510,7 +510,7 @@ type testPlanResult struct {
 }
 
 type testData struct {
-	clients    []testClient
+	nodes      []testNode
 	runs       []testRun
 	history    []testComplianceHistory
 	plans      []testPlan
@@ -527,19 +527,19 @@ type testComplianceHistory struct {
 // defaultTestData builds the standard test dataset.
 func defaultTestData() *testData {
 	now := time.Now()
-	client1ID := uuid.New()
-	client2ID := uuid.New()
+	node1ID := uuid.New()
+	node2ID := uuid.New()
 	runID := uuid.New()
 	planID := uuid.New()
 
 	// Create a temp config dir with test YAML
 	configDir, _ := os.MkdirTemp("", "hobnob-config-test")
-	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("client: web-01.example.com\nvars:\n  dsn: \"secret:hobnob/db/dsn\"\nmodules:\n  - name: test\n    type: file\n"), 0644)
+	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("node: web-01.example.com\nvars:\n  dsn: \"secret:hobnob/db/dsn\"\nmodules:\n  - name: test\n    type: file\n"), 0644)
 
 	return &testData{
-		clients: []testClient{
+		nodes: []testNode{
 			{
-				id:        client1ID,
+				id:        node1ID,
 				hostname:  "web-01.example.com",
 				ipAddress: "10.0.0.1",
 				enrolled:  now.Add(-24 * time.Hour),
@@ -547,7 +547,7 @@ func defaultTestData() *testData {
 				status:    "compliant",
 			},
 			{
-				id:        client2ID,
+				id:        node2ID,
 				hostname:  "web-02.example.com",
 				ipAddress: "10.0.0.2",
 				enrolled:  now.Add(-48 * time.Hour),
@@ -558,7 +558,7 @@ func defaultTestData() *testData {
 		runs: []testRun{
 			{
 				id:          runID,
-				clientID:    client1ID,
+				nodeID:    node1ID,
 				hostname:    "web-01.example.com",
 				startedAt:   now.Add(-5 * time.Minute),
 				status:      "success",
@@ -578,7 +578,7 @@ func defaultTestData() *testData {
 		plans: []testPlan{
 			{
 				id:       planID,
-				clientID: client1ID,
+				nodeID: node1ID,
 				hostname: "web-01.example.com",
 				created:  now.Add(-1 * time.Hour),
 				results: []testPlanResult{
@@ -591,7 +591,7 @@ func defaultTestData() *testData {
 		},
 		configDir: configDir,
 		facts: map[uuid.UUID]map[string]any{
-			client1ID: {
+			node1ID: {
 				"os": map[string]any{
 					"family": "debian",
 					"name":   "Ubuntu",
@@ -638,12 +638,12 @@ type mockDataSource struct {
 }
 
 func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
-	totalNodes := len(m.data.clients)
+	totalNodes := len(m.data.nodes)
 	activeCount := 0
 	failureCount := 0
 	driftedCount := 0
 
-	for _, c := range m.data.clients {
+	for _, c := range m.data.nodes {
 		if time.Since(c.lastSeen) < time.Hour {
 			activeCount++
 		}
@@ -688,13 +688,13 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 }
 
 func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
-	total := len(m.data.clients)
+	total := len(m.data.nodes)
 	counts := map[string]int32{
 		"compliant": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
 	}
 
 	var nonCompliant []ComplianceRow
-	for _, c := range m.data.clients {
+	for _, c := range m.data.nodes {
 		counts[c.status]++
 		if c.status != "compliant" {
 			nonCompliant = append(nonCompliant, ComplianceRow{
@@ -747,7 +747,7 @@ func (m *mockDataSource) DashboardStatsData(baseInterval time.Duration) Dashboar
 
 func (m *mockDataSource) NodesData(baseInterval time.Duration, statusFilter string) NodesPageData {
 	var rows []NodeRow
-	for _, c := range m.data.clients {
+	for _, c := range m.data.nodes {
 		if statusFilter != "" && c.status != statusFilter {
 			continue
 		}
@@ -774,10 +774,10 @@ func (m *mockDataSource) NodesData(baseInterval time.Duration, statusFilter stri
 }
 
 func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Duration) (NodeDetailPageData, error) {
-	var found *testClient
-	for i := range m.data.clients {
-		if m.data.clients[i].id == nodeID {
-			found = &m.data.clients[i]
+	var found *testNode
+	for i := range m.data.nodes {
+		if m.data.nodes[i].id == nodeID {
+			found = &m.data.nodes[i]
 			break
 		}
 	}
@@ -797,7 +797,7 @@ func (m *mockDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Dura
 	var runs []NodeDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range m.data.runs {
-		if r.clientID == nodeID {
+		if r.nodeID == nodeID {
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{

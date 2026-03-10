@@ -73,7 +73,38 @@ func validateFile(path string) ([]validate.Finding, error) {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	// Phase 2: structural parse via the tolerant node parser.
+	// Phase 2: detect file type — nodes file vs module file.
+	// A nodes file has a top-level "nodes:" key; a role file has "modules:" but no "resources:".
+	var probe map[string]any
+	yaml.Unmarshal(data, &probe)
+
+	if _, isNodes := probe["nodes"]; isNodes {
+		// Nodes file — validate each entry has a "match" field.
+		var cfg config.NodesConfig
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			return nil, fmt.Errorf("parsing nodes file: %w", err)
+		}
+		var findings []validate.Finding
+		for i, entry := range cfg.Nodes {
+			if entry.Match == "" {
+				findings = append(findings, validate.Finding{
+					Severity: validate.SeverityError,
+					Module:   filepath.Base(path),
+					Message:  fmt.Sprintf("entry %d: missing required 'match' field", i),
+				})
+			}
+		}
+		if len(cfg.Nodes) == 0 {
+			findings = append(findings, validate.Finding{
+				Severity: validate.SeverityWarning,
+				Module:   filepath.Base(path),
+				Message:  "no node entries defined",
+			})
+		}
+		return findings, nil
+	}
+
+	// Phase 2b: structural parse as module via the tolerant node parser.
 	def, err := config.ParseModuleFile(data)
 	if err != nil {
 		return nil, err

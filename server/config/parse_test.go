@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -50,8 +51,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_DuplicateNameKey(t *testing.T) {
-	// Resources like "repository" use "name" as both resource ID and attribute.
+func TestParseModuleFile_DuplicateKeyRejected(t *testing.T) {
 	data := []byte(`
 name: docker
 resources:
@@ -62,23 +62,12 @@ resources:
     state: present
 `)
 
-	def, err := ParseModuleFile(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := ParseModuleFile(data)
+	if err == nil {
+		t.Fatal("expected error for duplicate key, got nil")
 	}
-
-	if len(def.Resources) != 1 {
-		t.Fatalf("len(resources) = %d, want 1", len(def.Resources))
-	}
-
-	r := def.Resources[0]
-	// First "name" becomes the resource name.
-	if r.Name != "docker-repo" {
-		t.Errorf("resource name = %q, want docker-repo", r.Name)
-	}
-	// Second "name" goes to Attributes.
-	if r.Attributes["name"] != "docker" {
-		t.Errorf("attribute name = %v, want docker", r.Attributes["name"])
+	if !strings.Contains(err.Error(), "duplicate key") {
+		t.Errorf("error should mention duplicate key, got: %v", err)
 	}
 }
 

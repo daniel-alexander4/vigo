@@ -72,8 +72,8 @@ func run() error {
 		slog.Info("seeded approved pattern", "pattern", p.pattern)
 	}
 
-	// Insert sample clients (ON CONFLICT DO NOTHING on hostname).
-	clients := []struct {
+	// Insert sample nodes (ON CONFLICT DO NOTHING on hostname).
+	nodes := []struct {
 		hostname  string
 		ipAddress string
 		pubkeyPEM string
@@ -90,23 +90,23 @@ func run() error {
 		},
 	}
 
-	for _, c := range clients {
+	for _, n := range nodes {
 		_, err := pool.Exec(ctx, `
-			INSERT INTO clients (hostname, ip_address, pubkey_pem)
+			INSERT INTO nodes (hostname, ip_address, pubkey_pem)
 			VALUES ($1, $2, $3)
 			ON CONFLICT DO NOTHING
-		`, c.hostname, c.ipAddress, c.pubkeyPEM)
+		`, n.hostname, n.ipAddress, n.pubkeyPEM)
 		if err != nil {
-			return fmt.Errorf("inserting client %q: %w", c.hostname, err)
+			return fmt.Errorf("inserting node %q: %w", n.hostname, err)
 		}
-		slog.Info("seeded client", "hostname", c.hostname)
+		slog.Info("seeded node", "hostname", n.hostname)
 	}
 
-	// Create sample client config files if they don't exist.
-	if err := writeClientConfig("config/clients/web01.web.example.com.yaml", webClientConfig); err != nil {
+	// Create sample node config files if they don't exist.
+	if err := writeNodeConfig("config/nodes/web01.web.example.com.yaml", webNodeConfig); err != nil {
 		return err
 	}
-	if err := writeClientConfig("config/clients/db01.db.example.com.yaml", dbClientConfig); err != nil {
+	if err := writeNodeConfig("config/nodes/db01.db.example.com.yaml", dbNodeConfig); err != nil {
 		return err
 	}
 
@@ -114,78 +114,25 @@ func run() error {
 	return nil
 }
 
-func writeClientConfig(path, content string) error {
+func writeNodeConfig(path, content string) error {
 	if _, err := os.Stat(path); err == nil {
-		slog.Info("client config already exists, skipping", "path", path)
+		slog.Info("node config already exists, skipping", "path", path)
 		return nil
 	}
-	if err := os.MkdirAll("config/clients", 0755); err != nil {
-		return fmt.Errorf("creating config/clients dir: %w", err)
+	if err := os.MkdirAll("config/nodes", 0755); err != nil {
+		return fmt.Errorf("creating config/nodes dir: %w", err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
-	slog.Info("created client config", "path", path)
+	slog.Info("created node config", "path", path)
 	return nil
 }
 
-const webClientConfig = `client: web01.web.example.com
-environment: production
-
-modules:
-  - name: nginx
-    resources:
-      - name: nginx-package
-        type: package
-        ensure: present
-        name: nginx
-
-      - name: nginx-config
-        type: file
-        path: /etc/nginx/nginx.conf
-        content: |
-          worker_processes auto;
-          events { worker_connections 1024; }
-          http {
-            server {
-              listen 80;
-              server_name {{ .Vars.server_name }};
-            }
-          }
-        notify:
-          - nginx-service
-
-      - name: nginx-service
-        type: service
-        ensure: running
-        enable: true
-
-vars:
-  server_name: web01.example.com
-
-env_vars:
-  production:
-    server_name: web01.prod.example.com
-  staging:
-    server_name: web01.staging.example.com
+const webNodeConfig = `# This is a legacy seed file — not used by the config loader.
+# Real configs live in /etc/hobnob-server/modules/ and /etc/hobnob-server/nodes/.
 `
 
-const dbClientConfig = `client: db01.db.example.com
-environment: production
-
-modules:
-  - name: postgres
-    resources:
-      - name: postgresql-package
-        type: package
-        ensure: present
-        name: postgresql-16
-
-      - name: postgresql-service
-        type: service
-        ensure: running
-        enable: true
-
-vars:
-  max_connections: "200"
+const dbNodeConfig = `# This is a legacy seed file — not used by the config loader.
+# Real configs live in /etc/hobnob-server/modules/ and /etc/hobnob-server/nodes/.
 `

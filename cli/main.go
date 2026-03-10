@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -10,6 +11,12 @@ import (
 var serverURL string
 
 func main() {
+	// When invoked as "hnbvi", behave as "hobnobcli vi <args>".
+	if base := filepath.Base(os.Args[0]); base == "hnbvi" {
+		args := append([]string{"vi"}, os.Args[1:]...)
+		rootCmd.SetArgs(args)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		slog.Error("command failed", "error", err)
 		os.Exit(1)
@@ -17,9 +24,9 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "hobcli",
+	Use:   "hobnobcli",
 	Short: "Hobnob admin CLI",
-	Long:  "hobcli is the administrative CLI for the Hobnob configuration management system.\nIt communicates with the server's REST API to manage enrollment, nodes, and runs.",
+	Long:  "hobnobcli is the administrative CLI for the Hobnob configuration management system.\nIt communicates with the server's REST API to manage enrollment, nodes, and runs.",
 }
 
 func init() {

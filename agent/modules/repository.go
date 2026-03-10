@@ -13,7 +13,8 @@ import (
 // using the distro's native tooling, then refreshes the package index.
 //
 // Supported params:
-//   - name:     repository identifier, used for file naming (required)
+//   - repo_name (or name): repository identifier, used for file naming (required;
+//     defaults to resource name if omitted)
 //   - key_url:  URL to GPG signing key (optional)
 //   - repo:     repository specification — APT deb line or DNF/YUM repo block (required for state=present)
 //   - state:    "present" (default) or "absent"
@@ -23,7 +24,10 @@ type RepositoryExecutor struct {
 
 func (r *RepositoryExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
 	start := time.Now()
-	name := params["name"]
+	name := params["repo_name"]
+	if name == "" {
+		name = params["name"]
+	}
 	result := ResourceResult{
 		ResourceType: "repository",
 		ResourceName: name,

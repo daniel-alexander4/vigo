@@ -138,9 +138,21 @@ func (r *Runner) executeResource(ctx context.Context, node ResourceNode) modules
 		return result
 	}
 
+	// Inject resource name as fallback "name" param so executors that
+	// don't have a type-specific attribute (e.g., repository, cron) can
+	// use the resource's own name as an identifier.
+	params := node.Params
+	if _, hasName := params["name"]; !hasName {
+		params = make(map[string]string, len(node.Params)+1)
+		for k, v := range node.Params {
+			params[k] = v
+		}
+		params["name"] = node.Name
+	}
+
 	// Execute the resource.
 	start := time.Now()
-	execResult := executor.Execute(ctx, node.Params, r.DryRun)
+	execResult := executor.Execute(ctx, params, r.DryRun)
 	elapsed := time.Since(start)
 
 	// Merge executor result with our metadata.

@@ -61,7 +61,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	bh.RegisterRoutes(mux)
 
-	// grpc-gateway catches /api/ paths (hobcli CLI uses /api/v1/*).
+	// grpc-gateway catches /api/ paths (hobnobcli uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 
 	return mux, nil

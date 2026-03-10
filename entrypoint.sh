@@ -6,6 +6,7 @@ set -e
 
 DATA_DIR="/etc/hobnob-server"
 CERTS_DIR="${DATA_DIR}/certs"
+NODES_DIR="${DATA_DIR}/nodes"
 MODULES_DIR="${DATA_DIR}/modules"
 ROLES_DIR="${DATA_DIR}/roles"
 TEMPLATES_DIR="${DATA_DIR}/templates"
@@ -19,7 +20,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "$CERTS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
+mkdir -p "$CERTS_DIR" "$NODES_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
 
 # ---------------------------------------------------------------------------
 # Generate TLS certificates if missing
@@ -118,8 +119,8 @@ fi
 # ---------------------------------------------------------------------------
 
 # nodes.hnb.example
-if [ ! -f "${DATA_DIR}/nodes.hnb.example" ]; then
-    cp "${SEED_DIR}/node-configs/nodes.hnb.example" "${DATA_DIR}/"
+if [ ! -f "${NODES_DIR}/nodes.hnb.example" ]; then
+    cp "${SEED_DIR}/node-configs/nodes.hnb.example" "${NODES_DIR}/"
 fi
 
 # Module examples
@@ -146,6 +147,16 @@ if [ -d "${SEED_DIR}/node-configs/templates" ]; then
             cp "$src" "$dest"
         fi
     done
+fi
+
+# ---------------------------------------------------------------------------
+# Install CLI tools to host (bind-mounted /usr/local/bin via /host-bin)
+# ---------------------------------------------------------------------------
+
+if [ -d /host-bin ]; then
+    cp /usr/local/bin/hobnobcli /host-bin/hobnobcli
+    ln -sf hobnobcli /host-bin/hnbvi
+    echo "Installed hobnobcli and hnbvi to host."
 fi
 
 echo "Config seeding complete."

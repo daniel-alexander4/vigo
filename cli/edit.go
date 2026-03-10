@@ -62,10 +62,10 @@ func runEditor(filePath string, dangerous bool) error {
 		return fmt.Errorf("writing ftdetect file: %w", err)
 	}
 
-	// Resolve the hobcli binary for validation callbacks.
-	hobcliPath, err := os.Executable()
+	// Resolve the hobnobcli binary for validation callbacks.
+	cliPath, err := os.Executable()
 	if err != nil {
-		hobcliPath = "hobcli"
+		cliPath = "hobnobcli"
 	}
 
 	// Build vimrc.
@@ -73,7 +73,7 @@ func runEditor(filePath string, dangerous bool) error {
 	if dangerous {
 		dangerousFlag = " --dangerous"
 	}
-	vimrc := fmt.Sprintf(hobVimrc, tmpDir, hobcliPath, dangerousFlag)
+	vimrc := fmt.Sprintf(hobVimrc, tmpDir, cliPath, dangerousFlag)
 	vimrcPath := filepath.Join(tmpDir, "vimrc")
 	if err := os.WriteFile(vimrcPath, []byte(vimrc), 0644); err != nil {
 		return fmt.Errorf("writing vimrc: %w", err)
@@ -116,39 +116,42 @@ const hobSyntax = `" Vim syntax file for Hobnob .hnb configuration files
 runtime! syntax/yaml.vim
 
 " Hobnob top-level keys
-syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|clients\|depends_on\|when\|environment\|env_vars\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
-hi def link hobTopKey  Keyword
+syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|nodes\|depends_on\|when\|environment\|env_vars\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+hi hobTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes
 syn match hobResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|owner\|group\|package\|service\|enabled\|command\|creates\|onlyif\|unless\|cwd\|user\|username\|notify\|subscribes\|depends_on\|baseindent\|job\|schedule\|minute\|hour\|day\|month\|weekday\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
-hi def link hobResKey  Type
+hi hobResKey  ctermfg=33  guifg=#0087ff
 
 " Resource type values
 syn match hobResType   /\<\(file\|package\|service\|user\|exec\|repository\|archive\|cron\)\>/
-hi def link hobResType Constant
+hi hobResType ctermfg=214 guifg=#ffaf00 cterm=bold gui=bold
 
 " State values
 syn match hobState     /\<\(present\|absent\|running\|stopped\|restarted\|reloaded\|directory\)\>/
-hi def link hobState   Boolean
+hi hobState   ctermfg=40  guifg=#00d700
 
 " Secret references
 syn match hobSecret    /secret:[^ \t]*/
-hi def link hobSecret  WarningMsg
+hi hobSecret  ctermfg=196 guifg=#ff0000 cterm=bold gui=bold
 
 " Go template expressions
 syn region hobTemplate start=/{{/ end=/}}/ containedin=yamlFlowString,yamlString
-hi def link hobTemplate PreProc
+hi hobTemplate ctermfg=171 guifg=#d75fff
 
 " Idempotency guard keywords (highlighted to draw attention)
 syn match hobGuard     /^\s*\(creates\|onlyif\|unless\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
-hi def link hobGuard   Special
+hi hobGuard   ctermfg=208 guifg=#ff8700 cterm=bold gui=bold
+
+" Comments
+hi! yamlComment ctermfg=34 guifg=#00af00
 `
 
 // hobFtdetect sets up filetype detection for .hnb files.
 const hobFtdetect = `au BufRead,BufNewFile *.hnb set filetype=hnb`
 
 // hobVimrc is the custom vimrc template. %s placeholders:
-// 1: tmpDir (runtimepath), 2: hobcli path, 3: --dangerous flag or ""
+// 1: tmpDir (runtimepath), 2: hobnobcli path, 3: --dangerous flag or ""
 const hobVimrc = `" Hobnob editor vimrc — auto-generated, do not edit
 set nocompatible
 set runtimepath+=%s
@@ -163,8 +166,12 @@ set autoindent
 
 " Validate on write
 function! HobValidate()
-  let l:output = system('%s validate%s ' . shellescape(expand('%%:p')))
-  if v:shell_error != 0
+  let l:tmpfile = tempname() . '.hnb'
+  call writefile(getline(1, '$'), l:tmpfile)
+  let l:output = system('%s validate%s ' . shellescape(l:tmpfile))
+  let l:exit_code = v:shell_error
+  call delete(l:tmpfile)
+  if l:exit_code != 0
     echohl ErrorMsg
     for l:line in split(l:output, '\n')
       echomsg l:line

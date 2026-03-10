@@ -1,4 +1,4 @@
-// Package config handles loading, watching, and resolving per-client
+// Package config handles loading, watching, and resolving per-node
 // configuration from YAML files on disk. It integrates with the secrets
 // provider to resolve "secret:" prefixes and supports hot-reload via fsnotify.
 package config
@@ -74,11 +74,13 @@ type ConditionalBlock struct {
 	Resources []ResourceConfig `yaml:"resources"`
 }
 
-// NodeConfig represents the resolved per-client configuration.
+// NodeConfig represents the resolved per-node configuration.
 // This is the output type returned by ConfigStore.Get().
 type NodeConfig struct {
 	Node            string                    `yaml:"node"`
+	MatchPattern    string                    `yaml:"-"` // original match pattern from nodes.hnb
 	Environment     string                    `yaml:"environment"`
+	Roles           []string                  `yaml:"-"` // role names that were expanded
 	Modules         []ModuleConfig            `yaml:"modules"`
 	Vars            map[string]any            `yaml:"vars"`
 	VarOrder        []string                  `yaml:"-"`
@@ -198,7 +200,9 @@ type RoleDefinition struct {
 	Modules []ModuleRef `yaml:"modules"`
 }
 
-// NodeEntry is a single entry in nodes.hnb.
+// NodeEntry is a single entry in nodes.hnb. It has a custom UnmarshalYAML
+// that merges duplicate 'modules' and 'roles' keys (standard YAML would
+// silently keep only the last value).
 type NodeEntry struct {
 	Match       string                    `yaml:"match"`
 	Environment string                    `yaml:"environment"`
@@ -206,6 +210,50 @@ type NodeEntry struct {
 	Modules     []ModuleRef               `yaml:"modules"`
 	Vars        map[string]any            `yaml:"vars"`
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler for NodeEntry. It walks the
+// mapping manually so duplicate 'modules' and 'roles' keys are merged
+// instead of the last one winning.
+func (n *NodeEntry) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("NodeEntry: expected mapping, got %v", value.Kind)
+	}
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		key := value.Content[i].Value
+		val := value.Content[i+1]
+		switch key {
+		case "match":
+			if err := val.Decode(&n.Match); err != nil {
+				return fmt.Errorf("decoding match: %w", err)
+			}
+		case "environment":
+			if err := val.Decode(&n.Environment); err != nil {
+				return fmt.Errorf("decoding environment: %w", err)
+			}
+		case "roles":
+			var extra []string
+			if err := val.Decode(&extra); err != nil {
+				return fmt.Errorf("decoding roles: %w", err)
+			}
+			n.Roles = append(n.Roles, extra...)
+		case "modules":
+			var extra []ModuleRef
+			if err := val.Decode(&extra); err != nil {
+				return fmt.Errorf("decoding modules: %w", err)
+			}
+			n.Modules = append(n.Modules, extra...)
+		case "vars":
+			if err := val.Decode(&n.Vars); err != nil {
+				return fmt.Errorf("decoding vars: %w", err)
+			}
+		case "env_vars":
+			if err := val.Decode(&n.EnvVars); err != nil {
+				return fmt.Errorf("decoding env_vars: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 // NodesConfig is the top-level structure of nodes.hnb.

@@ -33,12 +33,15 @@ func (s *ServiceExecutor) isEnabled(ctx context.Context, name string) bool {
 
 // Execute applies the desired service state based on params.
 // Supported params:
-//   - name: service name or comma-separated list (required)
+//   - service (or name): service name or comma-separated list (required)
 //   - state: "running", "stopped", "restarted", or "reloaded"
 //   - enabled: "true" or "false" (optional)
 func (s *ServiceExecutor) Execute(ctx context.Context, params map[string]string, dryRun bool) ResourceResult {
 	start := time.Now()
-	nameParam := params["name"]
+	nameParam := params["service"]
+	if nameParam == "" {
+		nameParam = params["name"]
+	}
 	result := ResourceResult{
 		ResourceType: "service",
 		ResourceName: nameParam,

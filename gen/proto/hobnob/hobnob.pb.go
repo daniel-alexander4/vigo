@@ -246,7 +246,7 @@ func (x *CheckInRequest) GetPolicyMode() bool {
 type CheckInResponse struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Modules             []*Module              `protobuf:"bytes,1,rep,name=modules,proto3" json:"modules,omitempty"`
-	BaseInterval        string                 `protobuf:"bytes,2,opt,name=base_interval,json=baseInterval,proto3" json:"base_interval,omitempty"` // e.g. "30m"
+	BaseInterval        string                 `protobuf:"bytes,2,opt,name=base_interval,json=baseInterval,proto3" json:"base_interval,omitempty"` // e.g. "5m"
 	JitterPercent       int32                  `protobuf:"varint,3,opt,name=jitter_percent,json=jitterPercent,proto3" json:"jitter_percent,omitempty"`
 	CustomNails         []*CustomNailEntry     `protobuf:"bytes,4,rep,name=custom_nails,json=customNails,proto3" json:"custom_nails,omitempty"`
 	NoChange            bool                   `protobuf:"varint,5,opt,name=no_change,json=noChange,proto3" json:"no_change,omitempty"`                                 // true = fingerprint matched, skip execution
@@ -649,8 +649,12 @@ type PolicyBundle struct {
 	VarOrder        []string               `protobuf:"bytes,4,rep,name=var_order,json=varOrder,proto3" json:"var_order,omitempty"` // deterministic rendering order
 	ConditionalVars []*ConditionalVarDef   `protobuf:"bytes,5,rep,name=conditional_vars,json=conditionalVars,proto3" json:"conditional_vars,omitempty"`
 	CustomNails     []*CustomNailEntry     `protobuf:"bytes,6,rep,name=custom_nails,json=customNails,proto3" json:"custom_nails,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Trace fields for dry-run resolution visibility.
+	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // node entry match pattern from nodes.hnb
+	Environment    string   `protobuf:"bytes,8,opt,name=environment,proto3" json:"environment,omitempty"`                             // resolved environment
+	Roles          []string `protobuf:"bytes,9,rep,name=roles,proto3" json:"roles,omitempty"`                                         // role names that were expanded
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PolicyBundle) Reset() {
@@ -721,6 +725,27 @@ func (x *PolicyBundle) GetConditionalVars() []*ConditionalVarDef {
 func (x *PolicyBundle) GetCustomNails() []*CustomNailEntry {
 	if x != nil {
 		return x.CustomNails
+	}
+	return nil
+}
+
+func (x *PolicyBundle) GetMatchedPattern() string {
+	if x != nil {
+		return x.MatchedPattern
+	}
+	return ""
+}
+
+func (x *PolicyBundle) GetEnvironment() string {
+	if x != nil {
+		return x.Environment
+	}
+	return ""
+}
+
+func (x *PolicyBundle) GetRoles() []string {
+	if x != nil {
+		return x.Roles
 	}
 	return nil
 }
@@ -3939,14 +3964,17 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaa\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8b\x03\n" +
 	"\fPolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x121\n" +
 	"\amodules\x18\x02 \x03(\v2\x17.hobnob.v1.PolicyModuleR\amodules\x12\x1b\n" +
 	"\tvars_json\x18\x03 \x01(\fR\bvarsJson\x12\x1b\n" +
 	"\tvar_order\x18\x04 \x03(\tR\bvarOrder\x12G\n" +
 	"\x10conditional_vars\x18\x05 \x03(\v2\x1c.hobnob.v1.ConditionalVarDefR\x0fconditionalVars\x12=\n" +
-	"\fcustom_nails\x18\x06 \x03(\v2\x1a.hobnob.v1.CustomNailEntryR\vcustomNails\"\x8e\x01\n" +
+	"\fcustom_nails\x18\x06 \x03(\v2\x1a.hobnob.v1.CustomNailEntryR\vcustomNails\x12'\n" +
+	"\x0fmatched_pattern\x18\a \x01(\tR\x0ematchedPattern\x12 \n" +
+	"\venvironment\x18\b \x01(\tR\venvironment\x12\x14\n" +
+	"\x05roles\x18\t \x03(\tR\x05roles\"\x8e\x01\n" +
 	"\fPolicyModule\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x127\n" +
 	"\tresources\x18\x02 \x03(\v2\x19.hobnob.v1.PolicyResourceR\tresources\x12\x1d\n" +

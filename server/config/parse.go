@@ -102,22 +102,26 @@ func parseResourceNodes(nodes []*yaml.Node) ([]ResourceConfig, error) {
 	return result, nil
 }
 
-// parseOneResource extracts a ResourceConfig from a YAML mapping node,
-// handling duplicate keys gracefully. The first "name" becomes the resource
-// name; subsequent "name" entries go into Attributes.
+// parseOneResource extracts a ResourceConfig from a YAML mapping node.
+// Duplicate keys are rejected — use type-specific attributes instead
+// (e.g., "package:", "service:", "username:", "repo_name:").
 func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 	var res ResourceConfig
 	res.Attributes = make(map[string]any)
-	nameSet := false
+	seen := make(map[string]bool)
 
 	for i := 0; i < len(node.Content)-1; i += 2 {
 		key := node.Content[i].Value
 		val := node.Content[i+1]
 
+		if seen[key] {
+			return res, fmt.Errorf("resource %q: duplicate key %q (line %d)", res.Name, key, node.Content[i].Line)
+		}
+		seen[key] = true
+
 		switch {
-		case key == "name" && !nameSet:
+		case key == "name":
 			res.Name = val.Value
-			nameSet = true
 		case key == "type":
 			res.Type = val.Value
 		case key == "when":

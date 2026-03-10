@@ -96,8 +96,8 @@ The default config accepts any hostname from RFC 1918 / loopback addresses.
 
 ```bash
 # On the server:
-hobcli tokens generate
-hobcli approved add "web-01.example.com" --token <TOKEN>
+hobnobcli tokens generate
+hobnobcli approved add "web-01.example.com" --token <TOKEN>
 
 # On the node:
 curl -sSf "http://<server-ip>:8181/bootstrap?token=<TOKEN>" | sudo sh
@@ -115,11 +115,11 @@ This stops the service, removes the binary, and deletes `/etc/hobnob-node`. Then
 
 ### 7. Define desired state
 
-Edit `node-configs/clients.hnb` to map hostnames to modules and roles:
+Edit `node-configs/nodes.hnb` to map hostnames to modules and roles:
 
 ```yaml
-# node-configs/clients.hnb
-clients:
+# node-configs/nodes.hnb
+nodes:
   - match: "web01.example.com"
     environment: production
     modules: [nginx]
@@ -189,13 +189,13 @@ The server watches `node-configs/` and hot-reloads automatically. On the next ch
 
 ```bash
 # List enrolled nodes
-hobcli nodes list
+hobnobcli nodes list
 
 # View run results
-hobcli runs list
+hobnobcli runs list
 
 # Check compliance
-hobcli nodes show web01.example.com
+hobnobcli nodes show web01.example.com
 ```
 
 Or open the web dashboard at `http://<server-ip>:8181/`.
@@ -204,7 +204,7 @@ Or open the web dashboard at `http://<server-ip>:8181/`.
 
 ```
 node-configs/
-├── clients.hnb          # Maps hostnames/globs to roles and modules
+├── nodes.hnb             # Maps hostnames/globs to roles and modules
 ├── modules/              # Reusable resource sets with default vars
 │   ├── nginx.hnb
 │   ├── postgresql.hnb
@@ -217,7 +217,7 @@ node-configs/
     └── nginx.conf.tmpl
 ```
 
-Config files use the `.hnb` extension (YAML syntax). The server also accepts `.yaml`/`.yml`. `clients.hnb` entries use glob patterns — first match wins. Client-level `vars` override module defaults. Nodes matching no entry get an empty module list.
+Config files use the `.hnb` extension (YAML syntax). The server also accepts `.yaml`/`.yml`. `nodes.hnb` entries use glob patterns — first match wins. Node-level `vars` override module defaults. Nodes matching no entry get an empty module list.
 
 ## Examples
 
@@ -235,7 +235,7 @@ Ready-to-use module definitions in `node-configs/modules/` and role groupings in
 | Prometheus + Grafana | `node-configs/modules/prometheus.hnb`, `node-configs/modules/grafana.hnb` | Prometheus, node-exporter, Grafana |
 | CLI tools | `node-configs/modules/charm-tools.hnb`, `node-configs/modules/github-tools.hnb` | `repository` for Charm repo, `archive` for GitHub releases |
 
-Node-to-module mappings are in `node-configs/clients.hnb`, with roles like `webserver`, `database`, `monitoring`, and `bastion` in `node-configs/roles/`.
+Node-to-module mappings are in `node-configs/nodes.hnb`, with roles like `webserver`, `database`, `monitoring`, and `bastion` in `node-configs/roles/`.
 
 Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`), Go template variables, per-environment overrides, and `secret:` references where appropriate.
 
@@ -259,8 +259,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 **Port 1530** — approximate first recorded written use of "hobgoblin" in English. Clean, short, historically grounded.
 
 - **Server (hobd)** — gRPC endpoint for agents, REST API + web UI for operators, built-in CA for bootstrap CSR signing
-- **Agent (hob)** — daemon on each managed node, pulls config, converges idempotently
-- **hobcli** — admin CLI, talks to server REST API
+- **Agent (hobnob)** — daemon on each managed node, pulls config, converges idempotently
+- **hobnobcli** — admin CLI, talks to server REST API
 - **Config** — `.hnb` files (YAML syntax) on disk, hot-reloaded on change
 - **hnbvi** — vim-based editor with syntax highlighting and idempotency validation on save
 
@@ -345,18 +345,18 @@ Non-idempotent resources are rejected unless the server is started with `--dange
 
 ```bash
 # Validate .hnbfiles for YAML correctness + idempotency
-hobcli validate node-configs/modules/*.hnb
+hobnobcli validate node-configs/modules/*.hnb
 
 # Allow non-idempotent resources (shows errors but exits 0)
-hobcli validate --dangerous modules/risky.hnb
+hobnobcli validate --dangerous modules/risky.hnb
 
 # Edit with vim — syntax highlighting + validation on save
-hobcli vi node-configs/modules/nginx.hnb
+hobnobcli vi node-configs/modules/nginx.hnb
 # or via the hnbvi symlink:
 hnbvi node-configs/modules/nginx.hnb
 ```
 
-`hobcli validate` checks: (1) YAML syntax, (2) required fields (`name`, resource `name`/`type`), (3) idempotency rules. `hobcli vi` opens vim with `.hnb` syntax highlighting and blocks saves that fail validation.
+`hobnobcli validate` checks: (1) YAML syntax, (2) required fields (`name`, resource `name`/`type`), (3) idempotency rules. `hobnobcli vi` opens vim with `.hnb` syntax highlighting and blocks saves that fail validation.
 
 ## Key features
 
@@ -459,11 +459,11 @@ Gates are checked first, then vetoes. Each field accepts a single string or a li
 
 ### Module conditionals
 
-The same four fields work on module references in `clients.hnb` and role definitions, skipping entire modules:
+The same four fields work on module references in `nodes.hnb` and role definitions, skipping entire modules:
 
 ```yaml
-# node-configs/clients.hnb
-clients:
+# node-configs/nodes.hnb
+nodes:
   - match: "*.example.com"
     vars:
       is_debian:
@@ -573,11 +573,11 @@ Sensitive values in config files use the `secret:` prefix instead of plaintext. 
 
 ### Using secrets in node configs
 
-Reference secrets by path in `node-configs/clients.hnb` or module definitions:
+Reference secrets by path in `node-configs/nodes.hnb` or module definitions:
 
 ```yaml
-# node-configs/clients.hnb
-clients:
+# node-configs/nodes.hnb
+nodes:
   - match: "cache01.example.com"
     modules: [redis]
     vars:
@@ -635,7 +635,7 @@ The server's own config (`server-configs/server.yaml`) also uses `secret:` refer
 ## Development
 
 ```bash
-make build          # Build server, agent, hobcli + hnbvi symlink
+make build          # Build server, agent, hobnobcli + hnbvi symlink
 make proto          # Regenerate protobuf/gRPC code
 make certs          # Generate self-signed TLS certs
 make test           # Run all tests

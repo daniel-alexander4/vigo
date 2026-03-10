@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// mockDBTX implements db.DBTX for testing the traits handler.
+// mockDBTX implements db.DBTX for testing the nails handler.
 type mockDBTX struct {
 	queryRowFn func(sql string, args ...any) pgx.Row
 }
@@ -82,7 +82,7 @@ func TestNailsHandler_Success(t *testing.T) {
 	var resp struct {
 		Hostname    string          `json:"hostname"`
 		CollectedAt string          `json:"collected_at"`
-		Traits      json.RawMessage `json:"nails"`
+		Nails       json.RawMessage `json:"nails"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
@@ -101,15 +101,15 @@ func TestNailsHandler_Success(t *testing.T) {
 		t.Errorf("expected collected_at 2026-03-07T10:30:00Z, got %s", resp.CollectedAt)
 	}
 
-	// traits must be the raw JSON (not double-encoded)
-	var traits map[string]any
-	if err := json.Unmarshal(resp.Traits, &traits); err != nil {
-		t.Fatalf("traits is not valid JSON: %v", err)
+	// nails must be the raw JSON (not double-encoded)
+	var nails map[string]any
+	if err := json.Unmarshal(resp.Nails, &nails); err != nil {
+		t.Fatalf("nails is not valid JSON: %v", err)
 	}
 
-	osMap, ok := traits["os"].(map[string]any)
+	osMap, ok := nails["os"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected os to be a map, got %T", traits["os"])
+		t.Fatalf("expected os to be a map, got %T", nails["os"])
 	}
 	if osMap["distro"] != "ubuntu" {
 		t.Errorf("expected os.distro=ubuntu, got %v", osMap["distro"])
