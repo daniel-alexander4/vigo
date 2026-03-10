@@ -112,6 +112,8 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"sshkey":        &modules.SSHKeyExecutor{},
 		"firewall":      &modules.FirewallExecutor{},
 		"kernel_module": &modules.KernelModuleExecutor{},
+		"swap":          &modules.SwapExecutor{},
+		"tmpfile":       &modules.TmpfileExecutor{},
 	}
 
 	osFamily, osDistro := detectOSInfo()

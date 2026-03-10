@@ -83,6 +83,8 @@ var knownTypes = map[string]bool{
 	"sshkey":        true,
 	"firewall":      true,
 	"kernel_module": true,
+	"swap":          true,
+	"tmpfile":       true,
 }
 
 // ValidateModule checks all resources in a module for idempotency.
