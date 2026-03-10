@@ -145,6 +145,34 @@ func TestCloudCollector_ImplementsCollector(t *testing.T) {
 	var _ Collector = (*CloudCollector)(nil)
 }
 
+func TestDockerCollector_ImplementsCollector(t *testing.T) {
+	var _ Collector = (*DockerCollector)(nil)
+}
+
+func TestSystemdCollector_ImplementsCollector(t *testing.T) {
+	var _ Collector = (*SystemdCollector)(nil)
+}
+
+func TestSELinuxCollector_ImplementsCollector(t *testing.T) {
+	var _ Collector = (*SELinuxCollector)(nil)
+}
+
+func TestTimezoneCollector_ImplementsCollector(t *testing.T) {
+	var _ Collector = (*TimezoneCollector)(nil)
+}
+
+func TestLocaleCollector_ImplementsCollector(t *testing.T) {
+	var _ Collector = (*LocaleCollector)(nil)
+}
+
+func TestSwapCollector_ImplementsCollector(t *testing.T) {
+	var _ Collector = (*SwapCollector)(nil)
+}
+
+func TestGPUCollector_ImplementsCollector(t *testing.T) {
+	var _ Collector = (*GPUCollector)(nil)
+}
+
 // --- Live collector tests (run on actual host) ---
 
 func TestOSCollector_ReturnsExpectedKeys(t *testing.T) {
@@ -425,8 +453,8 @@ func TestCloudCollector_ReturnsProvider(t *testing.T) {
 
 func TestDefaultCollectors_ReturnsAllCollectors(t *testing.T) {
 	collectors := DefaultCollectors()
-	if len(collectors) != 18 {
-		t.Fatalf("DefaultCollectors() returned %d collectors, want 18", len(collectors))
+	if len(collectors) != 25 {
+		t.Fatalf("DefaultCollectors() returned %d collectors, want 25", len(collectors))
 	}
 
 	names := make(map[string]bool)
@@ -439,10 +467,121 @@ func TestDefaultCollectors_ReturnsAllCollectors(t *testing.T) {
 		"identity", "virtual", "uptime", "loadavg", "mountpoints",
 		"processors", "dmi", "cloud", "filesystem", "kernel",
 		"users", "memory", "blockdevices",
+		"docker", "systemd", "selinux", "timezone", "locale",
+		"swap", "gpu",
 	}
 	for _, name := range expected {
 		if !names[name] {
 			t.Errorf("missing collector %q", name)
 		}
+	}
+}
+
+func TestDockerCollector_ReturnsInstalledKey(t *testing.T) {
+	c := &DockerCollector{}
+	if c.Name() != "docker" {
+		t.Errorf("Name() = %q, want %q", c.Name(), "docker")
+	}
+	result, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := result["installed"]; !ok {
+		t.Error("missing 'installed' key")
+	}
+}
+
+func TestSystemdCollector_ReturnsAvailableKey(t *testing.T) {
+	c := &SystemdCollector{}
+	if c.Name() != "systemd" {
+		t.Errorf("Name() = %q, want %q", c.Name(), "systemd")
+	}
+	result, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := result["available"]; !ok {
+		t.Error("missing 'available' key")
+	}
+}
+
+func TestSELinuxCollector_ReturnsEnabledKey(t *testing.T) {
+	c := &SELinuxCollector{}
+	if c.Name() != "selinux" {
+		t.Errorf("Name() = %q, want %q", c.Name(), "selinux")
+	}
+	result, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := result["enabled"]; !ok {
+		t.Error("missing 'enabled' key")
+	}
+}
+
+func TestTimezoneCollector_ReturnsExpectedKeys(t *testing.T) {
+	c := &TimezoneCollector{}
+	if c.Name() != "timezone" {
+		t.Errorf("Name() = %q, want %q", c.Name(), "timezone")
+	}
+	result, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, key := range []string{"name", "abbreviation", "utc_offset", "utc_offset_seconds"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing key %q", key)
+		}
+	}
+	// utc_offset should look like +HH:MM or -HH:MM.
+	offset, ok := result["utc_offset"].(string)
+	if !ok || len(offset) < 6 {
+		t.Errorf("utc_offset = %q, want format like +05:00", offset)
+	}
+}
+
+func TestLocaleCollector_ReturnsMap(t *testing.T) {
+	c := &LocaleCollector{}
+	if c.Name() != "locale" {
+		t.Errorf("Name() = %q, want %q", c.Name(), "locale")
+	}
+	result, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should return at least an empty map, never nil.
+	if result == nil {
+		t.Error("result should not be nil")
+	}
+}
+
+func TestSwapCollector_ReturnsCountAndDevices(t *testing.T) {
+	c := &SwapCollector{}
+	if c.Name() != "swap" {
+		t.Errorf("Name() = %q, want %q", c.Name(), "swap")
+	}
+	result, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := result["count"]; !ok {
+		t.Error("missing 'count' key")
+	}
+	if _, ok := result["devices"]; !ok {
+		t.Error("missing 'devices' key")
+	}
+}
+
+func TestGPUCollector_ReturnsCountKey(t *testing.T) {
+	c := &GPUCollector{}
+	if c.Name() != "gpu" {
+		t.Errorf("Name() = %q, want %q", c.Name(), "gpu")
+	}
+	result, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := result["count"]; !ok {
+		t.Error("missing 'count' key")
 	}
 }

@@ -57,5 +57,12 @@ func DefaultCollectors() []Collector {
 		&UsersCollector{},
 		&MemoryCollector{},
 		&BlockDevicesCollector{},
+		&DockerCollector{},
+		&SystemdCollector{},
+		&SELinuxCollector{},
+		&TimezoneCollector{},
+		&LocaleCollector{},
+		&SwapCollector{},
+		&GPUCollector{},
 	}
 }

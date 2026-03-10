@@ -17,6 +17,7 @@ func VolatileCollectors() []Collector {
 		&FilesystemCollector{},
 		&UsersCollector{},
 		&MemoryCollector{},
+		&SwapCollector{},
 	}
 }
 
@@ -36,6 +37,12 @@ func StableCollectors() []Collector {
 		&CloudCollector{},
 		&KernelCollector{},
 		&BlockDevicesCollector{},
+		&DockerCollector{},
+		&SystemdCollector{},
+		&SELinuxCollector{},
+		&TimezoneCollector{},
+		&LocaleCollector{},
+		&GPUCollector{},
 	}
 }
 

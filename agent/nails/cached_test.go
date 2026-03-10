@@ -126,8 +126,8 @@ func TestVolatileAndStableCollectors_Cover13(t *testing.T) {
 	stable := StableCollectors()
 
 	total := len(volatile) + len(stable)
-	if total != 18 {
-		t.Errorf("volatile(%d) + stable(%d) = %d, want 18", len(volatile), len(stable), total)
+	if total != 25 {
+		t.Errorf("volatile(%d) + stable(%d) = %d, want 25", len(volatile), len(stable), total)
 	}
 
 	// Verify no duplicates.
