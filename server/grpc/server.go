@@ -14,7 +14,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/registry"
-	"github.com/hobnob/hobnob/server/nails"
+	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -52,7 +52,7 @@ type ServerConfig struct {
 	Queries      *db.Queries
 	BaseInterval time.Duration
 	Dispatcher   *webhook.Dispatcher
-	NailsDir     string
+	TraitsDir     string
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -80,7 +80,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		configStore:   cfg.ConfigStore,
 		queries:       cfg.Queries,
 		dispatcher:    cfg.Dispatcher,
-		nailsScanner: nails.NewScanner(cfg.NailsDir, 30*time.Second),
+		traitsScanner: traits.NewScanner(cfg.TraitsDir, 30*time.Second),
 		nodeCache:     nodeCache,
 		lastSeenBatch: lastSeenBatch,
 	}

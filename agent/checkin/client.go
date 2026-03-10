@@ -72,12 +72,12 @@ func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, nodeID string,
 }
 
 // CheckIn calls the server's CheckIn RPC with an ED25519-signed request.
-// If nailsJSON is non-nil, it is sent inline (replacing separate ReportNails).
+// If traitsJSON is non-nil, it is sent inline (replacing separate ReportTraits).
 // If policyVersion > 0, the agent signals it has a cached policy bundle at
 // that version and the server can short-circuit.
 // If cachedModuleHashes is non-nil, the server sends stubs for unchanged
 // modules (delta transfer).
-func (c *Client) CheckIn(ctx context.Context, stateFingerprint string, nailsJSON []byte, policyVersion uint64, cachedModuleHashes map[string]string) (*pb.CheckInResponse, error) {
+func (c *Client) CheckIn(ctx context.Context, stateFingerprint string, traitsJSON []byte, policyVersion uint64, cachedModuleHashes map[string]string) (*pb.CheckInResponse, error) {
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
 	sig := auth.SignPayload([]byte(stateFingerprint), ts, c.privateKey)
@@ -87,7 +87,7 @@ func (c *Client) CheckIn(ctx context.Context, stateFingerprint string, nailsJSON
 		StateFingerprint:   stateFingerprint,
 		Signature:          sig,
 		Timestamp:          timestamppb.New(now),
-		NailsJson:          nailsJSON,
+		TraitsJson:          traitsJSON,
 		PolicyVersion:      policyVersion,
 		PolicyMode:         true,
 		CachedModuleHashes: cachedModuleHashes,
@@ -133,20 +133,20 @@ func (c *Client) ReportResult(ctx context.Context, runID string, results []*pb.M
 	return nil
 }
 
-// ReportNails calls the server's ReportNails RPC with ED25519-signed facts JSON.
-func (c *Client) ReportNails(ctx context.Context, nailsMap map[string]any) error {
-	nailsJSON, err := json.Marshal(nailsMap)
+// ReportTraits calls the server's ReportTraits RPC with ED25519-signed facts JSON.
+func (c *Client) ReportTraits(ctx context.Context, traitsMap map[string]any) error {
+	traitsJSON, err := json.Marshal(traitsMap)
 	if err != nil {
-		return fmt.Errorf("marshal nails: %w", err)
+		return fmt.Errorf("marshal traits: %w", err)
 	}
 
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
-	sig := auth.SignPayload(nailsJSON, ts, c.privateKey)
+	sig := auth.SignPayload(traitsJSON, ts, c.privateKey)
 
-	_, err = c.agent.ReportNails(ctx, &pb.ReportNailsRequest{
+	_, err = c.agent.ReportTraits(ctx, &pb.ReportTraitsRequest{
 		NodeId:    c.nodeID,
-		NailsJson: nailsJSON,
+		TraitsJson: traitsJSON,
 		Signature: sig,
 		Timestamp: timestamppb.New(now),
 	})
@@ -157,14 +157,14 @@ func (c *Client) ReportNails(ctx context.Context, nailsMap map[string]any) error
 	return nil
 }
 
-// DownloadCustomNail retrieves a custom nail executable's bytes from the
+// DownloadCustomTrait retrieves a custom trait executable's bytes from the
 // server by name. The request travels over the mTLS-authenticated channel.
-func (c *Client) DownloadCustomNail(ctx context.Context, name string) ([]byte, error) {
-	resp, err := c.agent.DownloadCustomNail(ctx, &pb.DownloadCustomNailRequest{
+func (c *Client) DownloadCustomTrait(ctx context.Context, name string) ([]byte, error) {
+	resp, err := c.agent.DownloadCustomTrait(ctx, &pb.DownloadCustomTraitRequest{
 		Name: name,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("download custom nail %q: %w", name, err)
+		return nil, fmt.Errorf("download custom trait %q: %w", name, err)
 	}
 
 	return resp.Data, nil

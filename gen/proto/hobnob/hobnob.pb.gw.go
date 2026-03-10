@@ -116,9 +116,9 @@ func local_request_HobnobAgent_ReportResult_0(ctx context.Context, marshaler run
 	return msg, metadata, err
 }
 
-func request_HobnobAgent_ReportNails_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAgentClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_HobnobAgent_ReportTraits_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAgentClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq ReportNailsRequest
+		protoReq ReportTraitsRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
@@ -127,25 +127,25 @@ func request_HobnobAgent_ReportNails_0(ctx context.Context, marshaler runtime.Ma
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	msg, err := client.ReportNails(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.ReportTraits(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_HobnobAgent_ReportNails_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAgentServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_HobnobAgent_ReportTraits_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAgentServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq ReportNailsRequest
+		protoReq ReportTraitsRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	msg, err := server.ReportNails(ctx, &protoReq)
+	msg, err := server.ReportTraits(ctx, &protoReq)
 	return msg, metadata, err
 }
 
-func request_HobnobAgent_DownloadCustomNail_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAgentClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_HobnobAgent_DownloadCustomTrait_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAgentClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq DownloadCustomNailRequest
+		protoReq DownloadCustomTraitRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
@@ -154,19 +154,19 @@ func request_HobnobAgent_DownloadCustomNail_0(ctx context.Context, marshaler run
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	msg, err := client.DownloadCustomNail(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.DownloadCustomTrait(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_HobnobAgent_DownloadCustomNail_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAgentServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_HobnobAgent_DownloadCustomTrait_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobAgentServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq DownloadCustomNailRequest
+		protoReq DownloadCustomTraitRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	msg, err := server.DownloadCustomNail(ctx, &protoReq)
+	msg, err := server.DownloadCustomTrait(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -915,45 +915,45 @@ func RegisterHobnobAgentHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_HobnobAgent_ReportResult_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_HobnobAgent_ReportNails_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_HobnobAgent_ReportTraits_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/ReportNails", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/ReportNails"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/ReportTraits", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/ReportTraits"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_HobnobAgent_ReportNails_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_HobnobAgent_ReportTraits_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAgent_ReportNails_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAgent_ReportTraits_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_HobnobAgent_DownloadCustomNail_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_HobnobAgent_DownloadCustomTrait_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/DownloadCustomNail", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/DownloadCustomNail"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/DownloadCustomTrait", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/DownloadCustomTrait"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_HobnobAgent_DownloadCustomNail_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_HobnobAgent_DownloadCustomTrait_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAgent_DownloadCustomNail_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAgent_DownloadCustomTrait_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -1476,57 +1476,57 @@ func RegisterHobnobAgentHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_HobnobAgent_ReportResult_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_HobnobAgent_ReportNails_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_HobnobAgent_ReportTraits_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/ReportNails", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/ReportNails"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/ReportTraits", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/ReportTraits"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_HobnobAgent_ReportNails_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_HobnobAgent_ReportTraits_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAgent_ReportNails_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAgent_ReportTraits_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_HobnobAgent_DownloadCustomNail_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_HobnobAgent_DownloadCustomTrait_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/DownloadCustomNail", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/DownloadCustomNail"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/DownloadCustomTrait", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/DownloadCustomTrait"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_HobnobAgent_DownloadCustomNail_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_HobnobAgent_DownloadCustomTrait_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_HobnobAgent_DownloadCustomNail_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_HobnobAgent_DownloadCustomTrait_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	return nil
 }
 
 var (
-	pattern_HobnobAgent_Register_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "Register"}, ""))
-	pattern_HobnobAgent_CheckIn_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "CheckIn"}, ""))
-	pattern_HobnobAgent_ReportResult_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "ReportResult"}, ""))
-	pattern_HobnobAgent_ReportNails_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "ReportNails"}, ""))
-	pattern_HobnobAgent_DownloadCustomNail_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "DownloadCustomNail"}, ""))
+	pattern_HobnobAgent_Register_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "Register"}, ""))
+	pattern_HobnobAgent_CheckIn_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "CheckIn"}, ""))
+	pattern_HobnobAgent_ReportResult_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "ReportResult"}, ""))
+	pattern_HobnobAgent_ReportTraits_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "ReportTraits"}, ""))
+	pattern_HobnobAgent_DownloadCustomTrait_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "DownloadCustomTrait"}, ""))
 )
 
 var (
-	forward_HobnobAgent_Register_0           = runtime.ForwardResponseMessage
-	forward_HobnobAgent_CheckIn_0            = runtime.ForwardResponseMessage
-	forward_HobnobAgent_ReportResult_0       = runtime.ForwardResponseMessage
-	forward_HobnobAgent_ReportNails_0        = runtime.ForwardResponseMessage
-	forward_HobnobAgent_DownloadCustomNail_0 = runtime.ForwardResponseMessage
+	forward_HobnobAgent_Register_0            = runtime.ForwardResponseMessage
+	forward_HobnobAgent_CheckIn_0             = runtime.ForwardResponseMessage
+	forward_HobnobAgent_ReportResult_0        = runtime.ForwardResponseMessage
+	forward_HobnobAgent_ReportTraits_0        = runtime.ForwardResponseMessage
+	forward_HobnobAgent_DownloadCustomTrait_0 = runtime.ForwardResponseMessage
 )
 
 // RegisterHobnobAdminHandlerFromEndpoint is same as RegisterHobnobAdminHandler but

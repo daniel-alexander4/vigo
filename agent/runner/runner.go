@@ -44,8 +44,8 @@ type Runner struct {
 	// Executors maps resource type names to their executor implementations.
 	Executors map[string]modules.Executor
 
-	// Nails are the collected node nails (used for template rendering).
-	Nails map[string]any
+	// Traits are the collected node traits (used for template rendering).
+	Traits map[string]any
 
 	// DryRun passes through to executors and disables the notify pass.
 	DryRun bool
@@ -60,10 +60,10 @@ type Runner struct {
 }
 
 // NewRunner creates a Runner with the given configuration.
-func NewRunner(executors map[string]modules.Executor, nails map[string]any, dryRun bool, module string) *Runner {
+func NewRunner(executors map[string]modules.Executor, traits map[string]any, dryRun bool, module string) *Runner {
 	return &Runner{
 		Executors: executors,
-		Nails:     nails,
+		Traits:     traits,
 		DryRun:    dryRun,
 		Module:    module,
 	}
@@ -134,7 +134,7 @@ func (r *Runner) executeResource(ctx context.Context, node ResourceNode) modules
 
 	// Evaluate agent-side when expression if present.
 	if node.When != "" {
-		shouldRun, err := evaluateAgentWhen(ctx, node.When, r.Nails)
+		shouldRun, err := evaluateAgentWhen(ctx, node.When, r.Traits)
 		if err != nil {
 			result.Error = fmt.Errorf("evaluating when expression: %w", err)
 			return result
@@ -264,7 +264,7 @@ func (r *Runner) executeNotifyPass(
 // evaluateAgentWhen evaluates a when expression on the agent side. Only
 // builtin function calls should remain in agent-side expressions; var
 // references have been substituted to true/false by the server.
-func evaluateAgentWhen(ctx context.Context, when string, nails map[string]any) (bool, error) {
+func evaluateAgentWhen(ctx context.Context, when string, traits map[string]any) (bool, error) {
 	expr, err := parseWhenExprCached(when)
 	if err != nil {
 		return false, fmt.Errorf("parsing when expression %q: %w", when, err)
@@ -345,32 +345,32 @@ func evaluateAgentWhen(ctx context.Context, when string, nails map[string]any) (
 			info, err := os.Stat(args[0])
 			return err == nil && info.IsDir(), nil
 
-		// Nails-based builtins
+		// Traits-based builtins
 		case "os_family":
 			if len(args) != 1 {
 				return false, fmt.Errorf("os_family requires exactly 1 argument")
 			}
-			return strings.EqualFold(nailStr(nails, "os", "family"), args[0]), nil
+			return strings.EqualFold(traitStr(traits, "os", "family"), args[0]), nil
 		case "distro":
 			if len(args) != 1 {
 				return false, fmt.Errorf("distro requires exactly 1 argument")
 			}
-			return strings.EqualFold(nailStr(nails, "os", "distro"), args[0]), nil
+			return strings.EqualFold(traitStr(traits, "os", "distro"), args[0]), nil
 		case "arch":
 			if len(args) != 1 {
 				return false, fmt.Errorf("arch requires exactly 1 argument")
 			}
-			return strings.EqualFold(nailStr(nails, "os", "arch"), args[0]), nil
+			return strings.EqualFold(traitStr(traits, "os", "arch"), args[0]), nil
 		case "version_ge":
 			if len(args) != 1 {
 				return false, fmt.Errorf("version_ge requires exactly 1 argument")
 			}
-			return compareVersionGE(nailStr(nails, "os", "version"), args[0]), nil
+			return compareVersionGE(traitStr(traits, "os", "version"), args[0]), nil
 		case "in_group":
 			if len(args) != 1 {
 				return false, fmt.Errorf("in_group requires exactly 1 argument")
 			}
-			return userInGroup(nails, args[0]), nil
+			return userInGroup(traits, args[0]), nil
 
 		default:
 			return false, fmt.Errorf("unknown builtin function %q", name)
@@ -378,10 +378,10 @@ func evaluateAgentWhen(ctx context.Context, when string, nails map[string]any) (
 	})
 }
 
-// nailStr retrieves a nested nail value as a string.
-// e.g., nailStr(nails, "os", "family") → nails["os"]["family"]
-func nailStr(nails map[string]any, keys ...string) string {
-	var current any = nails
+// traitStr retrieves a nested trait value as a string.
+// e.g., traitStr(traits, "os", "family") → traits["os"]["family"]
+func traitStr(traits map[string]any, keys ...string) string {
+	var current any = traits
 	for _, key := range keys {
 		m, ok := current.(map[string]any)
 		if !ok {
@@ -426,11 +426,11 @@ func compareVersionGE(actual, required string) bool {
 }
 
 // userInGroup checks if the current user belongs to the specified group.
-// Reads from identity nails (identity.groups) if available, otherwise
+// Reads from identity traits (identity.groups) if available, otherwise
 // falls back to checking /etc/group.
-func userInGroup(nails map[string]any, group string) bool {
-	// Check identity nails first.
-	if identity, ok := nails["identity"].(map[string]any); ok {
+func userInGroup(traits map[string]any, group string) bool {
+	// Check identity traits first.
+	if identity, ok := traits["identity"].(map[string]any); ok {
 		// Primary group.
 		if g, ok := identity["group"].(string); ok && g == group {
 			return true
@@ -450,7 +450,7 @@ func userInGroup(nails map[string]any, group string) bool {
 	if err != nil {
 		return false
 	}
-	user := nailStr(nails, "identity", "user")
+	user := traitStr(traits, "identity", "user")
 	if user == "" {
 		return false
 	}

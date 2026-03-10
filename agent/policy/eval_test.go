@@ -76,8 +76,8 @@ func TestEvalBundle_TemplateRendering(t *testing.T) {
 		},
 	}
 
-	nails := map[string]any{"hostname": "web-01.example.com"}
-	modules, err := EvalBundle(bundle, nails)
+	traits := map[string]any{"hostname": "web-01.example.com"}
+	modules, err := EvalBundle(bundle, traits)
 	if err != nil {
 		t.Fatalf("EvalBundle: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestEvalBundle_ConditionalVars(t *testing.T) {
 		ConditionalVars: []*pb.ConditionalVarDef{
 			{
 				Name:        "is_debian",
-				Nail:       "os.distro",
+				Trait:       "os.distro",
 				Operator:    "in",
 				OperandJson: `["debian", "ubuntu"]`,
 			},
@@ -120,9 +120,9 @@ func TestEvalBundle_ConditionalVars(t *testing.T) {
 		},
 	}
 
-	// Debian nails → module included.
-	nails := map[string]any{"os": map[string]any{"distro": "debian"}}
-	modules, err := EvalBundle(bundle, nails)
+	// Debian traits → module included.
+	traits := map[string]any{"os": map[string]any{"distro": "debian"}}
+	modules, err := EvalBundle(bundle, traits)
 	if err != nil {
 		t.Fatalf("EvalBundle (debian): %v", err)
 	}
@@ -130,9 +130,9 @@ func TestEvalBundle_ConditionalVars(t *testing.T) {
 		t.Fatalf("expected 1 module for debian, got %d", len(modules))
 	}
 
-	// CentOS nails → module excluded.
-	nails = map[string]any{"os": map[string]any{"distro": "centos"}}
-	modules, err = EvalBundle(bundle, nails)
+	// CentOS traits → module excluded.
+	traits = map[string]any{"os": map[string]any{"distro": "centos"}}
+	modules, err = EvalBundle(bundle, traits)
 	if err != nil {
 		t.Fatalf("EvalBundle (centos): %v", err)
 	}

@@ -368,7 +368,7 @@ hnbvi node-configs/modules/nginx.hnb
 - **Notify/subscribe** — config change triggers service restart
 - **Conditional resources** — structured conditionals (`go_if_all_pass`, `skip_if_any_pass`, etc.) evaluated server-side
 - **Idempotency enforcement** — `exec` resources require guards; validated at config load time
-- **Nail collection** — OS, hardware, network, packages, time, identity, virtual, uptime, load, mountpoints, processors, DMI, cloud reported every check-in
+- **Trait collection** — OS, hardware, network, packages, time, identity, virtual, uptime, load, mountpoints, processors, DMI, cloud reported every check-in
 - **Compliance tracking** — compliant/drifted/failing/stale/unknown per node
 - **Secret rotation** — server polls isopass, force-runs affected nodes
 - **Webhooks** — HMAC-signed events for runs, drift, enrollment, rotation
@@ -382,40 +382,40 @@ Conditionals control which resources and modules run on a given node. They are e
 
 ### Conditional vars
 
-A conditional var is a structured YAML variable that evaluates a node nail and produces a boolean (`"true"` or `"false"`). Define them in `vars` at the module, client, or environment level:
+A conditional var is a structured YAML variable that evaluates a node trait and produces a boolean (`"true"` or `"false"`). Define them in `vars` at the module, client, or environment level:
 
 ```yaml
 vars:
   is_debian:
-    nail: os.distro
+    trait: os.distro
     only: [debian, ubuntu]
 
   is_not_container:
-    nail: hardware.virtualization
+    trait: hardware.virtualization
     not: [docker, lxc]
 
   has_enough_ram:
-    nail: hardware.memory_mb
+    trait: hardware.memory_mb
     gte: 2048
 
   hostname_matches_web:
-    nail: os.hostname
+    trait: os.hostname
     match: "^web\\d+\\."
 ```
 
-Each conditional var requires a `nail` field (dot-path into the node's nails map) and exactly one operator:
+Each conditional var requires a `trait` field (dot-path into the node's traits map) and exactly one operator:
 
 | Operator | Operand type | True when |
 |----------|-------------|-----------|
-| `only` | list | nail value is in the list |
-| `not` | list | nail value is NOT in the list |
-| `gt` | number | nail > operand |
-| `lt` | number | nail < operand |
-| `gte` | number | nail >= operand |
-| `lte` | number | nail <= operand |
-| `match` | regex string | nail matches the regex |
+| `only` | list | trait value is in the list |
+| `not` | list | trait value is NOT in the list |
+| `gt` | number | trait > operand |
+| `lt` | number | trait < operand |
+| `gte` | number | trait >= operand |
+| `lte` | number | trait <= operand |
+| `match` | regex string | trait matches the regex |
 
-Missing nails evaluate to `false`. Conditional vars are evaluated before template rendering, so their boolean results are available to other vars and to conditional fields.
+Missing traits evaluate to `false`. Conditional vars are evaluated before template rendering, so their boolean results are available to other vars and to conditional fields.
 
 ### Resource conditionals
 
@@ -467,7 +467,7 @@ nodes:
   - match: "*.example.com"
     vars:
       is_debian:
-        nail: os.distro
+        trait: os.distro
         only: [debian, ubuntu]
     modules:
       - nginx
@@ -521,13 +521,13 @@ name: webserver
 
 vars:
   is_debian:
-    nail: os.distro
+    trait: os.distro
     only: [debian, ubuntu]
   is_rhel:
-    nail: os.distro
+    trait: os.distro
     only: [rhel, centos, rocky, alma]
   has_enough_ram:
-    nail: hardware.memory_mb
+    trait: hardware.memory_mb
     gte: 1024
   worker_processes: "auto"
 

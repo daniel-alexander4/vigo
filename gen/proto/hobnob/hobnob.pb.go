@@ -157,7 +157,7 @@ type CheckInRequest struct {
 	StateFingerprint   string                 `protobuf:"bytes,2,opt,name=state_fingerprint,json=stateFingerprint,proto3" json:"state_fingerprint,omitempty"`
 	Signature          []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	NailsJson          []byte                 `protobuf:"bytes,5,opt,name=nails_json,json=nailsJson,proto3" json:"nails_json,omitempty"`                                                                                                        // inline nails (avoids separate ReportNails RPC)
+	TraitsJson         []byte                 `protobuf:"bytes,5,opt,name=traits_json,json=traitsJson,proto3" json:"traits_json,omitempty"`                                                                                                     // inline traits (avoids separate ReportTraits RPC)
 	PolicyVersion      uint64                 `protobuf:"varint,6,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`                                                                                           // agent's cached policy version (0 = no cache, send full bundle)
 	PolicyMode         bool                   `protobuf:"varint,7,opt,name=policy_mode,json=policyMode,proto3" json:"policy_mode,omitempty"`                                                                                                    // true = agent supports policy bundles
 	CachedModuleHashes map[string]string      `protobuf:"bytes,8,rep,name=cached_module_hashes,json=cachedModuleHashes,proto3" json:"cached_module_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // module name → content hash for delta transfer
@@ -223,9 +223,9 @@ func (x *CheckInRequest) GetTimestamp() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *CheckInRequest) GetNailsJson() []byte {
+func (x *CheckInRequest) GetTraitsJson() []byte {
 	if x != nil {
-		return x.NailsJson
+		return x.TraitsJson
 	}
 	return nil
 }
@@ -256,7 +256,7 @@ type CheckInResponse struct {
 	Modules             []*Module              `protobuf:"bytes,1,rep,name=modules,proto3" json:"modules,omitempty"`
 	BaseInterval        string                 `protobuf:"bytes,2,opt,name=base_interval,json=baseInterval,proto3" json:"base_interval,omitempty"` // e.g. "5m"
 	JitterPercent       int32                  `protobuf:"varint,3,opt,name=jitter_percent,json=jitterPercent,proto3" json:"jitter_percent,omitempty"`
-	CustomNails         []*CustomNailEntry     `protobuf:"bytes,4,rep,name=custom_nails,json=customNails,proto3" json:"custom_nails,omitempty"`
+	CustomTraits        []*CustomTraitEntry    `protobuf:"bytes,4,rep,name=custom_traits,json=customTraits,proto3" json:"custom_traits,omitempty"`
 	NoChange            bool                   `protobuf:"varint,5,opt,name=no_change,json=noChange,proto3" json:"no_change,omitempty"`                                 // true = fingerprint matched, skip execution
 	ResponseFingerprint string                 `protobuf:"bytes,6,opt,name=response_fingerprint,json=responseFingerprint,proto3" json:"response_fingerprint,omitempty"` // hash of this response for next check-in
 	PolicyBundle        *PolicyBundle          `protobuf:"bytes,7,opt,name=policy_bundle,json=policyBundle,proto3" json:"policy_bundle,omitempty"`                      // raw policy for agent-side evaluation
@@ -316,9 +316,9 @@ func (x *CheckInResponse) GetJitterPercent() int32 {
 	return 0
 }
 
-func (x *CheckInResponse) GetCustomNails() []*CustomNailEntry {
+func (x *CheckInResponse) GetCustomTraits() []*CustomTraitEntry {
 	if x != nil {
-		return x.CustomNails
+		return x.CustomTraits
 	}
 	return nil
 }
@@ -351,29 +351,29 @@ func (x *CheckInResponse) GetPolicyVersion() uint64 {
 	return 0
 }
 
-// CustomNailEntry describes a custom nail executable in the server's nails directory.
-type CustomNailEntry struct {
+// CustomTraitEntry describes a custom trait executable in the server's traits directory.
+type CustomTraitEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`     // nail name derived from filename (without extension)
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`     // trait name derived from filename (without extension)
 	Sha256        string                 `protobuf:"bytes,2,opt,name=sha256,proto3" json:"sha256,omitempty"` // hex-encoded SHA256 checksum of the executable
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CustomNailEntry) Reset() {
-	*x = CustomNailEntry{}
+func (x *CustomTraitEntry) Reset() {
+	*x = CustomTraitEntry{}
 	mi := &file_hobnob_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CustomNailEntry) String() string {
+func (x *CustomTraitEntry) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CustomNailEntry) ProtoMessage() {}
+func (*CustomTraitEntry) ProtoMessage() {}
 
-func (x *CustomNailEntry) ProtoReflect() protoreflect.Message {
+func (x *CustomTraitEntry) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -385,47 +385,47 @@ func (x *CustomNailEntry) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CustomNailEntry.ProtoReflect.Descriptor instead.
-func (*CustomNailEntry) Descriptor() ([]byte, []int) {
+// Deprecated: Use CustomTraitEntry.ProtoReflect.Descriptor instead.
+func (*CustomTraitEntry) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *CustomNailEntry) GetName() string {
+func (x *CustomTraitEntry) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *CustomNailEntry) GetSha256() string {
+func (x *CustomTraitEntry) GetSha256() string {
 	if x != nil {
 		return x.Sha256
 	}
 	return ""
 }
 
-// DownloadCustomNailRequest asks the server for a custom nail executable's bytes.
-type DownloadCustomNailRequest struct {
+// DownloadCustomTraitRequest asks the server for a custom trait executable's bytes.
+type DownloadCustomTraitRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // nail name (matches CustomNailEntry.name)
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // trait name (matches CustomTraitEntry.name)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DownloadCustomNailRequest) Reset() {
-	*x = DownloadCustomNailRequest{}
+func (x *DownloadCustomTraitRequest) Reset() {
+	*x = DownloadCustomTraitRequest{}
 	mi := &file_hobnob_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DownloadCustomNailRequest) String() string {
+func (x *DownloadCustomTraitRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DownloadCustomNailRequest) ProtoMessage() {}
+func (*DownloadCustomTraitRequest) ProtoMessage() {}
 
-func (x *DownloadCustomNailRequest) ProtoReflect() protoreflect.Message {
+func (x *DownloadCustomTraitRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -437,40 +437,40 @@ func (x *DownloadCustomNailRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DownloadCustomNailRequest.ProtoReflect.Descriptor instead.
-func (*DownloadCustomNailRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DownloadCustomTraitRequest.ProtoReflect.Descriptor instead.
+func (*DownloadCustomTraitRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *DownloadCustomNailRequest) GetName() string {
+func (x *DownloadCustomTraitRequest) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-// DownloadCustomNailResponse returns the raw executable bytes.
-type DownloadCustomNailResponse struct {
+// DownloadCustomTraitResponse returns the raw executable bytes.
+type DownloadCustomTraitResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DownloadCustomNailResponse) Reset() {
-	*x = DownloadCustomNailResponse{}
+func (x *DownloadCustomTraitResponse) Reset() {
+	*x = DownloadCustomTraitResponse{}
 	mi := &file_hobnob_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DownloadCustomNailResponse) String() string {
+func (x *DownloadCustomTraitResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DownloadCustomNailResponse) ProtoMessage() {}
+func (*DownloadCustomTraitResponse) ProtoMessage() {}
 
-func (x *DownloadCustomNailResponse) ProtoReflect() protoreflect.Message {
+func (x *DownloadCustomTraitResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -482,12 +482,12 @@ func (x *DownloadCustomNailResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DownloadCustomNailResponse.ProtoReflect.Descriptor instead.
-func (*DownloadCustomNailResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DownloadCustomTraitResponse.ProtoReflect.Descriptor instead.
+func (*DownloadCustomTraitResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *DownloadCustomNailResponse) GetData() []byte {
+func (x *DownloadCustomTraitResponse) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
@@ -648,7 +648,7 @@ func (x *Resource) GetWhen() string {
 
 // PolicyBundle contains the raw policy for agent-side evaluation. Secrets are
 // already resolved, vars are merged, but templates are NOT rendered and
-// conditionals are NOT evaluated — the agent does that locally with its nails.
+// conditionals are NOT evaluated — the agent does that locally with its traits.
 type PolicyBundle struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	PolicyVersion   uint64                 `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
@@ -656,7 +656,7 @@ type PolicyBundle struct {
 	VarsJson        []byte                 `protobuf:"bytes,3,opt,name=vars_json,json=varsJson,proto3" json:"vars_json,omitempty"` // JSON-encoded merged vars map[string]any
 	VarOrder        []string               `protobuf:"bytes,4,rep,name=var_order,json=varOrder,proto3" json:"var_order,omitempty"` // deterministic rendering order
 	ConditionalVars []*ConditionalVarDef   `protobuf:"bytes,5,rep,name=conditional_vars,json=conditionalVars,proto3" json:"conditional_vars,omitempty"`
-	CustomNails     []*CustomNailEntry     `protobuf:"bytes,6,rep,name=custom_nails,json=customNails,proto3" json:"custom_nails,omitempty"`
+	CustomTraits    []*CustomTraitEntry    `protobuf:"bytes,6,rep,name=custom_traits,json=customTraits,proto3" json:"custom_traits,omitempty"`
 	// Trace fields for dry-run resolution visibility.
 	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // node entry match pattern from nodes.hnb
 	Environment    string   `protobuf:"bytes,8,opt,name=environment,proto3" json:"environment,omitempty"`                             // resolved environment
@@ -730,9 +730,9 @@ func (x *PolicyBundle) GetConditionalVars() []*ConditionalVarDef {
 	return nil
 }
 
-func (x *PolicyBundle) GetCustomNails() []*CustomNailEntry {
+func (x *PolicyBundle) GetCustomTraits() []*CustomTraitEntry {
 	if x != nil {
-		return x.CustomNails
+		return x.CustomTraits
 	}
 	return nil
 }
@@ -930,11 +930,11 @@ func (x *PolicyResource) GetSubscribes() []string {
 	return nil
 }
 
-// ConditionalVarDef defines a nail-based conditional variable.
+// ConditionalVarDef defines a trait-based conditional variable.
 type ConditionalVarDef struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Nail          string                 `protobuf:"bytes,2,opt,name=nail,proto3" json:"nail,omitempty"`                                  // dot-path: "os.distro"
+	Trait         string                 `protobuf:"bytes,2,opt,name=trait,proto3" json:"trait,omitempty"`                                // dot-path: "os.distro"
 	Operator      string                 `protobuf:"bytes,3,opt,name=operator,proto3" json:"operator,omitempty"`                          // in, not_in, gt, lt, gte, lte, regex
 	OperandJson   string                 `protobuf:"bytes,4,opt,name=operand_json,json=operandJson,proto3" json:"operand_json,omitempty"` // JSON-encoded operand
 	unknownFields protoimpl.UnknownFields
@@ -978,9 +978,9 @@ func (x *ConditionalVarDef) GetName() string {
 	return ""
 }
 
-func (x *ConditionalVarDef) GetNail() string {
+func (x *ConditionalVarDef) GetTrait() string {
 	if x != nil {
-		return x.Nail
+		return x.Trait
 	}
 	return ""
 }
@@ -1211,30 +1211,30 @@ func (x *ReportResultResponse) GetAcknowledged() bool {
 	return false
 }
 
-type ReportNailsRequest struct {
+type ReportTraitsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	NailsJson     []byte                 `protobuf:"bytes,2,opt,name=nails_json,json=nailsJson,proto3" json:"nails_json,omitempty"` // JSON-encoded nails map
+	TraitsJson    []byte                 `protobuf:"bytes,2,opt,name=traits_json,json=traitsJson,proto3" json:"traits_json,omitempty"` // JSON-encoded traits map
 	Signature     []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ReportNailsRequest) Reset() {
-	*x = ReportNailsRequest{}
+func (x *ReportTraitsRequest) Reset() {
+	*x = ReportTraitsRequest{}
 	mi := &file_hobnob_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ReportNailsRequest) String() string {
+func (x *ReportTraitsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ReportNailsRequest) ProtoMessage() {}
+func (*ReportTraitsRequest) ProtoMessage() {}
 
-func (x *ReportNailsRequest) ProtoReflect() protoreflect.Message {
+func (x *ReportTraitsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1246,60 +1246,60 @@ func (x *ReportNailsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ReportNailsRequest.ProtoReflect.Descriptor instead.
-func (*ReportNailsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReportTraitsRequest.ProtoReflect.Descriptor instead.
+func (*ReportTraitsRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ReportNailsRequest) GetNodeId() string {
+func (x *ReportTraitsRequest) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *ReportNailsRequest) GetNailsJson() []byte {
+func (x *ReportTraitsRequest) GetTraitsJson() []byte {
 	if x != nil {
-		return x.NailsJson
+		return x.TraitsJson
 	}
 	return nil
 }
 
-func (x *ReportNailsRequest) GetSignature() []byte {
+func (x *ReportTraitsRequest) GetSignature() []byte {
 	if x != nil {
 		return x.Signature
 	}
 	return nil
 }
 
-func (x *ReportNailsRequest) GetTimestamp() *timestamppb.Timestamp {
+func (x *ReportTraitsRequest) GetTimestamp() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Timestamp
 	}
 	return nil
 }
 
-type ReportNailsResponse struct {
+type ReportTraitsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Acknowledged  bool                   `protobuf:"varint,1,opt,name=acknowledged,proto3" json:"acknowledged,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ReportNailsResponse) Reset() {
-	*x = ReportNailsResponse{}
+func (x *ReportTraitsResponse) Reset() {
+	*x = ReportTraitsResponse{}
 	mi := &file_hobnob_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ReportNailsResponse) String() string {
+func (x *ReportTraitsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ReportNailsResponse) ProtoMessage() {}
+func (*ReportTraitsResponse) ProtoMessage() {}
 
-func (x *ReportNailsResponse) ProtoReflect() protoreflect.Message {
+func (x *ReportTraitsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1311,12 +1311,12 @@ func (x *ReportNailsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ReportNailsResponse.ProtoReflect.Descriptor instead.
-func (*ReportNailsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReportTraitsResponse.ProtoReflect.Descriptor instead.
+func (*ReportTraitsResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ReportNailsResponse) GetAcknowledged() bool {
+func (x *ReportTraitsResponse) GetAcknowledged() bool {
 	if x != nil {
 		return x.Acknowledged
 	}
@@ -3946,36 +3946,36 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\xc1\x03\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xc3\x03\n" +
 	"\x0eCheckInRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\fR\tsignature\x128\n" +
-	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x1d\n" +
-	"\n" +
-	"nails_json\x18\x05 \x01(\fR\tnailsJson\x12%\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x1f\n" +
+	"\vtraits_json\x18\x05 \x01(\fR\n" +
+	"traitsJson\x12%\n" +
 	"\x0epolicy_version\x18\x06 \x01(\x04R\rpolicyVersion\x12\x1f\n" +
 	"\vpolicy_mode\x18\a \x01(\bR\n" +
 	"policyMode\x12c\n" +
 	"\x14cached_module_hashes\x18\b \x03(\v21.hobnob.v1.CheckInRequest.CachedModuleHashesEntryR\x12cachedModuleHashes\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfe\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\x03\n" +
 	"\x0fCheckInResponse\x12+\n" +
 	"\amodules\x18\x01 \x03(\v2\x11.hobnob.v1.ModuleR\amodules\x12#\n" +
 	"\rbase_interval\x18\x02 \x01(\tR\fbaseInterval\x12%\n" +
-	"\x0ejitter_percent\x18\x03 \x01(\x05R\rjitterPercent\x12=\n" +
-	"\fcustom_nails\x18\x04 \x03(\v2\x1a.hobnob.v1.CustomNailEntryR\vcustomNails\x12\x1b\n" +
+	"\x0ejitter_percent\x18\x03 \x01(\x05R\rjitterPercent\x12@\n" +
+	"\rcustom_traits\x18\x04 \x03(\v2\x1b.hobnob.v1.CustomTraitEntryR\fcustomTraits\x12\x1b\n" +
 	"\tno_change\x18\x05 \x01(\bR\bnoChange\x121\n" +
 	"\x14response_fingerprint\x18\x06 \x01(\tR\x13responseFingerprint\x12<\n" +
 	"\rpolicy_bundle\x18\a \x01(\v2\x17.hobnob.v1.PolicyBundleR\fpolicyBundle\x12%\n" +
-	"\x0epolicy_version\x18\b \x01(\x04R\rpolicyVersion\"=\n" +
-	"\x0fCustomNailEntry\x12\x12\n" +
+	"\x0epolicy_version\x18\b \x01(\x04R\rpolicyVersion\">\n" +
+	"\x10CustomTraitEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
-	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"/\n" +
-	"\x19DownloadCustomNailRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"0\n" +
-	"\x1aDownloadCustomNailResponse\x12\x12\n" +
+	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"0\n" +
+	"\x1aDownloadCustomTraitRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"1\n" +
+	"\x1bDownloadCustomTraitResponse\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"\xd1\x01\n" +
 	"\x06Module\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
@@ -3994,14 +3994,14 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8b\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8e\x03\n" +
 	"\fPolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x121\n" +
 	"\amodules\x18\x02 \x03(\v2\x17.hobnob.v1.PolicyModuleR\amodules\x12\x1b\n" +
 	"\tvars_json\x18\x03 \x01(\fR\bvarsJson\x12\x1b\n" +
 	"\tvar_order\x18\x04 \x03(\tR\bvarOrder\x12G\n" +
-	"\x10conditional_vars\x18\x05 \x03(\v2\x1c.hobnob.v1.ConditionalVarDefR\x0fconditionalVars\x12=\n" +
-	"\fcustom_nails\x18\x06 \x03(\v2\x1a.hobnob.v1.CustomNailEntryR\vcustomNails\x12'\n" +
+	"\x10conditional_vars\x18\x05 \x03(\v2\x1c.hobnob.v1.ConditionalVarDefR\x0fconditionalVars\x12@\n" +
+	"\rcustom_traits\x18\x06 \x03(\v2\x1b.hobnob.v1.CustomTraitEntryR\fcustomTraits\x12'\n" +
 	"\x0fmatched_pattern\x18\a \x01(\tR\x0ematchedPattern\x12 \n" +
 	"\venvironment\x18\b \x01(\tR\venvironment\x12\x14\n" +
 	"\x05roles\x18\t \x03(\tR\x05roles\"\xc5\x01\n" +
@@ -4026,10 +4026,10 @@ const file_hobnob_proto_rawDesc = "" +
 	"subscribes\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"z\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"|\n" +
 	"\x11ConditionalVarDef\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04nail\x18\x02 \x01(\tR\x04nail\x12\x1a\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05trait\x18\x02 \x01(\tR\x05trait\x12\x1a\n" +
 	"\boperator\x18\x03 \x01(\tR\boperator\x12!\n" +
 	"\foperand_json\x18\x04 \x01(\tR\voperandJson\"\xd0\x01\n" +
 	"\x13ReportResultRequest\x12\x15\n" +
@@ -4049,14 +4049,14 @@ const file_hobnob_proto_rawDesc = "" +
 	"\vduration_ms\x18\a \x01(\x05R\n" +
 	"durationMs\":\n" +
 	"\x14ReportResultResponse\x12\"\n" +
-	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xa4\x01\n" +
-	"\x12ReportNailsRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
-	"\n" +
-	"nails_json\x18\x02 \x01(\fR\tnailsJson\x12\x1c\n" +
+	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xa7\x01\n" +
+	"\x13ReportTraitsRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1f\n" +
+	"\vtraits_json\x18\x02 \x01(\fR\n" +
+	"traitsJson\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\fR\tsignature\x128\n" +
-	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"9\n" +
-	"\x13ReportNailsResponse\x12\"\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\":\n" +
+	"\x14ReportTraitsResponse\x12\"\n" +
 	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"K\n" +
 	"\x19AddApprovedPatternRequest\x12\x18\n" +
 	"\apattern\x18\x01 \x01(\tR\apattern\x12\x14\n" +
@@ -4222,13 +4222,13 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04diff\x18\x02 \x03(\v2'.hobnob.v1.PromoteEnvResponse.DiffEntryR\x04diff\x1a7\n" +
 	"\tDiffEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\x96\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\x9c\x03\n" +
 	"\vHobnobAgent\x12C\n" +
 	"\bRegister\x12\x1a.hobnob.v1.RegisterRequest\x1a\x1b.hobnob.v1.RegisterResponse\x12@\n" +
 	"\aCheckIn\x12\x19.hobnob.v1.CheckInRequest\x1a\x1a.hobnob.v1.CheckInResponse\x12O\n" +
-	"\fReportResult\x12\x1e.hobnob.v1.ReportResultRequest\x1a\x1f.hobnob.v1.ReportResultResponse\x12L\n" +
-	"\vReportNails\x12\x1d.hobnob.v1.ReportNailsRequest\x1a\x1e.hobnob.v1.ReportNailsResponse\x12a\n" +
-	"\x12DownloadCustomNail\x12$.hobnob.v1.DownloadCustomNailRequest\x1a%.hobnob.v1.DownloadCustomNailResponse2\xbb\x12\n" +
+	"\fReportResult\x12\x1e.hobnob.v1.ReportResultRequest\x1a\x1f.hobnob.v1.ReportResultResponse\x12O\n" +
+	"\fReportTraits\x12\x1e.hobnob.v1.ReportTraitsRequest\x1a\x1f.hobnob.v1.ReportTraitsResponse\x12d\n" +
+	"\x13DownloadCustomTrait\x12%.hobnob.v1.DownloadCustomTraitRequest\x1a&.hobnob.v1.DownloadCustomTraitResponse2\xbb\x12\n" +
 	"\vHobnobAdmin\x12~\n" +
 	"\x12AddApprovedPattern\x12$.hobnob.v1.AddApprovedPatternRequest\x1a%.hobnob.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12\x81\x01\n" +
 	"\x14ListApprovedPatterns\x12&.hobnob.v1.ListApprovedPatternsRequest\x1a'.hobnob.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x89\x01\n" +
@@ -4274,9 +4274,9 @@ var file_hobnob_proto_goTypes = []any{
 	(*RegisterResponse)(nil),              // 1: hobnob.v1.RegisterResponse
 	(*CheckInRequest)(nil),                // 2: hobnob.v1.CheckInRequest
 	(*CheckInResponse)(nil),               // 3: hobnob.v1.CheckInResponse
-	(*CustomNailEntry)(nil),               // 4: hobnob.v1.CustomNailEntry
-	(*DownloadCustomNailRequest)(nil),     // 5: hobnob.v1.DownloadCustomNailRequest
-	(*DownloadCustomNailResponse)(nil),    // 6: hobnob.v1.DownloadCustomNailResponse
+	(*CustomTraitEntry)(nil),              // 4: hobnob.v1.CustomTraitEntry
+	(*DownloadCustomTraitRequest)(nil),    // 5: hobnob.v1.DownloadCustomTraitRequest
+	(*DownloadCustomTraitResponse)(nil),   // 6: hobnob.v1.DownloadCustomTraitResponse
 	(*Module)(nil),                        // 7: hobnob.v1.Module
 	(*Resource)(nil),                      // 8: hobnob.v1.Resource
 	(*PolicyBundle)(nil),                  // 9: hobnob.v1.PolicyBundle
@@ -4286,8 +4286,8 @@ var file_hobnob_proto_goTypes = []any{
 	(*ReportResultRequest)(nil),           // 13: hobnob.v1.ReportResultRequest
 	(*ModuleResult)(nil),                  // 14: hobnob.v1.ModuleResult
 	(*ReportResultResponse)(nil),          // 15: hobnob.v1.ReportResultResponse
-	(*ReportNailsRequest)(nil),            // 16: hobnob.v1.ReportNailsRequest
-	(*ReportNailsResponse)(nil),           // 17: hobnob.v1.ReportNailsResponse
+	(*ReportTraitsRequest)(nil),           // 16: hobnob.v1.ReportTraitsRequest
+	(*ReportTraitsResponse)(nil),          // 17: hobnob.v1.ReportTraitsResponse
 	(*AddApprovedPatternRequest)(nil),     // 18: hobnob.v1.AddApprovedPatternRequest
 	(*AddApprovedPatternResponse)(nil),    // 19: hobnob.v1.AddApprovedPatternResponse
 	(*ListApprovedPatternsRequest)(nil),   // 20: hobnob.v1.ListApprovedPatternsRequest
@@ -4348,18 +4348,18 @@ var file_hobnob_proto_depIdxs = []int32{
 	72, // 0: hobnob.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
 	68, // 1: hobnob.v1.CheckInRequest.cached_module_hashes:type_name -> hobnob.v1.CheckInRequest.CachedModuleHashesEntry
 	7,  // 2: hobnob.v1.CheckInResponse.modules:type_name -> hobnob.v1.Module
-	4,  // 3: hobnob.v1.CheckInResponse.custom_nails:type_name -> hobnob.v1.CustomNailEntry
+	4,  // 3: hobnob.v1.CheckInResponse.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
 	9,  // 4: hobnob.v1.CheckInResponse.policy_bundle:type_name -> hobnob.v1.PolicyBundle
 	8,  // 5: hobnob.v1.Module.resources:type_name -> hobnob.v1.Resource
 	69, // 6: hobnob.v1.Resource.params:type_name -> hobnob.v1.Resource.ParamsEntry
 	10, // 7: hobnob.v1.PolicyBundle.modules:type_name -> hobnob.v1.PolicyModule
 	12, // 8: hobnob.v1.PolicyBundle.conditional_vars:type_name -> hobnob.v1.ConditionalVarDef
-	4,  // 9: hobnob.v1.PolicyBundle.custom_nails:type_name -> hobnob.v1.CustomNailEntry
+	4,  // 9: hobnob.v1.PolicyBundle.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
 	11, // 10: hobnob.v1.PolicyModule.resources:type_name -> hobnob.v1.PolicyResource
 	70, // 11: hobnob.v1.PolicyResource.attributes:type_name -> hobnob.v1.PolicyResource.AttributesEntry
 	14, // 12: hobnob.v1.ReportResultRequest.results:type_name -> hobnob.v1.ModuleResult
 	72, // 13: hobnob.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
-	72, // 14: hobnob.v1.ReportNailsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	72, // 14: hobnob.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	72, // 15: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
 	22, // 16: hobnob.v1.ListApprovedPatternsResponse.patterns:type_name -> hobnob.v1.ApprovedPattern
 	72, // 17: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
@@ -4386,8 +4386,8 @@ var file_hobnob_proto_depIdxs = []int32{
 	0,  // 38: hobnob.v1.HobnobAgent.Register:input_type -> hobnob.v1.RegisterRequest
 	2,  // 39: hobnob.v1.HobnobAgent.CheckIn:input_type -> hobnob.v1.CheckInRequest
 	13, // 40: hobnob.v1.HobnobAgent.ReportResult:input_type -> hobnob.v1.ReportResultRequest
-	16, // 41: hobnob.v1.HobnobAgent.ReportNails:input_type -> hobnob.v1.ReportNailsRequest
-	5,  // 42: hobnob.v1.HobnobAgent.DownloadCustomNail:input_type -> hobnob.v1.DownloadCustomNailRequest
+	16, // 41: hobnob.v1.HobnobAgent.ReportTraits:input_type -> hobnob.v1.ReportTraitsRequest
+	5,  // 42: hobnob.v1.HobnobAgent.DownloadCustomTrait:input_type -> hobnob.v1.DownloadCustomTraitRequest
 	18, // 43: hobnob.v1.HobnobAdmin.AddApprovedPattern:input_type -> hobnob.v1.AddApprovedPatternRequest
 	20, // 44: hobnob.v1.HobnobAdmin.ListApprovedPatterns:input_type -> hobnob.v1.ListApprovedPatternsRequest
 	23, // 45: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:input_type -> hobnob.v1.RevokeApprovedPatternRequest
@@ -4412,8 +4412,8 @@ var file_hobnob_proto_depIdxs = []int32{
 	1,  // 64: hobnob.v1.HobnobAgent.Register:output_type -> hobnob.v1.RegisterResponse
 	3,  // 65: hobnob.v1.HobnobAgent.CheckIn:output_type -> hobnob.v1.CheckInResponse
 	15, // 66: hobnob.v1.HobnobAgent.ReportResult:output_type -> hobnob.v1.ReportResultResponse
-	17, // 67: hobnob.v1.HobnobAgent.ReportNails:output_type -> hobnob.v1.ReportNailsResponse
-	6,  // 68: hobnob.v1.HobnobAgent.DownloadCustomNail:output_type -> hobnob.v1.DownloadCustomNailResponse
+	17, // 67: hobnob.v1.HobnobAgent.ReportTraits:output_type -> hobnob.v1.ReportTraitsResponse
+	6,  // 68: hobnob.v1.HobnobAgent.DownloadCustomTrait:output_type -> hobnob.v1.DownloadCustomTraitResponse
 	19, // 69: hobnob.v1.HobnobAdmin.AddApprovedPattern:output_type -> hobnob.v1.AddApprovedPatternResponse
 	21, // 70: hobnob.v1.HobnobAdmin.ListApprovedPatterns:output_type -> hobnob.v1.ListApprovedPatternsResponse
 	24, // 71: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:output_type -> hobnob.v1.RevokeApprovedPatternResponse

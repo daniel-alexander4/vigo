@@ -452,9 +452,9 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 		}
 
 		// Separate conditional vars from regular vars.
-		// A conditional var is any map value with a "nail" key or any
+		// A conditional var is any map value with a "trait" key or any
 		// known operator key (in, not_in, gt, lt, gte, lte, regex).
-		// Maps with operator keys but no nail are caught as validation
+		// Maps with operator keys but no trait are caught as validation
 		// errors by ParseConditionalVar.
 		var condVars []conditionals.ConditionalVar
 		for name, v := range def.Vars {

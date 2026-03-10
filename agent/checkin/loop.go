@@ -14,11 +14,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hobnob/hobnob/agent/modules"
-	"github.com/hobnob/hobnob/agent/nails"
+	"github.com/hobnob/hobnob/agent/traits"
 	"github.com/hobnob/hobnob/agent/policy"
 	"github.com/hobnob/hobnob/agent/runner"
 	"github.com/hobnob/hobnob/agent/snapshots"
-	"github.com/hobnob/hobnob/agent/customnails"
+	"github.com/hobnob/hobnob/agent/customtraits"
 	"github.com/hobnob/hobnob/agent/update"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
@@ -85,13 +85,13 @@ type PolicyState struct {
 // If dryRun is true, results are not reported back to the server.
 //
 // stateFingerprint is the response fingerprint from the previous check-in
-// (empty on first run). nailsJSON is the pre-marshaled nails for inline
+// (empty on first run). traitsJSON is the pre-marshaled traits for inline
 // delivery (nil falls back to legacy separate-RPC mode).
 //
 // policyState holds the cached policy bundle. If the server confirms the
 // version is current (no_change), the cached bundle is evaluated locally
-// with fresh nails. Pass nil for one-shot commands.
-func RunOnce(ctx context.Context, client *Client, executors map[string]modules.Executor, nailsMap map[string]any, dryRun bool, module string, stateFingerprint string, nailsJSON []byte, cache *runner.ResultCache, policyState *PolicyState) (*RunResult, error) {
+// with fresh traits. Pass nil for one-shot commands.
+func RunOnce(ctx context.Context, client *Client, executors map[string]modules.Executor, traitsMap map[string]any, dryRun bool, module string, stateFingerprint string, traitsJSON []byte, cache *runner.ResultCache, policyState *PolicyState) (*RunResult, error) {
 	var policyVersion uint64
 	var cachedModuleHashes map[string]string
 	if policyState != nil {
@@ -101,7 +101,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 		}
 	}
 
-	resp, err := client.CheckIn(ctx, stateFingerprint, nailsJSON, policyVersion, cachedModuleHashes)
+	resp, err := client.CheckIn(ctx, stateFingerprint, traitsJSON, policyVersion, cachedModuleHashes)
 	if err != nil {
 		return nil, fmt.Errorf("check-in: %w", err)
 	}
@@ -123,7 +123,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 	bundle := resp.PolicyBundle
 
 	if resp.NoChange && policyState != nil && policyState.Bundle != nil {
-		// Config unchanged — evaluate cached bundle with fresh nails.
+		// Config unchanged — evaluate cached bundle with fresh traits.
 		bundle = policyState.Bundle
 	}
 
@@ -148,7 +148,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 		policyState.ModuleCache.Update(bundle.Modules)
 	}
 
-	protoModules, err = policy.EvalBundle(bundle, nailsMap)
+	protoModules, err = policy.EvalBundle(bundle, traitsMap)
 	if err != nil {
 		return nil, fmt.Errorf("evaluating policy bundle: %w", err)
 	}
@@ -166,7 +166,7 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 
 	runID := uuid.New().String()
 
-	r := runner.NewRunner(executors, nailsMap, dryRun, module)
+	r := runner.NewRunner(executors, traitsMap, dryRun, module)
 	r.Cache = cache
 	results, err := r.Run(ctx, protoModules)
 	if err != nil {
@@ -192,19 +192,19 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 }
 
 // Loop runs the daemon pull loop until the context is cancelled. On each
-// iteration it syncs custom nails (if nailsCacheDir is non-empty), collects
-// nails, checks in with nails inline, executes modules, and reports results.
+// iteration it syncs custom traits (if traitsCacheDir is non-empty), collects
+// traits, checks in with traits inline, executes modules, and reports results.
 // Server errors trigger exponential backoff; successful runs reset the backoff
 // and sleep with jitter per the server's response.
 //
-// The agent sends nails inline with the CheckIn RPC, eliminating the separate
-// ReportNails round-trip. It also tracks the server's response fingerprint
+// The agent sends traits inline with the CheckIn RPC, eliminating the separate
+// ReportTraits round-trip. It also tracks the server's response fingerprint
 // to enable short-circuit on subsequent check-ins when nothing has changed.
 //
-// Stable nails (OS, hardware, network, packages, etc.) are cached and only
-// refreshed every 10 cycles. Volatile nails (time, uptime, loadavg,
+// Stable traits (OS, hardware, network, packages, etc.) are cached and only
+// refreshed every 10 cycles. Volatile traits (time, uptime, loadavg,
 // mountpoints) are collected every cycle.
-func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, nailsCacheDir string) error {
+func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, traitsCacheDir string) error {
 	logger := slog.Default()
 	bo := NewBackoff()
 
@@ -223,8 +223,8 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		ModuleCache: NewModuleCache(),
 	}
 
-	// Cached collector set: stable nails refresh every 10 cycles.
-	collectors := nails.NewCachedCollectors(10)
+	// Cached collector set: stable traits refresh every 10 cycles.
+	collectors := traits.NewCachedCollectors(10)
 
 	// Result cache: skip re-executing resources whose params haven't changed
 	// and whose last execution was a no-op. Expires after 5 cycles.
@@ -238,44 +238,44 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		default:
 		}
 
-		// 0. Pre-check-in to get custom nails manifest.
-		var customNails map[string]any
-		if nailsCacheDir != "" {
+		// 0. Pre-check-in to get custom traits manifest.
+		var customTraits map[string]any
+		if traitsCacheDir != "" {
 			preResp, preErr := client.CheckIn(ctx, "", nil, 0, nil)
 			if preErr != nil {
-				logger.Warn("pre-check-in for nails manifest failed", "error", preErr)
-			} else if len(preResp.CustomNails) > 0 {
-				nailsExec := customnails.NewExecutor(nailsCacheDir, client, 10*time.Second)
-				customNails, preErr = nailsExec.SyncAndRun(ctx, preResp.CustomNails)
+				logger.Warn("pre-check-in for traits manifest failed", "error", preErr)
+			} else if len(preResp.CustomTraits) > 0 {
+				traitsExec := customtraits.NewExecutor(traitsCacheDir, client, 10*time.Second)
+				customTraits, preErr = traitsExec.SyncAndRun(ctx, preResp.CustomTraits)
 				if preErr != nil {
-					logger.Warn("custom nails sync/run failed", "error", preErr)
+					logger.Warn("custom traits sync/run failed", "error", preErr)
 				}
 			}
 		}
 
-		// 1. Collect nails (volatile every cycle, stable every 10 cycles).
-		nailsMap, err := collectors.CollectAll(ctx)
+		// 1. Collect traits (volatile every cycle, stable every 10 cycles).
+		traitsMap, err := collectors.CollectAll(ctx)
 		if err != nil {
 			logger.Warn("fact collection failed", "error", err)
-			nailsMap = make(map[string]any)
+			traitsMap = make(map[string]any)
 		}
 
-		// 1b. Merge custom nails into nails map.
-		if customNails != nil {
-			for k, v := range customNails {
-				nailsMap[k] = v
+		// 1b. Merge custom traits into traits map.
+		if customTraits != nil {
+			for k, v := range customTraits {
+				traitsMap[k] = v
 			}
 		}
 
-		// 2. Marshal nails for inline delivery (replaces separate ReportNails RPC).
-		nailsJSON, marshalErr := json.Marshal(nailsMap)
+		// 2. Marshal traits for inline delivery (replaces separate ReportTraits RPC).
+		traitsJSON, marshalErr := json.Marshal(traitsMap)
 		if marshalErr != nil {
-			logger.Warn("failed to marshal nails", "error", marshalErr)
-			nailsJSON = nil
+			logger.Warn("failed to marshal traits", "error", marshalErr)
+			traitsJSON = nil
 		}
 
-		// 3. Run once (check-in with inline nails + execute + report).
-		runResult, err := RunOnce(ctx, client, executors, nailsMap, false, "", lastFingerprint, nailsJSON, resultCache, policyState)
+		// 3. Run once (check-in with inline traits + execute + report).
+		runResult, err := RunOnce(ctx, client, executors, traitsMap, false, "", lastFingerprint, traitsJSON, resultCache, policyState)
 		if err != nil {
 			wait := bo.NextBackOff()
 			logger.Warn("convergence run failed, backing off",

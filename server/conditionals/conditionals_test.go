@@ -8,11 +8,11 @@ import (
 
 func TestIsConditionalVar_WithTraitKey(t *testing.T) {
 	v := map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"in":    []any{"debian", "ubuntu"},
 	}
 	if !IsConditionalVar(v) {
-		t.Error("expected map with 'nail' key to be a conditional var")
+		t.Error("expected map with 'trait' key to be a conditional var")
 	}
 }
 
@@ -27,7 +27,7 @@ func TestIsConditionalVar_MapWithoutTrait(t *testing.T) {
 		"name": "foo",
 	}
 	if IsConditionalVar(v) {
-		t.Error("expected map without 'nail' key to not be a conditional var")
+		t.Error("expected map without 'trait' key to not be a conditional var")
 	}
 }
 
@@ -41,15 +41,15 @@ func TestIsConditionalVar_Nil(t *testing.T) {
 
 func TestParseConditionalVar_InOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"in":    []any{"debian", "ubuntu"},
 	}
 	cv, err := ParseConditionalVar("is_debian", raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cv.Nail != "os.distro" {
-		t.Errorf("expected nail 'os.distro', got %q", cv.Nail)
+	if cv.Trait != "os.distro" {
+		t.Errorf("expected trait 'os.distro', got %q", cv.Trait)
 	}
 	if cv.Operator != "in" {
 		t.Errorf("expected operator 'in', got %q", cv.Operator)
@@ -58,7 +58,7 @@ func TestParseConditionalVar_InOperator(t *testing.T) {
 
 func TestParseConditionalVar_NotInOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail":  "os.family",
+		"trait":  "os.family",
 		"not_in": []any{"windows"},
 	}
 	cv, err := ParseConditionalVar("not_windows", raw)
@@ -72,7 +72,7 @@ func TestParseConditionalVar_NotInOperator(t *testing.T) {
 
 func TestParseConditionalVar_GtOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	}
 	cv, err := ParseConditionalVar("high_mem", raw)
@@ -86,7 +86,7 @@ func TestParseConditionalVar_GtOperator(t *testing.T) {
 
 func TestParseConditionalVar_LtOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail": "hardware.cpu_count",
+		"trait": "hardware.cpu_count",
 		"lt":    100,
 	}
 	cv, err := ParseConditionalVar("low_cpu", raw)
@@ -100,7 +100,7 @@ func TestParseConditionalVar_LtOperator(t *testing.T) {
 
 func TestParseConditionalVar_GteOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gte":   4096,
 	}
 	cv, err := ParseConditionalVar("gte_mem", raw)
@@ -114,7 +114,7 @@ func TestParseConditionalVar_GteOperator(t *testing.T) {
 
 func TestParseConditionalVar_LteOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"lte":   8192,
 	}
 	cv, err := ParseConditionalVar("lte_mem", raw)
@@ -128,7 +128,7 @@ func TestParseConditionalVar_LteOperator(t *testing.T) {
 
 func TestParseConditionalVar_RegexOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"regex": "^ubuntu",
 	}
 	cv, err := ParseConditionalVar("is_ubuntu", raw)
@@ -142,7 +142,7 @@ func TestParseConditionalVar_RegexOperator(t *testing.T) {
 
 func TestParseConditionalVar_InvalidRegex(t *testing.T) {
 	raw := map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"regex": "[invalid",
 	}
 	_, err := ParseConditionalVar("bad_regex", raw)
@@ -155,15 +155,15 @@ func TestParseConditionalVar_MissingTrait(t *testing.T) {
 	raw := map[string]any{
 		"in": []any{"debian"},
 	}
-	_, err := ParseConditionalVar("no_nail", raw)
+	_, err := ParseConditionalVar("no_trait", raw)
 	if err == nil {
-		t.Error("expected error for missing nail field, got nil")
+		t.Error("expected error for missing trait field, got nil")
 	}
 }
 
 func TestParseConditionalVar_NoOperator(t *testing.T) {
 	raw := map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 	}
 	_, err := ParseConditionalVar("no_op", raw)
 	if err == nil {
@@ -173,7 +173,7 @@ func TestParseConditionalVar_NoOperator(t *testing.T) {
 
 func TestParseConditionalVar_MultipleOperators(t *testing.T) {
 	raw := map[string]any{
-		"nail":  "os.distro",
+		"trait":  "os.distro",
 		"in":     []any{"debian"},
 		"not_in": []any{"ubuntu"},
 	}
@@ -185,7 +185,7 @@ func TestParseConditionalVar_MultipleOperators(t *testing.T) {
 
 func TestParseConditionalVar_InvalidOperatorName(t *testing.T) {
 	raw := map[string]any{
-		"nail":   "os.distro",
+		"trait":   "os.distro",
 		"equals": "debian",
 	}
 	_, err := ParseConditionalVar("bad_op", raw)
@@ -198,27 +198,27 @@ func TestParseConditionalVar_InvalidOperatorName(t *testing.T) {
 
 func TestEvaluate_Only_Match(t *testing.T) {
 	cv := mustParse(t, "is_debian", map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"in": []any{"debian", "ubuntu"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"distro": "debian"},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected in:[debian, ubuntu] to match nail 'debian'")
+	if !Evaluate(cv, traits) {
+		t.Error("expected in:[debian, ubuntu] to match trait 'debian'")
 	}
 }
 
 func TestEvaluate_Only_NoMatch(t *testing.T) {
 	cv := mustParse(t, "is_debian", map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"in": []any{"debian", "ubuntu"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"distro": "centos"},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected in:[debian, ubuntu] to NOT match nail 'centos'")
+	if Evaluate(cv, traits) {
+		t.Error("expected in:[debian, ubuntu] to NOT match trait 'centos'")
 	}
 }
 
@@ -226,27 +226,27 @@ func TestEvaluate_Only_NoMatch(t *testing.T) {
 
 func TestEvaluate_Not_Match(t *testing.T) {
 	cv := mustParse(t, "not_windows", map[string]any{
-		"nail": "os.family",
+		"trait": "os.family",
 		"not_in": []any{"windows"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"family": "linux"},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected not_in:[windows] to be true when nail is 'linux'")
+	if !Evaluate(cv, traits) {
+		t.Error("expected not_in:[windows] to be true when trait is 'linux'")
 	}
 }
 
 func TestEvaluate_Not_NoMatch(t *testing.T) {
 	cv := mustParse(t, "not_windows", map[string]any{
-		"nail": "os.family",
+		"trait": "os.family",
 		"not_in": []any{"windows"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"family": "windows"},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected not_in:[windows] to be false when nail is 'windows'")
+	if Evaluate(cv, traits) {
+		t.Error("expected not_in:[windows] to be false when trait is 'windows'")
 	}
 }
 
@@ -254,40 +254,40 @@ func TestEvaluate_Not_NoMatch(t *testing.T) {
 
 func TestEvaluate_Gt_True(t *testing.T) {
 	cv := mustParse(t, "high_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 8192},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected gt:4096 to be true when nail is 8192")
+	if !Evaluate(cv, traits) {
+		t.Error("expected gt:4096 to be true when trait is 8192")
 	}
 }
 
 func TestEvaluate_Gt_Equal(t *testing.T) {
 	cv := mustParse(t, "high_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 4096},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected gt:4096 to be false when nail is 4096 (strict greater than)")
+	if Evaluate(cv, traits) {
+		t.Error("expected gt:4096 to be false when trait is 4096 (strict greater than)")
 	}
 }
 
 func TestEvaluate_Gt_False(t *testing.T) {
 	cv := mustParse(t, "high_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 2048},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected gt:4096 to be false when nail is 2048")
+	if Evaluate(cv, traits) {
+		t.Error("expected gt:4096 to be false when trait is 2048")
 	}
 }
 
@@ -295,27 +295,27 @@ func TestEvaluate_Gt_False(t *testing.T) {
 
 func TestEvaluate_Lt_True(t *testing.T) {
 	cv := mustParse(t, "low_cpu", map[string]any{
-		"nail": "hardware.cpu_count",
+		"trait": "hardware.cpu_count",
 		"lt":    100,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"cpu_count": 4},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected lt:100 to be true when nail is 4")
+	if !Evaluate(cv, traits) {
+		t.Error("expected lt:100 to be true when trait is 4")
 	}
 }
 
 func TestEvaluate_Lt_False(t *testing.T) {
 	cv := mustParse(t, "low_cpu", map[string]any{
-		"nail": "hardware.cpu_count",
+		"trait": "hardware.cpu_count",
 		"lt":    100,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"cpu_count": 200},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected lt:100 to be false when nail is 200")
+	if Evaluate(cv, traits) {
+		t.Error("expected lt:100 to be false when trait is 200")
 	}
 }
 
@@ -323,40 +323,40 @@ func TestEvaluate_Lt_False(t *testing.T) {
 
 func TestEvaluate_Gte_GreaterThan(t *testing.T) {
 	cv := mustParse(t, "gte_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gte":   4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 8192},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected gte:4096 to be true when nail is 8192")
+	if !Evaluate(cv, traits) {
+		t.Error("expected gte:4096 to be true when trait is 8192")
 	}
 }
 
 func TestEvaluate_Gte_Equal(t *testing.T) {
 	cv := mustParse(t, "gte_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gte":   4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 4096},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected gte:4096 to be true when nail is 4096")
+	if !Evaluate(cv, traits) {
+		t.Error("expected gte:4096 to be true when trait is 4096")
 	}
 }
 
 func TestEvaluate_Gte_LessThan(t *testing.T) {
 	cv := mustParse(t, "gte_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gte":   4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 2048},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected gte:4096 to be false when nail is 2048")
+	if Evaluate(cv, traits) {
+		t.Error("expected gte:4096 to be false when trait is 2048")
 	}
 }
 
@@ -364,40 +364,40 @@ func TestEvaluate_Gte_LessThan(t *testing.T) {
 
 func TestEvaluate_Lte_LessThan(t *testing.T) {
 	cv := mustParse(t, "lte_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"lte":   8192,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 4096},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected lte:8192 to be true when nail is 4096")
+	if !Evaluate(cv, traits) {
+		t.Error("expected lte:8192 to be true when trait is 4096")
 	}
 }
 
 func TestEvaluate_Lte_Equal(t *testing.T) {
 	cv := mustParse(t, "lte_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"lte":   8192,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 8192},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected lte:8192 to be true when nail is 8192")
+	if !Evaluate(cv, traits) {
+		t.Error("expected lte:8192 to be true when trait is 8192")
 	}
 }
 
 func TestEvaluate_Lte_GreaterThan(t *testing.T) {
 	cv := mustParse(t, "lte_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"lte":   8192,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": 16384},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected lte:8192 to be false when nail is 16384")
+	if Evaluate(cv, traits) {
+		t.Error("expected lte:8192 to be false when trait is 16384")
 	}
 }
 
@@ -405,26 +405,26 @@ func TestEvaluate_Lte_GreaterThan(t *testing.T) {
 
 func TestEvaluate_Match_True(t *testing.T) {
 	cv := mustParse(t, "is_ubuntu", map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"regex": "^ubuntu",
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"distro": "ubuntu-22.04"},
 	}
-	if !Evaluate(cv, nails) {
+	if !Evaluate(cv, traits) {
 		t.Error("expected regex:'^ubuntu' to be true for 'ubuntu-22.04'")
 	}
 }
 
 func TestEvaluate_Match_False(t *testing.T) {
 	cv := mustParse(t, "is_ubuntu", map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"regex": "^ubuntu",
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"distro": "debian-12"},
 	}
-	if Evaluate(cv, nails) {
+	if Evaluate(cv, traits) {
 		t.Error("expected regex:'^ubuntu' to be false for 'debian-12'")
 	}
 }
@@ -433,97 +433,97 @@ func TestEvaluate_Match_False(t *testing.T) {
 
 func TestEvaluate_MissingTrait_In(t *testing.T) {
 	cv := mustParse(t, "is_debian", map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"in":    []any{"debian"},
 	})
-	nails := map[string]any{}
-	if Evaluate(cv, nails) {
-		t.Error("expected false when nail is missing (in operator)")
+	traits := map[string]any{}
+	if Evaluate(cv, traits) {
+		t.Error("expected false when trait is missing (in operator)")
 	}
 }
 
 func TestEvaluate_MissingTrait_NotIn(t *testing.T) {
 	cv := mustParse(t, "not_windows", map[string]any{
-		"nail":  "os.family",
+		"trait":  "os.family",
 		"not_in": []any{"windows"},
 	})
-	nails := map[string]any{}
-	if Evaluate(cv, nails) {
-		t.Error("expected false when nail is missing (not_in operator)")
+	traits := map[string]any{}
+	if Evaluate(cv, traits) {
+		t.Error("expected false when trait is missing (not_in operator)")
 	}
 }
 
 func TestEvaluate_MissingTrait_Gt(t *testing.T) {
 	cv := mustParse(t, "high_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	})
-	nails := map[string]any{}
-	if Evaluate(cv, nails) {
-		t.Error("expected false when nail is missing (gt operator)")
+	traits := map[string]any{}
+	if Evaluate(cv, traits) {
+		t.Error("expected false when trait is missing (gt operator)")
 	}
 }
 
 func TestEvaluate_MissingTrait_Regex(t *testing.T) {
 	cv := mustParse(t, "is_ubuntu", map[string]any{
-		"nail": "os.distro",
+		"trait": "os.distro",
 		"regex": "^ubuntu",
 	})
-	nails := map[string]any{}
-	if Evaluate(cv, nails) {
-		t.Error("expected false when nail is missing (regex operator)")
+	traits := map[string]any{}
+	if Evaluate(cv, traits) {
+		t.Error("expected false when trait is missing (regex operator)")
 	}
 }
 
 func TestEvaluate_NonNumericTrait_Gt(t *testing.T) {
 	cv := mustParse(t, "high_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": "not-a-number"},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected false when nail is non-numeric with gt operator")
+	if Evaluate(cv, traits) {
+		t.Error("expected false when trait is non-numeric with gt operator")
 	}
 }
 
 func TestEvaluate_NonNumericTrait_Lt(t *testing.T) {
 	cv := mustParse(t, "low_cpu", map[string]any{
-		"nail": "hardware.cpu_count",
+		"trait": "hardware.cpu_count",
 		"lt":    100,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"cpu_count": "not-a-number"},
 	}
-	if Evaluate(cv, nails) {
-		t.Error("expected false when nail is non-numeric with lt operator")
+	if Evaluate(cv, traits) {
+		t.Error("expected false when trait is non-numeric with lt operator")
 	}
 }
 
 func TestEvaluate_FloatTrait_Gt(t *testing.T) {
 	cv := mustParse(t, "high_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": float64(8192)},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected gt:4096 to be true when nail is float64(8192)")
+	if !Evaluate(cv, traits) {
+		t.Error("expected gt:4096 to be true when trait is float64(8192)")
 	}
 }
 
 func TestEvaluate_StringNumericTrait_Gt(t *testing.T) {
 	cv := mustParse(t, "high_mem", map[string]any{
-		"nail": "hardware.memory_mb",
+		"trait": "hardware.memory_mb",
 		"gt":    4096,
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hardware": map[string]any{"memory_mb": "8192"},
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected gt:4096 to be true when nail is string '8192'")
+	if !Evaluate(cv, traits) {
+		t.Error("expected gt:4096 to be true when trait is string '8192'")
 	}
 }
 
@@ -531,60 +531,60 @@ func TestEvaluate_StringNumericTrait_Gt(t *testing.T) {
 
 func TestEvaluate_DotPath_Nested(t *testing.T) {
 	cv := mustParse(t, "deep", map[string]any{
-		"nail": "a.b.c",
+		"trait": "a.b.c",
 		"in": []any{"found"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"a": map[string]any{
 			"b": map[string]any{
 				"c": "found",
 			},
 		},
 	}
-	if !Evaluate(cv, nails) {
+	if !Evaluate(cv, traits) {
 		t.Error("expected dot-path 'a.b.c' to resolve to 'found'")
 	}
 }
 
 func TestEvaluate_DotPath_MissingIntermediate(t *testing.T) {
 	cv := mustParse(t, "deep", map[string]any{
-		"nail": "a.b.c",
+		"trait": "a.b.c",
 		"in": []any{"found"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"a": map[string]any{
 			"x": "other",
 		},
 	}
-	if Evaluate(cv, nails) {
+	if Evaluate(cv, traits) {
 		t.Error("expected false when intermediate path segment is missing")
 	}
 }
 
 func TestEvaluate_DotPath_TopLevel(t *testing.T) {
 	cv := mustParse(t, "hostname_check", map[string]any{
-		"nail": "hostname",
+		"trait": "hostname",
 		"in": []any{"web01"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"hostname": "web01",
 	}
-	if !Evaluate(cv, nails) {
-		t.Error("expected top-level nail 'hostname' to resolve")
+	if !Evaluate(cv, traits) {
+		t.Error("expected top-level trait 'hostname' to resolve")
 	}
 }
 
 func TestEvaluate_Only_NumericTraitAsString(t *testing.T) {
 	cv := mustParse(t, "check", map[string]any{
-		"nail": "count",
+		"trait": "count",
 		"in": []any{"5"},
 	})
-	nails := map[string]any{
+	traits := map[string]any{
 		"count": 5,
 	}
 	// only uses string comparison: fmt.Sprintf of 5 is "5"
-	if !Evaluate(cv, nails) {
-		t.Error("expected only:['5'] to match nail integer 5 via string coercion")
+	if !Evaluate(cv, traits) {
+		t.Error("expected only:['5'] to match trait integer 5 via string coercion")
 	}
 }
 

@@ -59,8 +59,8 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache) gr
 				return nil, err
 			}
 			ctx = newCtx
-		case *pb.ReportNailsRequest:
-			if err := verifyReportNails(ctx, queries, nodeCache, r); err != nil {
+		case *pb.ReportTraitsRequest:
+			if err := verifyReportTraits(ctx, queries, nodeCache, r); err != nil {
 				return nil, err
 			}
 		default:
@@ -137,8 +137,8 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.N
 	return db.ContextWithNode(ctx, node), nil
 }
 
-// verifyReportNails validates the signature on a ReportNailsRequest.
-func verifyReportNails(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportNailsRequest) error {
+// verifyReportTraits validates the signature on a ReportTraitsRequest.
+func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportTraitsRequest) error {
 	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
@@ -158,7 +158,7 @@ func verifyReportNails(ctx context.Context, queries *db.Queries, cache *db.NodeC
 		return err
 	}
 
-	payload := req.GetNailsJson()
+	payload := req.GetTraitsJson()
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {

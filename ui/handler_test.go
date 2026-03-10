@@ -997,8 +997,8 @@ func actionColor(action string) string {
 	}
 }
 
-// nailsJSON helper for test validation.
-func nailsJSON(facts map[string]any) json.RawMessage {
+// traitsJSON helper for test validation.
+func traitsJSON(facts map[string]any) json.RawMessage {
 	b, _ := json.Marshal(facts)
 	return b
 }

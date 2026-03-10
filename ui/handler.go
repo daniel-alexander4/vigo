@@ -670,9 +670,9 @@ func (ds *dbDataSource) NodeDetailData(nodeID uuid.UUID, baseInterval time.Durat
 
 	// Fetch latest facts
 	facts := make(map[string]any)
-	cf, err := ds.queries.GetLatestNodeNails(ctx, nodeID)
+	cf, err := ds.queries.GetLatestNodeTraits(ctx, nodeID)
 	if err == nil {
-		_ = json.Unmarshal(cf.Nails, &facts)
+		_ = json.Unmarshal(cf.Traits, &facts)
 	}
 
 	return NodeDetailPageData{

@@ -14,7 +14,7 @@ import (
 // buildPolicyBundle converts a resolved NodeConfig into a PolicyBundle proto.
 // Secrets are already resolved in the config (at load time). Vars are merged.
 // Template strings and when expressions are left raw — the agent evaluates
-// them locally with its own nails.
+// them locally with its own traits.
 //
 // If cachedHashes is non-nil, modules whose content hash matches the agent's
 // cached version are sent as stubs (name + hash only, no resources), saving
@@ -46,7 +46,7 @@ func buildPolicyBundle(cfg *config.NodeConfig, version uint64, cachedHashes map[
 		}
 		bundle.ConditionalVars = append(bundle.ConditionalVars, &pb.ConditionalVarDef{
 			Name:        cv.Name,
-			Nail:        cv.Nail,
+			Trait:        cv.Trait,
 			Operator:    cv.Operator,
 			OperandJson: string(operandJSON),
 		})

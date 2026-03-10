@@ -63,10 +63,10 @@ type Node struct {
 	ForcePush  bool               `json:"force_push"`
 }
 
-type NodeNail struct {
+type NodeTrait struct {
 	ID          uuid.UUID       `json:"id"`
 	NodeID      uuid.UUID       `json:"node_id"`
-	Nails       json.RawMessage `json:"nails"`
+	Traits       json.RawMessage `json:"traits"`
 	CollectedAt time.Time       `json:"collected_at"`
 }
 

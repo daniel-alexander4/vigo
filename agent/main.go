@@ -21,7 +21,7 @@ import (
 	"github.com/hobnob/hobnob/agent/checkin"
 	"github.com/hobnob/hobnob/agent/modules"
 	"github.com/hobnob/hobnob/agent/modules/pkgmgr"
-	"github.com/hobnob/hobnob/agent/nails"
+	"github.com/hobnob/hobnob/agent/traits"
 	"github.com/hobnob/hobnob/agent/snapshots"
 	"github.com/spf13/cobra"
 )
@@ -77,10 +77,10 @@ func saveNodeID(id string) error {
 	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
 }
 
-// detectOSInfo returns the OS family and distro from nails. Falls back to
+// detectOSInfo returns the OS family and distro from traits. Falls back to
 // runtime.GOOS if the OS collector fails.
 func detectOSInfo() (family, distro string) {
-	osCollector := &nails.OSCollector{}
+	osCollector := &traits.OSCollector{}
 	osFacts, err := osCollector.Collect(context.Background())
 	if err != nil {
 		return runtime.GOOS, ""
@@ -276,9 +276,9 @@ var rootCmd = &cobra.Command{
 			CurrentVersion: version,
 		}
 
-		// Start the daemon loop with custom nails cache.
-		nailsCacheDir := filepath.Join(dataDir, "nails")
-		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg, nailsCacheDir)
+		// Start the daemon loop with custom traits cache.
+		traitsCacheDir := filepath.Join(dataDir, "traits")
+		return checkin.Loop(ctx, client, executors, snapshotMgr, updateCfg, traitsCacheDir)
 	},
 }
 
@@ -295,19 +295,19 @@ func runOnceWithTrace(client *checkin.Client, executors map[string]modules.Execu
 	logger := slog.Default()
 
 	ctx := context.Background()
-	nailsMap, err := nails.CollectAll(ctx, nails.DefaultCollectors())
+	traitsMap, err := traits.CollectAll(ctx, traits.DefaultCollectors())
 	if err != nil {
 		logger.Warn("fact collection failed", "error", err)
-		nailsMap = make(map[string]any)
+		traitsMap = make(map[string]any)
 	}
 
-	nailsJSON, marshalErr := json.Marshal(nailsMap)
+	traitsJSON, marshalErr := json.Marshal(traitsMap)
 	if marshalErr != nil {
-		logger.Warn("failed to marshal nails", "error", marshalErr)
-		nailsJSON = nil
+		logger.Warn("failed to marshal traits", "error", marshalErr)
+		traitsJSON = nil
 	}
 
-	runResult, err := checkin.RunOnce(ctx, client, executors, nailsMap, isDryRun, module, "", nailsJSON, nil, nil)
+	runResult, err := checkin.RunOnce(ctx, client, executors, traitsMap, isDryRun, module, "", traitsJSON, nil, nil)
 	if err != nil {
 		return fmt.Errorf("convergence run failed: %w", err)
 	}

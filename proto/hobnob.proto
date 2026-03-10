@@ -21,11 +21,11 @@ service HobnobAgent {
   // ReportResult submits per-module execution results after a run.
   rpc ReportResult(ReportResultRequest) returns (ReportResultResponse);
 
-  // ReportNails submits collected nails from the agent.
-  rpc ReportNails(ReportNailsRequest) returns (ReportNailsResponse);
+  // ReportTraits submits collected traits from the agent.
+  rpc ReportTraits(ReportTraitsRequest) returns (ReportTraitsResponse);
 
-  // DownloadCustomNail retrieves a custom nail executable by name.
-  rpc DownloadCustomNail(DownloadCustomNailRequest) returns (DownloadCustomNailResponse);
+  // DownloadCustomTrait retrieves a custom trait executable by name.
+  rpc DownloadCustomTrait(DownloadCustomTraitRequest) returns (DownloadCustomTraitResponse);
 }
 
 // =============================================================================
@@ -211,7 +211,7 @@ message CheckInRequest {
   string state_fingerprint = 2;
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
-  bytes nails_json = 5;           // inline nails (avoids separate ReportNails RPC)
+  bytes traits_json = 5;           // inline traits (avoids separate ReportTraits RPC)
   uint64 policy_version = 6;     // agent's cached policy version (0 = no cache, send full bundle)
   bool policy_mode = 7;          // true = agent supports policy bundles
   map<string, string> cached_module_hashes = 8;  // module name → content hash for delta transfer
@@ -221,26 +221,26 @@ message CheckInResponse {
   repeated Module modules = 1;
   string base_interval = 2;   // e.g. "5m"
   int32 jitter_percent = 3;
-  repeated CustomNailEntry custom_nails = 4;
+  repeated CustomTraitEntry custom_traits = 4;
   bool no_change = 5;                    // true = fingerprint matched, skip execution
   string response_fingerprint = 6;       // hash of this response for next check-in
   PolicyBundle policy_bundle = 7;        // raw policy for agent-side evaluation
   uint64 policy_version = 8;            // current config version, always set
 }
 
-// CustomNailEntry describes a custom nail executable in the server's nails directory.
-message CustomNailEntry {
-  string name = 1;            // nail name derived from filename (without extension)
+// CustomTraitEntry describes a custom trait executable in the server's traits directory.
+message CustomTraitEntry {
+  string name = 1;            // trait name derived from filename (without extension)
   string sha256 = 2;          // hex-encoded SHA256 checksum of the executable
 }
 
-// DownloadCustomNailRequest asks the server for a custom nail executable's bytes.
-message DownloadCustomNailRequest {
-  string name = 1;            // nail name (matches CustomNailEntry.name)
+// DownloadCustomTraitRequest asks the server for a custom trait executable's bytes.
+message DownloadCustomTraitRequest {
+  string name = 1;            // trait name (matches CustomTraitEntry.name)
 }
 
-// DownloadCustomNailResponse returns the raw executable bytes.
-message DownloadCustomNailResponse {
+// DownloadCustomTraitResponse returns the raw executable bytes.
+message DownloadCustomTraitResponse {
   bytes data = 1;
 }
 
@@ -263,14 +263,14 @@ message Resource {
 
 // PolicyBundle contains the raw policy for agent-side evaluation. Secrets are
 // already resolved, vars are merged, but templates are NOT rendered and
-// conditionals are NOT evaluated — the agent does that locally with its nails.
+// conditionals are NOT evaluated — the agent does that locally with its traits.
 message PolicyBundle {
   uint64 policy_version = 1;
   repeated PolicyModule modules = 2;
   bytes vars_json = 3;                 // JSON-encoded merged vars map[string]any
   repeated string var_order = 4;       // deterministic rendering order
   repeated ConditionalVarDef conditional_vars = 5;
-  repeated CustomNailEntry custom_nails = 6;
+  repeated CustomTraitEntry custom_traits = 6;
 
   // Trace fields for dry-run resolution visibility.
   string matched_pattern = 7;          // node entry match pattern from nodes.hnb
@@ -300,10 +300,10 @@ message PolicyResource {
   repeated string subscribes = 6;
 }
 
-// ConditionalVarDef defines a nail-based conditional variable.
+// ConditionalVarDef defines a trait-based conditional variable.
 message ConditionalVarDef {
   string name = 1;
-  string nail = 2;                     // dot-path: "os.distro"
+  string trait = 2;                    // dot-path: "os.distro"
   string operator = 3;                 // in, not_in, gt, lt, gte, lte, regex
   string operand_json = 4;            // JSON-encoded operand
 }
@@ -330,14 +330,14 @@ message ReportResultResponse {
   bool acknowledged = 1;
 }
 
-message ReportNailsRequest {
+message ReportTraitsRequest {
   string node_id = 1;
-  bytes nails_json = 2;       // JSON-encoded nails map
+  bytes traits_json = 2;       // JSON-encoded traits map
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
 }
 
-message ReportNailsResponse {
+message ReportTraitsResponse {
   bool acknowledged = 1;
 }
 

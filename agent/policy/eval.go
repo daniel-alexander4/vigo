@@ -1,6 +1,6 @@
 // Package policy provides agent-side evaluation of server policy bundles.
 // When the server sends a PolicyBundle (raw templates, unevaluated conditionals),
-// this package evaluates everything locally using the agent's own nails,
+// this package evaluates everything locally using the agent's own traits,
 // producing the same compiled proto modules the runner expects.
 package policy
 
@@ -14,16 +14,16 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 )
 
-// EvalBundle evaluates a policy bundle using the agent's nails. It performs
+// EvalBundle evaluates a policy bundle using the agent's traits. It performs
 // the same computation the server would do in legacy mode:
-//  1. Parse conditional var definitions and evaluate against nails
-//  2. Render vars templates with nails
+//  1. Parse conditional var definitions and evaluate against traits
+//  2. Render vars templates with traits
 //  3. Filter modules by when expressions
 //  4. Filter resources by when expressions (split server/agent-side)
 //  5. Render resource attribute templates
 //
 // Returns compiled proto modules in the same format the runner expects.
-func EvalBundle(bundle *pb.PolicyBundle, nails map[string]any) ([]*pb.Module, error) {
+func EvalBundle(bundle *pb.PolicyBundle, traits map[string]any) ([]*pb.Module, error) {
 	if bundle == nil || len(bundle.Modules) == 0 {
 		return nil, nil
 	}
@@ -36,13 +36,13 @@ func EvalBundle(bundle *pb.PolicyBundle, nails map[string]any) ([]*pb.Module, er
 		}
 	}
 
-	// 2. Evaluate conditional vars against nails.
+	// 2. Evaluate conditional vars against traits.
 	varOrder := bundle.VarOrder
-	vars, varOrder = evaluateConditionalVars(bundle.ConditionalVars, nails, vars, varOrder)
+	vars, varOrder = evaluateConditionalVars(bundle.ConditionalVars, traits, vars, varOrder)
 
 	// 3. Render vars templates.
 	var err error
-	vars, err = config.RenderVars(vars, nails, varOrder)
+	vars, err = config.RenderVars(vars, traits, varOrder)
 	if err != nil {
 		return nil, fmt.Errorf("rendering vars: %w", err)
 	}
@@ -79,7 +79,7 @@ func EvalBundle(bundle *pb.PolicyBundle, nails map[string]any) ([]*pb.Module, er
 			// Render attribute templates.
 			params := make(map[string]string, len(pres.Attributes))
 			for k, v := range pres.Attributes {
-				rendered, err := config.RenderTemplate(v, nails, vars)
+				rendered, err := config.RenderTemplate(v, traits, vars)
 				if err != nil {
 					return nil, fmt.Errorf("rendering template for resource %q attr %q: %w",
 						pres.Name, k, err)
@@ -116,8 +116,8 @@ func EvalBundle(bundle *pb.PolicyBundle, nails map[string]any) ([]*pb.Module, er
 }
 
 // evaluateConditionalVars parses ConditionalVarDef protos and evaluates each
-// against the nails map, setting "true"/"false" string values in vars.
-func evaluateConditionalVars(defs []*pb.ConditionalVarDef, nails, vars map[string]any, varOrder []string) (map[string]any, []string) {
+// against the traits map, setting "true"/"false" string values in vars.
+func evaluateConditionalVars(defs []*pb.ConditionalVarDef, traits, vars map[string]any, varOrder []string) (map[string]any, []string) {
 	if len(defs) == 0 {
 		return vars, varOrder
 	}
@@ -132,7 +132,7 @@ func evaluateConditionalVars(defs []*pb.ConditionalVarDef, nails, vars map[strin
 			continue
 		}
 
-		if conditionals.Evaluate(cv, nails) {
+		if conditionals.Evaluate(cv, traits) {
 			vars[cv.Name] = "true"
 		} else {
 			vars[cv.Name] = "false"
@@ -169,7 +169,7 @@ func parseConditionalVarDef(def *pb.ConditionalVarDef) (conditionals.Conditional
 
 	return conditionals.ConditionalVar{
 		Name:     def.Name,
-		Nail:    def.Nail,
+		Trait:    def.Trait,
 		Operator: def.Operator,
 		Operand:  operand,
 	}, nil

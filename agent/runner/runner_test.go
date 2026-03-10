@@ -396,7 +396,7 @@ func TestRunnerContinuesOnError(t *testing.T) {
 // --- When builtin tests ---
 
 func TestEvaluateAgentWhen_OsFamily(t *testing.T) {
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"family": "debian", "distro": "ubuntu", "version": "22.04", "arch": "amd64"},
 	}
 
@@ -409,7 +409,7 @@ func TestEvaluateAgentWhen_OsFamily(t *testing.T) {
 		{"os_family('rhel')", false},
 	}
 	for _, tt := range tests {
-		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, traits)
 		if err != nil {
 			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
 		}
@@ -420,7 +420,7 @@ func TestEvaluateAgentWhen_OsFamily(t *testing.T) {
 }
 
 func TestEvaluateAgentWhen_Distro(t *testing.T) {
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
 	}
 
@@ -433,7 +433,7 @@ func TestEvaluateAgentWhen_Distro(t *testing.T) {
 		{"distro('centos')", false},
 	}
 	for _, tt := range tests {
-		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, traits)
 		if err != nil {
 			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
 		}
@@ -444,7 +444,7 @@ func TestEvaluateAgentWhen_Distro(t *testing.T) {
 }
 
 func TestEvaluateAgentWhen_Arch(t *testing.T) {
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"arch": "amd64"},
 	}
 
@@ -457,7 +457,7 @@ func TestEvaluateAgentWhen_Arch(t *testing.T) {
 		{"arch('arm64')", false},
 	}
 	for _, tt := range tests {
-		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, traits)
 		if err != nil {
 			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
 		}
@@ -468,7 +468,7 @@ func TestEvaluateAgentWhen_Arch(t *testing.T) {
 }
 
 func TestEvaluateAgentWhen_VersionGe(t *testing.T) {
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"version": "22.04"},
 	}
 
@@ -482,7 +482,7 @@ func TestEvaluateAgentWhen_VersionGe(t *testing.T) {
 		{"version_ge('24.04')", false},
 	}
 	for _, tt := range tests {
-		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, traits)
 		if err != nil {
 			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
 		}
@@ -518,7 +518,7 @@ func TestCompareVersionGE(t *testing.T) {
 }
 
 func TestEvaluateAgentWhen_InGroup(t *testing.T) {
-	nails := map[string]any{
+	traits := map[string]any{
 		"identity": map[string]any{
 			"user":  "testuser",
 			"group": "staff",
@@ -536,7 +536,7 @@ func TestEvaluateAgentWhen_InGroup(t *testing.T) {
 		{"in_group('wheel')", false},  // not a member
 	}
 	for _, tt := range tests {
-		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, traits)
 		if err != nil {
 			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
 		}
@@ -546,8 +546,8 @@ func TestEvaluateAgentWhen_InGroup(t *testing.T) {
 	}
 }
 
-func TestEvaluateAgentWhen_CombinedNailsBuiltins(t *testing.T) {
-	nails := map[string]any{
+func TestEvaluateAgentWhen_CombinedTraitsBuiltins(t *testing.T) {
+	traits := map[string]any{
 		"os": map[string]any{"family": "debian", "arch": "amd64", "version": "22.04"},
 	}
 
@@ -562,7 +562,7 @@ func TestEvaluateAgentWhen_CombinedNailsBuiltins(t *testing.T) {
 		{"os_family('debian') and version_ge('20.04')", true},
 	}
 	for _, tt := range tests {
-		got, err := evaluateAgentWhen(context.Background(), tt.expr, nails)
+		got, err := evaluateAgentWhen(context.Background(), tt.expr, traits)
 		if err != nil {
 			t.Fatalf("evaluateAgentWhen(%q) error: %v", tt.expr, err)
 		}
@@ -572,31 +572,31 @@ func TestEvaluateAgentWhen_CombinedNailsBuiltins(t *testing.T) {
 	}
 }
 
-func TestEvaluateAgentWhen_NilNails(t *testing.T) {
-	// Should not panic with nil nails.
+func TestEvaluateAgentWhen_NilTraits(t *testing.T) {
+	// Should not panic with nil traits.
 	got, err := evaluateAgentWhen(context.Background(), "os_family('debian')", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got {
-		t.Error("expected false with nil nails")
+		t.Error("expected false with nil traits")
 	}
 }
 
-func TestNailStr(t *testing.T) {
-	nails := map[string]any{
+func TestTraitStr(t *testing.T) {
+	traits := map[string]any{
 		"os": map[string]any{"family": "debian"},
 	}
-	if got := nailStr(nails, "os", "family"); got != "debian" {
-		t.Errorf("nailStr(os, family) = %q, want debian", got)
+	if got := traitStr(traits, "os", "family"); got != "debian" {
+		t.Errorf("traitStr(os, family) = %q, want debian", got)
 	}
-	if got := nailStr(nails, "os", "missing"); got != "" {
-		t.Errorf("nailStr(os, missing) = %q, want empty", got)
+	if got := traitStr(traits, "os", "missing"); got != "" {
+		t.Errorf("traitStr(os, missing) = %q, want empty", got)
 	}
-	if got := nailStr(nails, "missing", "family"); got != "" {
-		t.Errorf("nailStr(missing, family) = %q, want empty", got)
+	if got := traitStr(traits, "missing", "family"); got != "" {
+		t.Errorf("traitStr(missing, family) = %q, want empty", got)
 	}
-	if got := nailStr(nil, "os", "family"); got != "" {
-		t.Errorf("nailStr(nil) = %q, want empty", got)
+	if got := traitStr(nil, "os", "family"); got != "" {
+		t.Errorf("traitStr(nil) = %q, want empty", got)
 	}
 }

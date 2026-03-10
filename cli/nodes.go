@@ -124,9 +124,9 @@ var nodesDeleteCmd = &cobra.Command{
 	},
 }
 
-var nodesNailsCmd = &cobra.Command{
-	Use:   "nails <hostname> [dot.path]",
-	Short: "View collected nails for a node",
+var nodesTraitsCmd = &cobra.Command{
+	Use:   "traits <hostname> [dot.path]",
+	Short: "View collected traits for a node",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hostname := args[0]
@@ -135,19 +135,19 @@ var nodesNailsCmd = &cobra.Command{
 		var resp struct {
 			Hostname    string         `json:"hostname"`
 			CollectedAt string         `json:"collected_at"`
-			Nails       map[string]any `json:"nails"`
+			Traits       map[string]any `json:"traits"`
 		}
-		if err := client.get("/api/v1/nodes/"+hostname+"/nails", &resp); err != nil {
+		if err := client.get("/api/v1/nodes/"+hostname+"/traits", &resp); err != nil {
 			return err
 		}
 
 		// If a dot-path is provided, extract just that value.
 		if len(args) == 2 {
-			val, ok := traverseDotPath(resp.Nails, args[1])
+			val, ok := traverseDotPath(resp.Traits, args[1])
 			if !ok {
-				return fmt.Errorf("nail path '%s' not found", args[1])
+				return fmt.Errorf("trait path '%s' not found", args[1])
 			}
-			fmt.Fprintln(os.Stdout, formatNailValue(val))
+			fmt.Fprintln(os.Stdout, formatTraitValue(val))
 			return nil
 		}
 
@@ -179,9 +179,9 @@ func traverseDotPath(data map[string]any, path string) (any, bool) {
 	return current, true
 }
 
-// formatNailValue formats a nail value for display. Scalars (string, number,
+// formatTraitValue formats a trait value for display. Scalars (string, number,
 // bool) are printed plainly; maps and slices are pretty-printed as JSON.
-func formatNailValue(v any) string {
+func formatTraitValue(v any) string {
 	switch v.(type) {
 	case map[string]any, []any:
 		data, err := json.MarshalIndent(v, "", "  ")
@@ -195,5 +195,5 @@ func formatNailValue(v any) string {
 }
 
 func init() {
-	nodesCmd.AddCommand(nodesListCmd, nodesShowCmd, nodesRevokeCmd, nodesDeleteCmd, nodesNailsCmd)
+	nodesCmd.AddCommand(nodesListCmd, nodesShowCmd, nodesRevokeCmd, nodesDeleteCmd, nodesTraitsCmd)
 }

@@ -57,21 +57,21 @@ func TestTraitsTraverseDotPath_BadPath(t *testing.T) {
 }
 
 func TestTraitsFormatValue_String(t *testing.T) {
-	result := formatNailValue("ubuntu")
+	result := formatTraitValue("ubuntu")
 	if result != "ubuntu" {
 		t.Errorf("expected ubuntu, got %q", result)
 	}
 }
 
 func TestTraitsFormatValue_Number(t *testing.T) {
-	result := formatNailValue(float64(42))
+	result := formatTraitValue(float64(42))
 	if result != "42" {
 		t.Errorf("expected 42, got %q", result)
 	}
 }
 
 func TestTraitsFormatValue_Bool(t *testing.T) {
-	result := formatNailValue(true)
+	result := formatTraitValue(true)
 	if result != "true" {
 		t.Errorf("expected true, got %q", result)
 	}
@@ -79,7 +79,7 @@ func TestTraitsFormatValue_Bool(t *testing.T) {
 
 func TestTraitsFormatValue_Map(t *testing.T) {
 	m := map[string]any{"distro": "ubuntu", "version": "22.04"}
-	result := formatNailValue(m)
+	result := formatTraitValue(m)
 
 	// Should be valid JSON
 	var parsed map[string]any

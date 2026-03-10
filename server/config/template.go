@@ -15,15 +15,15 @@ type templateContext struct {
 
 // RenderTemplate renders a Go template string with .Traits and .Vars namespaces.
 // Templates are rendered at check-in time (not at config load time) so that
-// nails from the requesting agent are available.
-func RenderTemplate(tmpl string, nails map[string]any, vars map[string]any) (string, error) {
+// traits from the requesting agent are available.
+func RenderTemplate(tmpl string, traits map[string]any, vars map[string]any) (string, error) {
 	t, err := template.New("").Parse(tmpl)
 	if err != nil {
 		return "", fmt.Errorf("parsing template: %w", err)
 	}
 	var buf bytes.Buffer
 	ctx := templateContext{
-		Traits: nails,
+		Traits: traits,
 		Vars:   vars,
 	}
 	if err := t.Execute(&buf, ctx); err != nil {
@@ -35,11 +35,11 @@ func RenderTemplate(tmpl string, nails map[string]any, vars map[string]any) (str
 // RenderVars renders Go template syntax in var values in declaration order.
 // Only string values are rendered; non-string values (int, bool, map, etc.)
 // pass through unchanged. Vars are rendered top-down per varOrder so that
-// later vars can reference earlier rendered vars via .Vars. Nails are
+// later vars can reference earlier rendered vars via .Vars. Traits are
 // available as .Traits. If varOrder is nil, all vars are still rendered but
 // in non-deterministic map order. Call this BEFORE resource attribute
 // rendering so that rendered vars are available to resource templates.
-func RenderVars(vars map[string]any, nails map[string]any, varOrder []string) (map[string]any, error) {
+func RenderVars(vars map[string]any, traits map[string]any, varOrder []string) (map[string]any, error) {
 	result := make(map[string]any, len(vars))
 	for k, v := range vars {
 		result[k] = v
@@ -64,7 +64,7 @@ func RenderVars(vars map[string]any, nails map[string]any, varOrder []string) (m
 		if !ok {
 			continue
 		}
-		rendered, err := RenderTemplate(strVal, nails, result)
+		rendered, err := RenderTemplate(strVal, traits, result)
 		if err != nil {
 			return nil, fmt.Errorf("rendering var %q: %w", k, err)
 		}

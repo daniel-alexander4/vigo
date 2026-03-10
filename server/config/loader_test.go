@@ -788,17 +788,17 @@ func TestRenderVars(t *testing.T) {
 	tests := []struct {
 		name     string
 		vars     map[string]any
-		nails    map[string]any
+		traits    map[string]any
 		varOrder []string
 		want     map[string]any
 		wantErr  bool
 	}{
 		{
-			name: "nails reference renders correctly",
+			name: "traits reference renders correctly",
 			vars: map[string]any{
 				"greeting": "Hello from {{ .Traits.os.distro }}",
 			},
-			nails: map[string]any{
+			traits: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
 			},
 			varOrder: []string{"greeting"},
@@ -812,7 +812,7 @@ func TestRenderVars(t *testing.T) {
 				"base_port": "8080",
 				"port_line": "port={{ .Vars.base_port }}",
 			},
-			nails:    map[string]any{},
+			traits:    map[string]any{},
 			varOrder: []string{"base_port", "port_line"},
 			want: map[string]any{
 				"base_port": "8080",
@@ -825,7 +825,7 @@ func TestRenderVars(t *testing.T) {
 				"distro":   "{{ .Traits.os.distro }}",
 				"greeting": "Hello from {{ .Vars.distro }}",
 			},
-			nails: map[string]any{
+			traits: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
 			},
 			varOrder: []string{"distro", "greeting"},
@@ -839,7 +839,7 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"plain": "no templates here",
 			},
-			nails:    map[string]any{},
+			traits:    map[string]any{},
 			varOrder: []string{"plain"},
 			want: map[string]any{
 				"plain": "no templates here",
@@ -852,7 +852,7 @@ func TestRenderVars(t *testing.T) {
 				"enabled": true,
 				"name":    "test",
 			},
-			nails:    map[string]any{},
+			traits:    map[string]any{},
 			varOrder: []string{"count", "enabled", "name"},
 			want: map[string]any{
 				"count":   42,
@@ -865,14 +865,14 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"bad": "{{ .InvalidSyntax }{",
 			},
-			nails:    map[string]any{},
+			traits:    map[string]any{},
 			varOrder: []string{"bad"},
 			wantErr:  true,
 		},
 		{
 			name:     "empty vars map returns empty map",
 			vars:     map[string]any{},
-			nails:    map[string]any{},
+			traits:    map[string]any{},
 			varOrder: nil,
 			want:     map[string]any{},
 		},
@@ -881,7 +881,7 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"greeting": "Hello from {{ .Traits.os.distro }}",
 			},
-			nails: map[string]any{
+			traits: map[string]any{
 				"os": map[string]any{"distro": "ubuntu"},
 			},
 			varOrder: nil,
@@ -893,7 +893,7 @@ func TestRenderVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := RenderVars(tt.vars, tt.nails, tt.varOrder)
+			got, err := RenderVars(tt.vars, tt.traits, tt.varOrder)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -929,7 +929,7 @@ name: webserver
 vars:
   port: "8080"
   is_debian:
-    nail: "os.distro"
+    trait: "os.distro"
     in: [debian, ubuntu]
 resources:
   - name: install-nginx
@@ -969,8 +969,8 @@ nodes:
 	if cv.Name != "is_debian" {
 		t.Errorf("ConditionalVar name = %q, want 'is_debian'", cv.Name)
 	}
-	if cv.Nail != "os.distro" {
-		t.Errorf("ConditionalVar nail = %q, want 'os.distro'", cv.Nail)
+	if cv.Trait != "os.distro" {
+		t.Errorf("ConditionalVar trait = %q, want 'os.distro'", cv.Trait)
 	}
 	if cv.Operator != "in" {
 		t.Errorf("ConditionalVar operator = %q, want 'in'", cv.Operator)
@@ -980,7 +980,7 @@ nodes:
 func TestLoadModuleInvalidConditionalVar(t *testing.T) {
 	dir := setupDir(t)
 
-	// Module with a bad conditional var (no nail field).
+	// Module with a bad conditional var (no trait field).
 	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
 name: bad
 vars:
@@ -997,10 +997,10 @@ nodes:
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
-		t.Fatal("expected error for conditional var without nail field, got nil")
+		t.Fatal("expected error for conditional var without trait field, got nil")
 	}
-	if !strings.Contains(err.Error(), "missing required 'nail' field") {
-		t.Errorf("error = %q, want it to mention missing nail field", err)
+	if !strings.Contains(err.Error(), "missing required 'trait' field") {
+		t.Errorf("error = %q, want it to mention missing trait field", err)
 	}
 }
 
@@ -1011,7 +1011,7 @@ func TestLoadModuleInvalidConditionalVarBadOperator(t *testing.T) {
 name: bad
 vars:
   broken_cond:
-    nail: "os.distro"
+    trait: "os.distro"
     invalid_op: [debian]
 resources: []
 `)
@@ -1039,7 +1039,7 @@ func TestResolveEntryWithConditionalVars(t *testing.T) {
 name: mod_a
 vars:
   is_ubuntu:
-    nail: "os.distro"
+    trait: "os.distro"
     in: [ubuntu]
   port: "80"
 resources: []
@@ -1048,7 +1048,7 @@ resources: []
 name: mod_b
 vars:
   has_enough_mem:
-    nail: "hardware.memory_mb"
+    trait: "hardware.memory_mb"
     gte: 4096
 resources: []
 `)
@@ -1091,7 +1091,7 @@ func TestConditionalVarsNotOverridableByClientVars(t *testing.T) {
 name: mod
 vars:
   is_debian:
-    nail: "os.distro"
+    trait: "os.distro"
     in: [debian, ubuntu]
 resources: []
 `)
@@ -1746,14 +1746,14 @@ nodes:
 }
 
 func TestTemplateRendering(t *testing.T) {
-	nails := map[string]any{
+	traits := map[string]any{
 		"os": map[string]any{"distro": "ubuntu"},
 	}
 	vars := map[string]any{
 		"app_port": "8080",
 	}
 
-	result, err := RenderTemplate("port={{ .Vars.app_port }} os={{ .Traits.os.distro }}", nails, vars)
+	result, err := RenderTemplate("port={{ .Vars.app_port }} os={{ .Traits.os.distro }}", traits, vars)
 	if err != nil {
 		t.Fatalf("RenderTemplate: %v", err)
 	}

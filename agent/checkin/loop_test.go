@@ -92,8 +92,8 @@ type mockAgentClient struct {
 	checkInResp  *pb.CheckInResponse
 	checkInErr   error
 	reportCalled bool
-	nailsCalled  bool
-	nailsErr     error
+	traitsCalled  bool
+	traitsErr     error
 }
 
 func (m *mockAgentClient) Register(_ context.Context, _ *pb.RegisterRequest, _ ...grpc.CallOption) (*pb.RegisterResponse, error) {
@@ -109,13 +109,13 @@ func (m *mockAgentClient) ReportResult(_ context.Context, _ *pb.ReportResultRequ
 	return &pb.ReportResultResponse{Acknowledged: true}, nil
 }
 
-func (m *mockAgentClient) ReportNails(_ context.Context, _ *pb.ReportNailsRequest, _ ...grpc.CallOption) (*pb.ReportNailsResponse, error) {
-	m.nailsCalled = true
-	return &pb.ReportNailsResponse{Acknowledged: true}, m.nailsErr
+func (m *mockAgentClient) ReportTraits(_ context.Context, _ *pb.ReportTraitsRequest, _ ...grpc.CallOption) (*pb.ReportTraitsResponse, error) {
+	m.traitsCalled = true
+	return &pb.ReportTraitsResponse{Acknowledged: true}, m.traitsErr
 }
 
-func (m *mockAgentClient) DownloadCustomNail(_ context.Context, _ *pb.DownloadCustomNailRequest, _ ...grpc.CallOption) (*pb.DownloadCustomNailResponse, error) {
-	return &pb.DownloadCustomNailResponse{}, nil
+func (m *mockAgentClient) DownloadCustomTrait(_ context.Context, _ *pb.DownloadCustomTraitRequest, _ ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
+	return &pb.DownloadCustomTraitResponse{}, nil
 }
 
 // newMockClient creates a Client with a mock gRPC agent for testing.
@@ -138,9 +138,9 @@ func TestRunOnce_DryRun_DoesNotCallReportResult(t *testing.T) {
 
 	client := newMockClient(mock)
 	executors := map[string]modules.Executor{}
-	nailsMap := map[string]any{}
+	traitsMap := map[string]any{}
 
-	result, err := RunOnce(context.Background(), client, executors, nailsMap, true, "", "", nil, nil, nil)
+	result, err := RunOnce(context.Background(), client, executors, traitsMap, true, "", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunOnce dry-run: %v", err)
 	}
@@ -176,9 +176,9 @@ func TestRunOnce_ReportsResults(t *testing.T) {
 
 	client := newMockClient(mock)
 	executors := map[string]modules.Executor{}
-	nailsMap := map[string]any{}
+	traitsMap := map[string]any{}
 
-	_, err := RunOnce(context.Background(), client, executors, nailsMap, false, "", "", nil, nil, nil)
+	_, err := RunOnce(context.Background(), client, executors, traitsMap, false, "", "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -328,10 +328,10 @@ func (c *countingMockAgent) ReportResult(ctx context.Context, req *pb.ReportResu
 	return c.inner.ReportResult(ctx, req, opts...)
 }
 
-func (c *countingMockAgent) ReportNails(ctx context.Context, req *pb.ReportNailsRequest, opts ...grpc.CallOption) (*pb.ReportNailsResponse, error) {
-	return c.inner.ReportNails(ctx, req, opts...)
+func (c *countingMockAgent) ReportTraits(ctx context.Context, req *pb.ReportTraitsRequest, opts ...grpc.CallOption) (*pb.ReportTraitsResponse, error) {
+	return c.inner.ReportTraits(ctx, req, opts...)
 }
 
-func (c *countingMockAgent) DownloadCustomNail(ctx context.Context, req *pb.DownloadCustomNailRequest, opts ...grpc.CallOption) (*pb.DownloadCustomNailResponse, error) {
-	return c.inner.DownloadCustomNail(ctx, req, opts...)
+func (c *countingMockAgent) DownloadCustomTrait(ctx context.Context, req *pb.DownloadCustomTraitRequest, opts ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
+	return c.inner.DownloadCustomTrait(ctx, req, opts...)
 }

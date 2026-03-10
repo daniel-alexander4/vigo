@@ -16,9 +16,9 @@ import (
 )
 
 // CheckIn handles the HobnobAgent.CheckIn RPC. It validates the client,
-// stores inline nails for admin queries, and returns a policy bundle for
+// stores inline traits for admin queries, and returns a policy bundle for
 // agent-side evaluation. The server never renders templates or evaluates
-// conditionals — the agent does that locally with its own nails.
+// conditionals — the agent does that locally with its own traits.
 func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
 	nodeID, err := uuid.Parse(req.GetNodeId())
 	if err != nil {
@@ -64,17 +64,17 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		}
 	}
 
-	// Store inline nails for admin queries.
-	inlineNails := req.GetNailsJson()
-	if len(inlineNails) > 0 && json.Valid(inlineNails) {
-		if _, dbErr := s.queries.InsertNodeNails(ctx, db.InsertNodeNailsParams{
+	// Store inline traits for admin queries.
+	inlineTraits := req.GetTraitsJson()
+	if len(inlineTraits) > 0 && json.Valid(inlineTraits) {
+		if _, dbErr := s.queries.InsertNodeTraits(ctx, db.InsertNodeTraitsParams{
 			NodeID: nodeID,
-			Nails:  json.RawMessage(inlineNails),
+			Traits:  json.RawMessage(inlineTraits),
 		}); dbErr != nil {
-			slog.Error("failed to store inline nails", "node_id", nodeID, "error", dbErr)
+			slog.Error("failed to store inline traits", "node_id", nodeID, "error", dbErr)
 		} else {
-			if pruneErr := s.queries.PruneNodeNails(ctx, nodeID); pruneErr != nil {
-				slog.Error("failed to prune node nails", "node_id", nodeID, "error", pruneErr)
+			if pruneErr := s.queries.PruneNodeTraits(ctx, nodeID); pruneErr != nil {
+				slog.Error("failed to prune node traits", "node_id", nodeID, "error", pruneErr)
 			}
 		}
 	}
@@ -105,13 +105,13 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 	}
 
-	// Include custom nails manifest.
-	nailEntries, nailErr := s.nailsScanner.ScanDir()
-	if nailErr != nil {
-		slog.Warn("failed to scan nails directory", "error", nailErr)
+	// Include custom traits manifest.
+	traitEntries, traitErr := s.traitsScanner.ScanDir()
+	if traitErr != nil {
+		slog.Warn("failed to scan traits directory", "error", traitErr)
 	} else {
-		for _, te := range nailEntries {
-			bundle.CustomNails = append(bundle.CustomNails, &pb.CustomNailEntry{
+		for _, te := range traitEntries {
+			bundle.CustomTraits = append(bundle.CustomTraits, &pb.CustomTraitEntry{
 				Name:   te.Name,
 				Sha256: te.SHA256,
 			})
