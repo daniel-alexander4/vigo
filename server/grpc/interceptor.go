@@ -213,7 +213,7 @@ func checkTimestamp(ts time.Time) error {
 	diff := time.Since(ts)
 	if math.Abs(float64(diff)) > float64(signatureTimestampWindow) {
 		return status.Errorf(codes.Unauthenticated,
-			"request timestamp too far from server time (diff: %v, window: %v)",
+			"request timestamp too far from server time (diff: %v, window: %v) — ensure NTP is running on both server and agent (e.g. timedatectl set-ntp true)",
 			diff, signatureTimestampWindow)
 	}
 	return nil

@@ -333,7 +333,9 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 
 		// 5. Sleep with jitter based on server-provided interval.
 		sleepDur := jitteredDuration(runResult.BaseInterval, runResult.JitterPct)
-		logger.Info("sleeping until next check-in", "duration", sleepDur)
+		logger.Info("sleeping until next check-in",
+			"duration", sleepDur,
+			"next", time.Now().Add(sleepDur).Format(time.RFC3339))
 
 		select {
 		case <-ctx.Done():

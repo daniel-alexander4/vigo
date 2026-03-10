@@ -460,11 +460,11 @@ var registerCmd = &cobra.Command{
 		// Call Register RPC.
 		resp, err := client.Register(context.Background(), hostname, ipAddr, pubPEM, token)
 		if err != nil {
-			return fmt.Errorf("registration failed: %w", err)
+			return fmt.Errorf("registration failed: %w\n\nhint: verify the server address, check that the CA cert is correct, and ensure the server is reachable on the gRPC port", err)
 		}
 
 		if !resp.Success {
-			return fmt.Errorf("registration rejected: %s", resp.Message)
+			return fmt.Errorf("registration rejected: %s\n\nhint: check that the token is valid and unused, and that the hostname %q matches an approved pattern", resp.Message, hostname)
 		}
 
 		// Save node UUID.

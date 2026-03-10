@@ -71,6 +71,19 @@ func (c *apiClient) decodeResponse(resp *http.Response, result any) error {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Try to extract a human-readable message from JSON error bodies.
+		var errBody struct {
+			Message string `json:"message"`
+			Error   string `json:"error"`
+		}
+		if json.Unmarshal(body, &errBody) == nil {
+			if errBody.Message != "" {
+				return fmt.Errorf("server returned %d: %s", resp.StatusCode, errBody.Message)
+			}
+			if errBody.Error != "" {
+				return fmt.Errorf("server returned %d: %s", resp.StatusCode, errBody.Error)
+			}
+		}
 		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
 	}
 

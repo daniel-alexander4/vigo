@@ -45,6 +45,11 @@ var runsListCmd = &cobra.Command{
 			return err
 		}
 
+		if len(resp.Runs) == 0 {
+			fmt.Println("No runs found.")
+			return nil
+		}
+
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "ID\tNODE\tSTARTED\tSTATUS\tCHANGED\tFAILED")
 		for _, r := range resp.Runs {

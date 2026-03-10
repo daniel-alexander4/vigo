@@ -34,6 +34,11 @@ var nodesListCmd = &cobra.Command{
 			return err
 		}
 
+		if len(resp.Nodes) == 0 {
+			fmt.Println("No nodes found.")
+			return nil
+		}
+
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "ID\tHOSTNAME\tIP\tENROLLED\tLAST SEEN\tSTATUS")
 		for _, c := range resp.Nodes {

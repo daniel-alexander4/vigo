@@ -112,7 +112,7 @@ func TestAPIClientErrorResponse(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 404 response")
 	}
-	expected := `server returned 404: {"message":"not found"}`
+	expected := `server returned 404: not found`
 	if err.Error() != expected {
 		t.Errorf("expected error %q, got %q", expected, err.Error())
 	}
