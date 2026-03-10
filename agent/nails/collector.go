@@ -6,6 +6,7 @@ package nails
 import (
 	"context"
 	"log/slog"
+	"sync"
 )
 
 // Collector is the interface for pluggable nail collectors. Each collector
@@ -17,21 +18,41 @@ type Collector interface {
 	Collect(ctx context.Context) (map[string]any, error)
 }
 
-// CollectAll aggregates nails from all provided collectors into a nested map
-// keyed by each collector's Name(). If a collector fails, its error is logged
-// and collection continues with the remaining collectors.
+// collectorResult holds the output of a single collector goroutine.
+type collectorResult struct {
+	name  string
+	nails map[string]any
+}
+
+// CollectAll aggregates nails from all provided collectors in parallel.
+// Each collector runs in its own goroutine. If a collector fails, its error
+// is logged and collection continues with the remaining collectors.
 func CollectAll(ctx context.Context, collectors []Collector) (map[string]any, error) {
-	result := make(map[string]any)
+	ch := make(chan collectorResult, len(collectors))
+	var wg sync.WaitGroup
+
 	for _, c := range collectors {
-		nails, err := c.Collect(ctx)
-		if err != nil {
-			slog.Warn("nail collector failed",
-				"collector", c.Name(),
-				"error", err,
-			)
-			continue
-		}
-		result[c.Name()] = nails
+		wg.Add(1)
+		go func(c Collector) {
+			defer wg.Done()
+			nails, err := c.Collect(ctx)
+			if err != nil {
+				slog.Warn("nail collector failed",
+					"collector", c.Name(),
+					"error", err,
+				)
+				return
+			}
+			ch <- collectorResult{name: c.Name(), nails: nails}
+		}(c)
+	}
+
+	wg.Wait()
+	close(ch)
+
+	result := make(map[string]any, len(collectors))
+	for r := range ch {
+		result[r.name] = r.nails
 	}
 	return result, nil
 }

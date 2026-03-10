@@ -80,7 +80,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		configStore:   cfg.ConfigStore,
 		queries:       cfg.Queries,
 		dispatcher:    cfg.Dispatcher,
-		nailsScanner: nails.NewScanner(cfg.NailsDir),
+		nailsScanner: nails.NewScanner(cfg.NailsDir, 30*time.Second),
 		nodeCache:     nodeCache,
 		lastSeenBatch: lastSeenBatch,
 	}

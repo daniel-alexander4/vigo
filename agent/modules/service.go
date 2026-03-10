@@ -3,6 +3,7 @@ package modules
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -19,16 +20,27 @@ func (s *ServiceExecutor) runner() CommandRunner {
 	return &DefaultRunner{}
 }
 
-// isActive checks if a service is currently running.
-func (s *ServiceExecutor) isActive(ctx context.Context, name string) bool {
-	_, err := s.runner().Run(ctx, "systemctl", "is-active", "--quiet", name)
-	return err == nil
-}
-
-// isEnabled checks if a service is enabled at boot.
-func (s *ServiceExecutor) isEnabled(ctx context.Context, name string) bool {
-	_, err := s.runner().Run(ctx, "systemctl", "is-enabled", "--quiet", name)
-	return err == nil
+// serviceStatus returns active and enabled state in a single systemctl call,
+// halving subprocess overhead compared to separate is-active + is-enabled.
+func (s *ServiceExecutor) serviceStatus(ctx context.Context, name string) (active, enabled bool) {
+	out, err := s.runner().Run(ctx, "systemctl", "show", "--no-pager",
+		"--property=ActiveState,UnitFileState", name)
+	if err != nil {
+		return false, false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "ActiveState":
+			active = v == "active" || v == "activating"
+		case "UnitFileState":
+			enabled = v == "enabled" || v == "enabled-runtime"
+		}
+	}
+	return active, enabled
 }
 
 // Execute applies the desired service state based on params.
@@ -91,8 +103,7 @@ func (s *ServiceExecutor) executeOne(ctx context.Context, name, state, enabledPa
 		ResourceName: name,
 	}
 
-	active := s.isActive(ctx, name)
-	enabled := s.isEnabled(ctx, name)
+	active, enabled := s.serviceStatus(ctx, name)
 
 	changed := false
 

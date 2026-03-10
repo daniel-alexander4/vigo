@@ -161,24 +161,13 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 		return &pb.ForcePushResponse{NodesNotified: 1}, nil
 	}
 
-	// All non-revoked nodes
-	nodes, err := s.queries.ListNodes(ctx)
+	// All non-revoked nodes — single batch UPDATE.
+	affected, err := s.queries.SetForcePushAllActive(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
+		return nil, status.Errorf(codes.Internal, "batch setting force push: %v", err)
 	}
 
-	var count int32
-	for _, n := range nodes {
-		if n.Revoked {
-			continue
-		}
-		if err := s.queries.SetForcePush(ctx, n.ID); err != nil {
-			return nil, status.Errorf(codes.Internal, "setting force push for %s: %v", n.Hostname, err)
-		}
-		count++
-	}
-
-	return &pb.ForcePushResponse{NodesNotified: count}, nil
+	return &pb.ForcePushResponse{NodesNotified: int32(affected)}, nil
 }
 
 // ---------- Runs ----------
@@ -390,32 +379,25 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookR
 // ---------- Compliance ----------
 
 func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
-	nodes, err := s.queries.ListNodes(ctx)
+	// Single query with LATERAL JOIN — replaces N+1 per-node run lookups.
+	rows, err := s.queries.ListNodesWithLatestRun(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing nodes with runs: %v", err)
 	}
 
 	var statuses []string
-	for _, n := range nodes {
-		if n.Revoked {
-			continue
-		}
-
+	for _, r := range rows {
 		var runInfo *compliance.RunInfo
-		runs, err := s.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-			NodeID: n.ID,
-			Limit:  1,
-		})
-		if err == nil && len(runs) > 0 {
+		if r.LatestRunStatus.Valid {
 			runInfo = &compliance.RunInfo{
-				Status:       runs[0].Status,
-				ChangedCount: runs[0].ChangedCount,
+				Status:       r.LatestRunStatus.String,
+				ChangedCount: r.LatestRunChangedCount.Int32,
 			}
 		}
 
-		lastSeen := n.EnrolledAt
-		if n.LastSeen.Valid {
-			lastSeen = n.LastSeen.Time
+		lastSeen := r.EnrolledAt
+		if r.LastSeen.Valid {
+			lastSeen = r.LastSeen.Time
 		}
 
 		statuses = append(statuses, compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval))

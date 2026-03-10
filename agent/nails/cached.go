@@ -2,7 +2,6 @@ package nails
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 )
 
@@ -72,9 +71,9 @@ func NewCachedCollectors(stableInterval int) *CachedCollectors {
 	}
 }
 
-// CollectAll gathers nails from all collectors. Volatile collectors run every
-// call. Stable collectors run on the first call and then every N calls
-// (where N = stableInterval), reusing cached results on other cycles.
+// CollectAll gathers nails from all collectors in parallel. Volatile collectors
+// run every call. Stable collectors run on the first call and then every N
+// calls (where N = stableInterval), reusing cached results on other cycles.
 func (cc *CachedCollectors) CollectAll(ctx context.Context) (map[string]any, error) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
@@ -83,34 +82,37 @@ func (cc *CachedCollectors) CollectAll(ctx context.Context) (map[string]any, err
 	runStable := cc.cached == nil || cc.cycle%cc.interval == 0
 	cc.cycle++
 
-	result := make(map[string]any)
-
-	// Always run volatile collectors.
-	for _, c := range cc.volatile {
-		nails, err := c.Collect(ctx)
-		if err != nil {
-			slog.Warn("nail collector failed", "collector", c.Name(), "error", err)
-			continue
-		}
-		result[c.Name()] = nails
+	// Collect from all active collector sets in parallel.
+	var collectors []Collector
+	collectors = append(collectors, cc.volatile...)
+	if runStable {
+		collectors = append(collectors, cc.stable...)
 	}
 
+	collected, err := CollectAll(ctx, collectors)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the stable cache with fresh results.
 	if runStable {
-		// Run stable collectors and cache results.
 		cc.cached = make(map[string]any)
 		for _, c := range cc.stable {
-			nails, err := c.Collect(ctx)
-			if err != nil {
-				slog.Warn("nail collector failed", "collector", c.Name(), "error", err)
-				continue
+			if v, ok := collected[c.Name()]; ok {
+				cc.cached[c.Name()] = v
 			}
-			cc.cached[c.Name()] = nails
 		}
 	}
 
-	// Merge cached stable results into the output.
-	for k, v := range cc.cached {
+	// Start with volatile results, then merge cached stable results.
+	result := make(map[string]any, len(cc.volatile)+len(cc.stable))
+	for k, v := range collected {
 		result[k] = v
+	}
+	for k, v := range cc.cached {
+		if _, exists := result[k]; !exists {
+			result[k] = v
+		}
 	}
 
 	return result, nil

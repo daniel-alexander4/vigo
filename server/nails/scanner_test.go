@@ -16,7 +16,7 @@ func TestScanDir_FiltersExecutables(t *testing.T) {
 	writeExec(t, dir, "disk-check", "#!/bin/sh\ndf -h")
 	writeFile(t, dir, "README.md", "this is a readme")
 
-	scanner := NewScanner(dir)
+	scanner := NewScanner(dir, 0)
 	entries, err := scanner.ScanDir()
 	if err != nil {
 		t.Fatalf("ScanDir() error: %v", err)
@@ -48,7 +48,7 @@ func TestScanDir_FiltersExecutables(t *testing.T) {
 func TestScanDir_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 
-	scanner := NewScanner(dir)
+	scanner := NewScanner(dir, 0)
 	entries, err := scanner.ScanDir()
 	if err != nil {
 		t.Fatalf("ScanDir() error: %v", err)
@@ -60,7 +60,7 @@ func TestScanDir_EmptyDir(t *testing.T) {
 }
 
 func TestScanDir_NonExistentDir(t *testing.T) {
-	scanner := NewScanner("/nonexistent/path/that/does/not/exist")
+	scanner := NewScanner("/nonexistent/path/that/does/not/exist", 0)
 	entries, err := scanner.ScanDir()
 	if err != nil {
 		t.Fatalf("ScanDir() error: %v (expected nil error for missing dir)", err)
@@ -79,7 +79,7 @@ func TestScanDir_NameDerivation(t *testing.T) {
 	writeExec(t, dir, "memory.py", "mem")
 	writeExec(t, dir, "cpu.check.sh", "cpu")
 
-	scanner := NewScanner(dir)
+	scanner := NewScanner(dir, 0)
 	entries, err := scanner.ScanDir()
 	if err != nil {
 		t.Fatalf("ScanDir() error: %v", err)
@@ -108,7 +108,7 @@ func TestScanDir_SkipsSubdirectories(t *testing.T) {
 	}
 	writeExec(t, subdir, "nested.sh", "nested")
 
-	scanner := NewScanner(dir)
+	scanner := NewScanner(dir, 0)
 	entries, err := scanner.ScanDir()
 	if err != nil {
 		t.Fatalf("ScanDir() error: %v", err)
@@ -128,7 +128,7 @@ func TestReadFile_Existing(t *testing.T) {
 	content := "#!/bin/sh\necho hello"
 	writeExec(t, dir, "app-version.sh", content)
 
-	scanner := NewScanner(dir)
+	scanner := NewScanner(dir, 0)
 	// Must call ScanDir first to build name mapping.
 	if _, err := scanner.ScanDir(); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestReadFile_Existing(t *testing.T) {
 func TestReadFile_NonExistent(t *testing.T) {
 	dir := t.TempDir()
 
-	scanner := NewScanner(dir)
+	scanner := NewScanner(dir, 0)
 	if _, err := scanner.ScanDir(); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestReadFile_WithoutExtension(t *testing.T) {
 	content := "#!/bin/sh\ndf -h"
 	writeExec(t, dir, "disk-check", content)
 
-	scanner := NewScanner(dir)
+	scanner := NewScanner(dir, 0)
 	if _, err := scanner.ScanDir(); err != nil {
 		t.Fatal(err)
 	}

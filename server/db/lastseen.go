@@ -52,9 +52,8 @@ func (b *LastSeenBatcher) Start(ctx context.Context, interval time.Duration) {
 }
 
 // Flush writes all pending last_seen updates to the database and clears
-// the pending set. Each node is updated individually since sqlc doesn't
-// support array parameters; the batch is still a win because the writes
-// happen asynchronously rather than blocking check-in RPCs.
+// the pending set. Uses a single UPDATE ... WHERE id IN (...) query to
+// collapse N round-trips into one.
 func (b *LastSeenBatcher) Flush(ctx context.Context) {
 	b.mu.Lock()
 	if len(b.pending) == 0 {
@@ -66,9 +65,11 @@ func (b *LastSeenBatcher) Flush(ctx context.Context) {
 	b.pending = make(map[uuid.UUID]struct{})
 	b.mu.Unlock()
 
+	ids := make([]uuid.UUID, 0, len(batch))
 	for id := range batch {
-		if err := b.queries.UpdateLastSeen(ctx, id); err != nil {
-			slog.Error("failed to flush last_seen", "node_id", id, "error", err)
-		}
+		ids = append(ids, id)
+	}
+	if err := b.queries.BatchUpdateLastSeen(ctx, ids); err != nil {
+		slog.Error("failed to batch flush last_seen", "count", len(ids), "error", err)
 	}
 }

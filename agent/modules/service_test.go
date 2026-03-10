@@ -10,10 +10,27 @@ import (
 // Compile-time interface check
 var _ Executor = (*ServiceExecutor)(nil)
 
+// showOutput builds a mock systemctl show response.
+func showOutput(active, enabled bool) []byte {
+	as := "inactive"
+	if active {
+		as = "active"
+	}
+	us := "disabled"
+	if enabled {
+		us = "enabled"
+	}
+	return []byte("ActiveState=" + as + "\nUnitFileState=" + us + "\n")
+}
+
+// showKey returns the mock key for systemctl show of a service.
+func showKey(name string) string {
+	return "systemctl show --no-pager --property=ActiveState,UnitFileState " + name
+}
+
 func TestServiceExecutor_StartStoppedService(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(false, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -44,8 +61,7 @@ func TestServiceExecutor_StartStoppedService(t *testing.T) {
 
 func TestServiceExecutor_AlreadyRunning(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(true, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -64,8 +80,7 @@ func TestServiceExecutor_AlreadyRunning(t *testing.T) {
 
 func TestServiceExecutor_StopRunningService(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 1")}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(true, false)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -93,8 +108,7 @@ func TestServiceExecutor_StopRunningService(t *testing.T) {
 
 func TestServiceExecutor_Restart(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(true, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -121,8 +135,7 @@ func TestServiceExecutor_Restart(t *testing.T) {
 
 func TestServiceExecutor_Reload(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(true, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -149,8 +162,7 @@ func TestServiceExecutor_Reload(t *testing.T) {
 
 func TestServiceExecutor_EnableDisabled(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 1")}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(true, false)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -175,8 +187,7 @@ func TestServiceExecutor_EnableDisabled(t *testing.T) {
 
 func TestServiceExecutor_DisableEnabled(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(false, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -201,8 +212,7 @@ func TestServiceExecutor_DisableEnabled(t *testing.T) {
 
 func TestServiceExecutor_DryRun(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 1")}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(false, false)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -226,8 +236,7 @@ func TestServiceExecutor_DryRun(t *testing.T) {
 
 func TestServiceExecutor_ResourceType(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(true, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -254,13 +263,10 @@ func TestServiceExecutor_MissingName(t *testing.T) {
 
 func TestServiceExecutor_MultipleServices(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	// nginx is stopped, php-fpm is stopped, redis is already running
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 1")}
-	runner.results["systemctl is-active --quiet php-fpm"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
-	runner.results["systemctl is-enabled --quiet php-fpm"] = mockCmdResult{err: fmt.Errorf("exit status 1")}
-	runner.results["systemctl is-active --quiet redis"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet redis"] = mockCmdResult{}
+	// nginx is stopped+disabled, php-fpm is stopped+disabled, redis is running+enabled
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(false, false)}
+	runner.results[showKey("php-fpm")] = mockCmdResult{output: showOutput(false, false)}
+	runner.results[showKey("redis")] = mockCmdResult{output: showOutput(true, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -300,10 +306,8 @@ func TestServiceExecutor_MultipleServices(t *testing.T) {
 
 func TestServiceExecutor_MultipleAllRunning(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
-	runner.results["systemctl is-active --quiet redis"] = mockCmdResult{}
-	runner.results["systemctl is-enabled --quiet redis"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(true, true)}
+	runner.results[showKey("redis")] = mockCmdResult{output: showOutput(true, true)}
 
 	se := &ServiceExecutor{Runner: runner}
 	result := se.Execute(context.Background(), map[string]string{
@@ -325,8 +329,7 @@ func TestServiceExecutor_MultipleAllRunning(t *testing.T) {
 
 func TestServiceExecutor_MultipleStopsOnError(t *testing.T) {
 	runner := newMockCmdRunnerGeneric()
-	runner.results["systemctl is-active --quiet nginx"] = mockCmdResult{err: fmt.Errorf("exit status 3")}
-	runner.results["systemctl is-enabled --quiet nginx"] = mockCmdResult{}
+	runner.results[showKey("nginx")] = mockCmdResult{output: showOutput(false, true)}
 	runner.results["systemctl start nginx"] = mockCmdResult{err: fmt.Errorf("exit status 1"), output: []byte("Failed to start")}
 
 	se := &ServiceExecutor{Runner: runner}

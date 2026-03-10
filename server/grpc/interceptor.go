@@ -168,17 +168,23 @@ func verifyReportNails(ctx context.Context, queries *db.Queries, cache *db.NodeC
 	return nil
 }
 
-// lookupNodeAndPubKey retrieves a node and parses its ED25519 public key.
-// Uses the NodeCache if available, otherwise falls back to direct DB queries.
+// lookupNodeAndPubKey retrieves a node and its parsed ED25519 public key.
+// When a NodeCache is available, the parsed pubkey is served from cache,
+// eliminating PEM decode + x509 parse on every RPC. Falls back to direct
+// DB queries + on-the-fly parsing when no cache is configured.
 func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.NodeCache, nodeID uuid.UUID) (db.Node, ed25519.PublicKey, error) {
-	var node db.Node
-	var err error
-
+	// Fast path: cache returns both node and parsed pubkey.
 	if cache != nil {
-		node, err = cache.GetByID(ctx, nodeID)
-	} else {
-		node, err = queries.GetNodeByID(ctx, nodeID)
+		node, pubKey, err := cache.GetByIDWithPubKey(ctx, nodeID)
+		if err != nil {
+			slog.Error("node lookup failed", "node_id", nodeID, "error", err)
+			return db.Node{}, nil, status.Error(codes.Unauthenticated, "node not found")
+		}
+		return node, pubKey, nil
 	}
+
+	// Slow path: direct DB query + parse.
+	node, err := queries.GetNodeByID(ctx, nodeID)
 	if err != nil {
 		slog.Error("node lookup failed", "node_id", nodeID, "error", err)
 		return db.Node{}, nil, status.Error(codes.Unauthenticated, "node not found")
