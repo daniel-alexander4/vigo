@@ -26,6 +26,7 @@ type AgentService struct {
 	traitsScanner   *traits.Scanner
 	thrallCache    *db.ThrallCache
 	lastSeenBatch  *db.LastSeenBatcher
+	traitsBatch    *db.TraitsBatcher
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache
 	streamMgr        *streamManager

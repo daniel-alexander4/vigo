@@ -21,6 +21,7 @@ import (
 	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 // CertCache holds a TLS certificate atomically, allowing hot reload
@@ -68,11 +69,12 @@ type ServerConfig struct {
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
 // TLS 1.3 minimum, client certificate required and verified against CA.
 // Returns the server, a CertCache for TLS hot reload, a LastSeenBatcher,
-// and a TraitsPruner whose Start methods should be called in goroutines.
-func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher, *db.TraitsPruner, error) {
+// a TraitsBatcher, and a TraitsPruner whose Start methods should be called
+// in goroutines.
+func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher, *db.TraitsBatcher, *db.TraitsPruner, error) {
 	tlsCfg, certCache, err := buildTLSConfig(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
 
 	creds := credentials.NewTLS(tlsCfg)
@@ -88,11 +90,22 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 
 	thrallCache := db.NewThrallCache(cfg.Queries, thrallCacheTTL)
 	lastSeenBatch := db.NewLastSeenBatcher(cfg.Queries)
+	traitsBatch := db.NewTraitsBatcher(cfg.Queries)
 	traitsPruner := db.NewTraitsPruner(cfg.Queries)
 
 	srv := grpc.NewServer(
 		grpc.Creds(creds),
 		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, thrallCache, cfg.SignatureWindow)),
+		grpc.MaxConcurrentStreams(1000),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle: 15 * time.Minute,
+			Time:              30 * time.Second,
+			Timeout:           10 * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             10 * time.Second,
+			PermitWithoutStream: true,
+		}),
 	)
 
 	agentSvc := &AgentService{
@@ -105,6 +118,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		thrallCache:   thrallCache,
 		lastSeenBatch: lastSeenBatch,
+		traitsBatch:   traitsBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
 		streamMgr:        newStreamManager(),
@@ -123,7 +137,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 	}
 	pb.RegisterHobnobAdminServer(srv, adminSvc)
 
-	return srv, certCache, lastSeenBatch, traitsPruner, nil
+	return srv, certCache, lastSeenBatch, traitsBatch, traitsPruner, nil
 }
 
 // buildTLSConfig creates a tls.Config requiring client certificates verified

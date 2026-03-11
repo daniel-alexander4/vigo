@@ -106,9 +106,26 @@ func (cs *ConfigStore) Get(hostname string) *ThrallConfig {
 	}
 }
 
-// Match returns the matched pattern and resolved config for hostname using
-// the pattern index. Returns ("", nil) if no entry matches.
+// Match returns the matched pattern and a read-only resolved config for
+// hostname using the pattern index. Returns ("", nil) if no entry matches.
+// The returned config is shared — callers must not mutate it. The Thrall
+// field is NOT set to hostname (use MatchClone if you need that).
 func (cs *ConfigStore) Match(hostname string) (string, *ThrallConfig) {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	if i := cs.index.Lookup(hostname); i >= 0 {
+		entry := cs.entries[i]
+		return entry.match, entry.config
+	}
+
+	return "", nil
+}
+
+// MatchClone returns the matched pattern and a cloned config for hostname.
+// Safe to mutate. Used by callers that need to modify the result (e.g.
+// EffectiveConfigYAML).
+func (cs *ConfigStore) MatchClone(hostname string) (string, *ThrallConfig) {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 

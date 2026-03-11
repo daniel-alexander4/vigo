@@ -174,15 +174,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		s.lastSeenBatch.Mark(thrallID)
 	}
 
-	// Store inline traits for admin queries.
+	// Batch inline traits for periodic flush (hash-deduplicated).
 	inlineTraits := req.GetTraitsJson()
 	if len(inlineTraits) > 0 && json.Valid(inlineTraits) {
-		if _, dbErr := s.queries.InsertThrallTraits(ctx, db.InsertThrallTraitsParams{
-			ThrallID: thrallID,
-			Traits: string(inlineTraits),
-		}); dbErr != nil {
-			slog.Error("failed to store inline traits", "thrall_id", thrallID, "error", dbErr)
-		} else if s.traitsPruner != nil {
+		if s.traitsBatch != nil {
+			s.traitsBatch.Mark(thrallID, string(inlineTraits))
+		}
+		if s.traitsPruner != nil {
 			s.traitsPruner.Mark(thrallID)
 		}
 	}

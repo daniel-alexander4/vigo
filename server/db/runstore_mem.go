@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"sync"
 	"time"
@@ -11,14 +12,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// MemRunStore stores runs in memory using per-thrall ring buffers.
-// Faster than the DB backend but data is lost on server restart.
+const numShards = 64
+
+// MemRunStore stores runs in memory using per-thrall ring buffers, sharded
+// across 64 independent locks to reduce contention. Faster than the DB
+// backend but data is lost on server restart.
 // Enable via tuning.run_store: "memory" in server.yaml.
 type MemRunStore struct {
+	shards   [numShards]runShard
+	capacity int // max runs per thrall
+}
+
+type runShard struct {
 	mu       sync.RWMutex
-	byID     map[string]*memRun        // run UUID string → run + results
-	byThrall   map[string]*thrallRunBuffer // thrall UUID string → ring of run IDs
-	capacity int                       // max runs per thrall
+	byID     map[string]*memRun          // run UUID string → run + results
+	byThrall map[string]*thrallRunBuffer // thrall UUID string → ring of run IDs
 }
 
 type memRun struct {
@@ -37,28 +45,56 @@ func NewMemRunStore(capacity int) *MemRunStore {
 	if capacity < 1 {
 		capacity = 20
 	}
-	return &MemRunStore{
-		byID:     make(map[string]*memRun),
-		byThrall:   make(map[string]*thrallRunBuffer),
-		capacity: capacity,
+	s := &MemRunStore{capacity: capacity}
+	for i := range s.shards {
+		s.shards[i] = runShard{
+			byID:     make(map[string]*memRun),
+			byThrall: make(map[string]*thrallRunBuffer),
+		}
 	}
+	return s
+}
+
+// shard returns the shard for a given thrall ID.
+func (s *MemRunStore) shard(thrallID string) *runShard {
+	h := fnv.New32a()
+	h.Write([]byte(thrallID))
+	return &s.shards[h.Sum32()%numShards]
+}
+
+// shardByRunID finds which shard contains a run ID. Since run IDs are UUIDs
+// and we index by thrall, we need to check all shards for by-ID lookups.
+// For hot-path operations (CreateRunResult, FinishRun) we store the thrall ID
+// in memRun so we can shard directly.
+func (s *MemRunStore) findRunShard(runID string) (*runShard, *memRun) {
+	for i := range s.shards {
+		sh := &s.shards[i]
+		sh.mu.RLock()
+		mr, ok := sh.byID[runID]
+		sh.mu.RUnlock()
+		if ok {
+			return sh, mr
+		}
+	}
+	return nil, nil
 }
 
 func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, error) {
 	run := Run{
 		ID:          uuid.New().String(),
-		ThrallID:      arg.ThrallID,
+		ThrallID:    arg.ThrallID,
 		StartedAt:   time.Now(),
 		Status:      arg.Status,
 		ModuleCount: arg.ModuleCount,
 	}
 
-	s.mu.Lock()
-	s.byID[run.ID] = &memRun{run: run}
-	buf := s.byThrall[arg.ThrallID]
+	sh := s.shard(arg.ThrallID)
+	sh.mu.Lock()
+	sh.byID[run.ID] = &memRun{run: run}
+	buf := sh.byThrall[arg.ThrallID]
 	if buf == nil {
 		buf = &thrallRunBuffer{}
-		s.byThrall[arg.ThrallID] = buf
+		sh.byThrall[arg.ThrallID] = buf
 	}
 	// Prepend (newest first).
 	buf.runs = append([]string{run.ID}, buf.runs...)
@@ -66,9 +102,9 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 	if len(buf.runs) > s.capacity {
 		evictID := buf.runs[len(buf.runs)-1]
 		buf.runs = buf.runs[:s.capacity]
-		delete(s.byID, evictID)
+		delete(sh.byID, evictID)
 	}
-	s.mu.Unlock()
+	sh.mu.Unlock()
 
 	return run, nil
 }
@@ -87,20 +123,29 @@ func (s *MemRunStore) CreateRunResult(_ context.Context, arg CreateRunResultPara
 		CreatedAt:    time.Now(),
 	}
 
-	s.mu.Lock()
-	if mr, ok := s.byID[arg.RunID]; ok {
+	sh, _ := s.findRunShard(arg.RunID)
+	if sh == nil {
+		return result, nil
+	}
+	sh.mu.Lock()
+	if mr, ok := sh.byID[arg.RunID]; ok {
 		mr.results = append(mr.results, result)
 	}
-	s.mu.Unlock()
+	sh.mu.Unlock()
 
 	return result, nil
 }
 
 func (s *MemRunStore) FinishRun(_ context.Context, arg FinishRunParams) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	sh, _ := s.findRunShard(arg.ID)
+	if sh == nil {
+		return fmt.Errorf("run %s not found", arg.ID)
+	}
 
-	mr, ok := s.byID[arg.ID]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+
+	mr, ok := sh.byID[arg.ID]
 	if !ok {
 		return fmt.Errorf("run %s not found", arg.ID)
 	}
@@ -113,23 +158,25 @@ func (s *MemRunStore) FinishRun(_ context.Context, arg FinishRunParams) error {
 }
 
 func (s *MemRunStore) GetRunByID(_ context.Context, id string) (Run, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	mr, ok := s.byID[id]
-	if !ok {
+	sh, mr := s.findRunShard(id)
+	if sh == nil || mr == nil {
 		return Run{}, fmt.Errorf("run %s not found", id)
 	}
-	return mr.run, nil
+	sh.mu.RLock()
+	run := mr.run
+	sh.mu.RUnlock()
+	return run, nil
 }
 
 func (s *MemRunStore) ListAllRuns(_ context.Context, limit int64) ([]Run, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	runs := make([]Run, 0, len(s.byID))
-	for _, mr := range s.byID {
-		runs = append(runs, mr.run)
+	var runs []Run
+	for i := range s.shards {
+		sh := &s.shards[i]
+		sh.mu.RLock()
+		for _, mr := range sh.byID {
+			runs = append(runs, mr.run)
+		}
+		sh.mu.RUnlock()
 	}
 
 	// Sort by started_at DESC.
@@ -144,17 +191,17 @@ func (s *MemRunStore) ListAllRuns(_ context.Context, limit int64) ([]Run, error)
 }
 
 func (s *MemRunStore) ListRunResults(_ context.Context, runID string) ([]RunResult, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	mr, ok := s.byID[runID]
-	if !ok {
+	sh, mr := s.findRunShard(runID)
+	if sh == nil || mr == nil {
 		return nil, fmt.Errorf("run %s not found", runID)
 	}
 
+	sh.mu.RLock()
 	// Return a copy sorted by created_at ASC.
 	results := make([]RunResult, len(mr.results))
 	copy(results, mr.results)
+	sh.mu.RUnlock()
+
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].CreatedAt.Before(results[j].CreatedAt)
 	})
@@ -162,10 +209,11 @@ func (s *MemRunStore) ListRunResults(_ context.Context, runID string) ([]RunResu
 }
 
 func (s *MemRunStore) ListRunsByThrall(_ context.Context, arg ListRunsByThrallParams) ([]Run, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	sh := s.shard(arg.ThrallID)
+	sh.mu.RLock()
+	defer sh.mu.RUnlock()
 
-	buf, ok := s.byThrall[arg.ThrallID]
+	buf, ok := sh.byThrall[arg.ThrallID]
 	if !ok {
 		return []Run{}, nil
 	}
@@ -177,7 +225,7 @@ func (s *MemRunStore) ListRunsByThrall(_ context.Context, arg ListRunsByThrallPa
 
 	runs := make([]Run, 0, limit)
 	for _, id := range buf.runs[:limit] {
-		if mr, ok := s.byID[id]; ok {
+		if mr, ok := sh.byID[id]; ok {
 			runs = append(runs, mr.run)
 		}
 	}
@@ -185,19 +233,20 @@ func (s *MemRunStore) ListRunsByThrall(_ context.Context, arg ListRunsByThrallPa
 }
 
 func (s *MemRunStore) LatestRunPerThrall(_ context.Context, thrallIDs []string) (map[string]*Run, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	result := make(map[string]*Run, len(thrallIDs))
 	for _, thrallID := range thrallIDs {
-		buf, ok := s.byThrall[thrallID]
+		sh := s.shard(thrallID)
+		sh.mu.RLock()
+		buf, ok := sh.byThrall[thrallID]
 		if !ok || len(buf.runs) == 0 {
+			sh.mu.RUnlock()
 			continue
 		}
-		if mr, ok := s.byID[buf.runs[0]]; ok {
+		if mr, ok := sh.byID[buf.runs[0]]; ok {
 			run := mr.run
 			result[thrallID] = &run
 		}
+		sh.mu.RUnlock()
 	}
 	return result, nil
 }

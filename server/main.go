@@ -297,7 +297,7 @@ func run() error {
 	}
 
 	// Create and start gRPC server.
-	grpcSrv, _, lastSeenBatch, traitsPruner, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, _, lastSeenBatch, traitsBatch, traitsPruner, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:         cfg.Server.TLS.CertFile,
 		KeyFile:          cfg.Server.TLS.KeyFile,
 		CAFile:           cfg.Server.TLS.CAFile,
@@ -322,6 +322,9 @@ func run() error {
 
 	// Start async last_seen batcher.
 	go lastSeenBatch.Start(ctx, lastSeenFlush)
+
+	// Start async traits batcher (hash-deduplicated, flush every 10s).
+	go traitsBatch.Start(ctx, lastSeenFlush)
 
 	// Start async traits pruner.
 	go traitsPruner.Start(ctx, traitsPruneInterval)
