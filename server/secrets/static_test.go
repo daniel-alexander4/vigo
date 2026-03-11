@@ -19,8 +19,8 @@ func TestStaticProviderGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if val != "postgres://hobnob:testpw@localhost:5432/hobnob_test?sslmode=disable" {
-		t.Errorf("got %q, want postgres DSN", val)
+	if val != "hobnob_test.db" {
+		t.Errorf("got %q, want SQLite DSN", val)
 	}
 }
 
@@ -35,7 +35,7 @@ func TestStaticProviderGetBytes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBytes: %v", err)
 	}
-	expected := "postgres://hobnob:testpw@localhost:5432/hobnob_test?sslmode=disable"
+	expected := "hobnob_test.db"
 	if string(val) != expected {
 		t.Errorf("got %q, want %q", string(val), expected)
 	}

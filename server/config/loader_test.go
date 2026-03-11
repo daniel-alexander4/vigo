@@ -194,7 +194,7 @@ nodes:
 `)
 
 	mp := &mockProvider{secrets: map[string]string{
-		"hobnob/db/dsn":   "postgres://real:pw@db:5432/prod",
+		"hobnob/db/dsn":   "hobnob.db",
 		"myapp/db/config": "host=db port=5432 user=myapp",
 	}}
 	store, err := NewConfigStore(dir, mp, true)
@@ -203,7 +203,7 @@ nodes:
 	}
 
 	cfg := store.Get("web.example.com")
-	if cfg.Vars["db_dsn"] != "postgres://real:pw@db:5432/prod" {
+	if cfg.Vars["db_dsn"] != "hobnob.db" {
 		t.Errorf("db_dsn = %q, want resolved DSN", cfg.Vars["db_dsn"])
 	}
 }
@@ -221,7 +221,7 @@ nodes:
     environment: production
     modules: [app]
     vars:
-      dsn: "postgres://plaintext@db/bad"
+      dsn: "plaintext-hobnob.db"
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)

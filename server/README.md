@@ -7,27 +7,17 @@ The `hobd` server daemon is the central control plane for Hobnob. It serves gRPC
 - **Binary name:** `hobd`
 - **gRPC over mTLS (port 1530)** -- agent check-ins, result reporting, traits collection
 - **REST API + web UI (port 8181)** -- admin CLI (`hobnobcli`), browser dashboard
-- **PostgreSQL 16** backend with golang-migrate migrations
+- **SQLite** backend (WAL mode) with golang-migrate migrations
 - **Config hot-reload** via fsnotify on modules/, roles/, nodes/, and templates/ directories
 - **Prometheus metrics** at `GET /metrics`
 - **Secrets** resolved through isopass (prod) or static provider (dev/test)
 
 ## Quickstart
 
-### Prerequisites
-
-```bash
-# PostgreSQL 16
-sudo apt install postgresql-16
-
-# Create database
-sudo -u postgres createdb hobnob
-```
-
 ### Option A -- Docker Compose (recommended)
 
 ```bash
-# Start server + postgres
+# Start server (uses embedded SQLite)
 docker compose up -d
 
 # Bootstrap a node (trusted enrollment configured in server.yaml)
@@ -54,7 +44,7 @@ make certs
 
 ```bash
 # Create .env with database DSN
-echo 'hobnob/db/dsn=postgres://localhost/hobnob?sslmode=disable' > .env
+echo 'HOBNOB_DB_DSN=hobnob.db' > .env
 
 # Start with static secrets backend (set backend: "static" in server.yaml)
 ./bin/hobd
@@ -115,7 +105,7 @@ bootstrap:
 | `server/grpc/` | gRPC service implementations + ED25519 signature verification interceptor. Agent RPCs: Register, CheckIn, ReportResult, ReportTraits. Admin RPCs: ForcePush, DryRun, Rollback. TLS 1.3 minimum, mTLS required. |
 | `server/api/` | REST gateway + web UI (HTMX SPA) + bootstrap handler for agent enrollment |
 | `server/config/` | YAML config loader with secret resolution, fsnotify hot-reload, Go template rendering. See [config/README.md](config/README.md). |
-| `server/db/` | PostgreSQL query layer, NodeCache (60s TTL), LastSeenBatcher (10s flush) |
+| `server/db/` | SQLite query layer, NodeCache (60s TTL), LastSeenBatcher (10s flush) |
 | `server/registry/` | Node enrollment: hostname pattern matching, bcrypt token validation, revocation |
 | `server/secrets/` | Provider interface: `IsopassProvider` (prod) + `StaticProvider` (dev/test) |
 | `server/compliance/` | Status computation: compliant / drifted / failing / stale / unknown |
@@ -133,7 +123,7 @@ bootstrap:
 1. Load secrets config from `server.yaml` (first pass -- no secret resolution)
 2. Initialize secrets provider (isopass or static)
 3. Load full server config with secret resolution (second pass)
-4. Connect to PostgreSQL, run migrations
+4. Open SQLite database, run migrations
 5. Initialize ConfigStore -- load modules, roles, nodes; start fsnotify watcher
 6. Start LastSeenBatcher (flushes every 10s)
 7. Start secret rotation watcher (if enabled)

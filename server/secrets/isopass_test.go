@@ -66,7 +66,7 @@ func mockIsopassServer(t *testing.T) *httptest.Server {
 
 		secrets := map[string][]map[string]any{
 			"hobnob/db/dsn": {
-				{"id": "secret-1", "name": "hobnob/db/dsn", "value": "postgres://user:pass@localhost/hobnob"},
+				{"id": "secret-1", "name": "hobnob/db/dsn", "value": "hobnob.db"},
 			},
 			"hobnob/tls/cert": {
 				{"id": "secret-2", "name": "hobnob/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB..."},
@@ -114,7 +114,7 @@ func TestIsopassGet(t *testing.T) {
 
 	val, err := p.Get(context.Background(), "hobnob/db/dsn")
 	require.NoError(t, err)
-	assert.Equal(t, "postgres://user:pass@localhost/hobnob", val)
+	assert.Equal(t, "hobnob.db", val)
 }
 
 func TestIsopassGetNotFound(t *testing.T) {
@@ -190,7 +190,7 @@ func TestIsopassTokenRenewalOnExpiry(t *testing.T) {
 	// Call should trigger a new token exchange.
 	val, err := p.Get(context.Background(), "hobnob/db/dsn")
 	require.NoError(t, err)
-	assert.Equal(t, "postgres://user:pass@localhost/hobnob", val)
+	assert.Equal(t, "hobnob.db", val)
 }
 
 func TestIsopassAuthFailure(t *testing.T) {

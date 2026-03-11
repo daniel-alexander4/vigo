@@ -61,7 +61,7 @@ if [ ! -f "$ENV_FILE" ]; then
 # REQUIRED — server will not start without these:
 # =============================================================================
 
-HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
+HOBNOB_DB_DSN=hobnob.db
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
 HOBNOB_TLS_CA=certs/ca.crt

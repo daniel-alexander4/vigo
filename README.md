@@ -25,7 +25,7 @@ For production, replace with your own CA and server cert. Keep the CA private ke
 
 ```bash
 sudo tee /etc/hobnob-server/.env <<'EOF'
-HOBNOB_DB_DSN=postgres://hobnob:secret@postgres:5432/hobnob?sslmode=disable
+HOBNOB_DB_DSN=hobnob.db
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
 HOBNOB_TLS_CA=certs/ca.crt
@@ -46,13 +46,13 @@ sudo cp -r node-configs/modules node-configs/roles node-configs/templates /etc/h
 docker compose up -d
 ```
 
-This starts PostgreSQL and the hobnob server. Migrations run automatically. Verify:
+This starts the hobnob server with an embedded SQLite database. Migrations run automatically. Verify:
 
 ```bash
 docker compose ps
 ```
 
-You should see `postgres` (healthy) and `server` (running). The dashboard is at `http://<server-ip>:8181/`.
+You should see `hobnob` running. The dashboard is at `http://<server-ip>:8181/`.
 
 ### 6. Bootstrap managed nodes
 
@@ -251,8 +251,8 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
                             ┌─────────────┼─────────────┐
                             │             │             │
                        ┌────▼───┐   ┌─────▼────┐  ┌────▼───┐
-                       │Postgres│   │  Config   │  │isopass │
-                       │  :5432 │   │  (YAML)   │  │(secrets)│
+                       │ SQLite │   │  Config   │  │isopass │
+                       │  (WAL) │   │  (YAML)   │  │(secrets)│
                        └────────┘   └──────────┘  └────────┘
 ```
 
@@ -623,7 +623,7 @@ The server's own config (`server-configs/server.yaml`) also uses `secret:` refer
 
 | `.env` variable | Required | Description |
 |-----------------|----------|-------------|
-| `HOBNOB_DB_DSN` | Yes | PostgreSQL connection string |
+| `HOBNOB_DB_DSN` | Yes | SQLite database file path |
 | `HOBNOB_TLS_CERT` | Yes | Path to server TLS certificate |
 | `HOBNOB_TLS_KEY` | Yes | Path to server TLS private key |
 | `HOBNOB_TLS_CA` | Yes | Path to CA certificate |
@@ -642,5 +642,5 @@ make test           # Run all tests
 make lint           # Run linter
 make dist           # Cross-compile agent binaries
 make seed           # Insert dev seed data
-docker compose up   # Start server + postgres
+docker compose up   # Start server
 ```

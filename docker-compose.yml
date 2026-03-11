@@ -1,20 +1,4 @@
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: hobnob
-      POSTGRES_USER: hobnob
-      POSTGRES_PASSWORD: secret
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hobnob"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   hobnob:
     container_name: hobnob
     build:
@@ -26,11 +10,5 @@ services:
     volumes:
       - /etc/hobnob-server:/etc/hobnob-server
       - /usr/local/bin:/host-bin
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   # Agent is NOT run in compose -- it is installed on each managed node separately
-
-volumes:
-  pgdata:

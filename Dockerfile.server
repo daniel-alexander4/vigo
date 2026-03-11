@@ -1,13 +1,15 @@
 FROM golang:1.26-alpine AS builder
 
+RUN apk add --no-cache gcc musl-dev
+
 WORKDIR /build
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o hobd ./server
-RUN CGO_ENABLED=0 go build -o hobnobcli ./cli
+RUN CGO_ENABLED=1 go build -o hobd ./server
+RUN CGO_ENABLED=1 go build -o hobnobcli ./cli
 RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/linux/amd64/hobnob ./agent
 RUN GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/linux/arm64/hobnob ./agent
 RUN GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/darwin/amd64/hobnob ./agent
@@ -15,7 +17,7 @@ RUN GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/darwin/arm64/h
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates openssl
+RUN apk add --no-cache ca-certificates openssl sqlite-libs
 
 COPY --from=builder /build/hobd /usr/local/bin/hobd
 COPY --from=builder /build/hobnobcli /usr/local/bin/hobnobcli

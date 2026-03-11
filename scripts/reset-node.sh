@@ -25,16 +25,21 @@ echo "Backing up /etc/hobnob-server to /tmp/hobnob-server-backup..."
 rm -rf /tmp/hobnob-server-backup
 cp -a /etc/hobnob-server /tmp/hobnob-server-backup
 
-# Purge DB while postgres is still running.
+# Purge DB (SQLite file in /etc/hobnob-server).
 if [ "$SKIP_DB" = false ]; then
-  echo "Purging nodes and history from database..."
-  docker compose exec -T postgres psql -U hobnob -d hobnob -q <<'SQL'
-TRUNCATE nodes CASCADE;
-TRUNCATE compliance_history;
-TRUNCATE secret_rotation_events;
-TRUNCATE env_promotions;
+  DB_FILE="/etc/hobnob-server/hobnob.db"
+  if [ -f "$DB_FILE" ]; then
+    echo "Purging nodes and history from database..."
+    sqlite3 "$DB_FILE" <<'SQL'
+DELETE FROM nodes;
+DELETE FROM compliance_history;
+DELETE FROM secret_rotation_events;
+DELETE FROM env_promotions;
 SQL
-  echo "Database purged."
+    echo "Database purged."
+  else
+    echo "No database file found at $DB_FILE, skipping purge."
+  fi
 fi
 
 echo "Stopping and removing hobnob-node service..."

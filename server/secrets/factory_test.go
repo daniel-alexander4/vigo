@@ -18,7 +18,7 @@ func TestNewFromConfigStatic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if val != "postgres://hobnob:testpw@localhost:5432/hobnob_test?sslmode=disable" {
+	if val != "hobnob_test.db" {
 		t.Errorf("got %q", val)
 	}
 }
