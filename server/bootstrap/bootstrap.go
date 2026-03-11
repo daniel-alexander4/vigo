@@ -211,7 +211,7 @@ type bootstrapRegisterRequest struct {
 
 // bootstrapRegisterResponse is the JSON response for POST /api/v1/bootstrap/register.
 type bootstrapRegisterResponse struct {
-	ThrallID        string `json:"node_id"`
+	ThrallID        string `json:"thrall_id"`
 	SignedCertPEM string `json:"signed_cert_pem"`
 	CACertPEM     string `json:"ca_cert_pem"`
 }
@@ -284,7 +284,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("thrall bootstrapped",
 		"hostname", req.Hostname,
-		"node_id", thrallID,
+		"thrall_id", thrallID,
 	)
 
 	// Dispatch webhook event.

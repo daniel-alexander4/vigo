@@ -29,7 +29,7 @@ The `hobnob` agent daemon runs on managed nodes. It pulls desired state from the
 
 3. Verify:
    ```
-   sudo systemctl status hobnob-node
+   sudo systemctl status hobnob-thrall
    ```
 
 ### Manual bootstrap (token-based)
@@ -72,14 +72,14 @@ hobnob register --server hobd.example.com:1530 --token <token>
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--data-dir` | `/etc/hobnob-node` | Keypair, UUID, TLS certs |
+| `--data-dir` | `/etc/hobnob-thrall` | Keypair, UUID, TLS certs |
 | `--server` | `localhost:1530` | gRPC server address |
 | `--ca-file` | | CA certificate path |
 | `--cert-file` | | Client TLS certificate path |
 | `--key-file` | | Client TLS private key path |
 | `--log-level` | `info` | Log verbosity: debug, info, warn, error |
 | `--api-addr` | `http://localhost:8181` | Server REST API address for self-update |
-| `--executors-dir` | `/etc/hobnob-node/executors` | Directory for custom executor scripts |
+| `--executors-dir` | `/etc/hobnob-thrall/executors` | Directory for custom executor scripts |
 
 ## Architecture
 
@@ -99,9 +99,9 @@ The agent is organized into these subsystems:
 ## Data Directory Layout
 
 ```
-/etc/hobnob-node/
+/etc/hobnob-thrall/
 ├── agent.key           # ED25519 signing keypair (PKCS8 PEM)
-├── client.uuid         # Node UUID assigned by server
+├── thrall.uuid         # Thrall UUID assigned by server
 ├── certs/
 │   ├── tls.key         # ECDSA P-256 TLS private key
 │   ├── tls.crt         # Server-signed TLS client cert

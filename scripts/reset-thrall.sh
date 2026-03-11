@@ -52,8 +52,8 @@ systemctl reset-failed hobnob 2>/dev/null || true
 echo "Removing agent binary..."
 rm -f /usr/local/bin/hobnob
 
-echo "Removing agent data (/etc/hobnob)..."
-rm -rf /etc/hobnob
+echo "Removing agent data (/etc/hobnob-thrall)..."
+rm -rf /etc/hobnob-thrall
 
 echo "Removing server data (/etc/hobnob-server)..."
 rm -rf /etc/hobnob-server

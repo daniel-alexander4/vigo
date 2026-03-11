@@ -67,18 +67,18 @@ func setupLogger() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 }
 
-// loadThrallID reads the thrall UUID from <data-dir>/client.uuid.
+// loadThrallID reads the thrall UUID from <data-dir>/thrall.uuid.
 func loadNodeID() (string, error) {
-	data, err := os.ReadFile(dataDir + "/client.uuid")
+	data, err := os.ReadFile(dataDir + "/thrall.uuid")
 	if err != nil {
-		return "", fmt.Errorf("read thrall UUID from %s/client.uuid: %w (have you run 'hobnob register'?)", dataDir, err)
+		return "", fmt.Errorf("read thrall UUID from %s/thrall.uuid: %w (have you run 'hobnob register'?)", dataDir, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
 
-// saveThrallID writes the thrall UUID to <data-dir>/client.uuid.
+// saveThrallID writes the thrall UUID to <data-dir>/thrall.uuid.
 func saveNodeID(id string) error {
-	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
+	return os.WriteFile(dataDir+"/thrall.uuid", []byte(id+"\n"), 0600)
 }
 
 // saveSpokeAddr writes the spoke gRPC address to <data-dir>/spoke.addr.
