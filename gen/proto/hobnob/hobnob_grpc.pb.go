@@ -345,6 +345,7 @@ const (
 	HobnobAdmin_ListPackages_FullMethodName          = "/hobnob.v1.HobnobAdmin/ListPackages"
 	HobnobAdmin_ListPackageDrift_FullMethodName      = "/hobnob.v1.HobnobAdmin/ListPackageDrift"
 	HobnobAdmin_PromoteEnv_FullMethodName            = "/hobnob.v1.HobnobAdmin/PromoteEnv"
+	HobnobAdmin_EnrollNode_FullMethodName            = "/hobnob.v1.HobnobAdmin/EnrollNode"
 )
 
 // HobnobAdminClient is the client API for HobnobAdmin service.
@@ -393,6 +394,10 @@ type HobnobAdminClient interface {
 	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
 	// PromoteEnv promotes environment variables from one tier to another.
 	PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error)
+	// EnrollNode creates a node record directly (hub→spoke internal RPC).
+	// Used during enrollment routing: the hub validates the token, then calls
+	// this on the target spoke to create the node without token re-validation.
+	EnrollNode(ctx context.Context, in *EnrollNodeRequest, opts ...grpc.CallOption) (*EnrollNodeResponse, error)
 }
 
 type hobnobAdminClient struct {
@@ -613,6 +618,16 @@ func (c *hobnobAdminClient) PromoteEnv(ctx context.Context, in *PromoteEnvReques
 	return out, nil
 }
 
+func (c *hobnobAdminClient) EnrollNode(ctx context.Context, in *EnrollNodeRequest, opts ...grpc.CallOption) (*EnrollNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnrollNodeResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_EnrollNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HobnobAdminServer is the server API for HobnobAdmin service.
 // All implementations must embed UnimplementedHobnobAdminServer
 // for forward compatibility.
@@ -659,6 +674,10 @@ type HobnobAdminServer interface {
 	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
 	// PromoteEnv promotes environment variables from one tier to another.
 	PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error)
+	// EnrollNode creates a node record directly (hub→spoke internal RPC).
+	// Used during enrollment routing: the hub validates the token, then calls
+	// this on the target spoke to create the node without token re-validation.
+	EnrollNode(context.Context, *EnrollNodeRequest) (*EnrollNodeResponse, error)
 	mustEmbedUnimplementedHobnobAdminServer()
 }
 
@@ -731,6 +750,9 @@ func (UnimplementedHobnobAdminServer) ListPackageDrift(context.Context, *ListPac
 }
 func (UnimplementedHobnobAdminServer) PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PromoteEnv not implemented")
+}
+func (UnimplementedHobnobAdminServer) EnrollNode(context.Context, *EnrollNodeRequest) (*EnrollNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnrollNode not implemented")
 }
 func (UnimplementedHobnobAdminServer) mustEmbedUnimplementedHobnobAdminServer() {}
 func (UnimplementedHobnobAdminServer) testEmbeddedByValue()                     {}
@@ -1131,6 +1153,24 @@ func _HobnobAdmin_PromoteEnv_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HobnobAdmin_EnrollNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnrollNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HobnobAdminServer).EnrollNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HobnobAdmin_EnrollNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HobnobAdminServer).EnrollNode(ctx, req.(*EnrollNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HobnobAdmin_ServiceDesc is the grpc.ServiceDesc for HobnobAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1221,6 +1261,10 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PromoteEnv",
 			Handler:    _HobnobAdmin_PromoteEnv_Handler,
+		},
+		{
+			MethodName: "EnrollNode",
+			Handler:    _HobnobAdmin_EnrollNode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

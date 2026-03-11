@@ -89,9 +89,9 @@ Steps 1 and 2 get you to ~50k nodes on a single server with SQLite. Steps 3 and 
 | 2. Agent-side evaluation | Done (scalability plan rec #4) |
 | 3. Spoke federation — Phase 1 | Done — federation config, spoke mode, spoke gateway |
 | 3. Spoke federation — Phase 2 | Done — hub aggregation via spoke AdminService fan-out |
-| 3. Spoke federation — Phase 3 | Pending — enrollment routing (hub assigns nodes to spokes) |
+| 3. Spoke federation — Phase 3 | Done — enrollment routing (hub assigns nodes to spokes) |
 | 4. Persistent gRPC streams — server | Done — proto, stream handler, stream manager, config push |
-| 4. Persistent gRPC streams — agent | Pending — agent stream client, reconnection, fallback to polling |
+| 4. Persistent gRPC streams — agent | Done — stream client, event loop, automatic fallback to polling |
 
 ### Step 3 Phase 1: Spoke mode
 
@@ -116,9 +116,33 @@ Key insight: spokes already expose `HobnobAdmin` gRPC. Hub just dials spokes and
 
 ### Step 3 Phase 3: Enrollment routing
 
-- Agent registers with hub, hub determines spoke by hostname pattern
-- Hub pushes node record to spoke, returns spoke address to agent
-- Agent switches to spoke for subsequent check-ins
+- `SpokeEntry.Patterns` — hostname globs that determine which spoke owns which nodes
+- Hub receives `Register`, validates token + pattern, matches spoke by hostname
+- Hub calls spoke's `EnrollNode` admin RPC (creates node without token re-validation)
+- `RegisterResponse.spoke_addr` — hub returns spoke gRPC address to agent
+- Agent saves spoke address to `{data_dir}/spoke.addr`, uses it for check-ins
+- `registry.CreateNode()` — creates node directly (no token validation, for hub→spoke use)
+
+### Step 4: Persistent gRPC streams
+
+Server side (done previously):
+- Proto: `AgentStreamMessage` (agent→server), `ServerStreamMessage` (server→agent)
+- `AgentStream` bidi RPC on HobnobAgent service
+- `streamManager` in `server/grpc/streams.go` — tracks connected agents, push notifications
+- `buildCheckInResponse()` shared between unary CheckIn and stream handler
+
+Agent side:
+- `agent/checkin/stream.go`: `StreamConn` wraps the bidi stream, dispatches server messages to channels
+- `OpenStream()` — opens stream, sends initial check-in as handshake, returns initial response
+- `StreamConn.CheckIn()` — sends check-in on stream, waits for response via channel
+- `StreamConn.ReportResult()` — fire-and-forget result reporting on stream
+- `StreamConn.PolicyPush` / `ForcePush` channels — receive server-initiated push notifications
+- `StreamConn.Done()` — closed on disconnect for clean shutdown
+- `Loop()` modified: tries stream first, falls back to polling if unavailable
+- `streamLoop()` — event-driven: handles policy pushes, force pushes, periodic check-ins
+- `converge()` — extracted from RunOnce, shared between poll and stream modes
+- `client.BuildCheckInRequest()` / `BuildReportResultRequest()` — construct signed requests for stream use
+- 13 stream-specific tests (handshake, push dispatch, check-in, report, disconnect)
 
 ## Key realization
 

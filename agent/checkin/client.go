@@ -170,6 +170,41 @@ func (c *Client) DownloadCustomTrait(ctx context.Context, name string) ([]byte, 
 	return resp.Data, nil
 }
 
+// BuildCheckInRequest constructs a signed CheckInRequest without sending it.
+// Used by the stream client to send check-ins over the bidirectional stream.
+func (c *Client) BuildCheckInRequest(stateFingerprint string, traitsJSON []byte, policyVersion uint64, cachedModuleHashes map[string]string) *pb.CheckInRequest {
+	now := time.Now()
+	ts := strconv.FormatInt(now.Unix(), 10)
+	sig := auth.SignPayload([]byte(stateFingerprint), ts, c.privateKey)
+
+	return &pb.CheckInRequest{
+		NodeId:             c.nodeID,
+		StateFingerprint:   stateFingerprint,
+		Signature:          sig,
+		Timestamp:          timestamppb.New(now),
+		TraitsJson:         traitsJSON,
+		PolicyVersion:      policyVersion,
+		PolicyMode:         true,
+		CachedModuleHashes: cachedModuleHashes,
+	}
+}
+
+// BuildReportResultRequest constructs a signed ReportResultRequest without
+// sending it. Used by the stream client to send results over the stream.
+func (c *Client) BuildReportResultRequest(runID string, results []*pb.ModuleResult) *pb.ReportResultRequest {
+	now := time.Now()
+	ts := strconv.FormatInt(now.Unix(), 10)
+	sig := auth.SignPayload([]byte(runID), ts, c.privateKey)
+
+	return &pb.ReportResultRequest{
+		RunId:     runID,
+		NodeId:    c.nodeID,
+		Results:   results,
+		Signature: sig,
+		Timestamp: timestamppb.New(now),
+	}
+}
+
 // Close closes the underlying gRPC connection.
 func (c *Client) Close() error {
 	return c.conn.Close()

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -25,10 +26,11 @@ type Hub struct {
 }
 
 type spokeConn struct {
-	id   string
-	addr string
-	conn *grpc.ClientConn
-	admin pb.HobnobAdminClient
+	id       string
+	addr     string
+	patterns []string // hostname glob patterns routed to this spoke
+	conn     *grpc.ClientConn
+	admin    pb.HobnobAdminClient
 }
 
 // NewHub creates a Hub that connects to each configured spoke via mTLS.
@@ -53,10 +55,11 @@ func NewHub(ctx context.Context, spokes []config.SpokeEntry, certFile, keyFile, 
 		}
 
 		h.spokes = append(h.spokes, spokeConn{
-			id:    s.ID,
-			addr:  s.Addr,
-			conn:  conn,
-			admin: pb.NewHobnobAdminClient(conn),
+			id:       s.ID,
+			addr:     s.Addr,
+			patterns: s.Patterns,
+			conn:     conn,
+			admin:    pb.NewHobnobAdminClient(conn),
 		})
 		slog.Info("connected to spoke", "spoke_id", s.ID, "addr", s.Addr)
 	}
@@ -180,6 +183,54 @@ func (h *Hub) ForwardForcePush(ctx context.Context, nodeID string) (int32, error
 		total += r.value.(int32)
 	}
 	return total, nil
+}
+
+// RouteHostname determines which spoke should handle a given hostname by
+// matching against each spoke's configured patterns. Returns the spoke's
+// gRPC address and true if a match is found, or empty string and false if
+// no spoke pattern matches (the hub handles it locally).
+func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
+	for _, sc := range h.spokes {
+		for _, pattern := range sc.patterns {
+			matched, err := filepath.Match(pattern, hostname)
+			if err != nil {
+				slog.Warn("invalid spoke pattern", "spoke_id", sc.id, "pattern", pattern, "error", err)
+				continue
+			}
+			if matched {
+				return sc.addr, true
+			}
+		}
+	}
+	return "", false
+}
+
+// EnrollOnSpoke creates a node record on the target spoke via the EnrollNode
+// admin RPC. Returns the node UUID assigned by the spoke.
+func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress, pubkeyPEM string) (string, error) {
+	// Find the spoke connection by address.
+	var target *spokeConn
+	for i := range h.spokes {
+		if h.spokes[i].addr == spokeAddr {
+			target = &h.spokes[i]
+			break
+		}
+	}
+	if target == nil {
+		return "", fmt.Errorf("no spoke connection for address %s", spokeAddr)
+	}
+
+	resp, err := target.admin.EnrollNode(ctx, &pb.EnrollNodeRequest{
+		Hostname:  hostname,
+		IpAddress: ipAddress,
+		PubkeyPem: pubkeyPEM,
+	})
+	if err != nil {
+		return "", fmt.Errorf("enroll on spoke %s: %w", target.id, err)
+	}
+
+	slog.Info("enrolled node on spoke", "spoke_id", target.id, "hostname", hostname, "node_id", resp.NodeId)
+	return resp.NodeId, nil
 }
 
 // fanOutResult holds the response from one spoke.

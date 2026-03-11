@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hobnob/hobnob/agent/customtraits"
 	"github.com/hobnob/hobnob/agent/modules"
-	"github.com/hobnob/hobnob/agent/traits"
 	"github.com/hobnob/hobnob/agent/policy"
 	"github.com/hobnob/hobnob/agent/runner"
 	"github.com/hobnob/hobnob/agent/snapshots"
-	"github.com/hobnob/hobnob/agent/customtraits"
+	"github.com/hobnob/hobnob/agent/traits"
 	"github.com/hobnob/hobnob/agent/update"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
@@ -80,6 +80,93 @@ type PolicyState struct {
 	ModuleCache *ModuleCache // per-module content-addressable cache for delta transfer
 }
 
+// converge performs a convergence cycle with an already-received CheckInResponse.
+// reportFn is called to send results back to the server (nil skips reporting).
+// Used by both RunOnce (unary poll) and the stream event loop.
+func converge(ctx context.Context, resp *pb.CheckInResponse, reportFn func(ctx context.Context, runID string, results []*pb.ModuleResult) error, executors map[string]modules.Executor, traitsMap map[string]any, dryRun bool, module string, cache *runner.ResultCache, policyState *PolicyState) (*RunResult, error) {
+	// Parse server-provided timing.
+	baseInterval := 5 * time.Minute // default
+	if resp.BaseInterval != "" {
+		if parsed, parseErr := time.ParseDuration(resp.BaseInterval); parseErr == nil {
+			baseInterval = parsed
+		}
+	}
+	jitterPct := int(resp.JitterPercent)
+	if jitterPct == 0 {
+		jitterPct = 10 // default 10%
+	}
+
+	// Determine which policy bundle to evaluate.
+	bundle := resp.PolicyBundle
+
+	if resp.NoChange && policyState != nil && policyState.Bundle != nil {
+		// Config unchanged — evaluate cached bundle with fresh traits.
+		bundle = policyState.Bundle
+	}
+
+	if bundle == nil {
+		// First check-in with no cached bundle and server said no_change.
+		return &RunResult{
+			BaseInterval:  baseInterval,
+			JitterPct:     jitterPct,
+			NoChange:      true,
+			PolicyVersion: resp.PolicyVersion,
+		}, nil
+	}
+
+	// Delta transfer: fill in stub modules from the module cache.
+	if policyState != nil && policyState.ModuleCache != nil {
+		bundle.Modules = MergeStubs(bundle.Modules, policyState.ModuleCache)
+	}
+
+	// Update the module cache with fully resolved modules.
+	if policyState != nil && policyState.ModuleCache != nil {
+		policyState.ModuleCache.Update(bundle.Modules)
+	}
+
+	protoModules, err := policy.EvalBundle(bundle, traitsMap)
+	if err != nil {
+		return nil, fmt.Errorf("evaluating policy bundle: %w", err)
+	}
+
+	if len(protoModules) == 0 {
+		slog.Warn("server returned zero modules — check that this node is matched in nodes.hnb")
+		return &RunResult{
+			BaseInterval:        baseInterval,
+			JitterPct:           jitterPct,
+			ResponseFingerprint: resp.ResponseFingerprint,
+			PolicyVersion:       resp.PolicyVersion,
+			PolicyBundle:        resp.PolicyBundle,
+		}, nil
+	}
+
+	runID := uuid.New().String()
+
+	r := runner.NewRunner(executors, traitsMap, dryRun, module)
+	r.Cache = cache
+	results, err := r.Run(ctx, protoModules)
+	if err != nil {
+		return nil, fmt.Errorf("run modules: %w", err)
+	}
+
+	// Report results back to server (skip in dry-run mode).
+	if !dryRun && reportFn != nil {
+		protoResults := resultsToProto(results)
+		if reportErr := reportFn(ctx, runID, protoResults); reportErr != nil {
+			slog.Warn("failed to report results", "error", reportErr)
+		}
+	}
+
+	return &RunResult{
+		Results:             results,
+		BaseInterval:        baseInterval,
+		JitterPct:           jitterPct,
+		ResponseFingerprint: resp.ResponseFingerprint,
+		PolicyVersion:       resp.PolicyVersion,
+		PolicyBundle:        resp.PolicyBundle,
+	}, nil
+}
+
 // RunOnce performs a single check-in, executes the returned modules, and reports
 // results. It is used by both the one-shot "run" command and the daemon loop.
 // If dryRun is true, results are not reported back to the server.
@@ -106,110 +193,20 @@ func RunOnce(ctx context.Context, client *Client, executors map[string]modules.E
 		return nil, fmt.Errorf("check-in: %w", err)
 	}
 
-	// Parse server-provided timing.
-	baseInterval := 5 * time.Minute // default
-	if resp.BaseInterval != "" {
-		if parsed, parseErr := time.ParseDuration(resp.BaseInterval); parseErr == nil {
-			baseInterval = parsed
-		}
-	}
-	jitterPct := int(resp.JitterPercent)
-	if jitterPct == 0 {
-		jitterPct = 10 // default 10%
-	}
-
-	// Determine which policy bundle to evaluate.
-	var protoModules []*pb.Module
-	bundle := resp.PolicyBundle
-
-	if resp.NoChange && policyState != nil && policyState.Bundle != nil {
-		// Config unchanged — evaluate cached bundle with fresh traits.
-		bundle = policyState.Bundle
-	}
-
-	if bundle == nil {
-		// First check-in with no cached bundle and server said no_change
-		// (shouldn't happen, but handle gracefully).
-		return &RunResult{
-			BaseInterval:  baseInterval,
-			JitterPct:     jitterPct,
-			NoChange:      true,
-			PolicyVersion: resp.PolicyVersion,
-		}, nil
-	}
-
-	// Delta transfer: fill in stub modules from the module cache.
-	if policyState != nil && policyState.ModuleCache != nil {
-		bundle.Modules = MergeStubs(bundle.Modules, policyState.ModuleCache)
-	}
-
-	// Update the module cache with fully resolved modules.
-	if policyState != nil && policyState.ModuleCache != nil {
-		policyState.ModuleCache.Update(bundle.Modules)
-	}
-
-	protoModules, err = policy.EvalBundle(bundle, traitsMap)
-	if err != nil {
-		return nil, fmt.Errorf("evaluating policy bundle: %w", err)
-	}
-
-	if len(protoModules) == 0 {
-		slog.Warn("server returned zero modules — check that this node is matched in nodes.hnb")
-		return &RunResult{
-			BaseInterval:        baseInterval,
-			JitterPct:           jitterPct,
-			ResponseFingerprint: resp.ResponseFingerprint,
-			PolicyVersion:       resp.PolicyVersion,
-			PolicyBundle:        resp.PolicyBundle,
-		}, nil
-	}
-
-	runID := uuid.New().String()
-
-	r := runner.NewRunner(executors, traitsMap, dryRun, module)
-	r.Cache = cache
-	results, err := r.Run(ctx, protoModules)
-	if err != nil {
-		return nil, fmt.Errorf("run modules: %w", err)
-	}
-
-	// Report results back to server (skip in dry-run mode).
-	if !dryRun {
-		protoResults := resultsToProto(results)
-		if reportErr := client.ReportResult(ctx, runID, protoResults); reportErr != nil {
-			slog.Warn("failed to report results", "error", reportErr)
-		}
-	}
-
-	return &RunResult{
-		Results:             results,
-		BaseInterval:        baseInterval,
-		JitterPct:           jitterPct,
-		ResponseFingerprint: resp.ResponseFingerprint,
-		PolicyVersion:       resp.PolicyVersion,
-		PolicyBundle:        resp.PolicyBundle,
-	}, nil
+	return converge(ctx, resp, func(ctx context.Context, runID string, results []*pb.ModuleResult) error {
+		return client.ReportResult(ctx, runID, results)
+	}, executors, traitsMap, dryRun, module, cache, policyState)
 }
 
-// Loop runs the daemon pull loop until the context is cancelled. On each
-// iteration it syncs custom traits (if traitsCacheDir is non-empty), collects
-// traits, checks in with traits inline, executes modules, and reports results.
-// Server errors trigger exponential backoff; successful runs reset the backoff
-// and sleep with jitter per the server's response.
-//
-// The agent sends traits inline with the CheckIn RPC, eliminating the separate
-// ReportTraits round-trip. It also tracks the server's response fingerprint
-// to enable short-circuit on subsequent check-ins when nothing has changed.
-//
-// Stable traits (OS, hardware, network, packages, etc.) are cached and only
-// refreshed every 10 cycles. Volatile traits (time, uptime, loadavg,
-// mountpoints) are collected every cycle.
 // LoopConfig holds tuning parameters for the daemon loop.
 type LoopConfig struct {
 	TraitRefreshCycles int // stable traits refresh every N cycles (default 10)
 	ResultCacheCycles  int // no-op results cached for N cycles (default 5)
 }
 
+// Loop runs the daemon loop until the context is cancelled. It attempts to
+// open a persistent bidirectional stream to the server first (push-based).
+// If streaming is unavailable or disconnects, it falls back to polling.
 func Loop(ctx context.Context, client *Client, executors map[string]modules.Executor, snapshotMgr *snapshots.Manager, updateCfg *UpdateConfig, traitsCacheDir string, loopCfg LoopConfig) error {
 	traitRefreshCycles := loopCfg.TraitRefreshCycles
 	if traitRefreshCycles <= 0 {
@@ -229,22 +226,10 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		}
 	}
 
-	// Track response fingerprint across iterations for short-circuit.
 	var lastFingerprint string
-
-	// Policy state: cached policy bundle + version for agent-side evaluation.
-	policyState := &PolicyState{
-		ModuleCache: NewModuleCache(),
-	}
-
-	// Cached collector set: stable traits refresh every N cycles.
+	policyState := &PolicyState{ModuleCache: NewModuleCache()}
 	collectors := traits.NewCachedCollectors(traitRefreshCycles)
-
-	// Result cache: skip re-executing resources whose params haven't changed
-	// and whose last execution was a no-op. Expires after N cycles.
 	resultCache := runner.NewResultCache(resultCacheCycles)
-
-	// Custom traits manifest cached from previous cycle's response.
 	var cachedCustomTraits []*pb.CustomTraitEntry
 
 	for {
@@ -255,46 +240,34 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		default:
 		}
 
-		// 0. Sync custom traits using manifest cached from previous response.
-		var customTraits map[string]any
-		if traitsCacheDir != "" && len(cachedCustomTraits) > 0 {
-			traitsExec := customtraits.NewExecutor(traitsCacheDir, client, 10*time.Second)
-			var syncErr error
-			customTraits, syncErr = traitsExec.SyncAndRun(ctx, cachedCustomTraits)
-			if syncErr != nil {
-				logger.Warn("custom traits sync/run failed", "error", syncErr)
+		// Attempt stream mode. Collect traits first for the handshake.
+		traitsMap, traitsJSON := collectTraits(ctx, collectors, cachedCustomTraits, traitsCacheDir, client)
+		req := client.BuildCheckInRequest(lastFingerprint, traitsJSON, policyState.Version, getCachedHashes(policyState))
+
+		sc, initialResp, streamErr := OpenStream(ctx, client, req)
+		if streamErr == nil {
+			logger.Info("stream connected, switching to push mode")
+			bo.Reset()
+
+			streamLoopErr := streamLoop(ctx, sc, client, initialResp, traitsMap, executors,
+				collectors, resultCache, policyState, &cachedCustomTraits, traitsCacheDir, updateCfg)
+			sc.Close()
+
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
+
+			logger.Info("stream disconnected, falling back to polling", "error", streamLoopErr)
+			continue
 		}
 
-		// 1. Collect traits (volatile every cycle, stable every 10 cycles).
-		traitsMap, err := collectors.CollectAll(ctx)
-		if err != nil {
-			logger.Warn("fact collection failed", "error", err)
-			traitsMap = make(map[string]any)
-		}
+		logger.Debug("stream not available, using polling", "error", streamErr)
 
-		// 1b. Merge custom traits into traits map.
-		if customTraits != nil {
-			for k, v := range customTraits {
-				traitsMap[k] = v
-			}
-		}
-
-		// 2. Marshal traits for inline delivery (replaces separate ReportTraits RPC).
-		traitsJSON, marshalErr := json.Marshal(traitsMap)
-		if marshalErr != nil {
-			logger.Warn("failed to marshal traits", "error", marshalErr)
-			traitsJSON = nil
-		}
-
-		// 3. Run once (check-in with inline traits + execute + report).
+		// Poll mode: run one cycle using already-collected traits.
 		runResult, err := RunOnce(ctx, client, executors, traitsMap, false, "", lastFingerprint, traitsJSON, resultCache, policyState)
 		if err != nil {
 			wait := bo.NextBackOff()
-			logger.Warn("convergence run failed, backing off",
-				"error", err,
-				"backoff", wait,
-			)
+			logger.Warn("convergence run failed, backing off", "error", err, "backoff", wait)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -303,49 +276,15 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 			continue
 		}
 
-		// Success -- reset backoff and update fingerprint + policy state.
+		// Success — reset backoff and update state.
 		bo.Reset()
-		if runResult.ResponseFingerprint != "" {
-			lastFingerprint = runResult.ResponseFingerprint
-		}
-		if runResult.PolicyVersion > 0 {
-			policyState.Version = runResult.PolicyVersion
-		}
-		if runResult.PolicyBundle != nil {
-			policyState.Bundle = runResult.PolicyBundle
-			// Cache custom traits manifest for next cycle (eliminates pre-check-in RPC).
-			if len(runResult.PolicyBundle.CustomTraits) > 0 {
-				cachedCustomTraits = runResult.PolicyBundle.CustomTraits
-			}
-		}
+		updateState(policyState, runResult, &cachedCustomTraits, &lastFingerprint)
+		logRunResult(logger, runResult)
 
-		if runResult.NoChange {
-			logger.Info("no change detected, skipping execution")
-		} else {
-			// Log summary.
-			changed := 0
-			errCount := 0
-			for _, r := range runResult.Results {
-				if r.Changed {
-					changed++
-				}
-				if r.Error != nil {
-					errCount++
-				}
-			}
-			logger.Info("convergence run complete",
-				"total", len(runResult.Results),
-				"changed", changed,
-				"errors", errCount,
-			)
-		}
-
-		// 4. Check for self-update after successful convergence.
 		if updateCfg != nil && updateCfg.APIAddr != "" && updateCfg.CurrentVersion != "" {
 			checkSelfUpdate(ctx, logger, updateCfg)
 		}
 
-		// 5. Sleep with jitter based on server-provided interval.
 		sleepDur := jitteredDuration(runResult.BaseInterval, runResult.JitterPct)
 		logger.Info("sleeping until next check-in",
 			"duration", sleepDur,
@@ -357,6 +296,197 @@ func Loop(ctx context.Context, client *Client, executors map[string]modules.Exec
 		case <-time.After(sleepDur):
 		}
 	}
+}
+
+// streamLoop runs the event-driven stream loop. Returns when the stream
+// disconnects or the context is cancelled.
+func streamLoop(ctx context.Context, sc *StreamConn, client *Client, initialResp *pb.CheckInResponse, initialTraits map[string]any, executors map[string]modules.Executor, collectors *traits.CachedCollectors, resultCache *runner.ResultCache, policyState *PolicyState, cachedCustomTraits *[]*pb.CustomTraitEntry, traitsCacheDir string, updateCfg *UpdateConfig) error {
+	logger := slog.Default()
+
+	// Report function sends results over the stream.
+	reportFn := func(_ context.Context, runID string, results []*pb.ModuleResult) error {
+		return sc.ReportResult(client.BuildReportResultRequest(runID, results))
+	}
+
+	// Process initial check-in response.
+	rr, err := converge(ctx, initialResp, reportFn, executors, initialTraits, false, "", resultCache, policyState)
+	if err != nil {
+		logger.Warn("initial stream convergence failed", "error", err)
+	} else {
+		updateState(policyState, rr, cachedCustomTraits, nil)
+		logRunResult(logger, rr)
+	}
+
+	// Determine periodic check-in interval.
+	interval := 5 * time.Minute
+	jitterPct := 10
+	if rr != nil && rr.BaseInterval > 0 {
+		interval = rr.BaseInterval
+	}
+	if rr != nil && rr.JitterPct > 0 {
+		jitterPct = rr.JitterPct
+	}
+
+	timer := time.NewTimer(jitteredDuration(interval, jitterPct))
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case <-sc.Done():
+			return fmt.Errorf("stream disconnected")
+
+		case push := <-sc.PolicyPush:
+			// Server pushed new config — evaluate immediately.
+			logger.Info("received policy push via stream", "version", push.PolicyVersion)
+			traitsMap, _ := collectTraits(ctx, collectors, *cachedCustomTraits, traitsCacheDir, client)
+			resp := &pb.CheckInResponse{
+				PolicyBundle:  push.PolicyBundle,
+				PolicyVersion: push.PolicyVersion,
+			}
+			rr, err := converge(ctx, resp, reportFn, executors, traitsMap, false, "", resultCache, policyState)
+			if err != nil {
+				logger.Warn("stream policy push convergence failed", "error", err)
+			} else {
+				updateState(policyState, rr, cachedCustomTraits, nil)
+				logRunResult(logger, rr)
+			}
+			timer.Reset(jitteredDuration(interval, jitterPct))
+
+		case <-sc.ForcePush:
+			// Admin requested immediate convergence — do full check-in.
+			logger.Info("received force push via stream")
+			traitsMap, traitsJSON := collectTraits(ctx, collectors, *cachedCustomTraits, traitsCacheDir, client)
+			req := client.BuildCheckInRequest("", traitsJSON, policyState.Version, getCachedHashes(policyState))
+			resp, err := sc.CheckIn(ctx, req)
+			if err != nil {
+				logger.Warn("stream check-in after force push failed", "error", err)
+				continue
+			}
+			rr, err := converge(ctx, resp, reportFn, executors, traitsMap, false, "", resultCache, policyState)
+			if err != nil {
+				logger.Warn("stream force push convergence failed", "error", err)
+			} else {
+				updateState(policyState, rr, cachedCustomTraits, nil)
+				logRunResult(logger, rr)
+			}
+			timer.Reset(jitteredDuration(interval, jitterPct))
+
+		case <-timer.C:
+			// Periodic check-in — delivers fresh traits and verifies policy version.
+			traitsMap, traitsJSON := collectTraits(ctx, collectors, *cachedCustomTraits, traitsCacheDir, client)
+			req := client.BuildCheckInRequest("", traitsJSON, policyState.Version, getCachedHashes(policyState))
+			resp, err := sc.CheckIn(ctx, req)
+			if err != nil {
+				logger.Warn("stream periodic check-in failed", "error", err)
+				timer.Reset(jitteredDuration(interval, jitterPct))
+				continue
+			}
+			rr, err := converge(ctx, resp, reportFn, executors, traitsMap, false, "", resultCache, policyState)
+			if err != nil {
+				logger.Warn("stream periodic convergence failed", "error", err)
+			} else {
+				updateState(policyState, rr, cachedCustomTraits, nil)
+				if rr.BaseInterval > 0 {
+					interval = rr.BaseInterval
+				}
+				if rr.JitterPct > 0 {
+					jitterPct = rr.JitterPct
+				}
+				logRunResult(logger, rr)
+			}
+
+			if updateCfg != nil && updateCfg.APIAddr != "" && updateCfg.CurrentVersion != "" {
+				checkSelfUpdate(ctx, logger, updateCfg)
+			}
+
+			timer.Reset(jitteredDuration(interval, jitterPct))
+		}
+	}
+}
+
+// collectTraits syncs custom traits and collects all trait data for a check-in.
+func collectTraits(ctx context.Context, collectors *traits.CachedCollectors, cachedCustomTraits []*pb.CustomTraitEntry, traitsCacheDir string, client *Client) (map[string]any, []byte) {
+	logger := slog.Default()
+
+	// Sync custom traits.
+	var customTraits map[string]any
+	if traitsCacheDir != "" && len(cachedCustomTraits) > 0 {
+		traitsExec := customtraits.NewExecutor(traitsCacheDir, client, 10*time.Second)
+		var syncErr error
+		customTraits, syncErr = traitsExec.SyncAndRun(ctx, cachedCustomTraits)
+		if syncErr != nil {
+			logger.Warn("custom traits sync/run failed", "error", syncErr)
+		}
+	}
+
+	traitsMap, err := collectors.CollectAll(ctx)
+	if err != nil {
+		logger.Warn("trait collection failed", "error", err)
+		traitsMap = make(map[string]any)
+	}
+
+	for k, v := range customTraits {
+		traitsMap[k] = v
+	}
+
+	traitsJSON, err := json.Marshal(traitsMap)
+	if err != nil {
+		logger.Warn("failed to marshal traits", "error", err)
+		traitsJSON = nil
+	}
+
+	return traitsMap, traitsJSON
+}
+
+// updateState updates the policy state and custom traits cache from a run result.
+// lastFingerprint is optional (nil to skip fingerprint update).
+func updateState(ps *PolicyState, rr *RunResult, cachedCustomTraits *[]*pb.CustomTraitEntry, lastFingerprint *string) {
+	if lastFingerprint != nil && rr.ResponseFingerprint != "" {
+		*lastFingerprint = rr.ResponseFingerprint
+	}
+	if rr.PolicyVersion > 0 {
+		ps.Version = rr.PolicyVersion
+	}
+	if rr.PolicyBundle != nil {
+		ps.Bundle = rr.PolicyBundle
+		if len(rr.PolicyBundle.CustomTraits) > 0 {
+			*cachedCustomTraits = rr.PolicyBundle.CustomTraits
+		}
+	}
+}
+
+// getCachedHashes returns the module cache hashes for delta transfer.
+func getCachedHashes(ps *PolicyState) map[string]string {
+	if ps != nil && ps.ModuleCache != nil {
+		return ps.ModuleCache.Hashes()
+	}
+	return nil
+}
+
+// logRunResult logs a summary of a convergence run.
+func logRunResult(logger *slog.Logger, rr *RunResult) {
+	if rr.NoChange {
+		logger.Info("no change detected, skipping execution")
+		return
+	}
+	changed := 0
+	errCount := 0
+	for _, r := range rr.Results {
+		if r.Changed {
+			changed++
+		}
+		if r.Error != nil {
+			errCount++
+		}
+	}
+	logger.Info("convergence run complete",
+		"total", len(rr.Results),
+		"changed", changed,
+		"errors", errCount,
+	)
 }
 
 // checkSelfUpdate queries the server for a newer agent version and applies the

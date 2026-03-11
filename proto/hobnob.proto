@@ -193,6 +193,11 @@ service HobnobAdmin {
       body: "*"
     };
   }
+
+  // EnrollNode creates a node record directly (hub→spoke internal RPC).
+  // Used during enrollment routing: the hub validates the token, then calls
+  // this on the target spoke to create the node without token re-validation.
+  rpc EnrollNode(EnrollNodeRequest) returns (EnrollNodeResponse);
 }
 
 // =============================================================================
@@ -210,6 +215,7 @@ message RegisterResponse {
   bool success = 1;
   string node_id = 2;       // UUID assigned by the server
   string message = 3;
+  string spoke_addr = 4;    // if set, agent should connect to this spoke for check-ins
 }
 
 message CheckInRequest {
@@ -644,4 +650,18 @@ message PromoteEnvRequest {
 message PromoteEnvResponse {
   string promotion_id = 1;
   map<string, string> diff = 2;
+}
+
+// =============================================================================
+// Enrollment routing messages (hub→spoke internal)
+// =============================================================================
+
+message EnrollNodeRequest {
+  string hostname = 1;
+  string ip_address = 2;
+  string pubkey_pem = 3;
+}
+
+message EnrollNodeResponse {
+  string node_id = 1;
 }

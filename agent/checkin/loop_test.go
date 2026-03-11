@@ -119,7 +119,7 @@ func (m *mockAgentClient) DownloadCustomTrait(_ context.Context, _ *pb.DownloadC
 }
 
 func (m *mockAgentClient) AgentStream(_ context.Context, _ ...grpc.CallOption) (pb.HobnobAgent_AgentStreamClient, error) {
-	return nil, nil
+	return nil, errors.New("streaming not supported")
 }
 
 // newMockClient creates a Client with a mock gRPC agent for testing.

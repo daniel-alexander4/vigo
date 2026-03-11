@@ -231,6 +231,29 @@ func (r *Registry) RevokeNode(ctx context.Context, nodeID string) error {
 
 // ValidateNode checks if a node exists and is not revoked. Returns an error
 // if the node is revoked or does not exist.
+// CreateNode creates a node record directly without token validation.
+// Used by EnrollNode (hub→spoke enrollment routing) where the hub has
+// already validated the enrollment token.
+func (r *Registry) CreateNode(ctx context.Context, hostname, ip, pubkeyPEM string) (string, error) {
+	if hostname == "" {
+		return "", fmt.Errorf("hostname must not be empty")
+	}
+	if pubkeyPEM == "" {
+		return "", fmt.Errorf("public key must not be empty")
+	}
+
+	node, err := r.queries.CreateNode(ctx, db.CreateNodeParams{
+		Hostname:  hostname,
+		IpAddress: ip,
+		PubkeyPem: pubkeyPEM,
+	})
+	if err != nil {
+		return "", fmt.Errorf("creating node: %w", err)
+	}
+
+	return node.ID, nil
+}
+
 func (r *Registry) ValidateNode(ctx context.Context, nodeID string) error {
 	node, err := r.queries.GetNodeByID(ctx, nodeID)
 	if err != nil {

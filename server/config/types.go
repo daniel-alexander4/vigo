@@ -36,8 +36,9 @@ type FederationSection struct {
 
 // SpokeEntry defines a spoke server the hub aggregates from.
 type SpokeEntry struct {
-	ID   string `yaml:"id"`   // unique spoke identifier
-	Addr string `yaml:"addr"` // gRPC address (host:port)
+	ID       string   `yaml:"id"`       // unique spoke identifier
+	Addr     string   `yaml:"addr"`     // gRPC address (host:port)
+	Patterns []string `yaml:"patterns"` // hostname glob patterns routed to this spoke
 }
 
 // Validate checks that federation config is internally consistent.

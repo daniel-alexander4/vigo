@@ -81,6 +81,26 @@ func saveNodeID(id string) error {
 	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
 }
 
+// saveSpokeAddr writes the spoke gRPC address to <data-dir>/spoke.addr.
+// If addr is empty, the file is removed (node connects to the default server).
+func saveSpokeAddr(addr string) error {
+	path := dataDir + "/spoke.addr"
+	if addr == "" {
+		os.Remove(path)
+		return nil
+	}
+	return os.WriteFile(path, []byte(addr+"\n"), 0600)
+}
+
+// loadSpokeAddr reads the spoke address. Returns empty string if not set.
+func loadSpokeAddr() string {
+	data, err := os.ReadFile(dataDir + "/spoke.addr")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
 // detectOSInfo returns the OS family and distro from traits. Falls back to
 // runtime.GOOS if the OS collector fails.
 func detectOSInfo() (family, distro string) {
@@ -196,7 +216,13 @@ func newGRPCClient(nodeID string, privateKey []byte) (*checkin.Client, error) {
 		cert = auth.TLSCertPath(dataDir)
 		key = auth.TLSKeyPath(dataDir)
 	}
-	return checkin.NewClient(server, ca, cert, key, nodeID, privateKey)
+	// Use spoke address if hub routed us to a spoke during enrollment.
+	addr := server
+	if spokeAddr := loadSpokeAddr(); spokeAddr != "" {
+		addr = spokeAddr
+		slog.Info("using spoke address from enrollment routing", "spoke_addr", addr)
+	}
+	return checkin.NewClient(addr, ca, cert, key, nodeID, privateKey)
 }
 
 // signalContext returns a context that is cancelled on SIGINT or SIGTERM.
@@ -477,6 +503,16 @@ var registerCmd = &cobra.Command{
 		// Save node UUID.
 		if err := saveNodeID(resp.NodeId); err != nil {
 			return fmt.Errorf("save node UUID: %w", err)
+		}
+
+		// Save spoke address if hub routed us to a spoke.
+		if resp.SpokeAddr != "" {
+			if err := saveSpokeAddr(resp.SpokeAddr); err != nil {
+				return fmt.Errorf("save spoke address: %w", err)
+			}
+			logger.Info("hub routed to spoke, subsequent check-ins will use spoke",
+				"spoke_addr", resp.SpokeAddr,
+			)
 		}
 
 		logger.Info("registration successful",

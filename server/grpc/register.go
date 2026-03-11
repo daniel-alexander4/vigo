@@ -14,7 +14,8 @@ import (
 
 // Register handles the HobnobAgent.Register RPC. It delegates to the enrollment
 // registry to validate the one-time token, match approved patterns, and create
-// the client record.
+// the client record. In hub mode, after token validation, the node is enrolled
+// on the target spoke and the spoke address is returned to the agent.
 func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	slog.Info("register request",
 		"hostname", req.GetHostname(),
@@ -47,6 +48,32 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}
 	}
 
+	var spokeAddr string
+
+	// Hub mode: route the enrollment to the target spoke.
+	if s.hub != nil {
+		addr, matched := s.hub.RouteHostname(req.GetHostname())
+		if matched {
+			spokeNodeID, enrollErr := s.hub.EnrollOnSpoke(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem())
+			if enrollErr != nil {
+				slog.Error("spoke enrollment failed, node registered on hub only",
+					"hostname", req.GetHostname(),
+					"spoke_addr", addr,
+					"error", enrollErr,
+				)
+			} else {
+				// Spoke created the node — use the spoke's node ID and address.
+				nodeID = spokeNodeID
+				spokeAddr = addr
+				slog.Info("node enrolled on spoke",
+					"hostname", req.GetHostname(),
+					"spoke_addr", addr,
+					"node_id", nodeID,
+				)
+			}
+		}
+	}
+
 	slog.Info("node registered",
 		"hostname", req.GetHostname(),
 		"node_id", nodeID,
@@ -64,8 +91,9 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	}
 
 	return &pb.RegisterResponse{
-		Success:  true,
-		NodeId: nodeID,
-		Message:  "registered successfully",
+		Success:   true,
+		NodeId:    nodeID,
+		Message:   "registered successfully",
+		SpokeAddr: spokeAddr,
 	}, nil
 }

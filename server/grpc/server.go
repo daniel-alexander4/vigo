@@ -103,6 +103,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
 		streamMgr:     newStreamManager(),
+		hub:           cfg.Hub,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
