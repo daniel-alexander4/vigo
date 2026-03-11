@@ -9,65 +9,65 @@ import (
 	"context"
 )
 
-const getLatestNodeTraits = `-- name: GetLatestNodeTraits :one
-SELECT id, node_id, traits, collected_at
-FROM node_traits
-WHERE node_id = ?
+const getLatestThrallTraits = `-- name: GetLatestThrallTraits :one
+SELECT id, thrall_id, traits, collected_at
+FROM thrall_traits
+WHERE thrall_id = ?
 ORDER BY collected_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetLatestNodeTraits(ctx context.Context, nodeID string) (NodeTrait, error) {
-	row := q.db.QueryRowContext(ctx, getLatestNodeTraits, nodeID)
-	var i NodeTrait
+func (q *Queries) GetLatestThrallTraits(ctx context.Context, thrallID string) (ThrallTrait, error) {
+	row := q.db.QueryRowContext(ctx, getLatestThrallTraits, thrallID)
+	var i ThrallTrait
 	err := row.Scan(
 		&i.ID,
-		&i.NodeID,
+		&i.ThrallID,
 		&i.Traits,
 		&i.CollectedAt,
 	)
 	return i, err
 }
 
-const insertNodeTraits = `-- name: InsertNodeTraits :one
-INSERT INTO node_traits (node_id, traits)
+const insertThrallTraits = `-- name: InsertThrallTraits :one
+INSERT INTO thrall_traits (thrall_id, traits)
 VALUES (?, ?)
-RETURNING id, node_id, traits, collected_at
+RETURNING id, thrall_id, traits, collected_at
 `
 
-type InsertNodeTraitsParams struct {
-	NodeID string `json:"node_id"`
-	Traits string `json:"traits"`
+type InsertThrallTraitsParams struct {
+	ThrallID string `json:"thrall_id"`
+	Traits   string `json:"traits"`
 }
 
-func (q *Queries) InsertNodeTraits(ctx context.Context, arg InsertNodeTraitsParams) (NodeTrait, error) {
-	row := q.db.QueryRowContext(ctx, insertNodeTraits, arg.NodeID, arg.Traits)
-	var i NodeTrait
+func (q *Queries) InsertThrallTraits(ctx context.Context, arg InsertThrallTraitsParams) (ThrallTrait, error) {
+	row := q.db.QueryRowContext(ctx, insertThrallTraits, arg.ThrallID, arg.Traits)
+	var i ThrallTrait
 	err := row.Scan(
 		&i.ID,
-		&i.NodeID,
+		&i.ThrallID,
 		&i.Traits,
 		&i.CollectedAt,
 	)
 	return i, err
 }
 
-const pruneNodeTraits = `-- name: PruneNodeTraits :exec
-DELETE FROM node_traits
+const pruneThrallTraits = `-- name: PruneThrallTraits :exec
+DELETE FROM thrall_traits
 WHERE id IN (
-  SELECT nt.id FROM node_traits nt
-  WHERE nt.node_id = ?
+  SELECT nt.id FROM thrall_traits nt
+  WHERE nt.thrall_id = ?
   ORDER BY nt.collected_at ASC
-  LIMIT max(0, (SELECT count(*) FROM node_traits nt2 WHERE nt2.node_id = ?) - 10)
+  LIMIT max(0, (SELECT count(*) FROM thrall_traits nt2 WHERE nt2.thrall_id = ?) - 10)
 )
 `
 
-type PruneNodeTraitsParams struct {
-	NodeID   string `json:"node_id"`
-	NodeID_2 string `json:"node_id_2"`
+type PruneThrallTraitsParams struct {
+	ThrallID   string `json:"thrall_id"`
+	ThrallID_2 string `json:"thrall_id_2"`
 }
 
-func (q *Queries) PruneNodeTraits(ctx context.Context, arg PruneNodeTraitsParams) error {
-	_, err := q.db.ExecContext(ctx, pruneNodeTraits, arg.NodeID, arg.NodeID_2)
+func (q *Queries) PruneThrallTraits(ctx context.Context, arg PruneThrallTraitsParams) error {
+	_, err := q.db.ExecContext(ctx, pruneThrallTraits, arg.ThrallID, arg.ThrallID_2)
 	return err
 }

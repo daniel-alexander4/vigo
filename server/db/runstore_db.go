@@ -39,13 +39,13 @@ func (s *DBRunStore) ListRunResults(ctx context.Context, runID string) ([]RunRes
 	return s.q.ListRunResults(ctx, runID)
 }
 
-func (s *DBRunStore) ListRunsByNode(ctx context.Context, arg ListRunsByNodeParams) ([]Run, error) {
-	return s.q.ListRunsByNode(ctx, arg)
+func (s *DBRunStore) ListRunsByThrall(ctx context.Context, arg ListRunsByThrallParams) ([]Run, error) {
+	return s.q.ListRunsByThrall(ctx, arg)
 }
 
-func (s *DBRunStore) LatestRunPerNode(ctx context.Context, nodeIDs []string) (map[string]*Run, error) {
+func (s *DBRunStore) LatestRunPerThrall(ctx context.Context, thrallIDs []string) (map[string]*Run, error) {
 	// Use the optimized correlated subquery.
-	rows, err := s.q.ListNodesWithLatestRun(ctx)
+	rows, err := s.q.ListThrallsWithLatestRun(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (s *DBRunStore) LatestRunPerNode(ctx context.Context, nodeIDs []string) (ma
 	for _, r := range rows {
 		if r.LatestRunStatus.Valid {
 			run := Run{
-				NodeID:       r.ID,
+				ThrallID:       r.ID,
 				Status:       r.LatestRunStatus.String,
 				ChangedCount: r.LatestRunChangedCount.Int64,
 			}

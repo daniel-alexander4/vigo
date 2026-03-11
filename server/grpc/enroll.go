@@ -9,10 +9,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// EnrollNode handles the HobnobAdmin.EnrollNode RPC. This is a hub→spoke
+// EnrollThrall handles the HobnobAdmin.EnrollThrall RPC. This is a hub→spoke
 // internal RPC: the hub validates the enrollment token centrally, then calls
-// this on the target spoke to create the node record without re-validation.
-func (s *AdminService) EnrollNode(ctx context.Context, req *pb.EnrollNodeRequest) (*pb.EnrollNodeResponse, error) {
+// this on the target spoke to create the thrall record without re-validation.
+func (s *AdminService) EnrollThrall(ctx context.Context, req *pb.EnrollThrallRequest) (*pb.EnrollThrallResponse, error) {
 	hostname := req.GetHostname()
 	ipAddress := req.GetIpAddress()
 	pubkeyPEM := req.GetPubkeyPem()
@@ -21,17 +21,17 @@ func (s *AdminService) EnrollNode(ctx context.Context, req *pb.EnrollNodeRequest
 		return nil, status.Error(codes.InvalidArgument, "hostname and pubkey_pem are required")
 	}
 
-	nodeID, err := s.registry.CreateNode(ctx, hostname, ipAddress, pubkeyPEM)
+	thrallID, err := s.registry.CreateThrall(ctx, hostname, ipAddress, pubkeyPEM)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "creating node: %v", err)
+		return nil, status.Errorf(codes.Internal, "creating thrall: %v", err)
 	}
 
-	slog.Info("node enrolled via hub",
+	slog.Info("thrall enrolled via hub",
 		"hostname", hostname,
-		"node_id", nodeID,
+		"node_id", thrallID,
 	)
 
-	return &pb.EnrollNodeResponse{
-		NodeId: nodeID,
+	return &pb.EnrollThrallResponse{
+		ThrallId: thrallID,
 	}, nil
 }

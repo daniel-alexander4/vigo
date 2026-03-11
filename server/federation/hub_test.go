@@ -15,14 +15,14 @@ import (
 // fakeAdminService implements HobnobAdminServer for testing hub fan-out.
 type fakeAdminService struct {
 	pb.UnimplementedHobnobAdminServer
-	nodes      []*pb.Node
+	thralls      []*pb.Thrall
 	runs       []*pb.Run
 	compliance *pb.GetComplianceSummaryResponse
 	forcePush  int32
 }
 
-func (f *fakeAdminService) ListNodes(_ context.Context, _ *pb.ListNodesRequest) (*pb.ListNodesResponse, error) {
-	return &pb.ListNodesResponse{Nodes: f.nodes}, nil
+func (f *fakeAdminService) ListThralls(_ context.Context, _ *pb.ListThrallsRequest) (*pb.ListThrallsResponse, error) {
+	return &pb.ListThrallsResponse{Thralls: f.thralls}, nil
 }
 
 func (f *fakeAdminService) ListRuns(_ context.Context, _ *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
@@ -34,7 +34,7 @@ func (f *fakeAdminService) GetComplianceSummary(_ context.Context, _ *pb.GetComp
 }
 
 func (f *fakeAdminService) ForcePush(_ context.Context, _ *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
-	return &pb.ForcePushResponse{NodesNotified: f.forcePush}, nil
+	return &pb.ForcePushResponse{ThrallsNotified: f.forcePush}, nil
 }
 
 // startFakeSpoke starts a gRPC server with a fake admin service and returns
@@ -78,17 +78,17 @@ func newTestHub(t *testing.T, addrs []string) *Hub {
 	return h
 }
 
-func TestHub_AggregateListNodes(t *testing.T) {
+func TestHub_AggregateListThralls(t *testing.T) {
 	now := timestamppb.Now()
 
 	spokeA := &fakeAdminService{
-		nodes: []*pb.Node{
+		thralls: []*pb.Thrall{
 			{Id: "n1", Hostname: "web1.dc1", EnrolledAt: now},
 			{Id: "n2", Hostname: "web2.dc1", EnrolledAt: now},
 		},
 	}
 	spokeB := &fakeAdminService{
-		nodes: []*pb.Node{
+		thralls: []*pb.Thrall{
 			{Id: "n3", Hostname: "web1.dc2", EnrolledAt: now},
 		},
 	}
@@ -97,21 +97,21 @@ func TestHub_AggregateListNodes(t *testing.T) {
 	addrB := startFakeSpoke(t, spokeB)
 	hub := newTestHub(t, []string{addrA, addrB})
 
-	nodes, err := hub.AggregateListNodes(context.Background())
+	thralls, err := hub.AggregateListThralls(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nodes) != 3 {
-		t.Fatalf("got %d nodes, want 3", len(nodes))
+	if len(thralls) != 3 {
+		t.Fatalf("got %d thralls, want 3", len(thralls))
 	}
 
 	ids := map[string]bool{}
-	for _, n := range nodes {
+	for _, n := range thralls {
 		ids[n.Id] = true
 	}
 	for _, want := range []string{"n1", "n2", "n3"} {
 		if !ids[want] {
-			t.Errorf("missing node %s", want)
+			t.Errorf("missing thrall %s", want)
 		}
 	}
 }
@@ -162,13 +162,13 @@ func TestHub_AggregateListRuns(t *testing.T) {
 	now := timestamppb.Now()
 	spokeA := &fakeAdminService{
 		runs: []*pb.Run{
-			{Id: "r1", NodeId: "n1", StartedAt: now, Status: "success"},
+			{Id: "r1", ThrallId: "n1", StartedAt: now, Status: "success"},
 		},
 	}
 	spokeB := &fakeAdminService{
 		runs: []*pb.Run{
-			{Id: "r2", NodeId: "n3", StartedAt: now, Status: "failure"},
-			{Id: "r3", NodeId: "n3", StartedAt: now, Status: "success"},
+			{Id: "r2", ThrallId: "n3", StartedAt: now, Status: "failure"},
+			{Id: "r3", ThrallId: "n3", StartedAt: now, Status: "success"},
 		},
 	}
 

@@ -1,5 +1,5 @@
 // Package traits provides pluggable trait collectors that gather system
-// information from managed nodes. Traits are used in Go templates as
+// information from managed thralls. Traits are used in Go templates as
 // .Traits.os.family, .Traits.hardware.cpu_count, etc.
 package traits
 

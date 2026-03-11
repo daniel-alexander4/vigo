@@ -25,7 +25,7 @@ func newPolicyCache() *policyCache {
 
 // GetOrBuild returns a cached base PolicyBundle for the given pattern,
 // building and caching it on first access. Returns nil if cfg is nil.
-func (pc *policyCache) GetOrBuild(pattern string, cfg *config.NodeConfig, version uint64) (*pb.PolicyBundle, error) {
+func (pc *policyCache) GetOrBuild(pattern string, cfg *config.ThrallConfig, version uint64) (*pb.PolicyBundle, error) {
 	// Fast path: check cache with read lock.
 	pc.mu.RLock()
 	if pc.version == version {
@@ -64,7 +64,7 @@ func (pc *policyCache) GetOrBuild(pattern string, cfg *config.NodeConfig, versio
 // buildBasePolicyBundle creates a PolicyBundle with all modules fully
 // populated (no stubs). Module content hashes are taken from the
 // pre-computed ContentHash on each ModuleConfig.
-func buildBasePolicyBundle(cfg *config.NodeConfig, version uint64) (*pb.PolicyBundle, error) {
+func buildBasePolicyBundle(cfg *config.ThrallConfig, version uint64) (*pb.PolicyBundle, error) {
 	bundle, err := buildPolicyBundle(cfg, version, nil)
 	if err != nil {
 		return nil, err

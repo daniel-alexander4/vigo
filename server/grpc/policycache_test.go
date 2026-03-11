@@ -6,7 +6,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 )
 
-func makeTestConfig() *config.NodeConfig {
+func makeTestConfig() *config.ThrallConfig {
 	nginx := config.ModuleConfig{
 		Name: "nginx",
 		Resources: []config.ResourceConfig{
@@ -24,7 +24,7 @@ func makeTestConfig() *config.NodeConfig {
 	}
 	postgres.ContentHash = config.HashModuleContent(postgres)
 
-	return &config.NodeConfig{
+	return &config.ThrallConfig{
 		MatchPattern: "*.web.example.com",
 		Environment:  "production",
 		Roles:        []string{"webserver"},
@@ -75,7 +75,7 @@ func TestPolicyCache_VersionChange_Invalidates(t *testing.T) {
 func TestPolicyCache_DifferentPatterns(t *testing.T) {
 	pc := newPolicyCache()
 	cfg1 := makeTestConfig()
-	cfg2 := &config.NodeConfig{
+	cfg2 := &config.ThrallConfig{
 		MatchPattern: "*.db.example.com",
 		Modules: []config.ModuleConfig{
 			{Name: "pg", Resources: []config.ResourceConfig{{Name: "conf", Type: "file"}}},

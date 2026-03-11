@@ -21,7 +21,7 @@ type AgentService struct {
 	runStore       db.RunStore
 	dispatcher     *webhook.Dispatcher
 	traitsScanner   *traits.Scanner
-	nodeCache      *db.NodeCache
+	thrallCache    *db.ThrallCache
 	lastSeenBatch  *db.LastSeenBatcher
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache

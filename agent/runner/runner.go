@@ -346,7 +346,7 @@ func evaluateAgentWhen(ctx context.Context, when string, traits map[string]any) 
 			if len(args) != 1 {
 				return false, fmt.Errorf("flag_set requires exactly 1 argument")
 			}
-			flagPath := filepath.Join("/etc/hobnob-node/flags", args[0])
+			flagPath := filepath.Join("/etc/hobnob-thrall/flags", args[0])
 			_, err := os.Stat(flagPath)
 			return err == nil, nil
 

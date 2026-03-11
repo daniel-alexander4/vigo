@@ -67,22 +67,22 @@ func setupLogger() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 }
 
-// loadNodeID reads the node UUID from <data-dir>/client.uuid.
+// loadThrallID reads the thrall UUID from <data-dir>/client.uuid.
 func loadNodeID() (string, error) {
 	data, err := os.ReadFile(dataDir + "/client.uuid")
 	if err != nil {
-		return "", fmt.Errorf("read node UUID from %s/client.uuid: %w (have you run 'hobnob register'?)", dataDir, err)
+		return "", fmt.Errorf("read thrall UUID from %s/client.uuid: %w (have you run 'hobnob register'?)", dataDir, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
 
-// saveNodeID writes the node UUID to <data-dir>/client.uuid.
+// saveThrallID writes the thrall UUID to <data-dir>/client.uuid.
 func saveNodeID(id string) error {
 	return os.WriteFile(dataDir+"/client.uuid", []byte(id+"\n"), 0600)
 }
 
 // saveSpokeAddr writes the spoke gRPC address to <data-dir>/spoke.addr.
-// If addr is empty, the file is removed (node connects to the default server).
+// If addr is empty, the file is removed (thrall connects to the default server).
 func saveSpokeAddr(addr string) error {
 	path := dataDir + "/spoke.addr"
 	if addr == "" {
@@ -209,7 +209,7 @@ func loadCustomExecutors(executors map[string]modules.Executor, dir string) {
 // newGRPCClient creates a gRPC client with the configured TLS settings.
 // If explicit cert/key/ca flags are empty, it checks for bootstrap-issued certs
 // in the data directory.
-func newGRPCClient(nodeID string, privateKey []byte) (*checkin.Client, error) {
+func newGRPCClient(thrallID string, privateKey []byte) (*checkin.Client, error) {
 	ca, cert, key := caFile, certFile, keyFile
 	if ca == "" && auth.HasBootstrapCerts(dataDir) {
 		ca = auth.CACertPath(dataDir)
@@ -222,7 +222,7 @@ func newGRPCClient(nodeID string, privateKey []byte) (*checkin.Client, error) {
 		addr = spokeAddr
 		slog.Info("using spoke address from enrollment routing", "spoke_addr", addr)
 	}
-	return checkin.NewClient(addr, ca, cert, key, nodeID, privateKey)
+	return checkin.NewClient(addr, ca, cert, key, thrallID, privateKey)
 }
 
 // signalContext returns a context that is cancelled on SIGINT or SIGTERM.
@@ -262,14 +262,14 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("load or generate keypair: %w", err)
 		}
 
-		// Load node UUID.
-		nodeID, err := loadNodeID()
+		// Load thrall UUID.
+		thrallID, err := loadNodeID()
 		if err != nil {
 			return err
 		}
 
 		// Create gRPC client.
-		client, err := newGRPCClient(nodeID, priv)
+		client, err := newGRPCClient(thrallID, priv)
 		if err != nil {
 			return fmt.Errorf("create gRPC client: %w", err)
 		}
@@ -424,14 +424,14 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("load or generate keypair: %w", err)
 		}
 
-		// Load node UUID.
-		nodeID, err := loadNodeID()
+		// Load thrall UUID.
+		thrallID, err := loadNodeID()
 		if err != nil {
 			return err
 		}
 
 		// Create gRPC client.
-		client, err := newGRPCClient(nodeID, priv)
+		client, err := newGRPCClient(thrallID, priv)
 		if err != nil {
 			return fmt.Errorf("create gRPC client: %w", err)
 		}
@@ -483,7 +483,7 @@ var registerCmd = &cobra.Command{
 			"data_dir", dataDir,
 		)
 
-		// Create gRPC client (no node UUID yet, use empty string).
+		// Create gRPC client (no thrall UUID yet, use empty string).
 		client, err := checkin.NewClient(server, caFile, certFile, keyFile, "", priv)
 		if err != nil {
 			return fmt.Errorf("create gRPC client: %w", err)
@@ -500,9 +500,9 @@ var registerCmd = &cobra.Command{
 			return fmt.Errorf("registration rejected: %s\n\nhint: check that the token is valid and unused, and that the hostname %q matches an approved pattern", resp.Message, hostname)
 		}
 
-		// Save node UUID.
-		if err := saveNodeID(resp.NodeId); err != nil {
-			return fmt.Errorf("save node UUID: %w", err)
+		// Save thrall UUID.
+		if err := saveNodeID(resp.ThrallId); err != nil {
+			return fmt.Errorf("save thrall UUID: %w", err)
 		}
 
 		// Save spoke address if hub routed us to a spoke.
@@ -516,7 +516,7 @@ var registerCmd = &cobra.Command{
 		}
 
 		logger.Info("registration successful",
-			"node_id", resp.NodeId,
+			"thrall_id", resp.ThrallId,
 			"message", resp.Message,
 		)
 
@@ -586,7 +586,7 @@ After bootstrap, the agent has everything it needs to connect via mTLS.`,
 			Token     string `json:"token,omitempty"`
 		}
 		type registerResp struct {
-			NodeID        string `json:"node_id"`
+			ThrallID        string `json:"thrall_id"`
 			SignedCertPEM string `json:"signed_cert_pem"`
 			CACertPEM     string `json:"ca_cert_pem"`
 		}
@@ -628,12 +628,12 @@ After bootstrap, the agent has everything it needs to connect via mTLS.`,
 		if err := auth.SaveCACert(dataDir, []byte(resp.CACertPEM)); err != nil {
 			return fmt.Errorf("save CA cert: %w", err)
 		}
-		if err := saveNodeID(resp.NodeID); err != nil {
-			return fmt.Errorf("save node UUID: %w", err)
+		if err := saveNodeID(resp.ThrallID); err != nil {
+			return fmt.Errorf("save thrall UUID: %w", err)
 		}
 
 		logger.Info("bootstrap successful",
-			"node_id", resp.NodeID,
+			"thrall_id", resp.ThrallID,
 			"tls_cert", auth.TLSCertPath(dataDir),
 			"ca_cert", auth.CACertPath(dataDir),
 		)
@@ -650,11 +650,11 @@ After bootstrap, the agent has everything it needs to connect via mTLS.`,
 
 			// Verify connectivity with a single check-in before exiting.
 			logger.Info("verifying agent check-in...")
-			if err := verifyCheckIn(ctx, grpcAddr, dataDir, resp.NodeID); err != nil {
+			if err := verifyCheckIn(ctx, grpcAddr, dataDir, resp.ThrallID); err != nil {
 				logger.Warn("verification check-in failed", "error", err)
 				fmt.Fprintf(os.Stderr, "Check-in verification failed: %v\nThe service is installed but may not be able to reach the server.\n", err)
 			} else {
-				logger.Info("check-in verified, hobnob-node service is running")
+				logger.Info("check-in verified, hobnob-thrall service is running")
 			}
 		}
 
@@ -738,15 +738,15 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 `, installPath, grpcAddr, dataDir)
 
-	if err := os.WriteFile("/etc/systemd/system/hobnob-node.service", []byte(unit), 0644); err != nil {
+	if err := os.WriteFile("/etc/systemd/system/hobnob-thrall.service", []byte(unit), 0644); err != nil {
 		return "", fmt.Errorf("writing unit file: %w", err)
 	}
 
 	// daemon-reload, enable, start.
 	for _, args := range [][]string{
 		{"systemctl", "daemon-reload"},
-		{"systemctl", "enable", "hobnob-node"},
-		{"systemctl", "start", "hobnob-node"},
+		{"systemctl", "enable", "hobnob-thrall"},
+		{"systemctl", "start", "hobnob-thrall"},
 	} {
 		c := exec.Command(args[0], args[1:]...)
 		c.Stdout = os.Stdout
@@ -757,13 +757,13 @@ WantedBy=multi-user.target
 	}
 
 	fmt.Println("Hobnob agent service installed and started.")
-	fmt.Println("  systemctl status hobnob-node    # check status")
-	fmt.Println("  journalctl -u hobnob-node -f    # follow logs")
+	fmt.Println("  systemctl status hobnob-thrall    # check status")
+	fmt.Println("  journalctl -u hobnob-thrall -f    # follow logs")
 	return grpcAddr, nil
 }
 
 // verifyCheckIn does a single gRPC check-in to confirm the agent can reach the server.
-func verifyCheckIn(ctx context.Context, grpcAddr, dataDir, nodeID string) error {
+func verifyCheckIn(ctx context.Context, grpcAddr, dataDir, thrallID string) error {
 	_, privKey, err := auth.LoadOrGenerate(dataDir)
 	if err != nil {
 		return fmt.Errorf("loading keypair: %w", err)
@@ -774,7 +774,7 @@ func verifyCheckIn(ctx context.Context, grpcAddr, dataDir, nodeID string) error 
 		auth.CACertPath(dataDir),
 		auth.TLSCertPath(dataDir),
 		auth.TLSKeyPath(dataDir),
-		nodeID,
+		thrallID,
 		privKey,
 	)
 	if err != nil {
@@ -790,14 +790,14 @@ func verifyCheckIn(ctx context.Context, grpcAddr, dataDir, nodeID string) error 
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/hobnob-node", "directory for agent data (keypair, UUID, certs)")
+	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/etc/hobnob-thrall", "directory for agent data (keypair, UUID, certs)")
 	rootCmd.PersistentFlags().StringVar(&server, "server", "localhost:1530", "server gRPC address")
 	rootCmd.PersistentFlags().StringVar(&caFile, "ca-file", "", "CA certificate file for server verification")
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "client certificate file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "client key file for mTLS (optional in dev)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().StringVar(&apiAddr, "api-addr", "http://localhost:8181", "server REST API address for self-update")
-	rootCmd.PersistentFlags().StringVar(&executorsDir, "executors-dir", "/etc/hobnob-node/executors", "directory for custom executor scripts")
+	rootCmd.PersistentFlags().StringVar(&executorsDir, "executors-dir", "/etc/hobnob-thrall/executors", "directory for custom executor scripts")
 	rootCmd.PersistentFlags().StringVar(&snapshotDir, "snapshot-dir", "/var/lib/hobnob/snapshots", "directory for file snapshots (rollback)")
 	rootCmd.PersistentFlags().IntVar(&snapshotRetention, "snapshot-retention", 5, "max snapshots to keep per file path")
 	rootCmd.PersistentFlags().IntVar(&traitRefreshCycles, "trait-refresh-cycles", 10, "stable trait collectors refresh every N check-in cycles")

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// TraitsPruner accumulates node IDs that had traits inserted and
+// TraitsPruner accumulates thrall IDs that had traits inserted and
 // periodically prunes old trait snapshots, removing per-check-in DELETE
 // latency from the hot path.
 type TraitsPruner struct {
@@ -24,7 +24,7 @@ func NewTraitsPruner(queries *Queries) *TraitsPruner {
 	}
 }
 
-// Mark records a node as needing trait pruning.
+// Mark records a thrall as needing trait pruning.
 func (p *TraitsPruner) Mark(id string) {
 	p.mu.Lock()
 	p.pending[id] = struct{}{}
@@ -47,7 +47,7 @@ func (p *TraitsPruner) Start(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// Flush prunes trait snapshots for all pending nodes and clears the set.
+// Flush prunes trait snapshots for all pending thralls and clears the set.
 func (p *TraitsPruner) Flush(ctx context.Context) {
 	p.mu.Lock()
 	if len(p.pending) == 0 {
@@ -59,11 +59,11 @@ func (p *TraitsPruner) Flush(ctx context.Context) {
 	p.mu.Unlock()
 
 	for id := range batch {
-		if err := p.queries.PruneNodeTraits(ctx, PruneNodeTraitsParams{
-			NodeID:   id,
-			NodeID_2: id,
+		if err := p.queries.PruneThrallTraits(ctx, PruneThrallTraitsParams{
+			ThrallID:   id,
+			ThrallID_2: id,
 		}); err != nil {
-			slog.Error("failed to prune node traits", "node_id", id, "error", err)
+			slog.Error("failed to prune thrall traits", "thrall_id", id, "error", err)
 		}
 	}
 }

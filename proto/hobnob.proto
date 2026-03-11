@@ -61,36 +61,36 @@ service HobnobAdmin {
     };
   }
 
-  // ListNodes lists all enrolled nodes.
-  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse) {
+  // ListThralls lists all enrolled thralls.
+  rpc ListThralls(ListThrallsRequest) returns (ListThrallsResponse) {
     option (google.api.http) = {
-      get: "/api/v1/nodes"
+      get: "/api/v1/thralls"
     };
   }
 
-  // GetNode returns details for a single node.
-  rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {
+  // GetThrall returns details for a single thrall.
+  rpc GetThrall(GetThrallRequest) returns (GetThrallResponse) {
     option (google.api.http) = {
-      get: "/api/v1/nodes/{id}"
+      get: "/api/v1/thralls/{id}"
     };
   }
 
-  // RevokeNode revokes an enrolled node, blocking future check-ins.
-  rpc RevokeNode(RevokeNodeRequest) returns (RevokeNodeResponse) {
+  // RevokeThrall revokes an enrolled thrall, blocking future check-ins.
+  rpc RevokeThrall(RevokeThrallRequest) returns (RevokeThrallResponse) {
     option (google.api.http) = {
-      post: "/api/v1/nodes/{id}/revoke"
+      post: "/api/v1/thralls/{id}/revoke"
       body: "*"
     };
   }
 
-  // DeleteNode permanently removes a node and all its history from the database.
-  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse) {
+  // DeleteThrall permanently removes a thrall and all its history from the database.
+  rpc DeleteThrall(DeleteThrallRequest) returns (DeleteThrallResponse) {
     option (google.api.http) = {
-      delete: "/api/v1/nodes/{id}"
+      delete: "/api/v1/thralls/{id}"
     };
   }
 
-  // ForcePush triggers an immediate check-in for a node or all nodes.
+  // ForcePush triggers an immediate check-in for a thrall or all thralls.
   rpc ForcePush(ForcePushRequest) returns (ForcePushResponse) {
     option (google.api.http) = {
       post: "/api/v1/push"
@@ -101,12 +101,12 @@ service HobnobAdmin {
   // DryRun computes a plan without applying changes.
   rpc DryRun(DryRunRequest) returns (DryRunResponse) {
     option (google.api.http) = {
-      post: "/api/v1/nodes/{node_id}/dry-run"
+      post: "/api/v1/thralls/{thrall_id}/dry-run"
       body: "*"
     };
   }
 
-  // ListRuns lists recent runs, optionally filtered by node.
+  // ListRuns lists recent runs, optionally filtered by thrall.
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse) {
     option (google.api.http) = {
       get: "/api/v1/runs"
@@ -150,29 +150,29 @@ service HobnobAdmin {
     };
   }
 
-  // GetComplianceSummary returns aggregate compliance status across all nodes.
+  // GetComplianceSummary returns aggregate compliance status across all thralls.
   rpc GetComplianceSummary(GetComplianceSummaryRequest) returns (GetComplianceSummaryResponse) {
     option (google.api.http) = {
       get: "/api/v1/compliance"
     };
   }
 
-  // GetNodeCompliance returns compliance details for a single node.
-  rpc GetNodeCompliance(GetNodeComplianceRequest) returns (GetNodeComplianceResponse) {
+  // GetThrallCompliance returns compliance details for a single thrall.
+  rpc GetThrallCompliance(GetThrallComplianceRequest) returns (GetThrallComplianceResponse) {
     option (google.api.http) = {
-      get: "/api/v1/nodes/{id}/compliance"
+      get: "/api/v1/thralls/{id}/compliance"
     };
   }
 
-  // Rollback reverts a node to a previous run's state.
+  // Rollback reverts a thrall to a previous run's state.
   rpc Rollback(RollbackRequest) returns (RollbackResponse) {
     option (google.api.http) = {
-      post: "/api/v1/nodes/{node_id}/rollback"
+      post: "/api/v1/thralls/{thrall_id}/rollback"
       body: "*"
     };
   }
 
-  // ListPackages lists package audit records, optionally filtered by node.
+  // ListPackages lists package audit records, optionally filtered by thrall.
   rpc ListPackages(ListPackagesRequest) returns (ListPackagesResponse) {
     option (google.api.http) = {
       get: "/api/v1/packages"
@@ -194,10 +194,10 @@ service HobnobAdmin {
     };
   }
 
-  // EnrollNode creates a node record directly (hub→spoke internal RPC).
+  // EnrollThrall creates a thrall record directly (hub→spoke internal RPC).
   // Used during enrollment routing: the hub validates the token, then calls
-  // this on the target spoke to create the node without token re-validation.
-  rpc EnrollNode(EnrollNodeRequest) returns (EnrollNodeResponse);
+  // this on the target spoke to create the thrall without token re-validation.
+  rpc EnrollThrall(EnrollThrallRequest) returns (EnrollThrallResponse);
 }
 
 // =============================================================================
@@ -213,13 +213,13 @@ message RegisterRequest {
 
 message RegisterResponse {
   bool success = 1;
-  string node_id = 2;       // UUID assigned by the server
+  string thrall_id = 2;       // UUID assigned by the server
   string message = 3;
   string spoke_addr = 4;    // if set, agent should connect to this spoke for check-ins
 }
 
 message CheckInRequest {
-  string node_id = 1;
+  string thrall_id = 1;
   string state_fingerprint = 2;
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
@@ -285,7 +285,7 @@ message PolicyBundle {
   repeated CustomTraitEntry custom_traits = 6;
 
   // Trace fields for dry-run resolution visibility.
-  string matched_pattern = 7;          // node entry match pattern from nodes.hnb
+  string matched_pattern = 7;          // thrall entry match pattern from thralls.hnb
   string environment = 8;             // resolved environment
   repeated string roles = 9;          // role names that were expanded
 }
@@ -322,7 +322,7 @@ message ConditionalVarDef {
 
 message ReportResultRequest {
   string run_id = 1;
-  string node_id = 2;
+  string thrall_id = 2;
   repeated ModuleResult results = 3;
   bytes signature = 4;
   google.protobuf.Timestamp timestamp = 5;
@@ -343,7 +343,7 @@ message ReportResultResponse {
 }
 
 message ReportTraitsRequest {
-  string node_id = 1;
+  string thrall_id = 1;
   bytes traits_json = 2;       // JSON-encoded traits map
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
@@ -413,7 +413,7 @@ message ApprovedPattern {
   string pattern = 2;
   google.protobuf.Timestamp created_at = 3;
   bool used = 4;
-  string used_by = 5;          // node UUID if used
+  string used_by = 5;          // thrall UUID if used
 }
 
 message RevokeApprovedPatternRequest {
@@ -422,13 +422,13 @@ message RevokeApprovedPatternRequest {
 
 message RevokeApprovedPatternResponse {}
 
-message ListNodesRequest {}
+message ListThrallsRequest {}
 
-message ListNodesResponse {
-  repeated Node nodes = 1;
+message ListThrallsResponse {
+  repeated Thrall thralls = 1;
 }
 
-message Node {
+message Thrall {
   string id = 1;
   string hostname = 2;
   string ip_address = 3;
@@ -438,36 +438,36 @@ message Node {
   google.protobuf.Timestamp revoked_at = 7;
 }
 
-message GetNodeRequest {
+message GetThrallRequest {
   string id = 1;
 }
 
-message GetNodeResponse {
-  Node node = 1;
+message GetThrallResponse {
+  Thrall thrall = 1;
 }
 
-message RevokeNodeRequest {
+message RevokeThrallRequest {
   string id = 1;
 }
 
-message RevokeNodeResponse {}
+message RevokeThrallResponse {}
 
-message DeleteNodeRequest {
+message DeleteThrallRequest {
   string id = 1;
 }
 
-message DeleteNodeResponse {}
+message DeleteThrallResponse {}
 
 message ForcePushRequest {
-  string node_id = 1;         // empty = all nodes
+  string thrall_id = 1;         // empty = all thralls
 }
 
 message ForcePushResponse {
-  int32 nodes_notified = 1;
+  int32 thralls_notified = 1;
 }
 
 message DryRunRequest {
-  string node_id = 1;
+  string thrall_id = 1;
 }
 
 message DryRunResponse {
@@ -482,7 +482,7 @@ message PlannedAction {
 }
 
 message ListRunsRequest {
-  string node_id = 1;         // optional filter
+  string thrall_id = 1;         // optional filter
   int32 limit = 2;            // default 20
 }
 
@@ -492,7 +492,7 @@ message ListRunsResponse {
 
 message Run {
   string id = 1;
-  string node_id = 2;
+  string thrall_id = 2;
   google.protobuf.Timestamp started_at = 3;
   google.protobuf.Timestamp finished_at = 4;
   string status = 5;          // running, success, failure, partial
@@ -567,11 +567,11 @@ message GetComplianceSummaryResponse {
   float compliance_pct = 7;
 }
 
-message GetNodeComplianceRequest {
+message GetThrallComplianceRequest {
   string id = 1;
 }
 
-message GetNodeComplianceResponse {
+message GetThrallComplianceResponse {
   string status = 1;
   Run last_run = 2;
   repeated ComplianceSnapshot history = 3;
@@ -592,7 +592,7 @@ message ComplianceSnapshot {
 // =============================================================================
 
 message RollbackRequest {
-  string node_id = 1;
+  string thrall_id = 1;
   string run_id = 2;            // optional: rollback to specific run
   string file_path = 3;         // optional: rollback a single file
 }
@@ -607,7 +607,7 @@ message RollbackResponse {
 // =============================================================================
 
 message ListPackagesRequest {
-  string node_id = 1;           // optional filter
+  string thrall_id = 1;           // optional filter
 }
 
 message ListPackagesResponse {
@@ -621,7 +621,7 @@ message ListPackageDriftResponse {
 }
 
 message PackageInfo {
-  string node_id = 1;
+  string thrall_id = 1;
   string hostname = 2;
   string package_name = 3;
   string installed_version = 4;
@@ -629,7 +629,7 @@ message PackageInfo {
 }
 
 message PackageDrift {
-  string node_id = 1;
+  string thrall_id = 1;
   string hostname = 2;
   string package_name = 3;
   string installed_version = 4;
@@ -656,12 +656,12 @@ message PromoteEnvResponse {
 // Enrollment routing messages (hub→spoke internal)
 // =============================================================================
 
-message EnrollNodeRequest {
+message EnrollThrallRequest {
   string hostname = 1;
   string ip_address = 2;
   string pubkey_pem = 3;
 }
 
-message EnrollNodeResponse {
-  string node_id = 1;
+message EnrollThrallResponse {
+  string thrall_id = 1;
 }

@@ -1,11 +1,11 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/nodes">Nodes</a> &rsaquo; {{.Hostname}} &rsaquo; Plan
+        <a href="/thralls">Thralls</a> &rsaquo; {{.Hostname}} &rsaquo; Plan
     </div>
     <h1>Plan {{truncUUID .PlanID}}</h1>
     <p>
-        Node: <a href="/nodes/{{.NodeID}}">{{.Hostname}}</a>
+        Thrall: <a href="/thralls/{{.ThrallID}}">{{.Hostname}}</a>
         &middot; Created: {{formatTime .CreatedAt}}
     </p>
 </div>

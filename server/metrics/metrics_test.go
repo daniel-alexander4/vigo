@@ -53,8 +53,8 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	ModuleActions.WithLabelValues("file", "create").Inc()
 
 	// Verify gauges can be set.
-	NodesTotal.Set(5)
-	NodesActive.Set(3)
+	ThrallsTotal.Set(5)
+	ThrallsActive.Set(3)
 	CompliancePct.Set(0.85)
 	ComplianceStatus.WithLabelValues("testnode", "compliant").Set(1)
 	TimeSinceCheckin.WithLabelValues("testnode").Set(30.0)

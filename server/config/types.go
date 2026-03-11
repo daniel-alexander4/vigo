@@ -1,4 +1,4 @@
-// Package config handles loading, watching, and resolving per-node
+// Package config handles loading, watching, and resolving per-thrall
 // configuration from YAML files on disk. It integrates with the secrets
 // provider to resolve "secret:" prefixes and supports hot-reload via fsnotify.
 package config
@@ -21,7 +21,7 @@ const (
 	// Handles UI, webhooks, bootstrap, and aggregates data from spokes.
 	RoleHub FederationRole = "hub"
 	// RoleSpoke is a partition server handling agent check-ins for a
-	// subset of nodes. Disables webhooks, bootstrap, and secret watcher.
+	// subset of thralls. Disables webhooks, bootstrap, and secret watcher.
 	RoleSpoke FederationRole = "spoke"
 )
 
@@ -86,13 +86,13 @@ type ServerConfig struct {
 // and default to sensible values when omitted from server.yaml.
 type TuningSection struct {
 	SignatureWindow     string        `yaml:"signature_window"`      // default "5m"
-	NodeCacheTTL        string        `yaml:"node_cache_ttl"`        // default "60s"
+	ThrallCacheTTL        string        `yaml:"thrall_cache_ttl"`      // default "60s"
 	LastSeenFlush       string        `yaml:"last_seen_flush"`       // default "10s"
 	TraitsPruneInterval string        `yaml:"traits_prune_interval"` // default "5m"
 	MetricsInterval     string        `yaml:"metrics_interval"`      // default "30s"
 	TraitsScannerTTL    string        `yaml:"traits_scanner_ttl"`    // default "30s"
 	RunStore            string        `yaml:"run_store"`             // "database" (default) or "memory"
-	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-node run history depth for memory mode (default 20)
+	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-thrall run history depth for memory mode (default 20)
 	Webhook             WebhookTuning `yaml:"webhook"`
 }
 
@@ -126,7 +126,7 @@ type TLSConfig struct {
 }
 
 // TrustedEnrollment defines a hostname/CIDR pattern for token-free enrollment.
-// Nodes matching the pattern and originating from an allowed CIDR are enrolled
+// Thralls matching the pattern and originating from an allowed CIDR are enrolled
 // without a one-time token (Puppet-style autosigning).
 type TrustedEnrollment struct {
 	Pattern string   `yaml:"pattern"`
@@ -157,11 +157,11 @@ type ConditionalBlock struct {
 	Resources []ResourceConfig `yaml:"resources"`
 }
 
-// NodeConfig represents the resolved per-node configuration.
+// ThrallConfig represents the resolved per-thrall configuration.
 // This is the output type returned by ConfigStore.Get().
-type NodeConfig struct {
-	Node            string                    `yaml:"node"`
-	MatchPattern    string                    `yaml:"-"` // original match pattern from nodes.hnb
+type ThrallConfig struct {
+	Thrall          string                    `yaml:"thrall"`
+	MatchPattern    string                    `yaml:"-"` // original match pattern from thralls.hnb
 	Environment     string                    `yaml:"environment"`
 	Roles           []string                  `yaml:"-"` // role names that were expanded
 	Modules         []ModuleConfig            `yaml:"modules"`
@@ -171,7 +171,7 @@ type NodeConfig struct {
 	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
 }
 
-// ModuleConfig describes a module assigned to a node.
+// ModuleConfig describes a module assigned to a thrall.
 type ModuleConfig struct {
 	Name        string           `yaml:"name"`
 	DependsOn   []string         `yaml:"depends_on"`
@@ -250,7 +250,7 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// ModuleRef is a reference to a module in a role or node entry. It supports
+// ModuleRef is a reference to a module in a role or thrall entry. It supports
 // two YAML forms:
 //
 //	modules: [nginx]               # plain string -> ModuleRef{Name: "nginx"}
@@ -290,10 +290,10 @@ type RoleDefinition struct {
 	Modules []ModuleRef `yaml:"modules"`
 }
 
-// NodeEntry is a single entry in nodes.hnb. It has a custom UnmarshalYAML
+// ThrallEntry is a single entry in thralls.hnb. It has a custom UnmarshalYAML
 // that merges duplicate 'modules' and 'roles' keys (standard YAML would
 // silently keep only the last value).
-type NodeEntry struct {
+type ThrallEntry struct {
 	Match       string                    `yaml:"match"`
 	Environment string                    `yaml:"environment"`
 	Roles       []string                  `yaml:"roles"`
@@ -302,12 +302,12 @@ type NodeEntry struct {
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler for NodeEntry. It walks the
+// UnmarshalYAML implements yaml.Unmarshaler for ThrallEntry. It walks the
 // mapping manually so duplicate 'modules' and 'roles' keys are merged
 // instead of the last one winning.
-func (n *NodeEntry) UnmarshalYAML(value *yaml.Node) error {
+func (n *ThrallEntry) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("NodeEntry: expected mapping, got %v", value.Kind)
+		return fmt.Errorf("ThrallEntry: expected mapping, got %v", value.Kind)
 	}
 	for i := 0; i < len(value.Content)-1; i += 2 {
 		key := value.Content[i].Value
@@ -346,7 +346,7 @@ func (n *NodeEntry) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// NodesConfig is the top-level structure of nodes.hnb.
-type NodesConfig struct {
-	Nodes []NodeEntry `yaml:"nodes"`
+// ThrallsConfig is the top-level structure of thralls.hnb.
+type ThrallsConfig struct {
+	Thralls []ThrallEntry `yaml:"thralls"`
 }

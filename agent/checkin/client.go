@@ -24,7 +24,7 @@ import (
 type Client struct {
 	conn       *grpc.ClientConn
 	agent      pb.HobnobAgentClient
-	nodeID     string
+	thrallID     string
 	privateKey ed25519.PrivateKey
 }
 
@@ -32,7 +32,7 @@ type Client struct {
 // It loads TLS credentials for mTLS. If clientCertFile is empty, it connects
 // with only CA verification (dev mode) -- the server's signature interceptor
 // provides real auth via ED25519.
-func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, nodeID string, privateKey ed25519.PrivateKey) (*Client, error) {
+func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, thrallID string, privateKey ed25519.PrivateKey) (*Client, error) {
 	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, fmt.Errorf("read CA cert: %w", err)
@@ -66,7 +66,7 @@ func NewClient(serverAddr, caFile, clientCertFile, clientKeyFile, nodeID string,
 	return &Client{
 		conn:       conn,
 		agent:      pb.NewHobnobAgentClient(conn),
-		nodeID:     nodeID,
+		thrallID:     thrallID,
 		privateKey: privateKey,
 	}, nil
 }
@@ -83,7 +83,7 @@ func (c *Client) CheckIn(ctx context.Context, stateFingerprint string, traitsJSO
 	sig := auth.SignPayload([]byte(stateFingerprint), ts, c.privateKey)
 
 	resp, err := c.agent.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:             c.nodeID,
+		ThrallId:             c.thrallID,
 		StateFingerprint:   stateFingerprint,
 		Signature:          sig,
 		Timestamp:          timestamppb.New(now),
@@ -121,7 +121,7 @@ func (c *Client) ReportResult(ctx context.Context, runID string, results []*pb.M
 
 	_, err := c.agent.ReportResult(ctx, &pb.ReportResultRequest{
 		RunId:     runID,
-		NodeId:    c.nodeID,
+		ThrallId:    c.thrallID,
 		Results:   results,
 		Signature: sig,
 		Timestamp: timestamppb.New(now),
@@ -145,7 +145,7 @@ func (c *Client) ReportTraits(ctx context.Context, traitsMap map[string]any) err
 	sig := auth.SignPayload(traitsJSON, ts, c.privateKey)
 
 	_, err = c.agent.ReportTraits(ctx, &pb.ReportTraitsRequest{
-		NodeId:    c.nodeID,
+		ThrallId:    c.thrallID,
 		TraitsJson: traitsJSON,
 		Signature: sig,
 		Timestamp: timestamppb.New(now),
@@ -178,7 +178,7 @@ func (c *Client) BuildCheckInRequest(stateFingerprint string, traitsJSON []byte,
 	sig := auth.SignPayload([]byte(stateFingerprint), ts, c.privateKey)
 
 	return &pb.CheckInRequest{
-		NodeId:             c.nodeID,
+		ThrallId:             c.thrallID,
 		StateFingerprint:   stateFingerprint,
 		Signature:          sig,
 		Timestamp:          timestamppb.New(now),
@@ -198,7 +198,7 @@ func (c *Client) BuildReportResultRequest(runID string, results []*pb.ModuleResu
 
 	return &pb.ReportResultRequest{
 		RunId:     runID,
-		NodeId:    c.nodeID,
+		ThrallId:    c.thrallID,
 		Results:   results,
 		Signature: sig,
 		Timestamp: timestamppb.New(now),

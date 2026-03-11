@@ -40,7 +40,7 @@ type EnvPromotion struct {
 
 type FileSnapshot struct {
 	ID          string         `json:"id"`
-	NodeID      string         `json:"node_id"`
+	ThrallID    string         `json:"thrall_id"`
 	FilePath    string         `json:"file_path"`
 	ContentHash string         `json:"content_hash"`
 	Content     []byte         `json:"content"`
@@ -48,28 +48,9 @@ type FileSnapshot struct {
 	RunID       sql.NullString `json:"run_id"`
 }
 
-type Node struct {
-	ID         string       `json:"id"`
-	Hostname   string       `json:"hostname"`
-	IpAddress  string       `json:"ip_address"`
-	PubkeyPem  string       `json:"pubkey_pem"`
-	EnrolledAt time.Time    `json:"enrolled_at"`
-	LastSeen   sql.NullTime `json:"last_seen"`
-	Revoked    int64        `json:"revoked"`
-	RevokedAt  sql.NullTime `json:"revoked_at"`
-	ForcePush  int64        `json:"force_push"`
-}
-
-type NodeTrait struct {
-	ID          string    `json:"id"`
-	NodeID      string    `json:"node_id"`
-	Traits      string    `json:"traits"`
-	CollectedAt time.Time `json:"collected_at"`
-}
-
 type PackageAudit struct {
 	ID               string         `json:"id"`
-	NodeID           string         `json:"node_id"`
+	ThrallID         string         `json:"thrall_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -78,7 +59,7 @@ type PackageAudit struct {
 
 type Plan struct {
 	ID        string    `json:"id"`
-	NodeID    string    `json:"node_id"`
+	ThrallID  string    `json:"thrall_id"`
 	CreatedAt time.Time `json:"created_at"`
 	Modules   string    `json:"modules"`
 }
@@ -94,7 +75,7 @@ type PlanResult struct {
 
 type Run struct {
 	ID           string       `json:"id"`
-	NodeID       string       `json:"node_id"`
+	ThrallID     string       `json:"thrall_id"`
 	StartedAt    time.Time    `json:"started_at"`
 	FinishedAt   sql.NullTime `json:"finished_at"`
 	Status       string       `json:"status"`
@@ -118,12 +99,31 @@ type RunResult struct {
 }
 
 type SecretRotationEvent struct {
-	ID            string         `json:"id"`
-	SecretPath    string         `json:"secret_path"`
-	OldVersion    sql.NullString `json:"old_version"`
-	NewVersion    sql.NullString `json:"new_version"`
-	RotatedAt     time.Time      `json:"rotated_at"`
-	AffectedNodes int64          `json:"affected_nodes"`
+	ID              string         `json:"id"`
+	SecretPath      string         `json:"secret_path"`
+	OldVersion      sql.NullString `json:"old_version"`
+	NewVersion      sql.NullString `json:"new_version"`
+	RotatedAt       time.Time      `json:"rotated_at"`
+	AffectedThralls int64          `json:"affected_thralls"`
+}
+
+type Thrall struct {
+	ID         string       `json:"id"`
+	Hostname   string       `json:"hostname"`
+	IpAddress  string       `json:"ip_address"`
+	PubkeyPem  string       `json:"pubkey_pem"`
+	EnrolledAt time.Time    `json:"enrolled_at"`
+	LastSeen   sql.NullTime `json:"last_seen"`
+	Revoked    int64        `json:"revoked"`
+	RevokedAt  sql.NullTime `json:"revoked_at"`
+	ForcePush  int64        `json:"force_push"`
+}
+
+type ThrallTrait struct {
+	ID          string    `json:"id"`
+	ThrallID    string    `json:"thrall_id"`
+	Traits      string    `json:"traits"`
+	CollectedAt time.Time `json:"collected_at"`
 }
 
 type Webhook struct {

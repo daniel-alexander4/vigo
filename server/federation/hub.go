@@ -1,6 +1,6 @@
 // Package federation provides hub-spoke coordination for federated deployments.
 // The Hub connects to spoke servers via gRPC and aggregates admin queries
-// (ListNodes, GetComplianceSummary, ListRuns, ForcePush) across all spokes.
+// (ListThralls, GetComplianceSummary, ListRuns, ForcePush) across all spokes.
 package federation
 
 import (
@@ -81,28 +81,28 @@ func (h *Hub) SpokeCount() int {
 	return len(h.spokes)
 }
 
-// AggregateListNodes fans out ListNodes to all spokes and merges results.
-func (h *Hub) AggregateListNodes(ctx context.Context) ([]*pb.Node, error) {
+// AggregateListThralls fans out ListThralls to all spokes and merges results.
+func (h *Hub) AggregateListThralls(ctx context.Context) ([]*pb.Thrall, error) {
 	type result struct {
-		nodes []*pb.Node
+		thralls []*pb.Thrall
 		err   error
 	}
 
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
-		resp, err := sc.admin.ListNodes(ctx, &pb.ListNodesRequest{})
+		resp, err := sc.admin.ListThralls(ctx, &pb.ListThrallsRequest{})
 		if err != nil {
 			return nil, err
 		}
-		return resp.Nodes, nil
+		return resp.Thralls, nil
 	})
 
-	var allNodes []*pb.Node
+	var allNodes []*pb.Thrall
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("spoke ListNodes failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("spoke ListThralls failed", "spoke_id", r.spokeID, "error", r.err)
 			continue
 		}
-		allNodes = append(allNodes, r.value.([]*pb.Node)...)
+		allNodes = append(allNodes, r.value.([]*pb.Thrall)...)
 	}
 	return allNodes, nil
 }
@@ -139,11 +139,11 @@ func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetCompliance
 }
 
 // AggregateListRuns fans out ListRuns to all spokes and merges results.
-// If nodeID is non-empty, only queries spokes (all of them — fan-out is cheap).
-func (h *Hub) AggregateListRuns(ctx context.Context, nodeID string, limit int32) ([]*pb.Run, error) {
+// If thrallID is non-empty, only queries spokes (all of them — fan-out is cheap).
+func (h *Hub) AggregateListRuns(ctx context.Context, thrallID string, limit int32) ([]*pb.Run, error) {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
 		resp, err := sc.admin.ListRuns(ctx, &pb.ListRunsRequest{
-			NodeId: nodeID,
+			ThrallId: thrallID,
 			Limit:  limit,
 		})
 		if err != nil {
@@ -163,15 +163,15 @@ func (h *Hub) AggregateListRuns(ctx context.Context, nodeID string, limit int32)
 	return allRuns, nil
 }
 
-// ForwardForcePush sends a ForcePush to all spokes (or targeted if nodeID
-// is non-empty). Returns total nodes notified across all spokes.
-func (h *Hub) ForwardForcePush(ctx context.Context, nodeID string) (int32, error) {
+// ForwardForcePush sends a ForcePush to all spokes (or targeted if thrallID
+// is non-empty). Returns total thralls notified across all spokes.
+func (h *Hub) ForwardForcePush(ctx context.Context, thrallID string) (int32, error) {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
-		resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{NodeId: nodeID})
+		resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{ThrallId: thrallID})
 		if err != nil {
 			return nil, err
 		}
-		return resp.NodesNotified, nil
+		return resp.ThrallsNotified, nil
 	})
 
 	var total int32
@@ -205,8 +205,8 @@ func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
 	return "", false
 }
 
-// EnrollOnSpoke creates a node record on the target spoke via the EnrollNode
-// admin RPC. Returns the node UUID assigned by the spoke.
+// EnrollOnSpoke creates a thrall record on the target spoke via the EnrollThrall
+// admin RPC. Returns the thrall UUID assigned by the spoke.
 func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress, pubkeyPEM string) (string, error) {
 	// Find the spoke connection by address.
 	var target *spokeConn
@@ -220,7 +220,7 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 		return "", fmt.Errorf("no spoke connection for address %s", spokeAddr)
 	}
 
-	resp, err := target.admin.EnrollNode(ctx, &pb.EnrollNodeRequest{
+	resp, err := target.admin.EnrollThrall(ctx, &pb.EnrollThrallRequest{
 		Hostname:  hostname,
 		IpAddress: ipAddress,
 		PubkeyPem: pubkeyPEM,
@@ -229,8 +229,8 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 		return "", fmt.Errorf("enroll on spoke %s: %w", target.id, err)
 	}
 
-	slog.Info("enrolled node on spoke", "spoke_id", target.id, "hostname", hostname, "node_id", resp.NodeId)
-	return resp.NodeId, nil
+	slog.Info("enrolled thrall on spoke", "spoke_id", target.id, "hostname", hostname, "node_id", resp.ThrallId)
+	return resp.ThrallId, nil
 }
 
 // fanOutResult holds the response from one spoke.

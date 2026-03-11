@@ -12,13 +12,13 @@ import (
 )
 
 const createPackageAudit = `-- name: CreatePackageAudit :one
-INSERT INTO package_audit (node_id, package_name, installed_version, desired_version)
+INSERT INTO package_audit (thrall_id, package_name, installed_version, desired_version)
 VALUES (?, ?, ?, ?)
-RETURNING id, node_id, package_name, installed_version, desired_version, detected_at
+RETURNING id, thrall_id, package_name, installed_version, desired_version, detected_at
 `
 
 type CreatePackageAuditParams struct {
-	NodeID           string         `json:"node_id"`
+	ThrallID         string         `json:"thrall_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -26,7 +26,7 @@ type CreatePackageAuditParams struct {
 
 func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAuditParams) (PackageAudit, error) {
 	row := q.db.QueryRowContext(ctx, createPackageAudit,
-		arg.NodeID,
+		arg.ThrallID,
 		arg.PackageName,
 		arg.InstalledVersion,
 		arg.DesiredVersion,
@@ -34,7 +34,7 @@ func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAudit
 	var i PackageAudit
 	err := row.Scan(
 		&i.ID,
-		&i.NodeID,
+		&i.ThrallID,
 		&i.PackageName,
 		&i.InstalledVersion,
 		&i.DesiredVersion,
@@ -44,17 +44,17 @@ func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAudit
 }
 
 const listAllPackageAudit = `-- name: ListAllPackageAudit :many
-SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
-       n.hostname
+SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+       t.hostname
 FROM package_audit pa
-JOIN nodes n ON n.id = pa.node_id
+JOIN thralls t ON t.id = pa.thrall_id
 ORDER BY pa.detected_at DESC
 LIMIT ?
 `
 
 type ListAllPackageAuditRow struct {
 	ID               string         `json:"id"`
-	NodeID           string         `json:"node_id"`
+	ThrallID         string         `json:"thrall_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -73,7 +73,7 @@ func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int64) ([]ListA
 		var i ListAllPackageAuditRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.NodeID,
+			&i.ThrallID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,
@@ -93,18 +93,18 @@ func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int64) ([]ListA
 	return items, nil
 }
 
-const listPackageAuditByNode = `-- name: ListPackageAuditByNode :many
-SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
-       n.hostname
+const listPackageAuditByThrall = `-- name: ListPackageAuditByThrall :many
+SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+       t.hostname
 FROM package_audit pa
-JOIN nodes n ON n.id = pa.node_id
-WHERE pa.node_id = ?
+JOIN thralls t ON t.id = pa.thrall_id
+WHERE pa.thrall_id = ?
 ORDER BY pa.detected_at DESC
 `
 
-type ListPackageAuditByNodeRow struct {
+type ListPackageAuditByThrallRow struct {
 	ID               string         `json:"id"`
-	NodeID           string         `json:"node_id"`
+	ThrallID         string         `json:"thrall_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -112,18 +112,18 @@ type ListPackageAuditByNodeRow struct {
 	Hostname         string         `json:"hostname"`
 }
 
-func (q *Queries) ListPackageAuditByNode(ctx context.Context, nodeID string) ([]ListPackageAuditByNodeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPackageAuditByNode, nodeID)
+func (q *Queries) ListPackageAuditByThrall(ctx context.Context, thrallID string) ([]ListPackageAuditByThrallRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPackageAuditByThrall, thrallID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPackageAuditByNodeRow{}
+	items := []ListPackageAuditByThrallRow{}
 	for rows.Next() {
-		var i ListPackageAuditByNodeRow
+		var i ListPackageAuditByThrallRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.NodeID,
+			&i.ThrallID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,
@@ -144,17 +144,17 @@ func (q *Queries) ListPackageAuditByNode(ctx context.Context, nodeID string) ([]
 }
 
 const listPackageDrift = `-- name: ListPackageDrift :many
-SELECT pa.id, pa.node_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
-       n.hostname
+SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+       t.hostname
 FROM package_audit pa
-JOIN nodes n ON n.id = pa.node_id
+JOIN thralls t ON t.id = pa.thrall_id
 WHERE (pa.installed_version != pa.desired_version OR (pa.installed_version IS NULL AND pa.desired_version IS NOT NULL) OR (pa.installed_version IS NOT NULL AND pa.desired_version IS NULL))
 ORDER BY pa.detected_at DESC
 `
 
 type ListPackageDriftRow struct {
 	ID               string         `json:"id"`
-	NodeID           string         `json:"node_id"`
+	ThrallID         string         `json:"thrall_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -173,7 +173,7 @@ func (q *Queries) ListPackageDrift(ctx context.Context) ([]ListPackageDriftRow, 
 		var i ListPackageDriftRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.NodeID,
+			&i.ThrallID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,

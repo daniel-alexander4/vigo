@@ -1,5 +1,5 @@
 // Package watcher polls isopass for secret version changes and triggers
-// force-push re-convergence for nodes whose configs reference rotated secrets.
+// force-push re-convergence for thralls whose configs reference rotated secrets.
 package watcher
 
 import (
@@ -16,16 +16,16 @@ type VersionProvider interface {
 	GetVersion(ctx context.Context, key string) (int, error)
 }
 
-// NodeStore resolves which node hostnames reference a given secret path.
-type NodeStore interface {
-	NodesReferencingSecret(secretPath string) []string
+// ThrallStore resolves which thrall hostnames reference a given secret path.
+type ThrallStore interface {
+	ThrallsReferencingSecret(secretPath string) []string
 }
 
 // DB abstracts the database operations needed by the watcher.
 type DB interface {
 	SetForcePush(ctx context.Context, id string) error
 	CreateSecretRotationEvent(ctx context.Context, params RotationRecord) error
-	GetNodeByHostname(ctx context.Context, hostname string) (string, error)
+	GetThrallByHostname(ctx context.Context, hostname string) (string, error)
 }
 
 // EventDispatcher fires webhook events for secret rotation.
@@ -38,16 +38,16 @@ type RotationRecord struct {
 	SecretPath      string
 	OldVersion      string
 	NewVersion      string
-	AffectedNodes int32
+	AffectedThralls int32
 }
 
 // Watcher polls isopass at a configurable interval and detects secret
-// version changes. When a rotation is detected, all nodes referencing
+// version changes. When a rotation is detected, all thralls referencing
 // that secret have their force_push flag set.
 type Watcher struct {
 	provider     VersionProvider
 	db           DB
-	configStore  NodeStore
+	configStore  ThrallStore
 	dispatcher   EventDispatcher
 	pollInterval time.Duration
 	watchPaths   []string
@@ -61,7 +61,7 @@ type Watcher struct {
 func NewWatcher(
 	provider VersionProvider,
 	db DB,
-	configStore NodeStore,
+	configStore ThrallStore,
 	dispatcher EventDispatcher,
 	pollInterval time.Duration,
 	watchPaths []string,
@@ -160,23 +160,23 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 		w.versions[path] = currentVersion
 		w.mu.Unlock()
 
-		// Identify affected nodes.
-		hostnames := w.configStore.NodesReferencingSecret(path)
+		// Identify affected thralls.
+		hostnames := w.configStore.ThrallsReferencingSecret(path)
 		var affectedIDs []string
 		for _, hostname := range hostnames {
-			nodeID, err := w.db.GetNodeByHostname(ctx, hostname)
+			thrallID, err := w.db.GetThrallByHostname(ctx, hostname)
 			if err != nil {
-				slog.Error("watcher: looking up node",
+				slog.Error("watcher: looking up thrall",
 					"hostname", hostname, "error", err)
 				continue
 			}
-			if nodeID == "" {
+			if thrallID == "" {
 				continue
 			}
-			affectedIDs = append(affectedIDs, nodeID)
+			affectedIDs = append(affectedIDs, thrallID)
 		}
 
-		// Set force-push flag for each affected node.
+		// Set force-push flag for each affected thrall.
 		for _, id := range affectedIDs {
 			if err := w.db.SetForcePush(ctx, id); err != nil {
 				slog.Error("watcher: setting force push",
@@ -189,7 +189,7 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 			SecretPath:      path,
 			OldVersion:      strconv.Itoa(lastVersion),
 			NewVersion:      strconv.Itoa(currentVersion),
-			AffectedNodes: int32(len(affectedIDs)),
+			AffectedThralls: int32(len(affectedIDs)),
 		}); err != nil {
 			slog.Error("watcher: recording rotation event",
 				"path", path, "error", err)

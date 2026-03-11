@@ -11,7 +11,7 @@ import (
 	"github.com/hobnob/hobnob/server/db"
 )
 
-// TraitsHandler serves the REST endpoint for node trait inspection.
+// TraitsHandler serves the REST endpoint for thrall trait inspection.
 type TraitsHandler struct {
 	queries *db.Queries
 }
@@ -29,7 +29,7 @@ func newTraitsHandlerWithDB(dbtx db.DBTX) *TraitsHandler {
 
 // RegisterRoutes registers the traits endpoint on the given mux.
 func (h *TraitsHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/nodes/{hostname}/traits", h.HandleGetTraits)
+	mux.HandleFunc("GET /api/v1/thralls/{hostname}/traits", h.HandleGetTraits)
 }
 
 // traitsResponse is the JSON envelope returned by the traits endpoint.
@@ -39,28 +39,28 @@ type traitsResponse struct {
 	Traits       json.RawMessage `json:"traits"`
 }
 
-// HandleGetTraits returns the latest collected traits for a node, looked up
-// by hostname. Returns 404 if the node doesn't exist or hasn't reported
+// HandleGetTraits returns the latest collected traits for a thrall, looked up
+// by hostname. Returns 404 if the thrall doesn't exist or hasn't reported
 // traits yet.
 func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) {
 	hostname := r.PathValue("hostname")
 	ctx := r.Context()
 
-	node, err := h.queries.GetNodeByHostname(ctx, hostname)
+	thrall, err := h.queries.GetThrallByHostname(ctx, hostname)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, fmt.Sprintf("node '%s' not found", hostname))
+			writeJSONError(w, http.StatusNotFound, fmt.Sprintf("thrall '%s' not found", hostname))
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	traits, err := h.queries.GetLatestNodeTraits(ctx, node.ID)
+	traits, err := h.queries.GetLatestThrallTraits(ctx, thrall.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeJSONError(w, http.StatusNotFound,
-				fmt.Sprintf("no traits available for '%s' -- node has not reported traits yet", hostname))
+				fmt.Sprintf("no traits available for '%s' -- thrall has not reported traits yet", hostname))
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal error")

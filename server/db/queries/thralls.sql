@@ -1,48 +1,48 @@
--- name: CreateNode :one
-INSERT INTO nodes (hostname, ip_address, pubkey_pem)
+-- name: CreateThrall :one
+INSERT INTO thralls (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
 RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push;
 
--- name: GetNodeByID :one
+-- name: GetThrallByID :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM nodes
+FROM thralls
 WHERE id = ?;
 
--- name: GetNodeByHostname :one
+-- name: GetThrallByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM nodes
+FROM thralls
 WHERE hostname = ?;
 
--- name: ListNodes :many
+-- name: ListThralls :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM nodes
+FROM thralls
 ORDER BY enrolled_at DESC;
 
--- name: RevokeNode :exec
-UPDATE nodes
+-- name: RevokeThrall :exec
+UPDATE thralls
 SET revoked = true, revoked_at = datetime('now')
 WHERE id = ?;
 
 -- name: UpdateLastSeen :exec
-UPDATE nodes
+UPDATE thralls
 SET last_seen = datetime('now')
 WHERE id = ?;
 
 -- name: SetForcePush :exec
-UPDATE nodes
+UPDATE thralls
 SET force_push = true
 WHERE id = ?;
 
 -- name: ClearForcePush :exec
-UPDATE nodes
+UPDATE thralls
 SET force_push = false
 WHERE id = ?;
 
--- name: DeleteNode :exec
-DELETE FROM nodes
+-- name: DeleteThrall :exec
+DELETE FROM thralls
 WHERE id = ?;
 
--- name: ListNodesWithForcePush :many
+-- name: ListThrallsWithForcePush :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push
-FROM nodes
+FROM thralls
 WHERE force_push = true;

@@ -33,7 +33,7 @@ func TestDashboardHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Stat cards should be present
-	for _, want := range []string{"Total Nodes", "Active (1h)", "Recent Failures", "Drift Rate"} {
+	for _, want := range []string{"Total Thralls", "Active (1h)", "Recent Failures", "Drift Rate"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Dashboard missing stat card %q", want)
 		}
@@ -107,16 +107,16 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 	}
 
 	td := &testData{
-		nodes: []testNode{
+		thralls: []testThrall{
 			{
 				id:       uuid.New(),
-				hostname: "ok-node.example.com",
+				hostname: "ok-thrall.example.com",
 				lastSeen: time.Now(),
 				status:   "compliant",
 			},
 			{
 				id:       uuid.New(),
-				hostname: "drifted-node.example.com",
+				hostname: "drifted-thrall.example.com",
 				lastSeen: time.Now(),
 				status:   "drifted",
 			},
@@ -136,8 +136,8 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 	h.Compliance(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "drifted-node.example.com") {
-		t.Error("Compliance page should show non-compliant node hostname")
+	if !strings.Contains(body, "drifted-thrall.example.com") {
+		t.Error("Compliance page should show non-compliant thrall hostname")
 	}
 }
 
@@ -151,7 +151,7 @@ func TestAllPageHandlersContentType(t *testing.T) {
 	}{
 		{"Dashboard", "/", h.Dashboard},
 		{"Compliance", "/compliance", h.Compliance},
-		{"Nodes", "/nodes", h.Nodes},
+		{"Thralls", "/thralls", h.Thralls},
 		{"Runs", "/runs", h.Runs},
 	}
 
@@ -171,16 +171,16 @@ func TestAllPageHandlersContentType(t *testing.T) {
 
 // --- Task 1: New page tests ---
 
-func TestNodesHandler(t *testing.T) {
+func TestThrallsHandler(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/thralls", nil)
 	rec := httptest.NewRecorder()
 
-	h.Nodes(rec, req)
+	h.Thralls(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Nodes returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("Thralls returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
@@ -188,85 +188,85 @@ func TestNodesHandler(t *testing.T) {
 	// Table should have expected column headers
 	for _, col := range []string{"Hostname", "IP Address", "Enrolled", "Last Seen", "Status"} {
 		if !strings.Contains(body, col) {
-			t.Errorf("Nodes page missing column header %q", col)
+			t.Errorf("Thralls page missing column header %q", col)
 		}
 	}
 
-	// Should contain test node hostnames
+	// Should contain test thrall hostnames
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("Nodes page missing hostname web-01.example.com")
+		t.Error("Thralls page missing hostname web-01.example.com")
 	}
 
 	// Should show status badge
 	if !strings.Contains(body, "badge") {
-		t.Error("Nodes page missing status badge")
+		t.Error("Thralls page missing status badge")
 	}
 }
 
-func TestNodesHandlerStatusFilter(t *testing.T) {
+func TestThrallsHandlerStatusFilter(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/nodes?status=stale", nil)
+	req := httptest.NewRequest(http.MethodGet, "/thralls?status=stale", nil)
 	rec := httptest.NewRecorder()
 
-	h.Nodes(rec, req)
+	h.Thralls(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Nodes filtered returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("Thralls filtered returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
 
-	// stale node should be present
+	// stale thrall should be present
 	if !strings.Contains(body, "web-02.example.com") {
-		t.Error("Filtered nodes page should show stale node web-02.example.com")
+		t.Error("Filtered thralls page should show stale thrall web-02.example.com")
 	}
 
-	// compliant node should NOT be present
+	// compliant thrall should NOT be present
 	if strings.Contains(body, "web-01.example.com") {
-		t.Error("Filtered nodes page should NOT show compliant node when filtering for stale")
+		t.Error("Filtered thralls page should NOT show compliant thrall when filtering for stale")
 	}
 }
 
-func TestNodeDetailHandler(t *testing.T) {
+func TestThrallDetailHandler(t *testing.T) {
 	h := newTestHandler(t)
 
-	nodeID := h.dataSource.(*mockDataSource).data.nodes[0].id
-	req := httptest.NewRequest(http.MethodGet, "/nodes/"+nodeID.String(), nil)
-	req.SetPathValue("id", nodeID.String())
+	thrallID := h.dataSource.(*mockDataSource).data.thralls[0].id
+	req := httptest.NewRequest(http.MethodGet, "/thralls/"+thrallID.String(), nil)
+	req.SetPathValue("id", thrallID.String())
 	rec := httptest.NewRecorder()
 
-	h.NodeDetail(rec, req)
+	h.ThrallDetail(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("NodeDetail returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("ThrallDetail returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
 
-	// Should contain node hostname
+	// Should contain thrall hostname
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("NodeDetail page missing node hostname")
+		t.Error("ThrallDetail page missing thrall hostname")
 	}
 
 	// Should contain facts panel
 	if !strings.Contains(body, "facts") {
-		t.Error("NodeDetail page missing facts panel")
+		t.Error("ThrallDetail page missing facts panel")
 	}
 }
 
-func TestNodeDetailHandler404(t *testing.T) {
+func TestThrallDetailHandler404(t *testing.T) {
 	h := newTestHandler(t)
 
 	nonExistent := uuid.New()
-	req := httptest.NewRequest(http.MethodGet, "/nodes/"+nonExistent.String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/thralls/"+nonExistent.String(), nil)
 	req.SetPathValue("id", nonExistent.String())
 	rec := httptest.NewRecorder()
 
-	h.NodeDetail(rec, req)
+	h.ThrallDetail(rec, req)
 
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("NodeDetail for non-existent returned %d, want %d", rec.Code, http.StatusNotFound)
+		t.Fatalf("ThrallDetail for non-existent returned %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 
@@ -303,7 +303,7 @@ func TestRunsHandlerStatusFilter(t *testing.T) {
 	failRunID := uuid.New()
 	td.runs = append(td.runs, testRun{
 		id:          failRunID,
-		nodeID:    td.nodes[1].id,
+		thrallID:    td.thralls[1].id,
 		hostname:    "web-02.example.com",
 		startedAt:   time.Now().Add(-10 * time.Minute),
 		status:      "failure",
@@ -353,32 +353,32 @@ func TestRunDetailHandler(t *testing.T) {
 
 	// Should contain hostname
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("RunDetail page missing node hostname")
+		t.Error("RunDetail page missing thrall hostname")
 	}
 }
 
-func TestNodesTableFragment(t *testing.T) {
+func TestThrallsTableFragment(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/nodes-table", nil)
+	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/thralls-table", nil)
 	rec := httptest.NewRecorder()
 
-	h.NodesTable(rec, req)
+	h.ThrallsTable(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("NodesTable returned %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("ThrallsTable returned %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	body := rec.Body.String()
 
 	// Fragment should NOT contain full HTML wrapper
 	if strings.Contains(body, "<!DOCTYPE") || strings.Contains(body, "<html") {
-		t.Error("NodesTable fragment should not contain full HTML document")
+		t.Error("ThrallsTable fragment should not contain full HTML document")
 	}
 
-	// Should contain node hostnames
+	// Should contain thrall hostnames
 	if !strings.Contains(body, "web-01.example.com") {
-		t.Error("NodesTable fragment missing hostname")
+		t.Error("ThrallsTable fragment missing hostname")
 	}
 }
 
@@ -460,7 +460,7 @@ func TestServerBuildCompiles(t *testing.T) {
 
 // --- Test helpers ---
 
-type testNode struct {
+type testThrall struct {
 	id        uuid.UUID
 	hostname  string
 	ipAddress string
@@ -472,7 +472,7 @@ type testNode struct {
 
 type testRun struct {
 	id           uuid.UUID
-	nodeID       uuid.UUID
+	thrallID       uuid.UUID
 	hostname     string
 	startedAt    time.Time
 	status       string
@@ -494,7 +494,7 @@ type testRunResult struct {
 
 type testPlan struct {
 	id       uuid.UUID
-	nodeID uuid.UUID
+	thrallID uuid.UUID
 	hostname string
 	created  time.Time
 	results  []testPlanResult
@@ -508,7 +508,7 @@ type testPlanResult struct {
 }
 
 type testData struct {
-	nodes      []testNode
+	thralls      []testThrall
 	runs       []testRun
 	history    []testComplianceHistory
 	plans      []testPlan
@@ -525,19 +525,19 @@ type testComplianceHistory struct {
 // defaultTestData builds the standard test dataset.
 func defaultTestData() *testData {
 	now := time.Now()
-	node1ID := uuid.New()
-	node2ID := uuid.New()
+	thrall1ID := uuid.New()
+	thrall2ID := uuid.New()
 	runID := uuid.New()
 	planID := uuid.New()
 
 	// Create a temp config dir with test YAML
 	configDir, _ := os.MkdirTemp("", "hobnob-config-test")
-	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("node: web-01.example.com\nvars:\n  dsn: \"secret:hobnob/db/dsn\"\nmodules:\n  - name: test\n    type: file\n"), 0644)
+	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("thrall: web-01.example.com\nvars:\n  dsn: \"secret:hobnob/db/dsn\"\nmodules:\n  - name: test\n    type: file\n"), 0644)
 
 	return &testData{
-		nodes: []testNode{
+		thralls: []testThrall{
 			{
-				id:        node1ID,
+				id:        thrall1ID,
 				hostname:  "web-01.example.com",
 				ipAddress: "10.0.0.1",
 				enrolled:  now.Add(-24 * time.Hour),
@@ -545,7 +545,7 @@ func defaultTestData() *testData {
 				status:    "compliant",
 			},
 			{
-				id:        node2ID,
+				id:        thrall2ID,
 				hostname:  "web-02.example.com",
 				ipAddress: "10.0.0.2",
 				enrolled:  now.Add(-48 * time.Hour),
@@ -556,7 +556,7 @@ func defaultTestData() *testData {
 		runs: []testRun{
 			{
 				id:          runID,
-				nodeID:    node1ID,
+				thrallID:    thrall1ID,
 				hostname:    "web-01.example.com",
 				startedAt:   now.Add(-5 * time.Minute),
 				status:      "success",
@@ -576,7 +576,7 @@ func defaultTestData() *testData {
 		plans: []testPlan{
 			{
 				id:       planID,
-				nodeID: node1ID,
+				thrallID: thrall1ID,
 				hostname: "web-01.example.com",
 				created:  now.Add(-1 * time.Hour),
 				results: []testPlanResult{
@@ -589,7 +589,7 @@ func defaultTestData() *testData {
 		},
 		configDir: configDir,
 		facts: map[uuid.UUID]map[string]any{
-			node1ID: {
+			thrall1ID: {
 				"os": map[string]any{
 					"family": "debian",
 					"name":   "Ubuntu",
@@ -636,12 +636,12 @@ type mockDataSource struct {
 }
 
 func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
-	totalNodes := len(m.data.nodes)
+	totalThralls := len(m.data.thralls)
 	activeCount := 0
 	failureCount := 0
 	driftedCount := 0
 
-	for _, c := range m.data.nodes {
+	for _, c := range m.data.thralls {
 		if time.Since(c.lastSeen) < time.Hour {
 			activeCount++
 		}
@@ -654,8 +654,8 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 	}
 
 	driftRate := float64(0)
-	if totalNodes > 0 {
-		driftRate = float64(driftedCount) / float64(totalNodes) * 100
+	if totalThralls > 0 {
+		driftRate = float64(driftedCount) / float64(totalThralls) * 100
 	}
 
 	runs := make([]RunRow, 0, len(m.data.runs))
@@ -677,8 +677,8 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 			ActiveNav: "dashboard",
 			Version:   "test",
 		},
-		TotalNodes:     totalNodes,
-		ActiveNodes:    activeCount,
+		TotalThralls:     totalThralls,
+		ActiveThralls:    activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     runs,
@@ -686,13 +686,13 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 }
 
 func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
-	total := len(m.data.nodes)
+	total := len(m.data.thralls)
 	counts := map[string]int64{
 		"compliant": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
 	}
 
 	var nonCompliant []ComplianceRow
-	for _, c := range m.data.nodes {
+	for _, c := range m.data.thralls {
 		counts[c.status]++
 		if c.status != "compliant" {
 			nonCompliant = append(nonCompliant, ComplianceRow{
@@ -736,20 +736,20 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 func (m *mockDataSource) DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData {
 	d := m.DashboardData(baseInterval)
 	return DashboardStatsFragmentData{
-		TotalNodes:     d.TotalNodes,
-		ActiveNodes:    d.ActiveNodes,
+		TotalThralls:     d.TotalThralls,
+		ActiveThralls:    d.ActiveThralls,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
 }
 
-func (m *mockDataSource) NodesData(baseInterval time.Duration, statusFilter string) NodesPageData {
-	var rows []NodeRow
-	for _, c := range m.data.nodes {
+func (m *mockDataSource) ThrallsData(baseInterval time.Duration, statusFilter string) ThrallsPageData {
+	var rows []ThrallRow
+	for _, c := range m.data.thralls {
 		if statusFilter != "" && c.status != statusFilter {
 			continue
 		}
-		rows = append(rows, NodeRow{
+		rows = append(rows, ThrallRow{
 			ID:         c.id.String(),
 			Hostname:   c.hostname,
 			IPAddress:  c.ipAddress,
@@ -759,31 +759,31 @@ func (m *mockDataSource) NodesData(baseInterval time.Duration, statusFilter stri
 		})
 	}
 
-	return NodesPageData{
+	return ThrallsPageData{
 		PageData: PageData{
-			Title:     "Nodes",
-			ActiveNav: "nodes",
+			Title:     "Thralls",
+			ActiveNav: "thralls",
 			Version:   "test",
 		},
-		Nodes:        rows,
+		Thralls:        rows,
 		StatusFilter: statusFilter,
-		NodeCount:    len(rows),
+		ThrallCount:    len(rows),
 	}
 }
 
-func (m *mockDataSource) NodeDetailData(nodeID string, baseInterval time.Duration) (NodeDetailPageData, error) {
-	var found *testNode
-	for i := range m.data.nodes {
-		if m.data.nodes[i].id.String() == nodeID {
-			found = &m.data.nodes[i]
+func (m *mockDataSource) ThrallDetailData(thrallID string, baseInterval time.Duration) (ThrallDetailPageData, error) {
+	var found *testThrall
+	for i := range m.data.thralls {
+		if m.data.thralls[i].id.String() == thrallID {
+			found = &m.data.thralls[i]
 			break
 		}
 	}
 	if found == nil {
-		return NodeDetailPageData{}, fmt.Errorf("node not found")
+		return ThrallDetailPageData{}, fmt.Errorf("thrall not found")
 	}
 
-	nodeRow := NodeRow{
+	thrallRow := ThrallRow{
 		ID:         found.id.String(),
 		Hostname:   found.hostname,
 		IPAddress:  found.ipAddress,
@@ -792,10 +792,10 @@ func (m *mockDataSource) NodeDetailData(nodeID string, baseInterval time.Duratio
 		Status:     found.status,
 	}
 
-	var runs []NodeDetailRunRow
+	var runs []ThrallDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range m.data.runs {
-		if r.nodeID.String() == nodeID {
+		if r.thrallID.String() == thrallID {
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
@@ -808,7 +808,7 @@ func (m *mockDataSource) NodeDetailData(nodeID string, baseInterval time.Duratio
 					DurationMs:   res.durationMs,
 				})
 			}
-			runs = append(runs, NodeDetailRunRow{
+			runs = append(runs, ThrallDetailRunRow{
 				RunRow: RunRow{
 					ID:           r.id.String(),
 					Hostname:     r.hostname,
@@ -829,19 +829,19 @@ func (m *mockDataSource) NodeDetailData(nodeID string, baseInterval time.Duratio
 		}
 	}
 
-	parsedID, _ := uuid.Parse(nodeID)
+	parsedID, _ := uuid.Parse(thrallID)
 	facts := m.data.facts[parsedID]
 	if facts == nil {
 		facts = map[string]any{}
 	}
 
-	return NodeDetailPageData{
+	return ThrallDetailPageData{
 		PageData: PageData{
-			Title:     "Node: " + found.hostname,
-			ActiveNav: "nodes",
+			Title:     "Thrall: " + found.hostname,
+			ActiveNav: "thralls",
 			Version:   "test",
 		},
-		Node:         nodeRow,
+		Thrall:         thrallRow,
 		Runs:         runs,
 		Facts:        facts,
 		DriftHistory: driftHistory,
@@ -898,7 +898,7 @@ func (m *mockDataSource) RunDetailData(runID string) (RunDetailPageData, error) 
 					ActiveNav: "runs",
 					Version:   "test",
 				},
-				NodeID: r.nodeID.String(),
+				ThrallID: r.thrallID.String(),
 				Run: RunRow{
 					ID:           r.id.String(),
 					Hostname:     r.hostname,
@@ -927,7 +927,7 @@ func (m *mockDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 	return ConfigPageData{
 		PageData: PageData{
 			Title:     "Config: " + hostname,
-			ActiveNav: "nodes",
+			ActiveNav: "thralls",
 			Version:   "test",
 		},
 		Hostname: hostname,
@@ -963,11 +963,11 @@ func (m *mockDataSource) PlanDetailData(planID string) (PlanDetailPageData, erro
 			return PlanDetailPageData{
 				PageData: PageData{
 					Title:     "Plan Detail",
-					ActiveNav: "nodes",
+					ActiveNav: "thralls",
 					Version:   "test",
 				},
 				PlanID:      p.id.String(),
-				NodeID:      p.nodeID.String(),
+				ThrallID:      p.thrallID.String(),
 				Hostname:    p.hostname,
 				CreatedAt:   p.created,
 				Results:     results,

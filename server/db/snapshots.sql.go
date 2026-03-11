@@ -11,13 +11,13 @@ import (
 )
 
 const insertFileSnapshot = `-- name: InsertFileSnapshot :one
-INSERT INTO file_snapshots (node_id, file_path, content_hash, content, run_id)
+INSERT INTO file_snapshots (thrall_id, file_path, content_hash, content, run_id)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, node_id, file_path, content_hash, content, created_at, run_id
+RETURNING id, thrall_id, file_path, content_hash, content, created_at, run_id
 `
 
 type InsertFileSnapshotParams struct {
-	NodeID      string         `json:"node_id"`
+	ThrallID    string         `json:"thrall_id"`
 	FilePath    string         `json:"file_path"`
 	ContentHash string         `json:"content_hash"`
 	Content     []byte         `json:"content"`
@@ -26,7 +26,7 @@ type InsertFileSnapshotParams struct {
 
 func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshotParams) (FileSnapshot, error) {
 	row := q.db.QueryRowContext(ctx, insertFileSnapshot,
-		arg.NodeID,
+		arg.ThrallID,
 		arg.FilePath,
 		arg.ContentHash,
 		arg.Content,
@@ -35,7 +35,7 @@ func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshot
 	var i FileSnapshot
 	err := row.Scan(
 		&i.ID,
-		&i.NodeID,
+		&i.ThrallID,
 		&i.FilePath,
 		&i.ContentHash,
 		&i.Content,
@@ -46,19 +46,19 @@ func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshot
 }
 
 const listFileSnapshots = `-- name: ListFileSnapshots :many
-SELECT id, node_id, file_path, content_hash, content, created_at, run_id
+SELECT id, thrall_id, file_path, content_hash, content, created_at, run_id
 FROM file_snapshots
-WHERE node_id = ?1 AND file_path = ?2
+WHERE thrall_id = ?1 AND file_path = ?2
 ORDER BY created_at DESC
 `
 
 type ListFileSnapshotsParams struct {
-	NodeID   string `json:"node_id"`
+	ThrallID string `json:"thrall_id"`
 	FilePath string `json:"file_path"`
 }
 
 func (q *Queries) ListFileSnapshots(ctx context.Context, arg ListFileSnapshotsParams) ([]FileSnapshot, error) {
-	rows, err := q.db.QueryContext(ctx, listFileSnapshots, arg.NodeID, arg.FilePath)
+	rows, err := q.db.QueryContext(ctx, listFileSnapshots, arg.ThrallID, arg.FilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (q *Queries) ListFileSnapshots(ctx context.Context, arg ListFileSnapshotsPa
 		var i FileSnapshot
 		if err := rows.Scan(
 			&i.ID,
-			&i.NodeID,
+			&i.ThrallID,
 			&i.FilePath,
 			&i.ContentHash,
 			&i.Content,

@@ -32,11 +32,11 @@ func (m *mockProvider) Close() error { return nil }
 
 // --- helpers ---
 
-// setupDir creates a node-configs directory with nodes/, modules/, and roles/ subdirs.
+// setupDir creates a thrall-configs directory with thralls/, modules/, and roles/ subdirs.
 func setupDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "node-configs")
-	for _, sub := range []string{"nodes", "modules", "roles"} {
+	dir := filepath.Join(t.TempDir(), "thrall-configs")
+	for _, sub := range []string{"thralls", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -65,8 +65,8 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "webservers.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "webservers.yaml"), `
+thralls:
   - match: "test.example.com"
     environment: production
     modules: [nginx]
@@ -78,8 +78,8 @@ nodes:
 	}
 
 	cfg := store.Get("test.example.com")
-	if cfg.Node != "test.example.com" {
-		t.Errorf("Node = %q, want test.example.com", cfg.Node)
+	if cfg.Thrall != "test.example.com" {
+		t.Errorf("Thrall = %q, want test.example.com", cfg.Thrall)
 	}
 	if len(cfg.Modules) != 1 {
 		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
@@ -112,8 +112,8 @@ resources:
 name: webserver
 modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web01.example.com"
     environment: production
     roles: [webserver]
@@ -150,8 +150,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web01.example.com"
     environment: production
     modules: [nginx]
@@ -184,8 +184,8 @@ resources:
     targetpath: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web.example.com"
     environment: production
     modules: [app]
@@ -215,8 +215,8 @@ func TestKnownSecretEnforcement(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "bad.example.com"
     environment: production
     modules: [app]
@@ -237,8 +237,8 @@ func TestHardFailUnresolvable(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "fail.example.com"
     environment: production
     modules: [app]
@@ -263,8 +263,8 @@ resources: []
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "*.prod.example.com"
     environment: production
     modules: [base, nginx]
@@ -303,8 +303,8 @@ resources: []
 name: pattern
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web01.prod.example.com"
     environment: staging
     modules: [explicit]
@@ -339,14 +339,14 @@ name: postgres
 resources: []
 `)
 	// Two separate client files
-	writeFile(t, filepath.Join(dir, "nodes", "webservers.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "webservers.yaml"), `
+thralls:
   - match: "web-*"
     environment: production
     modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "databases.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "databases.yaml"), `
+thralls:
   - match: "db-*"
     environment: production
     modules: [postgres]
@@ -392,8 +392,8 @@ func TestEnvVarMerge(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "envtest.example.com"
     environment: production
     modules: [app]
@@ -450,8 +450,8 @@ resources: []
 	}
 
 	// Write a new client file
-	writeFile(t, filepath.Join(dir, "nodes", "new-hosts.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "new-hosts.yaml"), `
+thralls:
   - match: "new.example.com"
     environment: staging
     modules: [app]
@@ -479,8 +479,8 @@ func TestBadConfigKeepsOld(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "good.example.com"
     environment: production
     modules: [app]
@@ -502,8 +502,8 @@ nodes:
 	}
 
 	// Write invalid YAML
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   invalid yaml: [[[
 `)
 
@@ -518,8 +518,8 @@ nodes:
 func TestUnknownModuleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "bad.example.com"
     modules: [nonexistent]
 `)
@@ -533,8 +533,8 @@ nodes:
 func TestUnknownRoleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "bad.example.com"
     roles: [nonexistent]
 `)
@@ -570,8 +570,8 @@ resources: []
 name: web
 modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "dup.example.com"
     roles: [web]
     modules: [nginx]
@@ -603,8 +603,8 @@ resources:
 name: other
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web-*"
     modules: [app]
   - match: "db-*"
@@ -619,12 +619,12 @@ nodes:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	patterns := store.NodesReferencingSecret("myapp/db/config")
+	patterns := store.ThrallsReferencingSecret("myapp/db/config")
 	if len(patterns) != 1 || patterns[0] != "web-*" {
 		t.Errorf("expected [web-*], got %v", patterns)
 	}
 
-	patterns = store.NodesReferencingSecret("nonexistent")
+	patterns = store.ThrallsReferencingSecret("nonexistent")
 	if len(patterns) != 0 {
 		t.Errorf("expected empty, got %v", patterns)
 	}
@@ -652,8 +652,8 @@ resources:
     owner: root
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web.example.com"
     modules: [nginx]
 `)
@@ -699,8 +699,8 @@ resources:
     source: templates/test.tmpl
     content: "inline content"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -726,8 +726,8 @@ resources:
     targetpath: /etc/test
     source: templates/nonexistent.tmpl
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -762,8 +762,8 @@ resources:
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web.example.com"
     modules: [nginx]
 `)
@@ -938,8 +938,8 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web.example.com"
     modules: [webserver]
 `)
@@ -989,8 +989,8 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1016,8 +1016,8 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1052,8 +1052,8 @@ vars:
     gte: 4096
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "multi.example.com"
     modules: [mod_a, mod_b]
 `)
@@ -1095,8 +1095,8 @@ vars:
     in: [debian, ubuntu]
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "override.example.com"
     modules: [mod]
     vars:
@@ -1145,8 +1145,8 @@ resources:
           command: "apt-get update"
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "deb.example.com"
     modules: [debian-tools]
 `)
@@ -1202,8 +1202,8 @@ resources:
     state: running
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "mix.example.com"
     modules: [mixed]
 `)
@@ -1260,8 +1260,8 @@ resources:
           depends_on: [setup-repo]
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "dep.example.com"
     modules: [cross-dep]
 `)
@@ -1305,8 +1305,8 @@ resources:
           when: "not is_container"
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "dual.example.com"
     modules: [dual-cond]
 `)
@@ -1340,8 +1340,8 @@ resources:
       resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "bad.example.com"
     modules: [bad-block]
 `)
@@ -1383,8 +1383,8 @@ modules:
     when: "is_debian"
   - certbot
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web.example.com"
     roles: [webserver]
 `)
@@ -1421,8 +1421,8 @@ resources:
     package: redis
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "db.example.com"
     modules:
       - name: redis
@@ -1461,8 +1461,8 @@ modules:
   - name: certbot
     when: "is_debian or is_ubuntu"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "mix.example.com"
     roles: [web]
 `)
@@ -1511,8 +1511,8 @@ resources:
 name: webserver
 modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "web01.example.com"
     roles: [webserver]
   - match: "web02.example.com"
@@ -1551,8 +1551,8 @@ resources:
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.hnb"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+thralls:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1576,8 +1576,8 @@ resources:
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.hnb"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+thralls:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1603,8 +1603,8 @@ resources:
     command: "touch /tmp/done"
     creates: "/tmp/done"
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.hnb"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+thralls:
   - match: "test.example.com"
     modules: [good]
 `)
@@ -1630,8 +1630,8 @@ resources:
 name: web
 modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.hnb"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+thralls:
   - match: "test.example.com"
     roles: [web]
 `)
@@ -1653,7 +1653,7 @@ nodes:
 func TestDuplicateModulesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
-	for _, name := range []string{"docker", "grafana", "node-exporter"} {
+	for _, name := range []string{"docker", "grafana", "thrall-exporter"} {
 		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
 name: %s
 resources:
@@ -1664,13 +1664,13 @@ resources:
 `, name, name, name))
 	}
 	// Duplicate modules: keys — should merge, not overwrite.
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.hnb"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+thralls:
   - match: "danlap"
     environment: production
     modules: [docker]
     modules: [grafana]
-    modules: [node-exporter]
+    modules: [thrall-exporter]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -1687,7 +1687,7 @@ nodes:
 		t.Fatalf("expected 3 modules, got %d: %v", len(cfg.Modules), names)
 	}
 
-	want := []string{"docker", "grafana", "node-exporter"}
+	want := []string{"docker", "grafana", "thrall-exporter"}
 	for i, m := range cfg.Modules {
 		if m.Name != want[i] {
 			t.Errorf("module %d: got %q, want %q", i, m.Name, want[i])
@@ -1724,8 +1724,8 @@ modules: [nginx]
 name: cache
 modules: [redis]
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.hnb"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+thralls:
   - match: "test"
     roles: [web]
     roles: [cache]
@@ -1783,8 +1783,8 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "app.example.com"
     modules: [base-packages, app-config]
 `)
@@ -1828,8 +1828,8 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "app.example.com"
     modules: [base-packages]
 `)
@@ -1867,8 +1867,8 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "nodes", "nodes.yaml"), `
-nodes:
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
   - match: "app.example.com"
     modules: [base-packages, app-config]
 `)

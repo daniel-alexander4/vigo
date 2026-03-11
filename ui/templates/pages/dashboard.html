@@ -46,8 +46,8 @@
 
 {{define "dashboard-stats"}}
 <div class="stat-cards">
-    {{template "stat-card" dict "Value" .TotalNodes "Label" "Total Nodes" "Color" "brand"}}
-    {{template "stat-card" dict "Value" .ActiveNodes "Label" "Active (1h)" "Color" "success"}}
+    {{template "stat-card" dict "Value" .TotalThralls "Label" "Total Thralls" "Color" "brand"}}
+    {{template "stat-card" dict "Value" .ActiveThralls "Label" "Active (1h)" "Color" "success"}}
     {{template "stat-card" dict "Value" .RecentFailures "Label" "Recent Failures" "Color" "danger"}}
     {{template "stat-card" dict "Value" (printf "%.0f%%" .DriftRate) "Label" "Drift Rate" "Color" "warning"}}
 </div>

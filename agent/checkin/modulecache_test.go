@@ -94,7 +94,7 @@ func TestModuleCache_EvictsRemovedModules(t *testing.T) {
 		t.Fatalf("expected 2 cached modules")
 	}
 
-	// Node's role changed — only nginx now.
+	// Thrall's role changed — only nginx now.
 	cache.Update([]*pb.PolicyModule{
 		{Name: "nginx", ContentHash: "abc"},
 	})

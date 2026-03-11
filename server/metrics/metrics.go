@@ -7,16 +7,16 @@ import (
 )
 
 var (
-	// NodesTotal is the total number of enrolled nodes (gauge).
-	NodesTotal = promauto.NewGauge(prometheus.GaugeOpts{
+	// ThrallsTotal is the total number of enrolled thralls (gauge).
+	ThrallsTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "hobnob_nodes_total",
-		Help: "Total number of enrolled nodes.",
+		Help: "Total number of enrolled thralls.",
 	})
 
-	// NodesActive is the number of nodes seen in the last hour (gauge).
-	NodesActive = promauto.NewGauge(prometheus.GaugeOpts{
+	// ThrallsActive is the number of thralls seen in the last hour (gauge).
+	ThrallsActive = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "hobnob_nodes_active_total",
-		Help: "Number of nodes that checked in within the last hour.",
+		Help: "Number of thralls that checked in within the last hour.",
 	})
 
 	// CheckinsTotal counts check-in RPCs by status (counter).
@@ -25,18 +25,18 @@ var (
 		Help: "Total number of agent check-ins.",
 	}, []string{"status"})
 
-	// RunDuration observes run durations in seconds by node (histogram).
+	// RunDuration observes run durations in seconds by thrall (histogram).
 	RunDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "hobnob_run_duration_seconds",
 		Help:    "Duration of agent runs in seconds.",
 		Buckets: prometheus.DefBuckets,
-	}, []string{"node"})
+	}, []string{"thrall"})
 
-	// DriftDetected counts drift detection events by node and module (counter).
+	// DriftDetected counts drift detection events by thrall and module (counter).
 	DriftDetected = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "hobnob_drift_detected_total",
 		Help: "Total number of drift detection events.",
-	}, []string{"node", "module"})
+	}, []string{"thrall", "module"})
 
 	// ModuleActions counts module actions by resource type and action (counter).
 	ModuleActions = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -44,11 +44,11 @@ var (
 		Help: "Total number of module actions taken.",
 	}, []string{"type", "action"})
 
-	// ComplianceStatus tracks per-node compliance status (gauge, 1=current status).
+	// ComplianceStatus tracks per-thrall compliance status (gauge, 1=current status).
 	ComplianceStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hobnob_compliance_status",
-		Help: "Node compliance status (1 for current status).",
-	}, []string{"node", "status"})
+		Help: "Thrall compliance status (1 for current status).",
+	}, []string{"thrall", "status"})
 
 	// CompliancePct is the fleet-wide compliance percentage (gauge, 0-1).
 	CompliancePct = promauto.NewGauge(prometheus.GaugeOpts{
@@ -56,11 +56,11 @@ var (
 		Help: "Fleet-wide compliance percentage (0.0 to 1.0).",
 	})
 
-	// TimeSinceCheckin tracks seconds since each node's last check-in (gauge).
+	// TimeSinceCheckin tracks seconds since each thrall's last check-in (gauge).
 	TimeSinceCheckin = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hobnob_time_since_checkin_seconds",
-		Help: "Seconds since last check-in per node.",
-	}, []string{"node"})
+		Help: "Seconds since last check-in per thrall.",
+	}, []string{"thrall"})
 
 	// SigVerifyFailed counts signature verification failures by reason (counter).
 	SigVerifyFailed = promauto.NewCounterVec(prometheus.CounterOpts{

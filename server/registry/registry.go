@@ -1,5 +1,5 @@
 // Package registry implements the enrollment registry for agent registration,
-// approved pattern management, and node revocation.
+// approved pattern management, and thrall revocation.
 package registry
 
 import (
@@ -22,14 +22,14 @@ const bcryptCost = 10
 // Sentinel errors returned by Registry methods.
 var (
 	ErrNoMatchingPattern = errors.New("no matching approved pattern found for hostname or IP")
-	ErrNodeRevoked       = errors.New("node is revoked")
-	ErrNodeNotFound      = errors.New("node not found")
-	ErrHostnameRevoked   = errors.New("hostname belongs to a revoked node and cannot re-enroll")
+	ErrThrallRevoked       = errors.New("thrall is revoked")
+	ErrThrallNotFound      = errors.New("thrall not found")
+	ErrHostnameRevoked   = errors.New("hostname belongs to a revoked thrall and cannot re-enroll")
 )
 
-// Registry manages node enrollment: approved pattern creation, agent
+// Registry manages thrall enrollment: approved pattern creation, agent
 // registration with glob matching and bcrypt token validation, and
-// node revocation.
+// thrall revocation.
 type Registry struct {
 	queries *db.Queries
 }
@@ -67,15 +67,15 @@ func (r *Registry) AddApprovedPattern(ctx context.Context, pattern, token string
 
 // Register enrolls a new agent. It validates the hostname/IP against unused
 // approved patterns using glob matching, verifies the token via bcrypt, creates
-// a node record, marks the pattern as used, and returns the node UUID string.
+// a thrall record, marks the pattern as used, and returns the thrall UUID string.
 //
 // The flow is:
 //  1. Validate inputs
-//  2. Check ENRL-07: reject if hostname belongs to a revoked node
+//  2. Check ENRL-07: reject if hostname belongs to a revoked thrall
 //  3. Fetch all unused approved patterns
 //  4. Filter by glob match on hostname OR IP (avoid bcrypt on non-matching patterns)
 //  5. For glob-matched patterns, compare token via bcrypt
-//  6. On match: create node, mark pattern used, return node UUID
+//  6. On match: create thrall, mark pattern used, return thrall UUID
 func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token string) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")
@@ -87,8 +87,8 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 		return "", fmt.Errorf("token must not be empty")
 	}
 
-	// ENRL-07: Check if hostname belongs to a revoked node.
-	existing, err := r.queries.GetNodeByHostname(ctx, hostname)
+	// ENRL-07: Check if hostname belongs to a revoked thrall.
+	existing, err := r.queries.GetThrallByHostname(ctx, hostname)
 	if err == nil && existing.Revoked != 0 {
 		return "", ErrHostnameRevoked
 	}
@@ -118,21 +118,21 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 			continue
 		}
 
-		// Token matched. Create node.
-		node, err := r.queries.CreateNode(ctx, db.CreateNodeParams{
+		// Token matched. Create thrall.
+		thrall, err := r.queries.CreateThrall(ctx, db.CreateThrallParams{
 			Hostname:  hostname,
 			IpAddress: ip,
 			PubkeyPem: pubkeyPEM,
 		})
 		if err != nil {
-			return "", fmt.Errorf("creating node: %w", err)
+			return "", fmt.Errorf("creating thrall: %w", err)
 		}
 
 		// Mark pattern as used.
 		err = r.queries.MarkPatternUsed(ctx, db.MarkPatternUsedParams{
 			ID: p.ID,
 			UsedBy: sql.NullString{
-				String: node.ID,
+				String: thrall.ID,
 				Valid:  true,
 			},
 		})
@@ -140,15 +140,15 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 			return "", fmt.Errorf("marking pattern used: %w", err)
 		}
 
-		return node.ID, nil
+		return thrall.ID, nil
 	}
 
 	return "", ErrNoMatchingPattern
 }
 
-// TrustedRegister enrolls a node without a token by validating the hostname
+// TrustedRegister enrolls a thrall without a token by validating the hostname
 // and source IP against trusted enrollment patterns. This is the Puppet-style
-// autosigning path: if the node's hostname matches a trusted pattern and its
+// autosigning path: if the thrall's hostname matches a trusted pattern and its
 // IP falls within an allowed CIDR, it is enrolled without a one-time token.
 func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM string, trustedPatterns []config.TrustedEnrollment, peerIP string) (string, error) {
 	if hostname == "" {
@@ -158,8 +158,8 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 		return "", fmt.Errorf("public key must not be empty")
 	}
 
-	// ENRL-07: Check if hostname belongs to a revoked node.
-	existing, err := r.queries.GetNodeByHostname(ctx, hostname)
+	// ENRL-07: Check if hostname belongs to a revoked thrall.
+	existing, err := r.queries.GetThrallByHostname(ctx, hostname)
 	if err == nil && existing.Revoked != 0 {
 		return "", ErrHostnameRevoked
 	}
@@ -177,17 +177,17 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 			continue
 		}
 
-		// Trusted match. Create node.
-		node, err := r.queries.CreateNode(ctx, db.CreateNodeParams{
+		// Trusted match. Create thrall.
+		thrall, err := r.queries.CreateThrall(ctx, db.CreateThrallParams{
 			Hostname:  hostname,
 			IpAddress: ip,
 			PubkeyPem: pubkeyPEM,
 		})
 		if err != nil {
-			return "", fmt.Errorf("creating node: %w", err)
+			return "", fmt.Errorf("creating thrall: %w", err)
 		}
 
-		return node.ID, nil
+		return thrall.ID, nil
 	}
 
 	return "", ErrNoMatchingPattern
@@ -211,30 +211,30 @@ func matchesCIDR(ipStr string, cidrs []string) bool {
 	return false
 }
 
-// RevokeNode marks a node as revoked, blocking all future check-ins.
-func (r *Registry) RevokeNode(ctx context.Context, nodeID string) error {
-	// Verify node exists first.
-	_, err := r.queries.GetNodeByID(ctx, nodeID)
+// RevokeThrall marks a thrall as revoked, blocking all future check-ins.
+func (r *Registry) RevokeThrall(ctx context.Context, thrallID string) error {
+	// Verify thrall exists first.
+	_, err := r.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNodeNotFound
+			return ErrThrallNotFound
 		}
-		return fmt.Errorf("looking up node: %w", err)
+		return fmt.Errorf("looking up thrall: %w", err)
 	}
 
-	if err := r.queries.RevokeNode(ctx, nodeID); err != nil {
-		return fmt.Errorf("revoking node: %w", err)
+	if err := r.queries.RevokeThrall(ctx, thrallID); err != nil {
+		return fmt.Errorf("revoking thrall: %w", err)
 	}
 
 	return nil
 }
 
-// ValidateNode checks if a node exists and is not revoked. Returns an error
-// if the node is revoked or does not exist.
-// CreateNode creates a node record directly without token validation.
-// Used by EnrollNode (hub→spoke enrollment routing) where the hub has
+// ValidateThrall checks if a thrall exists and is not revoked. Returns an error
+// if the thrall is revoked or does not exist.
+// CreateThrall creates a thrall record directly without token validation.
+// Used by EnrollThrall (hub→spoke enrollment routing) where the hub has
 // already validated the enrollment token.
-func (r *Registry) CreateNode(ctx context.Context, hostname, ip, pubkeyPEM string) (string, error) {
+func (r *Registry) CreateThrall(ctx context.Context, hostname, ip, pubkeyPEM string) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")
 	}
@@ -242,29 +242,29 @@ func (r *Registry) CreateNode(ctx context.Context, hostname, ip, pubkeyPEM strin
 		return "", fmt.Errorf("public key must not be empty")
 	}
 
-	node, err := r.queries.CreateNode(ctx, db.CreateNodeParams{
+	thrall, err := r.queries.CreateThrall(ctx, db.CreateThrallParams{
 		Hostname:  hostname,
 		IpAddress: ip,
 		PubkeyPem: pubkeyPEM,
 	})
 	if err != nil {
-		return "", fmt.Errorf("creating node: %w", err)
+		return "", fmt.Errorf("creating thrall: %w", err)
 	}
 
-	return node.ID, nil
+	return thrall.ID, nil
 }
 
-func (r *Registry) ValidateNode(ctx context.Context, nodeID string) error {
-	node, err := r.queries.GetNodeByID(ctx, nodeID)
+func (r *Registry) ValidateThrall(ctx context.Context, thrallID string) error {
+	thrall, err := r.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNodeNotFound
+			return ErrThrallNotFound
 		}
-		return fmt.Errorf("looking up node: %w", err)
+		return fmt.Errorf("looking up thrall: %w", err)
 	}
 
-	if node.Revoked != 0 {
-		return ErrNodeRevoked
+	if thrall.Revoked != 0 {
+		return ErrThrallRevoked
 	}
 
 	return nil

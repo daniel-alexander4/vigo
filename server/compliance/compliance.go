@@ -1,4 +1,4 @@
-// Package compliance computes compliance status for managed nodes based on
+// Package compliance computes compliance status for managed thralls based on
 // their last run results and last-seen timestamps.
 package compliance
 
@@ -11,11 +11,11 @@ type RunInfo struct {
 	ChangedCount int64
 }
 
-// ComputeStatus determines the compliance status for a single node.
+// ComputeStatus determines the compliance status for a single thrall.
 // Returns one of: "compliant", "drifted", "failing", "stale", "unknown".
 //
 // Priority order:
-//  1. Stale — node hasn't checked in within 2x base interval
+//  1. Stale — thrall hasn't checked in within 2x base interval
 //  2. Unknown — no run data available
 //  3. Compliant — last run succeeded with no changes
 //  4. Drifted — last run succeeded but applied changes

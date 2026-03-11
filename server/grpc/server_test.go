@@ -104,7 +104,7 @@ func startTestServer(t *testing.T) (string, func()) {
 	t.Helper()
 	ctx := context.Background()
 	// Clean tables in correct order for FK constraints.
-	for _, table := range []string{"run_results", "runs", "node_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "nodes"} {
+	for _, table := range []string{"run_results", "runs", "thrall_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "thralls"} {
 		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("failed to delete from %s: %v", table, err)
 		}
@@ -113,9 +113,9 @@ func startTestServer(t *testing.T) (string, func()) {
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
-	// Create a minimal config store (empty node-configs dir with nodes/, modules/, and roles/ subdirs).
-	nodeConfigsDir := filepath.Join(t.TempDir(), "node-configs")
-	for _, sub := range []string{"nodes", "modules", "roles"} {
+	// Create a minimal config store (empty thrall-configs dir with thralls/, modules/, and roles/ subdirs).
+	nodeConfigsDir := filepath.Join(t.TempDir(), "thrall-configs")
+	for _, sub := range []string{"thralls", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(nodeConfigsDir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -258,14 +258,14 @@ func TestRegisterFlow(t *testing.T) {
 	if !resp.GetSuccess() {
 		t.Fatalf("Register returned success=false: %s", resp.GetMessage())
 	}
-	if resp.GetNodeId() == "" {
-		t.Fatal("expected non-empty node_id")
+	if resp.GetThrallId() == "" {
+		t.Fatal("expected non-empty thrall_id")
 	}
 
 	// Verify UUID is valid.
-	_, err = uuid.Parse(resp.GetNodeId())
+	_, err = uuid.Parse(resp.GetThrallId())
 	if err != nil {
-		t.Fatalf("node_id is not a valid UUID: %v", err)
+		t.Fatalf("thrall_id is not a valid UUID: %v", err)
 	}
 }
 
@@ -296,17 +296,17 @@ func TestCheckInRevoked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nodeID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Revoke the node.
-	if err := reg.RevokeNode(ctx, nodeID); err != nil {
+	// Revoke the thrall.
+	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
 		t.Fatal(err)
 	}
 
-	// CheckIn should fail for revoked node.
+	// CheckIn should fail for revoked thrall.
 	agentClient := pb.NewHobnobAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
@@ -314,7 +314,7 @@ func TestCheckInRevoked(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:           nodeID,
+		ThrallId:           thrallID,
 		StateFingerprint: "test-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -359,7 +359,7 @@ func TestCheckInSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nodeID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestCheckInSuccess(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, priv)
 
 	resp, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:           nodeID,
+		ThrallId:           thrallID,
 		StateFingerprint: "some-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -413,7 +413,7 @@ func TestCheckInBadSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nodeID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,7 +431,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	sig := auth.SignPayload(payload, tsStr, wrongPriv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		NodeId:           nodeID,
+		ThrallId:           thrallID,
 		StateFingerprint: "fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),

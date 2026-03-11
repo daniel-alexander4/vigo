@@ -30,14 +30,14 @@ var knownSecretFields = map[string]bool{
 
 const secretPrefix = "secret:"
 
-// resolvedEntry pairs a match pattern with a resolved node config.
+// resolvedEntry pairs a match pattern with a resolved thrall config.
 type resolvedEntry struct {
 	match  string
-	config *NodeConfig
+	config *ThrallConfig
 }
 
-// ConfigStore loads, watches, and provides per-node configuration.
-// The base dir contains nodes/, modules/, and roles/ subdirectories with
+// ConfigStore loads, watches, and provides per-thrall configuration.
+// The base dir contains thralls/, modules/, and roles/ subdirectories with
 // .hnb/.yaml config files. Secret references are resolved via a
 // secrets.Provider. Hot-reload via fsnotify.
 type ConfigStore struct {
@@ -45,15 +45,15 @@ type ConfigStore struct {
 	entries    []resolvedEntry
 	index      patternIndex                 // accelerated hostname lookup
 	rawModules map[string]*ModuleDefinition // unresolved, for secret ref scanning
-	dir        string                       // node-configs directory
+	dir        string                       // thrall-configs directory
 	provider   secrets.Provider
 	dangerous  bool // allow non-idempotent resources
 	version    atomic.Uint64 // incremented on each successful reload
 }
 
-// NewConfigStore creates a ConfigStore that scans nodesDir for node
-// config files (.hnb or .yaml), module definitions from nodesDir/modules/,
-// and role definitions from nodesDir/roles/. Secret references are resolved
+// NewConfigStore creates a ConfigStore that scans baseDir for thrall
+// config files (.hnb or .yaml), module definitions from baseDir/modules/,
+// and role definitions from baseDir/roles/. Secret references are resolved
 // using the given provider.
 //
 // By default, all resources must pass idempotency validation. Set dangerous
@@ -70,7 +70,7 @@ func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (
 	return cs, nil
 }
 
-// Dir returns the node-configs directory path.
+// Dir returns the thrall-configs directory path.
 func (cs *ConfigStore) Dir() string {
 	return cs.dir
 }
@@ -83,40 +83,40 @@ func (cs *ConfigStore) Version() uint64 {
 
 // Get returns the resolved config for the given hostname. Entries are
 // evaluated in order — first match wins. If no entry matches, an empty
-// config is returned (unconfigured node gets empty module list).
-func (cs *ConfigStore) Get(hostname string) *NodeConfig {
+// config is returned (unconfigured thrall gets empty module list).
+func (cs *ConfigStore) Get(hostname string) *ThrallConfig {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
 	if i := cs.index.Lookup(hostname); i >= 0 {
-		cfg := cloneNodeConfig(cs.entries[i].config)
-		cfg.Node = hostname
+		cfg := cloneThrallConfig(cs.entries[i].config)
+		cfg.Thrall = hostname
 		return cfg
 	}
 
-	return &NodeConfig{
-		Node:    hostname,
+	return &ThrallConfig{
+		Thrall:    hostname,
 		Modules: []ModuleConfig{},
 	}
 }
 
 // Match returns the matched pattern and resolved config for hostname using
 // the pattern index. Returns ("", nil) if no entry matches.
-func (cs *ConfigStore) Match(hostname string) (string, *NodeConfig) {
+func (cs *ConfigStore) Match(hostname string) (string, *ThrallConfig) {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
 	if i := cs.index.Lookup(hostname); i >= 0 {
 		entry := cs.entries[i]
-		cfg := cloneNodeConfig(entry.config)
-		cfg.Node = hostname
+		cfg := cloneThrallConfig(entry.config)
+		cfg.Thrall = hostname
 		return entry.match, cfg
 	}
 
 	return "", nil
 }
 
-// Watch starts fsnotify watchers on the node-configs directory and its
+// Watch starts fsnotify watchers on the thrall-configs directory and its
 // modules/ and roles/ subdirectories. Config changes are reloaded with
 // ~500ms debounce. Blocks until ctx is cancelled.
 func (cs *ConfigStore) Watch(ctx context.Context) error {
@@ -126,8 +126,8 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 	}
 	defer watcher.Close()
 
-	// Watch the nodes, modules, roles, and templates trees recursively.
-	for _, dir := range []string{cs.nodesDir(), cs.modulesDir(), cs.rolesDir(), cs.templatesDir()} {
+	// Watch the thralls, modules, roles, and templates trees recursively.
+	for _, dir := range []string{cs.thrallsDir(), cs.modulesDir(), cs.rolesDir(), cs.templatesDir()} {
 		if err := watchRecursive(watcher, dir); err != nil {
 			return fmt.Errorf("watching %s: %w", dir, err)
 		}
@@ -163,8 +163,8 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 	}
 }
 
-// nodesDir returns the path to the nodes subdirectory.
-func (cs *ConfigStore) nodesDir() string { return filepath.Join(cs.dir, "nodes") }
+// thrallsDir returns the path to the thralls subdirectory.
+func (cs *ConfigStore) thrallsDir() string { return filepath.Join(cs.dir, "thralls") }
 
 // modulesDir returns the path to the modules subdirectory.
 func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "modules") }
@@ -175,7 +175,7 @@ func (cs *ConfigStore) rolesDir() string { return filepath.Join(cs.dir, "roles")
 // templatesDir returns the path to the templates subdirectory.
 func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
 
-// loadAll reads module defs, role defs, and node YAML files, resolves
+// loadAll reads module defs, role defs, and thrall YAML files, resolves
 // all entries, and atomically swaps the config.
 func (cs *ConfigStore) loadAll() error {
 	start := time.Now()
@@ -204,9 +204,9 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	nodeEntries, err := loadNodesDir(cs.nodesDir())
+	thrallEntries, err := loadThrallsDir(cs.thrallsDir())
 	if err != nil {
-		return fmt.Errorf("loading nodes: %w", err)
+		return fmt.Errorf("loading thralls: %w", err)
 	}
 
 	// Validate role references.
@@ -219,10 +219,10 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	var entries []resolvedEntry
-	for i, entry := range nodeEntries {
+	for i, entry := range thrallEntries {
 		cfg, err := cs.resolveEntry(entry, moduleDefs, roleDefs)
 		if err != nil {
-			return fmt.Errorf("resolving node entry %d (match=%q): %w", i, entry.Match, err)
+			return fmt.Errorf("resolving thrall entry %d (match=%q): %w", i, entry.Match, err)
 		}
 		entries = append(entries, resolvedEntry{match: entry.Match, config: cfg})
 	}
@@ -257,8 +257,8 @@ func (cs *ConfigStore) loadAllInner() error {
 	return nil
 }
 
-// resolveEntry converts a NodeEntry into a fully resolved NodeConfig.
-func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*NodeConfig, error) {
+// resolveEntry converts a ThrallEntry into a fully resolved ThrallConfig.
+func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*ThrallConfig, error) {
 	// Collect module refs: roles first, then direct modules. First ref wins
 	// for conditional fields (matching existing var merge behavior).
 	var moduleRefs []ModuleRef
@@ -307,7 +307,7 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 		for _, target := range moduleDefs[mod.Name].Before {
 			idx, ok := modulesByName[target]
 			if !ok {
-				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this node", mod.Name, target, target)
+				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this thrall", mod.Name, target, target)
 			}
 			modules[idx].DependsOn = appendUnique(modules[idx].DependsOn, mod.Name)
 		}
@@ -332,7 +332,7 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 		}
 	}
 
-	// Build vars: module defaults first, then node-level overrides.
+	// Build vars: module defaults first, then thrall-level overrides.
 	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
 	var varOrder []string
@@ -345,7 +345,7 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 		}
 	}
 	for k, v := range entry.Vars {
-		// Skip node-level vars that would conflict with conditional var names.
+		// Skip thrall-level vars that would conflict with conditional var names.
 		// Conditional vars take precedence -- they are evaluated at check-in time.
 		if condVarNames[k] {
 			continue
@@ -356,8 +356,8 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 		vars[k] = v
 	}
 
-	cfg := &NodeConfig{
-		Node:            entry.Match,
+	cfg := &ThrallConfig{
+		Thrall:            entry.Match,
 		MatchPattern:    entry.Match,
 		Environment:     entry.Environment,
 		Roles:           entry.Roles,
@@ -384,10 +384,10 @@ func (cs *ConfigStore) resolveEntry(entry NodeEntry, moduleDefs map[string]*Modu
 	return cfg, nil
 }
 
-// NodesReferencingSecret returns the match patterns of all node entries
+// ThrallsReferencingSecret returns the match patterns of all thrall entries
 // whose configuration contains a "secret:<secretPath>" reference. Used by
-// the rotation watcher to identify which nodes need force-push.
-func (cs *ConfigStore) NodesReferencingSecret(secretPath string) []string {
+// the rotation watcher to identify which thralls need force-push.
+func (cs *ConfigStore) ThrallsReferencingSecret(secretPath string) []string {
 	needle := secretPrefix + secretPath
 
 	cs.mu.RLock()
@@ -449,7 +449,7 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 	}
 
 	// Redact resolved secrets in vars.
-	redacted := cloneNodeConfig(cfg)
+	redacted := cloneThrallConfig(cfg)
 	for k, v := range redacted.Vars {
 		if _, ok := v.(string); ok && knownSecretFields[k] {
 			redacted.Vars[k] = "[REDACTED]"
@@ -555,36 +555,36 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 	return defs, nil
 }
 
-// loadNodesDir reads all config files (.hnb/.yaml) from the nodes directory
-// and merges their node entries in filesystem order.
-func loadNodesDir(dir string) ([]NodeEntry, error) {
+// loadThrallsDir reads all config files (.hnb/.yaml) from the thralls directory
+// and merges their thrall entries in filesystem order.
+func loadThrallsDir(dir string) ([]ThrallEntry, error) {
 	paths, err := walkConfigFiles(dir)
 	if err != nil {
-		return nil, fmt.Errorf("reading nodes dir: %w", err)
+		return nil, fmt.Errorf("reading thralls dir: %w", err)
 	}
 
-	var allEntries []NodeEntry
+	var allEntries []ThrallEntry
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
 		}
-		var cfg NodesConfig
+		var cfg ThrallsConfig
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", path, err)
 		}
-		for i, entry := range cfg.Nodes {
+		for i, entry := range cfg.Thralls {
 			if entry.Match == "" {
 				return nil, fmt.Errorf("%s entry %d: missing required 'match' field", path, i)
 			}
 		}
-		allEntries = append(allEntries, cfg.Nodes...)
+		allEntries = append(allEntries, cfg.Thralls...)
 	}
 	return allEntries, nil
 }
 
 // mergeEnvVars merges base vars with environment-specific overrides.
-func mergeEnvVars(cfg *NodeConfig) {
+func mergeEnvVars(cfg *ThrallConfig) {
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]any)
 	}
@@ -653,7 +653,7 @@ func (cs *ConfigStore) resolveModuleSecrets(mod *ModuleConfig) error {
 }
 
 // resolveSourceFiles reads external template files referenced by the "source"
-// attribute on file resources. The source path is relative to the node-configs
+// attribute on file resources. The source path is relative to the thrall-configs
 // directory (e.g., "templates/nginx/nginx.conf.tmpl"). The file contents replace
 // the "source" attribute with "content".
 // It is an error to set both "source" and "content" on the same resource.
@@ -717,10 +717,10 @@ func moduleDefReferencesSecret(def *ModuleDefinition, needle string) bool {
 	return false
 }
 
-// entryReferencesSecret checks if a node entry uses any affected module
+// entryReferencesSecret checks if a thrall entry uses any affected module
 // or has the secret in its env_vars (non-active environment overrides retain
 // raw secret: prefixes since only the active environment is resolved).
-func entryReferencesSecret(cfg *NodeConfig, affectedModules map[string]bool, needle string) bool {
+func entryReferencesSecret(cfg *ThrallConfig, affectedModules map[string]bool, needle string) bool {
 	// Check if any module is affected.
 	for _, mod := range cfg.Modules {
 		if affectedModules[mod.Name] {
@@ -741,7 +741,7 @@ func entryReferencesSecret(cfg *NodeConfig, affectedModules map[string]bool, nee
 	return false
 }
 
-// ComputeEnvDiff compares env_vars between two environments across all node
+// ComputeEnvDiff compares env_vars between two environments across all thrall
 // entries that include the given module. Returns a map of var_name -> "old → new".
 func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[string]string {
 	cs.mu.RLock()
@@ -785,9 +785,9 @@ func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[str
 	return diff
 }
 
-// cloneNodeConfig returns a shallow copy of the NodeConfig with a
+// cloneThrallConfig returns a shallow copy of the ThrallConfig with a
 // fresh Modules slice and Vars map, so modifications don't affect the original.
-func cloneNodeConfig(cfg *NodeConfig) *NodeConfig {
+func cloneThrallConfig(cfg *ThrallConfig) *ThrallConfig {
 	clone := *cfg
 	clone.Modules = make([]ModuleConfig, len(cfg.Modules))
 	copy(clone.Modules, cfg.Modules)

@@ -8,7 +8,7 @@ import (
 
 var rollbackCmd = &cobra.Command{
 	Use:   "rollback <hostname-or-uuid>",
-	Short: "Rollback a node to a previous state",
+	Short: "Rollback a thrall to a previous state",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runID, _ := cmd.Flags().GetString("run")
@@ -23,7 +23,7 @@ var rollbackCmd = &cobra.Command{
 
 		client := newAPIClient()
 		body := map[string]string{
-			"node_id": args[0],
+			"thrall_id": args[0],
 		}
 		if runID != "" {
 			body["run_id"] = runID
@@ -36,7 +36,7 @@ var rollbackCmd = &cobra.Command{
 			Success bool   `json:"success"`
 			Message string `json:"message"`
 		}
-		err := client.post("/api/v1/nodes/"+args[0]+"/rollback", body, &resp)
+		err := client.post("/api/v1/thralls/"+args[0]+"/rollback", body, &resp)
 		if err != nil {
 			return err
 		}

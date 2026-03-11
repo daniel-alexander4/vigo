@@ -93,7 +93,7 @@ func newTestRegistry(t *testing.T) *registry.Registry {
 	t.Helper()
 	ctx := context.Background()
 	// Delete in correct order for foreign key constraints.
-	for _, table := range []string{"run_results", "runs", "node_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "nodes"} {
+	for _, table := range []string{"run_results", "runs", "thrall_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "thralls"} {
 		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("failed to delete from %s: %v", table, err)
 		}
@@ -198,22 +198,22 @@ func TestRegisterSuccess(t *testing.T) {
 		t.Fatal("expected non-empty client ID")
 	}
 
-	// Verify node was created in DB
-	node, err := db.New(testDB).GetNodeByID(ctx, clientID)
+	// Verify thrall was created in DB
+	thrall, err := db.New(testDB).GetThrallByID(ctx, clientID)
 	if err != nil {
-		t.Fatalf("GetNodeByID failed: %v", err)
+		t.Fatalf("GetThrallByID failed: %v", err)
 	}
-	if node.Hostname != "app01.web.example.com" {
-		t.Errorf("hostname = %q, want %q", node.Hostname, "app01.web.example.com")
+	if thrall.Hostname != "app01.web.example.com" {
+		t.Errorf("hostname = %q, want %q", thrall.Hostname, "app01.web.example.com")
 	}
-	if node.IpAddress != "192.168.1.10" {
-		t.Errorf("ip_address = %q, want %q", node.IpAddress, "192.168.1.10")
+	if thrall.IpAddress != "192.168.1.10" {
+		t.Errorf("ip_address = %q, want %q", thrall.IpAddress, "192.168.1.10")
 	}
-	if node.PubkeyPem != "ed25519-pubkey" {
-		t.Errorf("pubkey_pem = %q, want %q", node.PubkeyPem, "ed25519-pubkey")
+	if thrall.PubkeyPem != "ed25519-pubkey" {
+		t.Errorf("pubkey_pem = %q, want %q", thrall.PubkeyPem, "ed25519-pubkey")
 	}
-	if node.Revoked != 0 {
-		t.Error("newly created node should not be revoked")
+	if thrall.Revoked != 0 {
+		t.Error("newly created thrall should not be revoked")
 	}
 }
 
@@ -341,37 +341,37 @@ func TestRegisterWrongToken(t *testing.T) {
 	}
 }
 
-func TestRevokeNode(t *testing.T) {
+func TestRevokeThrall(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a node
+	// Create and register a thrall
 	token := "revoke-test-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	// Revoke the node
-	err = reg.RevokeNode(ctx, nodeID)
+	// Revoke the thrall
+	err = reg.RevokeThrall(ctx, thrallID)
 	if err != nil {
-		t.Fatalf("RevokeNode failed: %v", err)
+		t.Fatalf("RevokeThrall failed: %v", err)
 	}
 
 	// Verify revocation state in DB
-	node, err := db.New(testDB).GetNodeByID(ctx, nodeID)
+	thrall, err := db.New(testDB).GetThrallByID(ctx, thrallID)
 	if err != nil {
-		t.Fatalf("GetNodeByID failed: %v", err)
+		t.Fatalf("GetThrallByID failed: %v", err)
 	}
-	if node.Revoked == 0 {
-		t.Error("expected node to be revoked")
+	if thrall.Revoked == 0 {
+		t.Error("expected thrall to be revoked")
 	}
-	if !node.RevokedAt.Valid {
+	if !thrall.RevokedAt.Valid {
 		t.Error("expected revoked_at to be set")
 	}
 }
@@ -380,28 +380,28 @@ func TestRevokedNodeCheckIn(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a node
+	// Create and register a thrall
 	token := "checkin-test-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
 	// Revoke
-	err = reg.RevokeNode(ctx, nodeID)
+	err = reg.RevokeThrall(ctx, thrallID)
 	if err != nil {
-		t.Fatalf("RevokeNode failed: %v", err)
+		t.Fatalf("RevokeThrall failed: %v", err)
 	}
 
-	// ValidateNode should return error for revoked node
-	err = reg.ValidateNode(ctx, nodeID)
+	// ValidateNode should return error for revoked thrall
+	err = reg.ValidateThrall(ctx, thrallID)
 	if err == nil {
-		t.Fatal("ValidateNode should return error for revoked node")
+		t.Fatal("ValidateNode should return error for revoked thrall")
 	}
 }
 
@@ -409,25 +409,25 @@ func TestRevokedCannotReenroll(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a node
+	// Create and register a thrall
 	token1 := "first-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
 	// Revoke
-	err = reg.RevokeNode(ctx, nodeID)
+	err = reg.RevokeThrall(ctx, thrallID)
 	if err != nil {
-		t.Fatalf("RevokeNode failed: %v", err)
+		t.Fatalf("RevokeThrall failed: %v", err)
 	}
 
-	// Try to re-enroll the same hostname (ENRL-07: revoked nodes cannot re-enroll)
+	// Try to re-enroll the same hostname (ENRL-07: revoked thralls cannot re-enroll)
 	token2 := "second-token"
 	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token2)
 	if err != nil {
@@ -436,7 +436,7 @@ func TestRevokedCannotReenroll(t *testing.T) {
 
 	_, err = reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-2", token2)
 	if err == nil {
-		t.Fatal("Register should fail for hostname of a revoked node (ENRL-07)")
+		t.Fatal("Register should fail for hostname of a revoked thrall (ENRL-07)")
 	}
 }
 
@@ -444,9 +444,9 @@ func TestValidateNodeNonExistent(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	err := reg.ValidateNode(ctx, "00000000-0000-0000-0000-000000000000")
+	err := reg.ValidateThrall(ctx, "00000000-0000-0000-0000-000000000000")
 	if err == nil {
-		t.Fatal("ValidateNode should return error for non-existent node")
+		t.Fatal("ValidateNode should return error for non-existent thrall")
 	}
 }
 
@@ -454,21 +454,21 @@ func TestValidateNodeActive(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	token := "active-node-token"
+	token := "active-thrall-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	nodeID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	// Active node should validate successfully
-	err = reg.ValidateNode(ctx, nodeID)
+	// Active thrall should validate successfully
+	err = reg.ValidateThrall(ctx, thrallID)
 	if err != nil {
-		t.Fatalf("ValidateNode should succeed for active node: %v", err)
+		t.Fatalf("ValidateNode should succeed for active thrall: %v", err)
 	}
 }
 
@@ -561,12 +561,12 @@ func TestTrustedRegisterSuccess(t *testing.T) {
 		{Pattern: "*.web.example.com", CIDRs: []string{"10.0.1.0/24"}},
 	}
 
-	nodeID, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.100")
+	thrallID, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.100")
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed: %v", err)
 	}
-	if nodeID == "" {
-		t.Fatal("expected non-empty node ID")
+	if thrallID == "" {
+		t.Fatal("expected non-empty thrall ID")
 	}
 }
 
@@ -594,12 +594,12 @@ func TestTrustedRegisterNoCIDRsAllowsAny(t *testing.T) {
 		{Pattern: "*.open.example.com"},
 	}
 
-	nodeID, err := reg.TrustedRegister(ctx, "app01.open.example.com", "anywhere", "ed25519-pubkey", patterns, "203.0.113.50")
+	thrallID, err := reg.TrustedRegister(ctx, "app01.open.example.com", "anywhere", "ed25519-pubkey", patterns, "203.0.113.50")
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed with no CIDR restriction: %v", err)
 	}
-	if nodeID == "" {
-		t.Fatal("expected non-empty node ID")
+	if thrallID == "" {
+		t.Fatal("expected non-empty thrall ID")
 	}
 }
 
@@ -621,16 +621,16 @@ func TestTrustedRegisterRevokedHostname(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and revoke a node with token flow.
+	// Create and revoke a thrall with token flow.
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", "tok")
 	if err != nil {
 		t.Fatal(err)
 	}
-	nodeID, err := reg.Register(ctx, "revoked.example.com", "10.0.1.1", "pk1", "tok")
+	thrallID, err := reg.Register(ctx, "revoked.example.com", "10.0.1.1", "pk1", "tok")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.RevokeNode(ctx, nodeID); err != nil {
+	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -648,11 +648,11 @@ func TestRevokeNonExistentNode(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Revoking a non-existent node should not error (idempotent)
+	// Revoking a non-existent thrall should not error (idempotent)
 	// or could return an error -- depends on design. Testing behavior.
-	err := reg.RevokeNode(ctx, "00000000-0000-0000-0000-000000000000")
+	err := reg.RevokeThrall(ctx, "00000000-0000-0000-0000-000000000000")
 	// We accept either behavior but log it
 	if err != nil {
-		fmt.Printf("RevokeNode for non-existent node returned error: %v (acceptable)\n", err)
+		fmt.Printf("RevokeThrall for non-existent thrall returned error: %v (acceptable)\n", err)
 	}
 }

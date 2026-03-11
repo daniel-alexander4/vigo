@@ -8,7 +8,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 )
 
-// buildPolicyBundle converts a resolved NodeConfig into a PolicyBundle proto.
+// buildPolicyBundle converts a resolved ThrallConfig into a PolicyBundle proto.
 // Secrets are already resolved in the config (at load time). Vars are merged.
 // Template strings and when expressions are left raw — the agent evaluates
 // them locally with its own traits.
@@ -16,7 +16,7 @@ import (
 // If cachedHashes is non-nil, modules whose content hash matches the agent's
 // cached version are sent as stubs (name + hash only, no resources), saving
 // bandwidth when only a subset of modules changed.
-func buildPolicyBundle(cfg *config.NodeConfig, version uint64, cachedHashes map[string]string) (*pb.PolicyBundle, error) {
+func buildPolicyBundle(cfg *config.ThrallConfig, version uint64, cachedHashes map[string]string) (*pb.PolicyBundle, error) {
 	bundle := &pb.PolicyBundle{
 		PolicyVersion:  version,
 		MatchedPattern: cfg.MatchPattern,

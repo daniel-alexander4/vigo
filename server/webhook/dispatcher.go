@@ -21,13 +21,13 @@ import (
 type EventPayload struct {
 	Event     string      `json:"event"`
 	Timestamp time.Time   `json:"timestamp"`
-	Node      *NodeInfo   `json:"node,omitempty"`
+	Thrall      *ThrallInfo   `json:"thrall,omitempty"`
 	Run       *RunInfo    `json:"run,omitempty"`
 	Details   any         `json:"details,omitempty"`
 }
 
-// NodeInfo contains node metadata included in webhook payloads.
-type NodeInfo struct {
+// ThrallInfo contains thrall metadata included in webhook payloads.
+type ThrallInfo struct {
 	ID       string `json:"id"`
 	Hostname string `json:"hostname"`
 	IP       string `json:"ip,omitempty"`
@@ -113,7 +113,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event string, payload EventPa
 }
 
 // DispatchRotation fires a secret.rotated webhook event with the secret path
-// and count of affected nodes.
+// and count of affected thralls.
 func (d *Dispatcher) DispatchRotation(ctx context.Context, event string, secretPath string, affected int) {
 	d.Dispatch(ctx, event, EventPayload{
 		Details: map[string]any{

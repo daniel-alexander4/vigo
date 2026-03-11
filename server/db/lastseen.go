@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// LastSeenBatcher accumulates node IDs and flushes UpdateLastSeen writes
+// LastSeenBatcher accumulates thrall IDs and flushes UpdateLastSeen writes
 // periodically, removing per-check-in write latency from the hot path.
 type LastSeenBatcher struct {
 	mu      sync.Mutex
@@ -23,7 +23,7 @@ func NewLastSeenBatcher(queries *Queries) *LastSeenBatcher {
 	}
 }
 
-// Mark records a node as seen. This is a cheap in-memory operation that
+// Mark records a thrall as seen. This is a cheap in-memory operation that
 // replaces the synchronous UpdateLastSeen DB write on the check-in path.
 func (b *LastSeenBatcher) Mark(id string) {
 	b.mu.Lock()

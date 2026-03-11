@@ -126,7 +126,7 @@ func (m *mockAgentClient) AgentStream(_ context.Context, _ ...grpc.CallOption) (
 func newMockClient(mock *mockAgentClient) *Client {
 	return &Client{
 		agent:      mock,
-		nodeID:     "test-node-id",
+		thrallID:     "test-thrall-id",
 		privateKey: make([]byte, 64), // fake key, signing will produce deterministic output
 	}
 }

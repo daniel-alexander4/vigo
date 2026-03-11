@@ -20,18 +20,18 @@ func NewCollector(queries *db.Queries) *Collector {
 
 // UpdateGauges queries the database and updates all gauge metrics.
 func (c *Collector) UpdateGauges(ctx context.Context) error {
-	nodes, err := c.queries.ListNodes(ctx)
+	thralls, err := c.queries.ListThralls(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Single pass: compute all node metrics.
-	NodesTotal.Set(float64(len(nodes)))
+	// Single pass: compute all thrall metrics.
+	ThrallsTotal.Set(float64(len(thralls)))
 
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
 	var activeCount, totalNonRevoked, compliantCount int
-	for _, n := range nodes {
+	for _, n := range thralls {
 		recentlyActive := n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo)
 
 		if recentlyActive {
@@ -47,7 +47,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 			}
 		}
 	}
-	NodesActive.Set(float64(activeCount))
+	ThrallsActive.Set(float64(activeCount))
 
 	if totalNonRevoked > 0 {
 		CompliancePct.Set(float64(compliantCount) / float64(totalNonRevoked))

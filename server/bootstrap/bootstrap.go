@@ -115,7 +115,7 @@ echo "Server: ${SERVER_ADDR}"
 
 # Create directories.
 INSTALL_DIR="/usr/local/bin"
-DATA_DIR="/etc/hobnob-node"
+DATA_DIR="/etc/hobnob-thrall"
 mkdir -p "$DATA_DIR"
 
 # Download agent binary.
@@ -136,14 +136,14 @@ GRPC_HOST="$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')
 
 # Install systemd service (if systemd is available).
 if command -v systemctl > /dev/null 2>&1; then
-    cat > /etc/systemd/system/hobnob-node.service << SYSTEMD
+    cat > /etc/systemd/system/hobnob-thrall.service << SYSTEMD
 [Unit]
 Description=Hobnob Configuration Management Agent
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-node
+ExecStart=/usr/local/bin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall
 Restart=always
 RestartSec=10
 
@@ -151,8 +151,8 @@ RestartSec=10
 WantedBy=multi-user.target
 SYSTEMD
     systemctl daemon-reload
-    systemctl enable hobnob-node
-    systemctl start hobnob-node
+    systemctl enable hobnob-thrall
+    systemctl start hobnob-thrall
     echo "Hobnob agent service installed and started."
 else
     echo "systemd not found. Start the agent manually:"
@@ -163,7 +163,7 @@ echo "Bootstrap complete."
 `))
 
 // BootstrapScript serves a shell script that installs the agent and enrolls
-// the node. Token is optional — if omitted, the agent uses trusted enrollment.
+// the thrall. Token is optional — if omitted, the agent uses trusted enrollment.
 func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 
@@ -175,7 +175,7 @@ func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Derive the server address from the request if the configured address
-	// is just a port (e.g. ":8181"). The node needs a full URL to curl from.
+	// is just a port (e.g. ":8181"). The thrall needs a full URL to curl from.
 	serverAddr := h.serverAddr
 	if strings.HasPrefix(serverAddr, ":") {
 		// Derive from request Host header, but only use the hostname portion
@@ -211,7 +211,7 @@ type bootstrapRegisterRequest struct {
 
 // bootstrapRegisterResponse is the JSON response for POST /api/v1/bootstrap/register.
 type bootstrapRegisterResponse struct {
-	NodeID        string `json:"node_id"`
+	ThrallID        string `json:"node_id"`
 	SignedCertPEM string `json:"signed_cert_pem"`
 	CACertPEM     string `json:"ca_cert_pem"`
 }
@@ -246,19 +246,19 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		"has_token", req.Token != "",
 	)
 
-	var nodeID string
+	var thrallID string
 	var err error
 
 	if req.Token != "" {
 		// Token-based enrollment (existing flow).
-		nodeID, err = h.registry.Register(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, req.Token)
+		thrallID, err = h.registry.Register(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, req.Token)
 	} else {
 		// Trusted enrollment (no token — validate hostname+CIDR).
 		if len(h.trustedPatterns) == 0 {
 			http.Error(w, "no token provided and no trusted enrollment patterns configured", http.StatusForbidden)
 			return
 		}
-		nodeID, err = h.registry.TrustedRegister(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, h.trustedPatterns, peerIP)
+		thrallID, err = h.registry.TrustedRegister(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, h.trustedPatterns, peerIP)
 	}
 
 	if err != nil {
@@ -282,16 +282,16 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("node bootstrapped",
+	slog.Info("thrall bootstrapped",
 		"hostname", req.Hostname,
-		"node_id", nodeID,
+		"node_id", thrallID,
 	)
 
 	// Dispatch webhook event.
 	if h.dispatcher != nil {
-		h.dispatcher.Dispatch(r.Context(), "node.enrolled", webhook.EventPayload{
-			Node: &webhook.NodeInfo{
-				ID:       nodeID,
+		h.dispatcher.Dispatch(r.Context(), "thrall.enrolled", webhook.EventPayload{
+			Thrall: &webhook.ThrallInfo{
+				ID:       thrallID,
 				Hostname: req.Hostname,
 				IP:       req.IPAddress,
 			},
@@ -299,7 +299,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := bootstrapRegisterResponse{
-		NodeID:        nodeID,
+		ThrallID:        thrallID,
 		SignedCertPEM: string(signedCert),
 		CACertPEM:     string(h.ca.CACertPEM()),
 	}

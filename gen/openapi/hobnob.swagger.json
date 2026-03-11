@@ -106,7 +106,7 @@
     },
     "/api/v1/compliance": {
       "get": {
-        "summary": "GetComplianceSummary returns aggregate compliance status across all nodes.",
+        "summary": "GetComplianceSummary returns aggregate compliance status across all thralls.",
         "operationId": "HobnobAdmin_GetComplianceSummary",
         "responses": {
           "200": {
@@ -160,240 +160,9 @@
         ]
       }
     },
-    "/api/v1/nodes": {
-      "get": {
-        "summary": "ListNodes lists all enrolled nodes.",
-        "operationId": "HobnobAdmin_ListNodes",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListNodesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "HobnobAdmin"
-        ]
-      }
-    },
-    "/api/v1/nodes/{id}": {
-      "get": {
-        "summary": "GetNode returns details for a single node.",
-        "operationId": "HobnobAdmin_GetNode",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetNodeResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "HobnobAdmin"
-        ]
-      },
-      "delete": {
-        "summary": "DeleteNode permanently removes a node and all its history from the database.",
-        "operationId": "HobnobAdmin_DeleteNode",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DeleteNodeResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "HobnobAdmin"
-        ]
-      }
-    },
-    "/api/v1/nodes/{id}/compliance": {
-      "get": {
-        "summary": "GetNodeCompliance returns compliance details for a single node.",
-        "operationId": "HobnobAdmin_GetNodeCompliance",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetNodeComplianceResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "HobnobAdmin"
-        ]
-      }
-    },
-    "/api/v1/nodes/{id}/revoke": {
-      "post": {
-        "summary": "RevokeNode revokes an enrolled node, blocking future check-ins.",
-        "operationId": "HobnobAdmin_RevokeNode",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1RevokeNodeResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/HobnobAdminRevokeNodeBody"
-            }
-          }
-        ],
-        "tags": [
-          "HobnobAdmin"
-        ]
-      }
-    },
-    "/api/v1/nodes/{nodeId}/dry-run": {
-      "post": {
-        "summary": "DryRun computes a plan without applying changes.",
-        "operationId": "HobnobAdmin_DryRun",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DryRunResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "nodeId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/HobnobAdminDryRunBody"
-            }
-          }
-        ],
-        "tags": [
-          "HobnobAdmin"
-        ]
-      }
-    },
-    "/api/v1/nodes/{nodeId}/rollback": {
-      "post": {
-        "summary": "Rollback reverts a node to a previous run's state.",
-        "operationId": "HobnobAdmin_Rollback",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1RollbackResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "nodeId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/HobnobAdminRollbackBody"
-            }
-          }
-        ],
-        "tags": [
-          "HobnobAdmin"
-        ]
-      }
-    },
     "/api/v1/packages": {
       "get": {
-        "summary": "ListPackages lists package audit records, optionally filtered by node.",
+        "summary": "ListPackages lists package audit records, optionally filtered by thrall.",
         "operationId": "HobnobAdmin_ListPackages",
         "responses": {
           "200": {
@@ -411,7 +180,7 @@
         },
         "parameters": [
           {
-            "name": "nodeId",
+            "name": "thrallId",
             "description": "optional filter",
             "in": "query",
             "required": false,
@@ -448,7 +217,7 @@
     },
     "/api/v1/push": {
       "post": {
-        "summary": "ForcePush triggers an immediate check-in for a node or all nodes.",
+        "summary": "ForcePush triggers an immediate check-in for a thrall or all thralls.",
         "operationId": "HobnobAdmin_ForcePush",
         "responses": {
           "200": {
@@ -481,7 +250,7 @@
     },
     "/api/v1/runs": {
       "get": {
-        "summary": "ListRuns lists recent runs, optionally filtered by node.",
+        "summary": "ListRuns lists recent runs, optionally filtered by thrall.",
         "operationId": "HobnobAdmin_ListRuns",
         "responses": {
           "200": {
@@ -499,7 +268,7 @@
         },
         "parameters": [
           {
-            "name": "nodeId",
+            "name": "thrallId",
             "description": "optional filter",
             "in": "query",
             "required": false,
@@ -543,6 +312,237 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "HobnobAdmin"
+        ]
+      }
+    },
+    "/api/v1/thralls": {
+      "get": {
+        "summary": "ListThralls lists all enrolled thralls.",
+        "operationId": "HobnobAdmin_ListThralls",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListThrallsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "HobnobAdmin"
+        ]
+      }
+    },
+    "/api/v1/thralls/{id}": {
+      "get": {
+        "summary": "GetThrall returns details for a single thrall.",
+        "operationId": "HobnobAdmin_GetThrall",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetThrallResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "HobnobAdmin"
+        ]
+      },
+      "delete": {
+        "summary": "DeleteThrall permanently removes a thrall and all its history from the database.",
+        "operationId": "HobnobAdmin_DeleteThrall",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteThrallResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "HobnobAdmin"
+        ]
+      }
+    },
+    "/api/v1/thralls/{id}/compliance": {
+      "get": {
+        "summary": "GetThrallCompliance returns compliance details for a single thrall.",
+        "operationId": "HobnobAdmin_GetThrallCompliance",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetThrallComplianceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "HobnobAdmin"
+        ]
+      }
+    },
+    "/api/v1/thralls/{id}/revoke": {
+      "post": {
+        "summary": "RevokeThrall revokes an enrolled thrall, blocking future check-ins.",
+        "operationId": "HobnobAdmin_RevokeThrall",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeThrallResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/HobnobAdminRevokeThrallBody"
+            }
+          }
+        ],
+        "tags": [
+          "HobnobAdmin"
+        ]
+      }
+    },
+    "/api/v1/thralls/{thrallId}/dry-run": {
+      "post": {
+        "summary": "DryRun computes a plan without applying changes.",
+        "operationId": "HobnobAdmin_DryRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DryRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "thrallId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/HobnobAdminDryRunBody"
+            }
+          }
+        ],
+        "tags": [
+          "HobnobAdmin"
+        ]
+      }
+    },
+    "/api/v1/thralls/{thrallId}/rollback": {
+      "post": {
+        "summary": "Rollback reverts a thrall to a previous run's state.",
+        "operationId": "HobnobAdmin_Rollback",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RollbackResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "thrallId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/HobnobAdminRollbackBody"
+            }
           }
         ],
         "tags": [
@@ -673,7 +673,7 @@
     "HobnobAdminDryRunBody": {
       "type": "object"
     },
-    "HobnobAdminRevokeNodeBody": {
+    "HobnobAdminRevokeThrallBody": {
       "type": "object"
     },
     "HobnobAdminRollbackBody": {
@@ -787,7 +787,7 @@
         },
         "usedBy": {
           "type": "string",
-          "title": "node UUID if used"
+          "title": "thrall UUID if used"
         }
       }
     },
@@ -823,7 +823,7 @@
         }
       }
     },
-    "v1DeleteNodeResponse": {
+    "v1DeleteThrallResponse": {
       "type": "object"
     },
     "v1DeleteWebhookResponse": {
@@ -844,16 +844,16 @@
     "v1ForcePushRequest": {
       "type": "object",
       "properties": {
-        "nodeId": {
+        "thrallId": {
           "type": "string",
-          "title": "empty = all nodes"
+          "title": "empty = all thralls"
         }
       }
     },
     "v1ForcePushResponse": {
       "type": "object",
       "properties": {
-        "nodesNotified": {
+        "thrallsNotified": {
           "type": "integer",
           "format": "int32"
         }
@@ -903,7 +903,22 @@
         }
       }
     },
-    "v1GetNodeComplianceResponse": {
+    "v1GetRunResponse": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "$ref": "#/definitions/v1Run"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ModuleResult"
+          }
+        }
+      }
+    },
+    "v1GetThrallComplianceResponse": {
       "type": "object",
       "properties": {
         "status": {
@@ -921,26 +936,11 @@
         }
       }
     },
-    "v1GetNodeResponse": {
+    "v1GetThrallResponse": {
       "type": "object",
       "properties": {
-        "node": {
-          "$ref": "#/definitions/v1Node"
-        }
-      }
-    },
-    "v1GetRunResponse": {
-      "type": "object",
-      "properties": {
-        "run": {
-          "$ref": "#/definitions/v1Run"
-        },
-        "results": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1ModuleResult"
-          }
+        "thrall": {
+          "$ref": "#/definitions/v1Thrall"
         }
       }
     },
@@ -952,18 +952,6 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1ApprovedPattern"
-          }
-        }
-      }
-    },
-    "v1ListNodesResponse": {
-      "type": "object",
-      "properties": {
-        "nodes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Node"
           }
         }
       }
@@ -1000,6 +988,18 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1Run"
+          }
+        }
+      }
+    },
+    "v1ListThrallsResponse": {
+      "type": "object",
+      "properties": {
+        "thralls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Thrall"
           }
         }
       }
@@ -1044,39 +1044,10 @@
         }
       }
     },
-    "v1Node": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        },
-        "ipAddress": {
-          "type": "string"
-        },
-        "enrolledAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "lastSeen": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "revoked": {
-          "type": "boolean"
-        },
-        "revokedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
     "v1PackageDrift": {
       "type": "object",
       "properties": {
-        "nodeId": {
+        "thrallId": {
           "type": "string"
         },
         "hostname": {
@@ -1100,7 +1071,7 @@
     "v1PackageInfo": {
       "type": "object",
       "properties": {
-        "nodeId": {
+        "thrallId": {
           "type": "string"
         },
         "hostname": {
@@ -1166,7 +1137,7 @@
     "v1RevokeApprovedPatternResponse": {
       "type": "object"
     },
-    "v1RevokeNodeResponse": {
+    "v1RevokeThrallResponse": {
       "type": "object"
     },
     "v1RollbackResponse": {
@@ -1186,7 +1157,7 @@
         "id": {
           "type": "string"
         },
-        "nodeId": {
+        "thrallId": {
           "type": "string"
         },
         "startedAt": {
@@ -1216,6 +1187,35 @@
         "skippedCount": {
           "type": "integer",
           "format": "int32"
+        }
+      }
+    },
+    "v1Thrall": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "ipAddress": {
+          "type": "string"
+        },
+        "enrolledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastSeen": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revoked": {
+          "type": "boolean"
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },

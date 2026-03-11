@@ -6,7 +6,7 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 )
 
-// VirtualCollector detects virtualization: whether the node is a VM or
+// VirtualCollector detects virtualization: whether the thrall is a VM or
 // container, the hypervisor/runtime system, and the role (guest/host).
 type VirtualCollector struct{}
 

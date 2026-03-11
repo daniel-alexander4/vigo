@@ -11,16 +11,16 @@ import (
 )
 
 const createSecretRotationEvent = `-- name: CreateSecretRotationEvent :one
-INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_nodes)
+INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_thralls)
 VALUES (?, ?, ?, ?)
-RETURNING id, secret_path, old_version, new_version, rotated_at, affected_nodes
+RETURNING id, secret_path, old_version, new_version, rotated_at, affected_thralls
 `
 
 type CreateSecretRotationEventParams struct {
-	SecretPath    string         `json:"secret_path"`
-	OldVersion    sql.NullString `json:"old_version"`
-	NewVersion    sql.NullString `json:"new_version"`
-	AffectedNodes int64          `json:"affected_nodes"`
+	SecretPath      string         `json:"secret_path"`
+	OldVersion      sql.NullString `json:"old_version"`
+	NewVersion      sql.NullString `json:"new_version"`
+	AffectedThralls int64          `json:"affected_thralls"`
 }
 
 func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecretRotationEventParams) (SecretRotationEvent, error) {
@@ -28,7 +28,7 @@ func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecre
 		arg.SecretPath,
 		arg.OldVersion,
 		arg.NewVersion,
-		arg.AffectedNodes,
+		arg.AffectedThralls,
 	)
 	var i SecretRotationEvent
 	err := row.Scan(
@@ -37,13 +37,13 @@ func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecre
 		&i.OldVersion,
 		&i.NewVersion,
 		&i.RotatedAt,
-		&i.AffectedNodes,
+		&i.AffectedThralls,
 	)
 	return i, err
 }
 
 const listSecretRotationEvents = `-- name: ListSecretRotationEvents :many
-SELECT id, secret_path, old_version, new_version, rotated_at, affected_nodes
+SELECT id, secret_path, old_version, new_version, rotated_at, affected_thralls
 FROM secret_rotation_events
 ORDER BY rotated_at DESC
 LIMIT ?
@@ -64,7 +64,7 @@ func (q *Queries) ListSecretRotationEvents(ctx context.Context, limit int64) ([]
 			&i.OldVersion,
 			&i.NewVersion,
 			&i.RotatedAt,
-			&i.AffectedNodes,
+			&i.AffectedThralls,
 		); err != nil {
 			return nil, err
 		}

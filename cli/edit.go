@@ -116,7 +116,7 @@ const hobSyntax = `" Vim syntax file for Hobnob .hnb configuration files
 runtime! syntax/yaml.vim
 
 " Hobnob top-level keys
-syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|nodes\|depends_on\|when\|environment\|env_vars\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|thralls\|depends_on\|when\|environment\|env_vars\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi hobTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes

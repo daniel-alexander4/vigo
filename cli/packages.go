@@ -15,19 +15,19 @@ var packagesCmd = &cobra.Command{
 
 var packagesListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List packages across nodes",
+	Short: "List packages across thralls",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		nodeID, _ := cmd.Flags().GetString("node")
+		thrallID, _ := cmd.Flags().GetString("thrall")
 
 		path := "/api/v1/packages"
-		if nodeID != "" {
-			path += "?node_id=" + nodeID
+		if thrallID != "" {
+			path += "?thrall_id=" + thrallID
 		}
 
 		client := newAPIClient()
 		var resp struct {
 			Packages []struct {
-				NodeID           string `json:"nodeId"`
+				ThrallID           string `json:"thrallId"`
 				Hostname         string `json:"hostname"`
 				PackageName      string `json:"packageName"`
 				InstalledVersion string `json:"installedVersion"`
@@ -39,7 +39,7 @@ var packagesListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NODE\tPACKAGE\tINSTALLED\tDESIRED")
+		fmt.Fprintln(w, "THRALL\tPACKAGE\tINSTALLED\tDESIRED")
 		for _, p := range resp.Packages {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 				p.Hostname, p.PackageName, p.InstalledVersion, p.DesiredVersion)
@@ -55,7 +55,7 @@ var packagesDriftCmd = &cobra.Command{
 		client := newAPIClient()
 		var resp struct {
 			Drifts []struct {
-				NodeID           string `json:"nodeId"`
+				ThrallID           string `json:"thrallId"`
 				Hostname         string `json:"hostname"`
 				PackageName      string `json:"packageName"`
 				InstalledVersion string `json:"installedVersion"`
@@ -73,7 +73,7 @@ var packagesDriftCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NODE\tPACKAGE\tINSTALLED\tDESIRED\tDETECTED")
+		fmt.Fprintln(w, "THRALL\tPACKAGE\tINSTALLED\tDESIRED\tDETECTED")
 		for _, d := range resp.Drifts {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				d.Hostname, d.PackageName, d.InstalledVersion,
@@ -84,6 +84,6 @@ var packagesDriftCmd = &cobra.Command{
 }
 
 func init() {
-	packagesListCmd.Flags().String("node", "", "Filter by node ID")
+	packagesListCmd.Flags().String("thrall", "", "Filter by thrall ID")
 	packagesCmd.AddCommand(packagesListCmd, packagesDriftCmd)
 }

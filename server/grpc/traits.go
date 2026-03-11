@@ -16,10 +16,10 @@ import (
 // collected traits as JSONB in the database and prunes old entries to enforce
 // a 10-snapshot retention policy (DB-04).
 func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsRequest) (*pb.ReportTraitsResponse, error) {
-	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
+	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
-	nodeID := req.GetNodeId()
+	thrallID := req.GetThrallId()
 
 	traitsJSON := req.GetTraitsJson()
 	if len(traitsJSON) == 0 {
@@ -32,13 +32,13 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	}
 
 	// Store the traits.
-	_, err := s.queries.InsertNodeTraits(ctx, db.InsertNodeTraitsParams{
-		NodeID: nodeID,
+	_, err := s.queries.InsertThrallTraits(ctx, db.InsertThrallTraitsParams{
+		ThrallID: thrallID,
 		Traits: string(traitsJSON),
 	})
 	if err != nil {
-		slog.Error("failed to insert node traits",
-			"node_id", nodeID,
+		slog.Error("failed to insert thrall traits",
+			"node_id", thrallID,
 			"error", err,
 		)
 		return nil, status.Errorf(codes.Internal, "storing traits: %v", err)
@@ -46,11 +46,11 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 
 	// Schedule async pruning to enforce 10-snapshot retention.
 	if s.traitsPruner != nil {
-		s.traitsPruner.Mark(nodeID)
+		s.traitsPruner.Mark(thrallID)
 	}
 
 	slog.Info("traits reported",
-		"node_id", nodeID,
+		"node_id", thrallID,
 		"traits_size", len(traitsJSON),
 	)
 

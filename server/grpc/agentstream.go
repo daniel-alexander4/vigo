@@ -33,34 +33,34 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 		return status.Error(codes.InvalidArgument, "first stream message must be check_in")
 	}
 
-	if _, err := uuid.Parse(checkin.GetNodeId()); err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
+	if _, err := uuid.Parse(checkin.GetThrallId()); err != nil {
+		return status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
-	nodeID := checkin.GetNodeId()
+	thrallID := checkin.GetThrallId()
 
-	// Validate node is not revoked.
-	if err := s.registry.ValidateNode(stream.Context(), nodeID); err != nil {
-		if errors.Is(err, registry.ErrNodeRevoked) {
-			return status.Error(codes.PermissionDenied, "node is revoked")
+	// Validate thrall is not revoked.
+	if err := s.registry.ValidateThrall(stream.Context(), thrallID); err != nil {
+		if errors.Is(err, registry.ErrThrallRevoked) {
+			return status.Error(codes.PermissionDenied, "thrall is revoked")
 		}
-		if errors.Is(err, registry.ErrNodeNotFound) {
-			return status.Error(codes.NotFound, "node not found")
+		if errors.Is(err, registry.ErrThrallNotFound) {
+			return status.Error(codes.NotFound, "thrall not found")
 		}
-		return status.Errorf(codes.Internal, "validating node: %v", err)
+		return status.Errorf(codes.Internal, "validating thrall: %v", err)
 	}
 
-	// Look up node for hostname.
-	node, err := s.lookupNode(stream.Context(), nodeID)
+	// Look up thrall for hostname.
+	thrall, err := s.lookupThrall(stream.Context(), thrallID)
 	if err != nil {
 		return err
 	}
 
 	// Register the stream for push notifications.
-	as, cleanup := s.streamMgr.register(nodeID, node.Hostname)
+	as, cleanup := s.streamMgr.register(thrallID, thrall.Hostname)
 	defer cleanup()
 
 	// Send initial policy response.
-	resp, err := s.buildCheckInResponse(stream.Context(), nodeID, node, checkin)
+	resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, checkin)
 	if err != nil {
 		return err
 	}
@@ -74,8 +74,8 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 	metrics.CheckinsTotal.WithLabelValues("stream_connect").Inc()
 	slog.Info("agent stream established",
-		"node_id", nodeID,
-		"hostname", node.Hostname,
+		"thrall_id", thrallID,
+		"hostname", thrall.Hostname,
 	)
 
 	// Two goroutines: one reads from agent, one writes push messages.
@@ -115,9 +115,9 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
-				resp, err := s.buildCheckInResponse(stream.Context(), nodeID, node, m.CheckIn)
+				resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, m.CheckIn)
 				if err != nil {
-					slog.Error("stream check-in error", "node_id", nodeID, "error", err)
+					slog.Error("stream check-in error", "thrall_id", thrallID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -132,7 +132,7 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 			case *pb.AgentStreamMessage_ReportResult:
 				resp, err := s.ReportResult(stream.Context(), m.ReportResult)
 				if err != nil {
-					slog.Error("stream report-result error", "node_id", nodeID, "error", err)
+					slog.Error("stream report-result error", "thrall_id", thrallID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -147,7 +147,7 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 			case *pb.AgentStreamMessage_ReportTraits:
 				resp, err := s.ReportTraits(stream.Context(), m.ReportTraits)
 				if err != nil {
-					slog.Error("stream report-traits error", "node_id", nodeID, "error", err)
+					slog.Error("stream report-traits error", "thrall_id", thrallID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -168,22 +168,22 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 // buildCheckInResponse builds a CheckInResponse for both unary and stream contexts.
 // Extracted from CheckIn() to share logic.
-func (s *AgentService) buildCheckInResponse(ctx context.Context, nodeID string, node db.Node, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
+func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string, thrall db.Thrall, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
 	// Batch last-seen update.
 	if s.lastSeenBatch != nil {
-		s.lastSeenBatch.Mark(nodeID)
+		s.lastSeenBatch.Mark(thrallID)
 	}
 
 	// Store inline traits for admin queries.
 	inlineTraits := req.GetTraitsJson()
 	if len(inlineTraits) > 0 && json.Valid(inlineTraits) {
-		if _, dbErr := s.queries.InsertNodeTraits(ctx, db.InsertNodeTraitsParams{
-			NodeID: nodeID,
+		if _, dbErr := s.queries.InsertThrallTraits(ctx, db.InsertThrallTraitsParams{
+			ThrallID: thrallID,
 			Traits: string(inlineTraits),
 		}); dbErr != nil {
-			slog.Error("failed to store inline traits", "node_id", nodeID, "error", dbErr)
+			slog.Error("failed to store inline traits", "thrall_id", thrallID, "error", dbErr)
 		} else if s.traitsPruner != nil {
-			s.traitsPruner.Mark(nodeID)
+			s.traitsPruner.Mark(thrallID)
 		}
 	}
 
@@ -199,10 +199,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, nodeID string, 
 	}
 
 	// Look up config using pattern index.
-	pattern, cfg := s.configStore.Match(node.Hostname)
+	pattern, cfg := s.configStore.Match(thrall.Hostname)
 	if cfg == nil {
-		cfg = &config.NodeConfig{
-			Node:    node.Hostname,
+		cfg = &config.ThrallConfig{
+			Thrall:    thrall.Hostname,
 			Modules: []config.ModuleConfig{},
 		}
 		pattern = ""

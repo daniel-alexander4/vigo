@@ -27,14 +27,14 @@ const defaultSignatureWindow = 5 * time.Minute
 // ED25519 signatures on agent requests (SEC-03). The Register RPC is skipped
 // because the agent does not have a UUID yet during enrollment.
 //
-// When a NodeCache is provided, node lookups are served from cache,
-// avoiding a DB round-trip on every request. The looked-up node is stored
+// When a ThrallCache is provided, thrall lookups are served from cache,
+// avoiding a DB round-trip on every request. The looked-up thrall is stored
 // in the request context so downstream handlers can reuse it without another
 // lookup.
 //
 // sigWindow configures the maximum age of a signed request before rejection
 // for replay prevention. If zero, defaults to 5 minutes.
-func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache, sigWindow time.Duration) grpc.UnaryServerInterceptor {
+func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.ThrallCache, sigWindow time.Duration) grpc.UnaryServerInterceptor {
 	if sigWindow == 0 {
 		sigWindow = defaultSignatureWindow
 	}
@@ -76,14 +76,14 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.NodeCache, si
 }
 
 // verifyCheckIn validates the signature on a CheckInRequest. On success, it
-// returns a context enriched with the looked-up node for handler reuse.
-func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.CheckInRequest, sigWindow time.Duration) (context.Context, error) {
-	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
-		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
+// returns a context enriched with the looked-up thrall for handler reuse.
+func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, req *pb.CheckInRequest, sigWindow time.Duration) (context.Context, error) {
+	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
-	nodeID := req.GetNodeId()
+	thrallID := req.GetThrallId()
 
-	node, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
+	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, cache, thrallID)
 	if err != nil {
 		return ctx, err
 	}
@@ -106,19 +106,19 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.NodeCache
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
-	// Store node in context for handler reuse (eliminates duplicate lookups).
-	return db.ContextWithNode(ctx, node), nil
+	// Store thrall in context for handler reuse (eliminates duplicate lookups).
+	return db.ContextWithThrall(ctx, thrall), nil
 }
 
 // verifyReportResultCtx validates the signature on a ReportResultRequest and
-// stores the node in context for handler reuse.
-func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportResultRequest, sigWindow time.Duration) (context.Context, error) {
-	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
-		return ctx, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
+// stores the thrall in context for handler reuse.
+func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, req *pb.ReportResultRequest, sigWindow time.Duration) (context.Context, error) {
+	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
-	nodeID := req.GetNodeId()
+	thrallID := req.GetThrallId()
 
-	node, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
+	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, cache, thrallID)
 	if err != nil {
 		return ctx, err
 	}
@@ -140,17 +140,17 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.N
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
-	return db.ContextWithNode(ctx, node), nil
+	return db.ContextWithThrall(ctx, thrall), nil
 }
 
 // verifyReportTraits validates the signature on a ReportTraitsRequest.
-func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.NodeCache, req *pb.ReportTraitsRequest, sigWindow time.Duration) error {
-	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
+func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, req *pb.ReportTraitsRequest, sigWindow time.Duration) error {
+	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
+		return status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
-	nodeID := req.GetNodeId()
+	thrallID := req.GetThrallId()
 
-	_, pubKey, err := lookupNodeAndPubKey(ctx, queries, cache, nodeID)
+	_, pubKey, err := lookupThrallAndPubKey(ctx, queries, cache, thrallID)
 	if err != nil {
 		return err
 	}
@@ -175,46 +175,46 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.Node
 	return nil
 }
 
-// lookupNodeAndPubKey retrieves a node and its parsed ED25519 public key.
-// When a NodeCache is available, the parsed pubkey is served from cache,
+// lookupThrallAndPubKey retrieves a thrall and its parsed ED25519 public key.
+// When a ThrallCache is available, the parsed pubkey is served from cache,
 // eliminating PEM decode + x509 parse on every RPC. Falls back to direct
 // DB queries + on-the-fly parsing when no cache is configured.
-func lookupNodeAndPubKey(ctx context.Context, queries *db.Queries, cache *db.NodeCache, nodeID string) (db.Node, ed25519.PublicKey, error) {
-	// Fast path: cache returns both node and parsed pubkey.
+func lookupThrallAndPubKey(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, thrallID string) (db.Thrall, ed25519.PublicKey, error) {
+	// Fast path: cache returns both thrall and parsed pubkey.
 	if cache != nil {
-		node, pubKey, err := cache.GetByIDWithPubKey(ctx, nodeID)
+		thrall, pubKey, err := cache.GetByIDWithPubKey(ctx, thrallID)
 		if err != nil {
-			metrics.SigVerifyFailed.WithLabelValues("node_not_found").Inc()
-			slog.Error("node lookup failed", "node_id", nodeID, "error", err)
-			return db.Node{}, nil, status.Error(codes.Unauthenticated, "node not found")
+			metrics.SigVerifyFailed.WithLabelValues("thrall_not_found").Inc()
+			slog.Error("thrall lookup failed", "thrall_id", thrallID, "error", err)
+			return db.Thrall{}, nil, status.Error(codes.Unauthenticated, "thrall not found")
 		}
-		return node, pubKey, nil
+		return thrall, pubKey, nil
 	}
 
 	// Slow path: direct DB query + parse.
-	node, err := queries.GetNodeByID(ctx, nodeID)
+	thrall, err := queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
-		metrics.SigVerifyFailed.WithLabelValues("node_not_found").Inc()
-		slog.Error("node lookup failed", "node_id", nodeID, "error", err)
-		return db.Node{}, nil, status.Error(codes.Unauthenticated, "node not found")
+		metrics.SigVerifyFailed.WithLabelValues("thrall_not_found").Inc()
+		slog.Error("thrall lookup failed", "thrall_id", thrallID, "error", err)
+		return db.Thrall{}, nil, status.Error(codes.Unauthenticated, "thrall not found")
 	}
 
-	block, _ := pem.Decode([]byte(node.PubkeyPem))
+	block, _ := pem.Decode([]byte(thrall.PubkeyPem))
 	if block == nil {
-		return db.Node{}, nil, status.Error(codes.Internal, "invalid stored public key")
+		return db.Thrall{}, nil, status.Error(codes.Internal, "invalid stored public key")
 	}
 
 	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return db.Node{}, nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
+		return db.Thrall{}, nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
 	}
 
 	pubKey, ok := parsed.(ed25519.PublicKey)
 	if !ok {
-		return db.Node{}, nil, status.Error(codes.Internal, "stored key is not ED25519")
+		return db.Thrall{}, nil, status.Error(codes.Internal, "stored key is not ED25519")
 	}
 
-	return node, pubKey, nil
+	return thrall, pubKey, nil
 }
 
 // checkTimestamp verifies the timestamp is within the allowed window.

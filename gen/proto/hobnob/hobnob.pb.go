@@ -94,7 +94,7 @@ func (x *RegisterRequest) GetToken() string {
 type RegisterResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // UUID assigned by the server
+	ThrallId      string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // UUID assigned by the server
 	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	SpokeAddr     string                 `protobuf:"bytes,4,opt,name=spoke_addr,json=spokeAddr,proto3" json:"spoke_addr,omitempty"` // if set, agent should connect to this spoke for check-ins
 	unknownFields protoimpl.UnknownFields
@@ -138,9 +138,9 @@ func (x *RegisterResponse) GetSuccess() bool {
 	return false
 }
 
-func (x *RegisterResponse) GetNodeId() string {
+func (x *RegisterResponse) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -161,7 +161,7 @@ func (x *RegisterResponse) GetSpokeAddr() string {
 
 type CheckInRequest struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
-	NodeId             string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId           string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	StateFingerprint   string                 `protobuf:"bytes,2,opt,name=state_fingerprint,json=stateFingerprint,proto3" json:"state_fingerprint,omitempty"`
 	Signature          []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -203,9 +203,9 @@ func (*CheckInRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CheckInRequest) GetNodeId() string {
+func (x *CheckInRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -666,7 +666,7 @@ type PolicyBundle struct {
 	ConditionalVars []*ConditionalVarDef   `protobuf:"bytes,5,rep,name=conditional_vars,json=conditionalVars,proto3" json:"conditional_vars,omitempty"`
 	CustomTraits    []*CustomTraitEntry    `protobuf:"bytes,6,rep,name=custom_traits,json=customTraits,proto3" json:"custom_traits,omitempty"`
 	// Trace fields for dry-run resolution visibility.
-	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // node entry match pattern from nodes.hnb
+	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // thrall entry match pattern from thralls.hnb
 	Environment    string   `protobuf:"bytes,8,opt,name=environment,proto3" json:"environment,omitempty"`                             // resolved environment
 	Roles          []string `protobuf:"bytes,9,rep,name=roles,proto3" json:"roles,omitempty"`                                         // role names that were expanded
 	unknownFields  protoimpl.UnknownFields
@@ -1010,7 +1010,7 @@ func (x *ConditionalVarDef) GetOperandJson() string {
 type ReportResultRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId      string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	Results       []*ModuleResult        `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	Signature     []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -1055,9 +1055,9 @@ func (x *ReportResultRequest) GetRunId() string {
 	return ""
 }
 
-func (x *ReportResultRequest) GetNodeId() string {
+func (x *ReportResultRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -1221,7 +1221,7 @@ func (x *ReportResultResponse) GetAcknowledged() bool {
 
 type ReportTraitsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	TraitsJson    []byte                 `protobuf:"bytes,2,opt,name=traits_json,json=traitsJson,proto3" json:"traits_json,omitempty"` // JSON-encoded traits map
 	Signature     []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -1259,9 +1259,9 @@ func (*ReportTraitsRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ReportTraitsRequest) GetNodeId() string {
+func (x *ReportTraitsRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -1850,7 +1850,7 @@ type ApprovedPattern struct {
 	Pattern       string                 `protobuf:"bytes,2,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	Used          bool                   `protobuf:"varint,4,opt,name=used,proto3" json:"used,omitempty"`
-	UsedBy        string                 `protobuf:"bytes,5,opt,name=used_by,json=usedBy,proto3" json:"used_by,omitempty"` // node UUID if used
+	UsedBy        string                 `protobuf:"bytes,5,opt,name=used_by,json=usedBy,proto3" json:"used_by,omitempty"` // thrall UUID if used
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2000,26 +2000,26 @@ func (*RevokeApprovedPatternResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{28}
 }
 
-type ListNodesRequest struct {
+type ListThrallsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListNodesRequest) Reset() {
-	*x = ListNodesRequest{}
+func (x *ListThrallsRequest) Reset() {
+	*x = ListThrallsRequest{}
 	mi := &file_hobnob_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListNodesRequest) String() string {
+func (x *ListThrallsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListNodesRequest) ProtoMessage() {}
+func (*ListThrallsRequest) ProtoMessage() {}
 
-func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
+func (x *ListThrallsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2031,32 +2031,32 @@ func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListNodesRequest.ProtoReflect.Descriptor instead.
-func (*ListNodesRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListThrallsRequest.ProtoReflect.Descriptor instead.
+func (*ListThrallsRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{29}
 }
 
-type ListNodesResponse struct {
+type ListThrallsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Nodes         []*Node                `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	Thralls       []*Thrall              `protobuf:"bytes,1,rep,name=thralls,proto3" json:"thralls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListNodesResponse) Reset() {
-	*x = ListNodesResponse{}
+func (x *ListThrallsResponse) Reset() {
+	*x = ListThrallsResponse{}
 	mi := &file_hobnob_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListNodesResponse) String() string {
+func (x *ListThrallsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListNodesResponse) ProtoMessage() {}
+func (*ListThrallsResponse) ProtoMessage() {}
 
-func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
+func (x *ListThrallsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2068,19 +2068,19 @@ func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListNodesResponse.ProtoReflect.Descriptor instead.
-func (*ListNodesResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListThrallsResponse.ProtoReflect.Descriptor instead.
+func (*ListThrallsResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{30}
 }
 
-func (x *ListNodesResponse) GetNodes() []*Node {
+func (x *ListThrallsResponse) GetThralls() []*Thrall {
 	if x != nil {
-		return x.Nodes
+		return x.Thralls
 	}
 	return nil
 }
 
-type Node struct {
+type Thrall struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
@@ -2093,20 +2093,20 @@ type Node struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Node) Reset() {
-	*x = Node{}
+func (x *Thrall) Reset() {
+	*x = Thrall{}
 	mi := &file_hobnob_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Node) String() string {
+func (x *Thrall) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Node) ProtoMessage() {}
+func (*Thrall) ProtoMessage() {}
 
-func (x *Node) ProtoReflect() protoreflect.Message {
+func (x *Thrall) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2118,81 +2118,81 @@ func (x *Node) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Node.ProtoReflect.Descriptor instead.
-func (*Node) Descriptor() ([]byte, []int) {
+// Deprecated: Use Thrall.ProtoReflect.Descriptor instead.
+func (*Thrall) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{31}
 }
 
-func (x *Node) GetId() string {
+func (x *Thrall) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *Node) GetHostname() string {
+func (x *Thrall) GetHostname() string {
 	if x != nil {
 		return x.Hostname
 	}
 	return ""
 }
 
-func (x *Node) GetIpAddress() string {
+func (x *Thrall) GetIpAddress() string {
 	if x != nil {
 		return x.IpAddress
 	}
 	return ""
 }
 
-func (x *Node) GetEnrolledAt() *timestamppb.Timestamp {
+func (x *Thrall) GetEnrolledAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.EnrolledAt
 	}
 	return nil
 }
 
-func (x *Node) GetLastSeen() *timestamppb.Timestamp {
+func (x *Thrall) GetLastSeen() *timestamppb.Timestamp {
 	if x != nil {
 		return x.LastSeen
 	}
 	return nil
 }
 
-func (x *Node) GetRevoked() bool {
+func (x *Thrall) GetRevoked() bool {
 	if x != nil {
 		return x.Revoked
 	}
 	return false
 }
 
-func (x *Node) GetRevokedAt() *timestamppb.Timestamp {
+func (x *Thrall) GetRevokedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.RevokedAt
 	}
 	return nil
 }
 
-type GetNodeRequest struct {
+type GetThrallRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetNodeRequest) Reset() {
-	*x = GetNodeRequest{}
+func (x *GetThrallRequest) Reset() {
+	*x = GetThrallRequest{}
 	mi := &file_hobnob_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetNodeRequest) String() string {
+func (x *GetThrallRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetNodeRequest) ProtoMessage() {}
+func (*GetThrallRequest) ProtoMessage() {}
 
-func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
+func (x *GetThrallRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2204,39 +2204,39 @@ func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetNodeRequest.ProtoReflect.Descriptor instead.
-func (*GetNodeRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetThrallRequest.ProtoReflect.Descriptor instead.
+func (*GetThrallRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{32}
 }
 
-func (x *GetNodeRequest) GetId() string {
+func (x *GetThrallRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type GetNodeResponse struct {
+type GetThrallResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Node          *Node                  `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Thrall        *Thrall                `protobuf:"bytes,1,opt,name=thrall,proto3" json:"thrall,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetNodeResponse) Reset() {
-	*x = GetNodeResponse{}
+func (x *GetThrallResponse) Reset() {
+	*x = GetThrallResponse{}
 	mi := &file_hobnob_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetNodeResponse) String() string {
+func (x *GetThrallResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetNodeResponse) ProtoMessage() {}
+func (*GetThrallResponse) ProtoMessage() {}
 
-func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
+func (x *GetThrallResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2248,39 +2248,39 @@ func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetNodeResponse.ProtoReflect.Descriptor instead.
-func (*GetNodeResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetThrallResponse.ProtoReflect.Descriptor instead.
+func (*GetThrallResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{33}
 }
 
-func (x *GetNodeResponse) GetNode() *Node {
+func (x *GetThrallResponse) GetThrall() *Thrall {
 	if x != nil {
-		return x.Node
+		return x.Thrall
 	}
 	return nil
 }
 
-type RevokeNodeRequest struct {
+type RevokeThrallRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RevokeNodeRequest) Reset() {
-	*x = RevokeNodeRequest{}
+func (x *RevokeThrallRequest) Reset() {
+	*x = RevokeThrallRequest{}
 	mi := &file_hobnob_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RevokeNodeRequest) String() string {
+func (x *RevokeThrallRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RevokeNodeRequest) ProtoMessage() {}
+func (*RevokeThrallRequest) ProtoMessage() {}
 
-func (x *RevokeNodeRequest) ProtoReflect() protoreflect.Message {
+func (x *RevokeThrallRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2292,38 +2292,38 @@ func (x *RevokeNodeRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RevokeNodeRequest.ProtoReflect.Descriptor instead.
-func (*RevokeNodeRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use RevokeThrallRequest.ProtoReflect.Descriptor instead.
+func (*RevokeThrallRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{34}
 }
 
-func (x *RevokeNodeRequest) GetId() string {
+func (x *RevokeThrallRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type RevokeNodeResponse struct {
+type RevokeThrallResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RevokeNodeResponse) Reset() {
-	*x = RevokeNodeResponse{}
+func (x *RevokeThrallResponse) Reset() {
+	*x = RevokeThrallResponse{}
 	mi := &file_hobnob_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RevokeNodeResponse) String() string {
+func (x *RevokeThrallResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RevokeNodeResponse) ProtoMessage() {}
+func (*RevokeThrallResponse) ProtoMessage() {}
 
-func (x *RevokeNodeResponse) ProtoReflect() protoreflect.Message {
+func (x *RevokeThrallResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2335,32 +2335,32 @@ func (x *RevokeNodeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RevokeNodeResponse.ProtoReflect.Descriptor instead.
-func (*RevokeNodeResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use RevokeThrallResponse.ProtoReflect.Descriptor instead.
+func (*RevokeThrallResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{35}
 }
 
-type DeleteNodeRequest struct {
+type DeleteThrallRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteNodeRequest) Reset() {
-	*x = DeleteNodeRequest{}
+func (x *DeleteThrallRequest) Reset() {
+	*x = DeleteThrallRequest{}
 	mi := &file_hobnob_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteNodeRequest) String() string {
+func (x *DeleteThrallRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteNodeRequest) ProtoMessage() {}
+func (*DeleteThrallRequest) ProtoMessage() {}
 
-func (x *DeleteNodeRequest) ProtoReflect() protoreflect.Message {
+func (x *DeleteThrallRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2372,38 +2372,38 @@ func (x *DeleteNodeRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteNodeRequest.ProtoReflect.Descriptor instead.
-func (*DeleteNodeRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeleteThrallRequest.ProtoReflect.Descriptor instead.
+func (*DeleteThrallRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{36}
 }
 
-func (x *DeleteNodeRequest) GetId() string {
+func (x *DeleteThrallRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type DeleteNodeResponse struct {
+type DeleteThrallResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteNodeResponse) Reset() {
-	*x = DeleteNodeResponse{}
+func (x *DeleteThrallResponse) Reset() {
+	*x = DeleteThrallResponse{}
 	mi := &file_hobnob_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteNodeResponse) String() string {
+func (x *DeleteThrallResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteNodeResponse) ProtoMessage() {}
+func (*DeleteThrallResponse) ProtoMessage() {}
 
-func (x *DeleteNodeResponse) ProtoReflect() protoreflect.Message {
+func (x *DeleteThrallResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2415,14 +2415,14 @@ func (x *DeleteNodeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteNodeResponse.ProtoReflect.Descriptor instead.
-func (*DeleteNodeResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeleteThrallResponse.ProtoReflect.Descriptor instead.
+func (*DeleteThrallResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{37}
 }
 
 type ForcePushRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // empty = all nodes
+	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // empty = all thralls
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2457,18 +2457,18 @@ func (*ForcePushRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{38}
 }
 
-func (x *ForcePushRequest) GetNodeId() string {
+func (x *ForcePushRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
 
 type ForcePushResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodesNotified int32                  `protobuf:"varint,1,opt,name=nodes_notified,json=nodesNotified,proto3" json:"nodes_notified,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ThrallsNotified int32                  `protobuf:"varint,1,opt,name=thralls_notified,json=thrallsNotified,proto3" json:"thralls_notified,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ForcePushResponse) Reset() {
@@ -2501,16 +2501,16 @@ func (*ForcePushResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{39}
 }
 
-func (x *ForcePushResponse) GetNodesNotified() int32 {
+func (x *ForcePushResponse) GetThrallsNotified() int32 {
 	if x != nil {
-		return x.NodesNotified
+		return x.ThrallsNotified
 	}
 	return 0
 }
 
 type DryRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2545,9 +2545,9 @@ func (*DryRunRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{40}
 }
 
-func (x *DryRunRequest) GetNodeId() string {
+func (x *DryRunRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -2666,8 +2666,8 @@ func (x *PlannedAction) GetPlannedAction() string {
 
 type ListRunsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // optional filter
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                // default 20
+	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // optional filter
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                      // default 20
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2702,9 +2702,9 @@ func (*ListRunsRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{43}
 }
 
-func (x *ListRunsRequest) GetNodeId() string {
+func (x *ListRunsRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -2763,7 +2763,7 @@ func (x *ListRunsResponse) GetRuns() []*Run {
 type Run struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId      string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // running, success, failure, partial
@@ -2812,9 +2812,9 @@ func (x *Run) GetId() string {
 	return ""
 }
 
-func (x *Run) GetNodeId() string {
+func (x *Run) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -3512,27 +3512,27 @@ func (x *GetComplianceSummaryResponse) GetCompliancePct() float32 {
 	return 0
 }
 
-type GetNodeComplianceRequest struct {
+type GetThrallComplianceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetNodeComplianceRequest) Reset() {
-	*x = GetNodeComplianceRequest{}
+func (x *GetThrallComplianceRequest) Reset() {
+	*x = GetThrallComplianceRequest{}
 	mi := &file_hobnob_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetNodeComplianceRequest) String() string {
+func (x *GetThrallComplianceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetNodeComplianceRequest) ProtoMessage() {}
+func (*GetThrallComplianceRequest) ProtoMessage() {}
 
-func (x *GetNodeComplianceRequest) ProtoReflect() protoreflect.Message {
+func (x *GetThrallComplianceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3544,19 +3544,19 @@ func (x *GetNodeComplianceRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetNodeComplianceRequest.ProtoReflect.Descriptor instead.
-func (*GetNodeComplianceRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetThrallComplianceRequest.ProtoReflect.Descriptor instead.
+func (*GetThrallComplianceRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{59}
 }
 
-func (x *GetNodeComplianceRequest) GetId() string {
+func (x *GetThrallComplianceRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type GetNodeComplianceResponse struct {
+type GetThrallComplianceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	LastRun       *Run                   `protobuf:"bytes,2,opt,name=last_run,json=lastRun,proto3" json:"last_run,omitempty"`
@@ -3565,20 +3565,20 @@ type GetNodeComplianceResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetNodeComplianceResponse) Reset() {
-	*x = GetNodeComplianceResponse{}
+func (x *GetThrallComplianceResponse) Reset() {
+	*x = GetThrallComplianceResponse{}
 	mi := &file_hobnob_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetNodeComplianceResponse) String() string {
+func (x *GetThrallComplianceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetNodeComplianceResponse) ProtoMessage() {}
+func (*GetThrallComplianceResponse) ProtoMessage() {}
 
-func (x *GetNodeComplianceResponse) ProtoReflect() protoreflect.Message {
+func (x *GetThrallComplianceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3590,26 +3590,26 @@ func (x *GetNodeComplianceResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetNodeComplianceResponse.ProtoReflect.Descriptor instead.
-func (*GetNodeComplianceResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetThrallComplianceResponse.ProtoReflect.Descriptor instead.
+func (*GetThrallComplianceResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{60}
 }
 
-func (x *GetNodeComplianceResponse) GetStatus() string {
+func (x *GetThrallComplianceResponse) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *GetNodeComplianceResponse) GetLastRun() *Run {
+func (x *GetThrallComplianceResponse) GetLastRun() *Run {
 	if x != nil {
 		return x.LastRun
 	}
 	return nil
 }
 
-func (x *GetNodeComplianceResponse) GetHistory() []*ComplianceSnapshot {
+func (x *GetThrallComplianceResponse) GetHistory() []*ComplianceSnapshot {
 	if x != nil {
 		return x.History
 	}
@@ -3710,7 +3710,7 @@ func (x *ComplianceSnapshot) GetUnknown() int32 {
 
 type RollbackRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`          // optional: rollback to specific run
 	FilePath      string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"` // optional: rollback a single file
 	unknownFields protoimpl.UnknownFields
@@ -3747,9 +3747,9 @@ func (*RollbackRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{62}
 }
 
-func (x *RollbackRequest) GetNodeId() string {
+func (x *RollbackRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -3822,7 +3822,7 @@ func (x *RollbackResponse) GetMessage() string {
 
 type ListPackagesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // optional filter
+	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // optional filter
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3857,9 +3857,9 @@ func (*ListPackagesRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{64}
 }
 
-func (x *ListPackagesRequest) GetNodeId() string {
+func (x *ListPackagesRequest) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -3990,7 +3990,7 @@ func (x *ListPackageDriftResponse) GetDrifts() []*PackageDrift {
 
 type PackageInfo struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	NodeId           string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId         string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	PackageName      string                 `protobuf:"bytes,3,opt,name=package_name,json=packageName,proto3" json:"package_name,omitempty"`
 	InstalledVersion string                 `protobuf:"bytes,4,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"`
@@ -4029,9 +4029,9 @@ func (*PackageInfo) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{68}
 }
 
-func (x *PackageInfo) GetNodeId() string {
+func (x *PackageInfo) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -4066,7 +4066,7 @@ func (x *PackageInfo) GetDesiredVersion() string {
 
 type PackageDrift struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	NodeId           string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId         string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	PackageName      string                 `protobuf:"bytes,3,opt,name=package_name,json=packageName,proto3" json:"package_name,omitempty"`
 	InstalledVersion string                 `protobuf:"bytes,4,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"`
@@ -4106,9 +4106,9 @@ func (*PackageDrift) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{69}
 }
 
-func (x *PackageDrift) GetNodeId() string {
+func (x *PackageDrift) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -4260,7 +4260,7 @@ func (x *PromoteEnvResponse) GetDiff() map[string]string {
 	return nil
 }
 
-type EnrollNodeRequest struct {
+type EnrollThrallRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	IpAddress     string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
@@ -4269,20 +4269,20 @@ type EnrollNodeRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EnrollNodeRequest) Reset() {
-	*x = EnrollNodeRequest{}
+func (x *EnrollThrallRequest) Reset() {
+	*x = EnrollThrallRequest{}
 	mi := &file_hobnob_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EnrollNodeRequest) String() string {
+func (x *EnrollThrallRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EnrollNodeRequest) ProtoMessage() {}
+func (*EnrollThrallRequest) ProtoMessage() {}
 
-func (x *EnrollNodeRequest) ProtoReflect() protoreflect.Message {
+func (x *EnrollThrallRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4294,53 +4294,53 @@ func (x *EnrollNodeRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EnrollNodeRequest.ProtoReflect.Descriptor instead.
-func (*EnrollNodeRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use EnrollThrallRequest.ProtoReflect.Descriptor instead.
+func (*EnrollThrallRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{72}
 }
 
-func (x *EnrollNodeRequest) GetHostname() string {
+func (x *EnrollThrallRequest) GetHostname() string {
 	if x != nil {
 		return x.Hostname
 	}
 	return ""
 }
 
-func (x *EnrollNodeRequest) GetIpAddress() string {
+func (x *EnrollThrallRequest) GetIpAddress() string {
 	if x != nil {
 		return x.IpAddress
 	}
 	return ""
 }
 
-func (x *EnrollNodeRequest) GetPubkeyPem() string {
+func (x *EnrollThrallRequest) GetPubkeyPem() string {
 	if x != nil {
 		return x.PubkeyPem
 	}
 	return ""
 }
 
-type EnrollNodeResponse struct {
+type EnrollThrallResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EnrollNodeResponse) Reset() {
-	*x = EnrollNodeResponse{}
+func (x *EnrollThrallResponse) Reset() {
+	*x = EnrollThrallResponse{}
 	mi := &file_hobnob_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EnrollNodeResponse) String() string {
+func (x *EnrollThrallResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EnrollNodeResponse) ProtoMessage() {}
+func (*EnrollThrallResponse) ProtoMessage() {}
 
-func (x *EnrollNodeResponse) ProtoReflect() protoreflect.Message {
+func (x *EnrollThrallResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4352,14 +4352,14 @@ func (x *EnrollNodeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EnrollNodeResponse.ProtoReflect.Descriptor instead.
-func (*EnrollNodeResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use EnrollThrallResponse.ProtoReflect.Descriptor instead.
+func (*EnrollThrallResponse) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{73}
 }
 
-func (x *EnrollNodeResponse) GetNodeId() string {
+func (x *EnrollThrallResponse) GetThrallId() string {
 	if x != nil {
-		return x.NodeId
+		return x.ThrallId
 	}
 	return ""
 }
@@ -4375,15 +4375,15 @@ const file_hobnob_proto_rawDesc = "" +
 	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1d\n" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
-	"\x05token\x18\x04 \x01(\tR\x05token\"~\n" +
+	"\x05token\x18\x04 \x01(\tR\x05token\"\x82\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1b\n" +
+	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1d\n" +
 	"\n" +
-	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\"\xc3\x03\n" +
-	"\x0eCheckInRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12+\n" +
+	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\"\xc7\x03\n" +
+	"\x0eCheckInRequest\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x1f\n" +
@@ -4466,10 +4466,10 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05trait\x18\x02 \x01(\tR\x05trait\x12\x1a\n" +
 	"\boperator\x18\x03 \x01(\tR\boperator\x12!\n" +
-	"\foperand_json\x18\x04 \x01(\tR\voperandJson\"\xd0\x01\n" +
+	"\foperand_json\x18\x04 \x01(\tR\voperandJson\"\xd4\x01\n" +
 	"\x13ReportResultRequest\x12\x15\n" +
-	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x121\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1b\n" +
+	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x121\n" +
 	"\aresults\x18\x03 \x03(\v2\x17.hobnob.v1.ModuleResultR\aresults\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\xfc\x01\n" +
@@ -4484,9 +4484,9 @@ const file_hobnob_proto_rawDesc = "" +
 	"\vduration_ms\x18\a \x01(\x05R\n" +
 	"durationMs\":\n" +
 	"\x14ReportResultResponse\x12\"\n" +
-	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xa7\x01\n" +
-	"\x13ReportTraitsRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1f\n" +
+	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xab\x01\n" +
+	"\x13ReportTraitsRequest\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1f\n" +
 	"\vtraits_json\x18\x02 \x01(\fR\n" +
 	"traitsJson\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\fR\tsignature\x128\n" +
@@ -4531,11 +4531,11 @@ const file_hobnob_proto_rawDesc = "" +
 	"\aused_by\x18\x05 \x01(\tR\x06usedBy\".\n" +
 	"\x1cRevokeApprovedPatternRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x1f\n" +
-	"\x1dRevokeApprovedPatternResponse\"\x12\n" +
-	"\x10ListNodesRequest\":\n" +
-	"\x11ListNodesResponse\x12%\n" +
-	"\x05nodes\x18\x01 \x03(\v2\x0f.hobnob.v1.NodeR\x05nodes\"\x9c\x02\n" +
-	"\x04Node\x12\x0e\n" +
+	"\x1dRevokeApprovedPatternResponse\"\x14\n" +
+	"\x12ListThrallsRequest\"B\n" +
+	"\x13ListThrallsResponse\x12+\n" +
+	"\athralls\x18\x01 \x03(\v2\x11.hobnob.v1.ThrallR\athralls\"\x9e\x02\n" +
+	"\x06Thrall\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
@@ -4545,23 +4545,23 @@ const file_hobnob_proto_rawDesc = "" +
 	"\tlast_seen\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blastSeen\x12\x18\n" +
 	"\arevoked\x18\x06 \x01(\bR\arevoked\x129\n" +
 	"\n" +
-	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\" \n" +
-	"\x0eGetNodeRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"6\n" +
-	"\x0fGetNodeResponse\x12#\n" +
-	"\x04node\x18\x01 \x01(\v2\x0f.hobnob.v1.NodeR\x04node\"#\n" +
-	"\x11RevokeNodeRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x14\n" +
-	"\x12RevokeNodeResponse\"#\n" +
-	"\x11DeleteNodeRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x14\n" +
-	"\x12DeleteNodeResponse\"+\n" +
-	"\x10ForcePushRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\":\n" +
-	"\x11ForcePushResponse\x12%\n" +
-	"\x0enodes_notified\x18\x01 \x01(\x05R\rnodesNotified\"(\n" +
-	"\rDryRunRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"D\n" +
+	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\"\"\n" +
+	"\x10GetThrallRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
+	"\x11GetThrallResponse\x12)\n" +
+	"\x06thrall\x18\x01 \x01(\v2\x11.hobnob.v1.ThrallR\x06thrall\"%\n" +
+	"\x13RevokeThrallRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x16\n" +
+	"\x14RevokeThrallResponse\"%\n" +
+	"\x13DeleteThrallRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x16\n" +
+	"\x14DeleteThrallResponse\"/\n" +
+	"\x10ForcePushRequest\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\">\n" +
+	"\x11ForcePushResponse\x12)\n" +
+	"\x10thralls_notified\x18\x01 \x01(\x05R\x0fthrallsNotified\",\n" +
+	"\rDryRunRequest\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\"D\n" +
 	"\x0eDryRunResponse\x122\n" +
 	"\aactions\x18\x01 \x03(\v2\x18.hobnob.v1.PlannedActionR\aactions\"\xa1\x01\n" +
 	"\rPlannedAction\x12\x1f\n" +
@@ -4569,15 +4569,15 @@ const file_hobnob_proto_rawDesc = "" +
 	"moduleName\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12#\n" +
 	"\rresource_name\x18\x03 \x01(\tR\fresourceName\x12%\n" +
-	"\x0eplanned_action\x18\x04 \x01(\tR\rplannedAction\"@\n" +
-	"\x0fListRunsRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x0eplanned_action\x18\x04 \x01(\tR\rplannedAction\"D\n" +
+	"\x0fListRunsRequest\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"6\n" +
 	"\x10ListRunsResponse\x12\"\n" +
-	"\x04runs\x18\x01 \x03(\v2\x0e.hobnob.v1.RunR\x04runs\"\xce\x02\n" +
+	"\x04runs\x18\x01 \x03(\v2\x0e.hobnob.v1.RunR\x04runs\"\xd2\x02\n" +
 	"\x03Run\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x129\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
+	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x129\n" +
 	"\n" +
 	"started_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
@@ -4622,10 +4622,10 @@ const file_hobnob_proto_rawDesc = "" +
 	"\afailing\x18\x04 \x01(\x05R\afailing\x12\x14\n" +
 	"\x05stale\x18\x05 \x01(\x05R\x05stale\x12\x18\n" +
 	"\aunknown\x18\x06 \x01(\x05R\aunknown\x12%\n" +
-	"\x0ecompliance_pct\x18\a \x01(\x02R\rcompliancePct\"*\n" +
-	"\x18GetNodeComplianceRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x97\x01\n" +
-	"\x19GetNodeComplianceResponse\x12\x16\n" +
+	"\x0ecompliance_pct\x18\a \x01(\x02R\rcompliancePct\",\n" +
+	"\x1aGetThrallComplianceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x99\x01\n" +
+	"\x1bGetThrallComplianceResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12)\n" +
 	"\blast_run\x18\x02 \x01(\v2\x0e.hobnob.v1.RunR\alastRun\x127\n" +
 	"\ahistory\x18\x03 \x03(\v2\x1d.hobnob.v1.ComplianceSnapshotR\ahistory\"\xc0\x01\n" +
@@ -4636,29 +4636,29 @@ const file_hobnob_proto_rawDesc = "" +
 	"\adrifted\x18\x04 \x01(\x05R\adrifted\x12\x18\n" +
 	"\afailing\x18\x05 \x01(\x05R\afailing\x12\x14\n" +
 	"\x05stale\x18\x06 \x01(\x05R\x05stale\x12\x18\n" +
-	"\aunknown\x18\a \x01(\x05R\aunknown\"^\n" +
-	"\x0fRollbackRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x15\n" +
+	"\aunknown\x18\a \x01(\x05R\aunknown\"b\n" +
+	"\x0fRollbackRequest\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1b\n" +
 	"\tfile_path\x18\x03 \x01(\tR\bfilePath\"F\n" +
 	"\x10RollbackResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\".\n" +
-	"\x13ListPackagesRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"J\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"2\n" +
+	"\x13ListPackagesRequest\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\"J\n" +
 	"\x14ListPackagesResponse\x122\n" +
 	"\bpackages\x18\x01 \x03(\v2\x16.hobnob.v1.PackageInfoR\bpackages\"\x19\n" +
 	"\x17ListPackageDriftRequest\"K\n" +
 	"\x18ListPackageDriftResponse\x12/\n" +
-	"\x06drifts\x18\x01 \x03(\v2\x17.hobnob.v1.PackageDriftR\x06drifts\"\xbb\x01\n" +
-	"\vPackageInfo\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
+	"\x06drifts\x18\x01 \x03(\v2\x17.hobnob.v1.PackageDriftR\x06drifts\"\xbf\x01\n" +
+	"\vPackageInfo\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12!\n" +
 	"\fpackage_name\x18\x03 \x01(\tR\vpackageName\x12+\n" +
 	"\x11installed_version\x18\x04 \x01(\tR\x10installedVersion\x12'\n" +
-	"\x0fdesired_version\x18\x05 \x01(\tR\x0edesiredVersion\"\xf9\x01\n" +
-	"\fPackageDrift\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
+	"\x0fdesired_version\x18\x05 \x01(\tR\x0edesiredVersion\"\xfd\x01\n" +
+	"\fPackageDrift\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12!\n" +
 	"\fpackage_name\x18\x03 \x01(\tR\vpackageName\x12+\n" +
 	"\x11installed_version\x18\x04 \x01(\tR\x10installedVersion\x12'\n" +
@@ -4675,34 +4675,32 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04diff\x18\x02 \x03(\v2'.hobnob.v1.PromoteEnvResponse.DiffEntryR\x04diff\x1a7\n" +
 	"\tDiffEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"m\n" +
-	"\x11EnrollNodeRequest\x12\x1a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"o\n" +
+	"\x13EnrollThrallRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1d\n" +
 	"\n" +
-	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\"-\n" +
-	"\x12EnrollNodeResponse\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId2\xee\x03\n" +
+	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\"3\n" +
+	"\x14EnrollThrallResponse\x12\x1b\n" +
+	"\tthrall_id\x18\x01 \x01(\tR\bthrallId2\xee\x03\n" +
 	"\vHobnobAgent\x12C\n" +
 	"\bRegister\x12\x1a.hobnob.v1.RegisterRequest\x1a\x1b.hobnob.v1.RegisterResponse\x12@\n" +
 	"\aCheckIn\x12\x19.hobnob.v1.CheckInRequest\x1a\x1a.hobnob.v1.CheckInResponse\x12O\n" +
 	"\fReportResult\x12\x1e.hobnob.v1.ReportResultRequest\x1a\x1f.hobnob.v1.ReportResultResponse\x12O\n" +
 	"\fReportTraits\x12\x1e.hobnob.v1.ReportTraitsRequest\x1a\x1f.hobnob.v1.ReportTraitsResponse\x12d\n" +
 	"\x13DownloadCustomTrait\x12%.hobnob.v1.DownloadCustomTraitRequest\x1a&.hobnob.v1.DownloadCustomTraitResponse\x12P\n" +
-	"\vAgentStream\x12\x1d.hobnob.v1.AgentStreamMessage\x1a\x1e.hobnob.v1.ServerStreamMessage(\x010\x012\x86\x13\n" +
+	"\vAgentStream\x12\x1d.hobnob.v1.AgentStreamMessage\x1a\x1e.hobnob.v1.ServerStreamMessage(\x010\x012\xbc\x13\n" +
 	"\vHobnobAdmin\x12~\n" +
 	"\x12AddApprovedPattern\x12$.hobnob.v1.AddApprovedPatternRequest\x1a%.hobnob.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12\x81\x01\n" +
 	"\x14ListApprovedPatterns\x12&.hobnob.v1.ListApprovedPatternsRequest\x1a'.hobnob.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x89\x01\n" +
-	"\x15RevokeApprovedPattern\x12'.hobnob.v1.RevokeApprovedPatternRequest\x1a(.hobnob.v1.RevokeApprovedPatternResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/approved/{id}\x12]\n" +
-	"\tListNodes\x12\x1b.hobnob.v1.ListNodesRequest\x1a\x1c.hobnob.v1.ListNodesResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/api/v1/nodes\x12\\\n" +
-	"\aGetNode\x12\x19.hobnob.v1.GetNodeRequest\x1a\x1a.hobnob.v1.GetNodeResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/nodes/{id}\x12o\n" +
-	"\n" +
-	"RevokeNode\x12\x1c.hobnob.v1.RevokeNodeRequest\x1a\x1d.hobnob.v1.RevokeNodeResponse\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api/v1/nodes/{id}/revoke\x12e\n" +
-	"\n" +
-	"DeleteNode\x12\x1c.hobnob.v1.DeleteNodeRequest\x1a\x1d.hobnob.v1.DeleteNodeResponse\"\x1a\x82\xd3\xe4\x93\x02\x14*\x12/api/v1/nodes/{id}\x12_\n" +
-	"\tForcePush\x12\x1b.hobnob.v1.ForcePushRequest\x1a\x1c.hobnob.v1.ForcePushResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/api/v1/push\x12i\n" +
-	"\x06DryRun\x12\x18.hobnob.v1.DryRunRequest\x1a\x19.hobnob.v1.DryRunResponse\"*\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/api/v1/nodes/{node_id}/dry-run\x12Y\n" +
+	"\x15RevokeApprovedPattern\x12'.hobnob.v1.RevokeApprovedPatternRequest\x1a(.hobnob.v1.RevokeApprovedPatternResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/approved/{id}\x12e\n" +
+	"\vListThralls\x12\x1d.hobnob.v1.ListThrallsRequest\x1a\x1e.hobnob.v1.ListThrallsResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/api/v1/thralls\x12d\n" +
+	"\tGetThrall\x12\x1b.hobnob.v1.GetThrallRequest\x1a\x1c.hobnob.v1.GetThrallResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/thralls/{id}\x12w\n" +
+	"\fRevokeThrall\x12\x1e.hobnob.v1.RevokeThrallRequest\x1a\x1f.hobnob.v1.RevokeThrallResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/v1/thralls/{id}/revoke\x12m\n" +
+	"\fDeleteThrall\x12\x1e.hobnob.v1.DeleteThrallRequest\x1a\x1f.hobnob.v1.DeleteThrallResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/api/v1/thralls/{id}\x12_\n" +
+	"\tForcePush\x12\x1b.hobnob.v1.ForcePushRequest\x1a\x1c.hobnob.v1.ForcePushResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/api/v1/push\x12m\n" +
+	"\x06DryRun\x12\x18.hobnob.v1.DryRunRequest\x1a\x19.hobnob.v1.DryRunResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/api/v1/thralls/{thrall_id}/dry-run\x12Y\n" +
 	"\bListRuns\x12\x1a.hobnob.v1.ListRunsRequest\x1a\x1b.hobnob.v1.ListRunsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/api/v1/runs\x12X\n" +
 	"\x06GetRun\x12\x18.hobnob.v1.GetRunRequest\x1a\x19.hobnob.v1.GetRunResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/runs/{id}\x12m\n" +
 	"\rGenerateToken\x12\x1f.hobnob.v1.GenerateTokenRequest\x1a .hobnob.v1.GenerateTokenResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/api/v1/tokens\x12f\n" +
@@ -4710,15 +4708,14 @@ const file_hobnob_proto_rawDesc = "" +
 	"AddWebhook\x12\x1c.hobnob.v1.AddWebhookRequest\x1a\x1d.hobnob.v1.AddWebhookResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/webhooks\x12i\n" +
 	"\fListWebhooks\x12\x1e.hobnob.v1.ListWebhooksRequest\x1a\x1f.hobnob.v1.ListWebhooksResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/webhooks\x12q\n" +
 	"\rDeleteWebhook\x12\x1f.hobnob.v1.DeleteWebhookRequest\x1a .hobnob.v1.DeleteWebhookResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/webhooks/{id}\x12\x83\x01\n" +
-	"\x14GetComplianceSummary\x12&.hobnob.v1.GetComplianceSummaryRequest\x1a'.hobnob.v1.GetComplianceSummaryResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/compliance\x12\x85\x01\n" +
-	"\x11GetNodeCompliance\x12#.hobnob.v1.GetNodeComplianceRequest\x1a$.hobnob.v1.GetNodeComplianceResponse\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/api/v1/nodes/{id}/compliance\x12p\n" +
-	"\bRollback\x12\x1a.hobnob.v1.RollbackRequest\x1a\x1b.hobnob.v1.RollbackResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\" /api/v1/nodes/{node_id}/rollback\x12i\n" +
+	"\x14GetComplianceSummary\x12&.hobnob.v1.GetComplianceSummaryRequest\x1a'.hobnob.v1.GetComplianceSummaryResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/compliance\x12\x8d\x01\n" +
+	"\x13GetThrallCompliance\x12%.hobnob.v1.GetThrallComplianceRequest\x1a&.hobnob.v1.GetThrallComplianceResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/thralls/{id}/compliance\x12t\n" +
+	"\bRollback\x12\x1a.hobnob.v1.RollbackRequest\x1a\x1b.hobnob.v1.RollbackResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/api/v1/thralls/{thrall_id}/rollback\x12i\n" +
 	"\fListPackages\x12\x1e.hobnob.v1.ListPackagesRequest\x1a\x1f.hobnob.v1.ListPackagesResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/packages\x12{\n" +
 	"\x10ListPackageDrift\x12\".hobnob.v1.ListPackageDriftRequest\x1a#.hobnob.v1.ListPackageDriftResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/packages/drift\x12i\n" +
 	"\n" +
-	"PromoteEnv\x12\x1c.hobnob.v1.PromoteEnvRequest\x1a\x1d.hobnob.v1.PromoteEnvResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/v1/env/promote\x12I\n" +
-	"\n" +
-	"EnrollNode\x12\x1c.hobnob.v1.EnrollNodeRequest\x1a\x1d.hobnob.v1.EnrollNodeResponseB+Z)github.com/hobnob/hobnob/gen/proto/hobnobb\x06proto3"
+	"PromoteEnv\x12\x1c.hobnob.v1.PromoteEnvRequest\x1a\x1d.hobnob.v1.PromoteEnvResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/v1/env/promote\x12O\n" +
+	"\fEnrollThrall\x12\x1e.hobnob.v1.EnrollThrallRequest\x1a\x1f.hobnob.v1.EnrollThrallResponseB+Z)github.com/hobnob/hobnob/gen/proto/hobnobb\x06proto3"
 
 var (
 	file_hobnob_proto_rawDescOnce sync.Once
@@ -4763,15 +4760,15 @@ var file_hobnob_proto_goTypes = []any{
 	(*ApprovedPattern)(nil),               // 26: hobnob.v1.ApprovedPattern
 	(*RevokeApprovedPatternRequest)(nil),  // 27: hobnob.v1.RevokeApprovedPatternRequest
 	(*RevokeApprovedPatternResponse)(nil), // 28: hobnob.v1.RevokeApprovedPatternResponse
-	(*ListNodesRequest)(nil),              // 29: hobnob.v1.ListNodesRequest
-	(*ListNodesResponse)(nil),             // 30: hobnob.v1.ListNodesResponse
-	(*Node)(nil),                          // 31: hobnob.v1.Node
-	(*GetNodeRequest)(nil),                // 32: hobnob.v1.GetNodeRequest
-	(*GetNodeResponse)(nil),               // 33: hobnob.v1.GetNodeResponse
-	(*RevokeNodeRequest)(nil),             // 34: hobnob.v1.RevokeNodeRequest
-	(*RevokeNodeResponse)(nil),            // 35: hobnob.v1.RevokeNodeResponse
-	(*DeleteNodeRequest)(nil),             // 36: hobnob.v1.DeleteNodeRequest
-	(*DeleteNodeResponse)(nil),            // 37: hobnob.v1.DeleteNodeResponse
+	(*ListThrallsRequest)(nil),            // 29: hobnob.v1.ListThrallsRequest
+	(*ListThrallsResponse)(nil),           // 30: hobnob.v1.ListThrallsResponse
+	(*Thrall)(nil),                        // 31: hobnob.v1.Thrall
+	(*GetThrallRequest)(nil),              // 32: hobnob.v1.GetThrallRequest
+	(*GetThrallResponse)(nil),             // 33: hobnob.v1.GetThrallResponse
+	(*RevokeThrallRequest)(nil),           // 34: hobnob.v1.RevokeThrallRequest
+	(*RevokeThrallResponse)(nil),          // 35: hobnob.v1.RevokeThrallResponse
+	(*DeleteThrallRequest)(nil),           // 36: hobnob.v1.DeleteThrallRequest
+	(*DeleteThrallResponse)(nil),          // 37: hobnob.v1.DeleteThrallResponse
 	(*ForcePushRequest)(nil),              // 38: hobnob.v1.ForcePushRequest
 	(*ForcePushResponse)(nil),             // 39: hobnob.v1.ForcePushResponse
 	(*DryRunRequest)(nil),                 // 40: hobnob.v1.DryRunRequest
@@ -4793,8 +4790,8 @@ var file_hobnob_proto_goTypes = []any{
 	(*WebhookInfo)(nil),                   // 56: hobnob.v1.WebhookInfo
 	(*GetComplianceSummaryRequest)(nil),   // 57: hobnob.v1.GetComplianceSummaryRequest
 	(*GetComplianceSummaryResponse)(nil),  // 58: hobnob.v1.GetComplianceSummaryResponse
-	(*GetNodeComplianceRequest)(nil),      // 59: hobnob.v1.GetNodeComplianceRequest
-	(*GetNodeComplianceResponse)(nil),     // 60: hobnob.v1.GetNodeComplianceResponse
+	(*GetThrallComplianceRequest)(nil),    // 59: hobnob.v1.GetThrallComplianceRequest
+	(*GetThrallComplianceResponse)(nil),   // 60: hobnob.v1.GetThrallComplianceResponse
 	(*ComplianceSnapshot)(nil),            // 61: hobnob.v1.ComplianceSnapshot
 	(*RollbackRequest)(nil),               // 62: hobnob.v1.RollbackRequest
 	(*RollbackResponse)(nil),              // 63: hobnob.v1.RollbackResponse
@@ -4806,8 +4803,8 @@ var file_hobnob_proto_goTypes = []any{
 	(*PackageDrift)(nil),                  // 69: hobnob.v1.PackageDrift
 	(*PromoteEnvRequest)(nil),             // 70: hobnob.v1.PromoteEnvRequest
 	(*PromoteEnvResponse)(nil),            // 71: hobnob.v1.PromoteEnvResponse
-	(*EnrollNodeRequest)(nil),             // 72: hobnob.v1.EnrollNodeRequest
-	(*EnrollNodeResponse)(nil),            // 73: hobnob.v1.EnrollNodeResponse
+	(*EnrollThrallRequest)(nil),           // 72: hobnob.v1.EnrollThrallRequest
+	(*EnrollThrallResponse)(nil),          // 73: hobnob.v1.EnrollThrallResponse
 	nil,                                   // 74: hobnob.v1.CheckInRequest.CachedModuleHashesEntry
 	nil,                                   // 75: hobnob.v1.Resource.ParamsEntry
 	nil,                                   // 76: hobnob.v1.PolicyResource.AttributesEntry
@@ -4842,11 +4839,11 @@ var file_hobnob_proto_depIdxs = []int32{
 	78, // 24: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
 	26, // 25: hobnob.v1.ListApprovedPatternsResponse.patterns:type_name -> hobnob.v1.ApprovedPattern
 	78, // 26: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
-	31, // 27: hobnob.v1.ListNodesResponse.nodes:type_name -> hobnob.v1.Node
-	78, // 28: hobnob.v1.Node.enrolled_at:type_name -> google.protobuf.Timestamp
-	78, // 29: hobnob.v1.Node.last_seen:type_name -> google.protobuf.Timestamp
-	78, // 30: hobnob.v1.Node.revoked_at:type_name -> google.protobuf.Timestamp
-	31, // 31: hobnob.v1.GetNodeResponse.node:type_name -> hobnob.v1.Node
+	31, // 27: hobnob.v1.ListThrallsResponse.thralls:type_name -> hobnob.v1.Thrall
+	78, // 28: hobnob.v1.Thrall.enrolled_at:type_name -> google.protobuf.Timestamp
+	78, // 29: hobnob.v1.Thrall.last_seen:type_name -> google.protobuf.Timestamp
+	78, // 30: hobnob.v1.Thrall.revoked_at:type_name -> google.protobuf.Timestamp
+	31, // 31: hobnob.v1.GetThrallResponse.thrall:type_name -> hobnob.v1.Thrall
 	42, // 32: hobnob.v1.DryRunResponse.actions:type_name -> hobnob.v1.PlannedAction
 	45, // 33: hobnob.v1.ListRunsResponse.runs:type_name -> hobnob.v1.Run
 	78, // 34: hobnob.v1.Run.started_at:type_name -> google.protobuf.Timestamp
@@ -4856,8 +4853,8 @@ var file_hobnob_proto_depIdxs = []int32{
 	56, // 38: hobnob.v1.AddWebhookResponse.webhook:type_name -> hobnob.v1.WebhookInfo
 	56, // 39: hobnob.v1.ListWebhooksResponse.webhooks:type_name -> hobnob.v1.WebhookInfo
 	78, // 40: hobnob.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
-	45, // 41: hobnob.v1.GetNodeComplianceResponse.last_run:type_name -> hobnob.v1.Run
-	61, // 42: hobnob.v1.GetNodeComplianceResponse.history:type_name -> hobnob.v1.ComplianceSnapshot
+	45, // 41: hobnob.v1.GetThrallComplianceResponse.last_run:type_name -> hobnob.v1.Run
+	61, // 42: hobnob.v1.GetThrallComplianceResponse.history:type_name -> hobnob.v1.ComplianceSnapshot
 	68, // 43: hobnob.v1.ListPackagesResponse.packages:type_name -> hobnob.v1.PackageInfo
 	69, // 44: hobnob.v1.ListPackageDriftResponse.drifts:type_name -> hobnob.v1.PackageDrift
 	78, // 45: hobnob.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
@@ -4871,10 +4868,10 @@ var file_hobnob_proto_depIdxs = []int32{
 	22, // 53: hobnob.v1.HobnobAdmin.AddApprovedPattern:input_type -> hobnob.v1.AddApprovedPatternRequest
 	24, // 54: hobnob.v1.HobnobAdmin.ListApprovedPatterns:input_type -> hobnob.v1.ListApprovedPatternsRequest
 	27, // 55: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:input_type -> hobnob.v1.RevokeApprovedPatternRequest
-	29, // 56: hobnob.v1.HobnobAdmin.ListNodes:input_type -> hobnob.v1.ListNodesRequest
-	32, // 57: hobnob.v1.HobnobAdmin.GetNode:input_type -> hobnob.v1.GetNodeRequest
-	34, // 58: hobnob.v1.HobnobAdmin.RevokeNode:input_type -> hobnob.v1.RevokeNodeRequest
-	36, // 59: hobnob.v1.HobnobAdmin.DeleteNode:input_type -> hobnob.v1.DeleteNodeRequest
+	29, // 56: hobnob.v1.HobnobAdmin.ListThralls:input_type -> hobnob.v1.ListThrallsRequest
+	32, // 57: hobnob.v1.HobnobAdmin.GetThrall:input_type -> hobnob.v1.GetThrallRequest
+	34, // 58: hobnob.v1.HobnobAdmin.RevokeThrall:input_type -> hobnob.v1.RevokeThrallRequest
+	36, // 59: hobnob.v1.HobnobAdmin.DeleteThrall:input_type -> hobnob.v1.DeleteThrallRequest
 	38, // 60: hobnob.v1.HobnobAdmin.ForcePush:input_type -> hobnob.v1.ForcePushRequest
 	40, // 61: hobnob.v1.HobnobAdmin.DryRun:input_type -> hobnob.v1.DryRunRequest
 	43, // 62: hobnob.v1.HobnobAdmin.ListRuns:input_type -> hobnob.v1.ListRunsRequest
@@ -4884,12 +4881,12 @@ var file_hobnob_proto_depIdxs = []int32{
 	52, // 66: hobnob.v1.HobnobAdmin.ListWebhooks:input_type -> hobnob.v1.ListWebhooksRequest
 	54, // 67: hobnob.v1.HobnobAdmin.DeleteWebhook:input_type -> hobnob.v1.DeleteWebhookRequest
 	57, // 68: hobnob.v1.HobnobAdmin.GetComplianceSummary:input_type -> hobnob.v1.GetComplianceSummaryRequest
-	59, // 69: hobnob.v1.HobnobAdmin.GetNodeCompliance:input_type -> hobnob.v1.GetNodeComplianceRequest
+	59, // 69: hobnob.v1.HobnobAdmin.GetThrallCompliance:input_type -> hobnob.v1.GetThrallComplianceRequest
 	62, // 70: hobnob.v1.HobnobAdmin.Rollback:input_type -> hobnob.v1.RollbackRequest
 	64, // 71: hobnob.v1.HobnobAdmin.ListPackages:input_type -> hobnob.v1.ListPackagesRequest
 	66, // 72: hobnob.v1.HobnobAdmin.ListPackageDrift:input_type -> hobnob.v1.ListPackageDriftRequest
 	70, // 73: hobnob.v1.HobnobAdmin.PromoteEnv:input_type -> hobnob.v1.PromoteEnvRequest
-	72, // 74: hobnob.v1.HobnobAdmin.EnrollNode:input_type -> hobnob.v1.EnrollNodeRequest
+	72, // 74: hobnob.v1.HobnobAdmin.EnrollThrall:input_type -> hobnob.v1.EnrollThrallRequest
 	1,  // 75: hobnob.v1.HobnobAgent.Register:output_type -> hobnob.v1.RegisterResponse
 	3,  // 76: hobnob.v1.HobnobAgent.CheckIn:output_type -> hobnob.v1.CheckInResponse
 	15, // 77: hobnob.v1.HobnobAgent.ReportResult:output_type -> hobnob.v1.ReportResultResponse
@@ -4899,10 +4896,10 @@ var file_hobnob_proto_depIdxs = []int32{
 	23, // 81: hobnob.v1.HobnobAdmin.AddApprovedPattern:output_type -> hobnob.v1.AddApprovedPatternResponse
 	25, // 82: hobnob.v1.HobnobAdmin.ListApprovedPatterns:output_type -> hobnob.v1.ListApprovedPatternsResponse
 	28, // 83: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:output_type -> hobnob.v1.RevokeApprovedPatternResponse
-	30, // 84: hobnob.v1.HobnobAdmin.ListNodes:output_type -> hobnob.v1.ListNodesResponse
-	33, // 85: hobnob.v1.HobnobAdmin.GetNode:output_type -> hobnob.v1.GetNodeResponse
-	35, // 86: hobnob.v1.HobnobAdmin.RevokeNode:output_type -> hobnob.v1.RevokeNodeResponse
-	37, // 87: hobnob.v1.HobnobAdmin.DeleteNode:output_type -> hobnob.v1.DeleteNodeResponse
+	30, // 84: hobnob.v1.HobnobAdmin.ListThralls:output_type -> hobnob.v1.ListThrallsResponse
+	33, // 85: hobnob.v1.HobnobAdmin.GetThrall:output_type -> hobnob.v1.GetThrallResponse
+	35, // 86: hobnob.v1.HobnobAdmin.RevokeThrall:output_type -> hobnob.v1.RevokeThrallResponse
+	37, // 87: hobnob.v1.HobnobAdmin.DeleteThrall:output_type -> hobnob.v1.DeleteThrallResponse
 	39, // 88: hobnob.v1.HobnobAdmin.ForcePush:output_type -> hobnob.v1.ForcePushResponse
 	41, // 89: hobnob.v1.HobnobAdmin.DryRun:output_type -> hobnob.v1.DryRunResponse
 	44, // 90: hobnob.v1.HobnobAdmin.ListRuns:output_type -> hobnob.v1.ListRunsResponse
@@ -4912,12 +4909,12 @@ var file_hobnob_proto_depIdxs = []int32{
 	53, // 94: hobnob.v1.HobnobAdmin.ListWebhooks:output_type -> hobnob.v1.ListWebhooksResponse
 	55, // 95: hobnob.v1.HobnobAdmin.DeleteWebhook:output_type -> hobnob.v1.DeleteWebhookResponse
 	58, // 96: hobnob.v1.HobnobAdmin.GetComplianceSummary:output_type -> hobnob.v1.GetComplianceSummaryResponse
-	60, // 97: hobnob.v1.HobnobAdmin.GetNodeCompliance:output_type -> hobnob.v1.GetNodeComplianceResponse
+	60, // 97: hobnob.v1.HobnobAdmin.GetThrallCompliance:output_type -> hobnob.v1.GetThrallComplianceResponse
 	63, // 98: hobnob.v1.HobnobAdmin.Rollback:output_type -> hobnob.v1.RollbackResponse
 	65, // 99: hobnob.v1.HobnobAdmin.ListPackages:output_type -> hobnob.v1.ListPackagesResponse
 	67, // 100: hobnob.v1.HobnobAdmin.ListPackageDrift:output_type -> hobnob.v1.ListPackageDriftResponse
 	71, // 101: hobnob.v1.HobnobAdmin.PromoteEnv:output_type -> hobnob.v1.PromoteEnvResponse
-	73, // 102: hobnob.v1.HobnobAdmin.EnrollNode:output_type -> hobnob.v1.EnrollNodeResponse
+	73, // 102: hobnob.v1.HobnobAdmin.EnrollThrall:output_type -> hobnob.v1.EnrollThrallResponse
 	75, // [75:103] is the sub-list for method output_type
 	47, // [47:75] is the sub-list for method input_type
 	47, // [47:47] is the sub-list for extension type_name

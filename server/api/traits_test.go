@@ -25,7 +25,7 @@ func openTestDB(t *testing.T) *sql.DB {
 
 	// Minimal schema for traits tests.
 	_, err = sqlDB.Exec(`
-		CREATE TABLE nodes (
+		CREATE TABLE thralls (
 			id          TEXT PRIMARY KEY,
 			hostname    TEXT NOT NULL,
 			ip_address  TEXT NOT NULL,
@@ -36,9 +36,9 @@ func openTestDB(t *testing.T) *sql.DB {
 			revoked_at  DATETIME,
 			force_push  INTEGER NOT NULL DEFAULT 0
 		);
-		CREATE TABLE node_traits (
+		CREATE TABLE thrall_traits (
 			id           TEXT PRIMARY KEY,
-			node_id      TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
+			thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
 			traits       TEXT NOT NULL DEFAULT '{}',
 			collected_at DATETIME NOT NULL DEFAULT (datetime('now'))
 		);
@@ -51,23 +51,23 @@ func openTestDB(t *testing.T) *sql.DB {
 
 func TestTraitsHandler_Success(t *testing.T) {
 	sqlDB := openTestDB(t)
-	nodeID := uuid.New().String()
+	thrallID := uuid.New().String()
 
-	// Insert a node.
+	// Insert a thrall.
 	_, err := sqlDB.Exec(
-		`INSERT INTO nodes (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
-		nodeID, "web01", "10.0.0.1", "pubkey-pem",
+		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		thrallID, "web01", "10.0.0.1", "pubkey-pem",
 	)
 	if err != nil {
-		t.Fatalf("insert node: %v", err)
+		t.Fatalf("insert thrall: %v", err)
 	}
 
 	// Insert traits with a fixed timestamp.
 	collectedAt := time.Date(2026, 3, 7, 10, 30, 0, 0, time.UTC)
 	traitsJSON := `{"os":{"distro":"ubuntu","version":"22.04"}}`
 	_, err = sqlDB.Exec(
-		`INSERT INTO node_traits (id, node_id, traits, collected_at) VALUES (?, ?, ?, ?)`,
-		uuid.New().String(), nodeID, traitsJSON, collectedAt.Format("2006-01-02 15:04:05"),
+		`INSERT INTO thrall_traits (id, thrall_id, traits, collected_at) VALUES (?, ?, ?, ?)`,
+		uuid.New().String(), thrallID, traitsJSON, collectedAt.Format("2006-01-02 15:04:05"),
 	)
 	if err != nil {
 		t.Fatalf("insert traits: %v", err)
@@ -77,7 +77,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/nodes/web01/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/thralls/web01/traits", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -128,7 +128,7 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/nodes/nonexistent/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/thralls/nonexistent/traits", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -138,29 +138,29 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["message"] != "node 'nonexistent' not found" {
-		t.Errorf("expected node not found error, got %q", resp["message"])
+	if resp["message"] != "thrall 'nonexistent' not found" {
+		t.Errorf("expected thrall not found error, got %q", resp["message"])
 	}
 }
 
 func TestTraitsHandler_NoFacts(t *testing.T) {
 	sqlDB := openTestDB(t)
-	nodeID := uuid.New().String()
+	thrallID := uuid.New().String()
 
-	// Insert a node without traits.
+	// Insert a thrall without traits.
 	_, err := sqlDB.Exec(
-		`INSERT INTO nodes (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
-		nodeID, "web01", "10.0.0.1", "pubkey-pem",
+		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		thrallID, "web01", "10.0.0.1", "pubkey-pem",
 	)
 	if err != nil {
-		t.Fatalf("insert node: %v", err)
+		t.Fatalf("insert thrall: %v", err)
 	}
 
 	handler := NewTraitsHandler(db.New(sqlDB))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/nodes/web01/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/thralls/web01/traits", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -170,7 +170,7 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	expected := "no traits available for 'web01' -- node has not reported traits yet"
+	expected := "no traits available for 'web01' -- thrall has not reported traits yet"
 	if resp["message"] != expected {
 		t.Errorf("expected %q, got %q", expected, resp["message"])
 	}

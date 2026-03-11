@@ -76,7 +76,7 @@ func (c *ModuleCache) Update(modules []*pb.PolicyModule) {
 		}
 	}
 
-	// Evict modules no longer in the bundle (node's role changed, etc.).
+	// Evict modules no longer in the bundle (thrall's role changed, etc.).
 	for name := range c.modules {
 		if !active[name] {
 			delete(c.modules, name)

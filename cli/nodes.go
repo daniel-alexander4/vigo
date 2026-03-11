@@ -10,38 +10,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var nodesCmd = &cobra.Command{
-	Use:   "nodes",
-	Short: "Manage enrolled nodes",
+var thrallsCmd = &cobra.Command{
+	Use:   "thralls",
+	Short: "Manage enrolled thralls",
 }
 
-var nodesListCmd = &cobra.Command{
+var thrallsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all enrolled nodes",
+	Short: "List all enrolled thralls",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
-			Nodes []struct {
+			Thralls []struct {
 				ID         string `json:"id"`
 				Hostname   string `json:"hostname"`
 				IPAddress  string `json:"ipAddress"`
 				EnrolledAt string `json:"enrolledAt"`
 				LastSeen   string `json:"lastSeen"`
 				Revoked    bool   `json:"revoked"`
-			} `json:"nodes"`
+			} `json:"thralls"`
 		}
-		if err := client.get("/api/v1/nodes", &resp); err != nil {
+		if err := client.get("/api/v1/thralls", &resp); err != nil {
 			return err
 		}
 
-		if len(resp.Nodes) == 0 {
-			fmt.Println("No nodes found.")
+		if len(resp.Thralls) == 0 {
+			fmt.Println("No thralls found.")
 			return nil
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "ID\tHOSTNAME\tIP\tENROLLED\tLAST SEEN\tSTATUS")
-		for _, c := range resp.Nodes {
+		for _, c := range resp.Thralls {
 			status := "active"
 			if c.Revoked {
 				status = "revoked"
@@ -56,14 +56,14 @@ var nodesListCmd = &cobra.Command{
 	},
 }
 
-var nodesShowCmd = &cobra.Command{
+var thrallsShowCmd = &cobra.Command{
 	Use:   "show <id>",
-	Short: "Show details for a node",
+	Short: "Show details for a thrall",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
-			Node struct {
+			Thrall struct {
 				ID         string `json:"id"`
 				Hostname   string `json:"hostname"`
 				IPAddress  string `json:"ipAddress"`
@@ -71,13 +71,13 @@ var nodesShowCmd = &cobra.Command{
 				LastSeen   string `json:"lastSeen"`
 				Revoked    bool   `json:"revoked"`
 				RevokedAt  string `json:"revokedAt"`
-			} `json:"node"`
+			} `json:"thrall"`
 		}
-		if err := client.get("/api/v1/nodes/"+args[0], &resp); err != nil {
+		if err := client.get("/api/v1/thralls/"+args[0], &resp); err != nil {
 			return err
 		}
 
-		c := resp.Node
+		c := resp.Thrall
 		fmt.Printf("ID:         %s\n", c.ID)
 		fmt.Printf("Hostname:   %s\n", c.Hostname)
 		fmt.Printf("IP:         %s\n", c.IPAddress)
@@ -93,7 +93,7 @@ var nodesShowCmd = &cobra.Command{
 		var compResp struct {
 			Status string `json:"status"`
 		}
-		if err := client.get("/api/v1/nodes/"+args[0]+"/compliance", &compResp); err == nil {
+		if err := client.get("/api/v1/thralls/"+args[0]+"/compliance", &compResp); err == nil {
 			fmt.Printf("Compliance: %s\n", compResp.Status)
 		}
 
@@ -101,37 +101,37 @@ var nodesShowCmd = &cobra.Command{
 	},
 }
 
-var nodesRevokeCmd = &cobra.Command{
+var thrallsRevokeCmd = &cobra.Command{
 	Use:   "revoke <id>",
-	Short: "Revoke an enrolled node",
+	Short: "Revoke an enrolled thrall",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		if err := client.post("/api/v1/nodes/"+args[0]+"/revoke", nil, nil); err != nil {
+		if err := client.post("/api/v1/thralls/"+args[0]+"/revoke", nil, nil); err != nil {
 			return err
 		}
-		fmt.Printf("Revoked node %s\n", args[0])
+		fmt.Printf("Revoked thrall %s\n", args[0])
 		return nil
 	},
 }
 
-var nodesDeleteCmd = &cobra.Command{
+var thrallsDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
-	Short: "Permanently delete a node and all its history",
+	Short: "Permanently delete a thrall and all its history",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		if err := client.delete("/api/v1/nodes/"+args[0], nil); err != nil {
+		if err := client.delete("/api/v1/thralls/"+args[0], nil); err != nil {
 			return err
 		}
-		fmt.Printf("Deleted node %s\n", args[0])
+		fmt.Printf("Deleted thrall %s\n", args[0])
 		return nil
 	},
 }
 
-var nodesTraitsCmd = &cobra.Command{
+var thrallsTraitsCmd = &cobra.Command{
 	Use:   "traits <hostname> [dot.path]",
-	Short: "View collected traits for a node",
+	Short: "View collected traits for a thrall",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hostname := args[0]
@@ -142,7 +142,7 @@ var nodesTraitsCmd = &cobra.Command{
 			CollectedAt string         `json:"collected_at"`
 			Traits       map[string]any `json:"traits"`
 		}
-		if err := client.get("/api/v1/nodes/"+hostname+"/traits", &resp); err != nil {
+		if err := client.get("/api/v1/thralls/"+hostname+"/traits", &resp); err != nil {
 			return err
 		}
 
@@ -200,5 +200,5 @@ func formatTraitValue(v any) string {
 }
 
 func init() {
-	nodesCmd.AddCommand(nodesListCmd, nodesShowCmd, nodesRevokeCmd, nodesDeleteCmd, nodesTraitsCmd)
+	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd, thrallsTraitsCmd)
 }

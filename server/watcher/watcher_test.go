@@ -33,12 +33,12 @@ func (m *mockVersionProvider) setVersion(key string, v int) {
 	m.versions[key] = v
 }
 
-// mockNodeStore implements NodeStore for testing.
-type mockNodeStore struct {
+// mockThrallStore implements ThrallStore for testing.
+type mockThrallStore struct {
 	refs map[string][]string // secret path -> hostnames
 }
 
-func (m *mockNodeStore) NodesReferencingSecret(path string) []string {
+func (m *mockThrallStore) ThrallsReferencingSecret(path string) []string {
 	return m.refs[path]
 }
 
@@ -64,7 +64,7 @@ func (m *mockDB) CreateSecretRotationEvent(ctx context.Context, params RotationR
 	return nil
 }
 
-func (m *mockDB) GetNodeByHostname(ctx context.Context, hostname string) (string, error) {
+func (m *mockDB) GetThrallByHostname(ctx context.Context, hostname string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	id, ok := m.nodesByHost[hostname]
@@ -87,14 +87,14 @@ func (m *mockDispatcher) DispatchRotation(ctx context.Context, event string, sec
 }
 
 func TestRotationTrigger(t *testing.T) {
-	nodeID := uuid.New().String()
+	thrallID := uuid.New().String()
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockNodeStore{refs: map[string][]string{
+	store := &mockThrallStore{refs: map[string][]string{
 		"hobnob/db/dsn": {"web-01.example.com"},
 	}}
 	database := &mockDB{
 		nodesByHost: map[string]string{
-			"web-01.example.com": nodeID,
+			"web-01.example.com": thrallID,
 		},
 	}
 	dispatcher := &mockDispatcher{}
@@ -115,7 +115,7 @@ func TestRotationTrigger(t *testing.T) {
 
 	// Verify force push was triggered.
 	database.mu.Lock()
-	assert.Contains(t, database.forcePushed, nodeID)
+	assert.Contains(t, database.forcePushed, thrallID)
 	assert.Len(t, database.rotationEvents, 1)
 	assert.Equal(t, "hobnob/db/dsn", database.rotationEvents[0].SecretPath)
 	database.mu.Unlock()
@@ -128,7 +128,7 @@ func TestRotationTrigger(t *testing.T) {
 
 func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockNodeStore{refs: map[string][]string{}}
+	store := &mockThrallStore{refs: map[string][]string{}}
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
@@ -148,7 +148,7 @@ func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 
 func TestWatcherRunLoop(t *testing.T) {
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockNodeStore{refs: map[string][]string{}}
+	store := &mockThrallStore{refs: map[string][]string{}}
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
@@ -166,7 +166,7 @@ func TestMultipleAffectedNodes(t *testing.T) {
 	node2 := uuid.New().String()
 
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/tls/cert": 1}}
-	store := &mockNodeStore{refs: map[string][]string{
+	store := &mockThrallStore{refs: map[string][]string{
 		"hobnob/tls/cert": {"web-01.example.com", "web-02.example.com"},
 	}}
 	database := &mockDB{

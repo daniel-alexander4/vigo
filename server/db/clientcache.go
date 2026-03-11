@@ -11,94 +11,94 @@ import (
 	"time"
 )
 
-// cachedNode pairs a DB node with its parsed pubkey and fetch time.
-type cachedNode struct {
-	node      Node
+// cachedThrall pairs a DB thrall with its parsed pubkey and fetch time.
+type cachedThrall struct {
+	thrall      Thrall
 	pubKey    ed25519.PublicKey // parsed once, reused on every RPC
 	fetchedAt time.Time
 }
 
-// NodeCache provides a TTL-based in-memory cache for node lookups,
-// eliminating repeated GetNodeByID queries during a single check-in cycle.
+// ThrallCache provides a TTL-based in-memory cache for thrall lookups,
+// eliminating repeated GetThrallByID queries during a single check-in cycle.
 // Also caches the parsed ED25519 public key to avoid PEM decode + x509 parse
 // on every signature verification. Thread-safe for concurrent access.
-type NodeCache struct {
+type ThrallCache struct {
 	mu      sync.RWMutex
-	entries map[string]*cachedNode
+	entries map[string]*cachedThrall
 	queries *Queries
 	ttl     time.Duration
 }
 
-// NewNodeCache creates a node cache backed by the given Queries with the
+// NewThrallCache creates a thrall cache backed by the given Queries with the
 // specified TTL. Entries are lazily evicted on access after TTL expires.
-func NewNodeCache(queries *Queries, ttl time.Duration) *NodeCache {
-	return &NodeCache{
-		entries: make(map[string]*cachedNode),
+func NewThrallCache(queries *Queries, ttl time.Duration) *ThrallCache {
+	return &ThrallCache{
+		entries: make(map[string]*cachedThrall),
 		queries: queries,
 		ttl:     ttl,
 	}
 }
 
-// GetByID returns the node for the given UUID string, serving from cache if the
+// GetByID returns the thrall for the given UUID string, serving from cache if the
 // entry is fresh (within TTL). On cache miss or stale entry, fetches from DB
-// and updates the cache. Returns sql.ErrNoRows if the node does not exist.
-func (nc *NodeCache) GetByID(ctx context.Context, id string) (Node, error) {
+// and updates the cache. Returns sql.ErrNoRows if the thrall does not exist.
+func (nc *ThrallCache) GetByID(ctx context.Context, id string) (Thrall, error) {
 	nc.mu.RLock()
 	if entry, ok := nc.entries[id]; ok && time.Since(entry.fetchedAt) < nc.ttl {
-		n := entry.node
+		n := entry.thrall
 		nc.mu.RUnlock()
 		return n, nil
 	}
 	nc.mu.RUnlock()
 
 	// Cache miss or stale — fetch from DB.
-	node, err := nc.queries.GetNodeByID(ctx, id)
+	thrall, err := nc.queries.GetThrallByID(ctx, id)
 	if err != nil {
-		return Node{}, err
+		return Thrall{}, err
 	}
 
 	// Parse pubkey eagerly so it's cached for signature verification.
-	pubKey, _ := parsePubKey(node.PubkeyPem)
+	pubKey, _ := parsePubKey(thrall.PubkeyPem)
 
 	nc.mu.Lock()
-	nc.entries[id] = &cachedNode{node: node, pubKey: pubKey, fetchedAt: time.Now()}
+	nc.entries[id] = &cachedThrall{thrall: thrall, pubKey: pubKey, fetchedAt: time.Now()}
 	nc.mu.Unlock()
 
-	return node, nil
+	return thrall, nil
 }
 
-// GetByIDWithPubKey returns the node and its parsed ED25519 public key,
+// GetByIDWithPubKey returns the thrall and its parsed ED25519 public key,
 // serving both from cache when available. Eliminates PEM decode + x509 parse
 // on every signature verification RPC.
-func (nc *NodeCache) GetByIDWithPubKey(ctx context.Context, id string) (Node, ed25519.PublicKey, error) {
+func (nc *ThrallCache) GetByIDWithPubKey(ctx context.Context, id string) (Thrall, ed25519.PublicKey, error) {
 	nc.mu.RLock()
 	if entry, ok := nc.entries[id]; ok && time.Since(entry.fetchedAt) < nc.ttl {
 		nc.mu.RUnlock()
-		return entry.node, entry.pubKey, nil
+		return entry.thrall, entry.pubKey, nil
 	}
 	nc.mu.RUnlock()
 
 	// Cache miss or stale — fetch from DB.
-	node, err := nc.queries.GetNodeByID(ctx, id)
+	thrall, err := nc.queries.GetThrallByID(ctx, id)
 	if err != nil {
-		return Node{}, nil, err
+		return Thrall{}, nil, err
 	}
 
-	pubKey, pkErr := parsePubKey(node.PubkeyPem)
+	pubKey, pkErr := parsePubKey(thrall.PubkeyPem)
 	if pkErr != nil {
-		return Node{}, nil, pkErr
+		return Thrall{}, nil, pkErr
 	}
 
 	nc.mu.Lock()
-	nc.entries[id] = &cachedNode{node: node, pubKey: pubKey, fetchedAt: time.Now()}
+	nc.entries[id] = &cachedThrall{thrall: thrall, pubKey: pubKey, fetchedAt: time.Now()}
 	nc.mu.Unlock()
 
-	return node, pubKey, nil
+	return thrall, pubKey, nil
 }
 
-// Invalidate removes a node from the cache, forcing the next lookup to
+// Invalidate removes a thrall from the cache, forcing the next lookup to
 // hit the database. Used after revocation to ensure immediate effect.
-func (nc *NodeCache) Invalidate(id string) {
+func (nc *ThrallCache) Invalidate(id string) {
 	nc.mu.Lock()
 	delete(nc.entries, id)
 	nc.mu.Unlock()
@@ -121,20 +121,20 @@ func parsePubKey(pemStr string) (ed25519.PublicKey, error) {
 	return pubKey, nil
 }
 
-// nodeCtxKey is the context key for passing a cached node from the
+// thrallCtxKey is the context key for passing a cached thrall from the
 // interceptor to the handler within a single request.
-type nodeCtxKey struct{}
+type thrallCtxKey struct{}
 
-// ContextWithNode stores a Node in the context for reuse by downstream
+// ContextWithThrall stores a Thrall in the context for reuse by downstream
 // handlers, avoiding duplicate DB lookups within the same gRPC request.
-func ContextWithNode(ctx context.Context, n Node) context.Context {
-	return context.WithValue(ctx, nodeCtxKey{}, &n)
+func ContextWithThrall(ctx context.Context, n Thrall) context.Context {
+	return context.WithValue(ctx, thrallCtxKey{}, &n)
 }
 
-// NodeFromContext retrieves a Node previously stored by the interceptor.
-// Returns nil if no node is in the context.
-func NodeFromContext(ctx context.Context) *Node {
-	n, _ := ctx.Value(nodeCtxKey{}).(*Node)
+// ThrallFromContext retrieves a Thrall previously stored by the interceptor.
+// Returns nil if no thrall is in the context.
+func ThrallFromContext(ctx context.Context) *Thrall {
+	n, _ := ctx.Value(thrallCtxKey{}).(*Thrall)
 	return n
 }
 

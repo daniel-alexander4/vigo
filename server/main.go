@@ -155,7 +155,7 @@ func run() error {
 
 	// Parse tuning parameters (all optional, zero values use defaults).
 	sigWindow := parseDuration(cfg.Tuning.SignatureWindow, 0)
-	nodeCacheTTL := parseDuration(cfg.Tuning.NodeCacheTTL, 0)
+	nodeCacheTTL := parseDuration(cfg.Tuning.ThrallCacheTTL, 0)
 	lastSeenFlush := parseDuration(cfg.Tuning.LastSeenFlush, 10*time.Second)
 	traitsPruneInterval := parseDuration(cfg.Tuning.TraitsPruneInterval, 5*time.Minute)
 	metricsInterval := parseDuration(cfg.Tuning.MetricsInterval, 30*time.Second)
@@ -210,7 +210,7 @@ func run() error {
 		Dispatcher:       dispatcher,
 		TraitsDir:        traitsDir,
 		SignatureWindow:  sigWindow,
-		NodeCacheTTL:     nodeCacheTTL,
+		ThrallCacheTTL:     nodeCacheTTL,
 		TraitsScannerTTL: traitsScannerTTL,
 		Hub:              hub,
 	})

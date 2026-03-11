@@ -10,22 +10,22 @@ import (
 )
 
 const createPlan = `-- name: CreatePlan :one
-INSERT INTO plans (node_id, modules)
+INSERT INTO plans (thrall_id, modules)
 VALUES (?, ?)
-RETURNING id, node_id, created_at, modules
+RETURNING id, thrall_id, created_at, modules
 `
 
 type CreatePlanParams struct {
-	NodeID  string `json:"node_id"`
-	Modules string `json:"modules"`
+	ThrallID string `json:"thrall_id"`
+	Modules  string `json:"modules"`
 }
 
 func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, error) {
-	row := q.db.QueryRowContext(ctx, createPlan, arg.NodeID, arg.Modules)
+	row := q.db.QueryRowContext(ctx, createPlan, arg.ThrallID, arg.Modules)
 	var i Plan
 	err := row.Scan(
 		&i.ID,
-		&i.NodeID,
+		&i.ThrallID,
 		&i.CreatedAt,
 		&i.Modules,
 	)
@@ -67,7 +67,7 @@ func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultPara
 }
 
 const getPlanByID = `-- name: GetPlanByID :one
-SELECT id, node_id, created_at, modules
+SELECT id, thrall_id, created_at, modules
 FROM plans
 WHERE id = ?
 `
@@ -77,7 +77,7 @@ func (q *Queries) GetPlanByID(ctx context.Context, id string) (Plan, error) {
 	var i Plan
 	err := row.Scan(
 		&i.ID,
-		&i.NodeID,
+		&i.ThrallID,
 		&i.CreatedAt,
 		&i.Modules,
 	)
@@ -121,21 +121,21 @@ func (q *Queries) ListPlanResults(ctx context.Context, planID string) ([]PlanRes
 	return items, nil
 }
 
-const listPlansByNode = `-- name: ListPlansByNode :many
-SELECT id, node_id, created_at, modules
+const listPlansByThrall = `-- name: ListPlansByThrall :many
+SELECT id, thrall_id, created_at, modules
 FROM plans
-WHERE node_id = ?1
+WHERE thrall_id = ?1
 ORDER BY created_at DESC
 LIMIT ?2
 `
 
-type ListPlansByNodeParams struct {
-	NodeID string `json:"node_id"`
-	Limit  int64  `json:"limit"`
+type ListPlansByThrallParams struct {
+	ThrallID string `json:"thrall_id"`
+	Limit    int64  `json:"limit"`
 }
 
-func (q *Queries) ListPlansByNode(ctx context.Context, arg ListPlansByNodeParams) ([]Plan, error) {
-	rows, err := q.db.QueryContext(ctx, listPlansByNode, arg.NodeID, arg.Limit)
+func (q *Queries) ListPlansByThrall(ctx context.Context, arg ListPlansByThrallParams) ([]Plan, error) {
+	rows, err := q.db.QueryContext(ctx, listPlansByThrall, arg.ThrallID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (q *Queries) ListPlansByNode(ctx context.Context, arg ListPlansByNodeParams
 		var i Plan
 		if err := rows.Scan(
 			&i.ID,
-			&i.NodeID,
+			&i.ThrallID,
 			&i.CreatedAt,
 			&i.Modules,
 		); err != nil {

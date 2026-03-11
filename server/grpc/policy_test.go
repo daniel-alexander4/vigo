@@ -101,7 +101,7 @@ func TestBuildPolicyBundle_NoCachedHashes_FullModules(t *testing.T) {
 	}
 	mod.ContentHash = config.HashModuleContent(mod)
 
-	cfg := &config.NodeConfig{
+	cfg := &config.ThrallConfig{
 		MatchPattern: "*.web.example.com",
 		Modules:      []config.ModuleConfig{mod},
 	}
@@ -144,7 +144,7 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 	}
 	pgMod.ContentHash = config.HashModuleContent(pgMod)
 
-	cfg := &config.NodeConfig{
+	cfg := &config.ThrallConfig{
 		Modules: []config.ModuleConfig{nginxMod, pgMod},
 	}
 
@@ -200,7 +200,7 @@ func TestBuildPolicyBundle_CachedHashMismatch_SendsFull(t *testing.T) {
 	}
 	mod.ContentHash = config.HashModuleContent(mod)
 
-	cfg := &config.NodeConfig{
+	cfg := &config.ThrallConfig{
 		Modules: []config.ModuleConfig{mod},
 	}
 

@@ -92,7 +92,7 @@ func TestOpenStream_Handshake(t *testing.T) {
 	mock := &mockStreamAgentClient{stream: stream}
 	client := &Client{
 		agent:      mock,
-		nodeID:     "test-node",
+		thrallID:     "test-thrall",
 		privateKey: make([]byte, 64),
 	}
 
@@ -114,8 +114,8 @@ func TestOpenStream_Handshake(t *testing.T) {
 	if stream.sent[0].GetCheckIn() == nil {
 		t.Error("first sent message should be check_in")
 	}
-	if stream.sent[0].GetCheckIn().GetNodeId() != "test-node" {
-		t.Errorf("node_id = %q, want %q", stream.sent[0].GetCheckIn().GetNodeId(), "test-node")
+	if stream.sent[0].GetCheckIn().GetThrallId() != "test-thrall" {
+		t.Errorf("thrall_id = %q, want %q", stream.sent[0].GetCheckIn().GetThrallId(), "test-thrall")
 	}
 }
 
@@ -125,7 +125,7 @@ func TestOpenStream_StreamError(t *testing.T) {
 	}
 	client := &Client{
 		agent:      mock,
-		nodeID:     "test-node",
+		thrallID:     "test-thrall",
 		privateKey: make([]byte, 64),
 	}
 
@@ -242,7 +242,7 @@ func TestStreamConn_CheckIn(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	resp, err := sc.CheckIn(ctx, &pb.CheckInRequest{NodeId: "test"})
+	resp, err := sc.CheckIn(ctx, &pb.CheckInRequest{ThrallId: "test"})
 	if err != nil {
 		t.Fatalf("CheckIn: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestStreamConn_ReportResult(t *testing.T) {
 
 	err := sc.ReportResult(&pb.ReportResultRequest{
 		RunId:  "run-1",
-		NodeId: "node-1",
+		ThrallId: "thrall-1",
 		Results: []*pb.ModuleResult{
 			{ModuleName: "nginx", ActionTaken: "updated", Changed: true},
 		},

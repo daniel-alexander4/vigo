@@ -90,74 +90,74 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 	return &pb.RevokeApprovedPatternResponse{}, nil
 }
 
-// ---------- Nodes ----------
+// ---------- Thralls ----------
 
-func (s *AdminService) ListNodes(ctx context.Context, _ *pb.ListNodesRequest) (*pb.ListNodesResponse, error) {
+func (s *AdminService) ListThralls(ctx context.Context, _ *pb.ListThrallsRequest) (*pb.ListThrallsResponse, error) {
 	// Hub mode: aggregate from all spokes.
 	if s.hub != nil {
-		nodes, err := s.hub.AggregateListNodes(ctx)
+		thralls, err := s.hub.AggregateListThralls(ctx)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating nodes from spokes: %v", err)
+			return nil, status.Errorf(codes.Internal, "aggregating thralls from spokes: %v", err)
 		}
-		return &pb.ListNodesResponse{Nodes: nodes}, nil
+		return &pb.ListThrallsResponse{Thralls: thralls}, nil
 	}
 
-	nodes, err := s.queries.ListNodes(ctx)
+	thralls, err := s.queries.ListThralls(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing thralls: %v", err)
 	}
 
-	resp := &pb.ListNodesResponse{}
-	for _, n := range nodes {
-		resp.Nodes = append(resp.Nodes, dbNodeToProto(n))
+	resp := &pb.ListThrallsResponse{}
+	for _, n := range thralls {
+		resp.Thralls = append(resp.Thralls, dbThrallToProto(n))
 	}
 
 	return resp, nil
 }
 
-func (s *AdminService) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
+func (s *AdminService) GetThrall(ctx context.Context, req *pb.GetThrallRequest) (*pb.GetThrallResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 	}
 
-	n, err := s.queries.GetNodeByID(ctx, req.Id)
+	n, err := s.queries.GetThrallByID(ctx, req.Id)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
 	}
 
-	return &pb.GetNodeResponse{
-		Node: dbNodeToProto(n),
+	return &pb.GetThrallResponse{
+		Thrall: dbThrallToProto(n),
 	}, nil
 }
 
-func (s *AdminService) RevokeNode(ctx context.Context, req *pb.RevokeNodeRequest) (*pb.RevokeNodeResponse, error) {
+func (s *AdminService) RevokeThrall(ctx context.Context, req *pb.RevokeThrallRequest) (*pb.RevokeThrallResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 	}
 
-	if err := s.queries.RevokeNode(ctx, req.Id); err != nil {
-		return nil, status.Errorf(codes.Internal, "revoking node: %v", err)
+	if err := s.queries.RevokeThrall(ctx, req.Id); err != nil {
+		return nil, status.Errorf(codes.Internal, "revoking thrall: %v", err)
 	}
 
-	slog.Warn("node revoked", "node_id", req.Id)
+	slog.Warn("thrall revoked", "thrall_id", req.Id)
 
-	return &pb.RevokeNodeResponse{}, nil
+	return &pb.RevokeThrallResponse{}, nil
 }
 
-// ---------- DeleteNode ----------
+// ---------- DeleteThrall ----------
 
-func (s *AdminService) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest) (*pb.DeleteNodeResponse, error) {
+func (s *AdminService) DeleteThrall(ctx context.Context, req *pb.DeleteThrallRequest) (*pb.DeleteThrallResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 	}
 
-	if err := s.queries.DeleteNode(ctx, req.Id); err != nil {
-		return nil, status.Errorf(codes.Internal, "deleting node: %v", err)
+	if err := s.queries.DeleteThrall(ctx, req.Id); err != nil {
+		return nil, status.Errorf(codes.Internal, "deleting thrall: %v", err)
 	}
 
-	slog.Warn("node deleted", "node_id", req.Id)
+	slog.Warn("thrall deleted", "thrall_id", req.Id)
 
-	return &pb.DeleteNodeResponse{}, nil
+	return &pb.DeleteThrallResponse{}, nil
 }
 
 // ---------- ForcePush ----------
@@ -165,31 +165,31 @@ func (s *AdminService) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
 	// Hub mode: forward to all spokes.
 	if s.hub != nil {
-		total, err := s.hub.ForwardForcePush(ctx, req.GetNodeId())
+		total, err := s.hub.ForwardForcePush(ctx, req.GetThrallId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "forwarding force push to spokes: %v", err)
 		}
-		return &pb.ForcePushResponse{NodesNotified: total}, nil
+		return &pb.ForcePushResponse{ThrallsNotified: total}, nil
 	}
 
-	if req.NodeId != "" {
-		// Single node
-		if _, err := uuid.Parse(req.NodeId); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+	if req.ThrallId != "" {
+		// Single thrall
+		if _, err := uuid.Parse(req.ThrallId); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 		}
-		if err := s.queries.SetForcePush(ctx, req.NodeId); err != nil {
+		if err := s.queries.SetForcePush(ctx, req.ThrallId); err != nil {
 			return nil, status.Errorf(codes.Internal, "setting force push: %v", err)
 		}
-		return &pb.ForcePushResponse{NodesNotified: 1}, nil
+		return &pb.ForcePushResponse{ThrallsNotified: 1}, nil
 	}
 
-	// All non-revoked nodes — single batch UPDATE.
+	// All non-revoked thralls — single batch UPDATE.
 	affected, err := s.queries.SetForcePushAllActive(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "batch setting force push: %v", err)
 	}
 
-	return &pb.ForcePushResponse{NodesNotified: int32(affected)}, nil
+	return &pb.ForcePushResponse{ThrallsNotified: int32(affected)}, nil
 }
 
 // ---------- Runs ----------
@@ -201,7 +201,7 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		if limit <= 0 {
 			limit = 20
 		}
-		runs, err := s.hub.AggregateListRuns(ctx, req.GetNodeId(), limit)
+		runs, err := s.hub.AggregateListRuns(ctx, req.GetThrallId(), limit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "aggregating runs from spokes: %v", err)
 		}
@@ -213,13 +213,13 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		limit = 20
 	}
 
-	if req.NodeId != "" {
-		if _, err := uuid.Parse(req.NodeId); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+	if req.ThrallId != "" {
+		if _, err := uuid.Parse(req.ThrallId); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 		}
 
-		runs, err := s.runStore.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-			NodeID: req.NodeId,
+		runs, err := s.runStore.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
+			ThrallID: req.ThrallId,
 			Limit:  limit,
 		})
 		if err != nil {
@@ -292,17 +292,17 @@ func (s *AdminService) GenerateToken(ctx context.Context, _ *pb.GenerateTokenReq
 // ---------- DryRun ----------
 
 func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.DryRunResponse, error) {
-	if _, err := uuid.Parse(req.NodeId); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+	if _, err := uuid.Parse(req.ThrallId); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 	}
-	nodeID := req.NodeId
+	thrallID := req.ThrallId
 
-	node, err := s.queries.GetNodeByID(ctx, nodeID)
+	thrall, err := s.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
 	}
 
-	cfg := s.configStore.Get(node.Hostname)
+	cfg := s.configStore.Get(thrall.Hostname)
 	if len(cfg.Modules) == 0 {
 		return &pb.DryRunResponse{}, nil
 	}
@@ -314,7 +314,7 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	}
 
 	plan, err := s.queries.CreatePlan(ctx, db.CreatePlanParams{
-		NodeID:  nodeID,
+		ThrallID:  thrallID,
 		Modules: string(modulesJSON),
 	})
 	if err != nil {
@@ -434,24 +434,24 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 		return s.hub.AggregateComplianceSummary(ctx)
 	}
 
-	// Get all nodes from DB, then look up latest runs via RunStore.
-	nodes, err := s.queries.ListNodes(ctx)
+	// Get all thralls from DB, then look up latest runs via RunStore.
+	thralls, err := s.queries.ListThralls(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing thralls: %v", err)
 	}
 
-	nodeIDs := make([]string, len(nodes))
-	for i, n := range nodes {
-		nodeIDs[i] = n.ID
+	thrallIDs := make([]string, len(thralls))
+	for i, n := range thralls {
+		thrallIDs[i] = n.ID
 	}
 
-	latestRuns, err := s.runStore.LatestRunPerNode(ctx, nodeIDs)
+	latestRuns, err := s.runStore.LatestRunPerThrall(ctx, thrallIDs)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "fetching latest runs: %v", err)
 	}
 
 	counts := make(map[string]int32)
-	for _, n := range nodes {
+	for _, n := range thralls {
 		var runInfo *compliance.RunInfo
 		if run, ok := latestRuns[n.ID]; ok {
 			runInfo = &compliance.RunInfo{
@@ -468,7 +468,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 		counts[compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval)]++
 	}
 
-	total := int32(len(nodes))
+	total := int32(len(thralls))
 
 	var pct float32
 	if total > 0 {
@@ -486,21 +486,21 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	}, nil
 }
 
-func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeComplianceRequest) (*pb.GetNodeComplianceResponse, error) {
+func (s *AdminService) GetThrallCompliance(ctx context.Context, req *pb.GetThrallComplianceRequest) (*pb.GetThrallComplianceResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 	}
-	nodeID := req.Id
+	thrallID := req.Id
 
-	n, err := s.queries.GetNodeByID(ctx, nodeID)
+	n, err := s.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
 	}
 
 	var runInfo *compliance.RunInfo
 	var lastRunProto *pb.Run
-	runs, err := s.runStore.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-		NodeID: nodeID,
+	runs, err := s.runStore.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
+		ThrallID: thrallID,
 		Limit:  1,
 	})
 	if err == nil && len(runs) > 0 {
@@ -537,7 +537,7 @@ func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeCom
 		})
 	}
 
-	return &pb.GetNodeComplianceResponse{
+	return &pb.GetThrallComplianceResponse{
 		Status:  compStatus,
 		LastRun: lastRunProto,
 		History: snapshots,
@@ -547,21 +547,21 @@ func (s *AdminService) GetNodeCompliance(ctx context.Context, req *pb.GetNodeCom
 // ---------- Rollback ----------
 
 func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*pb.RollbackResponse, error) {
-	if _, err := uuid.Parse(req.NodeId); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+	if _, err := uuid.Parse(req.ThrallId); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 	}
-	nodeID := req.NodeId
+	thrallID := req.ThrallId
 
-	// Verify node exists.
-	_, err := s.queries.GetNodeByID(ctx, nodeID)
+	// Verify thrall exists.
+	_, err := s.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "node not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
 	}
 
 	// If a specific file_path is provided, verify snapshots exist.
 	if req.FilePath != "" {
 		snapshots, err := s.queries.ListFileSnapshots(ctx, db.ListFileSnapshotsParams{
-			NodeID:   nodeID,
+			ThrallID:   thrallID,
 			FilePath: req.FilePath,
 		})
 		if err != nil {
@@ -584,7 +584,7 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 	}
 
 	// Set force_push flag so agent picks up rollback on next check-in.
-	if err := s.queries.SetForcePush(ctx, nodeID); err != nil {
+	if err := s.queries.SetForcePush(ctx, thrallID); err != nil {
 		return nil, status.Errorf(codes.Internal, "setting force push for rollback: %v", err)
 	}
 
@@ -597,12 +597,12 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 // ---------- Packages ----------
 
 func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesRequest) (*pb.ListPackagesResponse, error) {
-	if req.NodeId != "" {
-		if _, err := uuid.Parse(req.NodeId); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid node id: %v", err)
+	if req.ThrallId != "" {
+		if _, err := uuid.Parse(req.ThrallId); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 		}
 
-		pkgs, err := s.queries.ListPackageAuditByNode(ctx, req.NodeId)
+		pkgs, err := s.queries.ListPackageAuditByThrall(ctx, req.ThrallId)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listing package audit: %v", err)
 		}
@@ -610,7 +610,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 		result := make([]*pb.PackageInfo, 0, len(pkgs))
 		for _, p := range pkgs {
 			pi := &pb.PackageInfo{
-				NodeId:      p.NodeID,
+				ThrallId:      p.ThrallID,
 				Hostname:    p.Hostname,
 				PackageName: p.PackageName,
 			}
@@ -633,7 +633,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 	result := make([]*pb.PackageInfo, 0, len(pkgs))
 	for _, p := range pkgs {
 		pi := &pb.PackageInfo{
-			NodeId:      p.NodeID,
+			ThrallId:      p.ThrallID,
 			Hostname:    p.Hostname,
 			PackageName: p.PackageName,
 		}
@@ -657,7 +657,7 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	resp := &pb.ListPackageDriftResponse{}
 	for _, d := range drifts {
 		pd := &pb.PackageDrift{
-			NodeId:      d.NodeID,
+			ThrallId:      d.ThrallID,
 			Hostname:    d.Hostname,
 			PackageName: d.PackageName,
 			DetectedAt:  timestamppb.New(d.DetectedAt),
@@ -684,7 +684,7 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 		return nil, status.Errorf(codes.InvalidArgument, "from_env and to_env are required")
 	}
 
-	// Compute diff by reading all node configs that contain the module.
+	// Compute diff by reading all thrall configs that contain the module.
 	// PromoteEnv is read-only audit -- never writes config files.
 	diff := s.configStore.ComputeEnvDiff(req.ModuleName, req.FromEnv, req.ToEnv)
 
@@ -712,8 +712,8 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 
 // ---------- Helpers ----------
 
-func dbNodeToProto(n db.Node) *pb.Node {
-	pn := &pb.Node{
+func dbThrallToProto(n db.Thrall) *pb.Thrall {
+	pn := &pb.Thrall{
 		Id:         n.ID,
 		Hostname:   n.Hostname,
 		IpAddress:  n.IpAddress,
@@ -732,7 +732,7 @@ func dbNodeToProto(n db.Node) *pb.Node {
 func dbRunToProto(r db.Run) *pb.Run {
 	pr := &pb.Run{
 		Id:           r.ID,
-		NodeId:       r.NodeID,
+		ThrallId:       r.ThrallID,
 		StartedAt:    timestamppb.New(r.StartedAt),
 		Status:       r.Status,
 		ModuleCount:  int32(r.ModuleCount),

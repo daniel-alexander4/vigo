@@ -11,14 +11,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// MemRunStore stores runs in memory using per-node ring buffers.
+// MemRunStore stores runs in memory using per-thrall ring buffers.
 // Faster than the DB backend but data is lost on server restart.
 // Enable via tuning.run_store: "memory" in server.yaml.
 type MemRunStore struct {
 	mu       sync.RWMutex
 	byID     map[string]*memRun        // run UUID string → run + results
-	byNode   map[string]*nodeRunBuffer // node UUID string → ring of run IDs
-	capacity int                       // max runs per node
+	byThrall   map[string]*thrallRunBuffer // thrall UUID string → ring of run IDs
+	capacity int                       // max runs per thrall
 }
 
 type memRun struct {
@@ -26,20 +26,20 @@ type memRun struct {
 	results []RunResult
 }
 
-// nodeRunBuffer is a bounded ring buffer of run IDs per node.
-type nodeRunBuffer struct {
+// thrallRunBuffer is a bounded ring buffer of run IDs per thrall.
+type thrallRunBuffer struct {
 	runs []string // newest first
 }
 
 // NewMemRunStore creates an in-memory run store keeping at most capacity
-// runs per node.
+// runs per thrall.
 func NewMemRunStore(capacity int) *MemRunStore {
 	if capacity < 1 {
 		capacity = 20
 	}
 	return &MemRunStore{
 		byID:     make(map[string]*memRun),
-		byNode:   make(map[string]*nodeRunBuffer),
+		byThrall:   make(map[string]*thrallRunBuffer),
 		capacity: capacity,
 	}
 }
@@ -47,7 +47,7 @@ func NewMemRunStore(capacity int) *MemRunStore {
 func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, error) {
 	run := Run{
 		ID:          uuid.New().String(),
-		NodeID:      arg.NodeID,
+		ThrallID:      arg.ThrallID,
 		StartedAt:   time.Now(),
 		Status:      arg.Status,
 		ModuleCount: arg.ModuleCount,
@@ -55,10 +55,10 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 
 	s.mu.Lock()
 	s.byID[run.ID] = &memRun{run: run}
-	buf := s.byNode[arg.NodeID]
+	buf := s.byThrall[arg.ThrallID]
 	if buf == nil {
-		buf = &nodeRunBuffer{}
-		s.byNode[arg.NodeID] = buf
+		buf = &thrallRunBuffer{}
+		s.byThrall[arg.ThrallID] = buf
 	}
 	// Prepend (newest first).
 	buf.runs = append([]string{run.ID}, buf.runs...)
@@ -161,11 +161,11 @@ func (s *MemRunStore) ListRunResults(_ context.Context, runID string) ([]RunResu
 	return results, nil
 }
 
-func (s *MemRunStore) ListRunsByNode(_ context.Context, arg ListRunsByNodeParams) ([]Run, error) {
+func (s *MemRunStore) ListRunsByThrall(_ context.Context, arg ListRunsByThrallParams) ([]Run, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	buf, ok := s.byNode[arg.NodeID]
+	buf, ok := s.byThrall[arg.ThrallID]
 	if !ok {
 		return []Run{}, nil
 	}
@@ -184,19 +184,19 @@ func (s *MemRunStore) ListRunsByNode(_ context.Context, arg ListRunsByNodeParams
 	return runs, nil
 }
 
-func (s *MemRunStore) LatestRunPerNode(_ context.Context, nodeIDs []string) (map[string]*Run, error) {
+func (s *MemRunStore) LatestRunPerThrall(_ context.Context, thrallIDs []string) (map[string]*Run, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make(map[string]*Run, len(nodeIDs))
-	for _, nodeID := range nodeIDs {
-		buf, ok := s.byNode[nodeID]
+	result := make(map[string]*Run, len(thrallIDs))
+	for _, thrallID := range thrallIDs {
+		buf, ok := s.byThrall[thrallID]
 		if !ok || len(buf.runs) == 0 {
 			continue
 		}
 		if mr, ok := s.byID[buf.runs[0]]; ok {
 			run := mr.run
-			result[nodeID] = &run
+			result[thrallID] = &run
 		}
 	}
 	return result, nil

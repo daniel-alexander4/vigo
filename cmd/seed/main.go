@@ -73,8 +73,8 @@ func run() error {
 		slog.Info("seeded approved pattern", "pattern", p.pattern)
 	}
 
-	// Insert sample nodes (ON CONFLICT DO NOTHING on hostname).
-	nodes := []struct {
+	// Insert sample thralls (ON CONFLICT DO NOTHING on hostname).
+	thralls := []struct {
 		hostname  string
 		ipAddress string
 		pubkeyPEM string
@@ -91,23 +91,23 @@ func run() error {
 		},
 	}
 
-	for _, n := range nodes {
+	for _, n := range thralls {
 		_, err := db.ExecContext(ctx, `
-			INSERT INTO nodes (hostname, ip_address, pubkey_pem)
+			INSERT INTO thralls (hostname, ip_address, pubkey_pem)
 			VALUES (?, ?, ?)
 			ON CONFLICT DO NOTHING
 		`, n.hostname, n.ipAddress, n.pubkeyPEM)
 		if err != nil {
-			return fmt.Errorf("inserting node %q: %w", n.hostname, err)
+			return fmt.Errorf("inserting thrall %q: %w", n.hostname, err)
 		}
-		slog.Info("seeded node", "hostname", n.hostname)
+		slog.Info("seeded thrall", "hostname", n.hostname)
 	}
 
-	// Create sample node config files if they don't exist.
-	if err := writeNodeConfig("config/nodes/web01.web.example.com.yaml", webNodeConfig); err != nil {
+	// Create sample thrall config files if they don't exist.
+	if err := writeThrallConfig("config/thralls/web01.web.example.com.yaml", webThrallConfig); err != nil {
 		return err
 	}
-	if err := writeNodeConfig("config/nodes/db01.db.example.com.yaml", dbNodeConfig); err != nil {
+	if err := writeThrallConfig("config/thralls/db01.db.example.com.yaml", dbThrallConfig); err != nil {
 		return err
 	}
 
@@ -115,25 +115,25 @@ func run() error {
 	return nil
 }
 
-func writeNodeConfig(path, content string) error {
+func writeThrallConfig(path, content string) error {
 	if _, err := os.Stat(path); err == nil {
-		slog.Info("node config already exists, skipping", "path", path)
+		slog.Info("thrall config already exists, skipping", "path", path)
 		return nil
 	}
-	if err := os.MkdirAll("config/nodes", 0755); err != nil {
-		return fmt.Errorf("creating config/nodes dir: %w", err)
+	if err := os.MkdirAll("config/thralls", 0755); err != nil {
+		return fmt.Errorf("creating config/thralls dir: %w", err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
-	slog.Info("created node config", "path", path)
+	slog.Info("created thrall config", "path", path)
 	return nil
 }
 
-const webNodeConfig = `# This is a legacy seed file — not used by the config loader.
-# Real configs live in /etc/hobnob-server/modules/ and /etc/hobnob-server/nodes/.
+const webThrallConfig = `# This is a legacy seed file — not used by the config loader.
+# Real configs live in /etc/hobnob-server/modules/ and /etc/hobnob-server/thralls/.
 `
 
-const dbNodeConfig = `# This is a legacy seed file — not used by the config loader.
-# Real configs live in /etc/hobnob-server/modules/ and /etc/hobnob-server/nodes/.
+const dbThrallConfig = `# This is a legacy seed file — not used by the config loader.
+# Real configs live in /etc/hobnob-server/modules/ and /etc/hobnob-server/thralls/.
 `

@@ -23,12 +23,12 @@ func (a *DBAdapter) SetForcePush(ctx context.Context, id string) error {
 	return a.q.SetForcePush(ctx, id)
 }
 
-func (a *DBAdapter) GetNodeByHostname(ctx context.Context, hostname string) (string, error) {
-	node, err := a.q.GetNodeByHostname(ctx, hostname)
+func (a *DBAdapter) GetThrallByHostname(ctx context.Context, hostname string) (string, error) {
+	thrall, err := a.q.GetThrallByHostname(ctx, hostname)
 	if err != nil {
 		return "", err
 	}
-	return node.ID, nil
+	return thrall.ID, nil
 }
 
 func (a *DBAdapter) CreateSecretRotationEvent(ctx context.Context, params RotationRecord) error {
@@ -36,7 +36,7 @@ func (a *DBAdapter) CreateSecretRotationEvent(ctx context.Context, params Rotati
 		SecretPath:    params.SecretPath,
 		OldVersion:    sql.NullString{String: params.OldVersion, Valid: true},
 		NewVersion:    sql.NullString{String: params.NewVersion, Valid: true},
-		AffectedNodes: int64(params.AffectedNodes),
+		AffectedThralls: int64(params.AffectedThralls),
 	})
 	return err
 }

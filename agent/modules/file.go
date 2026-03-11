@@ -28,7 +28,7 @@ type FileExecutor struct {
 }
 
 // Execute applies the desired file state based on params. Supported params:
-//   - targetpath: target file path on the managed node (required)
+//   - targetpath: target file path on the managed thrall (required)
 //   - content: desired file content (required for state=present)
 //   - baseindent: number of spaces to prepend to every non-empty line (default 0)
 //   - mode: file permission mode as octal string (default "0644")

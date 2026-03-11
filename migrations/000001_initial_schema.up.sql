@@ -1,7 +1,7 @@
 -- Consolidated SQLite schema for Hobnob.
 -- All tables use TEXT UUIDs with auto-generated v4 defaults.
 
-CREATE TABLE IF NOT EXISTS nodes (
+CREATE TABLE IF NOT EXISTS thralls (
     id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
     hostname    TEXT NOT NULL,
     ip_address  TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     force_push  INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_nodes_hostname ON nodes (hostname);
+CREATE INDEX IF NOT EXISTS idx_thralls_hostname ON thralls (hostname);
 
 CREATE TABLE IF NOT EXISTS approved_patterns (
     id         TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
@@ -21,12 +21,12 @@ CREATE TABLE IF NOT EXISTS approved_patterns (
     token_hash TEXT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     used_at    DATETIME,
-    used_by    TEXT REFERENCES nodes (id)
+    used_by    TEXT REFERENCES thralls (id)
 );
 
 CREATE TABLE IF NOT EXISTS runs (
     id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-    node_id       TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
+    thrall_id     TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
     started_at    DATETIME NOT NULL DEFAULT (datetime('now')),
     finished_at   DATETIME,
     status        TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'partial')),
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS runs (
     skipped_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_runs_node_id ON runs (node_id);
+CREATE INDEX IF NOT EXISTS idx_runs_thrall_id ON runs (thrall_id);
 
 CREATE TABLE IF NOT EXISTS run_results (
     id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
@@ -53,18 +53,18 @@ CREATE TABLE IF NOT EXISTS run_results (
 
 CREATE INDEX IF NOT EXISTS idx_run_results_run_id ON run_results (run_id);
 
-CREATE TABLE IF NOT EXISTS node_traits (
+CREATE TABLE IF NOT EXISTS thrall_traits (
     id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-    node_id      TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
+    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
     traits       TEXT NOT NULL DEFAULT '{}',
     collected_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_node_traits_node_id_collected ON node_traits (node_id, collected_at);
+CREATE INDEX IF NOT EXISTS idx_thrall_traits_thrall_id_collected ON thrall_traits (thrall_id, collected_at);
 
 CREATE TABLE IF NOT EXISTS plans (
     id         TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-    node_id    TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
+    thrall_id  TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     modules    TEXT NOT NULL DEFAULT '[]'
 );
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS plan_results (
 
 CREATE TABLE IF NOT EXISTS file_snapshots (
     id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-    node_id      TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
+    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
     file_path    TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     content      BLOB,
@@ -89,17 +89,17 @@ CREATE TABLE IF NOT EXISTS file_snapshots (
 );
 
 CREATE TABLE IF NOT EXISTS secret_rotation_events (
-    id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-    secret_path     TEXT NOT NULL,
-    old_version     TEXT,
-    new_version     TEXT,
-    rotated_at      DATETIME NOT NULL DEFAULT (datetime('now')),
-    affected_nodes  INTEGER NOT NULL DEFAULT 0
+    id               TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+    secret_path      TEXT NOT NULL,
+    old_version      TEXT,
+    new_version      TEXT,
+    rotated_at       DATETIME NOT NULL DEFAULT (datetime('now')),
+    affected_thralls INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS package_audit (
     id                TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-    node_id           TEXT NOT NULL REFERENCES nodes (id) ON DELETE CASCADE,
+    thrall_id         TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
     package_name      TEXT NOT NULL,
     installed_version TEXT,
     desired_version   TEXT,

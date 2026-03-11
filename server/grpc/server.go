@@ -56,7 +56,7 @@ type ServerConfig struct {
 	Dispatcher      *webhook.Dispatcher
 	TraitsDir        string
 	SignatureWindow  time.Duration // 0 → default 5m
-	NodeCacheTTL     time.Duration // 0 → default 60s
+	ThrallCacheTTL     time.Duration // 0 → default 60s
 	TraitsScannerTTL time.Duration // 0 → default 30s
 	Hub              *federation.Hub // non-nil when role=hub
 }
@@ -73,22 +73,22 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 
 	creds := credentials.NewTLS(tlsCfg)
 
-	nodeCacheTTL := cfg.NodeCacheTTL
-	if nodeCacheTTL == 0 {
-		nodeCacheTTL = 60 * time.Second
+	thrallCacheTTL := cfg.ThrallCacheTTL
+	if thrallCacheTTL == 0 {
+		thrallCacheTTL = 60 * time.Second
 	}
 	traitsScannerTTL := cfg.TraitsScannerTTL
 	if traitsScannerTTL == 0 {
 		traitsScannerTTL = 30 * time.Second
 	}
 
-	nodeCache := db.NewNodeCache(cfg.Queries, nodeCacheTTL)
+	thrallCache := db.NewThrallCache(cfg.Queries, thrallCacheTTL)
 	lastSeenBatch := db.NewLastSeenBatcher(cfg.Queries)
 	traitsPruner := db.NewTraitsPruner(cfg.Queries)
 
 	srv := grpc.NewServer(
 		grpc.Creds(creds),
-		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, nodeCache, cfg.SignatureWindow)),
+		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, thrallCache, cfg.SignatureWindow)),
 	)
 
 	agentSvc := &AgentService{
@@ -98,7 +98,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		runStore:      cfg.RunStore,
 		dispatcher:    cfg.Dispatcher,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
-		nodeCache:     nodeCache,
+		thrallCache:   thrallCache,
 		lastSeenBatch: lastSeenBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),

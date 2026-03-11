@@ -52,7 +52,7 @@ var previewCmd = &cobra.Command{
 	},
 }
 
-func previewNode(nodeID string) error {
+func previewNode(thrallID string) error {
 	client := newAPIClient()
 	var resp struct {
 		Actions []struct {
@@ -62,12 +62,12 @@ func previewNode(nodeID string) error {
 			PlannedAction string `json:"plannedAction"`
 		} `json:"actions"`
 	}
-	if err := client.post("/api/v1/nodes/"+nodeID+"/dry-run", map[string]any{}, &resp); err != nil {
+	if err := client.post("/api/v1/thralls/"+thrallID+"/dry-run", map[string]any{}, &resp); err != nil {
 		return err
 	}
 
 	if len(resp.Actions) == 0 {
-		fmt.Printf("No changes planned for %s\n", nodeID)
+		fmt.Printf("No changes planned for %s\n", thrallID)
 		return nil
 	}
 
@@ -83,16 +83,16 @@ func previewNode(nodeID string) error {
 func previewMultiple(envFilter string) error {
 	client := newAPIClient()
 	var listResp struct {
-		Nodes []struct {
+		Thralls []struct {
 			ID       string `json:"id"`
 			Hostname string `json:"hostname"`
-		} `json:"nodes"`
+		} `json:"thralls"`
 	}
-	if err := client.get("/api/v1/nodes", &listResp); err != nil {
+	if err := client.get("/api/v1/thralls", &listResp); err != nil {
 		return err
 	}
 
-	for _, c := range listResp.Nodes {
+	for _, c := range listResp.Thralls {
 		fmt.Printf("--- %s (%s) ---\n", c.Hostname, c.ID)
 		if err := previewNode(c.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "Error previewing %s: %v\n", c.Hostname, err)
@@ -103,6 +103,6 @@ func previewMultiple(envFilter string) error {
 }
 
 func init() {
-	previewCmd.Flags().Bool("all", false, "Preview all nodes")
-	previewCmd.Flags().String("env", "", "Filter nodes by environment")
+	previewCmd.Flags().Bool("all", false, "Preview all thralls")
+	previewCmd.Flags().String("env", "", "Filter thralls by environment")
 }

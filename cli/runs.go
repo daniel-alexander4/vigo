@@ -17,13 +17,13 @@ var runsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List recent runs",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		nodeID, _ := cmd.Flags().GetString("node")
+		thrallID, _ := cmd.Flags().GetString("thrall")
 		limit, _ := cmd.Flags().GetInt("limit")
 
 		path := "/api/v1/runs"
 		sep := "?"
-		if nodeID != "" {
-			path += fmt.Sprintf("%snode_id=%s", sep, nodeID)
+		if thrallID != "" {
+			path += fmt.Sprintf("%sthrall_id=%s", sep, thrallID)
 			sep = "&"
 		}
 		if limit > 0 {
@@ -34,7 +34,7 @@ var runsListCmd = &cobra.Command{
 		var resp struct {
 			Runs []struct {
 				ID           string `json:"id"`
-				NodeID       string `json:"nodeId"`
+				ThrallID       string `json:"thrallId"`
 				StartedAt    string `json:"startedAt"`
 				Status       string `json:"status"`
 				ChangedCount int32  `json:"changedCount"`
@@ -51,10 +51,10 @@ var runsListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNODE\tSTARTED\tSTATUS\tCHANGED\tFAILED")
+		fmt.Fprintln(w, "ID\tTHRALL\tSTARTED\tSTATUS\tCHANGED\tFAILED")
 		for _, r := range resp.Runs {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%d\n",
-				r.ID, r.NodeID,
+				r.ID, r.ThrallID,
 				formatTimestamp(r.StartedAt),
 				r.Status, r.ChangedCount, r.FailedCount)
 		}
@@ -71,7 +71,7 @@ var runsShowCmd = &cobra.Command{
 		var resp struct {
 			Run struct {
 				ID           string `json:"id"`
-				NodeID       string `json:"nodeId"`
+				ThrallID       string `json:"thrallId"`
 				StartedAt    string `json:"startedAt"`
 				FinishedAt   string `json:"finishedAt"`
 				Status       string `json:"status"`
@@ -96,7 +96,7 @@ var runsShowCmd = &cobra.Command{
 
 		r := resp.Run
 		fmt.Printf("Run:      %s\n", r.ID)
-		fmt.Printf("Node:     %s\n", r.NodeID)
+		fmt.Printf("Thrall:     %s\n", r.ThrallID)
 		fmt.Printf("Started:  %s\n", formatTimestamp(r.StartedAt))
 		fmt.Printf("Finished: %s\n", formatTimestamp(r.FinishedAt))
 		fmt.Printf("Status:   %s\n", r.Status)
@@ -124,7 +124,7 @@ var runsShowCmd = &cobra.Command{
 }
 
 func init() {
-	runsListCmd.Flags().String("node", "", "Filter by node ID")
+	runsListCmd.Flags().String("thrall", "", "Filter by thrall ID")
 	runsListCmd.Flags().Int("limit", 20, "Maximum number of runs to display")
 	runsCmd.AddCommand(runsListCmd, runsShowCmd)
 }

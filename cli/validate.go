@@ -73,19 +73,19 @@ func validateFile(path string) ([]validate.Finding, error) {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	// Phase 2: detect file type — nodes file vs module file.
-	// A nodes file has a top-level "nodes:" key; a role file has "modules:" but no "resources:".
+	// Phase 2: detect file type — thralls file vs module file.
+	// A thralls file has a top-level "thralls:" key; a role file has "modules:" but no "resources:".
 	var probe map[string]any
 	yaml.Unmarshal(data, &probe)
 
-	if _, isNodes := probe["nodes"]; isNodes {
-		// Nodes file — validate each entry has a "match" field.
-		var cfg config.NodesConfig
+	if _, isNodes := probe["thralls"]; isNodes {
+		// Thralls file — validate each entry has a "match" field.
+		var cfg config.ThrallsConfig
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("parsing nodes file: %w", err)
+			return nil, fmt.Errorf("parsing thralls file: %w", err)
 		}
 		var findings []validate.Finding
-		for i, entry := range cfg.Nodes {
+		for i, entry := range cfg.Thralls {
 			if entry.Match == "" {
 				findings = append(findings, validate.Finding{
 					Severity: validate.SeverityError,
@@ -94,17 +94,17 @@ func validateFile(path string) ([]validate.Finding, error) {
 				})
 			}
 		}
-		if len(cfg.Nodes) == 0 {
+		if len(cfg.Thralls) == 0 {
 			findings = append(findings, validate.Finding{
 				Severity: validate.SeverityWarning,
 				Module:   filepath.Base(path),
-				Message:  "no node entries defined",
+				Message:  "no thrall entries defined",
 			})
 		}
 		return findings, nil
 	}
 
-	// Phase 2b: structural parse as module via the tolerant node parser.
+	// Phase 2b: structural parse as module via the tolerant thrall parser.
 	def, err := config.ParseModuleFile(data)
 	if err != nil {
 		return nil, err

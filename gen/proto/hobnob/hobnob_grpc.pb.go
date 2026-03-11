@@ -327,10 +327,10 @@ const (
 	HobnobAdmin_AddApprovedPattern_FullMethodName    = "/hobnob.v1.HobnobAdmin/AddApprovedPattern"
 	HobnobAdmin_ListApprovedPatterns_FullMethodName  = "/hobnob.v1.HobnobAdmin/ListApprovedPatterns"
 	HobnobAdmin_RevokeApprovedPattern_FullMethodName = "/hobnob.v1.HobnobAdmin/RevokeApprovedPattern"
-	HobnobAdmin_ListNodes_FullMethodName             = "/hobnob.v1.HobnobAdmin/ListNodes"
-	HobnobAdmin_GetNode_FullMethodName               = "/hobnob.v1.HobnobAdmin/GetNode"
-	HobnobAdmin_RevokeNode_FullMethodName            = "/hobnob.v1.HobnobAdmin/RevokeNode"
-	HobnobAdmin_DeleteNode_FullMethodName            = "/hobnob.v1.HobnobAdmin/DeleteNode"
+	HobnobAdmin_ListThralls_FullMethodName           = "/hobnob.v1.HobnobAdmin/ListThralls"
+	HobnobAdmin_GetThrall_FullMethodName             = "/hobnob.v1.HobnobAdmin/GetThrall"
+	HobnobAdmin_RevokeThrall_FullMethodName          = "/hobnob.v1.HobnobAdmin/RevokeThrall"
+	HobnobAdmin_DeleteThrall_FullMethodName          = "/hobnob.v1.HobnobAdmin/DeleteThrall"
 	HobnobAdmin_ForcePush_FullMethodName             = "/hobnob.v1.HobnobAdmin/ForcePush"
 	HobnobAdmin_DryRun_FullMethodName                = "/hobnob.v1.HobnobAdmin/DryRun"
 	HobnobAdmin_ListRuns_FullMethodName              = "/hobnob.v1.HobnobAdmin/ListRuns"
@@ -340,12 +340,12 @@ const (
 	HobnobAdmin_ListWebhooks_FullMethodName          = "/hobnob.v1.HobnobAdmin/ListWebhooks"
 	HobnobAdmin_DeleteWebhook_FullMethodName         = "/hobnob.v1.HobnobAdmin/DeleteWebhook"
 	HobnobAdmin_GetComplianceSummary_FullMethodName  = "/hobnob.v1.HobnobAdmin/GetComplianceSummary"
-	HobnobAdmin_GetNodeCompliance_FullMethodName     = "/hobnob.v1.HobnobAdmin/GetNodeCompliance"
+	HobnobAdmin_GetThrallCompliance_FullMethodName   = "/hobnob.v1.HobnobAdmin/GetThrallCompliance"
 	HobnobAdmin_Rollback_FullMethodName              = "/hobnob.v1.HobnobAdmin/Rollback"
 	HobnobAdmin_ListPackages_FullMethodName          = "/hobnob.v1.HobnobAdmin/ListPackages"
 	HobnobAdmin_ListPackageDrift_FullMethodName      = "/hobnob.v1.HobnobAdmin/ListPackageDrift"
 	HobnobAdmin_PromoteEnv_FullMethodName            = "/hobnob.v1.HobnobAdmin/PromoteEnv"
-	HobnobAdmin_EnrollNode_FullMethodName            = "/hobnob.v1.HobnobAdmin/EnrollNode"
+	HobnobAdmin_EnrollThrall_FullMethodName          = "/hobnob.v1.HobnobAdmin/EnrollThrall"
 )
 
 // HobnobAdminClient is the client API for HobnobAdmin service.
@@ -358,19 +358,19 @@ type HobnobAdminClient interface {
 	ListApprovedPatterns(ctx context.Context, in *ListApprovedPatternsRequest, opts ...grpc.CallOption) (*ListApprovedPatternsResponse, error)
 	// RevokeApprovedPattern removes an approved pattern.
 	RevokeApprovedPattern(ctx context.Context, in *RevokeApprovedPatternRequest, opts ...grpc.CallOption) (*RevokeApprovedPatternResponse, error)
-	// ListNodes lists all enrolled nodes.
-	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
-	// GetNode returns details for a single node.
-	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
-	// RevokeNode revokes an enrolled node, blocking future check-ins.
-	RevokeNode(ctx context.Context, in *RevokeNodeRequest, opts ...grpc.CallOption) (*RevokeNodeResponse, error)
-	// DeleteNode permanently removes a node and all its history from the database.
-	DeleteNode(ctx context.Context, in *DeleteNodeRequest, opts ...grpc.CallOption) (*DeleteNodeResponse, error)
-	// ForcePush triggers an immediate check-in for a node or all nodes.
+	// ListThralls lists all enrolled thralls.
+	ListThralls(ctx context.Context, in *ListThrallsRequest, opts ...grpc.CallOption) (*ListThrallsResponse, error)
+	// GetThrall returns details for a single thrall.
+	GetThrall(ctx context.Context, in *GetThrallRequest, opts ...grpc.CallOption) (*GetThrallResponse, error)
+	// RevokeThrall revokes an enrolled thrall, blocking future check-ins.
+	RevokeThrall(ctx context.Context, in *RevokeThrallRequest, opts ...grpc.CallOption) (*RevokeThrallResponse, error)
+	// DeleteThrall permanently removes a thrall and all its history from the database.
+	DeleteThrall(ctx context.Context, in *DeleteThrallRequest, opts ...grpc.CallOption) (*DeleteThrallResponse, error)
+	// ForcePush triggers an immediate check-in for a thrall or all thralls.
 	ForcePush(ctx context.Context, in *ForcePushRequest, opts ...grpc.CallOption) (*ForcePushResponse, error)
 	// DryRun computes a plan without applying changes.
 	DryRun(ctx context.Context, in *DryRunRequest, opts ...grpc.CallOption) (*DryRunResponse, error)
-	// ListRuns lists recent runs, optionally filtered by node.
+	// ListRuns lists recent runs, optionally filtered by thrall.
 	ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
 	// GetRun returns details for a single run including per-module results.
 	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
@@ -382,22 +382,22 @@ type HobnobAdminClient interface {
 	ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error)
 	// DeleteWebhook removes a webhook by ID.
 	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error)
-	// GetComplianceSummary returns aggregate compliance status across all nodes.
+	// GetComplianceSummary returns aggregate compliance status across all thralls.
 	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
-	// GetNodeCompliance returns compliance details for a single node.
-	GetNodeCompliance(ctx context.Context, in *GetNodeComplianceRequest, opts ...grpc.CallOption) (*GetNodeComplianceResponse, error)
-	// Rollback reverts a node to a previous run's state.
+	// GetThrallCompliance returns compliance details for a single thrall.
+	GetThrallCompliance(ctx context.Context, in *GetThrallComplianceRequest, opts ...grpc.CallOption) (*GetThrallComplianceResponse, error)
+	// Rollback reverts a thrall to a previous run's state.
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error)
-	// ListPackages lists package audit records, optionally filtered by node.
+	// ListPackages lists package audit records, optionally filtered by thrall.
 	ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
 	// PromoteEnv promotes environment variables from one tier to another.
 	PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error)
-	// EnrollNode creates a node record directly (hub→spoke internal RPC).
+	// EnrollThrall creates a thrall record directly (hub→spoke internal RPC).
 	// Used during enrollment routing: the hub validates the token, then calls
-	// this on the target spoke to create the node without token re-validation.
-	EnrollNode(ctx context.Context, in *EnrollNodeRequest, opts ...grpc.CallOption) (*EnrollNodeResponse, error)
+	// this on the target spoke to create the thrall without token re-validation.
+	EnrollThrall(ctx context.Context, in *EnrollThrallRequest, opts ...grpc.CallOption) (*EnrollThrallResponse, error)
 }
 
 type hobnobAdminClient struct {
@@ -438,40 +438,40 @@ func (c *hobnobAdminClient) RevokeApprovedPattern(ctx context.Context, in *Revok
 	return out, nil
 }
 
-func (c *hobnobAdminClient) ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error) {
+func (c *hobnobAdminClient) ListThralls(ctx context.Context, in *ListThrallsRequest, opts ...grpc.CallOption) (*ListThrallsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListNodesResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_ListNodes_FullMethodName, in, out, cOpts...)
+	out := new(ListThrallsResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ListThralls_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *hobnobAdminClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
+func (c *hobnobAdminClient) GetThrall(ctx context.Context, in *GetThrallRequest, opts ...grpc.CallOption) (*GetThrallResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetNodeResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_GetNode_FullMethodName, in, out, cOpts...)
+	out := new(GetThrallResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetThrall_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *hobnobAdminClient) RevokeNode(ctx context.Context, in *RevokeNodeRequest, opts ...grpc.CallOption) (*RevokeNodeResponse, error) {
+func (c *hobnobAdminClient) RevokeThrall(ctx context.Context, in *RevokeThrallRequest, opts ...grpc.CallOption) (*RevokeThrallResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RevokeNodeResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_RevokeNode_FullMethodName, in, out, cOpts...)
+	out := new(RevokeThrallResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_RevokeThrall_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *hobnobAdminClient) DeleteNode(ctx context.Context, in *DeleteNodeRequest, opts ...grpc.CallOption) (*DeleteNodeResponse, error) {
+func (c *hobnobAdminClient) DeleteThrall(ctx context.Context, in *DeleteThrallRequest, opts ...grpc.CallOption) (*DeleteThrallResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteNodeResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_DeleteNode_FullMethodName, in, out, cOpts...)
+	out := new(DeleteThrallResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_DeleteThrall_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -568,10 +568,10 @@ func (c *hobnobAdminClient) GetComplianceSummary(ctx context.Context, in *GetCom
 	return out, nil
 }
 
-func (c *hobnobAdminClient) GetNodeCompliance(ctx context.Context, in *GetNodeComplianceRequest, opts ...grpc.CallOption) (*GetNodeComplianceResponse, error) {
+func (c *hobnobAdminClient) GetThrallCompliance(ctx context.Context, in *GetThrallComplianceRequest, opts ...grpc.CallOption) (*GetThrallComplianceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetNodeComplianceResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_GetNodeCompliance_FullMethodName, in, out, cOpts...)
+	out := new(GetThrallComplianceResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_GetThrallCompliance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -618,10 +618,10 @@ func (c *hobnobAdminClient) PromoteEnv(ctx context.Context, in *PromoteEnvReques
 	return out, nil
 }
 
-func (c *hobnobAdminClient) EnrollNode(ctx context.Context, in *EnrollNodeRequest, opts ...grpc.CallOption) (*EnrollNodeResponse, error) {
+func (c *hobnobAdminClient) EnrollThrall(ctx context.Context, in *EnrollThrallRequest, opts ...grpc.CallOption) (*EnrollThrallResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EnrollNodeResponse)
-	err := c.cc.Invoke(ctx, HobnobAdmin_EnrollNode_FullMethodName, in, out, cOpts...)
+	out := new(EnrollThrallResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_EnrollThrall_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -638,19 +638,19 @@ type HobnobAdminServer interface {
 	ListApprovedPatterns(context.Context, *ListApprovedPatternsRequest) (*ListApprovedPatternsResponse, error)
 	// RevokeApprovedPattern removes an approved pattern.
 	RevokeApprovedPattern(context.Context, *RevokeApprovedPatternRequest) (*RevokeApprovedPatternResponse, error)
-	// ListNodes lists all enrolled nodes.
-	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
-	// GetNode returns details for a single node.
-	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
-	// RevokeNode revokes an enrolled node, blocking future check-ins.
-	RevokeNode(context.Context, *RevokeNodeRequest) (*RevokeNodeResponse, error)
-	// DeleteNode permanently removes a node and all its history from the database.
-	DeleteNode(context.Context, *DeleteNodeRequest) (*DeleteNodeResponse, error)
-	// ForcePush triggers an immediate check-in for a node or all nodes.
+	// ListThralls lists all enrolled thralls.
+	ListThralls(context.Context, *ListThrallsRequest) (*ListThrallsResponse, error)
+	// GetThrall returns details for a single thrall.
+	GetThrall(context.Context, *GetThrallRequest) (*GetThrallResponse, error)
+	// RevokeThrall revokes an enrolled thrall, blocking future check-ins.
+	RevokeThrall(context.Context, *RevokeThrallRequest) (*RevokeThrallResponse, error)
+	// DeleteThrall permanently removes a thrall and all its history from the database.
+	DeleteThrall(context.Context, *DeleteThrallRequest) (*DeleteThrallResponse, error)
+	// ForcePush triggers an immediate check-in for a thrall or all thralls.
 	ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error)
 	// DryRun computes a plan without applying changes.
 	DryRun(context.Context, *DryRunRequest) (*DryRunResponse, error)
-	// ListRuns lists recent runs, optionally filtered by node.
+	// ListRuns lists recent runs, optionally filtered by thrall.
 	ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error)
 	// GetRun returns details for a single run including per-module results.
 	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
@@ -662,22 +662,22 @@ type HobnobAdminServer interface {
 	ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error)
 	// DeleteWebhook removes a webhook by ID.
 	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
-	// GetComplianceSummary returns aggregate compliance status across all nodes.
+	// GetComplianceSummary returns aggregate compliance status across all thralls.
 	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
-	// GetNodeCompliance returns compliance details for a single node.
-	GetNodeCompliance(context.Context, *GetNodeComplianceRequest) (*GetNodeComplianceResponse, error)
-	// Rollback reverts a node to a previous run's state.
+	// GetThrallCompliance returns compliance details for a single thrall.
+	GetThrallCompliance(context.Context, *GetThrallComplianceRequest) (*GetThrallComplianceResponse, error)
+	// Rollback reverts a thrall to a previous run's state.
 	Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error)
-	// ListPackages lists package audit records, optionally filtered by node.
+	// ListPackages lists package audit records, optionally filtered by thrall.
 	ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
 	// PromoteEnv promotes environment variables from one tier to another.
 	PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error)
-	// EnrollNode creates a node record directly (hub→spoke internal RPC).
+	// EnrollThrall creates a thrall record directly (hub→spoke internal RPC).
 	// Used during enrollment routing: the hub validates the token, then calls
-	// this on the target spoke to create the node without token re-validation.
-	EnrollNode(context.Context, *EnrollNodeRequest) (*EnrollNodeResponse, error)
+	// this on the target spoke to create the thrall without token re-validation.
+	EnrollThrall(context.Context, *EnrollThrallRequest) (*EnrollThrallResponse, error)
 	mustEmbedUnimplementedHobnobAdminServer()
 }
 
@@ -697,17 +697,17 @@ func (UnimplementedHobnobAdminServer) ListApprovedPatterns(context.Context, *Lis
 func (UnimplementedHobnobAdminServer) RevokeApprovedPattern(context.Context, *RevokeApprovedPatternRequest) (*RevokeApprovedPatternResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeApprovedPattern not implemented")
 }
-func (UnimplementedHobnobAdminServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
+func (UnimplementedHobnobAdminServer) ListThralls(context.Context, *ListThrallsRequest) (*ListThrallsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListThralls not implemented")
 }
-func (UnimplementedHobnobAdminServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetNode not implemented")
+func (UnimplementedHobnobAdminServer) GetThrall(context.Context, *GetThrallRequest) (*GetThrallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetThrall not implemented")
 }
-func (UnimplementedHobnobAdminServer) RevokeNode(context.Context, *RevokeNodeRequest) (*RevokeNodeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RevokeNode not implemented")
+func (UnimplementedHobnobAdminServer) RevokeThrall(context.Context, *RevokeThrallRequest) (*RevokeThrallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeThrall not implemented")
 }
-func (UnimplementedHobnobAdminServer) DeleteNode(context.Context, *DeleteNodeRequest) (*DeleteNodeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteNode not implemented")
+func (UnimplementedHobnobAdminServer) DeleteThrall(context.Context, *DeleteThrallRequest) (*DeleteThrallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteThrall not implemented")
 }
 func (UnimplementedHobnobAdminServer) ForcePush(context.Context, *ForcePushRequest) (*ForcePushResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForcePush not implemented")
@@ -736,8 +736,8 @@ func (UnimplementedHobnobAdminServer) DeleteWebhook(context.Context, *DeleteWebh
 func (UnimplementedHobnobAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
 }
-func (UnimplementedHobnobAdminServer) GetNodeCompliance(context.Context, *GetNodeComplianceRequest) (*GetNodeComplianceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetNodeCompliance not implemented")
+func (UnimplementedHobnobAdminServer) GetThrallCompliance(context.Context, *GetThrallComplianceRequest) (*GetThrallComplianceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetThrallCompliance not implemented")
 }
 func (UnimplementedHobnobAdminServer) Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Rollback not implemented")
@@ -751,8 +751,8 @@ func (UnimplementedHobnobAdminServer) ListPackageDrift(context.Context, *ListPac
 func (UnimplementedHobnobAdminServer) PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PromoteEnv not implemented")
 }
-func (UnimplementedHobnobAdminServer) EnrollNode(context.Context, *EnrollNodeRequest) (*EnrollNodeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method EnrollNode not implemented")
+func (UnimplementedHobnobAdminServer) EnrollThrall(context.Context, *EnrollThrallRequest) (*EnrollThrallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnrollThrall not implemented")
 }
 func (UnimplementedHobnobAdminServer) mustEmbedUnimplementedHobnobAdminServer() {}
 func (UnimplementedHobnobAdminServer) testEmbeddedByValue()                     {}
@@ -829,74 +829,74 @@ func _HobnobAdmin_RevokeApprovedPattern_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_ListNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListNodesRequest)
+func _HobnobAdmin_ListThralls_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListThrallsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).ListNodes(ctx, in)
+		return srv.(HobnobAdminServer).ListThralls(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_ListNodes_FullMethodName,
+		FullMethod: HobnobAdmin_ListThralls_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).ListNodes(ctx, req.(*ListNodesRequest))
+		return srv.(HobnobAdminServer).ListThralls(ctx, req.(*ListThrallsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetNodeRequest)
+func _HobnobAdmin_GetThrall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetThrallRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).GetNode(ctx, in)
+		return srv.(HobnobAdminServer).GetThrall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_GetNode_FullMethodName,
+		FullMethod: HobnobAdmin_GetThrall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).GetNode(ctx, req.(*GetNodeRequest))
+		return srv.(HobnobAdminServer).GetThrall(ctx, req.(*GetThrallRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_RevokeNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RevokeNodeRequest)
+func _HobnobAdmin_RevokeThrall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeThrallRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).RevokeNode(ctx, in)
+		return srv.(HobnobAdminServer).RevokeThrall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_RevokeNode_FullMethodName,
+		FullMethod: HobnobAdmin_RevokeThrall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).RevokeNode(ctx, req.(*RevokeNodeRequest))
+		return srv.(HobnobAdminServer).RevokeThrall(ctx, req.(*RevokeThrallRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_DeleteNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteNodeRequest)
+func _HobnobAdmin_DeleteThrall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteThrallRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).DeleteNode(ctx, in)
+		return srv.(HobnobAdminServer).DeleteThrall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_DeleteNode_FullMethodName,
+		FullMethod: HobnobAdmin_DeleteThrall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).DeleteNode(ctx, req.(*DeleteNodeRequest))
+		return srv.(HobnobAdminServer).DeleteThrall(ctx, req.(*DeleteThrallRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1063,20 +1063,20 @@ func _HobnobAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_GetNodeCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetNodeComplianceRequest)
+func _HobnobAdmin_GetThrallCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetThrallComplianceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).GetNodeCompliance(ctx, in)
+		return srv.(HobnobAdminServer).GetThrallCompliance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_GetNodeCompliance_FullMethodName,
+		FullMethod: HobnobAdmin_GetThrallCompliance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).GetNodeCompliance(ctx, req.(*GetNodeComplianceRequest))
+		return srv.(HobnobAdminServer).GetThrallCompliance(ctx, req.(*GetThrallComplianceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1153,20 +1153,20 @@ func _HobnobAdmin_PromoteEnv_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _HobnobAdmin_EnrollNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnrollNodeRequest)
+func _HobnobAdmin_EnrollThrall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnrollThrallRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(HobnobAdminServer).EnrollNode(ctx, in)
+		return srv.(HobnobAdminServer).EnrollThrall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: HobnobAdmin_EnrollNode_FullMethodName,
+		FullMethod: HobnobAdmin_EnrollThrall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HobnobAdminServer).EnrollNode(ctx, req.(*EnrollNodeRequest))
+		return srv.(HobnobAdminServer).EnrollThrall(ctx, req.(*EnrollThrallRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1191,20 +1191,20 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAdmin_RevokeApprovedPattern_Handler,
 		},
 		{
-			MethodName: "ListNodes",
-			Handler:    _HobnobAdmin_ListNodes_Handler,
+			MethodName: "ListThralls",
+			Handler:    _HobnobAdmin_ListThralls_Handler,
 		},
 		{
-			MethodName: "GetNode",
-			Handler:    _HobnobAdmin_GetNode_Handler,
+			MethodName: "GetThrall",
+			Handler:    _HobnobAdmin_GetThrall_Handler,
 		},
 		{
-			MethodName: "RevokeNode",
-			Handler:    _HobnobAdmin_RevokeNode_Handler,
+			MethodName: "RevokeThrall",
+			Handler:    _HobnobAdmin_RevokeThrall_Handler,
 		},
 		{
-			MethodName: "DeleteNode",
-			Handler:    _HobnobAdmin_DeleteNode_Handler,
+			MethodName: "DeleteThrall",
+			Handler:    _HobnobAdmin_DeleteThrall_Handler,
 		},
 		{
 			MethodName: "ForcePush",
@@ -1243,8 +1243,8 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAdmin_GetComplianceSummary_Handler,
 		},
 		{
-			MethodName: "GetNodeCompliance",
-			Handler:    _HobnobAdmin_GetNodeCompliance_Handler,
+			MethodName: "GetThrallCompliance",
+			Handler:    _HobnobAdmin_GetThrallCompliance_Handler,
 		},
 		{
 			MethodName: "Rollback",
@@ -1263,8 +1263,8 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAdmin_PromoteEnv_Handler,
 		},
 		{
-			MethodName: "EnrollNode",
-			Handler:    _HobnobAdmin_EnrollNode_Handler,
+			MethodName: "EnrollThrall",
+			Handler:    _HobnobAdmin_EnrollThrall_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

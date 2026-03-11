@@ -18,14 +18,14 @@ import (
 // ReportResult handles the HobnobAgent.ReportResult RPC. It stores per-module
 // execution results in the database and marks the run as finished.
 func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultRequest) (*pb.ReportResultResponse, error) {
-	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
+	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
-	nodeID := req.GetNodeId()
+	thrallID := req.GetThrallId()
 
 	// Create the run record (server generates the UUID).
 	run, err := s.runStore.CreateRun(ctx, db.CreateRunParams{
-		NodeID:      nodeID,
+		ThrallID:      thrallID,
 		Status:      "running",
 		ModuleCount: int64(len(req.GetResults())),
 	})
@@ -99,9 +99,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.Internal, "finishing run: %v", err)
 	}
 
-	// Reuse node from interceptor context (avoids redundant DB lookup).
-	hostname := nodeID // fallback
-	if n := db.NodeFromContext(ctx); n != nil {
+	// Reuse thrall from interceptor context (avoids redundant DB lookup).
+	hostname := thrallID // fallback
+	if n := db.ThrallFromContext(ctx); n != nil {
 		hostname = n.Hostname
 	}
 
@@ -119,7 +119,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 
 	slog.Info("run completed",
 		"run_id", runID,
-		"node_id", nodeID,
+		"thrall_id", thrallID,
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
@@ -130,8 +130,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	if s.dispatcher != nil {
 		event := webhook.FormatRunEvent(runStatus)
 		s.dispatcher.Dispatch(ctx, event, webhook.EventPayload{
-			Node: &webhook.NodeInfo{
-				ID:       nodeID,
+			Thrall: &webhook.ThrallInfo{
+				ID:       thrallID,
 				Hostname: hostname,
 			},
 			Run: &webhook.RunInfo{
@@ -145,8 +145,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		// Also fire drift.detected if any changes detected.
 		if changedCount > 0 {
 			s.dispatcher.Dispatch(ctx, "drift.detected", webhook.EventPayload{
-				Node: &webhook.NodeInfo{
-					ID:       nodeID,
+				Thrall: &webhook.ThrallInfo{
+					ID:       thrallID,
 					Hostname: hostname,
 				},
 				Run: &webhook.RunInfo{

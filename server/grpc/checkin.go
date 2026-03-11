@@ -18,47 +18,47 @@ import (
 // agent-side evaluation. The server never renders templates or evaluates
 // conditionals — the agent does that locally with its own traits.
 func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
-	if _, err := uuid.Parse(req.GetNodeId()); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
+	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
-	nodeID := req.GetNodeId()
+	thrallID := req.GetThrallId()
 
-	// Validate node is not revoked.
-	if err := s.registry.ValidateNode(ctx, nodeID); err != nil {
+	// Validate thrall is not revoked.
+	if err := s.registry.ValidateThrall(ctx, thrallID); err != nil {
 		metrics.CheckinsTotal.WithLabelValues("error").Inc()
-		if errors.Is(err, registry.ErrNodeRevoked) {
-			return nil, status.Error(codes.PermissionDenied, "node is revoked")
+		if errors.Is(err, registry.ErrThrallRevoked) {
+			return nil, status.Error(codes.PermissionDenied, "thrall is revoked")
 		}
-		if errors.Is(err, registry.ErrNodeNotFound) {
-			return nil, status.Error(codes.NotFound, "node not found")
+		if errors.Is(err, registry.ErrThrallNotFound) {
+			return nil, status.Error(codes.NotFound, "thrall not found")
 		}
-		return nil, status.Errorf(codes.Internal, "validating node: %v", err)
+		return nil, status.Errorf(codes.Internal, "validating thrall: %v", err)
 	}
 
-	// Reuse node from interceptor context if available, otherwise cache lookup.
-	node, err := s.lookupNode(ctx, nodeID)
+	// Reuse thrall from interceptor context if available, otherwise cache lookup.
+	thrall, err := s.lookupThrall(ctx, thrallID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.buildCheckInResponse(ctx, nodeID, node, req)
+	return s.buildCheckInResponse(ctx, thrallID, thrall, req)
 }
 
-// lookupNode resolves a node from context, cache, or DB.
-func (s *AgentService) lookupNode(ctx context.Context, nodeID string) (db.Node, error) {
-	if n := db.NodeFromContext(ctx); n != nil {
+// lookupNode resolves a thrall from context, cache, or DB.
+func (s *AgentService) lookupThrall(ctx context.Context, thrallID string) (db.Thrall, error) {
+	if n := db.ThrallFromContext(ctx); n != nil {
 		return *n, nil
 	}
-	if s.nodeCache != nil {
-		n, err := s.nodeCache.GetByID(ctx, nodeID)
+	if s.thrallCache != nil {
+		n, err := s.thrallCache.GetByID(ctx, thrallID)
 		if err != nil {
-			return db.Node{}, status.Errorf(codes.Internal, "looking up node: %v", err)
+			return db.Thrall{}, status.Errorf(codes.Internal, "looking up thrall: %v", err)
 		}
 		return n, nil
 	}
-	n, err := s.queries.GetNodeByID(ctx, nodeID)
+	n, err := s.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
-		return db.Node{}, status.Errorf(codes.Internal, "looking up node: %v", err)
+		return db.Thrall{}, status.Errorf(codes.Internal, "looking up thrall: %v", err)
 	}
 	return n, nil
 }

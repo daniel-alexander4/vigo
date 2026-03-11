@@ -21,8 +21,8 @@ type DataSource interface {
 	DashboardData(baseInterval time.Duration) DashboardPageData
 	ComplianceData(baseInterval time.Duration) CompliancePageData
 	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
-	NodesData(baseInterval time.Duration, statusFilter string) NodesPageData
-	NodeDetailData(nodeID string, baseInterval time.Duration) (NodeDetailPageData, error)
+	ThrallsData(baseInterval time.Duration, statusFilter string) ThrallsPageData
+	ThrallDetailData(thrallID string, baseInterval time.Duration) (ThrallDetailPageData, error)
 	RunsData(statusFilter string) RunsPageData
 	RunDetailData(runID string) (RunDetailPageData, error)
 	ConfigData(hostname string) (ConfigPageData, error)
@@ -80,8 +80,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Page routes
 	mux.HandleFunc("GET /{$}", h.Dashboard)
-	mux.HandleFunc("GET /nodes", h.Nodes)
-	mux.HandleFunc("GET /nodes/{id}", h.NodeDetail)
+	mux.HandleFunc("GET /thralls", h.Thralls)
+	mux.HandleFunc("GET /thralls/{id}", h.ThrallDetail)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
@@ -90,7 +90,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
-	mux.HandleFunc("GET /ui/fragments/nodes-table", h.NodesTable)
+	mux.HandleFunc("GET /ui/fragments/thralls-table", h.ThrallsTable)
 }
 
 // --- Page data types ---
@@ -105,8 +105,8 @@ type PageData struct {
 // DashboardPageData holds data for the dashboard page.
 type DashboardPageData struct {
 	PageData
-	TotalNodes     int
-	ActiveNodes    int
+	TotalThralls     int
+	ActiveThralls    int
 	RecentFailures int
 	DriftRate      float64
 	RecentRuns     []RunRow
@@ -137,7 +137,7 @@ type CompliancePageData struct {
 	NonCompliant  []ComplianceRow
 }
 
-// ComplianceRow is a non-compliant node displayed in the table.
+// ComplianceRow is a non-compliant thrall displayed in the table.
 type ComplianceRow struct {
 	Hostname      string
 	Status        string
@@ -147,14 +147,14 @@ type ComplianceRow struct {
 
 // DashboardStatsFragmentData holds data for the stats fragment (HTMX auto-refresh).
 type DashboardStatsFragmentData struct {
-	TotalNodes     int
-	ActiveNodes    int
+	TotalThralls     int
+	ActiveThralls    int
 	RecentFailures int
 	DriftRate      float64
 }
 
-// NodeRow is a single node displayed in the nodes table.
-type NodeRow struct {
+// ThrallRow is a single thrall displayed in the thralls table.
+type ThrallRow struct {
 	ID         string
 	Hostname   string
 	IPAddress  string
@@ -163,16 +163,16 @@ type NodeRow struct {
 	Status     string
 }
 
-// NodesPageData holds data for the nodes list page.
-type NodesPageData struct {
+// ThrallsPageData holds data for the thralls list page.
+type ThrallsPageData struct {
 	PageData
-	Nodes        []NodeRow
+	Thralls        []ThrallRow
 	StatusFilter string
-	NodeCount    int
+	ThrallCount    int
 }
 
-// NodeDetailRunRow is a run with its per-module results for the node detail page.
-type NodeDetailRunRow struct {
+// ThrallDetailRunRow is a run with its per-module results for the thrall detail page.
+type ThrallDetailRunRow struct {
 	RunRow
 	Results []RunResultRow
 }
@@ -188,11 +188,11 @@ type RunResultRow struct {
 	DurationMs   int64
 }
 
-// NodeDetailPageData holds data for the node detail page.
-type NodeDetailPageData struct {
+// ThrallDetailPageData holds data for the thrall detail page.
+type ThrallDetailPageData struct {
 	PageData
-	Node         NodeRow
-	Runs         []NodeDetailRunRow
+	Thrall         ThrallRow
+	Runs         []ThrallDetailRunRow
 	Facts        map[string]any
 	DriftHistory []DriftPoint
 }
@@ -217,7 +217,7 @@ type RunsPageData struct {
 type RunDetailPageData struct {
 	PageData
 	Run     RunRow
-	NodeID  string
+	ThrallID  string
 	Results []RunResultRow
 }
 
@@ -241,7 +241,7 @@ type PlanResultRow struct {
 type PlanDetailPageData struct {
 	PageData
 	PlanID      string
-	NodeID      string
+	ThrallID      string
 	Hostname    string
 	CreatedAt   time.Time
 	Results     []PlanResultRow
@@ -274,29 +274,29 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "compliance", data)
 }
 
-// Nodes renders the nodes list page with optional status filter.
-func (h *Handler) Nodes(w http.ResponseWriter, r *http.Request) {
+// Thralls renders the thralls list page with optional status filter.
+func (h *Handler) Thralls(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	data := h.dataSource.NodesData(h.baseInterval, statusFilter)
+	data := h.dataSource.ThrallsData(h.baseInterval, statusFilter)
 	data.Version = h.version
-	h.renderer.Render(w, "nodes", data)
+	h.renderer.Render(w, "thralls", data)
 }
 
-// NodeDetail renders the node detail page with runs, facts, and drift history.
-func (h *Handler) NodeDetail(w http.ResponseWriter, r *http.Request) {
+// ThrallDetail renders the thrall detail page with runs, facts, and drift history.
+func (h *Handler) ThrallDetail(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
-		http.Error(w, "invalid node ID", http.StatusBadRequest)
+		http.Error(w, "invalid thrall ID", http.StatusBadRequest)
 		return
 	}
 
-	data, err := h.dataSource.NodeDetailData(idStr, h.baseInterval)
+	data, err := h.dataSource.ThrallDetailData(idStr, h.baseInterval)
 	if err != nil {
-		http.Error(w, "node not found", http.StatusNotFound)
+		http.Error(w, "thrall not found", http.StatusNotFound)
 		return
 	}
 	data.Version = h.version
-	h.renderer.Render(w, "node-detail", data)
+	h.renderer.Render(w, "thrall-detail", data)
 }
 
 // Runs renders the runs list page with optional status filter.
@@ -353,11 +353,11 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "plans", data)
 }
 
-// NodesTable renders the nodes table fragment for HTMX polling.
-func (h *Handler) NodesTable(w http.ResponseWriter, r *http.Request) {
+// ThrallsTable renders the thralls table fragment for HTMX polling.
+func (h *Handler) ThrallsTable(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	data := h.dataSource.NodesData(h.baseInterval, statusFilter)
-	h.renderer.RenderFragment(w, "nodes", "nodes-table", data)
+	data := h.dataSource.ThrallsData(h.baseInterval, statusFilter)
+	h.renderer.RenderFragment(w, "thralls", "thralls-table", data)
 }
 
 // --- Production data source ---
@@ -367,15 +367,15 @@ type dbDataSource struct {
 	configStore *config.ConfigStore
 }
 
-// nodeComplianceInfo computes compliance status for a node using its latest run.
-func (ds *dbDataSource) nodeComplianceInfo(ctx context.Context, c db.Node, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
+// thrallComplianceInfo computes compliance status for a thrall using its latest run.
+func (ds *dbDataSource) thrallComplianceInfo(ctx context.Context, c db.Thrall, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
 	lastSeen := time.Time{}
 	if c.LastSeen.Valid {
 		lastSeen = c.LastSeen.Time
 	}
 
-	latestRuns, err := ds.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-		NodeID: c.ID,
+	latestRuns, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
+		ThrallID: c.ID,
 		Limit:  1,
 	})
 	if err != nil {
@@ -394,18 +394,18 @@ func (ds *dbDataSource) nodeComplianceInfo(ctx context.Context, c db.Node, baseI
 
 func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
 	ctx := context.Background()
-	nodes, err := ds.queries.ListNodes(ctx)
+	thralls, err := ds.queries.ListThralls(ctx)
 	if err != nil {
-		slog.Error("failed to list nodes", "error", err)
+		slog.Error("failed to list thralls", "error", err)
 		return DashboardPageData{PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"}}
 	}
 
-	totalNodes := len(nodes)
+	totalThralls := len(thralls)
 	activeCount := 0
 	driftedCount := 0
 	failureCount := 0
 
-	for _, n := range nodes {
+	for _, n := range thralls {
 		if n.Revoked != 0 {
 			continue
 		}
@@ -413,7 +413,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 			activeCount++
 		}
 
-		status, _ := ds.nodeComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.thrallComplianceInfo(ctx, n, baseInterval)
 		switch status {
 		case "drifted":
 			driftedCount++
@@ -423,8 +423,8 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 	}
 
 	driftRate := float64(0)
-	if totalNodes > 0 {
-		driftRate = float64(driftedCount) / float64(totalNodes) * 100
+	if totalThralls > 0 {
+		driftRate = float64(driftedCount) / float64(totalThralls) * 100
 	}
 
 	allRuns, err := ds.queries.ListAllRuns(ctx, 10)
@@ -432,16 +432,16 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		slog.Error("failed to list runs", "error", err)
 	}
 
-	nodeMap := make(map[string]string, len(nodes))
-	for _, n := range nodes {
-		nodeMap[n.ID] = n.Hostname
+	thrallMap := make(map[string]string, len(thralls))
+	for _, n := range thralls {
+		thrallMap[n.ID] = n.Hostname
 	}
 
 	recentRuns := make([]RunRow, 0, len(allRuns))
 	for _, r := range allRuns {
 		recentRuns = append(recentRuns, RunRow{
 			ID:           r.ID,
-			Hostname:     nodeMap[r.NodeID],
+			Hostname:     thrallMap[r.ThrallID],
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
@@ -452,8 +452,8 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 	return DashboardPageData{
 		PageData:       PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalNodes:     totalNodes,
-		ActiveNodes:    activeCount,
+		TotalThralls:     totalThralls,
+		ActiveThralls:    activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     recentRuns,
@@ -462,16 +462,16 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
 	ctx := context.Background()
-	nodes, err := ds.queries.ListNodes(ctx)
+	thralls, err := ds.queries.ListThralls(ctx)
 	if err != nil {
-		slog.Error("failed to list nodes", "error", err)
+		slog.Error("failed to list thralls", "error", err)
 		return CompliancePageData{PageData: PageData{Title: "Compliance", ActiveNav: "compliance"}}
 	}
 
 	var statuses []string
 	var nonCompliant []ComplianceRow
 
-	for _, n := range nodes {
+	for _, n := range thralls {
 		if n.Revoked != 0 {
 			continue
 		}
@@ -480,13 +480,13 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 			lastSeen = n.LastSeen.Time
 		}
 
-		status, _ := ds.nodeComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.thrallComplianceInfo(ctx, n, baseInterval)
 		statuses = append(statuses, status)
 
 		if status != "compliant" {
 			lastRunStatus := ""
-			latestRuns, err := ds.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-				NodeID: n.ID,
+			latestRuns, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
+				ThrallID: n.ID,
 				Limit:  1,
 			})
 			if err == nil && len(latestRuns) > 0 {
@@ -538,27 +538,27 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData {
 	d := ds.DashboardData(baseInterval)
 	return DashboardStatsFragmentData{
-		TotalNodes:     d.TotalNodes,
-		ActiveNodes:    d.ActiveNodes,
+		TotalThralls:     d.TotalThralls,
+		ActiveThralls:    d.ActiveThralls,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
 }
 
-func (ds *dbDataSource) NodesData(baseInterval time.Duration, statusFilter string) NodesPageData {
+func (ds *dbDataSource) ThrallsData(baseInterval time.Duration, statusFilter string) ThrallsPageData {
 	ctx := context.Background()
-	nodes, err := ds.queries.ListNodes(ctx)
+	thralls, err := ds.queries.ListThralls(ctx)
 	if err != nil {
-		slog.Error("failed to list nodes", "error", err)
-		return NodesPageData{PageData: PageData{Title: "Nodes", ActiveNav: "nodes"}}
+		slog.Error("failed to list thralls", "error", err)
+		return ThrallsPageData{PageData: PageData{Title: "Thralls", ActiveNav: "thralls"}}
 	}
 
-	var rows []NodeRow
-	for _, n := range nodes {
+	var rows []ThrallRow
+	for _, n := range thralls {
 		if n.Revoked != 0 {
 			continue
 		}
-		status, _ := ds.nodeComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.thrallComplianceInfo(ctx, n, baseInterval)
 
 		if statusFilter != "" && status != statusFilter {
 			continue
@@ -569,7 +569,7 @@ func (ds *dbDataSource) NodesData(baseInterval time.Duration, statusFilter strin
 			lastSeen = n.LastSeen.Time
 		}
 
-		rows = append(rows, NodeRow{
+		rows = append(rows, ThrallRow{
 			ID:         n.ID,
 			Hostname:   n.Hostname,
 			IPAddress:  n.IpAddress,
@@ -579,47 +579,47 @@ func (ds *dbDataSource) NodesData(baseInterval time.Duration, statusFilter strin
 		})
 	}
 
-	return NodesPageData{
-		PageData:     PageData{Title: "Nodes", ActiveNav: "nodes"},
-		Nodes:        rows,
+	return ThrallsPageData{
+		PageData:     PageData{Title: "Thralls", ActiveNav: "thralls"},
+		Thralls:        rows,
 		StatusFilter: statusFilter,
-		NodeCount:    len(rows),
+		ThrallCount:    len(rows),
 	}
 }
 
-func (ds *dbDataSource) NodeDetailData(nodeID string, baseInterval time.Duration) (NodeDetailPageData, error) {
+func (ds *dbDataSource) ThrallDetailData(thrallID string, baseInterval time.Duration) (ThrallDetailPageData, error) {
 	ctx := context.Background()
-	node, err := ds.queries.GetNodeByID(ctx, nodeID)
+	thrall, err := ds.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {
-		return NodeDetailPageData{}, fmt.Errorf("node not found: %w", err)
+		return ThrallDetailPageData{}, fmt.Errorf("thrall not found: %w", err)
 	}
 
 	lastSeen := time.Time{}
-	if node.LastSeen.Valid {
-		lastSeen = node.LastSeen.Time
+	if thrall.LastSeen.Valid {
+		lastSeen = thrall.LastSeen.Time
 	}
 
-	status, _ := ds.nodeComplianceInfo(ctx, node, baseInterval)
+	status, _ := ds.thrallComplianceInfo(ctx, thrall, baseInterval)
 
-	nodeRow := NodeRow{
-		ID:         node.ID,
-		Hostname:   node.Hostname,
-		IPAddress:  node.IpAddress,
-		EnrolledAt: node.EnrolledAt,
+	thrallRow := ThrallRow{
+		ID:         thrall.ID,
+		Hostname:   thrall.Hostname,
+		IPAddress:  thrall.IpAddress,
+		EnrolledAt: thrall.EnrolledAt,
 		LastSeen:   lastSeen,
 		Status:     status,
 	}
 
 	// Fetch last 20 runs with results
-	dbRuns, err := ds.queries.ListRunsByNode(ctx, db.ListRunsByNodeParams{
-		NodeID: nodeID,
+	dbRuns, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
+		ThrallID: thrallID,
 		Limit:  20,
 	})
 	if err != nil {
-		slog.Error("failed to list runs for node", "error", err)
+		slog.Error("failed to list runs for thrall", "error", err)
 	}
 
-	var runs []NodeDetailRunRow
+	var runs []ThrallDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range dbRuns {
 		dbResults, err := ds.queries.ListRunResults(ctx, r.ID)
@@ -644,10 +644,10 @@ func (ds *dbDataSource) NodeDetailData(nodeID string, baseInterval time.Duration
 			})
 		}
 
-		runs = append(runs, NodeDetailRunRow{
+		runs = append(runs, ThrallDetailRunRow{
 			RunRow: RunRow{
 				ID:           r.ID,
-				Hostname:     node.Hostname,
+				Hostname:     thrall.Hostname,
 				StartedAt:    r.StartedAt,
 				Status:       r.Status,
 				ModuleCount:  r.ModuleCount,
@@ -667,14 +667,14 @@ func (ds *dbDataSource) NodeDetailData(nodeID string, baseInterval time.Duration
 
 	// Fetch latest facts
 	facts := make(map[string]any)
-	cf, err := ds.queries.GetLatestNodeTraits(ctx, nodeID)
+	cf, err := ds.queries.GetLatestThrallTraits(ctx, thrallID)
 	if err == nil {
 		_ = json.Unmarshal([]byte(cf.Traits), &facts)
 	}
 
-	return NodeDetailPageData{
-		PageData:     PageData{Title: "Node: " + node.Hostname, ActiveNav: "nodes"},
-		Node:         nodeRow,
+	return ThrallDetailPageData{
+		PageData:     PageData{Title: "Thrall: " + thrall.Hostname, ActiveNav: "thralls"},
+		Thrall:         thrallRow,
 		Runs:         runs,
 		Facts:        facts,
 		DriftHistory: driftHistory,
@@ -689,14 +689,14 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 		return RunsPageData{PageData: PageData{Title: "Runs", ActiveNav: "runs"}}
 	}
 
-	// Build node hostname lookup to avoid N+1
-	nodes, err := ds.queries.ListNodes(ctx)
+	// Build thrall hostname lookup to avoid N+1
+	thralls, err := ds.queries.ListThralls(ctx)
 	if err != nil {
-		slog.Error("failed to list nodes for hostname lookup", "error", err)
+		slog.Error("failed to list thralls for hostname lookup", "error", err)
 	}
-	nodeMap := make(map[string]string, len(nodes))
-	for _, n := range nodes {
-		nodeMap[n.ID] = n.Hostname
+	thrallMap := make(map[string]string, len(thralls))
+	for _, n := range thralls {
+		thrallMap[n.ID] = n.Hostname
 	}
 
 	var rows []RunRow
@@ -706,7 +706,7 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 		}
 		rows = append(rows, RunRow{
 			ID:           r.ID,
-			Hostname:     nodeMap[r.NodeID],
+			Hostname:     thrallMap[r.ThrallID],
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
@@ -730,9 +730,9 @@ func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 		return RunDetailPageData{}, fmt.Errorf("run not found: %w", err)
 	}
 
-	node, err := ds.queries.GetNodeByID(ctx, r.NodeID)
+	thrall, err := ds.queries.GetThrallByID(ctx, r.ThrallID)
 	if err != nil {
-		return RunDetailPageData{}, fmt.Errorf("node not found: %w", err)
+		return RunDetailPageData{}, fmt.Errorf("thrall not found: %w", err)
 	}
 
 	dbResults, err := ds.queries.ListRunResults(ctx, runID)
@@ -759,10 +759,10 @@ func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 
 	return RunDetailPageData{
 		PageData: PageData{Title: "Run Detail", ActiveNav: "runs"},
-		NodeID:   node.ID,
+		ThrallID:   thrall.ID,
 		Run: RunRow{
 			ID:           r.ID,
-			Hostname:     node.Hostname,
+			Hostname:     thrall.Hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
@@ -784,7 +784,7 @@ func (ds *dbDataSource) ConfigData(hostname string) (ConfigPageData, error) {
 	}
 
 	return ConfigPageData{
-		PageData: PageData{Title: "Config: " + hostname, ActiveNav: "nodes"},
+		PageData: PageData{Title: "Config: " + hostname, ActiveNav: "thralls"},
 		Hostname: hostname,
 		RawYAML:  yamlStr,
 	}, nil
@@ -797,9 +797,9 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 		return PlanDetailPageData{}, fmt.Errorf("plan not found: %w", err)
 	}
 
-	node, err := ds.queries.GetNodeByID(ctx, p.NodeID)
+	thrall, err := ds.queries.GetThrallByID(ctx, p.ThrallID)
 	if err != nil {
-		return PlanDetailPageData{}, fmt.Errorf("node not found: %w", err)
+		return PlanDetailPageData{}, fmt.Errorf("thrall not found: %w", err)
 	}
 
 	dbResults, err := ds.queries.ListPlanResults(ctx, planID)
@@ -831,10 +831,10 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 	}
 
 	return PlanDetailPageData{
-		PageData:    PageData{Title: "Plan Detail", ActiveNav: "nodes"},
+		PageData:    PageData{Title: "Plan Detail", ActiveNav: "thralls"},
 		PlanID:      p.ID,
-		NodeID:      node.ID,
-		Hostname:    node.Hostname,
+		ThrallID:      thrall.ID,
+		Hostname:    thrall.Hostname,
 		CreatedAt:   p.CreatedAt,
 		Results:     results,
 		TotalCount:  len(results),
