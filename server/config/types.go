@@ -86,14 +86,28 @@ type ServerConfig struct {
 // SMTPSection configures email notifications via an SMTP relay.
 // Notifications are disabled when Host is empty.
 type SMTPSection struct {
-	Host       string   `yaml:"host"`                  // SMTP relay hostname (e.g. "smtp.example.com")
-	Port       int      `yaml:"port"`                  // SMTP port (default 587)
-	From       string   `yaml:"from"`                  // sender address (e.g. "hobnob@example.com")
-	Username   string   `yaml:"username"`               // SMTP auth username (optional)
-	Password   string   `yaml:"password"`               // SMTP auth password (supports secret: prefix)
-	TLS        bool     `yaml:"tls"`                    // use STARTTLS (default true)
-	Recipients []string `yaml:"recipients"`             // default recipient list
-	Events     []string `yaml:"events"`                 // event types to send (default: all)
+	Host       string                      `yaml:"host"`       // SMTP relay hostname (e.g. "smtp.example.com")
+	Port       int                         `yaml:"port"`       // SMTP port (default 587)
+	From       string                      `yaml:"from"`       // sender address (e.g. "hobnob@example.com")
+	Username   string                      `yaml:"username"`   // SMTP auth username (optional)
+	Password   string                      `yaml:"password"`   // SMTP auth password (supports secret: prefix)
+	TLS        bool                        `yaml:"tls"`        // use STARTTLS (default true)
+	Recipients []string                    `yaml:"recipients"` // default recipient list
+	Events     map[string]SMTPEventConfig  `yaml:"events"`     // event toggles + per-event overrides (nil = all)
+	Digest     SMTPDigestConfig            `yaml:"digest"`     // periodic summary batching
+}
+
+// SMTPEventConfig holds per-event notification settings.
+// An empty value enables the event with default recipients.
+type SMTPEventConfig struct {
+	Recipients []string `yaml:"recipients,omitempty"` // override default recipients
+	Threshold  int      `yaml:"threshold,omitempty"`  // compliance.threshold: fire below this %
+}
+
+// SMTPDigestConfig controls batching notifications into periodic summaries.
+type SMTPDigestConfig struct {
+	Interval string   `yaml:"interval"` // batch window (e.g. "1h", "30m"); empty = disabled
+	Events   []string `yaml:"events"`   // events routed to digest instead of immediate
 }
 
 // TuningSection holds operational tuning parameters. All fields are optional

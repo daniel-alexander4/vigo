@@ -1,6 +1,7 @@
 package smtp
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -185,6 +186,35 @@ func TestRender_ThrallStaleEvent(t *testing.T) {
 	}
 }
 
+func TestRender_ComplianceThresholdEvent(t *testing.T) {
+	n := NewNotifier(Config{Host: "smtp.example.com"})
+	event := Event{
+		Name:      "compliance.threshold",
+		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
+		Details: map[string]any{
+			"compliant_pct": 75,
+			"threshold":     90,
+			"compliant":     15,
+			"total":         20,
+		},
+	}
+
+	subject, body, err := n.render(event)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	if !strings.Contains(subject, "75%") {
+		t.Errorf("subject should contain percentage: %s", subject)
+	}
+	if !strings.Contains(body, "15/20") {
+		t.Errorf("body should contain compliant/total: %s", body)
+	}
+	if !strings.Contains(body, "90%") {
+		t.Errorf("body should contain threshold: %s", body)
+	}
+}
+
 func TestAllEventsHaveTemplates(t *testing.T) {
 	n := NewNotifier(Config{Host: "smtp.example.com"})
 	for _, eventName := range AllEvents {
@@ -198,17 +228,210 @@ func TestEventFilter(t *testing.T) {
 	n := NewNotifier(Config{
 		Host:       "smtp.example.com",
 		Recipients: []string{"admin@example.com"},
-		Events:     map[string]bool{"run.failure": true},
+		Events: map[string]*EventOverride{
+			"run.failure": {},
+		},
 	})
 
-	// run.failure is allowed.
-	if n.cfg.Events != nil && !n.cfg.Events["run.failure"] {
+	// run.failure is in the filter.
+	if _, ok := n.cfg.Events["run.failure"]; !ok {
 		t.Error("run.failure should be enabled")
 	}
 
 	// run.success is not in the filter.
-	if n.cfg.Events != nil && n.cfg.Events["run.success"] {
+	if _, ok := n.cfg.Events["run.success"]; ok {
 		t.Error("run.success should not be enabled")
+	}
+}
+
+func TestPerEventRecipients(t *testing.T) {
+	n := NewNotifier(Config{
+		Host:       "smtp.example.com",
+		Recipients: []string{"admin@example.com"},
+		Events: map[string]*EventOverride{
+			"run.failure":    {Recipients: []string{"ops@example.com", "oncall@example.com"}},
+			"run.success":    {},
+			"thrall.enrolled": nil,
+		},
+	})
+
+	// run.failure has per-event recipients.
+	got := n.recipientsFor("run.failure")
+	if len(got) != 2 || got[0] != "ops@example.com" {
+		t.Errorf("run.failure should use override recipients, got %v", got)
+	}
+
+	// run.success has empty override — falls back to default.
+	got = n.recipientsFor("run.success")
+	if len(got) != 1 || got[0] != "admin@example.com" {
+		t.Errorf("run.success should use default recipients, got %v", got)
+	}
+
+	// thrall.enrolled has nil override — falls back to default.
+	got = n.recipientsFor("thrall.enrolled")
+	if len(got) != 1 || got[0] != "admin@example.com" {
+		t.Errorf("thrall.enrolled should use default recipients, got %v", got)
+	}
+}
+
+func TestPerEventRecipients_AllEventsEnabled(t *testing.T) {
+	n := NewNotifier(Config{
+		Host:       "smtp.example.com",
+		Recipients: []string{"default@example.com"},
+		Events:     nil, // all events enabled
+	})
+
+	got := n.recipientsFor("run.failure")
+	if len(got) != 1 || got[0] != "default@example.com" {
+		t.Errorf("should use default recipients when Events is nil, got %v", got)
+	}
+}
+
+func TestDigest_BuffersEvents(t *testing.T) {
+	n := NewNotifier(Config{
+		Host:       "smtp.example.com",
+		Recipients: []string{"admin@example.com"},
+		Digest: &DigestConfig{
+			Interval: time.Hour,
+			Events:   map[string]bool{"run.success": true, "drift.detected": true},
+		},
+	})
+
+	// Digest events should be buffered, not sent immediately.
+	n.Notify(Event{
+		Name:      "run.success",
+		Timestamp: time.Now(),
+		Thrall:    &ThrallInfo{ID: "a", Hostname: "web01"},
+		Run:       &RunInfo{ID: "r1", Status: "success"},
+	})
+	n.Notify(Event{
+		Name:      "drift.detected",
+		Timestamp: time.Now(),
+		Thrall:    &ThrallInfo{ID: "b", Hostname: "web02"},
+		Run:       &RunInfo{ID: "r2", Status: "success", Changed: 2},
+	})
+
+	n.mu.Lock()
+	count := len(n.digestBuf)
+	n.mu.Unlock()
+
+	if count != 2 {
+		t.Errorf("expected 2 buffered events, got %d", count)
+	}
+}
+
+func TestDigest_NonDigestEventsSentImmediately(t *testing.T) {
+	n := NewNotifier(Config{
+		Host:       "smtp.example.com",
+		Recipients: []string{"admin@example.com"},
+		Digest: &DigestConfig{
+			Interval: time.Hour,
+			Events:   map[string]bool{"run.success": true},
+		},
+	})
+
+	// run.failure is NOT in digest — should not be buffered.
+	n.Notify(Event{
+		Name:      "run.failure",
+		Timestamp: time.Now(),
+		Thrall:    &ThrallInfo{ID: "a", Hostname: "web01"},
+		Run:       &RunInfo{ID: "r1", Status: "failure", Failed: 1},
+	})
+
+	n.mu.Lock()
+	count := len(n.digestBuf)
+	n.mu.Unlock()
+
+	if count != 0 {
+		t.Errorf("non-digest event should not be buffered, got %d", count)
+	}
+}
+
+func TestDigest_FlushClearsBuffer(t *testing.T) {
+	n := NewNotifier(Config{
+		Host:       "smtp.example.com",
+		Recipients: []string{"admin@example.com"},
+		Digest: &DigestConfig{
+			Interval: time.Hour,
+			Events:   map[string]bool{"run.success": true},
+		},
+	})
+
+	n.mu.Lock()
+	n.digestBuf = []Event{
+		{Name: "run.success", Timestamp: time.Now(), Thrall: &ThrallInfo{Hostname: "web01"}},
+		{Name: "run.success", Timestamp: time.Now(), Thrall: &ThrallInfo{Hostname: "web02"}},
+	}
+	n.mu.Unlock()
+
+	// flushDigest will fail to deliver (no SMTP server) but should clear buffer.
+	n.flushDigest()
+
+	n.mu.Lock()
+	count := len(n.digestBuf)
+	n.mu.Unlock()
+
+	if count != 0 {
+		t.Errorf("expected buffer cleared after flush, got %d", count)
+	}
+}
+
+func TestDigest_EmptyFlushIsNoop(t *testing.T) {
+	n := NewNotifier(Config{
+		Host:       "smtp.example.com",
+		Recipients: []string{"admin@example.com"},
+		Digest: &DigestConfig{
+			Interval: time.Hour,
+			Events:   map[string]bool{"run.success": true},
+		},
+	})
+
+	// Should not panic or send anything.
+	n.flushDigest()
+}
+
+func TestDigest_RenderDigest(t *testing.T) {
+	n := NewNotifier(Config{Host: "smtp.example.com"})
+	events := []Event{
+		{Name: "run.success", Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC), Thrall: &ThrallInfo{Hostname: "web01"}},
+		{Name: "run.success", Timestamp: time.Date(2026, 3, 10, 12, 5, 0, 0, time.UTC), Thrall: &ThrallInfo{Hostname: "web02"}},
+		{Name: "drift.detected", Timestamp: time.Date(2026, 3, 10, 12, 10, 0, 0, time.UTC), Thrall: &ThrallInfo{Hostname: "db01"}},
+	}
+
+	subject, body := n.renderDigest(events)
+
+	if !strings.Contains(subject, "3 events") {
+		t.Errorf("subject should contain event count: %s", subject)
+	}
+	if !strings.Contains(body, "run.success: 2") {
+		t.Errorf("body should contain run.success count: %s", body)
+	}
+	if !strings.Contains(body, "drift.detected: 1") {
+		t.Errorf("body should contain drift.detected count: %s", body)
+	}
+	if !strings.Contains(body, "web01") {
+		t.Errorf("body should contain thrall hostnames: %s", body)
+	}
+}
+
+func TestDigest_StartReturnsImmediatelyWhenDisabled(t *testing.T) {
+	n := NewNotifier(Config{Host: "smtp.example.com"})
+
+	// Should return immediately — no digest configured.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		n.Start(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good — returned immediately.
+	case <-time.After(200 * time.Millisecond):
+		t.Error("Start should return immediately when digest is not configured")
 	}
 }
 

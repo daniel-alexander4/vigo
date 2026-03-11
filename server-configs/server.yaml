@@ -42,7 +42,8 @@ watcher:
 # trusted_enrollment patterns allow nodes to enroll without a token.
 # CIDRs restrict which source IPs can use each pattern.
 # SMTP email notifications.
-# Disabled when host is empty. Events default to all if omitted.
+# Disabled when host is empty. Omit events to enable all with default recipients.
+# Per-event recipient overrides and digest batching are optional.
 # smtp:
 #   host: smtp.example.com
 #   port: 587
@@ -50,16 +51,24 @@ watcher:
 #   username: hobnob
 #   password: "secret:hobnob/smtp/password"
 #   tls: true
-#   recipients:
+#   recipients:                           # default recipients for all events
 #     - admin@example.com
-#   events:                     # omit to enable all
-#     - thrall.enrolled         # new thrall registered
-#     - run.success             # convergence run succeeded
-#     - run.failure             # convergence run failed
-#     - drift.detected          # config drift corrected
-#     - secret.rotated          # secret version bumped, thralls re-queued
-#     - config.reload.failure   # YAML config reload error
-#     - thrall.stale            # thrall missed check-in window
+#   events:                               # omit to enable all with default recipients
+#     thrall.enrolled: {}                 # new thrall registered
+#     run.success: {}                     # convergence run succeeded
+#     run.failure:                        # convergence run failed
+#       recipients: [ops@example.com]     #   override recipients for this event
+#     drift.detected: {}                  # config drift corrected
+#     secret.rotated: {}                  # secret version bumped, thralls re-queued
+#     config.reload.failure: {}           # YAML config reload error
+#     thrall.stale: {}                    # thrall missed check-in window
+#     compliance.threshold:               # compliance % dropped below threshold
+#       threshold: 90
+#   digest:                               # batch low-priority events into summaries
+#     interval: "1h"                      # flush interval (e.g. "1h", "30m")
+#     events:                             # events routed to digest instead of immediate
+#       - run.success
+#       - drift.detected
 
 bootstrap:
   cert_validity: "8760h"  # 1 year

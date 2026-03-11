@@ -27,7 +27,7 @@ func run() error {
 
 	dsn := os.Getenv("HOBNOB_DB_DSN")
 	if dsn == "" {
-		dsn = "hobnob.db"
+		dsn = "db/hobnob.db"
 	}
 
 	db, err := sql.Open("sqlite3", dsn)

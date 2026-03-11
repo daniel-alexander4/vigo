@@ -22,6 +22,7 @@ import (
 	"github.com/hobnob/hobnob/server/api"
 	"github.com/hobnob/hobnob/server/bootstrap"
 	"github.com/hobnob/hobnob/server/ca"
+	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
@@ -48,7 +49,7 @@ func run() error {
 
 	// Determine config paths relative to working directory.
 	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server.yaml")
-	nodeConfigsDir := envOrDefault("HOBNOB_NODE_CONFIGS_DIR", ".")
+	nodeConfigsDir := envOrDefault("HOBNOB_THRALL_CONFIGS_DIR", ".")
 	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
 	traitsDir := envOrDefault("HOBNOB_CUSTOM_TRAITS_DIR", "custom-traits")
 
@@ -236,13 +237,30 @@ func run() error {
 	}
 
 	// Create SMTP notifier (disabled when smtp.host is empty).
-	var smtpEvents map[string]bool
+	var smtpEvents map[string]*hobnobsmtp.EventOverride
 	if len(cfg.SMTP.Events) > 0 {
-		smtpEvents = make(map[string]bool, len(cfg.SMTP.Events))
-		for _, e := range cfg.SMTP.Events {
-			smtpEvents[e] = true
+		smtpEvents = make(map[string]*hobnobsmtp.EventOverride, len(cfg.SMTP.Events))
+		for name, ec := range cfg.SMTP.Events {
+			smtpEvents[name] = &hobnobsmtp.EventOverride{
+				Recipients: ec.Recipients,
+			}
 		}
 	}
+
+	var digestCfg *hobnobsmtp.DigestConfig
+	if cfg.SMTP.Digest.Interval != "" {
+		if interval, pErr := time.ParseDuration(cfg.SMTP.Digest.Interval); pErr == nil && interval > 0 {
+			digestEvents := make(map[string]bool, len(cfg.SMTP.Digest.Events))
+			for _, e := range cfg.SMTP.Digest.Events {
+				digestEvents[e] = true
+			}
+			digestCfg = &hobnobsmtp.DigestConfig{
+				Interval: interval,
+				Events:   digestEvents,
+			}
+		}
+	}
+
 	smtpNotifier := hobnobsmtp.NewNotifier(hobnobsmtp.Config{
 		Host:       cfg.SMTP.Host,
 		Port:       cfg.SMTP.Port,
@@ -252,6 +270,7 @@ func run() error {
 		TLS:        cfg.SMTP.TLS,
 		Recipients: cfg.SMTP.Recipients,
 		Events:     smtpEvents,
+		Digest:     digestCfg,
 	})
 	if smtpNotifier.Enabled() {
 		slog.Info("SMTP notifications enabled", "host", cfg.SMTP.Host, "recipients", len(cfg.SMTP.Recipients))
@@ -353,6 +372,20 @@ func run() error {
 
 	// Start stale thrall checker — fires thrall.stale SMTP events on transition.
 	go runStaleChecker(ctx, queries, smtpNotifier, baseInterval)
+
+	// Start SMTP digest flush loop (if configured).
+	go smtpNotifier.Start(ctx)
+
+	// Start compliance threshold checker (if configured).
+	complianceThreshold := 0
+	if cfg.SMTP.Events != nil {
+		if ec, ok := cfg.SMTP.Events["compliance.threshold"]; ok {
+			complianceThreshold = ec.Threshold
+		}
+	}
+	if complianceThreshold > 0 {
+		go runComplianceChecker(ctx, queries, runStore, smtpNotifier, baseInterval, complianceThreshold)
+	}
 
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
 	var httpSrv *http.Server
@@ -535,6 +568,90 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, notifier *hobnobs
 				})
 			}
 			wasStale = nowStale
+		}
+	}
+}
+
+// runComplianceChecker periodically computes the compliance percentage across
+// all active thralls and fires a compliance.threshold SMTP notification when
+// it drops below the configured threshold. Only fires once per transition.
+func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, notifier *hobnobsmtp.Notifier, baseInterval time.Duration, threshold int) {
+	if notifier == nil || !notifier.Enabled() || threshold <= 0 {
+		return
+	}
+
+	slog.Info("compliance threshold checker started", "threshold", threshold)
+
+	wasBelowThreshold := false
+	ticker := time.NewTicker(baseInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			thralls, err := queries.ListThralls(ctx)
+			if err != nil {
+				slog.Error("compliance checker: listing thralls", "error", err)
+				continue
+			}
+
+			// Collect active thrall IDs.
+			var ids []string
+			thrallMap := make(map[string]db.Thrall)
+			for _, t := range thralls {
+				if t.Revoked != 0 {
+					continue
+				}
+				ids = append(ids, t.ID)
+				thrallMap[t.ID] = t
+			}
+			if len(ids) == 0 {
+				continue
+			}
+
+			latestRuns, err := runStore.LatestRunPerThrall(ctx, ids)
+			if err != nil {
+				slog.Error("compliance checker: fetching latest runs", "error", err)
+				continue
+			}
+
+			compliantCount := 0
+			for _, id := range ids {
+				t := thrallMap[id]
+				var ri *compliance.RunInfo
+				if run, ok := latestRuns[id]; ok {
+					ri = &compliance.RunInfo{
+						Status:       run.Status,
+						ChangedCount: int64(run.ChangedCount),
+					}
+				}
+				lastSeen := time.Time{}
+				if t.LastSeen.Valid {
+					lastSeen = t.LastSeen.Time
+				}
+				if compliance.ComputeStatus(ri, lastSeen, baseInterval) == "compliant" {
+					compliantCount++
+				}
+			}
+
+			pct := (compliantCount * 100) / len(ids)
+			belowNow := pct < threshold
+
+			if belowNow && !wasBelowThreshold {
+				notifier.Notify(hobnobsmtp.Event{
+					Name:      "compliance.threshold",
+					Timestamp: time.Now().UTC(),
+					Details: map[string]any{
+						"compliant_pct": pct,
+						"threshold":     threshold,
+						"compliant":     compliantCount,
+						"total":         len(ids),
+					},
+				})
+			}
+			wasBelowThreshold = belowNow
 		}
 	}
 }

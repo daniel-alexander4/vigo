@@ -72,6 +72,28 @@ Thrall {{ .Thrall.Hostname }} has not checked in within the expected interval.
   Time:     {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
 {{- end -}}
 
+{{- define "compliance.threshold" -}}
+[Hobnob] Compliance below threshold: {{ index .Details "compliant_pct" }}%
+Compliance has dropped below the configured threshold.
+
+  Compliant: {{ index .Details "compliant" }}/{{ index .Details "total" }} ({{ index .Details "compliant_pct" }}%)
+  Threshold: {{ index .Details "threshold" }}%
+  Time:      {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+{{- end -}}
+
+{{- define "digest" -}}
+[Hobnob] Digest: {{ .Total }} events
+{{ .Total }} event(s) in this digest period.
+{{ range .Types }}
+  {{ . }}: {{ index $.Counts . }}
+{{- end }}
+
+Details:
+{{ range .Events }}
+  [{{ .Timestamp.Format "15:04:05" }}] {{ .Name }}{{ if .Thrall }} — {{ .Thrall.Hostname }}{{ end }}
+{{- end }}
+{{- end -}}
+
 {{- define "default" -}}
 [Hobnob] {{ .Name }}
 Event: {{ .Name }}

@@ -11,13 +11,13 @@ Database schema migrations for SQLite, managed by golang-migrate.
 
 ```bash
 # Apply all pending migrations
-migrate -path migrations -database "sqlite3://hobnob.db" up
+migrate -path migrations -database "sqlite3://db/hobnob.db" up
 
 # Rollback last migration
-migrate -path migrations -database "sqlite3://hobnob.db" down 1
+migrate -path migrations -database "sqlite3://db/hobnob.db" down 1
 
 # Check current version
-migrate -path migrations -database "sqlite3://hobnob.db" version
+migrate -path migrations -database "sqlite3://db/hobnob.db" version
 ```
 
 Migrations run automatically on server startup.

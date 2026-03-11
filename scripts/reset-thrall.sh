@@ -20,28 +20,6 @@ for arg in "$@"; do
   esac
 done
 
-# Preserve server config across reset.
-echo "Backing up /etc/hobnob-server to /tmp/hobnob-server-backup..."
-rm -rf /tmp/hobnob-server-backup
-cp -a /etc/hobnob-server /tmp/hobnob-server-backup
-
-# Purge DB (SQLite file in /etc/hobnob-server).
-if [ "$SKIP_DB" = false ]; then
-  DB_FILE="/etc/hobnob-server/hobnob.db"
-  if [ -f "$DB_FILE" ]; then
-    echo "Purging thralls and history from database..."
-    sqlite3 "$DB_FILE" <<'SQL'
-DELETE FROM thralls;
-DELETE FROM compliance_history;
-DELETE FROM secret_rotation_events;
-DELETE FROM env_promotions;
-SQL
-    echo "Database purged."
-  else
-    echo "No database file found at $DB_FILE, skipping purge."
-  fi
-fi
-
 echo "Stopping and removing hobnob service..."
 systemctl stop hobnob 2>/dev/null || true
 systemctl disable hobnob 2>/dev/null || true
@@ -55,12 +33,9 @@ rm -f /usr/local/bin/hobnob
 echo "Removing agent data (/etc/hobnob-thrall)..."
 rm -rf /etc/hobnob-thrall
 
-echo "Removing server data (/etc/hobnob-server)..."
-rm -rf /etc/hobnob-server
-mkdir -p /etc/hobnob-server
-
-echo "Restoring server config from backup..."
-cp -a /tmp/hobnob-server-backup/. /etc/hobnob-server/
-rm -rf /tmp/hobnob-server-backup
+echo "Removing server data (/etc/hobnob-server), preserving license..."
+find /etc/hobnob-server -mindepth 1 \
+  -path /etc/hobnob-server/license -prune -o \
+  -print0 | xargs -0 rm -rf
 
 echo "Done. Thrall is clean — ready to re-bootstrap."

@@ -21,7 +21,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "$CERTS_DIR" "$THRALLS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
+mkdir -p "$CERTS_DIR" "$THRALLS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "${DATA_DIR}/db"
 mkdir -p -m 700 "${DATA_DIR}/license"
 
 # ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@ if [ ! -f "$ENV_FILE" ]; then
 # REQUIRED — server will not start without these:
 # =============================================================================
 
-HOBNOB_DB_DSN=hobnob.db
+HOBNOB_DB_DSN=db/hobnob.db
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
 HOBNOB_TLS_CA=certs/ca.crt
@@ -85,7 +85,7 @@ HOBNOB_TLS_CA_KEY=certs/ca.key
 # HOBNOB_CONFIG_FILE=server.yaml
 
 # Config directory for modules, roles, thralls (default: . i.e. same as server dir)
-# HOBNOB_NODE_CONFIGS_DIR=.
+# HOBNOB_THRALL_CONFIGS_DIR=.
 
 # Migrations directory (default: migrations)
 # HOBNOB_MIGRATIONS_DIR=migrations
@@ -188,7 +188,7 @@ set +a
 cd "$DATA_DIR"
 
 export HOBNOB_CONFIG_FILE="server.yaml"
-export HOBNOB_NODE_CONFIGS_DIR="."
+export HOBNOB_THRALL_CONFIGS_DIR="."
 export HOBNOB_MIGRATIONS_DIR="/migrations"
 export HOBNOB_AGENT_DIR="/dist/agent"
 

@@ -222,7 +222,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	for _, role := range roleDefs {
 		for _, ref := range role.Modules {
 			if _, ok := moduleDefs[ref.Name]; !ok {
-				return fmt.Errorf("role %q references unknown module %q", role.Name, ref.Name)
+				return fmt.Errorf("role %q references module %q which does not exist — add a module definition to modules/", role.Name, ref.Name)
 			}
 		}
 	}
@@ -275,7 +275,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 	for _, roleName := range entry.Roles {
 		role, ok := roleDefs[roleName]
 		if !ok {
-			return nil, fmt.Errorf("unknown role %q", roleName)
+			return nil, fmt.Errorf("role %q does not exist — add a role definition to roles/", roleName)
 		}
 		for _, ref := range role.Modules {
 			if !seen[ref.Name] {
@@ -296,7 +296,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 	for _, ref := range moduleRefs {
 		def, ok := moduleDefs[ref.Name]
 		if !ok {
-			return nil, fmt.Errorf("unknown module %q", ref.Name)
+			return nil, fmt.Errorf("module %q does not exist — add a module definition to modules/", ref.Name)
 		}
 		modules = append(modules, ModuleConfig{
 			Name:      def.Name,

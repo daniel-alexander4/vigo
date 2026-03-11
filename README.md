@@ -25,7 +25,7 @@ For production, replace with your own CA and server cert. Keep the CA private ke
 
 ```bash
 sudo tee /etc/hobnob-server/.env <<'EOF'
-HOBNOB_DB_DSN=hobnob.db
+HOBNOB_DB_DSN=db/hobnob.db
 HOBNOB_TLS_CERT=certs/server.crt
 HOBNOB_TLS_KEY=certs/server.key
 HOBNOB_TLS_CA=certs/ca.crt

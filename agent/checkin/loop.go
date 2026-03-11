@@ -130,7 +130,7 @@ func converge(ctx context.Context, resp *pb.CheckInResponse, reportFn func(ctx c
 	}
 
 	if len(protoModules) == 0 {
-		slog.Warn("server returned zero modules — check that this thrall is matched in thralls.hnb")
+		slog.Warn("server returned zero modules — check server logs for config errors (missing modules/roles) and verify this thrall is matched in thralls/")
 		return &RunResult{
 			BaseInterval:        baseInterval,
 			JitterPct:           jitterPct,
