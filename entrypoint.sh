@@ -6,10 +6,11 @@ set -e
 
 DATA_DIR="/etc/hobnob-server"
 CERTS_DIR="${DATA_DIR}/certs"
-NODES_DIR="${DATA_DIR}/nodes"
+THRALLS_DIR="${DATA_DIR}/thralls"
 MODULES_DIR="${DATA_DIR}/modules"
 ROLES_DIR="${DATA_DIR}/roles"
 TEMPLATES_DIR="${DATA_DIR}/templates"
+EXAMPLES_DIR="${DATA_DIR}/examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
 
@@ -20,7 +21,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "$CERTS_DIR" "$NODES_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
+mkdir -p "$CERTS_DIR" "$THRALLS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
 
 # ---------------------------------------------------------------------------
 # Generate TLS certificates if missing
@@ -74,7 +75,7 @@ HOBNOB_TLS_CA_KEY=certs/ca.key
 # Server config file path (default: server.yaml)
 # HOBNOB_CONFIG_FILE=server.yaml
 
-# Node configs directory (default: . i.e. same as server dir)
+# Config directory for modules, roles, thralls (default: . i.e. same as server dir)
 # HOBNOB_NODE_CONFIGS_DIR=.
 
 # Migrations directory (default: migrations)
@@ -94,7 +95,7 @@ HOBNOB_TLS_CA_KEY=certs/ca.key
 # HOBNOB_ENV_FILE=.env
 
 # =============================================================================
-# MODULE SECRETS — uncomment when enabling the corresponding node entries.
+# MODULE SECRETS — uncomment when enabling the corresponding thrall entries.
 # Each maps to a secret: reference in node config vars.
 # =============================================================================
 
@@ -115,33 +116,37 @@ if [ ! -f "$SERVER_YAML" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Seed example configs (skip files that already exist)
+# Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# nodes.hnb.example
-if [ ! -f "${NODES_DIR}/nodes.hnb.example" ]; then
-    cp "${SEED_DIR}/node-configs/nodes.hnb.example" "${NODES_DIR}/"
-fi
+mkdir -p "${EXAMPLES_DIR}/modules" "${EXAMPLES_DIR}/thralls" "${EXAMPLES_DIR}/roles" "${EXAMPLES_DIR}/templates"
+
+# Thrall mapping examples
+for src in "${SEED_DIR}/node-configs/thralls/"*.hnb.example; do
+    [ -f "$src" ] || continue
+    dest="${EXAMPLES_DIR}/thralls/$(basename "$src")"
+    [ -f "$dest" ] || cp "$src" "$dest"
+done
 
 # Module examples
 for src in "${SEED_DIR}/node-configs/modules/"*.hnb.example; do
     [ -f "$src" ] || continue
-    dest="${MODULES_DIR}/$(basename "$src")"
+    dest="${EXAMPLES_DIR}/modules/$(basename "$src")"
     [ -f "$dest" ] || cp "$src" "$dest"
 done
 
 # Role examples
 for src in "${SEED_DIR}/node-configs/roles/"*.hnb.example; do
     [ -f "$src" ] || continue
-    dest="${ROLES_DIR}/$(basename "$src")"
+    dest="${EXAMPLES_DIR}/roles/$(basename "$src")"
     [ -f "$dest" ] || cp "$src" "$dest"
 done
 
-# Template files
+# Template examples
 if [ -d "${SEED_DIR}/node-configs/templates" ]; then
     find "${SEED_DIR}/node-configs/templates" -type f | while IFS= read -r src; do
         rel="${src#${SEED_DIR}/node-configs/templates/}"
-        dest="${TEMPLATES_DIR}/${rel}"
+        dest="${EXAMPLES_DIR}/templates/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
             cp "$src" "$dest"

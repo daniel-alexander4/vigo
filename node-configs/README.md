@@ -1,11 +1,11 @@
 # node-configs
 
-Configuration files that define the desired state of managed nodes. These YAML files (with `.hnb` extension) are the single source of truth -- no config is written via API, CLI, or UI.
+Configuration files that define the desired state of managed thralls. These YAML files (with `.hnb` extension) are the single source of truth -- no config is written via API, CLI, or UI.
 
 ## Summary
 
 - YAML syntax with `.hnb` file extension
-- Three layers: modules (reusable resource sets), roles (module groups), nodes (hostname-to-role mapping)
+- Three layers: modules (reusable resource sets), roles (module groups), thralls (hostname-to-role mapping)
 - Single source of truth: edit files, server auto-reloads via fsnotify
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Secret references use `secret:` prefix, resolved at server load time
@@ -21,7 +21,8 @@ node-configs/
   roles/             # Named collections of modules
     webserver.hnb
     base.hnb
-  nodes.hnb          # Map hostnames to roles and modules
+  thralls/           # Map hostnames to roles and modules
+    thralls.hnb
 ```
 
 Directories are read recursively -- subdirectories are supported for organization:
@@ -45,13 +46,13 @@ modules/
 ```bash
 cp modules/openssh.hnb.example modules/openssh.hnb
 cp roles/webserver.hnb.example roles/webserver.hnb
-cp nodes.hnb.example nodes.hnb
+cp thralls.hnb.example thralls/thralls.hnb
 ```
 
-2. Edit `nodes.hnb` to map your hostnames to roles:
+2. Edit `thralls/thralls.hnb` to map your hostnames to roles:
 
 ```yaml
-nodes:
+thralls:
   - match: "web-*.example.com"
     roles: [webserver]
 
@@ -119,12 +120,12 @@ modules:
   - fail2ban
 ```
 
-### Node Mapping
+### Thrall Mapping
 
 Map hostnames (globs supported) to roles, modules, and variables. First match wins -- put specific patterns before broad ones.
 
 ```yaml
-nodes:
+thralls:
   - match: "web-*.prod.example.com"
     environment: production
     roles: [webserver]
@@ -147,8 +148,8 @@ nodes:
 ## Variable Precedence
 
 1. Module default vars (lowest priority)
-2. Node-level vars
-3. env_vars for the node's environment (highest priority)
+2. Thrall-level vars
+3. env_vars for the thrall's environment (highest priority)
 
 ## Templates
 
@@ -164,12 +165,12 @@ content: |
 
 Available namespaces:
 
-- `.Vars` -- merged variables (module defaults + node overrides + env_vars)
-- `.Traits` -- node's collected traits (os, hardware, network, etc.)
+- `.Vars` -- merged variables (module defaults + thrall overrides + env_vars)
+- `.Traits` -- thrall's collected traits (os, hardware, network, etc.)
 
 ## Conditional Variables
 
-Define variables whose value depends on a node's traits:
+Define variables whose value depends on a thrall's traits:
 
 ```yaml
 vars:
