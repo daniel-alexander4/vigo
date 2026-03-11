@@ -43,6 +43,7 @@ type resolvedEntry struct {
 type ConfigStore struct {
 	mu         sync.RWMutex
 	entries    []resolvedEntry
+	index      patternIndex                 // accelerated hostname lookup
 	rawModules map[string]*ModuleDefinition // unresolved, for secret ref scanning
 	dir        string                       // node-configs directory
 	provider   secrets.Provider
@@ -87,22 +88,32 @@ func (cs *ConfigStore) Get(hostname string) *NodeConfig {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
-	for _, entry := range cs.entries {
-		matched, err := filepath.Match(entry.match, hostname)
-		if err != nil {
-			continue
-		}
-		if matched {
-			cfg := cloneNodeConfig(entry.config)
-			cfg.Node = hostname
-			return cfg
-		}
+	if i := cs.index.Lookup(hostname); i >= 0 {
+		cfg := cloneNodeConfig(cs.entries[i].config)
+		cfg.Node = hostname
+		return cfg
 	}
 
 	return &NodeConfig{
 		Node:    hostname,
 		Modules: []ModuleConfig{},
 	}
+}
+
+// Match returns the matched pattern and resolved config for hostname using
+// the pattern index. Returns ("", nil) if no entry matches.
+func (cs *ConfigStore) Match(hostname string) (string, *NodeConfig) {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	if i := cs.index.Lookup(hostname); i >= 0 {
+		entry := cs.entries[i]
+		cfg := cloneNodeConfig(entry.config)
+		cfg.Node = hostname
+		return entry.match, cfg
+	}
+
+	return "", nil
 }
 
 // Watch starts fsnotify watchers on the node-configs directory and its
@@ -216,8 +227,20 @@ func (cs *ConfigStore) loadAllInner() error {
 		entries = append(entries, resolvedEntry{match: entry.Match, config: cfg})
 	}
 
+	// Pre-compute module content hashes for delta transfer.
+	for i := range entries {
+		cfg := entries[i].config
+		for j := range cfg.Modules {
+			cfg.Modules[j].ContentHash = HashModuleContent(cfg.Modules[j])
+		}
+	}
+
+	// Build pattern index for fast hostname lookup.
+	idx := buildPatternIndex(entries)
+
 	cs.mu.Lock()
 	cs.entries = entries
+	cs.index = idx
 	cs.rawModules = moduleDefs
 	cs.mu.Unlock()
 
@@ -227,6 +250,8 @@ func (cs *ConfigStore) loadAllInner() error {
 		"modules", len(moduleDefs),
 		"roles", len(roleDefs),
 		"entries", len(entries),
+		"exact_patterns", len(idx.exact),
+		"glob_patterns", len(idx.globs),
 		"version", v)
 
 	return nil

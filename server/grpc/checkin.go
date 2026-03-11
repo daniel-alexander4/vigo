@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
@@ -93,14 +94,33 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		}, nil
 	}
 
-	// Build policy bundle: secrets resolved, vars merged, templates and
-	// conditionals left raw for agent-side evaluation.
-	cfg := s.configStore.Get(node.Hostname)
+	// Look up config using pattern index (O(1) for exact, O(globs) for wildcards).
+	pattern, cfg := s.configStore.Match(node.Hostname)
+	if cfg == nil {
+		cfg = &config.NodeConfig{
+			Node:    node.Hostname,
+			Modules: []config.ModuleConfig{},
+		}
+		pattern = ""
+	}
 
-	bundle, err := buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes())
-	if err != nil {
-		slog.Error("failed to build policy bundle", "node_id", nodeID, "error", err)
-		return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
+	// Get or build cached base bundle for this pattern, then customize
+	// stubs based on what the agent already has cached.
+	var bundle *pb.PolicyBundle
+	if s.policyCache != nil && pattern != "" {
+		base, err := s.policyCache.GetOrBuild(pattern, cfg, configVersion)
+		if err != nil {
+			slog.Error("failed to build policy bundle", "node_id", nodeID, "error", err)
+			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
+		}
+		bundle = customizeStubs(base, req.GetCachedModuleHashes())
+	} else {
+		var err error
+		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes())
+		if err != nil {
+			slog.Error("failed to build policy bundle", "node_id", nodeID, "error", err)
+			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
+		}
 	}
 
 	// Include custom traits manifest.

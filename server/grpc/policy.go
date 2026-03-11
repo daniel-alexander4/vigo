@@ -1,12 +1,8 @@
 package grpc
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
-	"sort"
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/config"
@@ -49,17 +45,15 @@ func buildPolicyBundle(cfg *config.NodeConfig, version uint64, cachedHashes map[
 		})
 	}
 
-	// Convert modules with raw templates and compute content hashes.
+	// Convert modules to proto. Content hashes are pre-computed at config
+	// load time (ModuleConfig.ContentHash) to avoid per-check-in SHA256.
 	for _, mod := range cfg.Modules {
 		pbMod := buildPolicyModule(mod)
-
-		// Compute content hash for delta transfer.
-		hash := hashPolicyModule(pbMod)
-		pbMod.ContentHash = hash
+		pbMod.ContentHash = mod.ContentHash
 
 		// If agent has this module cached with the same hash, send a stub.
 		if cachedHashes != nil {
-			if agentHash, ok := cachedHashes[mod.Name]; ok && agentHash == hash {
+			if agentHash, ok := cachedHashes[mod.Name]; ok && agentHash == mod.ContentHash {
 				pbMod.Stub = true
 				pbMod.Resources = nil
 			}
@@ -99,56 +93,28 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 	return pbMod
 }
 
-// hashPolicyModule computes a SHA256 hash of a PolicyModule's content.
-// The hash covers resources (name, type, attributes, when, notify, subscribes),
-// depends_on, and the module-level when expression — everything that affects
-// the module's behavior. The module name is NOT included (it's the cache key).
+// hashPolicyModule computes a content hash from a PolicyModule proto.
+// Delegates to config.HashModuleContent after converting to ModuleConfig.
+// Kept for backward compatibility with tests; production code uses
+// pre-computed ModuleConfig.ContentHash instead.
 func hashPolicyModule(mod *pb.PolicyModule) string {
-	h := sha256.New()
-
-	// Module-level fields.
-	io.WriteString(h, "when:")
-	io.WriteString(h, mod.When)
-	io.WriteString(h, "\ndeps:")
-	for _, dep := range mod.DependsOn {
-		io.WriteString(h, dep)
-		io.WriteString(h, ",")
+	cfg := config.ModuleConfig{
+		When:      mod.When,
+		DependsOn: mod.DependsOn,
 	}
-
-	// Resources in order.
 	for _, res := range mod.Resources {
-		io.WriteString(h, "\nres:")
-		io.WriteString(h, res.Name)
-		io.WriteString(h, "|")
-		io.WriteString(h, res.Type)
-		io.WriteString(h, "|when:")
-		io.WriteString(h, res.When)
-
-		// Sort attribute keys for deterministic hashing.
-		keys := make([]string, 0, len(res.Attributes))
-		for k := range res.Attributes {
-			keys = append(keys, k)
+		attrs := make(map[string]any, len(res.Attributes))
+		for k, v := range res.Attributes {
+			attrs[k] = v
 		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			io.WriteString(h, "|")
-			io.WriteString(h, k)
-			io.WriteString(h, "=")
-			io.WriteString(h, res.Attributes[k])
-		}
-
-		// Notify and subscribes.
-		io.WriteString(h, "|notify:")
-		for _, n := range res.Notify {
-			io.WriteString(h, n)
-			io.WriteString(h, ",")
-		}
-		io.WriteString(h, "|subscribes:")
-		for _, s := range res.Subscribes {
-			io.WriteString(h, s)
-			io.WriteString(h, ",")
-		}
+		cfg.Resources = append(cfg.Resources, config.ResourceConfig{
+			Name:       res.Name,
+			Type:       res.Type,
+			When:       res.When,
+			Attributes: attrs,
+			Notify:     res.Notify,
+			Subscribes: res.Subscribes,
+		})
 	}
-
-	return hex.EncodeToString(h.Sum(nil))
+	return config.HashModuleContent(cfg)
 }

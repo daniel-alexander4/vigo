@@ -99,6 +99,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		nodeCache:     nodeCache,
 		lastSeenBatch: lastSeenBatch,
 		traitsPruner:  traitsPruner,
+		policyCache:   newPolicyCache(),
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 

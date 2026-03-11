@@ -113,10 +113,11 @@ type NodeConfig struct {
 
 // ModuleConfig describes a module assigned to a node.
 type ModuleConfig struct {
-	Name      string           `yaml:"name"`
-	DependsOn []string         `yaml:"depends_on"`
-	When      string           `yaml:"when,omitempty"`
-	Resources []ResourceConfig `yaml:"resources"`
+	Name        string           `yaml:"name"`
+	DependsOn   []string         `yaml:"depends_on"`
+	When        string           `yaml:"when,omitempty"`
+	Resources   []ResourceConfig `yaml:"resources"`
+	ContentHash string           `yaml:"-"` // pre-computed at config load for delta transfer
 }
 
 // ResourceConfig describes a single resource within a module.

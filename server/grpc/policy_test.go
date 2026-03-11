@@ -93,16 +93,17 @@ func TestHashPolicyModule_AttributeOrderIrrelevant(t *testing.T) {
 }
 
 func TestBuildPolicyBundle_NoCachedHashes_FullModules(t *testing.T) {
+	mod := config.ModuleConfig{
+		Name: "nginx",
+		Resources: []config.ResourceConfig{
+			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "test"}},
+		},
+	}
+	mod.ContentHash = config.HashModuleContent(mod)
+
 	cfg := &config.NodeConfig{
 		MatchPattern: "*.web.example.com",
-		Modules: []config.ModuleConfig{
-			{
-				Name: "nginx",
-				Resources: []config.ResourceConfig{
-					{Name: "conf", Type: "file", Attributes: map[string]any{"content": "test"}},
-				},
-			},
-		},
+		Modules:      []config.ModuleConfig{mod},
 	}
 
 	bundle, err := buildPolicyBundle(cfg, 1, nil)
@@ -114,34 +115,37 @@ func TestBuildPolicyBundle_NoCachedHashes_FullModules(t *testing.T) {
 		t.Fatalf("modules count = %d, want 1", len(bundle.Modules))
 	}
 
-	mod := bundle.Modules[0]
-	if mod.ContentHash == "" {
+	pbMod := bundle.Modules[0]
+	if pbMod.ContentHash == "" {
 		t.Error("content_hash should be set")
 	}
-	if mod.Stub {
+	if pbMod.Stub {
 		t.Error("stub should be false when no cached hashes")
 	}
-	if len(mod.Resources) != 1 {
-		t.Errorf("resources count = %d, want 1", len(mod.Resources))
+	if len(pbMod.Resources) != 1 {
+		t.Errorf("resources count = %d, want 1", len(pbMod.Resources))
 	}
 }
 
 func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
-	cfg := &config.NodeConfig{
-		Modules: []config.ModuleConfig{
-			{
-				Name: "nginx",
-				Resources: []config.ResourceConfig{
-					{Name: "conf", Type: "file", Attributes: map[string]any{"content": "test"}},
-				},
-			},
-			{
-				Name: "postgres",
-				Resources: []config.ResourceConfig{
-					{Name: "conf", Type: "file", Attributes: map[string]any{"content": "pg"}},
-				},
-			},
+	nginxMod := config.ModuleConfig{
+		Name: "nginx",
+		Resources: []config.ResourceConfig{
+			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "test"}},
 		},
+	}
+	nginxMod.ContentHash = config.HashModuleContent(nginxMod)
+
+	pgMod := config.ModuleConfig{
+		Name: "postgres",
+		Resources: []config.ResourceConfig{
+			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "pg"}},
+		},
+	}
+	pgMod.ContentHash = config.HashModuleContent(pgMod)
+
+	cfg := &config.NodeConfig{
+		Modules: []config.ModuleConfig{nginxMod, pgMod},
 	}
 
 	// First build to get the hash.
@@ -188,15 +192,16 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 }
 
 func TestBuildPolicyBundle_CachedHashMismatch_SendsFull(t *testing.T) {
-	cfg := &config.NodeConfig{
-		Modules: []config.ModuleConfig{
-			{
-				Name: "nginx",
-				Resources: []config.ResourceConfig{
-					{Name: "conf", Type: "file", Attributes: map[string]any{"content": "updated"}},
-				},
-			},
+	mod := config.ModuleConfig{
+		Name: "nginx",
+		Resources: []config.ResourceConfig{
+			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "updated"}},
 		},
+	}
+	mod.ContentHash = config.HashModuleContent(mod)
+
+	cfg := &config.NodeConfig{
+		Modules: []config.ModuleConfig{mod},
 	}
 
 	// Agent has an old hash.
@@ -209,11 +214,11 @@ func TestBuildPolicyBundle_CachedHashMismatch_SendsFull(t *testing.T) {
 		t.Fatalf("buildPolicyBundle: %v", err)
 	}
 
-	mod := bundle.Modules[0]
-	if mod.Stub {
+	pbMod := bundle.Modules[0]
+	if pbMod.Stub {
 		t.Error("module with mismatched hash should not be a stub")
 	}
-	if len(mod.Resources) != 1 {
-		t.Errorf("resources = %d, want 1", len(mod.Resources))
+	if len(pbMod.Resources) != 1 {
+		t.Errorf("resources = %d, want 1", len(pbMod.Resources))
 	}
 }
