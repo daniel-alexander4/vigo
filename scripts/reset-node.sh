@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Factory reset a hobnob node: stop service, remove all agent and server state,
-# purge node history from the database, so the node can be re-bootstrapped from scratch.
+# Factory reset a hobnob thrall: stop service, remove all agent and server state,
+# purge thrall history from the database, so the thrall can be re-bootstrapped from scratch.
 #
 # Usage:
-#   sudo scripts/reset-node.sh              # reset local node + purge DB
-#   sudo scripts/reset-node.sh --no-db      # reset local node only (skip DB)
+#   sudo scripts/reset-node.sh              # reset local thrall + purge DB
+#   sudo scripts/reset-node.sh --no-db      # reset local thrall only (skip DB)
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run as root: sudo $0" >&2
@@ -29,9 +29,9 @@ cp -a /etc/hobnob-server /tmp/hobnob-server-backup
 if [ "$SKIP_DB" = false ]; then
   DB_FILE="/etc/hobnob-server/hobnob.db"
   if [ -f "$DB_FILE" ]; then
-    echo "Purging nodes and history from database..."
+    echo "Purging thralls and history from database..."
     sqlite3 "$DB_FILE" <<'SQL'
-DELETE FROM nodes;
+DELETE FROM thralls;
 DELETE FROM compliance_history;
 DELETE FROM secret_rotation_events;
 DELETE FROM env_promotions;
@@ -42,18 +42,18 @@ SQL
   fi
 fi
 
-echo "Stopping and removing hobnob-node service..."
-systemctl stop hobnob-node 2>/dev/null || true
-systemctl disable hobnob-node 2>/dev/null || true
-rm -f /etc/systemd/system/hobnob-node.service
+echo "Stopping and removing hobnob service..."
+systemctl stop hobnob 2>/dev/null || true
+systemctl disable hobnob 2>/dev/null || true
+rm -f /etc/systemd/system/hobnob.service
 systemctl daemon-reload
-systemctl reset-failed hobnob-node 2>/dev/null || true
+systemctl reset-failed hobnob 2>/dev/null || true
 
 echo "Removing agent binary..."
 rm -f /usr/local/bin/hobnob
 
-echo "Removing agent data (/etc/hobnob-node)..."
-rm -rf /etc/hobnob-node
+echo "Removing agent data (/etc/hobnob)..."
+rm -rf /etc/hobnob
 
 echo "Removing server data (/etc/hobnob-server)..."
 rm -rf /etc/hobnob-server
@@ -63,4 +63,4 @@ echo "Restoring server config from backup..."
 cp -a /tmp/hobnob-server-backup/. /etc/hobnob-server/
 rm -rf /tmp/hobnob-server-backup
 
-echo "Done. Node is clean — ready to re-bootstrap."
+echo "Done. Thrall is clean — ready to re-bootstrap."
