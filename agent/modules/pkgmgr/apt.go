@@ -24,14 +24,19 @@ func (a *AptManager) IsInstalled(ctx context.Context, name string) (bool, string
 		// dpkg exits non-zero for packages that are not installed
 		return false, "", nil
 	}
+	// A package in "deinstall ok config-files" state has no binary installed.
+	// Only treat "install ok installed" as actually installed.
+	installed := false
 	version := ""
 	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "Status:") && strings.Contains(line, "install ok installed") {
+			installed = true
+		}
 		if strings.HasPrefix(line, "Version:") {
 			version = strings.TrimSpace(strings.TrimPrefix(line, "Version:"))
-			break
 		}
 	}
-	return true, version, nil
+	return installed, version, nil
 }
 
 func (a *AptManager) Install(ctx context.Context, name, version string) error {

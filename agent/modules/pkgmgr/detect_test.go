@@ -190,6 +190,33 @@ func TestAptIsInstalled(t *testing.T) {
 	}
 }
 
+func TestAptIsInstalledBrokenStates(t *testing.T) {
+	broken := []struct {
+		name   string
+		status string
+	}{
+		{"deinstall config-files", "Status: deinstall ok config-files\nVersion: 12.1.1\n"},
+		{"half-installed", "Status: install reinstreq half-installed\nVersion: 12.1.1\n"},
+		{"half-configured", "Status: install ok half-configured\nVersion: 12.1.1\n"},
+		{"unpacked", "Status: install ok unpacked\nVersion: 12.1.1\n"},
+		{"triggers-awaited", "Status: install ok triggers-awaited\nVersion: 12.1.1\n"},
+		{"triggers-pending", "Status: install ok triggers-pending\nVersion: 12.1.1\n"},
+	}
+	for _, tc := range broken {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &mockRunner{output: []byte(tc.status)}
+			mgr := &AptManager{Runner: m}
+			installed, _, err := mgr.IsInstalled(context.Background(), "pkg")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if installed {
+				t.Errorf("expected installed=false for %s state", tc.name)
+			}
+		})
+	}
+}
+
 func TestAptIsInstalledNotFound(t *testing.T) {
 	m := &mockRunner{output: []byte("dpkg-query: package 'nginx' is not installed\n"), err: fmt.Errorf("exit status 1")}
 	mgr := &AptManager{Runner: m}
