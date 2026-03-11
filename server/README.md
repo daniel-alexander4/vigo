@@ -96,6 +96,32 @@ bootstrap:
       cidrs: ["10.0.0.0/8"]
 ```
 
+## SMTP Notifications
+
+Email notifications are sent via an SMTP relay when configured. Add an `smtp` section to `server.yaml`:
+
+```yaml
+smtp:
+  host: smtp.example.com
+  port: 587                              # default 587
+  from: hobnob@example.com
+  username: hobnob
+  password: "secret:hobnob/smtp/password"
+  tls: true                              # STARTTLS (default true)
+  recipients:
+    - admin@example.com
+    - ops-team@example.com
+  events:                                # omit to receive all events
+    - thrall.enrolled
+    - run.failure
+    - drift.detected
+    - secret.rotated
+```
+
+Disabled when `host` is empty or omitted. Notifications are non-blocking -- delivery failures are logged but never affect server operation.
+
+**Available events:** `thrall.enrolled`, `run.success`, `run.failure`, `drift.detected`, `secret.rotated`
+
 ## Architecture
 
 ### Subsystems
@@ -110,6 +136,7 @@ bootstrap:
 | `server/secrets/` | Provider interface: `IsopassProvider` (prod) + `StaticProvider` (dev/test) |
 | `server/compliance/` | Status computation: compliant / drifted / failing / stale / unknown |
 | `server/webhook/` | HMAC-signed webhook dispatch (max 20 concurrent, 3 retries, 10s HTTP timeout) |
+| `server/smtp/` | SMTP email notifications with Go templates (enrollment, run failure, drift, secret rotation) |
 | `server/watcher/` | Secret rotation polling -- force-pushes affected nodes on secret version change |
 | `server/metrics/` | Prometheus metrics collector (30s refresh interval) |
 | `server/traits/` | Custom trait executable scanner with TTL cache (30s) |

@@ -41,6 +41,23 @@ watcher:
 # Bootstrap enrollment settings.
 # trusted_enrollment patterns allow nodes to enroll without a token.
 # CIDRs restrict which source IPs can use each pattern.
+# SMTP email notifications.
+# Disabled when host is empty. Events default to all if omitted.
+# smtp:
+#   host: smtp.example.com
+#   port: 587
+#   from: hobnob@example.com
+#   username: hobnob
+#   password: "secret:hobnob/smtp/password"
+#   tls: true
+#   recipients:
+#     - admin@example.com
+#   events:
+#     - thrall.enrolled
+#     - run.failure
+#     - drift.detected
+#     - secret.rotated
+
 bootstrap:
   cert_validity: "8760h"  # 1 year
   # Accept any hostname from RFC 1918 / loopback private IP space.
