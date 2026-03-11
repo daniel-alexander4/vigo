@@ -24,6 +24,17 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		"ip", req.GetIpAddress(),
 	)
 
+	// License enforcement: block new registrations at Stage 2+.
+	if s.licenseEnforcer != nil {
+		if err := s.licenseEnforcer.RegistrationAllowed(); err != nil {
+			slog.Warn("registration blocked by license enforcement",
+				"hostname", req.GetHostname(),
+				"error", err,
+			)
+			return nil, status.Error(codes.PermissionDenied, err.Error())
+		}
+	}
+
 	thrallID, err := s.registry.Register(ctx,
 		req.GetHostname(),
 		req.GetIpAddress(),

@@ -10,6 +10,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=1 go build -o hobd ./server
 RUN CGO_ENABLED=1 go build -o hobnobcli ./cli
+RUN CGO_ENABLED=1 go build -o hobnob-license-manager ./license-manager
 RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/linux/amd64/hobnob ./agent
 RUN GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/linux/arm64/hobnob ./agent
 RUN GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/darwin/amd64/hobnob ./agent
@@ -21,6 +22,7 @@ RUN apk add --no-cache ca-certificates openssl sqlite-libs
 
 COPY --from=builder /build/hobd /usr/local/bin/hobd
 COPY --from=builder /build/hobnobcli /usr/local/bin/hobnobcli
+COPY --from=builder /build/hobnob-license-manager /usr/local/bin/hobnob-license-manager
 COPY --from=builder /build/migrations /migrations
 COPY --from=builder /build/dist/agent /dist/agent
 

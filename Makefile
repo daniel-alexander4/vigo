@@ -6,6 +6,7 @@ build:
 	go build -o bin/hobd ./server
 	go build -o bin/hobnob ./agent
 	go build -o bin/hobnobcli ./cli
+	go build -o bin/hobnob-license-manager ./license-manager
 	ln -sf hobnobcli bin/hnbvi
 
 proto:

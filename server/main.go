@@ -26,6 +26,7 @@ import (
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/secrets"
@@ -129,8 +130,56 @@ func run() error {
 	}
 	slog.Info("migrations complete")
 
-	// Initialize subsystems.
+	// Initialize query layer early — needed for license thrall count.
 	queries := db.New(sqlDB)
+
+	// Load and validate license.
+	licensePath := envOrDefault("HOBNOB_LICENSE_FILE", license.DefaultLicensePath)
+	licenseGraceDir := envOrDefault("HOBNOB_LICENSE_GRACE_DIR", "/etc/hobnob-server/license")
+
+	thrallCounter := func(ctx context.Context) (int, error) {
+		thralls, err := queries.ListThralls(ctx)
+		if err != nil {
+			return 0, err
+		}
+		count := 0
+		for _, t := range thralls {
+			if t.Revoked == 0 {
+				count++
+			}
+		}
+		return count, nil
+	}
+
+	enforcer, err := license.NewEnforcer(licensePath, licenseGraceDir, thrallCounter, func() { cancel() })
+	if err != nil {
+		return fmt.Errorf("license: %w", err)
+	}
+
+	slog.Info("license loaded",
+		"license_id", enforcer.GetStatus().License.LicenseID,
+		"stage", enforcer.GetStatus().Stage.String(),
+	)
+
+	// Set up SIGHUP handler for license reload.
+	sighupCh := make(chan os.Signal, 1)
+	signal.Notify(sighupCh, syscall.SIGHUP)
+	go func() {
+		for range sighupCh {
+			slog.Info("received SIGHUP, reloading license...")
+			if err := enforcer.Reload(); err != nil {
+				slog.Error("license reload failed", "error", err)
+			} else {
+				s := enforcer.GetStatus()
+				slog.Info("license reloaded", "stage", s.Stage.String())
+			}
+		}
+	}()
+
+	// Start license enforcer periodic check.
+	go enforcer.Run(ctx)
+
+	// Initialize subsystems.
 	reg := registry.NewRegistry(queries)
 
 	dangerous := os.Getenv("HOBNOB_DANGEROUS") == "1" || hasFlag("--dangerous")
@@ -237,6 +286,7 @@ func run() error {
 		TraitsScannerTTL: traitsScannerTTL,
 		Hub:              hub,
 		SMTPNotifier:     smtpNotifier,
+		LicenseEnforcer:  enforcer,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
@@ -287,11 +337,14 @@ func run() error {
 
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
 	var httpSrv *http.Server
+	licenseHandler := api.NewLicenseHandler(enforcer)
+
 	if role == config.RoleSpoke {
 		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Federation.SpokeID)
 		if gwErr != nil {
 			return fmt.Errorf("creating spoke gateway: %w", gwErr)
 		}
+		licenseHandler.RegisterRoutes(mux)
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
 			Handler: mux,
@@ -335,6 +388,7 @@ func run() error {
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
+		licenseHandler.RegisterRoutes(gwMux)
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
 			Handler: gwMux,

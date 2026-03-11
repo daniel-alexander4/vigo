@@ -14,6 +14,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/traits"
@@ -61,6 +62,7 @@ type ServerConfig struct {
 	TraitsScannerTTL time.Duration // 0 → default 30s
 	Hub              *federation.Hub // non-nil when role=hub
 	SMTPNotifier     *hobnobsmtp.Notifier
+	LicenseEnforcer  *license.Enforcer
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -105,8 +107,9 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		lastSeenBatch: lastSeenBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
-		streamMgr:     newStreamManager(),
-		hub:           cfg.Hub,
+		streamMgr:        newStreamManager(),
+		hub:              cfg.Hub,
+		licenseEnforcer:  cfg.LicenseEnforcer,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 

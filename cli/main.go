@@ -47,5 +47,6 @@ func init() {
 		validateCmd,
 		viCmd,
 		inventoryCmd,
+		cliLicenseCmd,
 	)
 }

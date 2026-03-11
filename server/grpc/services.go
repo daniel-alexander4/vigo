@@ -7,6 +7,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/traits"
@@ -27,8 +28,9 @@ type AgentService struct {
 	lastSeenBatch  *db.LastSeenBatcher
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache
-	streamMgr      *streamManager
-	hub            *federation.Hub // non-nil when role=hub; routes enrollment to spokes
+	streamMgr        *streamManager
+	hub              *federation.Hub    // non-nil when role=hub; routes enrollment to spokes
+	licenseEnforcer  *license.Enforcer
 }
 
 // AdminService implements the HobnobAdmin gRPC service.
