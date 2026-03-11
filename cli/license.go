@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -71,13 +72,13 @@ func runLicenseInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("reading license file: %w", err)
 	}
 
-	destDir := "/etc/hobnob-server/license"
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	destDir := license.DefaultLicenseDir
+	if err := os.MkdirAll(destDir, 0700); err != nil {
 		return fmt.Errorf("creating license directory: %w", err)
 	}
 
-	destPath := destDir + "/hobnob.lic"
-	if err := os.WriteFile(destPath, data, 0644); err != nil {
+	destPath := filepath.Join(destDir, filepath.Base(licenseInstallFile))
+	if err := os.WriteFile(destPath, data, 0600); err != nil {
 		return fmt.Errorf("writing license file: %w", err)
 	}
 
@@ -168,12 +169,13 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 }
 
 func runLicenseInspect(cmd *cobra.Command, args []string) error {
-	path := license.DefaultLicensePath
+	var lic *license.License
+	var err error
 	if len(args) > 0 {
-		path = args[0]
+		lic, err = license.LoadFile(args[0])
+	} else {
+		lic, _, err = license.LoadDir(license.DefaultLicenseDir)
 	}
-
-	lic, err := license.LoadFile(path)
 	if err != nil {
 		return err
 	}

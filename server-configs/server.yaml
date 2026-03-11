@@ -52,11 +52,14 @@ watcher:
 #   tls: true
 #   recipients:
 #     - admin@example.com
-#   events:
-#     - thrall.enrolled
-#     - run.failure
-#     - drift.detected
-#     - secret.rotated
+#   events:                     # omit to enable all
+#     - thrall.enrolled         # new thrall registered
+#     - run.success             # convergence run succeeded
+#     - run.failure             # convergence run failed
+#     - drift.detected          # config drift corrected
+#     - secret.rotated          # secret version bumped, thralls re-queued
+#     - config.reload.failure   # YAML config reload error
+#     - thrall.stale            # thrall missed check-in window
 
 bootstrap:
   cert_validity: "8760h"  # 1 year

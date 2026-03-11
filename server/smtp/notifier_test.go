@@ -114,6 +114,86 @@ func TestRender_DefaultTemplate(t *testing.T) {
 	}
 }
 
+func TestRender_SecretRotatedEvent(t *testing.T) {
+	n := NewNotifier(Config{Host: "smtp.example.com"})
+	event := Event{
+		Name:      "secret.rotated",
+		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
+		Details: map[string]any{
+			"path":     "hobnob/db/dsn",
+			"affected": 3,
+		},
+	}
+
+	subject, body, err := n.render(event)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	if !strings.Contains(subject, "hobnob/db/dsn") {
+		t.Errorf("subject should contain secret path: %s", subject)
+	}
+	if !strings.Contains(body, "3 thrall(s)") {
+		t.Errorf("body should contain affected count: %s", body)
+	}
+}
+
+func TestRender_ConfigReloadFailureEvent(t *testing.T) {
+	n := NewNotifier(Config{Host: "smtp.example.com"})
+	event := Event{
+		Name:      "config.reload.failure",
+		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
+		Details: map[string]any{
+			"error": "modules/nginx.hnb: duplicate key 'resources'",
+		},
+	}
+
+	subject, body, err := n.render(event)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	if !strings.Contains(subject, "Config reload failed") {
+		t.Errorf("subject should indicate failure: %s", subject)
+	}
+	if !strings.Contains(body, "duplicate key") {
+		t.Errorf("body should contain error message: %s", body)
+	}
+}
+
+func TestRender_ThrallStaleEvent(t *testing.T) {
+	n := NewNotifier(Config{Host: "smtp.example.com"})
+	event := Event{
+		Name:      "thrall.stale",
+		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
+		Thrall:    &ThrallInfo{ID: "abc-123", Hostname: "web01.example.com", IP: "10.0.0.1"},
+		Details: map[string]any{
+			"last_seen": "2026-03-10 11:45:00 UTC",
+		},
+	}
+
+	subject, body, err := n.render(event)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	if !strings.Contains(subject, "web01.example.com") {
+		t.Errorf("subject should contain hostname: %s", subject)
+	}
+	if !strings.Contains(body, "11:45:00") {
+		t.Errorf("body should contain last seen time: %s", body)
+	}
+}
+
+func TestAllEventsHaveTemplates(t *testing.T) {
+	n := NewNotifier(Config{Host: "smtp.example.com"})
+	for _, eventName := range AllEvents {
+		if n.tmpl.Lookup(eventName) == nil {
+			t.Errorf("AllEvents lists %q but no template defined", eventName)
+		}
+	}
+}
+
 func TestEventFilter(t *testing.T) {
 	n := NewNotifier(Config{
 		Host:       "smtp.example.com",

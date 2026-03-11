@@ -22,6 +22,15 @@ SEED_DIR="/seed"
 # ---------------------------------------------------------------------------
 
 mkdir -p "$CERTS_DIR" "$THRALLS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR"
+mkdir -p -m 700 "${DATA_DIR}/license"
+
+# ---------------------------------------------------------------------------
+# Lock down license file permissions if present
+# ---------------------------------------------------------------------------
+
+for f in "${DATA_DIR}"/license/*.lic; do
+    [ -f "$f" ] && chmod 600 "$f"
+done
 
 # ---------------------------------------------------------------------------
 # Generate TLS certificates if missing

@@ -33,6 +33,11 @@ type EventDispatcher interface {
 	DispatchRotation(ctx context.Context, event string, secretPath string, affected int)
 }
 
+// NotifyFunc is an optional callback for sending notifications (e.g. SMTP)
+// when a secret rotation is detected. The details map contains "path" and
+// "affected" keys.
+type NotifyFunc func(event string, details map[string]any)
+
 // RotationRecord contains the parameters for recording a secret rotation event.
 type RotationRecord struct {
 	SecretPath      string
@@ -49,6 +54,7 @@ type Watcher struct {
 	db           DB
 	configStore  ThrallStore
 	dispatcher   EventDispatcher
+	notifyFunc   NotifyFunc
 	pollInterval time.Duration
 	watchPaths   []string
 	versions     map[string]int
@@ -75,6 +81,11 @@ func NewWatcher(
 		watchPaths:   watchPaths,
 		versions:     make(map[string]int),
 	}
+}
+
+// SetNotifyFunc sets an optional callback invoked on secret rotation events.
+func (w *Watcher) SetNotifyFunc(fn NotifyFunc) {
+	w.notifyFunc = fn
 }
 
 // maxBackoffMultiplier caps exponential backoff at 32x the poll interval.
@@ -198,6 +209,14 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 		// Fire webhook.
 		if w.dispatcher != nil {
 			w.dispatcher.DispatchRotation(ctx, "secret.rotated", path, len(affectedIDs))
+		}
+
+		// Fire SMTP notification.
+		if w.notifyFunc != nil {
+			w.notifyFunc("secret.rotated", map[string]any{
+				"path":     path,
+				"affected": len(affectedIDs),
+			})
 		}
 	}
 

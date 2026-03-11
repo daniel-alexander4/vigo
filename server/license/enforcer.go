@@ -62,7 +62,7 @@ type Status struct {
 type Enforcer struct {
 	mu           sync.RWMutex
 	license      *License
-	licensePath  string
+	licenseDir   string
 	graceDir     string
 	counter      ThrallCounter
 	shutdownFn   ShutdownFunc
@@ -72,15 +72,15 @@ type Enforcer struct {
 	lastLogTime  time.Time
 }
 
-// NewEnforcer creates an enforcer that loads the license from the given path.
-// It validates the license immediately and returns an error if the license
-// is missing, invalid, or at Stage 3 (service stop).
-func NewEnforcer(licensePath, graceDir string, counter ThrallCounter, shutdownFn ShutdownFunc) (*Enforcer, error) {
+// NewEnforcer creates an enforcer that scans licenseDir for valid .lic files.
+// It validates the license immediately and returns an error if no valid
+// license is found or the license is at Stage 3 (service stop).
+func NewEnforcer(licenseDir, graceDir string, counter ThrallCounter, shutdownFn ShutdownFunc) (*Enforcer, error) {
 	e := &Enforcer{
-		licensePath: licensePath,
-		graceDir:    graceDir,
-		counter:     counter,
-		shutdownFn:  shutdownFn,
+		licenseDir: licenseDir,
+		graceDir:   graceDir,
+		counter:    counter,
+		shutdownFn: shutdownFn,
 	}
 
 	if err := e.loadAndCheck(); err != nil {
@@ -188,15 +188,12 @@ func (e *Enforcer) loadAndCheck() error {
 
 // loadAndCheckLocked does the work without acquiring the lock.
 func (e *Enforcer) loadAndCheckLocked() error {
-	lic, err := LoadFile(e.licensePath)
+	lic, path, err := LoadDir(e.licenseDir)
 	if err != nil {
-		return fmt.Errorf("no valid license file at %s: %w\nInstall a license with: hobnobcli license install --file=<path>", e.licensePath, err)
+		return fmt.Errorf("%w\nPlace a .lic file in %s or install with: hobnobcli license install --file=<path>", err, e.licenseDir)
 	}
 
-	if err := lic.Verify(); err != nil {
-		return fmt.Errorf("license verification failed: %w", err)
-	}
-
+	slog.Info("license loaded", "path", path)
 	e.license = lic
 	return e.evaluateLocked()
 }

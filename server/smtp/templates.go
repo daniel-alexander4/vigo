@@ -46,10 +46,30 @@ Configuration drift was detected on {{ .Thrall.Hostname }}.
 {{- end -}}
 
 {{- define "secret.rotated" -}}
-[Hobnob] Secret rotated
+[Hobnob] Secret rotated: {{ index .Details "path" }}
 A secret was rotated and affected thralls have been queued for re-convergence.
 
-  Time: {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+  Path:     {{ index .Details "path" }}
+  Affected: {{ index .Details "affected" }} thrall(s)
+  Time:     {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+{{- end -}}
+
+{{- define "config.reload.failure" -}}
+[Hobnob] Config reload failed
+Configuration reload failed. The previous config remains active.
+
+  Error: {{ index .Details "error" }}
+  Time:  {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+{{- end -}}
+
+{{- define "thrall.stale" -}}
+[Hobnob] Thrall stale: {{ .Thrall.Hostname }}
+Thrall {{ .Thrall.Hostname }} has not checked in within the expected interval.
+
+  ID:       {{ .Thrall.ID }}
+  Hostname: {{ .Thrall.Hostname }}
+  Last seen: {{ index .Details "last_seen" }}
+  Time:     {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
 {{- end -}}
 
 {{- define "default" -}}

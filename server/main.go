@@ -134,8 +134,8 @@ func run() error {
 	queries := db.New(sqlDB)
 
 	// Load and validate license.
-	licensePath := envOrDefault("HOBNOB_LICENSE_FILE", license.DefaultLicensePath)
-	licenseGraceDir := envOrDefault("HOBNOB_LICENSE_GRACE_DIR", "/etc/hobnob-server/license")
+	licenseDir := envOrDefault("HOBNOB_LICENSE_DIR", license.DefaultLicenseDir)
+	licenseGraceDir := envOrDefault("HOBNOB_LICENSE_GRACE_DIR", licenseDir)
 
 	thrallCounter := func(ctx context.Context) (int, error) {
 		thralls, err := queries.ListThralls(ctx)
@@ -151,7 +151,7 @@ func run() error {
 		return count, nil
 	}
 
-	enforcer, err := license.NewEnforcer(licensePath, licenseGraceDir, thrallCounter, func() { cancel() })
+	enforcer, err := license.NewEnforcer(licenseDir, licenseGraceDir, thrallCounter, func() { cancel() })
 	if err != nil {
 		return fmt.Errorf("license: %w", err)
 	}
@@ -257,6 +257,15 @@ func run() error {
 		slog.Info("SMTP notifications enabled", "host", cfg.SMTP.Host, "recipients", len(cfg.SMTP.Recipients))
 	}
 
+	// Wire SMTP notification for config reload failures.
+	configStore.SetOnReloadFailure(func(err error) {
+		smtpNotifier.Notify(hobnobsmtp.Event{
+			Name:      "config.reload.failure",
+			Timestamp: time.Now().UTC(),
+			Details:   map[string]any{"error": err.Error()},
+		})
+	})
+
 	// Connect to spokes (hub mode only).
 	var hub *federation.Hub
 	if role == config.RoleHub {
@@ -309,6 +318,13 @@ func run() error {
 				}
 			}
 			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, dispatcher, pollInterval, watchPaths)
+			w.SetNotifyFunc(func(event string, details map[string]any) {
+				smtpNotifier.Notify(hobnobsmtp.Event{
+					Name:      event,
+					Timestamp: time.Now().UTC(),
+					Details:   details,
+				})
+			})
 			go func() {
 				if err := w.Run(ctx); err != nil && ctx.Err() == nil {
 					slog.Error("secret watcher error", "error", err)
@@ -334,6 +350,9 @@ func run() error {
 	// Start metrics collector in background.
 	metricsCollector := metrics.NewCollector(queries)
 	go metricsCollector.Run(ctx, metricsInterval)
+
+	// Start stale thrall checker — fires thrall.stale SMTP events on transition.
+	go runStaleChecker(ctx, queries, smtpNotifier, baseInterval)
 
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
 	var httpSrv *http.Server
@@ -457,4 +476,65 @@ func parseDuration(s string, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+// runStaleChecker periodically scans thralls and fires a thrall.stale SMTP
+// notification when a thrall transitions from non-stale to stale. A thrall
+// is stale if it hasn't checked in within 2x the base interval. The checker
+// runs at the base interval frequency.
+func runStaleChecker(ctx context.Context, queries *db.Queries, notifier *hobnobsmtp.Notifier, baseInterval time.Duration) {
+	if notifier == nil || !notifier.Enabled() {
+		return
+	}
+
+	staleThreshold := 2 * baseInterval
+	wasStale := make(map[string]bool) // thrall ID → was stale last tick
+
+	ticker := time.NewTicker(baseInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			thralls, err := queries.ListThralls(ctx)
+			if err != nil {
+				slog.Error("stale checker: listing thralls", "error", err)
+				continue
+			}
+
+			nowStale := make(map[string]bool, len(wasStale))
+			for _, t := range thralls {
+				if t.Revoked != 0 {
+					continue
+				}
+				if !t.LastSeen.Valid {
+					continue
+				}
+				if time.Since(t.LastSeen.Time) <= staleThreshold {
+					continue
+				}
+
+				nowStale[t.ID] = true
+				if wasStale[t.ID] {
+					continue // already notified
+				}
+
+				notifier.Notify(hobnobsmtp.Event{
+					Name:      "thrall.stale",
+					Timestamp: time.Now().UTC(),
+					Thrall: &hobnobsmtp.ThrallInfo{
+						ID:       t.ID,
+						Hostname: t.Hostname,
+						IP:       t.IpAddress,
+					},
+					Details: map[string]any{
+						"last_seen": t.LastSeen.Time.Format("2006-01-02 15:04:05 UTC"),
+					},
+				})
+			}
+			wasStale = nowStale
+		}
+	}
 }

@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"time"
 )
 
-const DefaultLicensePath = "/etc/hobnob-server/license/hobnob.lic"
+const DefaultLicenseDir = "/etc/hobnob-server/license"
 
 // Payload contains the license terms. Field order does not matter for
 // verification because we canonicalize before signing/verifying.
@@ -38,6 +39,32 @@ func LoadFile(path string) (*License, error) {
 		return nil, fmt.Errorf("reading license file: %w", err)
 	}
 	return Parse(data)
+}
+
+// LoadDir scans a directory for .lic files and returns the first one that
+// parses and passes signature verification. Files are tried in lexicographic
+// order. Returns an error if no valid license is found.
+func LoadDir(dir string) (*License, string, error) {
+	matches, err := filepath.Glob(filepath.Join(dir, "*.lic"))
+	if err != nil {
+		return nil, "", fmt.Errorf("scanning license directory: %w", err)
+	}
+	if len(matches) == 0 {
+		return nil, "", fmt.Errorf("no .lic files found in %s", dir)
+	}
+	sort.Strings(matches)
+
+	for _, path := range matches {
+		lic, err := LoadFile(path)
+		if err != nil {
+			continue
+		}
+		if lic.Verify() != nil {
+			continue
+		}
+		return lic, path, nil
+	}
+	return nil, "", fmt.Errorf("no valid license found in %s (%d .lic file(s) checked)", dir, len(matches))
 }
 
 // Parse decodes a license from raw JSON bytes.

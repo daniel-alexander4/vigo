@@ -37,6 +37,18 @@ type RunInfo struct {
 	Failed  int32
 }
 
+// AllEvents lists every event name the SMTP notifier recognises.
+// Used for documentation and config validation.
+var AllEvents = []string{
+	"thrall.enrolled",
+	"run.success",
+	"run.failure",
+	"drift.detected",
+	"secret.rotated",
+	"config.reload.failure",
+	"thrall.stale",
+}
+
 // Config holds SMTP connection and notification settings.
 type Config struct {
 	Host       string

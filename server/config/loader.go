@@ -49,6 +49,12 @@ type ConfigStore struct {
 	provider   secrets.Provider
 	dangerous  bool // allow non-idempotent resources
 	version    atomic.Uint64 // incremented on each successful reload
+	onReloadFailure func(err error) // optional callback on reload failure
+}
+
+// SetOnReloadFailure sets a callback invoked when a config reload fails.
+func (cs *ConfigStore) SetOnReloadFailure(fn func(err error)) {
+	cs.onReloadFailure = fn
 }
 
 // NewConfigStore creates a ConfigStore that scans baseDir for thrall
@@ -152,6 +158,9 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 			debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
 				if err := cs.loadAll(); err != nil {
 					slog.Error("config reload failed, keeping previous config", "error", err)
+					if cs.onReloadFailure != nil {
+						cs.onReloadFailure(err)
+					}
 				}
 			})
 		case err, ok := <-watcher.Errors:

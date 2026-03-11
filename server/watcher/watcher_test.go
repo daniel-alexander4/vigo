@@ -126,6 +126,45 @@ func TestRotationTrigger(t *testing.T) {
 	dispatcher.mu.Unlock()
 }
 
+func TestNotifyFuncCalledOnRotation(t *testing.T) {
+	thrallID := uuid.New().String()
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
+	store := &mockThrallStore{refs: map[string][]string{
+		"hobnob/db/dsn": {"web-01.example.com"},
+	}}
+	database := &mockDB{
+		nodesByHost: map[string]string{
+			"web-01.example.com": thrallID,
+		},
+	}
+	dispatcher := &mockDispatcher{}
+
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+
+	var mu sync.Mutex
+	var notified []string
+	var notifiedDetails []map[string]any
+	w.SetNotifyFunc(func(event string, details map[string]any) {
+		mu.Lock()
+		defer mu.Unlock()
+		notified = append(notified, event)
+		notifiedDetails = append(notifiedDetails, details)
+	})
+
+	ctx := context.Background()
+	w.initVersions(ctx)
+
+	provider.setVersion("hobnob/db/dsn", 2)
+	w.checkRotations(ctx)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []string{"secret.rotated"}, notified)
+	require.Len(t, notifiedDetails, 1)
+	assert.Equal(t, "hobnob/db/dsn", notifiedDetails[0]["path"])
+	assert.Equal(t, 1, notifiedDetails[0]["affected"])
+}
+
 func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
 	store := &mockThrallStore{refs: map[string][]string{}}

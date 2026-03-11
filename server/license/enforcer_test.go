@@ -13,37 +13,6 @@ import (
 	"time"
 )
 
-// setupEnforcerTest creates a temp dir with a valid license file and returns
-// the enforcer, the temp dir path, and the public key hex.
-func setupEnforcerTest(t *testing.T, payload Payload) (*Enforcer, string, ed25519.PrivateKey) {
-	t.Helper()
-
-	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	pubHex := hex.EncodeToString(pub)
-
-	canonical, _ := CanonicalJSON(payload)
-	sig := ed25519.Sign(priv, canonical)
-	lic := &License{
-		Payload:   payload,
-		Signature: base64.StdEncoding.EncodeToString(sig),
-	}
-
-	dir := t.TempDir()
-	licPath := filepath.Join(dir, "hobnob.lic")
-	data, _ := json.MarshalIndent(lic, "", "  ")
-	os.WriteFile(licPath, data, 0644)
-
-	// Temporarily override the public key for verification.
-	origPubKey := PublicKeyHex
-	t.Cleanup(func() {
-		// Restore (though it's a const, we use VerifyWithKey internally).
-	})
-	_ = origPubKey
-	_ = pubHex
-
-	return nil, dir, priv
-}
-
 func TestEnforcerCompliant(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
@@ -73,7 +42,7 @@ func TestEnforcerCompliant(t *testing.T) {
 	shutdownCalled := false
 	shutdown := func() { shutdownCalled = true }
 
-	e, err := NewEnforcer(filepath.Join(dir, "hobnob.lic"), dir, counter, shutdown)
+	e, err := NewEnforcer(dir, dir, counter, shutdown)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +84,7 @@ func TestEnforcerExpired(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
-	e, err := NewEnforcer(filepath.Join(dir, "hobnob.lic"), dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +119,7 @@ func TestEnforcerOverLimit(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil } // 10 > 5
 
-	e, err := NewEnforcer(filepath.Join(dir, "hobnob.lic"), dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,9 +134,9 @@ func TestEnforcerNoLicenseFile(t *testing.T) {
 	dir := t.TempDir()
 	counter := func(ctx context.Context) (int, error) { return 0, nil }
 
-	_, err := NewEnforcer(filepath.Join(dir, "nonexistent.lic"), dir, counter, func() {})
+	_, err := NewEnforcer(dir, dir, counter, func() {})
 	if err == nil {
-		t.Fatal("expected error for missing license file")
+		t.Fatal("expected error for empty license directory")
 	}
 }
 
@@ -186,7 +155,6 @@ func TestEnforcerReload(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	licPath := filepath.Join(dir, "hobnob.lic")
 	writeLic(t, dir, payload, priv)
 
 	setPublicKeyForTest(hex.EncodeToString(pub))
@@ -194,7 +162,7 @@ func TestEnforcerReload(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
-	e, err := NewEnforcer(licPath, dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,15 +175,7 @@ func TestEnforcerReload(t *testing.T) {
 	payload.ExpiresAt = time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02")
 	payload.LicenseID = "lic-test-2"
 	payload.Version = 2
-
-	canonical, _ := CanonicalJSON(payload)
-	sig := ed25519.Sign(priv, canonical)
-	lic := &License{
-		Payload:   payload,
-		Signature: base64.StdEncoding.EncodeToString(sig),
-	}
-	data, _ := json.MarshalIndent(lic, "", "  ")
-	os.WriteFile(licPath, data, 0644)
+	writeLic(t, dir, payload, priv)
 
 	if err := e.Reload(); err != nil {
 		t.Fatal(err)
