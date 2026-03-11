@@ -170,6 +170,49 @@ func local_request_HobnobAgent_DownloadCustomTrait_0(ctx context.Context, marsha
 	return msg, metadata, err
 }
 
+func request_HobnobAgent_AgentStream_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAgentClient, req *http.Request, pathParams map[string]string) (HobnobAgent_AgentStreamClient, runtime.ServerMetadata, error) {
+	var metadata runtime.ServerMetadata
+	stream, err := client.AgentStream(ctx)
+	if err != nil {
+		grpclog.Errorf("Failed to start streaming: %v", err)
+		return nil, metadata, err
+	}
+	dec := marshaler.NewDecoder(req.Body)
+	handleSend := func() error {
+		var protoReq AgentStreamMessage
+		err := dec.Decode(&protoReq)
+		if errors.Is(err, io.EOF) {
+			return err
+		}
+		if err != nil {
+			grpclog.Errorf("Failed to decode request: %v", err)
+			return status.Errorf(codes.InvalidArgument, "Failed to decode request: %v", err)
+		}
+		if err := stream.Send(&protoReq); err != nil {
+			grpclog.Errorf("Failed to send request: %v", err)
+			return err
+		}
+		return nil
+	}
+	go func() {
+		for {
+			if err := handleSend(); err != nil {
+				break
+			}
+		}
+		if err := stream.CloseSend(); err != nil {
+			grpclog.Errorf("Failed to terminate client stream: %v", err)
+		}
+	}()
+	header, err := stream.Header()
+	if err != nil {
+		grpclog.Errorf("Failed to get header from client: %v", err)
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
 func request_HobnobAdmin_AddApprovedPattern_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq AddApprovedPatternRequest
@@ -956,6 +999,13 @@ func RegisterHobnobAgentHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		forward_HobnobAgent_DownloadCustomTrait_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
+	mux.Handle(http.MethodPost, pattern_HobnobAgent_AgentStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
+	})
+
 	return nil
 }
 
@@ -1510,6 +1560,23 @@ func RegisterHobnobAgentHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_HobnobAgent_DownloadCustomTrait_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_HobnobAgent_AgentStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobAgent/AgentStream", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobAgent/AgentStream"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_HobnobAgent_AgentStream_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_HobnobAgent_AgentStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
@@ -1519,6 +1586,7 @@ var (
 	pattern_HobnobAgent_ReportResult_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "ReportResult"}, ""))
 	pattern_HobnobAgent_ReportTraits_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "ReportTraits"}, ""))
 	pattern_HobnobAgent_DownloadCustomTrait_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "DownloadCustomTrait"}, ""))
+	pattern_HobnobAgent_AgentStream_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobAgent", "AgentStream"}, ""))
 )
 
 var (
@@ -1527,6 +1595,7 @@ var (
 	forward_HobnobAgent_ReportResult_0        = runtime.ForwardResponseMessage
 	forward_HobnobAgent_ReportTraits_0        = runtime.ForwardResponseMessage
 	forward_HobnobAgent_DownloadCustomTrait_0 = runtime.ForwardResponseMessage
+	forward_HobnobAgent_AgentStream_0         = runtime.ForwardResponseStream
 )
 
 // RegisterHobnobAdminHandlerFromEndpoint is same as RegisterHobnobAdminHandler but

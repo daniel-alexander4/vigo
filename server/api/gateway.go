@@ -70,6 +70,40 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 // GatewayOption configures optional features on the bootstrap handler.
 type GatewayOption func(*bootstrap.Handler)
 
+// NewSpokeGateway creates a lightweight HTTP mux for spoke mode.
+// It exposes the admin gRPC-gateway proxy (for hobnobcli), metrics, and traits
+// but omits the web UI and bootstrap routes.
+func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, spokeID string) (*http.ServeMux, error) {
+	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
+	if err != nil {
+		return nil, fmt.Errorf("building gateway TLS: %w", err)
+	}
+
+	gwMux := runtime.NewServeMux()
+	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
+
+	if err := pb.RegisterHobnobAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
+		return nil, fmt.Errorf("registering admin gateway: %w", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+
+	// Traits endpoint for admin queries.
+	traitsHandler := NewTraitsHandler(queries)
+	traitsHandler.RegisterRoutes(mux)
+
+	// Health endpoint for monitoring spoke status.
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status":"ok","spoke_id":%q}`, spokeID)
+	})
+
+	// grpc-gateway catches /api/ paths (hobnobcli uses /api/v1/*).
+	mux.Handle("/api/", gwMux)
+
+	return mux, nil
+}
 
 // buildGatewayTLS creates TLS credentials for the gateway's connection back
 // to the gRPC server. The gateway acts as a client to gRPC, so it needs

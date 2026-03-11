@@ -13,6 +13,7 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/federation"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
@@ -53,10 +54,11 @@ type ServerConfig struct {
 	RunStore        db.RunStore
 	BaseInterval    time.Duration
 	Dispatcher      *webhook.Dispatcher
-	TraitsDir       string
-	SignatureWindow time.Duration // 0 → default 5m
-	NodeCacheTTL    time.Duration // 0 → default 60s
+	TraitsDir        string
+	SignatureWindow  time.Duration // 0 → default 5m
+	NodeCacheTTL     time.Duration // 0 → default 60s
 	TraitsScannerTTL time.Duration // 0 → default 30s
+	Hub              *federation.Hub // non-nil when role=hub
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -100,6 +102,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		lastSeenBatch: lastSeenBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
+		streamMgr:     newStreamManager(),
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
@@ -109,6 +112,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		runStore:     cfg.RunStore,
 		configStore:  cfg.ConfigStore,
 		baseInterval: cfg.BaseInterval,
+		hub:          cfg.Hub,
 	}
 	pb.RegisterHobnobAdminServer(srv, adminSvc)
 

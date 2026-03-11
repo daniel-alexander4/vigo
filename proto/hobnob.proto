@@ -26,6 +26,12 @@ service HobnobAgent {
 
   // DownloadCustomTrait retrieves a custom trait executable by name.
   rpc DownloadCustomTrait(DownloadCustomTraitRequest) returns (DownloadCustomTraitResponse);
+
+  // AgentStream opens a persistent bidirectional stream between agent and server.
+  // Replaces poll-based CheckIn with push-based policy delivery.
+  // Agent sends: check-in requests, run results, trait updates.
+  // Server sends: policy bundles (initial + on config change), force-push signals.
+  rpc AgentStream(stream AgentStreamMessage) returns (stream ServerStreamMessage);
 }
 
 // =============================================================================
@@ -340,6 +346,40 @@ message ReportTraitsRequest {
 message ReportTraitsResponse {
   bool acknowledged = 1;
 }
+
+// =============================================================================
+// Persistent stream messages (Step 4: eliminates TLS handshake overhead)
+// =============================================================================
+
+// AgentStreamMessage is sent by the agent on a persistent bidirectional stream.
+message AgentStreamMessage {
+  oneof msg {
+    CheckInRequest check_in = 1;
+    ReportResultRequest report_result = 2;
+    ReportTraitsRequest report_traits = 3;
+  }
+}
+
+// ServerStreamMessage is sent by the server on a persistent bidirectional stream.
+message ServerStreamMessage {
+  oneof msg {
+    CheckInResponse check_in_response = 1;
+    ReportResultResponse report_result_ack = 2;
+    ReportTraitsResponse report_traits_ack = 3;
+    StreamPolicyPush policy_push = 4;
+    StreamForcePush force_push = 5;
+  }
+}
+
+// StreamPolicyPush is sent server→agent when config changes while the stream
+// is open. The agent should evaluate the new bundle immediately.
+message StreamPolicyPush {
+  PolicyBundle policy_bundle = 1;
+  uint64 policy_version = 2;
+}
+
+// StreamForcePush signals the agent to run a convergence cycle immediately.
+message StreamForcePush {}
 
 // =============================================================================
 // Admin service messages

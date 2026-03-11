@@ -24,6 +24,7 @@ import (
 	"github.com/hobnob/hobnob/server/ca"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/federation"
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
@@ -70,7 +71,17 @@ func run() error {
 		return fmt.Errorf("loading server config: %w", err)
 	}
 
+	// Determine federation role.
+	role := cfg.Federation.Role
+	if role == "" {
+		role = config.RoleStandalone
+	}
+	if err := cfg.Federation.Validate(); err != nil {
+		return err
+	}
+
 	slog.Info("server config loaded",
+		"role", role,
 		"grpc_listen", cfg.Server.GRPCListen,
 		"api_listen", cfg.Server.APIListen,
 	)
@@ -163,13 +174,27 @@ func run() error {
 		slog.Info("run store backend: database")
 	}
 
-	// Create webhook dispatcher.
-	dispatcher := webhook.NewDispatcher(queries, webhook.DispatcherConfig{
-		Timeout:       whTimeout,
-		MaxRetries:    cfg.Tuning.Webhook.MaxRetries,
-		MaxConcurrent: cfg.Tuning.Webhook.MaxConcurrent,
-		RetryDelay:    whRetryDelay,
-	})
+	// Create webhook dispatcher (hub and standalone only — spokes skip webhooks).
+	var dispatcher *webhook.Dispatcher
+	if role != config.RoleSpoke {
+		dispatcher = webhook.NewDispatcher(queries, webhook.DispatcherConfig{
+			Timeout:       whTimeout,
+			MaxRetries:    cfg.Tuning.Webhook.MaxRetries,
+			MaxConcurrent: cfg.Tuning.Webhook.MaxConcurrent,
+			RetryDelay:    whRetryDelay,
+		})
+	}
+
+	// Connect to spokes (hub mode only).
+	var hub *federation.Hub
+	if role == config.RoleHub {
+		hub, err = federation.NewHub(ctx, cfg.Federation.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+		if err != nil {
+			return fmt.Errorf("connecting to spokes: %w", err)
+		}
+		defer hub.Close()
+		slog.Info("federation hub initialized", "spokes", hub.SpokeCount())
+	}
 
 	// Create and start gRPC server.
 	grpcSrv, _, lastSeenBatch, traitsPruner, err := isgrpc.NewServer(isgrpc.ServerConfig{
@@ -187,6 +212,7 @@ func run() error {
 		SignatureWindow:  sigWindow,
 		NodeCacheTTL:     nodeCacheTTL,
 		TraitsScannerTTL: traitsScannerTTL,
+		Hub:              hub,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
@@ -198,8 +224,8 @@ func run() error {
 	// Start async traits pruner.
 	go traitsPruner.Start(ctx, traitsPruneInterval)
 
-	// Start secret rotation watcher if enabled and provider supports versioning.
-	if cfg.Watcher.Enabled {
+	// Start secret rotation watcher (hub and standalone only).
+	if role != config.RoleSpoke && cfg.Watcher.Enabled {
 		if vp, ok := provider.(watcher.VersionProvider); ok {
 			watchPaths := configStore.SecretPaths()
 			pollInterval := 5 * time.Minute
@@ -235,49 +261,60 @@ func run() error {
 	metricsCollector := metrics.NewCollector(queries)
 	go metricsCollector.Run(ctx, metricsInterval)
 
-	// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
-	var gwOpts []api.GatewayOption
-	if cfg.Server.TLS.CAKeyFile != "" {
-		certAuthority, err := ca.Load(cfg.Server.TLS.CAFile, cfg.Server.TLS.CAKeyFile)
-		if err != nil {
-			return fmt.Errorf("loading CA for bootstrap: %w", err)
+	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
+	var httpSrv *http.Server
+	if role == config.RoleSpoke {
+		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Federation.SpokeID)
+		if gwErr != nil {
+			return fmt.Errorf("creating spoke gateway: %w", gwErr)
 		}
-		slog.Info("bootstrap CA loaded, CSR signing enabled")
+		httpSrv = &http.Server{
+			Addr:    cfg.Server.APIListen,
+			Handler: mux,
+		}
+	} else {
+		// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
+		var gwOpts []api.GatewayOption
+		if cfg.Server.TLS.CAKeyFile != "" {
+			certAuthority, caErr := ca.Load(cfg.Server.TLS.CAFile, cfg.Server.TLS.CAKeyFile)
+			if caErr != nil {
+				return fmt.Errorf("loading CA for bootstrap: %w", caErr)
+			}
+			slog.Info("bootstrap CA loaded, CSR signing enabled")
 
-		// Parse cert validity duration.
-		certValidity := 365 * 24 * time.Hour
-		if cfg.Bootstrap.CertValidity != "" {
-			if parsed, err := time.ParseDuration(cfg.Bootstrap.CertValidity); err == nil {
-				certValidity = parsed
+			// Parse cert validity duration.
+			certValidity := 365 * 24 * time.Hour
+			if cfg.Bootstrap.CertValidity != "" {
+				if parsed, pErr := time.ParseDuration(cfg.Bootstrap.CertValidity); pErr == nil {
+					certValidity = parsed
+				}
+			}
+
+			gwOpts = append(gwOpts, func(bh *bootstrap.Handler) {
+				bh.SetCA(certAuthority)
+				bh.SetRegistry(reg)
+				bh.SetTrustedPatterns(cfg.Bootstrap.TrustedPatterns)
+				bh.SetCertValidity(certValidity)
+				bh.SetDispatcher(dispatcher)
+			})
+
+			if len(cfg.Bootstrap.TrustedPatterns) > 0 {
+				for _, tp := range cfg.Bootstrap.TrustedPatterns {
+					slog.Info("trusted enrollment pattern", "pattern", tp.Pattern, "cidrs", tp.CIDRs)
+				}
 			}
 		}
 
-		gwOpts = append(gwOpts, func(bh *bootstrap.Handler) {
-			bh.SetCA(certAuthority)
-			bh.SetRegistry(reg)
-			bh.SetTrustedPatterns(cfg.Bootstrap.TrustedPatterns)
-			bh.SetCertValidity(certValidity)
-			bh.SetDispatcher(dispatcher)
-		})
-
-		if len(cfg.Bootstrap.TrustedPatterns) > 0 {
-			for _, tp := range cfg.Bootstrap.TrustedPatterns {
-				slog.Info("trusted enrollment pattern", "pattern", tp.Pattern, "cidrs", tp.CIDRs)
-			}
+		version := envOrDefault("HOBNOB_VERSION", "dev")
+		agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
+		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, gwOpts...)
+		if gwErr != nil {
+			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
-	}
-
-	// Start REST gateway with UI.
-	version := envOrDefault("HOBNOB_VERSION", "dev")
-	agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
-	gwMux, err := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, gwOpts...)
-	if err != nil {
-		return fmt.Errorf("creating REST gateway: %w", err)
-	}
-
-	httpSrv := &http.Server{
-		Addr:    cfg.Server.APIListen,
-		Handler: gwMux,
+		httpSrv = &http.Server{
+			Addr:    cfg.Server.APIListen,
+			Handler: gwMux,
+		}
 	}
 
 	go func() {
@@ -287,10 +324,19 @@ func run() error {
 		}
 	}()
 
-	slog.Info("server ready",
-		"grpc", cfg.Server.GRPCListen,
-		"rest", cfg.Server.APIListen,
-	)
+	if role == config.RoleSpoke {
+		slog.Info("spoke ready",
+			"spoke_id", cfg.Federation.SpokeID,
+			"grpc", cfg.Server.GRPCListen,
+			"api", cfg.Server.APIListen,
+		)
+	} else {
+		slog.Info("server ready",
+			"role", role,
+			"grpc", cfg.Server.GRPCListen,
+			"rest", cfg.Server.APIListen,
+		)
+	}
 
 	// Wait for shutdown signal.
 	<-ctx.Done()
@@ -314,7 +360,6 @@ func hasFlag(flag string) bool {
 	}
 	return false
 }
-
 
 // envOrDefault returns the environment variable value or a default.
 func envOrDefault(key, def string) string {

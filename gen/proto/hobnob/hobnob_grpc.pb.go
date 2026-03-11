@@ -24,6 +24,7 @@ const (
 	HobnobAgent_ReportResult_FullMethodName        = "/hobnob.v1.HobnobAgent/ReportResult"
 	HobnobAgent_ReportTraits_FullMethodName        = "/hobnob.v1.HobnobAgent/ReportTraits"
 	HobnobAgent_DownloadCustomTrait_FullMethodName = "/hobnob.v1.HobnobAgent/DownloadCustomTrait"
+	HobnobAgent_AgentStream_FullMethodName         = "/hobnob.v1.HobnobAgent/AgentStream"
 )
 
 // HobnobAgentClient is the client API for HobnobAgent service.
@@ -40,6 +41,11 @@ type HobnobAgentClient interface {
 	ReportTraits(ctx context.Context, in *ReportTraitsRequest, opts ...grpc.CallOption) (*ReportTraitsResponse, error)
 	// DownloadCustomTrait retrieves a custom trait executable by name.
 	DownloadCustomTrait(ctx context.Context, in *DownloadCustomTraitRequest, opts ...grpc.CallOption) (*DownloadCustomTraitResponse, error)
+	// AgentStream opens a persistent bidirectional stream between agent and server.
+	// Replaces poll-based CheckIn with push-based policy delivery.
+	// Agent sends: check-in requests, run results, trait updates.
+	// Server sends: policy bundles (initial + on config change), force-push signals.
+	AgentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentStreamMessage, ServerStreamMessage], error)
 }
 
 type hobnobAgentClient struct {
@@ -100,6 +106,19 @@ func (c *hobnobAgentClient) DownloadCustomTrait(ctx context.Context, in *Downloa
 	return out, nil
 }
 
+func (c *hobnobAgentClient) AgentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentStreamMessage, ServerStreamMessage], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &HobnobAgent_ServiceDesc.Streams[0], HobnobAgent_AgentStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[AgentStreamMessage, ServerStreamMessage]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type HobnobAgent_AgentStreamClient = grpc.BidiStreamingClient[AgentStreamMessage, ServerStreamMessage]
+
 // HobnobAgentServer is the server API for HobnobAgent service.
 // All implementations must embed UnimplementedHobnobAgentServer
 // for forward compatibility.
@@ -114,6 +133,11 @@ type HobnobAgentServer interface {
 	ReportTraits(context.Context, *ReportTraitsRequest) (*ReportTraitsResponse, error)
 	// DownloadCustomTrait retrieves a custom trait executable by name.
 	DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error)
+	// AgentStream opens a persistent bidirectional stream between agent and server.
+	// Replaces poll-based CheckIn with push-based policy delivery.
+	// Agent sends: check-in requests, run results, trait updates.
+	// Server sends: policy bundles (initial + on config change), force-push signals.
+	AgentStream(grpc.BidiStreamingServer[AgentStreamMessage, ServerStreamMessage]) error
 	mustEmbedUnimplementedHobnobAgentServer()
 }
 
@@ -138,6 +162,9 @@ func (UnimplementedHobnobAgentServer) ReportTraits(context.Context, *ReportTrait
 }
 func (UnimplementedHobnobAgentServer) DownloadCustomTrait(context.Context, *DownloadCustomTraitRequest) (*DownloadCustomTraitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DownloadCustomTrait not implemented")
+}
+func (UnimplementedHobnobAgentServer) AgentStream(grpc.BidiStreamingServer[AgentStreamMessage, ServerStreamMessage]) error {
+	return status.Error(codes.Unimplemented, "method AgentStream not implemented")
 }
 func (UnimplementedHobnobAgentServer) mustEmbedUnimplementedHobnobAgentServer() {}
 func (UnimplementedHobnobAgentServer) testEmbeddedByValue()                     {}
@@ -250,6 +277,13 @@ func _HobnobAgent_DownloadCustomTrait_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HobnobAgent_AgentStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(HobnobAgentServer).AgentStream(&grpc.GenericServerStream[AgentStreamMessage, ServerStreamMessage]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type HobnobAgent_AgentStreamServer = grpc.BidiStreamingServer[AgentStreamMessage, ServerStreamMessage]
+
 // HobnobAgent_ServiceDesc is the grpc.ServiceDesc for HobnobAgent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -278,7 +312,14 @@ var HobnobAgent_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HobnobAgent_DownloadCustomTrait_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "AgentStream",
+			Handler:       _HobnobAgent_AgentStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "hobnob.proto",
 }
 

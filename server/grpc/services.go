@@ -6,6 +6,7 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/federation"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
@@ -24,6 +25,7 @@ type AgentService struct {
 	lastSeenBatch  *db.LastSeenBatcher
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache
+	streamMgr      *streamManager
 }
 
 // AdminService implements the HobnobAdmin gRPC service.
@@ -34,4 +36,5 @@ type AdminService struct {
 	runStore     db.RunStore
 	configStore  *config.ConfigStore
 	baseInterval time.Duration
+	hub          *federation.Hub // non-nil when role=hub; aggregates from spokes
 }

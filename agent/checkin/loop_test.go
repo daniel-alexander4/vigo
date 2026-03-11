@@ -118,6 +118,10 @@ func (m *mockAgentClient) DownloadCustomTrait(_ context.Context, _ *pb.DownloadC
 	return &pb.DownloadCustomTraitResponse{}, nil
 }
 
+func (m *mockAgentClient) AgentStream(_ context.Context, _ ...grpc.CallOption) (pb.HobnobAgent_AgentStreamClient, error) {
+	return nil, nil
+}
+
 // newMockClient creates a Client with a mock gRPC agent for testing.
 func newMockClient(mock *mockAgentClient) *Client {
 	return &Client{
@@ -334,4 +338,8 @@ func (c *countingMockAgent) ReportTraits(ctx context.Context, req *pb.ReportTrai
 
 func (c *countingMockAgent) DownloadCustomTrait(ctx context.Context, req *pb.DownloadCustomTraitRequest, opts ...grpc.CallOption) (*pb.DownloadCustomTraitResponse, error) {
 	return c.inner.DownloadCustomTrait(ctx, req, opts...)
+}
+
+func (c *countingMockAgent) AgentStream(ctx context.Context, opts ...grpc.CallOption) (pb.HobnobAgent_AgentStreamClient, error) {
+	return c.inner.AgentStream(ctx, opts...)
 }

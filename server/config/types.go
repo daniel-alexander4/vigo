@@ -11,15 +11,74 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// FederationRole defines the server's role in a federated deployment.
+type FederationRole string
+
+const (
+	// RoleStandalone is the default: a single server handling everything.
+	RoleStandalone FederationRole = "standalone"
+	// RoleHub is the central server in a federated deployment.
+	// Handles UI, webhooks, bootstrap, and aggregates data from spokes.
+	RoleHub FederationRole = "hub"
+	// RoleSpoke is a partition server handling agent check-ins for a
+	// subset of nodes. Disables webhooks, bootstrap, and secret watcher.
+	RoleSpoke FederationRole = "spoke"
+)
+
+// FederationSection configures hub-spoke federation. Omit entirely
+// (or set role: standalone) for single-server deployments.
+type FederationSection struct {
+	Role    FederationRole `yaml:"role"`     // standalone (default), hub, spoke
+	SpokeID string         `yaml:"spoke_id"` // required for spoke mode
+	HubAddr string         `yaml:"hub_addr"` // hub gRPC address (for future spoke→hub communication)
+	Spokes  []SpokeEntry   `yaml:"spokes"`   // hub-only: spoke definitions
+}
+
+// SpokeEntry defines a spoke server the hub aggregates from.
+type SpokeEntry struct {
+	ID   string `yaml:"id"`   // unique spoke identifier
+	Addr string `yaml:"addr"` // gRPC address (host:port)
+}
+
+// Validate checks that federation config is internally consistent.
+func (f FederationSection) Validate() error {
+	role := f.Role
+	if role == "" || role == RoleStandalone {
+		return nil
+	}
+	if role == RoleHub {
+		if len(f.Spokes) == 0 {
+			return fmt.Errorf("federation.spokes is required when role is 'hub'")
+		}
+		for i, s := range f.Spokes {
+			if s.ID == "" {
+				return fmt.Errorf("federation.spokes[%d].id is required", i)
+			}
+			if s.Addr == "" {
+				return fmt.Errorf("federation.spokes[%d].addr is required", i)
+			}
+		}
+		return nil
+	}
+	if role == RoleSpoke {
+		if f.SpokeID == "" {
+			return fmt.Errorf("federation.spoke_id is required when role is 'spoke'")
+		}
+		return nil
+	}
+	return fmt.Errorf("federation.role must be standalone, hub, or spoke (got %q)", role)
+}
+
 // ServerConfig represents the top-level server configuration from server.yaml.
 type ServerConfig struct {
-	Server    ServerSection   `yaml:"server"`
-	Database  DatabaseSection `yaml:"database"`
-	CheckIn   CheckInSection  `yaml:"checkin"`
-	Watcher   WatcherSection  `yaml:"watcher"`
-	Secrets   secrets.Config  `yaml:"secrets"`
-	Bootstrap BootstrapConfig `yaml:"bootstrap"`
-	Tuning    TuningSection   `yaml:"tuning"`
+	Server     ServerSection    `yaml:"server"`
+	Database   DatabaseSection  `yaml:"database"`
+	CheckIn    CheckInSection   `yaml:"checkin"`
+	Watcher    WatcherSection   `yaml:"watcher"`
+	Secrets    secrets.Config   `yaml:"secrets"`
+	Bootstrap  BootstrapConfig  `yaml:"bootstrap"`
+	Federation FederationSection `yaml:"federation"`
+	Tuning     TuningSection    `yaml:"tuning"`
 }
 
 // TuningSection holds operational tuning parameters. All fields are optional

@@ -26,6 +26,18 @@ watcher:
   enabled: true
   poll_interval: "5m"
 
+# Federation settings for hub-spoke scaling.
+# Omit (or set role: standalone) for single-server deployments.
+# federation:
+#   role: standalone       # standalone (default), hub, spoke
+#   spoke_id: ""           # required when role=spoke (e.g. "dc1")
+#   hub_addr: ""           # hub gRPC address (for spoke→hub communication)
+#   spokes:                # required when role=hub
+#     - id: dc1
+#       addr: spoke1.example.com:1530
+#     - id: dc2
+#       addr: spoke2.example.com:1530
+
 # Bootstrap enrollment settings.
 # trusted_enrollment patterns allow nodes to enroll without a token.
 # CIDRs restrict which source IPs can use each pattern.

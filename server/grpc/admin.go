@@ -93,6 +93,15 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 // ---------- Nodes ----------
 
 func (s *AdminService) ListNodes(ctx context.Context, _ *pb.ListNodesRequest) (*pb.ListNodesResponse, error) {
+	// Hub mode: aggregate from all spokes.
+	if s.hub != nil {
+		nodes, err := s.hub.AggregateListNodes(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "aggregating nodes from spokes: %v", err)
+		}
+		return &pb.ListNodesResponse{Nodes: nodes}, nil
+	}
+
 	nodes, err := s.queries.ListNodes(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing nodes: %v", err)
@@ -154,6 +163,15 @@ func (s *AdminService) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest
 // ---------- ForcePush ----------
 
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
+	// Hub mode: forward to all spokes.
+	if s.hub != nil {
+		total, err := s.hub.ForwardForcePush(ctx, req.GetNodeId())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "forwarding force push to spokes: %v", err)
+		}
+		return &pb.ForcePushResponse{NodesNotified: total}, nil
+	}
+
 	if req.NodeId != "" {
 		// Single node
 		if _, err := uuid.Parse(req.NodeId); err != nil {
@@ -177,6 +195,19 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 // ---------- Runs ----------
 
 func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
+	// Hub mode: aggregate from all spokes.
+	if s.hub != nil {
+		limit := req.Limit
+		if limit <= 0 {
+			limit = 20
+		}
+		runs, err := s.hub.AggregateListRuns(ctx, req.GetNodeId(), limit)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "aggregating runs from spokes: %v", err)
+		}
+		return &pb.ListRunsResponse{Runs: runs}, nil
+	}
+
 	limit := int64(req.Limit)
 	if limit <= 0 {
 		limit = 20
@@ -398,6 +429,11 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookR
 // ---------- Compliance ----------
 
 func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
+	// Hub mode: aggregate from all spokes.
+	if s.hub != nil {
+		return s.hub.AggregateComplianceSummary(ctx)
+	}
+
 	// Get all nodes from DB, then look up latest runs via RunStore.
 	nodes, err := s.queries.ListNodes(ctx)
 	if err != nil {

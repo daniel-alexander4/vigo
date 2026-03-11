@@ -81,6 +81,45 @@ This also eliminates the check-in interval as a scaling factor. Instead of 100k 
 
 Steps 1 and 2 get you to ~50k nodes on a single server with SQLite. Steps 3 and 4 get you past 100k. At no point do you need PostgreSQL. Each component has its own embedded SQLite with a workload that fits SQLite's strengths — small databases, read-heavy, infrequent writes.
 
+## Implementation status
+
+| Step | Status |
+|---|---|
+| 1. Compiled policy cache | Done (5129b6e) |
+| 2. Agent-side evaluation | Done (scalability plan rec #4) |
+| 3. Spoke federation — Phase 1 | Done — federation config, spoke mode, spoke gateway |
+| 3. Spoke federation — Phase 2 | Done — hub aggregation via spoke AdminService fan-out |
+| 3. Spoke federation — Phase 3 | Pending — enrollment routing (hub assigns nodes to spokes) |
+| 4. Persistent gRPC streams — server | Done — proto, stream handler, stream manager, config push |
+| 4. Persistent gRPC streams — agent | Pending — agent stream client, reconnection, fallback to polling |
+
+### Step 3 Phase 1: Spoke mode
+
+- `FederationSection` in server.yaml: `role` (standalone/hub/spoke), `spoke_id`, `hub_addr`
+- Spoke mode: disables webhook dispatcher, secret watcher, bootstrap handler
+- Spoke mode: serves gRPC (agent + admin) + lightweight REST (API, metrics, healthz, traits)
+- Hub mode: identical to standalone (Phase 2 adds spoke aggregation)
+- Each instance has its own SQLite, ConfigStore, MemRunStore
+- Config shared via filesystem (git sync, rsync, NFS)
+
+### Step 3 Phase 2: Hub aggregation (no new proto)
+
+Key insight: spokes already expose `HobnobAdmin` gRPC. Hub just dials spokes and calls existing RPCs.
+- `federation.Hub` — connects to spoke gRPC servers via mTLS, fans out queries concurrently
+- Hub config: `federation.spokes` list with `id` + `addr` per spoke
+- `AggregateListNodes` — fans out ListNodes, merges results
+- `AggregateComplianceSummary` — fans out GetComplianceSummary, sums counts, recomputes pct
+- `AggregateListRuns` — fans out ListRuns, merges results
+- `ForwardForcePush` — fans out ForcePush, sums notified count
+- AdminService delegates to Hub when `hub != nil` (ListNodes, ListRuns, GetComplianceSummary, ForcePush)
+- 5 hub tests with fake spoke gRPC servers
+
+### Step 3 Phase 3: Enrollment routing
+
+- Agent registers with hub, hub determines spoke by hostname pattern
+- Hub pushes node record to spoke, returns spoke address to agent
+- Agent switches to spoke for subsequent check-ins
+
 ## Key realization
 
 SQLite's limitation is concurrent writers, not database size or read throughput. The MemRunStore pattern — keep hot, high-write data in memory, only persist what's worth persisting — is the right architecture. Extend it to traits and last-seen, and SQLite becomes a durable config store that barely gets written to.
