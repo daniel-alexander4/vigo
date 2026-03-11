@@ -8,6 +8,7 @@ import (
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
 	"github.com/hobnob/hobnob/server/registry"
+	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 )
@@ -20,6 +21,7 @@ type AgentService struct {
 	queries        *db.Queries
 	runStore       db.RunStore
 	dispatcher     *webhook.Dispatcher
+	smtpNotifier   *hobnobsmtp.Notifier
 	traitsScanner   *traits.Scanner
 	thrallCache    *db.ThrallCache
 	lastSeenBatch  *db.LastSeenBatcher

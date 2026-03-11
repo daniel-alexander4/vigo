@@ -80,6 +80,20 @@ type ServerConfig struct {
 	Bootstrap  BootstrapConfig  `yaml:"bootstrap"`
 	Federation FederationSection `yaml:"federation"`
 	Tuning     TuningSection    `yaml:"tuning"`
+	SMTP       SMTPSection      `yaml:"smtp"`
+}
+
+// SMTPSection configures email notifications via an SMTP relay.
+// Notifications are disabled when Host is empty.
+type SMTPSection struct {
+	Host       string   `yaml:"host"`                  // SMTP relay hostname (e.g. "smtp.example.com")
+	Port       int      `yaml:"port"`                  // SMTP port (default 587)
+	From       string   `yaml:"from"`                  // sender address (e.g. "hobnob@example.com")
+	Username   string   `yaml:"username"`               // SMTP auth username (optional)
+	Password   string   `yaml:"password"`               // SMTP auth password (supports secret: prefix)
+	TLS        bool     `yaml:"tls"`                    // use STARTTLS (default true)
+	Recipients []string `yaml:"recipients"`             // default recipient list
+	Events     []string `yaml:"events"`                 // event types to send (default: all)
 }
 
 // TuningSection holds operational tuning parameters. All fields are optional

@@ -29,6 +29,7 @@ import (
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/secrets"
+	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/watcher"
 	"github.com/hobnob/hobnob/server/webhook"
 )
@@ -185,6 +186,28 @@ func run() error {
 		})
 	}
 
+	// Create SMTP notifier (disabled when smtp.host is empty).
+	var smtpEvents map[string]bool
+	if len(cfg.SMTP.Events) > 0 {
+		smtpEvents = make(map[string]bool, len(cfg.SMTP.Events))
+		for _, e := range cfg.SMTP.Events {
+			smtpEvents[e] = true
+		}
+	}
+	smtpNotifier := hobnobsmtp.NewNotifier(hobnobsmtp.Config{
+		Host:       cfg.SMTP.Host,
+		Port:       cfg.SMTP.Port,
+		From:       cfg.SMTP.From,
+		Username:   cfg.SMTP.Username,
+		Password:   cfg.SMTP.Password,
+		TLS:        cfg.SMTP.TLS,
+		Recipients: cfg.SMTP.Recipients,
+		Events:     smtpEvents,
+	})
+	if smtpNotifier.Enabled() {
+		slog.Info("SMTP notifications enabled", "host", cfg.SMTP.Host, "recipients", len(cfg.SMTP.Recipients))
+	}
+
 	// Connect to spokes (hub mode only).
 	var hub *federation.Hub
 	if role == config.RoleHub {
@@ -213,6 +236,7 @@ func run() error {
 		ThrallCacheTTL:     nodeCacheTTL,
 		TraitsScannerTTL: traitsScannerTTL,
 		Hub:              hub,
+		SMTPNotifier:     smtpNotifier,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)

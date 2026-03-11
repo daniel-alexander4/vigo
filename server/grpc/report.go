@@ -10,6 +10,7 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/metrics"
+	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -156,6 +157,20 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 				},
 			})
 		}
+	}
+
+	// Send SMTP notification.
+	smtpThrall := &hobnobsmtp.ThrallInfo{ID: thrallID, Hostname: hostname}
+	smtpRun := &hobnobsmtp.RunInfo{ID: runID, Status: runStatus, Changed: int32(changedCount), Failed: int32(failedCount)}
+	s.smtpNotifier.Notify(hobnobsmtp.Event{
+		Name: webhook.FormatRunEvent(runStatus), Timestamp: time.Now().UTC(),
+		Thrall: smtpThrall, Run: smtpRun,
+	})
+	if changedCount > 0 {
+		s.smtpNotifier.Notify(hobnobsmtp.Event{
+			Name: "drift.detected", Timestamp: time.Now().UTC(),
+			Thrall: smtpThrall, Run: smtpRun,
+		})
 	}
 
 	return &pb.ReportResultResponse{Acknowledged: true}, nil

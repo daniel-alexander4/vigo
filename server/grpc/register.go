@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/registry"
+	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -89,6 +91,11 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 			},
 		})
 	}
+
+	s.smtpNotifier.Notify(hobnobsmtp.Event{
+		Name: "thrall.enrolled", Timestamp: time.Now().UTC(),
+		Thrall: &hobnobsmtp.ThrallInfo{ID: thrallID, Hostname: req.GetHostname(), IP: req.GetIpAddress()},
+	})
 
 	return &pb.RegisterResponse{
 		Success:   true,

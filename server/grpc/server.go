@@ -15,6 +15,7 @@ import (
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
 	"github.com/hobnob/hobnob/server/registry"
+	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc"
@@ -59,6 +60,7 @@ type ServerConfig struct {
 	ThrallCacheTTL     time.Duration // 0 → default 60s
 	TraitsScannerTTL time.Duration // 0 → default 30s
 	Hub              *federation.Hub // non-nil when role=hub
+	SMTPNotifier     *hobnobsmtp.Notifier
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -97,6 +99,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		queries:       cfg.Queries,
 		runStore:      cfg.RunStore,
 		dispatcher:    cfg.Dispatcher,
+		smtpNotifier:  cfg.SMTPNotifier,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		thrallCache:   thrallCache,
 		lastSeenBatch: lastSeenBatch,
