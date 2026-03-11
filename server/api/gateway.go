@@ -50,9 +50,11 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	uiHandler.RegisterRoutes(mux)
 
-	// Mount traits endpoint (direct handler, not proxied through grpc-gateway).
+	// Mount traits and inventory endpoints (direct handlers, not proxied through grpc-gateway).
 	traitsHandler := NewTraitsHandler(queries)
 	traitsHandler.RegisterRoutes(mux)
+	inventoryHandler := NewInventoryHandler(queries)
+	inventoryHandler.RegisterRoutes(mux)
 
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
@@ -89,9 +91,11 @@ func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile st
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Traits endpoint for admin queries.
+	// Traits and inventory endpoints for admin queries.
 	traitsHandler := NewTraitsHandler(queries)
 	traitsHandler.RegisterRoutes(mux)
+	invHandler := NewInventoryHandler(queries)
+	invHandler.RegisterRoutes(mux)
 
 	// Health endpoint for monitoring spoke status.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

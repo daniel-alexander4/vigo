@@ -46,5 +46,6 @@ func init() {
 		envCmd,
 		validateCmd,
 		viCmd,
+		inventoryCmd,
 	)
 }
