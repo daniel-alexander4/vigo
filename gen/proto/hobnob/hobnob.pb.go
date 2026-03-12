@@ -2089,16 +2089,17 @@ func (x *ListThrallsResponse) GetThralls() []*Thrall {
 }
 
 type Thrall struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	IpAddress     string                 `protobuf:"bytes,3,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
-	EnrolledAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=enrolled_at,json=enrolledAt,proto3" json:"enrolled_at,omitempty"`
-	LastSeen      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
-	Revoked       bool                   `protobuf:"varint,6,opt,name=revoked,proto3" json:"revoked,omitempty"`
-	RevokedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Id                    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Hostname              string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	IpAddress             string                 `protobuf:"bytes,3,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	EnrolledAt            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=enrolled_at,json=enrolledAt,proto3" json:"enrolled_at,omitempty"`
+	LastSeen              *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
+	Revoked               bool                   `protobuf:"varint,6,opt,name=revoked,proto3" json:"revoked,omitempty"`
+	RevokedAt             *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	PendingRotatedSecrets []string               `protobuf:"bytes,8,rep,name=pending_rotated_secrets,json=pendingRotatedSecrets,proto3" json:"pending_rotated_secrets,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *Thrall) Reset() {
@@ -2176,6 +2177,13 @@ func (x *Thrall) GetRevoked() bool {
 func (x *Thrall) GetRevokedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.RevokedAt
+	}
+	return nil
+}
+
+func (x *Thrall) GetPendingRotatedSecrets() []string {
+	if x != nil {
+		return x.PendingRotatedSecrets
 	}
 	return nil
 }
@@ -4543,7 +4551,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x1dRevokeApprovedPatternResponse\"\x14\n" +
 	"\x12ListThrallsRequest\"B\n" +
 	"\x13ListThrallsResponse\x12+\n" +
-	"\athralls\x18\x01 \x03(\v2\x11.hobnob.v1.ThrallR\athralls\"\x9e\x02\n" +
+	"\athralls\x18\x01 \x03(\v2\x11.hobnob.v1.ThrallR\athralls\"\xd6\x02\n" +
 	"\x06Thrall\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1d\n" +
@@ -4554,7 +4562,8 @@ const file_hobnob_proto_rawDesc = "" +
 	"\tlast_seen\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blastSeen\x12\x18\n" +
 	"\arevoked\x18\x06 \x01(\bR\arevoked\x129\n" +
 	"\n" +
-	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\"\"\n" +
+	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x126\n" +
+	"\x17pending_rotated_secrets\x18\b \x03(\tR\x15pendingRotatedSecrets\"\"\n" +
 	"\x10GetThrallRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
 	"\x11GetThrallResponse\x12)\n" +

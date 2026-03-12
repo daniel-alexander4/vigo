@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package main
 
 import (
@@ -64,13 +67,14 @@ var thrallsShowCmd = &cobra.Command{
 		client := newAPIClient()
 		var resp struct {
 			Thrall struct {
-				ID         string `json:"id"`
-				Hostname   string `json:"hostname"`
-				IPAddress  string `json:"ipAddress"`
-				EnrolledAt string `json:"enrolledAt"`
-				LastSeen   string `json:"lastSeen"`
-				Revoked    bool   `json:"revoked"`
-				RevokedAt  string `json:"revokedAt"`
+				ID                     string   `json:"id"`
+				Hostname               string   `json:"hostname"`
+				IPAddress              string   `json:"ipAddress"`
+				EnrolledAt             string   `json:"enrolledAt"`
+				LastSeen               string   `json:"lastSeen"`
+				Revoked                bool     `json:"revoked"`
+				RevokedAt              string   `json:"revokedAt"`
+				PendingRotatedSecrets  []string `json:"pendingRotatedSecrets"`
 			} `json:"thrall"`
 		}
 		if err := client.get("/api/v1/thralls/"+args[0], &resp); err != nil {
@@ -95,6 +99,10 @@ var thrallsShowCmd = &cobra.Command{
 		}
 		if err := client.get("/api/v1/thralls/"+args[0]+"/compliance", &compResp); err == nil {
 			fmt.Printf("Compliance: %s\n", compResp.Status)
+		}
+
+		if len(c.PendingRotatedSecrets) > 0 {
+			fmt.Printf("Pending secrets: %s\n", strings.Join(c.PendingRotatedSecrets, ", "))
 		}
 
 		return nil

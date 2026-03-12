@@ -437,6 +437,7 @@ message Thrall {
   google.protobuf.Timestamp last_seen = 5;
   bool revoked = 6;
   google.protobuf.Timestamp revoked_at = 7;
+  repeated string pending_rotated_secrets = 8;
 }
 
 message GetThrallRequest {

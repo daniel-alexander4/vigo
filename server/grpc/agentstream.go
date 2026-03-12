@@ -191,8 +191,11 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 
 	configVersion := s.configStore.Version()
 
-	// Short-circuit: agent has a cached bundle with matching config version.
-	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion {
+	// Short-circuit: agent has a cached bundle with matching config version
+	// AND there are no pending rotated secrets or force_push flags.
+	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
+		thrall.ForcePush == 0 &&
+		(thrall.PendingRotatedSecrets == "" || thrall.PendingRotatedSecrets == "[]") {
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 		return &pb.CheckInResponse{
 			NoChange:      true,
@@ -239,25 +242,33 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		}
 	}
 
-	// Inject _secret_triggered for resources subscribing to rotated secrets.
-	// Re-read thrall to get fresh pending_rotated_secrets (may have changed
-	// since the stream connected or since the last check-in).
+	// Re-read thrall to get fresh flags (may have changed since stream
+	// connected or since the last check-in due to watcher activity).
 	freshThrall, freshErr := s.queries.GetThrallByID(ctx, thrallID)
 	if freshErr != nil {
-		slog.Warn("failed to re-read thrall for pending secrets", "thrall_id", thrallID, "error", freshErr)
-	}
-	pending := freshThrall.PendingRotatedSecrets
-	if pending != "" && pending != "[]" {
-		var rotatedPaths []string
-		if err := json.Unmarshal([]byte(pending), &rotatedPaths); err == nil && len(rotatedPaths) > 0 {
-			injectSecretTriggers(bundle, rotatedPaths)
-			if clearErr := s.queries.ClearRotatedSecrets(ctx, thrallID); clearErr != nil {
-				slog.Error("failed to clear rotated secrets",
-					"thrall_id", thrallID, "error", clearErr)
-			} else {
-				slog.Info("delivered secret rotation triggers",
-					"thrall_id", thrallID,
-					"secrets", strings.Join(rotatedPaths, ", "))
+		slog.Warn("failed to re-read thrall for pending flags", "thrall_id", thrallID, "error", freshErr)
+	} else {
+		// Inject _secret_triggered for resources subscribing to rotated secrets.
+		pending := freshThrall.PendingRotatedSecrets
+		if pending != "" && pending != "[]" {
+			var rotatedPaths []string
+			if err := json.Unmarshal([]byte(pending), &rotatedPaths); err == nil && len(rotatedPaths) > 0 {
+				injectSecretTriggers(bundle, rotatedPaths)
+				if clearErr := s.queries.ClearRotatedSecrets(ctx, thrallID); clearErr != nil {
+					slog.Error("failed to clear rotated secrets",
+						"thrall_id", thrallID, "error", clearErr)
+				} else {
+					slog.Info("delivered secret rotation triggers",
+						"thrall_id", thrallID,
+						"secrets", strings.Join(rotatedPaths, ", "))
+				}
+			}
+		}
+
+		// Clear force_push flag now that the agent has received the fresh bundle.
+		if freshThrall.ForcePush != 0 {
+			if err := s.queries.ClearForcePush(ctx, thrallID); err != nil {
+				slog.Warn("failed to clear force_push", "thrall_id", thrallID, "error", err)
 			}
 		}
 	}

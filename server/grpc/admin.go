@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc
 
 import (
@@ -725,6 +728,12 @@ func dbThrallToProto(n db.Thrall) *pb.Thrall {
 	}
 	if n.RevokedAt.Valid {
 		pn.RevokedAt = timestamppb.New(n.RevokedAt.Time)
+	}
+	if n.PendingRotatedSecrets != "" && n.PendingRotatedSecrets != "[]" {
+		var paths []string
+		if err := json.Unmarshal([]byte(n.PendingRotatedSecrets), &paths); err == nil {
+			pn.PendingRotatedSecrets = paths
+		}
 	}
 	return pn
 }

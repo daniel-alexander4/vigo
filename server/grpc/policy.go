@@ -105,6 +105,11 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 	for _, p := range rotatedPaths {
 		rotatedSet[p] = true
 	}
+	// Copy the modules slice so writes don't corrupt the shared policy cache.
+	modules := make([]*pb.PolicyModule, len(bundle.Modules))
+	copy(modules, bundle.Modules)
+	bundle.Modules = modules
+
 	for mi, mod := range bundle.Modules {
 		if mod.Stub {
 			continue
@@ -112,14 +117,20 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 		for ri, res := range mod.Resources {
 			for _, sp := range res.SubscribesSecret {
 				if rotatedSet[sp] {
-					// Clone the resource to avoid mutating shared cache entries.
-					cloned := *res
-					cloned.Attributes = make(map[string]string, len(res.Attributes)+1)
+					// Clone module + resource so the cache entry stays clean.
+					clonedMod := *mod
+					clonedMod.Resources = make([]*pb.PolicyResource, len(mod.Resources))
+					copy(clonedMod.Resources, mod.Resources)
+
+					clonedRes := *res
+					clonedRes.Attributes = make(map[string]string, len(res.Attributes)+1)
 					for k, v := range res.Attributes {
-						cloned.Attributes[k] = v
+						clonedRes.Attributes[k] = v
 					}
-					cloned.Attributes["_secret_triggered"] = "true"
-					bundle.Modules[mi].Resources[ri] = &cloned
+					clonedRes.Attributes["_secret_triggered"] = "true"
+
+					clonedMod.Resources[ri] = &clonedRes
+					bundle.Modules[mi] = &clonedMod
 					break
 				}
 			}

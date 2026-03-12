@@ -1216,6 +1216,12 @@
         "revokedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "pendingRotatedSecrets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
