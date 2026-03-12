@@ -169,12 +169,43 @@ func validateResource(moduleName string, res Resource) []Finding {
 	}
 
 	switch res.Type {
+	case "file":
+		findings = append(findings, validateFile(base, res)...)
 	case "exec":
 		findings = append(findings, validateExec(base, res)...)
 	case "service":
 		findings = append(findings, validateService(base, res)...)
 	case "reboot":
 		findings = append(findings, validateReboot(base, res)...)
+	}
+
+	return findings
+}
+
+// validateFile checks that file resources declare required attributes:
+// targetpath, owner, group, mode, and one of content/source (unless state=absent).
+func validateFile(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	for _, field := range []string{"targetpath", "owner", "group", "mode"} {
+		if attrString(res.Attributes, field) == "" {
+			f := base
+			f.Severity = SeverityError
+			f.Message = fmt.Sprintf("file resource missing required attribute %q", field)
+			findings = append(findings, f)
+		}
+	}
+
+	state := attrString(res.Attributes, "state")
+	if state != "absent" {
+		hasContent := attrString(res.Attributes, "content") != ""
+		hasSource := attrString(res.Attributes, "source") != ""
+		if !hasContent && !hasSource {
+			f := base
+			f.Severity = SeverityError
+			f.Message = "file resource missing content — add content or source"
+			findings = append(findings, f)
+		}
 	}
 
 	return findings

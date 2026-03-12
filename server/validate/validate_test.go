@@ -137,7 +137,7 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		typ   string
 		attrs map[string]any
 	}{
-		{"file", map[string]any{"targetpath": "/etc/foo", "content": "bar"}},
+		{"file", map[string]any{"targetpath": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
 		{"package", map[string]any{"package": "nginx", "state": "present"}},
 		{"user", map[string]any{"username": "deploy"}},
 		{"repository", map[string]any{"name": "nginx", "type": "apt"}},
@@ -156,6 +156,60 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		if HasErrors(findings) {
 			t.Errorf("type %q should be inherently idempotent, got: %s", tt.typ, FormatFindings(findings))
 		}
+	}
+}
+
+func TestFileValidation_MissingRequiredFields(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "bare-file", Type: "file", Attributes: map[string]any{}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected errors for bare file resource")
+	}
+	// Should require: targetpath, owner, group, mode, content/source = 5 errors.
+	errorCount := 0
+	for _, f := range findings {
+		if f.Severity == SeverityError {
+			errorCount++
+		}
+	}
+	if errorCount != 5 {
+		t.Errorf("expected 5 errors, got %d: %s", errorCount, FormatFindings(findings))
+	}
+}
+
+func TestFileValidation_AbsentSkipsContent(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "rm-file", Type: "file", Attributes: map[string]any{
+				"targetpath": "/tmp/gone", "owner": "root", "group": "root", "mode": "0644", "state": "absent",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("state=absent should not require content, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestFileValidation_SourceSatisfiesContent(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "tmpl-file", Type: "file", Attributes: map[string]any{
+				"targetpath": "/etc/app.conf", "source": "templates/app.conf.tmpl",
+				"owner": "root", "group": "root", "mode": "0600",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("source should satisfy content requirement, got: %s", FormatFindings(findings))
 	}
 }
 
@@ -226,7 +280,7 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "good-file", Type: "file", Attributes: map[string]any{"targetpath": "/etc/foo"}},
+			{Name: "good-file", Type: "file", Attributes: map[string]any{"targetpath": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
 			{Name: "bad-exec", Type: "exec", Attributes: map[string]any{"command": "echo hello"}},
 			{Name: "good-exec", Type: "exec", Attributes: map[string]any{"command": "echo world", "creates": "/tmp/done"}},
 		},
