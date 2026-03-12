@@ -1,0 +1,72 @@
+name: php-fpm
+
+vars:
+  php_version: "8.2"
+  pm_max_children: "50"
+  pm_start_servers: "5"
+  pm_min_spare: "5"
+  pm_max_spare: "35"
+  listen_socket: "/run/php/php-fpm.sock"
+
+resources:
+  - name: install-php-fpm
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}php{{ .Vars.php_version }}-fpm{{ else }}php-fpm{{ end }}
+    state: present
+
+  - name: php-fpm-pool
+    type: file
+    targetpath: >-
+      {{ if eq .Traits.os.family "debian" }}/etc/php/{{ .Vars.php_version }}/fpm/pool.d/www.conf{{ else }}/etc/php-fpm.d/www.conf{{ end }}
+    content: |
+      ; Managed by Hobnob — do not edit manually
+      [www]
+
+      user = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+      group = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+
+      listen = {{ .Vars.listen_socket }}
+      listen.owner = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+      listen.group = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+      listen.mode = 0660
+
+      ; Process manager
+      pm = dynamic
+      pm.max_children = {{ .Vars.pm_max_children }}
+      pm.start_servers = {{ .Vars.pm_start_servers }}
+      pm.min_spare_servers = {{ .Vars.pm_min_spare }}
+      pm.max_spare_servers = {{ .Vars.pm_max_spare }}
+      pm.max_requests = 500
+
+      ; Status page (restrict access in web server config)
+      pm.status_path = /fpm-status
+      ping.path = /fpm-ping
+
+      ; Logging
+      php_admin_value[error_log] = /var/log/php-fpm/www-error.log
+      php_admin_flag[log_errors] = on
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-php-fpm]
+    notify: [php-fpm-service]
+
+  - name: php-fpm-log-dir
+    type: file
+    targetpath: /var/log/php-fpm
+    state: directory
+    owner: >-
+      {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+    group: >-
+      {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+    mode: "0755"
+
+  - name: php-fpm-service
+    type: service
+    service: >-
+      {{ if eq .Traits.os.family "debian" }}php{{ .Vars.php_version }}-fpm{{ else }}php-fpm{{ end }}
+    enabled: true
+    state: running
+    depends_on: [php-fpm-pool, php-fpm-log-dir]
+    subscribes: [php-fpm-pool]

@@ -128,40 +128,16 @@ fi
 # Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-mkdir -p "${EXAMPLES_DIR}/modules" "${EXAMPLES_DIR}/thralls" "${EXAMPLES_DIR}/roles" "${EXAMPLES_DIR}/templates"
-
-# Thrall mapping examples
-for src in "${SEED_DIR}/node-configs/thralls/"*.hnb.example; do
-    [ -f "$src" ] || continue
-    dest="${EXAMPLES_DIR}/thralls/$(basename "$src")"
-    [ -f "$dest" ] || cp "$src" "$dest"
+# Find all .hnb.example files under /seed/thrall-configs/ and copy them
+# to /etc/hobnob-server/examples/ preserving directory structure.
+find "${SEED_DIR}/thrall-configs" -name '*.hnb.example' -type f | while IFS= read -r src; do
+    rel="${src#${SEED_DIR}/thrall-configs/}"
+    dest="${EXAMPLES_DIR}/${rel}"
+    if [ ! -f "$dest" ]; then
+        mkdir -p "$(dirname "$dest")"
+        cp "$src" "$dest"
+    fi
 done
-
-# Module examples
-for src in "${SEED_DIR}/node-configs/modules/"*.hnb.example; do
-    [ -f "$src" ] || continue
-    dest="${EXAMPLES_DIR}/modules/$(basename "$src")"
-    [ -f "$dest" ] || cp "$src" "$dest"
-done
-
-# Role examples
-for src in "${SEED_DIR}/node-configs/roles/"*.hnb.example; do
-    [ -f "$src" ] || continue
-    dest="${EXAMPLES_DIR}/roles/$(basename "$src")"
-    [ -f "$dest" ] || cp "$src" "$dest"
-done
-
-# Template examples
-if [ -d "${SEED_DIR}/node-configs/templates" ]; then
-    find "${SEED_DIR}/node-configs/templates" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/node-configs/templates/}"
-        dest="${EXAMPLES_DIR}/templates/${rel}"
-        if [ ! -f "$dest" ]; then
-            mkdir -p "$(dirname "$dest")"
-            cp "$src" "$dest"
-        fi
-    done
-fi
 
 # ---------------------------------------------------------------------------
 # Install CLI tools to host (bind-mounted /usr/local/bin via /host-bin)

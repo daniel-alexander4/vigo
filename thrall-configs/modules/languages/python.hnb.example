@@ -1,0 +1,37 @@
+name: python
+
+vars:
+  pip_index_url: ""
+  pip_trusted_host: ""
+
+resources:
+  - name: install-python3
+    type: package
+    package: python3
+    state: present
+
+  - name: install-pip
+    type: package
+    package: python3-pip
+    state: present
+    depends_on: [install-python3]
+
+  - name: install-venv
+    type: package
+    package: python3-venv
+    state: present
+    when: "os_family('debian')"
+    depends_on: [install-python3]
+
+  - name: pip-conf
+    type: file
+    targetpath: /etc/pip.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      [global]
+      {{ if ne .Vars.pip_index_url "" }}index-url = {{ .Vars.pip_index_url }}{{ end }}
+      {{ if ne .Vars.pip_trusted_host "" }}trusted-host = {{ .Vars.pip_trusted_host }}{{ end }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-pip]

@@ -1,0 +1,25 @@
+name: limits
+
+vars:
+  nofile_soft: "65536"
+  nofile_hard: "65536"
+  nproc_soft: "65536"
+  nproc_hard: "65536"
+  memlock: "65536"
+
+resources:
+  - name: limits-conf
+    type: file
+    targetpath: /etc/security/limits.d/99-hobnob.conf
+    content: |
+      # /etc/security/limits.d/99-hobnob.conf — managed by hobnob
+
+      * soft nofile {{ .Vars.nofile_soft }}
+      * hard nofile {{ .Vars.nofile_hard }}
+      * soft nproc  {{ .Vars.nproc_soft }}
+      * hard nproc  {{ .Vars.nproc_hard }}
+      * soft memlock {{ .Vars.memlock }}
+      * hard memlock {{ .Vars.memlock }}
+    owner: root
+    group: root
+    mode: "0644"

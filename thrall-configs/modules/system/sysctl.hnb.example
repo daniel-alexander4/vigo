@@ -1,0 +1,46 @@
+name: sysctl-tuning
+
+vars:
+  vm_swappiness: "10"
+  somaxconn: "65535"
+  ip_forward: "1"
+  tcp_tw_reuse: "1"
+  file_max: "2097152"
+  rmem_max: "16777216"
+  wmem_max: "16777216"
+
+resources:
+  - name: vm-swappiness
+    type: sysctl
+    key: vm.swappiness
+    value: "{{ .Vars.vm_swappiness }}"
+
+  - name: net-somaxconn
+    type: sysctl
+    key: net.core.somaxconn
+    value: "{{ .Vars.somaxconn }}"
+
+  - name: ip-forward
+    type: sysctl
+    key: net.ipv4.ip_forward
+    value: "{{ .Vars.ip_forward }}"
+
+  - name: tcp-tw-reuse
+    type: sysctl
+    key: net.ipv4.tcp_tw_reuse
+    value: "{{ .Vars.tcp_tw_reuse }}"
+
+  - name: file-max
+    type: sysctl
+    key: fs.file-max
+    value: "{{ .Vars.file_max }}"
+
+  - name: rmem-max
+    type: sysctl
+    key: net.core.rmem_max
+    value: "{{ .Vars.rmem_max }}"
+
+  - name: wmem-max
+    type: sysctl
+    key: net.core.wmem_max
+    value: "{{ .Vars.wmem_max }}"

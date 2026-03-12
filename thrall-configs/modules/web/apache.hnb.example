@@ -1,0 +1,103 @@
+name: apache
+
+vars:
+  apache_port: "80"
+  server_admin: "webmaster@localhost"
+  server_name: "localhost"
+  keepalive_timeout: "5"
+  max_request_workers: "150"
+
+resources:
+  - name: install-apache
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}apache2{{ else }}httpd{{ end }}
+    state: present
+
+  # mod_ssl is bundled on Debian; RHEL needs a separate package
+  - name: install-mod-ssl
+    type: package
+    package: mod_ssl
+    state: present
+    when: "os_family('redhat')"
+    depends_on: [install-apache]
+
+  - name: enable-mod-rewrite
+    type: exec
+    command: a2enmod rewrite
+    when: "os_family('debian') && !command_succeeds('apache2ctl -M 2>/dev/null | grep -q rewrite')"
+    depends_on: [install-apache]
+    notify: [apache-service]
+
+  - name: enable-mod-ssl
+    type: exec
+    command: a2enmod ssl
+    when: "os_family('debian') && !command_succeeds('apache2ctl -M 2>/dev/null | grep -q ssl')"
+    depends_on: [install-apache]
+    notify: [apache-service]
+
+  - name: apache-conf
+    type: file
+    targetpath: >-
+      {{ if eq .Traits.os.family "debian" }}/etc/apache2/apache2.conf{{ else }}/etc/httpd/conf/httpd.conf{{ end }}
+    content: |
+      # Managed by Hobnob — do not edit manually
+
+      ServerRoot {{ if eq .Traits.os.family "debian" }}"/etc/apache2"{{ else }}"/etc/httpd"{{ end }}
+      ServerAdmin {{ .Vars.server_admin }}
+      ServerName {{ .Vars.server_name }}
+
+      Listen {{ .Vars.apache_port }}
+
+      # Timeout and keepalive
+      Timeout 60
+      KeepAlive On
+      MaxKeepAliveRequests 100
+      KeepAliveTimeout {{ .Vars.keepalive_timeout }}
+
+      # MPM event settings
+      <IfModule mpm_event_module>
+          StartServers             2
+          MinSpareThreads         25
+          MaxSpareThreads         75
+          ThreadLimit             64
+          ThreadsPerChild         25
+          MaxRequestWorkers       {{ .Vars.max_request_workers }}
+          MaxConnectionsPerChild  0
+      </IfModule>
+
+      # MPM prefork fallback
+      <IfModule mpm_prefork_module>
+          StartServers             5
+          MinSpareServers          5
+          MaxSpareServers         10
+          MaxRequestWorkers       {{ .Vars.max_request_workers }}
+          MaxConnectionsPerChild  0
+      </IfModule>
+
+      # Logging
+      ErrorLog {{ if eq .Traits.os.family "debian" }}"${APACHE_LOG_DIR}/error.log"{{ else }}"logs/error_log"{{ end }}
+      LogLevel warn
+      {{ if eq .Traits.os.family "debian" }}
+      IncludeOptional mods-enabled/*.load
+      IncludeOptional mods-enabled/*.conf
+      IncludeOptional conf-enabled/*.conf
+      IncludeOptional sites-enabled/*.conf
+      {{ else }}
+      IncludeOptional conf.d/*.conf
+      IncludeOptional conf.modules.d/*.conf
+      {{ end }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-apache]
+    notify: [apache-service]
+
+  - name: apache-service
+    type: service
+    service: >-
+      {{ if eq .Traits.os.family "debian" }}apache2{{ else }}httpd{{ end }}
+    enabled: true
+    state: running
+    depends_on: [apache-conf]
+    subscribes: [apache-conf]

@@ -1,0 +1,9 @@
+name: timezone
+
+vars:
+  system_timezone: "UTC"
+
+resources:
+  - name: set-timezone
+    type: timezone
+    timezone: "{{ .Vars.system_timezone }}"

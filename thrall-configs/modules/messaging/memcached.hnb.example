@@ -1,0 +1,40 @@
+name: memcached
+
+vars:
+  memcached_port: "11211"
+  memcached_memory: "64"
+  memcached_max_conn: "1024"
+  memcached_listen: "127.0.0.1"
+
+resources:
+  - name: install-memcached
+    type: package
+    package: memcached
+    state: present
+
+  - name: memcached-conf
+    type: file
+    targetpath: /etc/memcached.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      -l {{ .Vars.memcached_listen }}
+      -p {{ .Vars.memcached_port }}
+      -m {{ .Vars.memcached_memory }}
+      -c {{ .Vars.memcached_max_conn }}
+      -t 4
+      -u memcache
+      -P /var/run/memcached/memcached.pid
+      logfile /var/log/memcached.log
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-memcached]
+    notify: [memcached-service]
+
+  - name: memcached-service
+    type: service
+    service: memcached
+    enabled: true
+    state: running
+    depends_on: [memcached-conf]
+    subscribes: [memcached-conf]

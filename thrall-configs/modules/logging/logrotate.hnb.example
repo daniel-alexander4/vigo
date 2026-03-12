@@ -1,0 +1,35 @@
+name: logrotate
+
+vars:
+  log_path: "/var/log/app/*.log"
+  rotate_count: "14"
+  rotate_size: "100M"
+  compress: "true"
+
+resources:
+  - name: install-logrotate
+    type: package
+    package: logrotate
+    state: present
+
+  - name: logrotate-hobnob-conf
+    type: file
+    targetpath: /etc/logrotate.d/hobnob
+    content: |
+      {{ .Vars.log_path }} {
+          rotate {{ .Vars.rotate_count }}
+          size {{ .Vars.rotate_size }}
+          missingok
+          notifempty
+          {{ if eq .Vars.compress "true" }}compress
+          delaycompress
+          {{ end }}create 0640 root adm
+          sharedscripts
+          postrotate
+              /usr/lib/rsyslog/rsyslog-rotate 2>/dev/null || true
+          endscript
+      }
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-logrotate]

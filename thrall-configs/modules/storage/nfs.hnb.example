@@ -1,0 +1,76 @@
+name: nfs
+
+vars:
+  nfs_export_path: "/srv/nfs"
+  nfs_export_clients: "10.0.0.0/24(rw,sync,no_subtree_check,no_root_squash)"
+  nfs_mount_source: "10.0.0.1:/srv/nfs"
+  nfs_mount_point: "/mnt/nfs"
+
+resources:
+  # --- Package (distro-specific) ---
+
+  - name: install-nfs
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}nfs-kernel-server{{ else }}nfs-utils{{ end }}
+    state: present
+
+  # --- Export directory ---
+
+  - name: nfs-export-dir
+    type: file
+    targetpath: "{{ .Vars.nfs_export_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+  # --- Exports config ---
+
+  - name: nfs-exports
+    type: file
+    targetpath: /etc/exports
+    content: |
+      # Managed by Hobnob — do not edit manually
+      {{ .Vars.nfs_export_path }} {{ .Vars.nfs_export_clients }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-nfs, nfs-export-dir]
+    notify: [reload-exports]
+
+  # Re-export shares when /etc/exports changes
+  - name: reload-exports
+    type: exec
+    command: "exportfs -ra"
+    depends_on: [nfs-exports]
+
+  # --- Service ---
+
+  - name: nfs-service
+    type: service
+    service: >-
+      {{ if eq .Traits.os.family "debian" }}nfs-kernel-server{{ else }}nfs-server{{ end }}
+    enabled: true
+    state: running
+    depends_on: [nfs-exports]
+    subscribes: [nfs-exports]
+
+  # --- Client mount ---
+
+  - name: nfs-mount-dir
+    type: file
+    targetpath: "{{ .Vars.nfs_mount_point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+  - name: nfs-mount
+    type: mount
+    path: "{{ .Vars.nfs_mount_point }}"
+    device: "{{ .Vars.nfs_mount_source }}"
+    fstype: nfs
+    options: "rw,hard,intr,timeo=600"
+    state: mounted
+    depends_on: [nfs-mount-dir]

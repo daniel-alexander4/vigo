@@ -1,0 +1,44 @@
+name: rsyslog
+
+vars:
+  remote_syslog_server: ""
+  remote_syslog_port: "514"
+  log_format: "RSYSLOG_TraditionalFileFormat"
+
+resources:
+  - name: install-rsyslog
+    type: package
+    package: rsyslog
+    state: present
+
+  - name: rsyslog-hobnob-conf
+    type: file
+    targetpath: /etc/rsyslog.d/50-hobnob.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+
+      # Use configured log format
+      $ActionFileDefaultTemplate {{ .Vars.log_format }}
+
+      # Separate log files for key facilities
+      auth,authpriv.*                 /var/log/auth.log
+      mail.*                          /var/log/mail.log
+      cron.*                          /var/log/cron.log
+
+      {{ if ne .Vars.remote_syslog_server "" }}
+      # Forward all logs to remote syslog server over UDP
+      *.* @{{ .Vars.remote_syslog_server }}:{{ .Vars.remote_syslog_port }}
+      {{ end }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-rsyslog]
+    notify: [rsyslog-service]
+
+  - name: rsyslog-service
+    type: service
+    service: rsyslog
+    enabled: true
+    state: running
+    depends_on: [rsyslog-hobnob-conf]
+    subscribes: [rsyslog-hobnob-conf]

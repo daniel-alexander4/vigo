@@ -1,0 +1,54 @@
+name: sudo
+
+vars:
+  passwordless: "false"
+  env_keep: "SSH_AUTH_SOCK EDITOR VISUAL"
+
+resources:
+  - name: install-sudo
+    type: package
+    package: sudo
+    state: present
+
+  - name: sudoers
+    type: file
+    targetpath: /etc/sudoers
+    content: |
+      # /etc/sudoers — managed by hobnob
+      Defaults    env_reset
+      Defaults    mail_badpass
+      Defaults    secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      Defaults    logfile="/var/log/sudo.log"
+      Defaults    log_input, log_output
+      Defaults    env_keep += "{{ .Vars.env_keep }}"
+
+      root ALL=(ALL:ALL) ALL
+
+      #includedir /etc/sudoers.d
+    owner: root
+    group: root
+    mode: "0440"
+    depends_on: [install-sudo]
+
+  - name: sudoers-hobnob
+    type: file
+    targetpath: /etc/sudoers.d/hobnob
+    content: |
+      # /etc/sudoers.d/hobnob — managed by hobnob
+      {{ if eq .Traits.os.family "redhat" -}}
+      {{ if eq .Vars.passwordless "true" -}}
+      %wheel ALL=(ALL:ALL) NOPASSWD: ALL
+      {{ else -}}
+      %wheel ALL=(ALL:ALL) ALL
+      {{ end -}}
+      {{ else -}}
+      {{ if eq .Vars.passwordless "true" -}}
+      %sudo ALL=(ALL:ALL) NOPASSWD: ALL
+      {{ else -}}
+      %sudo ALL=(ALL:ALL) ALL
+      {{ end -}}
+      {{ end -}}
+    owner: root
+    group: root
+    mode: "0440"
+    depends_on: [install-sudo]

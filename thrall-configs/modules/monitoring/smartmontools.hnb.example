@@ -1,0 +1,42 @@
+name: smartmontools
+
+vars:
+  # Short self-test daily at 02:00, long self-test Saturdays at 03:00
+  smartd_schedule: "-s (S/../.././02|L/../../6/03)"
+
+resources:
+  - name: install-smartmontools
+    type: package
+    package: smartmontools
+    state: present
+
+  - name: smartd-conf
+    type: file
+    targetpath: >-
+      {{ if eq .Traits.os.family "debian" }}/etc/smartmontools/smartd.conf{{ else }}/etc/smartd.conf{{ end }}
+    content: |
+      # Managed by Hobnob — do not edit manually
+      #
+      # DEVICESCAN: scan all devices and apply these directives
+      #   -H   check SMART health status
+      #   -l error   report ATA error log increases
+      #   -l selftest   report self-test log failures
+      #   -f   check for usage attribute failures
+      #   -t   equivalent to -p and -u (track all attribute changes)
+      #   -m root   send email alerts to root
+      DEVICESCAN -H -l error -l selftest -f -t {{ .Vars.smartd_schedule }} -m root
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-smartmontools]
+    notify: [smartd-service]
+
+  - name: smartd-service
+    type: service
+    # smartd on RHEL/generic, smartmontools on Debian
+    service: >-
+      {{ if eq .Traits.os.family "debian" }}smartmontools{{ else }}smartd{{ end }}
+    enabled: true
+    state: running
+    depends_on: [smartd-conf]
+    subscribes: [smartd-conf]

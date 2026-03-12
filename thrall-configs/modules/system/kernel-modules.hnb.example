@@ -1,0 +1,26 @@
+name: kernel-modules
+
+resources:
+  # Container networking (required for Kubernetes, Docker Swarm)
+  - name: br-netfilter
+    type: kernel_module
+    module: br_netfilter
+    state: present
+
+  # Container storage driver (overlay2)
+  - name: overlay
+    type: kernel_module
+    module: overlay
+    state: present
+
+  # IPVS for load balancing (kube-proxy IPVS mode)
+  - name: ip-vs
+    type: kernel_module
+    module: ip_vs
+    state: present
+
+  # Disable cramfs — rarely needed, reduces attack surface
+  - name: disable-cramfs
+    type: kernel_module
+    module: cramfs
+    state: absent

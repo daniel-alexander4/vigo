@@ -1,0 +1,58 @@
+name: firewall-rules
+
+vars:
+  ssh_port: "22"
+  http_port: "80"
+  https_port: "443"
+
+resources:
+  # Ensure ufw is installed and enabled before adding rules
+  - name: install-ufw
+    type: package
+    package: ufw
+    state: present
+
+  - name: enable-ufw
+    type: exec
+    command: "ufw --force enable"
+    when: "!command_succeeds('ufw status | grep -q active')"
+    depends_on: [install-ufw]
+
+  - name: allow-ssh
+    type: firewall
+    port: "{{ .Vars.ssh_port }}"
+    proto: tcp
+    action: allow
+    comment: "hobnob: allow SSH"
+    depends_on: [enable-ufw]
+
+  - name: allow-http
+    type: firewall
+    port: "{{ .Vars.http_port }}"
+    proto: tcp
+    action: allow
+    comment: "hobnob: allow HTTP"
+    depends_on: [enable-ufw]
+
+  - name: allow-https
+    type: firewall
+    port: "{{ .Vars.https_port }}"
+    proto: tcp
+    action: allow
+    comment: "hobnob: allow HTTPS"
+    depends_on: [enable-ufw]
+
+  # ICMP uses a ufw application-level rule rather than a port
+  - name: allow-icmp
+    type: exec
+    command: |
+      ufw allow proto icmp from any to any
+    when: "!command_succeeds('ufw status verbose | grep -q ICMP')"
+    depends_on: [enable-ufw]
+
+  # Default deny incoming — ufw's default policy for anything not explicitly allowed
+  - name: deny-incoming-default
+    type: exec
+    command: "ufw default deny incoming"
+    when: "!command_succeeds('ufw status verbose | grep -q \"Default: deny (incoming)\"')"
+    depends_on: [allow-ssh, allow-http, allow-https, allow-icmp]

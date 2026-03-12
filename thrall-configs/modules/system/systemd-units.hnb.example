@@ -1,0 +1,63 @@
+name: systemd-units
+
+vars:
+  app_name: "myapp"
+  app_binary: "/usr/local/bin/myapp"
+  app_user: "myapp"
+  app_workdir: "/opt/myapp"
+
+resources:
+  - name: app-user
+    type: user
+    username: "{{ .Vars.app_user }}"
+    system: "true"
+    shell: /usr/sbin/nologin
+    state: present
+
+  - name: app-workdir
+    type: file
+    targetpath: "{{ .Vars.app_workdir }}"
+    state: directory
+    owner: "{{ .Vars.app_user }}"
+    group: "{{ .Vars.app_user }}"
+    mode: "0755"
+    depends_on: [app-user]
+
+  - name: app-unit-file
+    type: file
+    targetpath: "/etc/systemd/system/{{ .Vars.app_name }}.service"
+    content: |
+      [Unit]
+      Description={{ .Vars.app_name }}
+      After=network.target
+
+      [Service]
+      Type=simple
+      User={{ .Vars.app_user }}
+      WorkingDirectory={{ .Vars.app_workdir }}
+      ExecStart={{ .Vars.app_binary }}
+      Restart=on-failure
+      RestartSec=5
+      LimitNOFILE=65535
+
+      [Install]
+      WantedBy=multi-user.target
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [app-workdir]
+    notify: [daemon-reload]
+
+  - name: daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    depends_on: [app-unit-file]
+    notify: [app-service]
+
+  - name: app-service
+    type: service
+    service: "{{ .Vars.app_name }}"
+    enabled: true
+    state: running
+    depends_on: [daemon-reload]
+    subscribes: [daemon-reload]

@@ -1,0 +1,28 @@
+name: selinux
+
+vars:
+  selinux_mode: "enforcing"
+
+resources:
+  - conditional_block:
+      when: "os_family('redhat')"
+      resources:
+        - name: selinux-config
+          type: file
+          targetpath: /etc/selinux/config
+          content: |
+            # /etc/selinux/config — managed by hobnob
+            SELINUX={{ .Vars.selinux_mode }}
+            SELINUXTYPE=targeted
+          owner: root
+          group: root
+          mode: "0644"
+
+        # Apply runtime mode without requiring reboot.
+        # Only runs when getenforce is available (SELinux tooling installed).
+        - name: selinux-enforce
+          type: exec
+          command: "setenforce {{ .Vars.selinux_mode }}"
+          when: "command_succeeds('which getenforce')"
+          depends_on: [selinux-config]
+          subscribes: [selinux-config]

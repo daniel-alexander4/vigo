@@ -1,0 +1,66 @@
+name: fstab-entries
+
+vars:
+  nfs_server: "10.0.0.1"
+  nfs_share: "/srv/shared"
+  nfs_mount_point: "/mnt/shared"
+  tmpfs_size: "2G"
+
+resources:
+  # --- NFS share mount ---
+
+  - name: nfs-mount-dir
+    type: file
+    targetpath: "{{ .Vars.nfs_mount_point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+  - name: nfs-share
+    type: mount
+    path: "{{ .Vars.nfs_mount_point }}"
+    device: "{{ .Vars.nfs_server }}:{{ .Vars.nfs_share }}"
+    fstype: nfs
+    options: "rw,hard,intr,timeo=600,retrans=3"
+    state: mounted
+    depends_on: [nfs-mount-dir]
+
+  # --- tmpfs for /tmp ---
+
+  - name: tmpfs-tmp
+    type: mount
+    path: /tmp
+    device: tmpfs
+    fstype: tmpfs
+    options: "defaults,noatime,nosuid,nodev,size={{ .Vars.tmpfs_size }}"
+    state: mounted
+
+  # --- tmpfs for shared memory ---
+
+  - name: tmpfs-shm
+    type: mount
+    path: /dev/shm
+    device: tmpfs
+    fstype: tmpfs
+    options: "defaults,nosuid,nodev,noexec"
+    state: mounted
+
+  # --- Bind mount ---
+
+  - name: bind-mount-dir
+    type: file
+    targetpath: /srv/www
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+  - name: bind-mount
+    type: mount
+    path: /srv/www
+    device: /var/www
+    fstype: none
+    options: "bind"
+    state: mounted
+    depends_on: [bind-mount-dir]

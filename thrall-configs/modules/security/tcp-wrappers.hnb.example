@@ -1,0 +1,33 @@
+name: tcp-wrappers
+
+vars:
+  allowed_sshd_networks: "LOCAL"
+  allowed_services: "sshd"
+
+resources:
+  - name: install-tcp-wrappers
+    type: package
+    package: "{{ if eq .Traits.os.family \"debian\" }}tcpd{{ else }}tcp_wrappers{{ end }}"
+    state: present
+
+  - name: hosts-allow
+    type: file
+    targetpath: /etc/hosts.allow
+    content: |
+      # /etc/hosts.allow — managed by hobnob
+      {{ .Vars.allowed_services }}: {{ .Vars.allowed_sshd_networks }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-tcp-wrappers]
+
+  - name: hosts-deny
+    type: file
+    targetpath: /etc/hosts.deny
+    content: |
+      # /etc/hosts.deny — managed by hobnob
+      ALL: ALL
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-tcp-wrappers]

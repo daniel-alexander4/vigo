@@ -1,0 +1,71 @@
+name: rabbitmq
+
+vars:
+  rabbitmq_port: "5672"
+  rabbitmq_mgmt_port: "15672"
+  memory_watermark: "0.4"
+  disk_free_limit: "1GB"
+
+resources:
+  # --- Repositories ---
+
+  - name: erlang-repo
+    type: repository
+    key_url: https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc
+    repo: "deb [signed-by=/etc/apt/keyrings/erlang_solutions.gpg] https://packages.erlang-solutions.com/ubuntu {{ .Traits.os.codename }} contrib"
+    state: present
+    when: "os_family('debian')"
+
+  - name: rabbitmq-repo
+    type: repository
+    key_url: https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey
+    repo: "deb [signed-by=/etc/apt/keyrings/rabbitmq-server.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu {{ .Traits.os.codename }} main"
+    state: present
+    when: "os_family('debian')"
+
+  # --- Package ---
+
+  - name: install-rabbitmq
+    type: package
+    package: rabbitmq-server
+    state: present
+    depends_on: [erlang-repo, rabbitmq-repo]
+
+  # --- Configuration ---
+
+  - name: rabbitmq-conf
+    type: file
+    targetpath: /etc/rabbitmq/rabbitmq.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      listeners.tcp.default = {{ .Vars.rabbitmq_port }}
+      management.tcp.port = {{ .Vars.rabbitmq_mgmt_port }}
+      vm_memory_high_watermark.relative = {{ .Vars.memory_watermark }}
+      disk_free_limit.absolute = {{ .Vars.disk_free_limit }}
+      log.dir = /var/log/rabbitmq
+      log.file = rabbit.log
+      log.file.level = info
+    owner: rabbitmq
+    group: rabbitmq
+    mode: "0644"
+    depends_on: [install-rabbitmq]
+    notify: [rabbitmq-service]
+
+  # --- Management plugin ---
+
+  - name: enable-management-plugin
+    type: exec
+    command: "rabbitmq-plugins enable rabbitmq_management"
+    when: "!command_succeeds('rabbitmq-plugins list -e | grep rabbitmq_management')"
+    depends_on: [install-rabbitmq]
+    notify: [rabbitmq-service]
+
+  # --- Service ---
+
+  - name: rabbitmq-service
+    type: service
+    service: rabbitmq-server
+    enabled: true
+    state: running
+    depends_on: [rabbitmq-conf, enable-management-plugin]
+    subscribes: [rabbitmq-conf]

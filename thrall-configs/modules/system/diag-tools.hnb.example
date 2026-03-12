@@ -1,0 +1,174 @@
+name: diag-tools
+
+resources:
+  # --- Network diagnostics ---
+
+  - name: install-traceroute
+    type: package
+    package: traceroute
+    state: present
+
+  - name: install-netcat
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}netcat-openbsd{{ else }}nmap-ncat{{ end }}
+    state: present
+
+  - name: install-telnet
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}telnet{{ else }}telnet{{ end }}
+    state: present
+
+  - name: install-tcpdump
+    type: package
+    package: tcpdump
+    state: present
+
+  - name: install-nmap
+    type: package
+    package: nmap
+    state: present
+
+  - name: install-dnsutils
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}dnsutils{{ else }}bind-utils{{ end }}
+    state: present
+
+  - name: install-mtr
+    type: package
+    package: mtr
+    state: present
+
+  - name: install-socat
+    type: package
+    package: socat
+    state: present
+
+  - name: install-curl
+    type: package
+    package: curl
+    state: present
+
+  - name: install-wget
+    type: package
+    package: wget
+    state: present
+
+  - name: install-whois
+    type: package
+    package: whois
+    state: present
+
+  - name: install-ethtool
+    type: package
+    package: ethtool
+    state: present
+
+  - name: install-iperf3
+    type: package
+    package: iperf3
+    state: present
+
+  # --- Disk and I/O diagnostics ---
+
+  - name: install-sysstat
+    type: package
+    package: sysstat
+    state: present
+
+  - name: install-iotop
+    type: package
+    package: iotop
+    state: present
+
+  - name: install-hdparm
+    type: package
+    package: hdparm
+    state: present
+
+  # --- Process and system diagnostics ---
+
+  - name: install-htop
+    type: package
+    package: htop
+    state: present
+
+  - name: install-strace
+    type: package
+    package: strace
+    state: present
+
+  - name: install-ltrace
+    type: package
+    package: ltrace
+    state: present
+
+  - name: install-lsof
+    type: package
+    package: lsof
+    state: present
+
+  - name: install-psmisc
+    type: package
+    package: psmisc
+    state: present
+
+  # --- File and text utilities ---
+
+  - name: install-tree
+    type: package
+    package: tree
+    state: present
+
+  - name: install-jq
+    type: package
+    package: jq
+    state: present
+
+  - name: install-rsync
+    type: package
+    package: rsync
+    state: present
+
+  - name: install-file
+    type: package
+    package: file
+    state: present
+
+  - name: install-zip
+    type: package
+    package: zip
+    state: present
+
+  - name: install-unzip
+    type: package
+    package: unzip
+    state: present
+
+  # --- Hardware info ---
+
+  - name: install-pciutils
+    type: package
+    package: pciutils
+    state: present
+
+  - name: install-usbutils
+    type: package
+    package: usbutils
+    state: present
+
+  - name: install-dmidecode
+    type: package
+    package: dmidecode
+    state: present
+
+  # --- Enable sysstat collection (provides iostat, sar, mpstat) ---
+
+  - name: sysstat-service
+    type: service
+    service: sysstat
+    enabled: true
+    state: running
+    depends_on: [install-sysstat]

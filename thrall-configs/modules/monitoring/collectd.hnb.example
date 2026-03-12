@@ -1,0 +1,71 @@
+name: collectd
+
+vars:
+  collectd_interval: "10"
+  collectd_hostname_override: ""
+
+resources:
+  - name: install-collectd
+    type: package
+    package: collectd
+    state: present
+
+  - name: collectd-conf
+    type: file
+    targetpath: >-
+      {{ if eq .Traits.os.family "debian" }}/etc/collectd/collectd.conf{{ else }}/etc/collectd.conf{{ end }}
+    content: |
+      # Managed by Hobnob — do not edit manually
+      {{ if ne .Vars.collectd_hostname_override "" }}Hostname "{{ .Vars.collectd_hostname_override }}"{{ end }}
+      FQDNLookup true
+
+      Interval {{ .Vars.collectd_interval }}
+
+      LoadPlugin cpu
+      LoadPlugin memory
+      LoadPlugin disk
+      LoadPlugin interface
+      LoadPlugin load
+      LoadPlugin df
+
+      <Plugin cpu>
+        ReportByCpu true
+        ReportByState true
+        ValuesPercentage true
+      </Plugin>
+
+      <Plugin memory>
+        ValuesAbsolute true
+        ValuesPercentage true
+      </Plugin>
+
+      <Plugin disk>
+        Disk "/^[hsv]d[a-z]/"
+        IgnoreSelected false
+      </Plugin>
+
+      <Plugin interface>
+        Interface "lo"
+        IgnoreSelected true
+      </Plugin>
+
+      <Plugin df>
+        MountPoint "/"
+        ReportByDevice false
+        ReportInodes true
+        ValuesAbsolute true
+        ValuesPercentage true
+      </Plugin>
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-collectd]
+    notify: [collectd-service]
+
+  - name: collectd-service
+    type: service
+    service: collectd
+    enabled: true
+    state: running
+    depends_on: [collectd-conf]
+    subscribes: [collectd-conf]

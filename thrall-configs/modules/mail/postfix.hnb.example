@@ -1,0 +1,61 @@
+name: postfix
+
+vars:
+  postfix_hostname: "{{ .Traits.identity.hostname }}"
+  postfix_domain: "example.com"
+  postfix_relayhost: ""
+  postfix_interfaces: "loopback-only"
+
+resources:
+  - name: install-postfix
+    type: package
+    package: postfix
+    state: present
+
+  - name: postfix-main-cf
+    type: file
+    targetpath: /etc/postfix/main.cf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      smtpd_banner = $myhostname ESMTP
+      biff = no
+      append_dot_mydomain = no
+
+      myhostname = {{ .Vars.postfix_hostname }}
+      mydomain = {{ .Vars.postfix_domain }}
+      myorigin = $mydomain
+      mydestination = $myhostname, localhost.$mydomain, localhost
+      inet_interfaces = {{ .Vars.postfix_interfaces }}
+      inet_protocols = ipv4
+
+      {{ if ne .Vars.postfix_relayhost "" }}
+      relayhost = {{ .Vars.postfix_relayhost }}
+      {{ end }}
+
+      # TLS settings
+      smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem
+      smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key
+      smtpd_tls_security_level = may
+      smtp_tls_security_level = may
+      smtp_tls_loglevel = 1
+
+      # Limits
+      mailbox_size_limit = 0
+      recipient_delimiter = +
+      message_size_limit = 52428800
+
+      # Logging
+      maillog_file = /var/log/mail.log
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-postfix]
+    notify: [postfix-service]
+
+  - name: postfix-service
+    type: service
+    service: postfix
+    enabled: true
+    state: running
+    depends_on: [postfix-main-cf]
+    subscribes: [postfix-main-cf]

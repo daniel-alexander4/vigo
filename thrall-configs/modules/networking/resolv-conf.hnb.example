@@ -1,0 +1,27 @@
+name: resolv-conf
+
+vars:
+  nameserver_1: "1.1.1.1"
+  nameserver_2: "8.8.8.8"
+  nameserver_3: ""
+  search_domain: ""
+  dns_options: "timeout:2 attempts:3"
+
+resources:
+  - name: resolv-conf
+    type: file
+    targetpath: /etc/resolv.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      {{ if ne .Vars.search_domain "" }}
+      search {{ .Vars.search_domain }}
+      {{ end }}
+      nameserver {{ .Vars.nameserver_1 }}
+      nameserver {{ .Vars.nameserver_2 }}
+      {{ if ne .Vars.nameserver_3 "" }}
+      nameserver {{ .Vars.nameserver_3 }}
+      {{ end }}
+      options {{ .Vars.dns_options }}
+    owner: root
+    group: root
+    mode: "0644"

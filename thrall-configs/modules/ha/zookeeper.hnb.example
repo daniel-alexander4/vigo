@@ -1,0 +1,65 @@
+name: zookeeper
+
+vars:
+  zk_tick_time: "2000"
+  zk_client_port: "2181"
+  zk_data_dir: "/var/lib/zookeeper"
+  zk_server_id: "1"
+
+resources:
+  - name: install-java
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}default-jre-headless{{ else }}java-11-openjdk-headless{{ end }}
+    state: present
+
+  - name: install-zookeeper
+    type: package
+    package: zookeeper
+    state: present
+    depends_on: [install-java]
+
+  - name: zk-data-dir
+    type: file
+    targetpath: "{{ .Vars.zk_data_dir }}"
+    state: directory
+    owner: zookeeper
+    group: zookeeper
+    mode: "0755"
+
+  - name: zoo-cfg
+    type: file
+    targetpath: /etc/zookeeper/conf/zoo.cfg
+    content: |
+      # Managed by Hobnob — do not edit manually
+      tickTime={{ .Vars.zk_tick_time }}
+      dataDir={{ .Vars.zk_data_dir }}
+      clientPort={{ .Vars.zk_client_port }}
+      initLimit=10
+      syncLimit=5
+      maxClientCnxns=60
+      autopurge.snapRetainCount=3
+      autopurge.purgeInterval=1
+    owner: root
+    group: zookeeper
+    mode: "0644"
+    depends_on: [install-zookeeper]
+    notify: [zookeeper-service]
+
+  - name: zk-myid
+    type: file
+    targetpath: "{{ .Vars.zk_data_dir }}/myid"
+    content: "{{ .Vars.zk_server_id }}"
+    owner: zookeeper
+    group: zookeeper
+    mode: "0644"
+    depends_on: [zk-data-dir]
+    notify: [zookeeper-service]
+
+  - name: zookeeper-service
+    type: service
+    service: zookeeper
+    enabled: true
+    state: running
+    depends_on: [zoo-cfg, zk-myid]
+    subscribes: [zoo-cfg, zk-myid]

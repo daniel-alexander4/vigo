@@ -1,0 +1,34 @@
+name: cron-jobs
+
+vars:
+  backup_script: "/usr/local/bin/backup.sh"
+  cleanup_days: "30"
+  healthcheck_url: "http://localhost:8080/health"
+
+resources:
+  # Remove logs older than cleanup_days, daily at 2:30 AM
+  - name: log-cleanup
+    type: cron
+    command: "find /var/log -name '*.gz' -mtime +{{ .Vars.cleanup_days }} -delete"
+    minute: "30"
+    hour: "2"
+    user: root
+    state: present
+
+  # Weekly full backup, Sundays at 1:00 AM
+  - name: weekly-backup
+    type: cron
+    command: "{{ .Vars.backup_script }}"
+    minute: "0"
+    hour: "1"
+    weekday: "0"
+    user: root
+    state: present
+
+  # Health check every 15 minutes
+  - name: health-check
+    type: cron
+    command: "curl -sf {{ .Vars.healthcheck_url }} > /dev/null || logger -t healthcheck 'FAILED'"
+    minute: "*/15"
+    user: root
+    state: present

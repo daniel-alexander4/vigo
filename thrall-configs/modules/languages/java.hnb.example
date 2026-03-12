@@ -1,0 +1,25 @@
+name: java
+
+vars:
+  # Leave empty to use the distro default package
+  java_package_override: ""
+  java_home: "/usr/lib/jvm/default-java"
+
+resources:
+  - name: install-java
+    type: package
+    package: >-
+      {{ if ne .Vars.java_package_override "" }}{{ .Vars.java_package_override }}{{ else if eq .Traits.os.family "debian" }}default-jdk{{ else }}java-17-openjdk-devel{{ end }}
+    state: present
+
+  - name: java-profile
+    type: file
+    targetpath: /etc/profile.d/java.sh
+    content: |
+      # Managed by Hobnob — do not edit manually
+      export JAVA_HOME="{{ .Vars.java_home }}"
+      export PATH="$JAVA_HOME/bin:$PATH"
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-java]

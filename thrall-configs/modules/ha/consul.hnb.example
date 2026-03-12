@@ -1,0 +1,128 @@
+name: consul
+
+vars:
+  consul_version: "1.18.1"
+  consul_datacenter: "dc1"
+  consul_log_level: "INFO"
+  consul_server_mode: "false"
+
+resources:
+  # --- User ---
+
+  - name: consul-user
+    type: user
+    username: consul
+    system: "true"
+    shell: /usr/sbin/nologin
+    home: /opt/consul
+    state: present
+
+  # --- Install from archive ---
+
+  - name: install-consul
+    type: archive
+    url: "https://releases.hashicorp.com/consul/{{ .Vars.consul_version }}/consul_{{ .Vars.consul_version }}_linux_amd64.zip"
+    targetpath: /usr/local/bin/consul
+    binary: consul
+    unless: "consul version | grep {{ .Vars.consul_version }}"
+
+  # --- Data directory ---
+
+  - name: consul-data-dir
+    type: file
+    targetpath: /opt/consul/data
+    state: directory
+    owner: consul
+    group: consul
+    mode: "0750"
+    depends_on: [consul-user]
+
+  - name: consul-config-dir
+    type: file
+    targetpath: /etc/consul.d
+    state: directory
+    owner: consul
+    group: consul
+    mode: "0750"
+    depends_on: [consul-user]
+
+  # --- Configuration ---
+
+  - name: consul-hcl
+    type: file
+    targetpath: /etc/consul.d/consul.hcl
+    content: |
+      # Managed by Hobnob — do not edit manually
+      datacenter = "{{ .Vars.consul_datacenter }}"
+      data_dir   = "/opt/consul/data"
+      log_level  = "{{ .Vars.consul_log_level }}"
+
+      client_addr = "0.0.0.0"
+      bind_addr   = "{{ .Traits.network.default_ipv4 }}"
+
+      server = {{ .Vars.consul_server_mode }}
+
+      ui_config {
+        enabled = true
+      }
+
+      connect {
+        enabled = true
+      }
+
+      performance {
+        raft_multiplier = 1
+      }
+    owner: consul
+    group: consul
+    mode: "0640"
+    depends_on: [consul-config-dir]
+    notify: [consul-service]
+
+  # --- Systemd unit ---
+
+  - name: consul-unit-file
+    type: file
+    targetpath: /etc/systemd/system/consul.service
+    content: |
+      [Unit]
+      Description=HashiCorp Consul
+      Documentation=https://www.consul.io/
+      Requires=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=notify
+      User=consul
+      Group=consul
+      ExecStart=/usr/local/bin/consul agent -config-dir=/etc/consul.d/
+      ExecReload=/bin/kill --signal HUP $MAINPID
+      KillMode=process
+      KillSignal=SIGTERM
+      Restart=on-failure
+      RestartSec=5
+      LimitNOFILE=65536
+
+      [Install]
+      WantedBy=multi-user.target
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-consul, consul-hcl]
+    notify: [daemon-reload]
+
+  - name: daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    depends_on: [consul-unit-file]
+    notify: [consul-service]
+
+  # --- Service ---
+
+  - name: consul-service
+    type: service
+    service: consul
+    enabled: true
+    state: running
+    depends_on: [daemon-reload, consul-data-dir]
+    subscribes: [daemon-reload, consul-hcl]

@@ -1,0 +1,56 @@
+name: dnsmasq
+
+vars:
+  dns_listen: "127.0.0.1"
+  dns_cache_size: "1000"
+  dns_upstream_1: "1.1.1.1"
+  dns_upstream_2: "8.8.8.8"
+  dhcp_range: ""
+
+resources:
+  - name: install-dnsmasq
+    type: package
+    package: dnsmasq
+    state: present
+
+  - name: dnsmasq-conf
+    type: file
+    targetpath: /etc/dnsmasq.d/hobnob.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      listen-address={{ .Vars.dns_listen }}
+      port=53
+      cache-size={{ .Vars.dns_cache_size }}
+      no-resolv
+
+      # Upstream DNS servers
+      server={{ .Vars.dns_upstream_1 }}
+      server={{ .Vars.dns_upstream_2 }}
+
+      # Security
+      bogus-priv
+      domain-needed
+      no-poll
+
+      {{ if ne .Vars.dhcp_range "" }}
+      # DHCP
+      dhcp-range={{ .Vars.dhcp_range }}
+      dhcp-leasefile=/var/lib/misc/dnsmasq.leases
+      {{ end }}
+
+      # Logging
+      log-queries
+      log-facility=/var/log/dnsmasq.log
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-dnsmasq]
+    notify: [dnsmasq-service]
+
+  - name: dnsmasq-service
+    type: service
+    service: dnsmasq
+    enabled: true
+    state: running
+    depends_on: [dnsmasq-conf]
+    subscribes: [dnsmasq-conf]

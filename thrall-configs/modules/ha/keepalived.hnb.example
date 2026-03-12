@@ -1,0 +1,61 @@
+name: keepalived
+
+vars:
+  vrrp_interface: "eth0"
+  virtual_ip: "10.0.0.100"
+  vrrp_priority: "100"
+  vrrp_router_id: "51"
+  vrrp_password: "secret:hobnob/keepalived/vrrp-password"
+
+resources:
+  - name: install-keepalived
+    type: package
+    package: keepalived
+    state: present
+
+  - name: keepalived-conf
+    type: file
+    targetpath: /etc/keepalived/keepalived.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      vrrp_instance VI_1 {
+          state BACKUP
+          interface {{ .Vars.vrrp_interface }}
+          virtual_router_id {{ .Vars.vrrp_router_id }}
+          priority {{ .Vars.vrrp_priority }}
+          advert_int 1
+
+          authentication {
+              auth_type PASS
+              auth_pass {{ .Vars.vrrp_password }}
+          }
+
+          virtual_ipaddress {
+              {{ .Vars.virtual_ip }}/24
+          }
+
+          track_script {
+              chk_health
+          }
+      }
+
+      vrrp_script chk_health {
+          script "/usr/bin/killall -0 haproxy"
+          interval 2
+          weight 2
+          fall 3
+          rise 2
+      }
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-keepalived]
+    notify: [keepalived-service]
+
+  - name: keepalived-service
+    type: service
+    service: keepalived
+    enabled: true
+    state: running
+    depends_on: [keepalived-conf]
+    subscribes: [keepalived-conf]

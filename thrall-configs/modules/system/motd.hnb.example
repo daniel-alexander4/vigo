@@ -1,0 +1,22 @@
+name: motd
+
+vars:
+  org_name: "ACME Corp"
+  contact_email: "ops@example.com"
+
+resources:
+  - name: motd
+    type: file
+    targetpath: /etc/motd
+    content: |
+      ========================================
+        {{ .Vars.org_name }}
+        Host: {{ .Traits.identity.hostname }}
+        OS:   {{ .Traits.os.distro }} {{ .Traits.os.version }}
+      ----------------------------------------
+        Managed by Hobnob. Unauthorized access
+        is prohibited. Contact {{ .Vars.contact_email }}
+      ========================================
+    owner: root
+    group: root
+    mode: "0644"

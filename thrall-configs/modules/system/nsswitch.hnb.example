@@ -1,0 +1,29 @@
+name: nsswitch
+
+vars:
+  use_ldap: "false"
+
+resources:
+  - name: nsswitch-conf
+    type: file
+    targetpath: /etc/nsswitch.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      {{ if eq .Vars.use_ldap "true" }}
+      passwd:     files ldap
+      group:      files ldap
+      shadow:     files ldap
+      {{ else }}
+      passwd:     files
+      group:      files
+      shadow:     files
+      {{ end }}
+      hosts:      files dns
+      networks:   files
+      protocols:  files
+      services:   files
+      ethers:     files
+      rpc:        files
+    owner: root
+    group: root
+    mode: "0644"

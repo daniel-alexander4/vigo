@@ -1,0 +1,44 @@
+name: ntp
+
+vars:
+  ntp_server_1: "0.pool.ntp.org"
+  ntp_server_2: "1.pool.ntp.org"
+  ntp_server_3: "2.pool.ntp.org"
+
+resources:
+  - name: install-ntp
+    type: package
+    package: ntp
+    state: present
+
+  - name: ntp-conf
+    type: file
+    targetpath: /etc/ntp.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      driftfile /var/lib/ntp/ntp.drift
+
+      # Restrict default access
+      restrict default kod nomodify notrap nopeer noquery
+      restrict -6 default kod nomodify notrap nopeer noquery
+      restrict 127.0.0.1
+      restrict ::1
+
+      # NTP servers
+      server {{ .Vars.ntp_server_1 }} iburst
+      server {{ .Vars.ntp_server_2 }} iburst
+      server {{ .Vars.ntp_server_3 }} iburst
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-ntp]
+    notify: [ntp-service]
+
+  - name: ntp-service
+    type: service
+    # ntp on Debian, ntpd on RHEL
+    service: "{{ if eq .Traits.os.family \"debian\" }}ntp{{ else }}ntpd{{ end }}"
+    enabled: true
+    state: running
+    depends_on: [ntp-conf]
+    subscribes: [ntp-conf]

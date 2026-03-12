@@ -1,0 +1,90 @@
+name: tomcat
+
+# Requires the java module — add both to your role:
+#   roles:
+#     - modules: [java, tomcat]
+
+vars:
+  tomcat_port: "8080"
+  tomcat_heap_min: "512m"
+  tomcat_heap_max: "1024m"
+  tomcat_max_threads: "200"
+
+resources:
+  - name: tomcat-user
+    type: user
+    username: tomcat
+    system: "true"
+    shell: /usr/sbin/nologin
+    group: tomcat
+    state: present
+
+  - name: install-tomcat
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}tomcat10{{ else }}tomcat{{ end }}
+    state: present
+    depends_on: [tomcat-user]
+
+  - name: tomcat-server-xml
+    type: file
+    targetpath: >-
+      {{ if eq .Traits.os.family "debian" }}/etc/tomcat10/server.xml{{ else }}/etc/tomcat/server.xml{{ end }}
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!-- Managed by Hobnob — do not edit manually -->
+      <Server port="8005" shutdown="SHUTDOWN">
+
+        <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+        <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on" />
+        <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+        <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+        <Service name="Catalina">
+          <Connector port="{{ .Vars.tomcat_port }}"
+                     protocol="org.apache.coyote.http11.Http11NioProtocol"
+                     maxThreads="{{ .Vars.tomcat_max_threads }}"
+                     connectionTimeout="20000"
+                     redirectPort="8443"
+                     URIEncoding="UTF-8" />
+
+          <Engine name="Catalina" defaultHost="localhost">
+            <Host name="localhost" appBase="webapps"
+                  unpackWARs="true" autoDeploy="true">
+              <Valve className="org.apache.catalina.valves.AccessLogValve"
+                     directory="logs"
+                     prefix="access_log"
+                     suffix=".txt"
+                     pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+            </Host>
+          </Engine>
+        </Service>
+      </Server>
+    owner: root
+    group: tomcat
+    mode: "0640"
+    depends_on: [install-tomcat]
+    notify: [tomcat-service]
+
+  - name: tomcat-defaults
+    type: file
+    targetpath: >-
+      {{ if eq .Traits.os.family "debian" }}/etc/default/tomcat10{{ else }}/etc/sysconfig/tomcat{{ end }}
+    content: |
+      # Managed by Hobnob — do not edit manually
+      JAVA_OPTS="-Djava.awt.headless=true"
+      CATALINA_OPTS="-Xms{{ .Vars.tomcat_heap_min }} -Xmx{{ .Vars.tomcat_heap_max }} -XX:+UseG1GC"
+    owner: root
+    group: tomcat
+    mode: "0640"
+    depends_on: [install-tomcat]
+    notify: [tomcat-service]
+
+  - name: tomcat-service
+    type: service
+    service: >-
+      {{ if eq .Traits.os.family "debian" }}tomcat10{{ else }}tomcat{{ end }}
+    enabled: true
+    state: running
+    depends_on: [tomcat-server-xml, tomcat-defaults]
+    subscribes: [tomcat-server-xml, tomcat-defaults]

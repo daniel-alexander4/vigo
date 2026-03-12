@@ -1,0 +1,77 @@
+name: passwd-policy
+
+vars:
+  pass_max_days: "90"
+  pass_min_days: "7"
+  pass_min_len: "12"
+  pass_warn_age: "14"
+  pwquality_dcredit: "-1"
+  pwquality_ucredit: "-1"
+  pwquality_lcredit: "-1"
+  pwquality_ocredit: "-1"
+
+resources:
+  - name: login-defs
+    type: file
+    targetpath: /etc/login.defs
+    content: |
+      # /etc/login.defs — managed by hobnob
+      MAIL_DIR        /var/mail
+      FAILLOG_ENAB    yes
+      LOG_UNKFAIL_ENAB no
+      LOG_OK_LOGINS   no
+      SYSLOG_SU_ENAB  yes
+      SYSLOG_SG_ENAB  yes
+      SU_NAME         su
+      ENV_SUPATH      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      ENV_PATH        PATH=/usr/local/bin:/usr/bin:/bin
+      TTYGROUP        tty
+      TTYPERM          0600
+      ERASECHAR       0177
+      KILLCHAR        025
+      UMASK           022
+
+      PASS_MAX_DAYS   {{ .Vars.pass_max_days }}
+      PASS_MIN_DAYS   {{ .Vars.pass_min_days }}
+      PASS_MIN_LEN    {{ .Vars.pass_min_len }}
+      PASS_WARN_AGE   {{ .Vars.pass_warn_age }}
+
+      UID_MIN          1000
+      UID_MAX         60000
+      SYS_UID_MIN      100
+      SYS_UID_MAX      999
+      GID_MIN          1000
+      GID_MAX         60000
+      SYS_GID_MIN      100
+      SYS_GID_MAX      999
+
+      LOGIN_RETRIES   3
+      LOGIN_TIMEOUT   60
+      ENCRYPT_METHOD  SHA512
+    owner: root
+    group: root
+    mode: "0644"
+
+  # pwquality is RHEL/CentOS-specific (pam_pwquality module)
+  - conditional_block:
+      when: "os_family('redhat')"
+      resources:
+        - name: install-libpwquality
+          type: package
+          package: libpwquality
+          state: present
+
+        - name: pwquality-conf
+          type: file
+          targetpath: /etc/security/pwquality.conf
+          content: |
+            # /etc/security/pwquality.conf — managed by hobnob
+            minlen = {{ .Vars.pass_min_len }}
+            dcredit = {{ .Vars.pwquality_dcredit }}
+            ucredit = {{ .Vars.pwquality_ucredit }}
+            lcredit = {{ .Vars.pwquality_lcredit }}
+            ocredit = {{ .Vars.pwquality_ocredit }}
+          owner: root
+          group: root
+          mode: "0644"
+          depends_on: [install-libpwquality]

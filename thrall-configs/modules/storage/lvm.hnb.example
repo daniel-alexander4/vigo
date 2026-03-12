@@ -1,0 +1,66 @@
+name: lvm
+
+vars:
+  lvm_disk: "/dev/sdb"
+  vg_name: "data_vg"
+  lv_name: "data_lv"
+  lv_size: "100%FREE"
+  fs_type: "ext4"
+  mount_point: "/data"
+
+resources:
+  - name: install-lvm
+    type: package
+    package: lvm2
+    state: present
+
+  # --- Physical volume ---
+
+  - name: create-pv
+    type: exec
+    command: "pvcreate {{ .Vars.lvm_disk }}"
+    when: "!command_succeeds('pvs {{ .Vars.lvm_disk }}')"
+    depends_on: [install-lvm]
+
+  # --- Volume group ---
+
+  - name: create-vg
+    type: exec
+    command: "vgcreate {{ .Vars.vg_name }} {{ .Vars.lvm_disk }}"
+    when: "!command_succeeds('vgs {{ .Vars.vg_name }}')"
+    depends_on: [create-pv]
+
+  # --- Logical volume ---
+
+  - name: create-lv
+    type: exec
+    command: "lvcreate -l {{ .Vars.lv_size }} -n {{ .Vars.lv_name }} {{ .Vars.vg_name }}"
+    when: "!command_succeeds('lvs {{ .Vars.vg_name }}/{{ .Vars.lv_name }}')"
+    depends_on: [create-vg]
+
+  # --- Filesystem ---
+
+  - name: format-lv
+    type: exec
+    command: "mkfs.{{ .Vars.fs_type }} /dev/{{ .Vars.vg_name }}/{{ .Vars.lv_name }}"
+    when: "!command_succeeds('blkid /dev/{{ .Vars.vg_name }}/{{ .Vars.lv_name }}')"
+    depends_on: [create-lv]
+
+  # --- Mount ---
+
+  - name: mount-dir
+    type: file
+    targetpath: "{{ .Vars.mount_point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+  - name: mount-lv
+    type: mount
+    path: "{{ .Vars.mount_point }}"
+    device: "/dev/{{ .Vars.vg_name }}/{{ .Vars.lv_name }}"
+    fstype: "{{ .Vars.fs_type }}"
+    options: "defaults,noatime"
+    state: mounted
+    depends_on: [format-lv, mount-dir]

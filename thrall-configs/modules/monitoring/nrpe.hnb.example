@@ -1,0 +1,66 @@
+name: nrpe
+
+vars:
+  nagios_server: "127.0.0.1"
+  disk_warn: "20%"
+  disk_crit: "10%"
+  load_warn: "5.0,4.0,3.0"
+  load_crit: "10.0,8.0,6.0"
+
+resources:
+  - name: install-nrpe
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}nagios-nrpe-server{{ else }}nrpe{{ end }}
+    state: present
+
+  - name: install-nagios-plugins
+    type: package
+    package: >-
+      {{ if eq .Traits.os.family "debian" }}nagios-plugins-basic{{ else }}nagios-plugins-all{{ end }}
+    state: present
+
+  - name: nrpe-cfg
+    type: file
+    targetpath: /etc/nagios/nrpe.cfg
+    content: |
+      # Managed by Hobnob — do not edit manually
+      log_facility=daemon
+      pid_file=/var/run/nagios/nrpe.pid
+      server_port=5666
+      nrpe_user=nagios
+      nrpe_group=nagios
+
+      allowed_hosts=127.0.0.1,::1,{{ .Vars.nagios_server }}
+
+      dont_blame_nrpe=0
+      allow_bash_command_substitution=0
+
+      command_timeout=60
+      connection_timeout=300
+
+      {{ if eq .Traits.os.family "debian" }}
+      include_dir=/etc/nagios/nrpe.d/
+      {{ else }}
+      include_dir=/etc/nrpe.d/
+      {{ end }}
+
+      # Check commands
+      command[check_disk]=/usr/lib/nagios/plugins/check_disk -w {{ .Vars.disk_warn }} -c {{ .Vars.disk_crit }} -p /
+      command[check_load]=/usr/lib/nagios/plugins/check_load -w {{ .Vars.load_warn }} -c {{ .Vars.load_crit }}
+      command[check_procs]=/usr/lib/nagios/plugins/check_procs -w 250 -c 400
+      command[check_users]=/usr/lib/nagios/plugins/check_users -w 5 -c 10
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-nrpe]
+    notify: [nrpe-service]
+
+  - name: nrpe-service
+    type: service
+    service: >-
+      {{ if eq .Traits.os.family "debian" }}nagios-nrpe-server{{ else }}nrpe{{ end }}
+    enabled: true
+    state: running
+    depends_on: [nrpe-cfg]
+    subscribes: [nrpe-cfg]

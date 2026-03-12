@@ -1,0 +1,131 @@
+name: elastic-stack
+
+vars:
+  es_cluster_name: "hobnob-cluster"
+  es_http_port: "9200"
+  kibana_port: "5601"
+  logstash_workers: "2"
+  es_heap_size: "1g"
+
+resources:
+  # --- Repository ---
+
+  - name: elastic-repo
+    type: repository
+    key_url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    repo: >-
+      {{ if eq .Traits.os.family "debian" }}deb [signed-by=/etc/apt/keyrings/elastic.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main{{ else }}https://artifacts.elastic.co/packages/8.x/yum{{ end }}
+    state: present
+
+  # --- Packages ---
+
+  - name: install-elasticsearch
+    type: package
+    package: elasticsearch
+    state: present
+    depends_on: [elastic-repo]
+
+  - name: install-kibana
+    type: package
+    package: kibana
+    state: present
+    depends_on: [elastic-repo]
+
+  - name: install-logstash
+    type: package
+    package: logstash
+    state: present
+    depends_on: [elastic-repo]
+
+  # --- Elasticsearch config ---
+
+  - name: elasticsearch-yml
+    type: file
+    targetpath: /etc/elasticsearch/elasticsearch.yml
+    content: |
+      # Managed by Hobnob — do not edit manually
+      cluster.name: {{ .Vars.es_cluster_name }}
+      node.name: {{ .Traits.identity.hostname }}
+      path.data: /var/lib/elasticsearch
+      path.logs: /var/log/elasticsearch
+      network.host: 0.0.0.0
+      http.port: {{ .Vars.es_http_port }}
+      discovery.type: single-node
+      xpack.security.enabled: false
+    owner: root
+    group: elasticsearch
+    mode: "0640"
+    depends_on: [install-elasticsearch]
+    notify: [elasticsearch-service]
+
+  - name: elasticsearch-heap
+    type: file
+    targetpath: /etc/elasticsearch/jvm.options.d/heap.options
+    content: |
+      -Xms{{ .Vars.es_heap_size }}
+      -Xmx{{ .Vars.es_heap_size }}
+    owner: root
+    group: elasticsearch
+    mode: "0640"
+    depends_on: [install-elasticsearch]
+    notify: [elasticsearch-service]
+
+  # --- Kibana config ---
+
+  - name: kibana-yml
+    type: file
+    targetpath: /etc/kibana/kibana.yml
+    content: |
+      # Managed by Hobnob — do not edit manually
+      server.port: {{ .Vars.kibana_port }}
+      server.host: "0.0.0.0"
+      server.name: {{ .Traits.identity.hostname }}
+      elasticsearch.hosts: ["http://localhost:{{ .Vars.es_http_port }}"]
+    owner: root
+    group: kibana
+    mode: "0640"
+    depends_on: [install-kibana]
+    notify: [kibana-service]
+
+  # --- Logstash config ---
+
+  - name: logstash-yml
+    type: file
+    targetpath: /etc/logstash/logstash.yml
+    content: |
+      # Managed by Hobnob — do not edit manually
+      node.name: {{ .Traits.identity.hostname }}
+      path.data: /var/lib/logstash
+      pipeline.workers: {{ .Vars.logstash_workers }}
+      path.logs: /var/log/logstash
+    owner: root
+    group: logstash
+    mode: "0640"
+    depends_on: [install-logstash]
+    notify: [logstash-service]
+
+  # --- Services ---
+
+  - name: elasticsearch-service
+    type: service
+    service: elasticsearch
+    enabled: true
+    state: running
+    depends_on: [elasticsearch-yml, elasticsearch-heap]
+    subscribes: [elasticsearch-yml, elasticsearch-heap]
+
+  - name: kibana-service
+    type: service
+    service: kibana
+    enabled: true
+    state: running
+    depends_on: [kibana-yml, elasticsearch-service]
+    subscribes: [kibana-yml]
+
+  - name: logstash-service
+    type: service
+    service: logstash
+    enabled: true
+    state: running
+    depends_on: [logstash-yml, elasticsearch-service]
+    subscribes: [logstash-yml]
