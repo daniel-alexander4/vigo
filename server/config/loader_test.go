@@ -1,7 +1,11 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -249,6 +253,92 @@ thralls:
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
 		t.Fatal("expected error for unresolvable secret, got nil")
+	}
+}
+
+func TestMultipleSecretErrorsCollected(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: config-file
+    type: file
+    path: /etc/app/config
+    content: "secret:app/config/content"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "web-*.prod.example.com"
+    environment: production
+    modules: [app]
+    vars:
+      db_conn: "secret:missing/db/conn"
+      api_key: "secret:missing/api/key"
+  - match: "db-*.prod.example.com"
+    environment: production
+    modules: [app]
+    vars:
+      db_conn: "secret:missing/db/conn2"
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for unresolvable secrets, got nil")
+	}
+
+	var se *SecretErrors
+	if !errors.As(err, &se) {
+		t.Fatalf("expected *SecretErrors, got %T: %v", err, err)
+	}
+
+	// Should collect errors from both entries: 2 vars + 1 resource attr from first,
+	// 1 var + 1 resource attr from second = 5 total (but resource errors also collected).
+	if len(se.Errors) < 4 {
+		t.Errorf("expected at least 4 secret errors, got %d:\n%s", len(se.Errors), se.Format())
+	}
+
+	// Verify hints are populated.
+	for _, e := range se.Errors {
+		if e.Hint() == "" {
+			t.Errorf("empty hint for error: %v", e)
+		}
+		if !strings.Contains(e.Hint(), "isopass") {
+			t.Errorf("hint should mention isopass: %q", e.Hint())
+		}
+	}
+
+	// Verify formatted output is readable.
+	formatted := se.Format()
+	if !strings.Contains(formatted, "web-*.prod.example.com") {
+		t.Error("formatted output missing first match pattern")
+	}
+	if !strings.Contains(formatted, "db-*.prod.example.com") {
+		t.Error("formatted output missing second match pattern")
+	}
+	if !strings.Contains(formatted, "fix:") {
+		t.Error("formatted output missing fix hints")
+	}
+}
+
+func TestSecretErrorHintCategories(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"not found", fmt.Errorf("secret %q not found in isopass", "x"), "isopass set"},
+		{"unreachable", fmt.Errorf("isopass unreachable at https://x"), "HOBNOB_ISOPASS_URL"},
+		{"auth failed", fmt.Errorf("isopass authentication failed"), "HOBNOB_ISOPASS_TOKEN"},
+		{"plaintext", fmt.Errorf("must use \"secret:\" prefix"), "secret:<path>"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se := &SecretError{Match: "test", Attr: "x", Secret: "x", Err: tt.err}
+			if !strings.Contains(se.Hint(), tt.want) {
+				t.Errorf("hint = %q, want substring %q", se.Hint(), tt.want)
+			}
+		})
 	}
 }
 
@@ -1647,6 +1737,69 @@ thralls:
 	}
 	if cfg.Modules[0].Name != "nginx" {
 		t.Errorf("expected module nginx, got %q", cfg.Modules[0].Name)
+	}
+}
+
+func TestMultipleIdempotencyErrorsCollected(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "bad1.hnb"), `
+name: bad1
+resources:
+  - name: yolo-exec
+    type: exec
+    command: "echo one"
+`)
+	writeFile(t, filepath.Join(dir, "modules", "bad2.hnb"), `
+name: bad2
+resources:
+  - name: another-yolo
+    type: exec
+    command: "echo two"
+  - name: third-yolo
+    type: exec
+    command: "echo three"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+thralls:
+  - match: "test.example.com"
+    modules: [bad1, bad2]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err == nil {
+		t.Fatal("expected idempotency errors, got nil")
+	}
+
+	var ie *IdempotencyErrors
+	if !errors.As(err, &ie) {
+		t.Fatalf("expected *IdempotencyErrors, got %T: %v", err, err)
+	}
+
+	// Should collect errors from both modules.
+	if len(ie.Modules) != 2 {
+		t.Errorf("expected 2 modules with errors, got %d", len(ie.Modules))
+	}
+
+	// bad2 has 2 unguarded execs.
+	totalFindings := 0
+	for _, m := range ie.Modules {
+		totalFindings += len(m.Findings)
+	}
+	if totalFindings != 3 {
+		t.Errorf("expected 3 total findings, got %d", totalFindings)
+	}
+
+	// Verify formatted output mentions both modules.
+	formatted := ie.Format()
+	if !strings.Contains(formatted, "bad1") {
+		t.Error("formatted output missing bad1")
+	}
+	if !strings.Contains(formatted, "bad2") {
+		t.Error("formatted output missing bad2")
+	}
+	if !strings.Contains(formatted, "--dangerous") {
+		t.Error("formatted output should mention --dangerous bypass")
 	}
 }
 

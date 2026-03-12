@@ -1,7 +1,11 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -38,7 +42,16 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		slog.Error("server failed", "error", err)
+		var se *config.SecretErrors
+		var ie *config.IdempotencyErrors
+		switch {
+		case errors.As(err, &se):
+			fmt.Fprint(os.Stderr, se.Format())
+		case errors.As(err, &ie):
+			fmt.Fprint(os.Stderr, ie.Format())
+		default:
+			slog.Error("server failed", "error", err)
+		}
 		os.Exit(1)
 	}
 }
@@ -340,6 +353,7 @@ func run() error {
 				}
 			}
 			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, dispatcher, pollInterval, watchPaths)
+			w.SetConfigReloader(configStore)
 			w.SetNotifyFunc(func(event string, details map[string]any) {
 				smtpNotifier.Notify(hobnobsmtp.Event{
 					Name:      event,

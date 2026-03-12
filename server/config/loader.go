@@ -5,6 +5,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -21,6 +22,129 @@ import (
 	"github.com/hobnob/hobnob/server/validate"
 	"gopkg.in/yaml.v3"
 )
+
+// SecretError describes a single secret resolution failure with enough
+// context to diagnose and fix without guessing.
+type SecretError struct {
+	Match    string // thrall match pattern (e.g. "db-*.prod.example.com")
+	Module   string // module name (empty if failure is in thrall vars)
+	Resource string // resource name (empty if failure is in vars)
+	Attr     string // attribute or var name
+	Secret   string // the secret key that failed
+	Err      error  // underlying error from provider
+}
+
+func (e *SecretError) Error() string {
+	loc := e.Match
+	if e.Module != "" {
+		loc += " > " + e.Module
+	}
+	if e.Resource != "" {
+		loc += " > " + e.Resource
+	}
+	return fmt.Sprintf("%s: secret %q (%s): %v", loc, e.Secret, e.Attr, e.Err)
+}
+
+// Hint returns an actionable fix suggestion based on the error message.
+func (e *SecretError) Hint() string {
+	msg := e.Err.Error()
+	switch {
+	case strings.Contains(msg, "not found"):
+		return fmt.Sprintf("create this secret in isopass: isopass set %s", e.Secret)
+	case strings.Contains(msg, "unreachable"):
+		return "ensure isopass is running and HOBNOB_ISOPASS_URL is correct"
+	case strings.Contains(msg, "authentication failed"):
+		return "check HOBNOB_ISOPASS_TOKEN -- regenerate if expired"
+	case strings.Contains(msg, "must use \"secret:\" prefix"):
+		return fmt.Sprintf("use \"secret:<path>\" instead of a plaintext value for %s", e.Attr)
+	default:
+		return "check isopass logs for details"
+	}
+}
+
+// SecretErrors collects multiple secret resolution failures so operators
+// can fix everything in one pass rather than restarting per error.
+type SecretErrors struct {
+	Errors []*SecretError
+}
+
+func (se *SecretErrors) Error() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d secret resolution error(s):\n", len(se.Errors))
+	for _, e := range se.Errors {
+		fmt.Fprintf(&b, "  - %s\n", e.Error())
+	}
+	return b.String()
+}
+
+// Format returns a human-readable diagnostic block suitable for container logs.
+func (se *SecretErrors) Format() string {
+	var b strings.Builder
+	b.WriteString("\n=== hobd failed to start: secret resolution errors ===\n\n")
+	for i, e := range se.Errors {
+		fmt.Fprintf(&b, "  %d) %s\n", i+1, e.Match)
+		if e.Module != "" {
+			fmt.Fprintf(&b, "     module:   %s\n", e.Module)
+		}
+		if e.Resource != "" {
+			fmt.Fprintf(&b, "     resource: %s\n", e.Resource)
+		}
+		fmt.Fprintf(&b, "     attr:     %s\n", e.Attr)
+		fmt.Fprintf(&b, "     secret:   %s\n", e.Secret)
+		fmt.Fprintf(&b, "     error:    %v\n", e.Err)
+		fmt.Fprintf(&b, "     fix:      %s\n\n", e.Hint())
+	}
+	b.WriteString("=== fix the above errors and restart hobd ===\n")
+	return b.String()
+}
+
+// IdempotencyErrors collects validation failures across multiple modules
+// so operators can fix everything in one pass rather than restarting per module.
+type IdempotencyErrors struct {
+	Modules []idempotencyModuleError
+}
+
+type idempotencyModuleError struct {
+	Module   string
+	Path     string
+	Findings []validate.Finding
+}
+
+func (ie *IdempotencyErrors) Error() string {
+	total := 0
+	for _, m := range ie.Modules {
+		total += len(m.Findings)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d idempotency error(s) across %d module(s):\n", total, len(ie.Modules))
+	for _, m := range ie.Modules {
+		for _, f := range m.Findings {
+			fmt.Fprintf(&b, "  - %s\n", f.String())
+		}
+	}
+	return b.String()
+}
+
+// Format returns a human-readable diagnostic block suitable for container logs.
+func (ie *IdempotencyErrors) Format() string {
+	var b strings.Builder
+	b.WriteString("\n=== hobd failed to start: idempotency validation errors ===\n\n")
+	for i, m := range ie.Modules {
+		fmt.Fprintf(&b, "  %d) module %q (%s)\n", i+1, m.Module, m.Path)
+		for _, f := range m.Findings {
+			sev := "ERROR"
+			if f.Severity == validate.SeverityWarning {
+				sev = "WARN"
+			}
+			fmt.Fprintf(&b, "     [%s] %s (%s): %s\n", sev, f.ResourceName, f.ResourceType, f.Message)
+		}
+		b.WriteByte('\n')
+	}
+	b.WriteString("  fix: add idempotency guards (creates, onlyif, unless, subscribes)\n")
+	b.WriteString("       or start the server with --dangerous to bypass validation\n\n")
+	b.WriteString("=== fix the above errors and restart hobd ===\n")
+	return b.String()
+}
 
 // knownSecretFields are var names that must use the "secret:" prefix.
 // If a config sets one of these to a plain value, loading fails.
@@ -183,7 +307,16 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 			}
 			debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
 				if err := cs.loadAll(); err != nil {
-					slog.Error("config reload failed, keeping previous config", "error", err)
+					var se *SecretErrors
+					var ie *IdempotencyErrors
+					switch {
+					case errors.As(err, &se):
+						slog.Error("config reload failed, keeping previous config\n" + se.Format())
+					case errors.As(err, &ie):
+						slog.Error("config reload failed, keeping previous config\n" + ie.Format())
+					default:
+						slog.Error("config reload failed, keeping previous config", "error", err)
+					}
 					if cs.onReloadFailure != nil {
 						cs.onReloadFailure(err)
 					}
@@ -254,12 +387,23 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	var entries []resolvedEntry
+	var allSecretErrs []*SecretError
 	for i, entry := range thrallEntries {
 		cfg, err := cs.resolveEntry(entry, moduleDefs, roleDefs)
 		if err != nil {
+			// Secret errors are collected across all entries so the
+			// operator can fix everything in one restart cycle.
+			var se *SecretErrors
+			if errors.As(err, &se) {
+				allSecretErrs = append(allSecretErrs, se.Errors...)
+				continue
+			}
 			return fmt.Errorf("resolving thrall entry %d (match=%q): %w", i, entry.Match, err)
 		}
 		entries = append(entries, resolvedEntry{match: entry.Match, config: cfg})
+	}
+	if len(allSecretErrs) > 0 {
+		return &SecretErrors{Errors: allSecretErrs}
 	}
 
 	// Pre-compute module content hashes for delta transfer.
@@ -407,13 +551,14 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 	mergeEnvVars(cfg)
 
 	// Enforce known-secret fields and resolve secret: prefixes.
-	if err := cs.resolveVars(cfg.Vars); err != nil {
-		return nil, fmt.Errorf("resolving vars: %w", err)
-	}
+	// Collect all failures so the operator can fix everything in one pass.
+	var secretErrs []*SecretError
+	secretErrs = append(secretErrs, cs.resolveVars(entry.Match, cfg.Vars)...)
 	for i := range cfg.Modules {
-		if err := cs.resolveModuleSecrets(&cfg.Modules[i]); err != nil {
-			return nil, fmt.Errorf("module %q: %w", cfg.Modules[i].Name, err)
-		}
+		secretErrs = append(secretErrs, cs.resolveModuleSecrets(entry.Match, &cfg.Modules[i])...)
+	}
+	if len(secretErrs) > 0 {
+		return nil, &SecretErrors{Errors: secretErrs}
 	}
 
 	return cfg, nil
@@ -508,6 +653,7 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 	}
 
 	defs := make(map[string]*ModuleDefinition)
+	var idempErrs []idempotencyModuleError
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -544,7 +690,7 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 		}
 		def.ConditionalVars = condVars
 
-		// Idempotency validation.
+		// Idempotency validation — collect errors across all modules.
 		findings := validate.ValidateModule(moduleToValidate(def))
 		for _, f := range findings {
 			if f.Severity == validate.SeverityWarning {
@@ -552,12 +698,17 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			}
 		}
 		if !dangerous && validate.HasErrors(findings) {
-			return nil, fmt.Errorf("module %q failed idempotency check in %s:\n%s"+
-				"hint: fix the resources above, or start the server with --dangerous to bypass",
-				def.Name, path, validate.FormatFindings(findings))
+			idempErrs = append(idempErrs, idempotencyModuleError{
+				Module:   def.Name,
+				Path:     path,
+				Findings: findings,
+			})
 		}
 
 		defs[def.Name] = def
+	}
+	if len(idempErrs) > 0 {
+		return nil, &IdempotencyErrors{Modules: idempErrs}
 	}
 	return defs, nil
 }
@@ -639,33 +790,49 @@ func mergeEnvVars(cfg *ThrallConfig) {
 }
 
 // resolveVars enforces known-secret fields and resolves secret: prefixes.
-func (cs *ConfigStore) resolveVars(vars map[string]any) error {
+// It collects all failures rather than stopping at the first.
+func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretError {
+	var errs []*SecretError
 	for k, v := range vars {
 		str, ok := v.(string)
 		if !ok {
 			continue
 		}
 		if knownSecretFields[k] && !strings.HasPrefix(str, secretPrefix) {
-			return fmt.Errorf(
-				"known-secret field %q must use %q prefix (got %q) -- "+
-					"store secrets in isopass, not in config files",
-				k, secretPrefix, str,
-			)
+			errs = append(errs, &SecretError{
+				Match:  match,
+				Attr:   k,
+				Secret: str,
+				Err: fmt.Errorf(
+					"known-secret field %q must use %q prefix (got %q) -- "+
+						"store secrets in isopass, not in config files",
+					k, secretPrefix, str,
+				),
+			})
+			continue
 		}
 		if strings.HasPrefix(str, secretPrefix) {
 			key := strings.TrimPrefix(str, secretPrefix)
 			resolved, err := cs.provider.Get(context.Background(), key)
 			if err != nil {
-				return fmt.Errorf("resolving secret %q: %w", key, err)
+				errs = append(errs, &SecretError{
+					Match:  match,
+					Attr:   k,
+					Secret: key,
+					Err:    err,
+				})
+				continue
 			}
 			vars[k] = resolved
 		}
 	}
-	return nil
+	return errs
 }
 
 // resolveModuleSecrets resolves secret: prefixes in module resource attributes.
-func (cs *ConfigStore) resolveModuleSecrets(mod *ModuleConfig) error {
+// It collects all failures rather than stopping at the first.
+func (cs *ConfigStore) resolveModuleSecrets(match string, mod *ModuleConfig) []*SecretError {
+	var errs []*SecretError
 	for i := range mod.Resources {
 		attrs := mod.Resources[i].Attributes
 		for k, v := range attrs {
@@ -677,14 +844,21 @@ func (cs *ConfigStore) resolveModuleSecrets(mod *ModuleConfig) error {
 				key := strings.TrimPrefix(str, secretPrefix)
 				resolved, err := cs.provider.Get(context.Background(), key)
 				if err != nil {
-					return fmt.Errorf("resolving secret for resource %q attr %q: %w",
-						mod.Resources[i].Name, k, err)
+					errs = append(errs, &SecretError{
+						Match:    match,
+						Module:   mod.Name,
+						Resource: mod.Resources[i].Name,
+						Attr:     k,
+						Secret:   key,
+						Err:      err,
+					})
+					continue
 				}
 				attrs[k] = resolved
 			}
 		}
 	}
-	return nil
+	return errs
 }
 
 // resolveSourceFiles reads external template files referenced by the "source"

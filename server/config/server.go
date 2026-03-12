@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package config
 
 import (
@@ -51,24 +54,39 @@ func LoadServerConfig(path string, provider secrets.Provider) (*ServerConfig, er
 }
 
 // resolveServerSecrets resolves secret: prefixed values in the server config.
+// Collects all failures so the operator can fix everything in one restart.
 func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider) error {
-	fields := []*string{
-		&cfg.Database.DSN,
-		&cfg.Server.TLS.CertFile,
-		&cfg.Server.TLS.KeyFile,
-		&cfg.Server.TLS.CAFile,
-		&cfg.Server.TLS.CAKeyFile,
+	type field struct {
+		ptr  *string
+		name string
+	}
+	fields := []field{
+		{&cfg.Database.DSN, "database.dsn"},
+		{&cfg.Server.TLS.CertFile, "server.tls.cert_file"},
+		{&cfg.Server.TLS.KeyFile, "server.tls.key_file"},
+		{&cfg.Server.TLS.CAFile, "server.tls.ca_file"},
+		{&cfg.Server.TLS.CAKeyFile, "server.tls.ca_key_file"},
 	}
 
-	for _, field := range fields {
-		if strings.HasPrefix(*field, secretPrefix) {
-			key := strings.TrimPrefix(*field, secretPrefix)
+	var errs []*SecretError
+	for _, f := range fields {
+		if strings.HasPrefix(*f.ptr, secretPrefix) {
+			key := strings.TrimPrefix(*f.ptr, secretPrefix)
 			val, err := provider.Get(context.Background(), key)
 			if err != nil {
-				return fmt.Errorf("resolving secret %q: %w", key, err)
+				errs = append(errs, &SecretError{
+					Match:  "server.yaml",
+					Attr:   f.name,
+					Secret: key,
+					Err:    err,
+				})
+				continue
 			}
-			*field = val
+			*f.ptr = val
 		}
+	}
+	if len(errs) > 0 {
+		return &SecretErrors{Errors: errs}
 	}
 
 	return nil
