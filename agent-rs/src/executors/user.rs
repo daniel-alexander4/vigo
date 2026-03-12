@@ -1,0 +1,502 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+//! User executor — manages system users idempotently via useradd/usermod/userdel.
+
+use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
+use std::time::Instant;
+
+pub struct UserExecutor {
+    pub runner: Box<dyn CommandRunner>,
+    pub passwd_path: String,
+    pub shadow_path: String,
+}
+
+struct PasswdEntry {
+    uid: String,
+    _gid: String,
+    gecos: String,
+    home: String,
+    shell: String,
+}
+
+impl UserExecutor {
+    pub fn new() -> Self {
+        Self {
+            runner: Box::new(DefaultRunner),
+            passwd_path: "/etc/passwd".into(),
+            shadow_path: "/etc/shadow".into(),
+        }
+    }
+
+    fn lookup_user(&self, name: &str) -> Result<Option<PasswdEntry>, String> {
+        let f = std::fs::File::open(&self.passwd_path)
+            .map_err(|e| format!("open passwd: {}", e))?;
+
+        for line in BufReader::new(f).lines().flatten() {
+            let fields: Vec<&str> = line.split(':').collect();
+            if fields.len() >= 7 && fields[0] == name {
+                return Ok(Some(PasswdEntry {
+                    uid: fields[2].to_string(),
+                    _gid: fields[3].to_string(),
+                    gecos: fields[4].to_string(),
+                    home: fields[5].to_string(),
+                    shell: fields[6].to_string(),
+                }));
+            }
+        }
+        Ok(None)
+    }
+
+    fn lookup_shadow_hash(&self, name: &str) -> Result<String, String> {
+        let f = match std::fs::File::open(&self.shadow_path) {
+            Ok(f) => f,
+            Err(e) => return Err(format!("open shadow: {}", e)),
+        };
+        for line in BufReader::new(f).lines().flatten() {
+            let fields: Vec<&str> = line.splitn(3, ':').collect();
+            if fields.len() >= 2 && fields[0] == name {
+                return Ok(fields[1].to_string());
+            }
+        }
+        Ok(String::new())
+    }
+
+    fn current_groups(&self, name: &str) -> Vec<String> {
+        match self.runner.run("id", &["-nG", name]) {
+            Ok(o) if o.status.success() => {
+                String::from_utf8_lossy(&o.stdout)
+                    .split_whitespace()
+                    .map(|s| s.to_string())
+                    .collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    fn resolve_home(name: &str, params: &HashMap<String, String>, entry: Option<&PasswdEntry>) -> String {
+        if let Some(h) = params.get("home") {
+            if !h.is_empty() {
+                return h.clone();
+            }
+        }
+        if let Some(e) = entry {
+            if !e.home.is_empty() {
+                return e.home.clone();
+            }
+        }
+        format!("/home/{}", name)
+    }
+
+    fn build_useradd_args(name: &str, params: &HashMap<String, String>) -> Vec<String> {
+        let mut args = Vec::new();
+        let system = params.get("system").map(|s| s == "true").unwrap_or(false);
+
+        if system {
+            args.push("--system".into());
+        }
+        for (flag, key) in [("-u", "uid"), ("-s", "shell"), ("-d", "home"), ("-c", "comment"), ("-g", "group"), ("-p", "password")] {
+            if let Some(v) = params.get(key) {
+                if !v.is_empty() {
+                    args.push(flag.into());
+                    args.push(v.clone());
+                }
+            }
+        }
+        if !system {
+            args.push("-m".into()); // create home dir
+        }
+        args.push(name.into());
+        args
+    }
+
+    fn write_authorized_keys(&self, name: &str, home: &str, keys: &str) -> Result<(), String> {
+        let ssh_dir = format!("{}/.ssh", home);
+        std::fs::create_dir_all(&ssh_dir)
+            .map_err(|e| format!("mkdir {}: {}", ssh_dir, e))?;
+
+        let ak_path = format!("{}/authorized_keys", ssh_dir);
+
+        // Remove symlinks for security.
+        if let Ok(meta) = std::fs::symlink_metadata(&ak_path) {
+            if meta.file_type().is_symlink() {
+                std::fs::remove_file(&ak_path)
+                    .map_err(|e| format!("remove symlink {}: {}", ak_path, e))?;
+            }
+        }
+
+        std::fs::write(&ak_path, keys)
+            .map_err(|e| format!("write {}: {}", ak_path, e))?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&ak_path, std::fs::Permissions::from_mode(0o600));
+            let _ = std::fs::set_permissions(&ssh_dir, std::fs::Permissions::from_mode(0o700));
+        }
+
+        match self.runner.run("chown", &["-R", &format!("{}:", name), &ssh_dir]) {
+            Ok(o) if !o.status.success() => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                Err(format!("chown {}: {}", ssh_dir, stderr))
+            }
+            Err(e) => Err(format!("chown {}: {}", ssh_dir, e)),
+            _ => Ok(()),
+        }
+    }
+
+    fn find_available_system_uid(&self) -> Result<i32, String> {
+        let f = std::fs::File::open(&self.passwd_path)
+            .map_err(|e| format!("open passwd: {}", e))?;
+
+        let mut used = std::collections::HashSet::new();
+        for line in BufReader::new(f).lines().flatten() {
+            let fields: Vec<&str> = line.split(':').collect();
+            if fields.len() >= 3 {
+                if let Ok(uid) = fields[2].parse::<i32>() {
+                    used.insert(uid);
+                }
+            }
+        }
+
+        for uid in (100..=999).rev() {
+            if !used.contains(&uid) {
+                return Ok(uid);
+            }
+        }
+        Err("no available system UID in range 100-999".into())
+    }
+}
+
+impl Executor for UserExecutor {
+    fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
+        let start = Instant::now();
+        let name = params
+            .get("username")
+            .or_else(|| params.get("name"))
+            .cloned()
+            .unwrap_or_default();
+
+        let mut result = ResourceResult::new("user", &name);
+
+        if name.is_empty() {
+            result.error = Some("user executor: name param is required".into());
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
+
+        let entry = match self.lookup_user(&name) {
+            Ok(e) => e,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
+        let exists = entry.is_some();
+
+        match state {
+            "present" => {
+                if !exists {
+                    // Create user.
+                    result.action = Action::Created;
+                    result.changed = true;
+
+                    if dry_run {
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
+
+                    let args = Self::build_useradd_args(&name, params);
+                    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                    match self.runner.run("useradd", &arg_refs) {
+                        Ok(o) if !o.status.success() => {
+                            let stderr = String::from_utf8_lossy(&o.stderr);
+                            result.error = Some(format!("useradd {}: {}", name, stderr));
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
+                        Err(e) => {
+                            result.error = Some(format!("useradd {}: {}", name, e));
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
+                        _ => {}
+                    }
+
+                    // Supplementary groups.
+                    if let Some(groups) = params.get("groups") {
+                        if !groups.is_empty() {
+                            match self.runner.run("usermod", &["-aG", groups, &name]) {
+                                Ok(o) if !o.status.success() => {
+                                    let stderr = String::from_utf8_lossy(&o.stderr);
+                                    result.error = Some(format!("usermod -aG: {}", stderr));
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                                Err(e) => {
+                                    result.error = Some(format!("usermod -aG: {}", e));
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    // Authorized keys.
+                    if let Some(keys) = params.get("authorized_keys") {
+                        if !keys.is_empty() {
+                            let home = match self.lookup_user(&name) {
+                                Ok(e) => Self::resolve_home(&name, params, e.as_ref()),
+                                Err(_) => Self::resolve_home(&name, params, None),
+                            };
+                            if let Err(e) = self.write_authorized_keys(&name, &home, keys) {
+                                result.error = Some(e);
+                            }
+                        }
+                    }
+                } else {
+                    // Update existing user.
+                    let entry = entry.as_ref().unwrap();
+                    let mut needs_update = false;
+                    let mut mod_args: Vec<String> = Vec::new();
+
+                    if let Some(uid) = params.get("uid") {
+                        if !uid.is_empty() && *uid != entry.uid {
+                            needs_update = true;
+                            mod_args.extend(["-u".into(), uid.clone()]);
+                        }
+                    }
+
+                    // System user UID reassignment.
+                    if params.get("system").map(|s| s == "true").unwrap_or(false) {
+                        if let Ok(current_uid) = entry.uid.parse::<i32>() {
+                            if current_uid >= 1000 {
+                                match self.find_available_system_uid() {
+                                    Ok(new_uid) => {
+                                        needs_update = true;
+                                        mod_args.extend(["-u".into(), new_uid.to_string()]);
+                                    }
+                                    Err(e) => {
+                                        result.error = Some(format!(
+                                            "system user {} has non-system UID {}: {}",
+                                            name, entry.uid, e
+                                        ));
+                                        result.duration_ms = start.elapsed().as_millis() as i32;
+                                        return result;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for (flag, key, field) in [
+                        ("-s", "shell", &entry.shell),
+                        ("-d", "home", &entry.home),
+                        ("-c", "comment", &entry.gecos),
+                    ] {
+                        if let Some(v) = params.get(key) {
+                            if !v.is_empty() && v != field {
+                                needs_update = true;
+                                mod_args.extend([flag.into(), v.clone()]);
+                            }
+                        }
+                    }
+
+                    if let Some(group) = params.get("group") {
+                        if !group.is_empty() {
+                            needs_update = true;
+                            mod_args.extend(["-g".into(), group.clone()]);
+                        }
+                    }
+
+                    // Check supplementary groups.
+                    let mut groups_to_add = Vec::new();
+                    if let Some(groups) = params.get("groups") {
+                        if !groups.is_empty() {
+                            let desired: Vec<&str> = groups.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                            let current = self.current_groups(&name);
+                            for g in &desired {
+                                if !current.iter().any(|c| c == g) {
+                                    groups_to_add.push(g.to_string());
+                                }
+                            }
+                            if !groups_to_add.is_empty() {
+                                needs_update = true;
+                            }
+                        }
+                    }
+
+                    // Check password.
+                    let mut password_changed = false;
+                    let mut desired_password = String::new();
+                    if let Some(pw) = params.get("password") {
+                        if !pw.is_empty() {
+                            desired_password = pw.clone();
+                            match self.lookup_shadow_hash(&name) {
+                                Ok(current_hash) => {
+                                    if current_hash != *pw {
+                                        password_changed = true;
+                                        needs_update = true;
+                                    }
+                                }
+                                Err(e) => {
+                                    result.error = Some(e);
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                            }
+                        }
+                    }
+
+                    // Check authorized_keys.
+                    let mut keys_changed = false;
+                    let mut desired_keys = String::new();
+                    if let Some(keys) = params.get("authorized_keys") {
+                        if !keys.is_empty() {
+                            desired_keys = keys.clone();
+                            let home = Self::resolve_home(&name, params, Some(entry));
+                            let ak_path = format!("{}/.ssh/authorized_keys", home);
+                            match std::fs::read_to_string(&ak_path) {
+                                Ok(existing) if existing == *keys => {}
+                                _ => {
+                                    keys_changed = true;
+                                    needs_update = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if !needs_update {
+                        result.action = Action::None;
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
+
+                    result.action = Action::Updated;
+                    result.changed = true;
+
+                    if dry_run {
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
+
+                    // Apply core attribute changes.
+                    if !mod_args.is_empty() {
+                        mod_args.push(name.clone());
+                        let arg_refs: Vec<&str> = mod_args.iter().map(|s| s.as_str()).collect();
+                        match self.runner.run("usermod", &arg_refs) {
+                            Ok(o) if !o.status.success() => {
+                                let stderr = String::from_utf8_lossy(&o.stderr);
+                                // Retry after pkill if user has running processes.
+                                if stderr.contains("currently used by process") {
+                                    let _ = self.runner.run("pkill", &["-u", &name]);
+                                    match self.runner.run("usermod", &arg_refs) {
+                                        Ok(o2) if !o2.status.success() => {
+                                            let stderr2 = String::from_utf8_lossy(&o2.stderr);
+                                            result.error = Some(format!("usermod {}: {}", name, stderr2));
+                                            result.duration_ms = start.elapsed().as_millis() as i32;
+                                            return result;
+                                        }
+                                        Err(e) => {
+                                            result.error = Some(format!("usermod {}: {}", name, e));
+                                            result.duration_ms = start.elapsed().as_millis() as i32;
+                                            return result;
+                                        }
+                                        _ => {}
+                                    }
+                                } else {
+                                    result.error = Some(format!("usermod {}: {}", name, stderr));
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                            }
+                            Err(e) => {
+                                result.error = Some(format!("usermod {}: {}", name, e));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // Apply supplementary groups.
+                    if !groups_to_add.is_empty() {
+                        let joined = groups_to_add.join(",");
+                        match self.runner.run("usermod", &["-aG", &joined, &name]) {
+                            Ok(o) if !o.status.success() => {
+                                let stderr = String::from_utf8_lossy(&o.stderr);
+                                result.error = Some(format!("usermod -aG: {}", stderr));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                            Err(e) => {
+                                result.error = Some(format!("usermod -aG: {}", e));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // Apply password.
+                    if password_changed {
+                        match self.runner.run("usermod", &["-p", &desired_password, &name]) {
+                            Ok(o) if !o.status.success() => {
+                                let stderr = String::from_utf8_lossy(&o.stderr);
+                                result.error = Some(format!("usermod -p: {}", stderr));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                            Err(e) => {
+                                result.error = Some(format!("usermod -p: {}", e));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // Apply authorized_keys.
+                    if keys_changed {
+                        let home = Self::resolve_home(&name, params, Some(entry));
+                        if let Err(e) = self.write_authorized_keys(&name, &home, &desired_keys) {
+                            result.error = Some(e);
+                        }
+                    }
+                }
+            }
+            "absent" => {
+                if !exists {
+                    result.action = Action::None;
+                } else {
+                    result.action = Action::Deleted;
+                    result.changed = true;
+                    if !dry_run {
+                        match self.runner.run("userdel", &[&name]) {
+                            Ok(o) if !o.status.success() => {
+                                let stderr = String::from_utf8_lossy(&o.stderr);
+                                result.error = Some(format!("userdel {}: {}", name, stderr));
+                            }
+                            Err(e) => {
+                                result.error = Some(format!("userdel {}: {}", name, e));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            _ => {
+                result.error = Some(format!("user executor: unknown state {:?}", state));
+            }
+        }
+
+        result.duration_ms = start.elapsed().as_millis() as i32;
+        result
+    }
+}

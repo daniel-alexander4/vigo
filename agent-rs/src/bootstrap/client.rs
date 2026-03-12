@@ -1,0 +1,110 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+//! HTTP client for the bootstrap registration endpoint (POST /api/v1/bootstrap/register).
+
+use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize)]
+pub struct RegisterRequest {
+    pub hostname: String,
+    pub ip_address: String,
+    pub pubkey_pem: String,
+    pub csr_pem: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterResponse {
+    pub thrall_id: String,
+    pub signed_cert_pem: String,
+    pub ca_cert_pem: String,
+}
+
+/// POST the bootstrap registration request and return the signed certs.
+pub async fn register(server: &str, req: &RegisterRequest) -> Result<RegisterResponse> {
+    let url = format!(
+        "{}/api/v1/bootstrap/register",
+        server.trim_end_matches('/')
+    );
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true) // Bootstrap happens before we have TLS certs
+        .build()
+        .context("build HTTP client")?;
+
+    let http_resp = client
+        .post(&url)
+        .json(req)
+        .send()
+        .await
+        .with_context(|| format!("bootstrap request to {}", url))?;
+
+    let status = http_resp.status();
+    if !status.is_success() {
+        let body = http_resp.text().await.unwrap_or_default();
+        bail!(
+            "bootstrap rejected (HTTP {}): {}",
+            status.as_u16(),
+            body.trim()
+        );
+    }
+
+    let resp: RegisterResponse = http_resp
+        .json()
+        .await
+        .context("parse bootstrap JSON response")?;
+
+    if resp.thrall_id.is_empty() {
+        bail!("server returned empty thrall_id");
+    }
+
+    Ok(resp)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_register_request_serialization() {
+        let req = RegisterRequest {
+            hostname: "web01".into(),
+            ip_address: "10.0.0.1".into(),
+            pubkey_pem: "-----BEGIN PUBLIC KEY-----\nfoo\n-----END PUBLIC KEY-----\n".into(),
+            csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nbar\n-----END CERTIFICATE REQUEST-----\n".into(),
+            token: Some("tok123".into()),
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["hostname"], "web01");
+        assert_eq!(json["token"], "tok123");
+    }
+
+    #[test]
+    fn test_register_request_no_token() {
+        let req = RegisterRequest {
+            hostname: "web01".into(),
+            ip_address: "10.0.0.1".into(),
+            pubkey_pem: "pub".into(),
+            csr_pem: "csr".into(),
+            token: None,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert!(json.get("token").is_none());
+    }
+
+    #[test]
+    fn test_register_response_deserialization() {
+        let json = r#"{
+            "thrall_id": "550e8400-e29b-41d4-a716-446655440000",
+            "signed_cert_pem": "-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----\n",
+            "ca_cert_pem": "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----\n"
+        }"#;
+        let resp: RegisterResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.thrall_id, "550e8400-e29b-41d4-a716-446655440000");
+        assert!(resp.signed_cert_pem.contains("BEGIN CERTIFICATE"));
+        assert!(resp.ca_cert_pem.contains("BEGIN CERTIFICATE"));
+    }
+}

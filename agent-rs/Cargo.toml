@@ -1,0 +1,63 @@
+[package]
+name = "hobnob"
+version = "0.1.0"
+edition = "2021"
+description = "Hobnob configuration management agent"
+
+[dependencies]
+# gRPC + Proto
+tonic = { version = "0.12", features = ["tls"] }
+prost = "0.13"
+prost-types = "0.13"
+
+# TLS + Crypto
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls-pki-types = "1"
+rustls-pemfile = "2"
+rcgen = "0.13"
+ed25519-dalek = { version = "2", features = ["pkcs8", "pem", "rand_core"] }
+hostname = "0.4"
+p256 = { version = "0.13", features = ["pkcs8", "pem"] }
+sha2 = "0.10"
+rand = "0.8"
+pkcs8 = { version = "0.10", features = ["pem", "std"] }
+spki = { version = "0.7", features = ["pem", "std"] }
+
+# Async
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "process", "fs"] }
+
+# CLI + Serialization
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP (archive downloads + self-update only)
+reqwest = { version = "0.12", features = ["rustls-tls-manual-roots", "json"], default-features = false }
+
+# Misc
+regex = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+nix = { version = "0.29", features = ["user", "fs", "signal", "process"] }
+libc = "0.2"
+anyhow = "1"
+async-trait = "0.1"
+thiserror = "2"
+tokio-stream = "0.1"
+tokio-util = "0.7"
+async-stream = "0.3"
+
+[dev-dependencies]
+mockito = "1"
+tempfile = "3"
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

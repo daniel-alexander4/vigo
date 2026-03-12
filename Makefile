@@ -1,16 +1,76 @@
-.PHONY: build proto certs test lint seed migrate sqlc dist clean
+.PHONY: build build-agent test test-agent lint lint-agent dist dist-agent \
+       proto certs seed migrate sqlc up down logs clean
 
 VERSION ?= dev
 
-build:
+# --- Primary build: server + CLI (Go), agent (Rust) ---
+
+build: build-agent
 	go build -o bin/hobd ./server
-	go build -o bin/hobnob ./agent
 	go build -o bin/hobnobcli ./cli
 	go build -o bin/hobnob-license-manager ./license-manager
 	ln -sf hobnobcli bin/hnbvi
 
+build-agent:
+	cd agent-rs && cargo build --release
+	cp agent-rs/target/release/hobnob bin/hobnob
+
+test:
+	go test $(shell go list ./... | grep -v /agent-go/) -v -race -count=1
+	cd agent-rs && cargo test
+
+test-agent:
+	cd agent-rs && cargo test
+
+lint:
+	golangci-lint run --skip-dirs agent-go ./...
+	buf lint
+	cd agent-rs && cargo clippy -- -D warnings
+
+lint-agent:
+	cd agent-rs && cargo clippy -- -D warnings
+
+# --- Distribution: cross-compiled static binaries ---
+
+dist: dist-agent
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -o dist/server/linux/amd64/hobd ./server
+	GOOS=linux GOARCH=amd64 go build -o dist/cli/linux/amd64/hobnobcli ./cli
+
+# Cross-compile Rust agent to static musl binaries.
+# Prerequisites:
+#   rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+#   apt install musl-tools gcc-aarch64-linux-gnu
+dist-agent:
+	mkdir -p dist/agent/linux/amd64 dist/agent/linux/arm64
+	cd agent-rs && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
+	cp agent-rs/target/x86_64-unknown-linux-musl/release/hobnob dist/agent/linux/amd64/hobnob
+	cd agent-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
+	cp agent-rs/target/aarch64-unknown-linux-musl/release/hobnob dist/agent/linux/arm64/hobnob
+
+# --- Archived Go agent (kept for reference) ---
+
+build-agent-go:
+	go build -o bin/hobnob-go ./agent-go
+
+dist-agent-go:
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/linux/amd64/hobnob ./agent-go
+	GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/linux/arm64/hobnob ./agent-go
+	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/darwin/amd64/hobnob ./agent-go
+	GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/darwin/arm64/hobnob ./agent-go
+
+# --- Codegen ---
+
 proto:
 	buf generate
+
+seed:
+	go run ./cmd/seed/main.go
+
+migrate:
+	migrate -path migrations -database "$$DATABASE_URL" up
+
+sqlc:
+	sqlc generate
 
 certs:
 	mkdir -p certs
@@ -29,27 +89,19 @@ certs:
 	rm -f certs/server.csr certs/ca.srl
 	@echo "Certificates generated in certs/"
 
-test:
-	go test ./... -v -race -count=1
+# --- Docker Compose (reads COMPOSE_PROFILES from server .env) ---
 
-lint:
-	golangci-lint run ./...
-	buf lint
+ENVFILE ?= /etc/hobnob-server/.env
 
-seed:
-	go run ./cmd/seed/main.go
+up:
+	docker compose --env-file $(ENVFILE) up -d --build
 
-migrate:
-	migrate -path migrations -database "$$DATABASE_URL" up
+down:
+	docker compose --env-file $(ENVFILE) down
 
-sqlc:
-	sqlc generate
-
-dist:
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/linux/amd64/hobnob ./agent
-	GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/linux/arm64/hobnob ./agent
-	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/darwin/amd64/hobnob ./agent
-	GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent/darwin/arm64/hobnob ./agent
+logs:
+	docker compose --env-file $(ENVFILE) logs -f
 
 clean:
 	rm -rf bin/ certs/ dist/
+	cd agent-rs && cargo clean 2>/dev/null || true

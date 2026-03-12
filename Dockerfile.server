@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26-alpine AS go-builder
 
 RUN apk add --no-cache gcc musl-dev
 
@@ -11,24 +11,46 @@ COPY . .
 RUN CGO_ENABLED=1 go build -o hobd ./server
 RUN CGO_ENABLED=1 go build -o hobnobcli ./cli
 RUN CGO_ENABLED=1 go build -o hobnob-license-manager ./license-manager
-RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/linux/amd64/hobnob ./agent
-RUN GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/linux/arm64/hobnob ./agent
-RUN GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o dist/agent/darwin/amd64/hobnob ./agent
-RUN GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/agent/darwin/arm64/hobnob ./agent
+
+# --- Rust agent (static musl binaries for linux amd64/arm64) ---
+
+FROM rust:alpine AS rust-builder
+
+RUN apk add --no-cache musl-dev protobuf-dev
+
+WORKDIR /build
+COPY agent-rs/ agent-rs/
+COPY proto/ proto/
+
+# Build for x86_64 (native in Alpine).
+RUN cd agent-rs && cargo build --release --target x86_64-unknown-linux-musl \
+    && mkdir -p /out/linux/amd64 \
+    && cp target/x86_64-unknown-linux-musl/release/hobnob /out/linux/amd64/hobnob
+
+# aarch64 cross-compile requires a cross-linker toolchain.
+# Install it and add the target, then build.
+RUN apk add --no-cache gcc-aarch64-none-elf || true
+RUN rustup target add aarch64-unknown-linux-musl \
+    && cd agent-rs && cargo build --release --target aarch64-unknown-linux-musl \
+    && mkdir -p /out/linux/arm64 \
+    && cp target/aarch64-unknown-linux-musl/release/hobnob /out/linux/arm64/hobnob \
+    || echo "WARN: aarch64 cross-compile skipped (missing cross-linker)"
+
+# --- Runtime image ---
 
 FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates openssl sqlite-libs
 
-COPY --from=builder /build/hobd /usr/local/bin/hobd
-COPY --from=builder /build/hobnobcli /usr/local/bin/hobnobcli
-COPY --from=builder /build/hobnob-license-manager /usr/local/bin/hobnob-license-manager
-COPY --from=builder /build/migrations /migrations
-COPY --from=builder /build/dist/agent /dist/agent
+COPY --from=go-builder /build/hobd /usr/local/bin/hobd
+COPY --from=go-builder /build/hobnobcli /usr/local/bin/hobnobcli
+COPY --from=go-builder /build/hobnob-license-manager /usr/local/bin/hobnob-license-manager
+COPY --from=go-builder /build/migrations /migrations
+COPY --from=rust-builder /out /dist/agent
 
 # Seed configs — copied to /data on first run by entrypoint.
 COPY server-configs/server.yaml /seed/server.yaml
-COPY node-configs/ /seed/node-configs/
+COPY thrall-configs/ /seed/thrall-configs/
 
 COPY entrypoint.sh /entrypoint.sh
 
