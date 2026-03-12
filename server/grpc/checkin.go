@@ -1,8 +1,12 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc
 
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/google/uuid"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
@@ -33,6 +37,13 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 			return nil, status.Error(codes.NotFound, "thrall not found")
 		}
 		return nil, status.Errorf(codes.Internal, "validating thrall: %v", err)
+	}
+
+	// Log warning on every check-in if license is in grace or enrollment-block.
+	if s.licenseEnforcer != nil {
+		if warn := s.licenseEnforcer.CheckInWarning(); warn != "" {
+			slog.Warn(warn, "thrall_id", thrallID)
+		}
 	}
 
 	// Reuse thrall from interceptor context if available, otherwise cache lookup.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package db
 
 import (
@@ -50,8 +53,8 @@ func (b *LastSeenBatcher) Start(ctx context.Context, interval time.Duration) {
 }
 
 // Flush writes all pending last_seen updates to the database and clears
-// the pending set. Uses a single UPDATE ... WHERE id IN (...) query to
-// collapse N round-trips into one.
+// the pending set. Chunks IDs into batches of 500 to avoid blowing up
+// SQLite's query planner with massive IN-clauses.
 func (b *LastSeenBatcher) Flush(ctx context.Context) {
 	b.mu.Lock()
 	if len(b.pending) == 0 {
@@ -67,9 +70,22 @@ func (b *LastSeenBatcher) Flush(ctx context.Context) {
 	for id := range batch {
 		ids = append(ids, id)
 	}
-	if err := b.queries.BatchUpdateLastSeen(ctx, ids); err != nil {
-		slog.Error("failed to batch flush last_seen", "count", len(ids), "error", err)
-		// Re-add failed IDs so they're retried on next flush.
+
+	const chunkSize = 500
+	var failed bool
+	for i := 0; i < len(ids); i += chunkSize {
+		end := i + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		if err := b.queries.BatchUpdateLastSeen(ctx, ids[i:end]); err != nil {
+			slog.Error("failed to batch flush last_seen", "count", end-i, "error", err)
+			failed = true
+		}
+	}
+
+	// Re-add all IDs on any failure so they're retried on next flush.
+	if failed {
 		b.mu.Lock()
 		for id := range batch {
 			b.pending[id] = struct{}{}

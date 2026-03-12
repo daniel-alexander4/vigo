@@ -20,7 +20,7 @@ resources:
 
   - name: allow-ssh
     type: firewall
-    port: "{{ .Vars.ssh_port }}"
+    port: "22"
     proto: tcp
     action: allow
     comment: "hobnob: allow SSH"
@@ -28,7 +28,7 @@ resources:
 
   - name: allow-http
     type: firewall
-    port: "{{ .Vars.http_port }}"
+    port: "80"
     proto: tcp
     action: allow
     comment: "hobnob: allow HTTP"
@@ -36,7 +36,7 @@ resources:
 
   - name: allow-https
     type: firewall
-    port: "{{ .Vars.https_port }}"
+    port: "443"
     proto: tcp
     action: allow
     comment: "hobnob: allow HTTPS"

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package license
 
 import (
@@ -14,7 +17,7 @@ type Stage int
 const (
 	StageCompliant  Stage = 0
 	StageGrace      Stage = 1
-	StageThrallBlock Stage = 2
+	StageEnrollBlock Stage = 2
 	StageServiceStop Stage = 3
 )
 
@@ -24,8 +27,8 @@ func (s Stage) String() string {
 		return "Compliant"
 	case StageGrace:
 		return "Grace Period"
-	case StageThrallBlock:
-		return "Thrall Block"
+	case StageEnrollBlock:
+		return "Enrollment Block"
 	case StageServiceStop:
 		return "Service Stop"
 	default:
@@ -34,9 +37,9 @@ func (s Stage) String() string {
 }
 
 const (
-	graceDays      = 30
-	thrallBlockDays = 15
-	totalDaysToStop = graceDays + thrallBlockDays // 45
+	graceDays       = 15
+	enrollBlockDays = 15
+	totalDaysToStop = graceDays + enrollBlockDays // 30
 )
 
 // ThrallCounter returns the current number of active (non-revoked) thralls.
@@ -105,8 +108,8 @@ func (e *Enforcer) RegistrationAllowed() error {
 	defer e.mu.RUnlock()
 
 	switch e.stage {
-	case StageThrallBlock:
-		return fmt.Errorf("license violation: new thrall registrations are blocked (enforcement stage 2 — thrall block)")
+	case StageEnrollBlock:
+		return fmt.Errorf("license violation: new enrollments are blocked (enforcement stage 2 — enrollment block)")
 	case StageServiceStop:
 		return fmt.Errorf("license violation: server is shutting down (enforcement stage 3 — service stop)")
 	default:
@@ -248,12 +251,37 @@ func (e *Enforcer) evaluateLocked() error {
 		e.stage = StageServiceStop
 		return fmt.Errorf("license enforcement stage 3: %s — server must shut down (day %d of %d)", e.violation, elapsed, totalDaysToStop)
 	case elapsed >= graceDays:
-		e.stage = StageThrallBlock
+		e.stage = StageEnrollBlock
 	default:
 		e.stage = StageGrace
 	}
 
 	return nil
+}
+
+// CheckInWarning returns a non-empty warning message if the license is in
+// grace period or enrollment block. The check-in handler should log this on
+// every check-in so operators see it in their logs.
+func (e *Enforcer) CheckInWarning() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.stage == StageCompliant || e.stage == StageServiceStop {
+		return ""
+	}
+
+	elapsed := 0
+	if e.graceStart != nil {
+		elapsed = int(time.Since(*e.graceStart).Hours() / 24)
+	}
+
+	switch e.stage {
+	case StageGrace:
+		return fmt.Sprintf("license violation: %s (grace period day %d of %d — reduce node count or upgrade license)", e.violation, elapsed, graceDays)
+	case StageEnrollBlock:
+		return fmt.Sprintf("license violation: %s (enrollment blocked, day %d of %d — server shutdown in %d days)", e.violation, elapsed, totalDaysToStop, totalDaysToStop-elapsed)
+	}
+	return ""
 }
 
 // logIfNeeded emits log messages at the appropriate cadence per stage.
@@ -266,7 +294,7 @@ func (e *Enforcer) logIfNeeded() {
 		return
 	case StageGrace:
 		interval = 24 * time.Hour
-	case StageThrallBlock, StageServiceStop:
+	case StageEnrollBlock, StageServiceStop:
 		interval = 1 * time.Hour
 	}
 
@@ -286,9 +314,9 @@ func (e *Enforcer) logIfNeeded() {
 			"violation", e.violation,
 			"license_id", e.license.Payload.LicenseID,
 			"day", elapsed,
-			"grace_days_remaining", totalDaysToStop-elapsed)
-	case StageThrallBlock:
-		slog.Error("license violation: new thrall registrations blocked",
+			"grace_days_remaining", graceDays-elapsed)
+	case StageEnrollBlock:
+		slog.Error("license violation: new enrollments blocked",
 			"violation", e.violation,
 			"license_id", e.license.Payload.LicenseID,
 			"day", elapsed,

@@ -9,7 +9,7 @@ resources:
   # Remove logs older than cleanup_days, daily at 2:30 AM
   - name: log-cleanup
     type: cron
-    command: "find /var/log -name '*.gz' -mtime +{{ .Vars.cleanup_days }} -delete"
+    command: "find /var/log -name '*.gz' -mtime +30 -delete"
     minute: "30"
     hour: "2"
     user: root
@@ -18,7 +18,7 @@ resources:
   # Weekly full backup, Sundays at 1:00 AM
   - name: weekly-backup
     type: cron
-    command: "{{ .Vars.backup_script }}"
+    command: "/usr/local/bin/backup.sh"
     minute: "0"
     hour: "1"
     weekday: "0"
@@ -28,7 +28,7 @@ resources:
   # Health check every 15 minutes
   - name: health-check
     type: cron
-    command: "curl -sf {{ .Vars.healthcheck_url }} > /dev/null || logger -t healthcheck 'FAILED'"
+    command: "curl -sf http://localhost:8080/health > /dev/null || logger -t healthcheck 'FAILED'"
     minute: "*/15"
     user: root
     state: present

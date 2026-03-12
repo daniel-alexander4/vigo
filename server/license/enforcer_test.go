@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package license
 
 import (
@@ -213,6 +216,119 @@ func TestGraceStartPersistence(t *testing.T) {
 	clearGraceStart(dir)
 	if _, err := readGraceStart(dir); err == nil {
 		t.Error("expected error after clearing grace_start")
+	}
+}
+
+func TestEnforcerTimeline(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+
+	payload := Payload{
+		CustomerName: "Test",
+		CustomerID:   "test-001",
+		LicenseID:    "lic-test",
+		MaxThralls:   5,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+
+	dir := t.TempDir()
+	graceDir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	setPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { setPublicKeyForTest("") })
+
+	counter := func(ctx context.Context) (int, error) { return 10, nil }
+
+	// Day 0 — grace period.
+	e, err := NewEnforcer(dir, graceDir, counter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.GetStatus().Stage != StageGrace {
+		t.Fatalf("expected Grace at day 0, got %v", e.GetStatus().Stage)
+	}
+
+	// Simulate day 14 — still grace.
+	clearGraceStart(graceDir)
+	writeGraceStart(graceDir, time.Now().Add(-14*24*time.Hour))
+	e.mu.Lock()
+	e.graceStart = nil
+	_ = e.evaluateLocked()
+	e.mu.Unlock()
+	if e.GetStatus().Stage != StageGrace {
+		t.Errorf("expected Grace at day 14, got %v", e.GetStatus().Stage)
+	}
+
+	// Simulate day 16 — enrollment block.
+	clearGraceStart(graceDir)
+	writeGraceStart(graceDir, time.Now().Add(-16*24*time.Hour))
+	e.mu.Lock()
+	e.graceStart = nil
+	_ = e.evaluateLocked()
+	e.mu.Unlock()
+	if e.GetStatus().Stage != StageEnrollBlock {
+		t.Errorf("expected EnrollBlock at day 16, got %v", e.GetStatus().Stage)
+	}
+	if err := e.RegistrationAllowed(); err == nil {
+		t.Error("registration should be blocked at StageEnrollBlock")
+	}
+
+	// Simulate day 31 — service stop.
+	clearGraceStart(graceDir)
+	writeGraceStart(graceDir, time.Now().Add(-31*24*time.Hour))
+	e.mu.Lock()
+	e.graceStart = nil
+	err = e.evaluateLocked()
+	e.mu.Unlock()
+	if err == nil {
+		t.Error("expected error at service stop stage")
+	}
+	if e.GetStatus().Stage != StageServiceStop {
+		t.Errorf("expected ServiceStop at day 31, got %v", e.GetStatus().Stage)
+	}
+}
+
+func TestCheckInWarning(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+
+	payload := Payload{
+		CustomerName: "Test",
+		CustomerID:   "test-001",
+		LicenseID:    "lic-test",
+		MaxThralls:   5,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+
+	dir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	setPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { setPublicKeyForTest("") })
+
+	// Compliant — no warning.
+	compliantCounter := func(ctx context.Context) (int, error) { return 3, nil }
+	e, err := NewEnforcer(dir, dir, compliantCounter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := e.CheckInWarning(); w != "" {
+		t.Errorf("expected no warning when compliant, got %q", w)
+	}
+
+	// Over limit — warning.
+	overCounter := func(ctx context.Context) (int, error) { return 10, nil }
+	dir2 := t.TempDir()
+	writeLic(t, dir2, payload, priv)
+	e2, err := NewEnforcer(dir2, dir2, overCounter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := e2.CheckInWarning(); w == "" {
+		t.Error("expected warning when over limit")
 	}
 }
 

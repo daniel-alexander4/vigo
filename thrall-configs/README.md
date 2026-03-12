@@ -1,4 +1,4 @@
-# node-configs
+# thrall-configs
 
 Configuration files that define the desired state of managed thralls. These YAML files (with `.hnb` extension) are the single source of truth -- no config is written via API, CLI, or UI.
 
@@ -13,7 +13,7 @@ Configuration files that define the desired state of managed thralls. These YAML
 ## Directory Structure
 
 ```
-node-configs/
+thrall-configs/
   modules/           # Reusable resource definitions
     nginx.hnb
     openssh.hnb

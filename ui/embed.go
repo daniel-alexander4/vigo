@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package ui provides embedded web UI assets and rendering for the Hobnob dashboard.
 package ui
 

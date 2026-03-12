@@ -12,8 +12,7 @@ resources:
 
   - name: collectd-conf
     type: file
-    targetpath: >-
-      {{ if eq .Traits.os.family "debian" }}/etc/collectd/collectd.conf{{ else }}/etc/collectd.conf{{ end }}
+    targetpath: /etc/collectd/collectd.conf
     content: |
       # Managed by Hobnob — do not edit manually
       {{ if ne .Vars.collectd_hostname_override "" }}Hostname "{{ .Vars.collectd_hostname_override }}"{{ end }}
@@ -61,6 +60,59 @@ resources:
     mode: "0644"
     depends_on: [install-collectd]
     notify: [collectd-service]
+    when: "os_family('debian')"
+
+  - name: collectd-conf
+    type: file
+    targetpath: /etc/collectd.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      {{ if ne .Vars.collectd_hostname_override "" }}Hostname "{{ .Vars.collectd_hostname_override }}"{{ end }}
+      FQDNLookup true
+
+      Interval {{ .Vars.collectd_interval }}
+
+      LoadPlugin cpu
+      LoadPlugin memory
+      LoadPlugin disk
+      LoadPlugin interface
+      LoadPlugin load
+      LoadPlugin df
+
+      <Plugin cpu>
+        ReportByCpu true
+        ReportByState true
+        ValuesPercentage true
+      </Plugin>
+
+      <Plugin memory>
+        ValuesAbsolute true
+        ValuesPercentage true
+      </Plugin>
+
+      <Plugin disk>
+        Disk "/^[hsv]d[a-z]/"
+        IgnoreSelected false
+      </Plugin>
+
+      <Plugin interface>
+        Interface "lo"
+        IgnoreSelected true
+      </Plugin>
+
+      <Plugin df>
+        MountPoint "/"
+        ReportByDevice false
+        ReportInodes true
+        ValuesAbsolute true
+        ValuesPercentage true
+      </Plugin>
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-collectd]
+    notify: [collectd-service]
+    when: "!os_family('debian')"
 
   - name: collectd-service
     type: service

@@ -26,6 +26,9 @@ vendor/
 *.out
 coverage.html
 
+# Rust agent build output
+agent-rs/target/
+
 # IDE
 .idea/
 .vscode/

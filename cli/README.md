@@ -17,12 +17,12 @@ make build
 export HOBNOB_SERVER=http://hobd.example.com:8181
 # Or use --server flag on every command
 
-# List nodes
-hobnobcli nodes list
+# List thralls
+hobnobcli thralls list
 
-# View node traits
-hobnobcli nodes traits web01.example.com
-hobnobcli nodes traits web01.example.com os.distro
+# View thrall traits
+hobnobcli thralls traits web01.example.com
+hobnobcli thralls traits web01.example.com os.distro
 
 # Token-based enrollment (when trusted enrollment is not configured)
 hobnobcli tokens generate
@@ -51,33 +51,33 @@ hobnobcli approved list
 hobnobcli approved revoke <id>
 ```
 
-### nodes -- Node management
+### thralls -- Thrall management
 
 ```bash
-# List all enrolled nodes
-hobnobcli nodes list
+# List all enrolled thralls
+hobnobcli thralls list
 
-# Show node details
-hobnobcli nodes show <id>
+# Show thrall details
+hobnobcli thralls show <id>
 
 # View collected traits
-hobnobcli nodes traits <hostname>
-hobnobcli nodes traits <hostname> os.distro    # dot-path query
+hobnobcli thralls traits <hostname>
+hobnobcli thralls traits <hostname> os.distro    # dot-path query
 
-# Revoke a node (blocks future check-ins)
-hobnobcli nodes revoke <id>
+# Revoke a thrall (blocks future check-ins)
+hobnobcli thralls revoke <id>
 
-# Permanently delete a node and all history
-hobnobcli nodes delete <id>
+# Permanently delete a thrall and all history
+hobnobcli thralls delete <id>
 ```
 
 ### push -- Force immediate check-in
 
 ```bash
-# Force single node
+# Force single thrall
 hobnobcli push <hostname-or-uuid>
 
-# Force all nodes
+# Force all thralls
 hobnobcli push --all
 ```
 
@@ -86,7 +86,7 @@ hobnobcli push --all
 ```bash
 # List recent runs (default limit: 20)
 hobnobcli runs list
-hobnobcli runs list --node <id> --limit 50
+hobnobcli runs list --thrall <id> --limit 50
 
 # Show run details
 hobnobcli runs show <run-id>
@@ -95,7 +95,7 @@ hobnobcli runs show <run-id>
 ### preview -- Dry-run
 
 ```bash
-# Preview changes for a node
+# Preview changes for a thrall
 hobnobcli preview <hostname-or-uuid>
 ```
 
@@ -127,11 +127,11 @@ hobnobcli webhooks delete <id>
 ### packages -- Package audit
 
 ```bash
-# List packages across all nodes
+# List packages across all thralls
 hobnobcli packages list
 
-# Filter by node
-hobnobcli packages list --node <id>
+# Filter by thrall
+hobnobcli packages list --thrall <id>
 
 # Show package drift (installed != desired)
 hobnobcli packages drift

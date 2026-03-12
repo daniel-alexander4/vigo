@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package license
 
 // PublicKeyHex is the Ed25519 public key used to verify license signatures.

@@ -1,10 +1,15 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package db
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 )
@@ -62,8 +67,8 @@ func (b *TraitsBatcher) Start(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// Flush writes all pending traits inserts to the database and clears the
-// pending set.
+// Flush writes all pending traits inserts to the database using multi-row
+// INSERT and clears the pending set.
 func (b *TraitsBatcher) Flush(ctx context.Context) {
 	b.mu.Lock()
 	if len(b.pending) == 0 {
@@ -74,13 +79,42 @@ func (b *TraitsBatcher) Flush(ctx context.Context) {
 	b.pending = make(map[string]string)
 	b.mu.Unlock()
 
+	if err := b.batchInsertTraits(ctx, batch); err != nil {
+		slog.Error("failed to batch flush traits", "count", len(batch), "error", err)
+	}
+}
+
+// batchInsertTraits uses multi-row INSERT to write all pending traits in a
+// single round-trip. Chunks at 200 rows (400 params) to stay under SQLite's
+// 999 parameter limit.
+func (b *TraitsBatcher) batchInsertTraits(ctx context.Context, batch map[string]string) error {
+	const chunkSize = 200 // 2 columns × 200 = 400 params
+	items := make([]InsertThrallTraitsParams, 0, len(batch))
 	for thrallID, traits := range batch {
-		if _, err := b.queries.InsertThrallTraits(ctx, InsertThrallTraitsParams{
-			ThrallID: thrallID,
-			Traits:   traits,
-		}); err != nil {
-			slog.Error("failed to batch flush traits", "thrall_id", thrallID, "error", err)
-			// Don't re-queue — next check-in will re-send traits with a fresh hash comparison.
+		items = append(items, InsertThrallTraitsParams{ThrallID: thrallID, Traits: traits})
+	}
+
+	for i := 0; i < len(items); i += chunkSize {
+		end := i + chunkSize
+		if end > len(items) {
+			end = len(items)
+		}
+		chunk := items[i:end]
+
+		var sb strings.Builder
+		sb.WriteString("INSERT INTO thrall_traits (thrall_id, traits) VALUES ")
+		params := make([]interface{}, 0, len(chunk)*2)
+		for j, item := range chunk {
+			if j > 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteString("(?,?)")
+			params = append(params, item.ThrallID, item.Traits)
+		}
+
+		if _, err := b.queries.db.ExecContext(ctx, sb.String(), params...); err != nil {
+			return fmt.Errorf("multi-row insert traits (%d rows): %w", len(chunk), err)
 		}
 	}
+	return nil
 }

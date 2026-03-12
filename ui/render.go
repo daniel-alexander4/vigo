@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package ui
 
 import (
@@ -14,6 +17,10 @@ import (
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer/html"
 )
 
 // Renderer holds parsed templates and renders them to HTTP responses.
@@ -184,4 +191,27 @@ func pct(numerator, denominator int) float64 {
 		return 0
 	}
 	return float64(numerator) / float64(denominator) * 100
+}
+
+// markdownRenderer is a singleton goldmark instance with chroma syntax highlighting.
+var markdownRenderer = goldmark.New(
+	goldmark.WithExtensions(
+		extension.GFM,
+		highlighting.NewHighlighting(
+			highlighting.WithStyle("monokai"),
+			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+		),
+	),
+	goldmark.WithRendererOptions(
+		html.WithUnsafe(),
+	),
+)
+
+// RenderMarkdown converts markdown source to HTML with syntax-highlighted code blocks.
+func RenderMarkdown(source string) string {
+	var buf bytes.Buffer
+	if err := markdownRenderer.Convert([]byte(source), &buf); err != nil {
+		return "<pre>" + template.HTMLEscapeString(source) + "</pre>"
+	}
+	return buf.String()
 }

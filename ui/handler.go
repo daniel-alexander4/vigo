@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package ui
 
 import (
@@ -10,9 +13,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hobnob/hobnob/server/ai"
 	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/federation"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -38,10 +43,13 @@ type Handler struct {
 	caFile       string
 	agentDir     string
 	version      string
+	assistant    *ai.Assistant
+	hub          *federation.Hub
 }
 
 // NewHandler creates a UI handler wired to real database queries.
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string) (*Handler, error) {
+// The assistant parameter is optional — pass nil to disable the Ask page.
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -55,6 +63,8 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		caFile:       caFile,
 		agentDir:     agentDir,
 		version:      version,
+		assistant:    assistant,
+		hub:          hub,
 	}, nil
 }
 
@@ -91,15 +101,28 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/thralls-table", h.ThrallsTable)
+
+	// Federation page (only registered when running as hub)
+	if h.hub != nil {
+		mux.HandleFunc("GET /federation", h.Federation)
+	}
+
+	// AI chat page (only registered when assistant is available)
+	if h.assistant != nil {
+		mux.HandleFunc("GET /ask", h.AskPage)
+		mux.HandleFunc("POST /ui/ask", h.AskStream)
+	}
 }
 
 // --- Page data types ---
 
 // PageData holds common fields for all page templates.
 type PageData struct {
-	Title     string
-	ActiveNav string
-	Version   string
+	Title             string
+	ActiveNav         string
+	Version           string
+	AIEnabled         bool
+	FederationEnabled bool
 }
 
 // DashboardPageData holds data for the dashboard page.
@@ -252,12 +275,19 @@ type PlanDetailPageData struct {
 	SkipCount   int
 }
 
+// setCommon applies version, AI-enabled, and federation flags to page data.
+func (h *Handler) setCommon(pd *PageData) {
+	pd.Version = h.version
+	pd.AIEnabled = h.assistant != nil
+	pd.FederationEnabled = h.hub != nil
+}
+
 // --- Handlers ---
 
 // Dashboard renders the main dashboard page.
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "dashboard", data)
 }
 
@@ -270,7 +300,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 // Compliance renders the compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "compliance", data)
 }
 
@@ -278,7 +308,7 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Thralls(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	data := h.dataSource.ThrallsData(h.baseInterval, statusFilter)
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "thralls", data)
 }
 
@@ -295,7 +325,7 @@ func (h *Handler) ThrallDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "thrall not found", http.StatusNotFound)
 		return
 	}
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "thrall-detail", data)
 }
 
@@ -303,7 +333,7 @@ func (h *Handler) ThrallDetail(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	data := h.dataSource.RunsData(statusFilter)
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "runs", data)
 }
 
@@ -320,7 +350,7 @@ func (h *Handler) RunDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "run not found", http.StatusNotFound)
 		return
 	}
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "run-detail", data)
 }
 
@@ -332,7 +362,7 @@ func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "config not found", http.StatusNotFound)
 		return
 	}
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "config", data)
 }
 
@@ -349,7 +379,7 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "plan not found", http.StatusNotFound)
 		return
 	}
-	data.Version = h.version
+	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "plans", data)
 }
 
@@ -843,6 +873,139 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 		DeleteCount: deleteCount,
 		SkipCount:   skipCount,
 	}, nil
+}
+
+// FederationSpokeRow represents a spoke in the federation UI table.
+type FederationSpokeRow struct {
+	ID          string
+	Addr        string
+	Patterns    []string
+	Healthy     bool
+	ThrallCount int32
+	Error       string
+}
+
+// FederationPageData holds data for the federation page.
+type FederationPageData struct {
+	PageData
+	SpokeCount   int
+	HealthyCount int
+	TotalThralls int32
+	Spokes       []FederationSpokeRow
+}
+
+// Federation renders the federation hub status page.
+func (h *Handler) Federation(w http.ResponseWriter, r *http.Request) {
+	statuses := h.hub.SpokeStatuses(r.Context())
+
+	var spokes []FederationSpokeRow
+	healthyCount := 0
+	var totalThralls int32
+	for _, s := range statuses {
+		spokes = append(spokes, FederationSpokeRow{
+			ID:          s.ID,
+			Addr:        s.Addr,
+			Patterns:    s.Patterns,
+			Healthy:     s.Healthy,
+			ThrallCount: s.ThrallCount,
+			Error:       s.Error,
+		})
+		if s.Healthy {
+			healthyCount++
+		}
+		totalThralls += s.ThrallCount
+	}
+
+	data := FederationPageData{
+		PageData:     PageData{Title: "Federation", ActiveNav: "federation"},
+		SpokeCount:   len(spokes),
+		HealthyCount: healthyCount,
+		TotalThralls: totalThralls,
+		Spokes:       spokes,
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "federation", data)
+}
+
+// AskPage renders the AI chat page.
+func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
+	data := struct {
+		PageData
+	}{
+		PageData: PageData{Title: "Ask AI", ActiveNav: "ask"},
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "ask", data)
+}
+
+// AskStream handles POST /ui/ask — proxies to the AI assistant with server-side markdown rendering.
+func (h *Handler) AskStream(w http.ResponseWriter, r *http.Request) {
+	if h.assistant == nil {
+		http.Error(w, "AI assistant not enabled", http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		Question string `json:"question"`
+		History  []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"history"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Question == "" {
+		http.Error(w, "question is required", http.StatusBadRequest)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	aiReq := ai.AskRequest{Question: req.Question}
+	for _, m := range req.History {
+		aiReq.History = append(aiReq.History, ai.HistoryMessage{Role: m.Role, Content: m.Content})
+	}
+
+	sendSSE := func(data any) {
+		b, _ := json.Marshal(data)
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		flusher.Flush()
+	}
+
+	var rawAnswer string
+
+	err := h.assistant.AskStream(r.Context(), aiReq, func(event ai.SSEEvent) {
+		switch event.Type {
+		case "delta":
+			rawAnswer = event.Text
+			sendSSE(map[string]any{"type": "delta", "html": RenderMarkdown(event.Text)})
+		case "status":
+			sendSSE(map[string]any{"type": "status", "tools": event.ToolsCalled})
+		case "done":
+			sendSSE(map[string]any{
+				"type":        "done",
+				"raw_answer":  rawAnswer,
+				"tools_used":  event.ToolsUsed,
+				"tokens_used": event.TokensUsed,
+			})
+		case "error":
+			sendSSE(map[string]any{"type": "error", "text": event.Text})
+		}
+	})
+	if err != nil {
+		sendSSE(map[string]any{"type": "error", "text": err.Error()})
+	}
 }
 
 // planActionColor maps a plan action to a badge CSS class.

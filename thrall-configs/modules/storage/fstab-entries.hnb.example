@@ -11,7 +11,7 @@ resources:
 
   - name: nfs-mount-dir
     type: file
-    targetpath: "{{ .Vars.nfs_mount_point }}"
+    targetpath: /mnt/shared
     state: directory
     owner: root
     group: root
@@ -19,8 +19,8 @@ resources:
 
   - name: nfs-share
     type: mount
-    path: "{{ .Vars.nfs_mount_point }}"
-    device: "{{ .Vars.nfs_server }}:{{ .Vars.nfs_share }}"
+    path: /mnt/shared
+    device: "10.0.0.1:/srv/shared"
     fstype: nfs
     options: "rw,hard,intr,timeo=600,retrans=3"
     state: mounted
@@ -33,7 +33,7 @@ resources:
     path: /tmp
     device: tmpfs
     fstype: tmpfs
-    options: "defaults,noatime,nosuid,nodev,size={{ .Vars.tmpfs_size }}"
+    options: "defaults,noatime,nosuid,nodev,size=2G"
     state: mounted
 
   # --- tmpfs for shared memory ---

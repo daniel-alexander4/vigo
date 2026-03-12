@@ -1,12 +1,19 @@
+# Secrets backend. Options: "static" (default) or "isopass".
+# Static reads from a .env file. Isopass connects to an isopass API instance.
 secrets:
   backend: static
   env_file: ".env"
+# secrets:
+#   backend: isopass
+#   url: https://localhost:8443
+#   token_env: HOBNOB_SECRETS_TOKEN   # env var containing bearer token
+#   tls_skip_verify: true             # skip TLS cert verification (e.g. self-signed)
 
 server:
   grpc_listen: ":1530"
   api_listen: ":8181"
   tls:
-    cert_file: "secret:hobnob/tls/cert"
+    cert_file: "secret:hobnob.tls.cert"
     key_file: "secret:hobnob/tls/key"
     ca_file: "secret:hobnob/tls/ca"
     ca_key_file: "secret:hobnob/tls/ca_key"  # enables CSR signing for bootstrap
@@ -69,6 +76,19 @@ watcher:
 #     events:                             # events routed to digest instead of immediate
 #       - run.success
 #       - drift.detected
+
+# AI assistant. Disabled by default. Uses Ollama (free, local) as the default
+# LLM backend. Paid providers (claude, openai) require an API key.
+# ai:
+#   enabled: true
+#   provider: ollama               # ollama | claude | openai | openai-compat
+#   model: "qwen2.5:7b"           # provider-specific model name
+#   max_tokens: 4096
+#   base_url: ""                   # auto for ollama; required for openai-compat
+#   api_key: ""                    # "secret:hobnob/ai/api_key" for paid providers
+#   rate_limit: 30                 # requests/minute (0 = unlimited)
+#   max_tool_rounds: 10            # max tool-use iterations per request
+#   context_mode: auto             # tools | prefetch | auto
 
 bootstrap:
   cert_validity: "8760h"  # 1 year

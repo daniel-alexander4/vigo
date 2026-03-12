@@ -9,6 +9,7 @@ resources:
   - name: prometheus-user
     type: user
     username: prometheus
+    system: "true"
     shell: /usr/sbin/nologin
 
   - name: install-prometheus

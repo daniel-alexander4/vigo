@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package bootstrap provides HTTP handlers for agent bootstrap scripts,
 // binary distribution, and version information.
 package bootstrap

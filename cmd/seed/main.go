@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Command seed inserts development test data into the Hobnob database.
 // It is idempotent -- safe to run multiple times.
 //

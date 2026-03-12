@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package traits provides a scanner for custom trait executables.
 // The server distributes these executables to agents, which run them
 // and merge their JSON output into the traits map under the custom.* namespace.

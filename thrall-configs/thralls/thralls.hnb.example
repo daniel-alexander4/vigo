@@ -1,5 +1,5 @@
 # Thrall-to-module mappings. First match wins.
-# Entries can reference roles (node-configs/roles/) or modules (node-configs/modules/) by name.
+# Entries can reference roles (thrall-configs/roles/) or modules (thrall-configs/modules/) by name.
 # Thrall-level vars override module default vars.
 
 thralls:

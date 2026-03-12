@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package metrics
 
 import (
@@ -38,7 +41,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 			activeCount++
 		}
 		if n.LastSeen.Valid {
-			TimeSinceCheckin.WithLabelValues(n.Hostname).Set(now.Sub(n.LastSeen.Time).Seconds())
+			CheckinAgeDist.Observe(now.Sub(n.LastSeen.Time).Seconds())
 		}
 		if n.Revoked == 0 {
 			totalNonRevoked++

@@ -175,6 +175,8 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateExec(base, res)...)
 	case "service":
 		findings = append(findings, validateService(base, res)...)
+	case "cron":
+		findings = append(findings, validateCron(base, res)...)
 	case "reboot":
 		findings = append(findings, validateReboot(base, res)...)
 	}
@@ -258,6 +260,46 @@ func validateReboot(base Finding, res Resource) []Finding {
 	f.Severity = SeverityWarning
 	f.Message = "reboot resource has no subscribes guard and no reboot_required_file — will reboot every convergence"
 	return []Finding{f}
+}
+
+// validateCron checks that cron resources explicitly declare schedule and user.
+// Without these, the defaults are "* * * * *" (every minute) as "root" — dangerous.
+func validateCron(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	state := attrString(res.Attributes, "state")
+	if state == "absent" {
+		return nil
+	}
+
+	// Require an explicit schedule. Either the "schedule" field (full cron expression)
+	// or all five individual fields (minute, hour, day, month, weekday).
+	hasSchedule := attrString(res.Attributes, "schedule") != ""
+	if !hasSchedule {
+		hasAll := true
+		for _, field := range []string{"minute", "hour", "day", "month", "weekday"} {
+			if attrString(res.Attributes, field) == "" {
+				hasAll = false
+				break
+			}
+		}
+		if !hasAll {
+			f := base
+			f.Severity = SeverityError
+			f.Message = "cron resource missing schedule — add schedule or all of minute/hour/day/month/weekday (default is every minute)"
+			findings = append(findings, f)
+		}
+	}
+
+	// Require an explicit user.
+	if attrString(res.Attributes, "user") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "cron resource missing user — add user (default is root)"
+		findings = append(findings, f)
+	}
+
+	return findings
 }
 
 func attrString(attrs map[string]any, key string) string {

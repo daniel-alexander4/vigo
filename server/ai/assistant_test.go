@@ -1,0 +1,234 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+package ai
+
+import (
+	"context"
+	"testing"
+
+	"github.com/hobnob/hobnob/server/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func testCfg(overrides ...func(*config.AISection)) config.AISection {
+	cfg := config.AISection{
+		Enabled:       true,
+		MaxTokens:     4096,
+		MaxToolRounds: 10,
+		ContextMode:   "tools",
+	}
+	for _, fn := range overrides {
+		fn(&cfg)
+	}
+	return withDefaults(cfg)
+}
+
+func TestAsk_DirectAnswer(t *testing.T) {
+	provider := newMockProvider(&ChatResponse{
+		Content:    "Hobnob manages your infrastructure.",
+		TokensUsed: 100,
+	})
+
+	a := &Assistant{
+		provider: provider,
+		tools:    &toolDeps{},
+		cfg:      testCfg(),
+	}
+
+	resp, err := a.Ask(context.Background(), AskRequest{Question: "What is Hobnob?"})
+	require.NoError(t, err)
+	assert.Equal(t, "Hobnob manages your infrastructure.", resp.Answer)
+	assert.Equal(t, 100, resp.TokensUsed)
+	assert.Empty(t, resp.ToolsUsed)
+}
+
+func TestAsk_ToolUseLoop(t *testing.T) {
+	provider := newMockProvider(
+		&ChatResponse{
+			ToolCalls: []ToolCall{{
+				ID:        "call_1",
+				Name:      "list_modules",
+				Arguments: "{}",
+			}},
+			TokensUsed: 50,
+		},
+		&ChatResponse{
+			Content:    "You have 3 modules: nginx, redis, base.",
+			TokensUsed: 80,
+		},
+	)
+
+	a := &Assistant{
+		provider: provider,
+		tools:    &toolDeps{},
+		cfg:      testCfg(),
+	}
+
+	resp, err := a.Ask(context.Background(), AskRequest{Question: "What modules do I have?"})
+	require.NoError(t, err)
+	assert.Equal(t, "You have 3 modules: nginx, redis, base.", resp.Answer)
+	assert.Equal(t, 130, resp.TokensUsed)
+	assert.Equal(t, []string{"list_modules"}, resp.ToolsUsed)
+	assert.Equal(t, 2, len(provider.calls))
+}
+
+func TestAsk_MaxRoundsReached(t *testing.T) {
+	responses := make([]*ChatResponse, 15)
+	for i := range responses {
+		responses[i] = &ChatResponse{
+			ToolCalls: []ToolCall{{
+				ID:        "call",
+				Name:      "list_modules",
+				Arguments: "{}",
+			}},
+			TokensUsed: 10,
+		}
+	}
+	provider := newMockProvider(responses...)
+
+	a := &Assistant{
+		provider: provider,
+		tools:    &toolDeps{},
+		cfg: testCfg(func(c *config.AISection) {
+			c.MaxToolRounds = 3
+		}),
+	}
+
+	resp, err := a.Ask(context.Background(), AskRequest{Question: "infinite loop?"})
+	require.NoError(t, err)
+	assert.Contains(t, resp.Answer, "maximum number of tool rounds")
+	assert.Equal(t, 3, len(provider.calls))
+}
+
+func TestAsk_RateLimit(t *testing.T) {
+	provider := newMockProvider(&ChatResponse{Content: "ok"})
+
+	a := &Assistant{
+		provider:    provider,
+		tools:       &toolDeps{},
+		cfg:         testCfg(func(c *config.AISection) { c.RateLimit = 1 }),
+		rateLimiter: newRateLimiter(1),
+	}
+
+	_, err := a.Ask(context.Background(), AskRequest{Question: "test"})
+	require.NoError(t, err)
+
+	_, err = a.Ask(context.Background(), AskRequest{Question: "test"})
+	assert.ErrorContains(t, err, "rate limit exceeded")
+}
+
+func TestStripSecrets(t *testing.T) {
+	input := `{"dsn": "secret:hobnob/db/dsn", "other": "safe"}`
+	result := stripSecrets(input)
+	assert.NotContains(t, result, "secret:")
+	assert.Contains(t, result, "[REDACTED:")
+}
+
+func TestExtractHostname(t *testing.T) {
+	tests := []struct {
+		question string
+		want     string
+	}{
+		{"why is web-03 failing?", "web-03"},
+		{"what's running on db.prod.example.com?", "db.prod.example.com"},
+		{"how many thralls do I have?", ""},
+		{"tell me about web-server-01", "web-server-01"},
+	}
+	for _, tt := range tests {
+		got := extractHostname(tt.question)
+		assert.Equal(t, tt.want, got, "question: %s", tt.question)
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     config.AISection
+		wantErr string
+	}{
+		{"disabled is always valid", config.AISection{Enabled: false, Provider: "invalid"}, ""},
+		{"valid ollama", config.AISection{Enabled: true, Provider: "ollama"}, ""},
+		{"valid claude", config.AISection{Enabled: true, Provider: "claude"}, ""},
+		{"invalid provider", config.AISection{Enabled: true, Provider: "gemini"}, "ai.provider must be"},
+		{"openai-compat needs base_url", config.AISection{Enabled: true, Provider: "openai-compat"}, "ai.base_url is required"},
+		{"openai-compat with base_url", config.AISection{Enabled: true, Provider: "openai-compat", BaseURL: "http://localhost:8080/v1"}, ""},
+		{"invalid context mode", config.AISection{Enabled: true, ContextMode: "magic"}, "ai.context_mode must be"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateConfig(tt.cfg)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfigDefaults(t *testing.T) {
+	cfg := withDefaults(config.AISection{Enabled: true})
+	assert.Equal(t, "ollama", cfg.Provider)
+	assert.Equal(t, "qwen2.5:7b", cfg.Model)
+	assert.Equal(t, 4096, cfg.MaxTokens)
+	assert.Equal(t, 10, cfg.MaxToolRounds)
+	assert.Equal(t, "auto", cfg.ContextMode)
+	assert.Equal(t, "http://ollama:11434/v1", cfg.BaseURL)
+
+	cfg2 := withDefaults(config.AISection{Enabled: true, Provider: "claude"})
+	assert.Equal(t, "claude-sonnet-4-20250514", cfg2.Model)
+	assert.Equal(t, "tools", cfg2.ContextMode)
+}
+
+func TestAsk_PrefetchMode(t *testing.T) {
+	provider := newMockProvider(&ChatResponse{
+		Content:    "Here's what I found about your fleet.",
+		TokensUsed: 200,
+	})
+
+	a := &Assistant{
+		provider: provider,
+		tools:    &toolDeps{},
+		cfg: testCfg(func(c *config.AISection) {
+			c.ContextMode = "prefetch"
+		}),
+	}
+
+	resp, err := a.Ask(context.Background(), AskRequest{Question: "how is my fleet?"})
+	require.NoError(t, err)
+	assert.Equal(t, "Here's what I found about your fleet.", resp.Answer)
+	assert.Empty(t, resp.ToolsUsed)
+	assert.Equal(t, 1, len(provider.calls))
+	lastMsg := provider.calls[0].Messages[len(provider.calls[0].Messages)-1]
+	assert.Contains(t, lastMsg.Content, "how is my fleet?")
+}
+
+func TestAsk_AutoFallback(t *testing.T) {
+	provider := newMockProvider(
+		&ChatResponse{
+			ToolCalls:  []ToolCall{{ID: "1", Name: "", Arguments: ""}},
+			TokensUsed: 30,
+		},
+		&ChatResponse{
+			Content:    "Fallback answer without tools.",
+			TokensUsed: 50,
+		},
+	)
+
+	a := &Assistant{
+		provider: provider,
+		tools:    &toolDeps{},
+		cfg: testCfg(func(c *config.AISection) {
+			c.ContextMode = "auto"
+		}),
+	}
+
+	resp, err := a.Ask(context.Background(), AskRequest{Question: "test"})
+	require.NoError(t, err)
+	assert.Equal(t, "Fallback answer without tools.", resp.Answer)
+	assert.Equal(t, 2, len(provider.calls))
+	assert.NotEmpty(t, provider.calls[0].Tools)
+	assert.Empty(t, provider.calls[1].Tools)
+}

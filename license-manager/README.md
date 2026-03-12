@@ -238,9 +238,9 @@ When a customer installs the license, the Hobnob server enforces it through four
 | Stage | Condition | Behavior |
 |-------|-----------|----------|
 | 0 — Compliant | Valid license, thralls within limit | Normal operation |
-| 1 — Grace Period | License expired or thrall count exceeded (days 1-30) | Full operation, WARN logs daily |
-| 2 — Thrall Block | 30 days past violation (days 31-45) | Existing thralls work, new registrations rejected |
-| 3 — Service Stop | 45 days past violation (day 46+) | Server shuts down |
+| 1 — Grace Period | License expired or thrall count exceeded (days 1-15) | Full operation, WARN on every check-in |
+| 2 — Enrollment Block | 15 days past violation (days 16-30) | Existing thralls work, new enrollments rejected |
+| 3 — Service Stop | 30 days past violation (day 31+) | Server shuts down |
 
 Installing a valid license at any stage returns to Compliant immediately.
 

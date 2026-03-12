@@ -19,17 +19,23 @@ resources:
     group: tomcat
     state: present
 
-  - name: install-tomcat
+  - name: install-tomcat-debian
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}tomcat10{{ else }}tomcat{{ end }}
+    package: tomcat10
     state: present
+    when: "os_family('debian')"
     depends_on: [tomcat-user]
 
-  - name: tomcat-server-xml
+  - name: install-tomcat-redhat
+    type: package
+    package: tomcat
+    state: present
+    when: "!os_family('debian')"
+    depends_on: [tomcat-user]
+
+  - name: tomcat-server-xml-debian
     type: file
-    targetpath: >-
-      {{ if eq .Traits.os.family "debian" }}/etc/tomcat10/server.xml{{ else }}/etc/tomcat/server.xml{{ end }}
+    targetpath: /etc/tomcat10/server.xml
     content: |
       <?xml version="1.0" encoding="UTF-8"?>
       <!-- Managed by Hobnob — do not edit manually -->
@@ -63,13 +69,53 @@ resources:
     owner: root
     group: tomcat
     mode: "0640"
-    depends_on: [install-tomcat]
-    notify: [tomcat-service]
+    when: "os_family('debian')"
+    depends_on: [install-tomcat-debian]
+    notify: [tomcat-service-debian]
 
-  - name: tomcat-defaults
+  - name: tomcat-server-xml-redhat
     type: file
-    targetpath: >-
-      {{ if eq .Traits.os.family "debian" }}/etc/default/tomcat10{{ else }}/etc/sysconfig/tomcat{{ end }}
+    targetpath: /etc/tomcat/server.xml
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!-- Managed by Hobnob — do not edit manually -->
+      <Server port="8005" shutdown="SHUTDOWN">
+
+        <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+        <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on" />
+        <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+        <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+        <Service name="Catalina">
+          <Connector port="{{ .Vars.tomcat_port }}"
+                     protocol="org.apache.coyote.http11.Http11NioProtocol"
+                     maxThreads="{{ .Vars.tomcat_max_threads }}"
+                     connectionTimeout="20000"
+                     redirectPort="8443"
+                     URIEncoding="UTF-8" />
+
+          <Engine name="Catalina" defaultHost="localhost">
+            <Host name="localhost" appBase="webapps"
+                  unpackWARs="true" autoDeploy="true">
+              <Valve className="org.apache.catalina.valves.AccessLogValve"
+                     directory="logs"
+                     prefix="access_log"
+                     suffix=".txt"
+                     pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+            </Host>
+          </Engine>
+        </Service>
+      </Server>
+    owner: root
+    group: tomcat
+    mode: "0640"
+    when: "!os_family('debian')"
+    depends_on: [install-tomcat-redhat]
+    notify: [tomcat-service-redhat]
+
+  - name: tomcat-defaults-debian
+    type: file
+    targetpath: /etc/default/tomcat10
     content: |
       # Managed by Hobnob — do not edit manually
       JAVA_OPTS="-Djava.awt.headless=true"
@@ -77,14 +123,38 @@ resources:
     owner: root
     group: tomcat
     mode: "0640"
-    depends_on: [install-tomcat]
-    notify: [tomcat-service]
+    when: "os_family('debian')"
+    depends_on: [install-tomcat-debian]
+    notify: [tomcat-service-debian]
 
-  - name: tomcat-service
+  - name: tomcat-defaults-redhat
+    type: file
+    targetpath: /etc/sysconfig/tomcat
+    content: |
+      # Managed by Hobnob — do not edit manually
+      JAVA_OPTS="-Djava.awt.headless=true"
+      CATALINA_OPTS="-Xms{{ .Vars.tomcat_heap_min }} -Xmx{{ .Vars.tomcat_heap_max }} -XX:+UseG1GC"
+    owner: root
+    group: tomcat
+    mode: "0640"
+    when: "!os_family('debian')"
+    depends_on: [install-tomcat-redhat]
+    notify: [tomcat-service-redhat]
+
+  - name: tomcat-service-debian
     type: service
-    service: >-
-      {{ if eq .Traits.os.family "debian" }}tomcat10{{ else }}tomcat{{ end }}
+    service: tomcat10
     enabled: true
     state: running
-    depends_on: [tomcat-server-xml, tomcat-defaults]
-    subscribes: [tomcat-server-xml, tomcat-defaults]
+    when: "os_family('debian')"
+    depends_on: [tomcat-server-xml-debian, tomcat-defaults-debian]
+    subscribes: [tomcat-server-xml-debian, tomcat-defaults-debian]
+
+  - name: tomcat-service-redhat
+    type: service
+    service: tomcat
+    enabled: true
+    state: running
+    when: "!os_family('debian')"
+    depends_on: [tomcat-server-xml-redhat, tomcat-defaults-redhat]
+    subscribes: [tomcat-server-xml-redhat, tomcat-defaults-redhat]

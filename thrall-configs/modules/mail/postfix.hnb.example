@@ -1,7 +1,7 @@
 name: postfix
 
 vars:
-  postfix_hostname: "{{ .Traits.identity.hostname }}"
+  postfix_hostname: "mail.example.com"
   postfix_domain: "example.com"
   postfix_relayhost: ""
   postfix_interfaces: "loopback-only"

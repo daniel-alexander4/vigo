@@ -5,10 +5,17 @@ vars:
   allowed_services: "sshd"
 
 resources:
-  - name: install-tcp-wrappers
+  - name: install-tcp-wrappers-debian
     type: package
-    package: "{{ if eq .Traits.os.family \"debian\" }}tcpd{{ else }}tcp_wrappers{{ end }}"
+    package: tcpd
     state: present
+    when: "os_family('debian')"
+
+  - name: install-tcp-wrappers-redhat
+    type: package
+    package: tcp_wrappers
+    state: present
+    when: "!os_family('debian')"
 
   - name: hosts-allow
     type: file
@@ -19,7 +26,7 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    depends_on: [install-tcp-wrappers]
+    depends_on: [install-tcp-wrappers-debian, install-tcp-wrappers-redhat]
 
   - name: hosts-deny
     type: file
@@ -30,4 +37,4 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    depends_on: [install-tcp-wrappers]
+    depends_on: [install-tcp-wrappers-debian, install-tcp-wrappers-redhat]

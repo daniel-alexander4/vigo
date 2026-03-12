@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package webhook provides asynchronous event dispatch to registered webhook
 // endpoints with HMAC-SHA256 payload signing and retry support.
 package webhook

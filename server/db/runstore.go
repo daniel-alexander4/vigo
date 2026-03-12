@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package db provides database access and the RunStore abstraction for
 // pluggable run storage backends.
 package db
@@ -14,6 +17,9 @@ import (
 type RunStore interface {
 	CreateRun(ctx context.Context, arg CreateRunParams) (Run, error)
 	CreateRunResult(ctx context.Context, arg CreateRunResultParams) (RunResult, error)
+	// BatchCreateRunResults inserts multiple results in a single round-trip.
+	// Falls back to per-row inserts if the batch is empty.
+	BatchCreateRunResults(ctx context.Context, args []CreateRunResultParams) error
 	FinishRun(ctx context.Context, arg FinishRunParams) error
 	GetRunByID(ctx context.Context, id string) (Run, error)
 	ListAllRuns(ctx context.Context, limit int64) ([]Run, error)

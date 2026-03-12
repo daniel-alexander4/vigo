@@ -1,0 +1,56 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Federation</h1>
+    <p>Hub status and spoke health</p>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__value">{{.SpokeCount}}</div>
+        <div class="stat-card__label">Spokes</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-{{if eq .HealthyCount .SpokeCount}}success{{else if gt .HealthyCount 0}}warning{{else}}danger{{end}}">{{.HealthyCount}}/{{.SpokeCount}}</div>
+        <div class="stat-card__label">Healthy</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value">{{.TotalThralls}}</div>
+        <div class="stat-card__label">Total Thralls</div>
+    </div>
+</div>
+
+{{if .Spokes}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Spoke ID</th>
+                <th>Address</th>
+                <th>Patterns</th>
+                <th>Thralls</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Spokes}}
+            <tr>
+                <td><strong>{{.ID}}</strong></td>
+                <td class="text-muted">{{.Addr}}</td>
+                <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
+                <td>{{.ThrallCount}}</td>
+                <td>
+                    {{if .Healthy}}
+                        <span class="badge badge--success">healthy</span>
+                    {{else}}
+                        <span class="badge badge--danger" title="{{.Error}}">unreachable</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<p class="text-muted">No spokes configured.</p>
+{{end}}
+{{end}}

@@ -42,7 +42,7 @@ resources:
 
   - name: doc-root
     type: file
-    targetpath: "{{ .Vars.doc_root }}"
+    targetpath: /var/www/html
     state: directory
     owner: www-data
     group: www-data

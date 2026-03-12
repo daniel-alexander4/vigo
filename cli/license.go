@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package main
 
 import (
@@ -133,7 +136,7 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 	case 1:
 		stageName = "Grace Period"
 	case 2:
-		stageName = "Thrall Block"
+		stageName = "Enrollment Block"
 	case 3:
 		stageName = "Service Stop"
 	}

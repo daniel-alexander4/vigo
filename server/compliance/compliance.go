@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package compliance computes compliance status for managed thralls based on
 // their last run results and last-seen timestamps.
 package compliance

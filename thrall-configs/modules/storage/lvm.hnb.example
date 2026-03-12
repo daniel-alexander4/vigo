@@ -18,39 +18,39 @@ resources:
 
   - name: create-pv
     type: exec
-    command: "pvcreate {{ .Vars.lvm_disk }}"
-    when: "!command_succeeds('pvs {{ .Vars.lvm_disk }}')"
+    command: "pvcreate /dev/sdb"
+    when: "!command_succeeds('pvs /dev/sdb')"
     depends_on: [install-lvm]
 
   # --- Volume group ---
 
   - name: create-vg
     type: exec
-    command: "vgcreate {{ .Vars.vg_name }} {{ .Vars.lvm_disk }}"
-    when: "!command_succeeds('vgs {{ .Vars.vg_name }}')"
+    command: "vgcreate data_vg /dev/sdb"
+    when: "!command_succeeds('vgs data_vg')"
     depends_on: [create-pv]
 
   # --- Logical volume ---
 
   - name: create-lv
     type: exec
-    command: "lvcreate -l {{ .Vars.lv_size }} -n {{ .Vars.lv_name }} {{ .Vars.vg_name }}"
-    when: "!command_succeeds('lvs {{ .Vars.vg_name }}/{{ .Vars.lv_name }}')"
+    command: "lvcreate -l 100%FREE -n data_lv data_vg"
+    when: "!command_succeeds('lvs data_vg/data_lv')"
     depends_on: [create-vg]
 
   # --- Filesystem ---
 
   - name: format-lv
     type: exec
-    command: "mkfs.{{ .Vars.fs_type }} /dev/{{ .Vars.vg_name }}/{{ .Vars.lv_name }}"
-    when: "!command_succeeds('blkid /dev/{{ .Vars.vg_name }}/{{ .Vars.lv_name }}')"
+    command: "mkfs.ext4 /dev/data_vg/data_lv"
+    when: "!command_succeeds('blkid /dev/data_vg/data_lv')"
     depends_on: [create-lv]
 
   # --- Mount ---
 
   - name: mount-dir
     type: file
-    targetpath: "{{ .Vars.mount_point }}"
+    targetpath: /data
     state: directory
     owner: root
     group: root
@@ -58,9 +58,9 @@ resources:
 
   - name: mount-lv
     type: mount
-    path: "{{ .Vars.mount_point }}"
-    device: "/dev/{{ .Vars.vg_name }}/{{ .Vars.lv_name }}"
-    fstype: "{{ .Vars.fs_type }}"
+    path: /data
+    device: /dev/data_vg/data_lv
+    fstype: ext4
     options: "defaults,noatime"
     state: mounted
     depends_on: [format-lv, mount-dir]

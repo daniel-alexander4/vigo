@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package federation provides hub-spoke coordination for federated deployments.
 // The Hub connects to spoke servers via gRPC and aggregates admin queries
 // (ListThralls, GetComplianceSummary, ListRuns, ForcePush) across all spokes.
@@ -231,6 +234,43 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 
 	slog.Info("enrolled thrall on spoke", "spoke_id", target.id, "hostname", hostname, "node_id", resp.ThrallId)
 	return resp.ThrallId, nil
+}
+
+// SpokeStatus describes the health and summary of a single spoke.
+type SpokeStatus struct {
+	ID          string   `json:"id"`
+	Addr        string   `json:"addr"`
+	Patterns    []string `json:"patterns"`
+	Healthy     bool     `json:"healthy"`
+	ThrallCount int32    `json:"thrall_count"`
+	Error       string   `json:"error,omitempty"`
+}
+
+// SpokeStatuses probes each spoke's health by calling GetComplianceSummary
+// with a short timeout and returns the results.
+func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
+	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
+		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		return sc.admin.GetComplianceSummary(probeCtx, &pb.GetComplianceSummaryRequest{})
+	})
+
+	statuses := make([]SpokeStatus, len(h.spokes))
+	for i, sc := range h.spokes {
+		statuses[i] = SpokeStatus{
+			ID:       sc.id,
+			Addr:     sc.addr,
+			Patterns: sc.patterns,
+		}
+		r := results[i]
+		if r.err != nil {
+			statuses[i].Error = r.err.Error()
+		} else {
+			statuses[i].Healthy = true
+			statuses[i].ThrallCount = r.value.(*pb.GetComplianceSummaryResponse).Total
+		}
+	}
+	return statuses
 }
 
 // fanOutResult holds the response from one spoke.

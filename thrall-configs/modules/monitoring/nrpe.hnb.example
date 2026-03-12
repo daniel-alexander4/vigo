@@ -10,15 +10,27 @@ vars:
 resources:
   - name: install-nrpe
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}nagios-nrpe-server{{ else }}nrpe{{ end }}
+    package: nagios-nrpe-server
     state: present
+    when: "os_family('debian')"
+
+  - name: install-nrpe
+    type: package
+    package: nrpe
+    state: present
+    when: "!os_family('debian')"
 
   - name: install-nagios-plugins
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}nagios-plugins-basic{{ else }}nagios-plugins-all{{ end }}
+    package: nagios-plugins-basic
     state: present
+    when: "os_family('debian')"
+
+  - name: install-nagios-plugins
+    type: package
+    package: nagios-plugins-all
+    state: present
+    when: "!os_family('debian')"
 
   - name: nrpe-cfg
     type: file
@@ -58,9 +70,18 @@ resources:
 
   - name: nrpe-service
     type: service
-    service: >-
-      {{ if eq .Traits.os.family "debian" }}nagios-nrpe-server{{ else }}nrpe{{ end }}
+    service: nagios-nrpe-server
     enabled: true
     state: running
     depends_on: [nrpe-cfg]
     subscribes: [nrpe-cfg]
+    when: "os_family('debian')"
+
+  - name: nrpe-service
+    type: service
+    service: nrpe
+    enabled: true
+    state: running
+    depends_on: [nrpe-cfg]
+    subscribes: [nrpe-cfg]
+    when: "!os_family('debian')"

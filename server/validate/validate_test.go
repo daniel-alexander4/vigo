@@ -142,7 +142,7 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		{"user", map[string]any{"username": "deploy"}},
 		{"repository", map[string]any{"name": "nginx", "type": "apt"}},
 		{"archive", map[string]any{"source": "https://example.com/foo.tar.gz", "target": "/opt/foo"}},
-		{"cron", map[string]any{"name": "backup", "job": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *"}},
+		{"cron", map[string]any{"name": "backup", "job": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy"}},
 	}
 
 	for _, tt := range types {
@@ -318,6 +318,104 @@ func TestExecWithSubscribesSecret_IsClean(t *testing.T) {
 	findings := ValidateModule(mod)
 	if HasErrors(findings) {
 		t.Errorf("exec with subscribes_secret should pass validation, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestCronValidation_MissingScheduleAndUser(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "bad-cron", Type: "cron", Attributes: map[string]any{
+				"job": "/usr/local/bin/backup.sh",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected errors for cron without schedule and user")
+	}
+	errorCount := 0
+	for _, f := range findings {
+		if f.Severity == SeverityError {
+			errorCount++
+		}
+	}
+	if errorCount != 2 {
+		t.Errorf("expected 2 errors (schedule + user), got %d: %s", errorCount, FormatFindings(findings))
+	}
+}
+
+func TestCronValidation_WithSchedule_MissingUser(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "no-user-cron", Type: "cron", Attributes: map[string]any{
+				"job":      "/usr/local/bin/backup.sh",
+				"schedule": "0 2 * * *",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for cron without user")
+	}
+	if len(findings) != 1 {
+		t.Errorf("expected 1 error, got %d: %s", len(findings), FormatFindings(findings))
+	}
+}
+
+func TestCronValidation_IndividualFields_IsClean(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "fields-cron", Type: "cron", Attributes: map[string]any{
+				"job":     "/usr/local/bin/backup.sh",
+				"user":    "deploy",
+				"minute":  "0",
+				"hour":    "2",
+				"day":     "*",
+				"month":   "*",
+				"weekday": "*",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("cron with all individual fields + user should pass, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestCronValidation_PartialFields_IsError(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "partial-cron", Type: "cron", Attributes: map[string]any{
+				"job":    "/usr/local/bin/backup.sh",
+				"user":   "deploy",
+				"minute": "0",
+				"hour":   "2",
+				// day, month, weekday omitted — would default to *
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for cron with only some individual fields")
+	}
+}
+
+func TestCronValidation_Absent_SkipsChecks(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "rm-cron", Type: "cron", Attributes: map[string]any{
+				"state": "absent",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("state=absent should skip schedule/user checks, got: %s", FormatFindings(findings))
 	}
 }
 

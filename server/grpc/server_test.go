@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc_test
 
 import (
@@ -30,7 +33,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/hobnob/hobnob/agent/auth"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
@@ -235,11 +237,11 @@ func TestRegisterFlow(t *testing.T) {
 	}
 
 	// Generate an ED25519 keypair for the agent.
-	pub, _, err := auth.GenerateKeypair()
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubPEM, err := auth.PublicKeyPEM(pub)
+	pubPEM, err := publicKeyPEM(pub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,11 +289,11 @@ func TestCheckInRevoked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pub, priv, err := auth.GenerateKeypair()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubPEM, err := auth.PublicKeyPEM(pub)
+	pubPEM, err := publicKeyPEM(pub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +313,7 @@ func TestCheckInRevoked(t *testing.T) {
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("test-fingerprint")
-	sig := auth.SignPayload(payload, tsStr, priv)
+	sig := signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
 		ThrallId:           thrallID,
@@ -350,11 +352,11 @@ func TestCheckInSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pub, priv, err := auth.GenerateKeypair()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubPEM, err := auth.PublicKeyPEM(pub)
+	pubPEM, err := publicKeyPEM(pub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +371,7 @@ func TestCheckInSuccess(t *testing.T) {
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("some-fingerprint")
-	sig := auth.SignPayload(payload, tsStr, priv)
+	sig := signPayload(payload, tsStr, priv)
 
 	resp, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
 		ThrallId:           thrallID,
@@ -404,11 +406,11 @@ func TestCheckInBadSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pub, _, err := auth.GenerateKeypair()
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pubPEM, err := auth.PublicKeyPEM(pub)
+	pubPEM, err := publicKeyPEM(pub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +421,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	}
 
 	// Use a DIFFERENT key to sign (should fail verification).
-	_, wrongPriv, err := auth.GenerateKeypair()
+	_, wrongPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +430,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("fingerprint")
-	sig := auth.SignPayload(payload, tsStr, wrongPriv)
+	sig := signPayload(payload, tsStr, wrongPriv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
 		ThrallId:           thrallID,
@@ -552,6 +554,23 @@ func writePEM(path, blockType string, der []byte) error {
 		Type:  blockType,
 		Bytes: der,
 	}), 0644)
+}
+
+// publicKeyPEM exports an ED25519 public key in PKIX PEM format.
+func publicKeyPEM(pub ed25519.PublicKey) (string, error) {
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return "", err
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})), nil
+}
+
+// signPayload signs payload+timestamp with ED25519 for request authentication.
+func signPayload(payload []byte, timestamp string, key ed25519.PrivateKey) []byte {
+	msg := make([]byte, len(payload)+len(timestamp))
+	copy(msg, payload)
+	copy(msg[len(payload):], timestamp)
+	return ed25519.Sign(key, msg)
 }
 
 func writePrivKeyPEM(path string, key ed25519.PrivateKey) error {

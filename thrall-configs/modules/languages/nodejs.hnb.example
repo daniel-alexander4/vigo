@@ -1,20 +1,17 @@
 name: nodejs
 
-vars:
-  nodejs_version: "20"
-
 resources:
   - name: nodesource-repo-debian
     type: repository
     key_url: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
-    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_{{ .Vars.nodejs_version }}.x nodistro main"
+    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main"
     state: present
     when: "os_family('debian')"
 
   - name: nodesource-repo-rhel
     type: repository
-    key_url: "https://rpm.nodesource.com/pub_{{ .Vars.nodejs_version }}.x/nodistro/repo/nodesource-repo.gpg.key"
-    repo: "nodesource-{{ .Vars.nodejs_version }}"
+    key_url: "https://rpm.nodesource.com/pub_20.x/nodistro/repo/nodesource-repo.gpg.key"
+    repo: "nodesource-20"
     state: present
     when: "os_family('redhat')"
 

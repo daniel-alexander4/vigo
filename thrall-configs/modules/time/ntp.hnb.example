@@ -36,9 +36,18 @@ resources:
 
   - name: ntp-service
     type: service
-    # ntp on Debian, ntpd on RHEL
-    service: "{{ if eq .Traits.os.family \"debian\" }}ntp{{ else }}ntpd{{ end }}"
+    service: ntp
     enabled: true
     state: running
     depends_on: [ntp-conf]
     subscribes: [ntp-conf]
+    when: "os_family('debian')"
+
+  - name: ntp-service
+    type: service
+    service: ntpd
+    enabled: true
+    state: running
+    depends_on: [ntp-conf]
+    subscribes: [ntp-conf]
+    when: "!os_family('debian')"

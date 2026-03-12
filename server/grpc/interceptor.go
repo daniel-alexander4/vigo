@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc
 
 import (
@@ -11,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hobnob/hobnob/agent/auth"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/metrics"
@@ -101,7 +103,7 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.ThrallCac
 	payload := []byte(req.GetStateFingerprint())
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
-	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
 		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
@@ -135,7 +137,7 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.T
 	payload := []byte(req.GetRunId())
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
-	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
 		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
@@ -167,7 +169,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.Thra
 	payload := req.GetTraitsJson()
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
-	if !auth.VerifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
 		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return status.Error(codes.Unauthenticated, "signature verification failed")
 	}
@@ -215,6 +217,14 @@ func lookupThrallAndPubKey(ctx context.Context, queries *db.Queries, cache *db.T
 	}
 
 	return thrall, pubKey, nil
+}
+
+// verifyPayload verifies an ED25519 signature over payload+timestamp.
+func verifyPayload(payload []byte, timestamp string, sig []byte, pub ed25519.PublicKey) bool {
+	msg := make([]byte, len(payload)+len(timestamp))
+	copy(msg, payload)
+	copy(msg[len(payload):], timestamp)
+	return ed25519.Verify(pub, msg, sig)
 }
 
 // checkTimestamp verifies the timestamp is within the allowed window.

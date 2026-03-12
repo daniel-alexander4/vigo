@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package grpc provides the mTLS gRPC server for Hobnob, implementing
 // both HobnobAgent and HobnobAdmin service handlers.
 package grpc
@@ -57,10 +60,11 @@ type ServerConfig struct {
 	RunStore        db.RunStore
 	BaseInterval    time.Duration
 	Dispatcher      *webhook.Dispatcher
-	TraitsDir        string
-	SignatureWindow  time.Duration // 0 → default 5m
-	ThrallCacheTTL     time.Duration // 0 → default 60s
-	TraitsScannerTTL time.Duration // 0 → default 30s
+	TraitsDir            string
+	SignatureWindow      time.Duration // 0 → default 5m
+	ThrallCacheTTL       time.Duration // 0 → default 60s
+	TraitsScannerTTL     time.Duration // 0 → default 30s
+	MaxConcurrentStreams uint32        // 0 → default 1000
 	Hub              *federation.Hub // non-nil when role=hub
 	SMTPNotifier     *hobnobsmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
@@ -93,10 +97,15 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 	traitsBatch := db.NewTraitsBatcher(cfg.Queries)
 	traitsPruner := db.NewTraitsPruner(cfg.Queries)
 
+	maxStreams := cfg.MaxConcurrentStreams
+	if maxStreams == 0 {
+		maxStreams = 1000
+	}
+
 	srv := grpc.NewServer(
 		grpc.Creds(creds),
 		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, thrallCache, cfg.SignatureWindow)),
-		grpc.MaxConcurrentStreams(1000),
+		grpc.MaxConcurrentStreams(maxStreams),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle: 15 * time.Minute,
 			Time:              30 * time.Second,

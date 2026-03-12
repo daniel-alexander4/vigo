@@ -12,14 +12,14 @@ resources:
   - name: erlang-repo
     type: repository
     key_url: https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc
-    repo: "deb [signed-by=/etc/apt/keyrings/erlang_solutions.gpg] https://packages.erlang-solutions.com/ubuntu {{ .Traits.os.codename }} contrib"
+    repo: "deb [signed-by=/etc/apt/keyrings/erlang_solutions.gpg] https://packages.erlang-solutions.com/ubuntu jammy contrib"
     state: present
     when: "os_family('debian')"
 
   - name: rabbitmq-repo
     type: repository
     key_url: https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey
-    repo: "deb [signed-by=/etc/apt/keyrings/rabbitmq-server.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu {{ .Traits.os.codename }} main"
+    repo: "deb [signed-by=/etc/apt/keyrings/rabbitmq-server.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu jammy main"
     state: present
     when: "os_family('debian')"
 

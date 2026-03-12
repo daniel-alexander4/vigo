@@ -8,11 +8,17 @@ vars:
   max_request_workers: "150"
 
 resources:
-  - name: install-apache
+  - name: install-apache-debian
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}apache2{{ else }}httpd{{ end }}
+    package: apache2
     state: present
+    when: "os_family('debian')"
+
+  - name: install-apache-redhat
+    type: package
+    package: httpd
+    state: present
+    when: "!os_family('debian')"
 
   # mod_ssl is bundled on Debian; RHEL needs a separate package
   - name: install-mod-ssl
@@ -20,30 +26,29 @@ resources:
     package: mod_ssl
     state: present
     when: "os_family('redhat')"
-    depends_on: [install-apache]
+    depends_on: [install-apache-redhat]
 
   - name: enable-mod-rewrite
     type: exec
     command: a2enmod rewrite
     when: "os_family('debian') && !command_succeeds('apache2ctl -M 2>/dev/null | grep -q rewrite')"
-    depends_on: [install-apache]
-    notify: [apache-service]
+    depends_on: [install-apache-debian]
+    notify: [apache-service-debian]
 
   - name: enable-mod-ssl
     type: exec
     command: a2enmod ssl
     when: "os_family('debian') && !command_succeeds('apache2ctl -M 2>/dev/null | grep -q ssl')"
-    depends_on: [install-apache]
-    notify: [apache-service]
+    depends_on: [install-apache-debian]
+    notify: [apache-service-debian]
 
-  - name: apache-conf
+  - name: apache-conf-debian
     type: file
-    targetpath: >-
-      {{ if eq .Traits.os.family "debian" }}/etc/apache2/apache2.conf{{ else }}/etc/httpd/conf/httpd.conf{{ end }}
+    targetpath: /etc/apache2/apache2.conf
     content: |
       # Managed by Hobnob — do not edit manually
 
-      ServerRoot {{ if eq .Traits.os.family "debian" }}"/etc/apache2"{{ else }}"/etc/httpd"{{ end }}
+      ServerRoot "/etc/apache2"
       ServerAdmin {{ .Vars.server_admin }}
       ServerName {{ .Vars.server_name }}
 
@@ -76,42 +81,111 @@ resources:
       </IfModule>
 
       # Logging
-      ErrorLog {{ if eq .Traits.os.family "debian" }}"${APACHE_LOG_DIR}/error.log"{{ else }}"logs/error_log"{{ end }}
+      ErrorLog "${APACHE_LOG_DIR}/error.log"
       LogLevel warn
-      {{ if eq .Traits.os.family "debian" }}
+
       IncludeOptional mods-enabled/*.load
       IncludeOptional mods-enabled/*.conf
       IncludeOptional conf-enabled/*.conf
       IncludeOptional sites-enabled/*.conf
-      {{ else }}
-      IncludeOptional conf.d/*.conf
-      IncludeOptional conf.modules.d/*.conf
-      {{ end }}
     owner: root
     group: root
     mode: "0644"
-    depends_on: [install-apache]
-    notify: [apache-service]
+    when: "os_family('debian')"
+    depends_on: [install-apache-debian]
+    notify: [apache-service-debian]
 
-  - name: apache-logrotate
+  - name: apache-conf-redhat
+    type: file
+    targetpath: /etc/httpd/conf/httpd.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+
+      ServerRoot "/etc/httpd"
+      ServerAdmin {{ .Vars.server_admin }}
+      ServerName {{ .Vars.server_name }}
+
+      Listen {{ .Vars.apache_port }}
+
+      # Timeout and keepalive
+      Timeout 60
+      KeepAlive On
+      MaxKeepAliveRequests 100
+      KeepAliveTimeout {{ .Vars.keepalive_timeout }}
+
+      # MPM event settings
+      <IfModule mpm_event_module>
+          StartServers             2
+          MinSpareThreads         25
+          MaxSpareThreads         75
+          ThreadLimit             64
+          ThreadsPerChild         25
+          MaxRequestWorkers       {{ .Vars.max_request_workers }}
+          MaxConnectionsPerChild  0
+      </IfModule>
+
+      # MPM prefork fallback
+      <IfModule mpm_prefork_module>
+          StartServers             5
+          MinSpareServers          5
+          MaxSpareServers         10
+          MaxRequestWorkers       {{ .Vars.max_request_workers }}
+          MaxConnectionsPerChild  0
+      </IfModule>
+
+      # Logging
+      ErrorLog "logs/error_log"
+      LogLevel warn
+
+      IncludeOptional conf.d/*.conf
+      IncludeOptional conf.modules.d/*.conf
+    owner: root
+    group: root
+    mode: "0644"
+    when: "!os_family('debian')"
+    depends_on: [install-apache-redhat]
+    notify: [apache-service-redhat]
+
+  - name: apache-logrotate-debian
     type: logrotate
-    path: >-
-      {{ if eq .Traits.os.family "debian" }}/var/log/apache2/*.log{{ else }}/var/log/httpd/*log{{ end }}
+    path: /var/log/apache2/*.log
     frequency: daily
     rotate: "14"
     compress: "true"
     missingok: "true"
     notifempty: "true"
     create: "0640 root adm"
-    postrotate: >-
-      {{ if eq .Traits.os.family "debian" }}/usr/sbin/apachectl graceful > /dev/null 2>&1 || true{{ else }}/bin/systemctl reload httpd.service > /dev/null 2>&1 || true{{ end }}
-    depends_on: [install-apache]
+    postrotate: "/usr/sbin/apachectl graceful > /dev/null 2>&1 || true"
+    when: "os_family('debian')"
+    depends_on: [install-apache-debian]
 
-  - name: apache-service
+  - name: apache-logrotate-redhat
+    type: logrotate
+    path: /var/log/httpd/*log
+    frequency: daily
+    rotate: "14"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 root adm"
+    postrotate: "/bin/systemctl reload httpd.service > /dev/null 2>&1 || true"
+    when: "!os_family('debian')"
+    depends_on: [install-apache-redhat]
+
+  - name: apache-service-debian
     type: service
-    service: >-
-      {{ if eq .Traits.os.family "debian" }}apache2{{ else }}httpd{{ end }}
+    service: apache2
     enabled: true
     state: running
-    depends_on: [apache-conf]
-    subscribes: [apache-conf]
+    when: "os_family('debian')"
+    depends_on: [apache-conf-debian]
+    subscribes: [apache-conf-debian]
+
+  - name: apache-service-redhat
+    type: service
+    service: httpd
+    enabled: true
+    state: running
+    when: "!os_family('debian')"
+    depends_on: [apache-conf-redhat]
+    subscribes: [apache-conf-redhat]

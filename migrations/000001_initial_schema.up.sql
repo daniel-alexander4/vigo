@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS thralls (
     last_seen   DATETIME,
     revoked     INTEGER NOT NULL DEFAULT 0,
     revoked_at  DATETIME,
-    force_push  INTEGER NOT NULL DEFAULT 0
+    force_push  INTEGER NOT NULL DEFAULT 0,
+    pending_rotated_secrets TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE INDEX IF NOT EXISTS idx_thralls_hostname ON thralls (hostname);

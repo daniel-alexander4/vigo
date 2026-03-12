@@ -131,8 +131,8 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 | `server/grpc/` | gRPC service implementations + ED25519 signature verification interceptor. Agent RPCs: Register, CheckIn, ReportResult, ReportTraits. Admin RPCs: ForcePush, DryRun, Rollback. TLS 1.3 minimum, mTLS required. |
 | `server/api/` | REST gateway + web UI (HTMX SPA) + bootstrap handler for agent enrollment |
 | `server/config/` | YAML config loader with secret resolution, fsnotify hot-reload, Go template rendering. See [config/README.md](config/README.md). |
-| `server/db/` | SQLite query layer, NodeCache (60s TTL), LastSeenBatcher (10s flush) |
-| `server/registry/` | Node enrollment: hostname pattern matching, bcrypt token validation, revocation |
+| `server/db/` | SQLite query layer, ThrallCache (60s TTL), LastSeenBatcher (10s flush) |
+| `server/registry/` | Thrall enrollment: hostname pattern matching, bcrypt token validation, revocation |
 | `server/secrets/` | Provider interface: `IsopassProvider` (prod) + `StaticProvider` (dev/test) |
 | `server/compliance/` | Status computation: compliant / drifted / failing / stale / unknown |
 | `server/webhook/` | HMAC-signed webhook dispatch (max 20 concurrent, 3 retries, 10s HTTP timeout) |
@@ -166,24 +166,24 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 |---------|-------|-------|
 | TLS minimum version | 1.3 | Enforced on gRPC |
 | Signature timestamp window | 5 minutes | Replay prevention |
-| NodeCache TTL | 60 seconds | Caches node record + parsed pubkey |
+| ThrallCache TTL | 60 seconds | Caches thrall record + parsed pubkey |
 | LastSeen flush interval | 10 seconds | Batched DB writes |
 | Metrics refresh interval | 30 seconds | Prometheus gauges |
 | Traits scanner TTL | 30 seconds | Custom trait file cache |
 | Webhook max concurrent | 20 | Semaphore-gated |
 | Webhook max retries | 3 | Exponential backoff |
 | Webhook HTTP timeout | 10 seconds | Per delivery |
-| Traits snapshot retention | 10 | Per node, pruned on report |
+| Traits snapshot retention | 10 | Per thrall, pruned on report |
 | Bcrypt cost | 10 | Token hashing |
-| Compliance stale threshold | 2x base_interval | Node hasn't checked in |
+| Compliance stale threshold | 2x base_interval | Thrall hasn't checked in |
 | Config reload debounce | 500ms | Prevents rapid re-parsing |
 
 ## Examples
 
-### Bootstrap a node (trusted enrollment)
+### Bootstrap a thrall (trusted enrollment)
 
 ```bash
-# On the managed node (server has trusted_enrollment configured)
+# On the managed thrall (server has trusted_enrollment configured)
 curl -sSf http://hobd.example.com:8181/bootstrap | sudo sh
 ```
 
@@ -195,17 +195,17 @@ curl -sSf http://hobd.example.com:8181/bootstrap | sudo sh
 # Output: Token: abc123...
 ./bin/hobnobcli approved add "web-01.example.com" --token abc123...
 
-# On the managed node
+# On the managed thrall
 sudo hobnob bootstrap --server http://hobd.example.com:8181 --token abc123...
 ```
 
-### Force a node to re-converge immediately
+### Force a thrall to re-converge immediately
 
 ```bash
 ./bin/hobnobcli push web-01.example.com
 ```
 
-### Preview what would change on a node (dry run)
+### Preview what would change on a thrall (dry run)
 
 ```bash
 ./bin/hobnobcli preview web-01.example.com

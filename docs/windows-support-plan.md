@@ -295,7 +295,7 @@ All time-based builtins (`hour_range`, `day_of_week`, `day_of_month`) and trait-
 - README.md — add Windows bootstrap instructions
 - CLAUDE.md — note Windows support in architecture
 - agent/README.md — Windows-specific sections
-- node-configs/ examples — add Windows module examples (IIS, Windows Update, etc.)
+- thrall-configs/ examples — add Windows module examples (IIS, Windows Update, etc.)
 
 ### 7.2 Testing
 - Unit tests for each Windows executor (mock command output)
@@ -308,7 +308,7 @@ All time-based builtins (`hour_range`, `day_of_week`, `day_of_month`) and trait-
 ### 7.3 Example Windows modules
 
 ```yaml
-# node-configs/modules/iis.hnb
+# thrall-configs/modules/iis.hnb
 name: iis
 resources:
   - name: iis-feature

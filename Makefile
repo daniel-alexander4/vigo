@@ -16,14 +16,14 @@ build-agent:
 	cp agent-rs/target/release/hobnob bin/hobnob
 
 test:
-	go test $(shell go list ./... | grep -v /agent-go/) -v -race -count=1
+	go test ./... -v -race -count=1
 	cd agent-rs && cargo test
 
 test-agent:
 	cd agent-rs && cargo test
 
 lint:
-	golangci-lint run --skip-dirs agent-go ./...
+	golangci-lint run ./...
 	buf lint
 	cd agent-rs && cargo clippy -- -D warnings
 
@@ -46,17 +46,6 @@ dist-agent:
 	cp agent-rs/target/x86_64-unknown-linux-musl/release/hobnob dist/agent/linux/amd64/hobnob
 	cd agent-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
 	cp agent-rs/target/aarch64-unknown-linux-musl/release/hobnob dist/agent/linux/arm64/hobnob
-
-# --- Archived Go agent (kept for reference) ---
-
-build-agent-go:
-	go build -o bin/hobnob-go ./agent-go
-
-dist-agent-go:
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/linux/amd64/hobnob ./agent-go
-	GOOS=linux GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/linux/arm64/hobnob ./agent-go
-	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/darwin/amd64/hobnob ./agent-go
-	GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=$(VERSION)" -o dist/agent-go/darwin/arm64/hobnob ./agent-go
 
 # --- Codegen ---
 

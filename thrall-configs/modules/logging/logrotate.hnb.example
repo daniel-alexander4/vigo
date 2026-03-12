@@ -14,12 +14,12 @@ resources:
 
   - name: app-logrotate
     type: logrotate
-    path: "{{ .Vars.log_path }}"
+    path: "/var/log/app/*.log"
     frequency: daily
-    rotate: "{{ .Vars.rotate_count }}"
-    size: "{{ .Vars.rotate_size }}"
-    compress: "{{ .Vars.compress }}"
-    delaycompress: "{{ .Vars.compress }}"
+    rotate: "14"
+    size: "100M"
+    compress: "true"
+    delaycompress: "true"
     missingok: "true"
     notifempty: "true"
     create: "0640 root adm"

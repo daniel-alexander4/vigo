@@ -22,7 +22,7 @@ resources:
         # Only runs when getenforce is available (SELinux tooling installed).
         - name: selinux-enforce
           type: exec
-          command: "setenforce {{ .Vars.selinux_mode }}"
+          command: "setenforce enforcing"
           when: "command_succeeds('which getenforce')"
           depends_on: [selinux-config]
           subscribes: [selinux-config]

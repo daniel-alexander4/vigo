@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -206,6 +207,50 @@ func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (
 // Dir returns the thrall-configs directory path.
 func (cs *ConfigStore) Dir() string {
 	return cs.dir
+}
+
+// ConfigStats holds summary statistics about the loaded configuration.
+type ConfigStats struct {
+	Modules int
+	Entries int
+}
+
+// Stats returns the current module and entry counts.
+func (cs *ConfigStore) Stats() ConfigStats {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return ConfigStats{
+		Modules: len(cs.rawModules),
+		Entries: len(cs.entries),
+	}
+}
+
+// ListModuleNames returns the sorted names of all loaded modules.
+func (cs *ConfigStore) ListModuleNames() []string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	names := make([]string, 0, len(cs.rawModules))
+	for name := range cs.rawModules {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// ListRoleNames returns the sorted names of all loaded roles.
+// Roles are loaded during loadAll but not stored separately, so we
+// re-read them from the roles directory.
+func (cs *ConfigStore) ListRoleNames() []string {
+	roleDefs, err := loadRoleDefs(cs.rolesDir())
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(roleDefs))
+	for name := range roleDefs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Reload re-reads all config files and re-resolves secrets from the provider.

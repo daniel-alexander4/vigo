@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package ca implements a certificate authority that signs agent CSRs
 // during bootstrap enrollment.
 package ca

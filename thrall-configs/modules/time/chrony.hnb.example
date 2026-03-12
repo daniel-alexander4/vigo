@@ -13,8 +13,7 @@ resources:
 
   - name: chrony-conf
     type: file
-    # /etc/chrony/chrony.conf on Debian, /etc/chrony.conf on RHEL
-    targetpath: "{{ if eq .Traits.os.family \"debian\" }}/etc/chrony/chrony.conf{{ else }}/etc/chrony.conf{{ end }}"
+    targetpath: /etc/chrony/chrony.conf
     content: |
       # Managed by Hobnob — do not edit manually
 
@@ -42,12 +41,54 @@ resources:
     mode: "0644"
     depends_on: [install-chrony]
     notify: [chrony-service]
+    when: "os_family('debian')"
+
+  - name: chrony-conf
+    type: file
+    targetpath: /etc/chrony.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+
+      # NTP servers
+      server {{ .Vars.chrony_server_1 }} iburst
+      server {{ .Vars.chrony_server_2 }} iburst
+
+      # Step the clock if offset exceeds 1 second during first 3 updates
+      makestep 1.0 3
+
+      # Sync the RTC
+      rtcsync
+
+      # Drift file
+      driftfile /var/lib/chrony/drift
+
+      # Log tracking, measurements, and statistics
+      logdir /var/log/chrony
+      {{ if ne .Vars.chrony_allow_network "" }}
+      # Allow NTP clients on this network
+      allow {{ .Vars.chrony_allow_network }}
+      {{ end }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-chrony]
+    notify: [chrony-service]
+    when: "!os_family('debian')"
 
   - name: chrony-service
     type: service
-    # chrony on Debian, chronyd on RHEL
-    service: "{{ if eq .Traits.os.family \"debian\" }}chrony{{ else }}chronyd{{ end }}"
+    service: chrony
     enabled: true
     state: running
     depends_on: [chrony-conf]
     subscribes: [chrony-conf]
+    when: "os_family('debian')"
+
+  - name: chrony-service
+    type: service
+    service: chronyd
+    enabled: true
+    state: running
+    depends_on: [chrony-conf]
+    subscribes: [chrony-conf]
+    when: "!os_family('debian')"

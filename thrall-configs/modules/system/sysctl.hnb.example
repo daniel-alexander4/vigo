@@ -13,34 +13,34 @@ resources:
   - name: vm-swappiness
     type: sysctl
     key: vm.swappiness
-    value: "{{ .Vars.vm_swappiness }}"
+    value: "10"
 
   - name: net-somaxconn
     type: sysctl
     key: net.core.somaxconn
-    value: "{{ .Vars.somaxconn }}"
+    value: "65535"
 
   - name: ip-forward
     type: sysctl
     key: net.ipv4.ip_forward
-    value: "{{ .Vars.ip_forward }}"
+    value: "1"
 
   - name: tcp-tw-reuse
     type: sysctl
     key: net.ipv4.tcp_tw_reuse
-    value: "{{ .Vars.tcp_tw_reuse }}"
+    value: "1"
 
   - name: file-max
     type: sysctl
     key: fs.file-max
-    value: "{{ .Vars.file_max }}"
+    value: "2097152"
 
   - name: rmem-max
     type: sysctl
     key: net.core.rmem_max
-    value: "{{ .Vars.rmem_max }}"
+    value: "16777216"
 
   - name: wmem-max
     type: sysctl
     key: net.core.wmem_max
-    value: "{{ .Vars.wmem_max }}"
+    value: "16777216"

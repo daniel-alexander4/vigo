@@ -84,6 +84,22 @@ type ServerConfig struct {
 	Federation FederationSection `yaml:"federation"`
 	Tuning     TuningSection    `yaml:"tuning"`
 	SMTP       SMTPSection      `yaml:"smtp"`
+	AI         AISection        `yaml:"ai"`
+}
+
+// AISection is the "ai:" block in server.yaml. Parsed here so it participates
+// in secret resolution (api_key can use "secret:" prefix). Validation and
+// defaults live in server/ai/config.go.
+type AISection struct {
+	Enabled       bool   `yaml:"enabled"`
+	Provider      string `yaml:"provider"`
+	Model         string `yaml:"model"`
+	MaxTokens     int    `yaml:"max_tokens"`
+	BaseURL       string `yaml:"base_url"`
+	APIKey        string `yaml:"api_key"`
+	RateLimit     int    `yaml:"rate_limit"`
+	MaxToolRounds int    `yaml:"max_tool_rounds"`
+	ContextMode   string `yaml:"context_mode"`
 }
 
 // SMTPSection configures email notifications via an SMTP relay.
@@ -124,6 +140,7 @@ type TuningSection struct {
 	TraitsScannerTTL    string        `yaml:"traits_scanner_ttl"`    // default "30s"
 	RunStore            string        `yaml:"run_store"`             // "database" (default) or "memory"
 	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-thrall run history depth for memory mode (default 20)
+	MaxConcurrentStreams uint32       `yaml:"max_concurrent_streams"` // gRPC bidirectional stream limit (default 1000)
 	Webhook             WebhookTuning `yaml:"webhook"`
 }
 

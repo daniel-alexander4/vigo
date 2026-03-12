@@ -111,6 +111,23 @@ HOBNOB_TLS_CA_KEY=certs/ca.key
 # HOBNOB_REDIS_PASSWORD=changeme
 # HOBNOB_HAPROXY_STATS_PASSWORD=changeme
 # HOBNOB_MYSQL_ROOT_PASSWORD=changeme
+
+# =============================================================================
+# AI ASSISTANT — uncomment HOBNOB_AI_PROVIDER to enable.
+# =============================================================================
+# Provider options: ollama, claude, openai, openai-compat
+# HOBNOB_AI_PROVIDER=ollama
+# HOBNOB_AI_MODEL=qwen2.5:7b
+# HOBNOB_AI_BASE_URL=http://hobnob-ollama:11434
+# HOBNOB_AI_API_KEY=
+# HOBNOB_AI_MAX_TOKENS=4096
+
+# =============================================================================
+# DOCKER COMPOSE — controls which optional services start.
+# =============================================================================
+# Set to "ollama" to start the local Ollama container alongside hobnob.
+# Leave empty for no-AI or API-based AI (claude, openai).
+# COMPOSE_PROFILES=ollama
 ENVEOF
     echo "Default .env created."
 fi
@@ -159,6 +176,32 @@ echo "Config seeding complete."
 set -a
 . "$ENV_FILE"
 set +a
+
+# ---------------------------------------------------------------------------
+# Generate ai: block in server.yaml from env vars
+# ---------------------------------------------------------------------------
+
+# Strip any existing ai: block (from previous runs).
+sed -i '/^ai:/,/^[^ ]/{ /^ai:/d; /^  /d; }' "$SERVER_YAML"
+
+if [ -n "$HOBNOB_AI_PROVIDER" ]; then
+    AI_MODEL="${HOBNOB_AI_MODEL:-qwen2.5:7b}"
+    AI_MAX_TOKENS="${HOBNOB_AI_MAX_TOKENS:-4096}"
+
+    cat >> "$SERVER_YAML" <<AIEOF
+
+ai:
+  enabled: true
+  provider: ${HOBNOB_AI_PROVIDER}
+  model: "${AI_MODEL}"
+  max_tokens: ${AI_MAX_TOKENS}
+AIEOF
+
+    [ -n "$HOBNOB_AI_BASE_URL" ] && echo "  base_url: \"${HOBNOB_AI_BASE_URL}\"" >> "$SERVER_YAML"
+    [ -n "$HOBNOB_AI_API_KEY" ] && echo "  api_key: \"${HOBNOB_AI_API_KEY}\"" >> "$SERVER_YAML"
+
+    echo "AI configured: provider=${HOBNOB_AI_PROVIDER} model=${AI_MODEL}"
+fi
 
 # Run from /etc/hobnob-server so relative paths in .env and server.yaml resolve correctly.
 cd "$DATA_DIR"

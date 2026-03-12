@@ -1,24 +1,36 @@
 name: java
 
 vars:
-  java_version: "17"
-  java_package_override: ""
   java_home: "/usr/lib/jvm/default-java"
 
 resources:
-  - name: install-java
+  - name: install-java-debian
     type: package
-    package: >-
-      {{ if ne .Vars.java_package_override "" }}{{ .Vars.java_package_override }}{{ else if eq .Traits.os.family "debian" }}openjdk-{{ .Vars.java_version }}-jdk{{ else }}java-{{ .Vars.java_version }}-openjdk-devel{{ end }}
+    package: openjdk-17-jdk
     state: present
+    when: "os_family('debian')"
 
-  - name: set-java-alternative
+  - name: install-java-redhat
+    type: package
+    package: java-17-openjdk-devel
+    state: present
+    when: "!os_family('debian')"
+
+  - name: set-java-alternative-debian
     type: alternatives
-    path: >-
-      {{ if eq .Traits.os.family "debian" }}/usr/lib/jvm/java-{{ .Vars.java_version }}-openjdk-amd64/bin/java{{ else }}/usr/lib/jvm/java-{{ .Vars.java_version }}-openjdk/bin/java{{ end }}
+    path: /usr/lib/jvm/java-17-openjdk-amd64/bin/java
     link: /usr/bin/java
     priority: "100"
-    depends_on: [install-java]
+    depends_on: [install-java-debian]
+    when: "os_family('debian')"
+
+  - name: set-java-alternative-redhat
+    type: alternatives
+    path: /usr/lib/jvm/java-17-openjdk/bin/java
+    link: /usr/bin/java
+    priority: "100"
+    depends_on: [install-java-redhat]
+    when: "!os_family('debian')"
 
   - name: java-profile
     type: file
@@ -30,4 +42,4 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    depends_on: [install-java]
+    depends_on: [install-java-debian, install-java-redhat]

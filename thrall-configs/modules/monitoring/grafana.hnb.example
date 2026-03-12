@@ -38,7 +38,7 @@ resources:
 
   - name: grafana-set-password
     type: exec
-    command: "grafana-cli admin reset-admin-password '{{ .Vars.grafana_admin_password }}'"
+    command: "grafana-cli admin reset-admin-password 'secret:hobnob/grafana/admin-password'"
     depends_on: [grafana-service]
     subscribes_secret: ["hobnob/grafana/admin-password"]
 

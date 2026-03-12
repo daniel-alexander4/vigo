@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc
 
 import (
@@ -35,8 +38,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	}
 	runID := run.ID
 
-	// Store each module result.
+	// Build batch of results and compute counts in a single pass.
 	var changedCount, failedCount, skippedCount int64
+	batch := make([]db.CreateRunResultParams, 0, len(req.GetResults()))
 	for _, result := range req.GetResults() {
 		errMsg := sql.NullString{}
 		if result.GetErrorMessage() != "" {
@@ -48,7 +52,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			changed = 1
 		}
 
-		_, err := s.runStore.CreateRunResult(ctx, db.CreateRunResultParams{
+		batch = append(batch, db.CreateRunResultParams{
 			RunID:        runID,
 			ModuleName:   result.GetModuleName(),
 			ResourceType: result.GetResourceType(),
@@ -58,14 +62,6 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			ErrorMessage: errMsg,
 			DurationMs:   int64(result.GetDurationMs()),
 		})
-		if err != nil {
-			slog.Error("failed to store run result",
-				"run_id", runID,
-				"module", result.GetModuleName(),
-				"error", err,
-			)
-			return nil, status.Errorf(codes.Internal, "storing run result: %v", err)
-		}
 
 		if result.GetChanged() {
 			changedCount++
@@ -76,6 +72,16 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		if result.GetActionTaken() == "already in desired state" && !result.GetChanged() {
 			skippedCount++
 		}
+	}
+
+	// Insert all results in a single batched operation.
+	if err := s.runStore.BatchCreateRunResults(ctx, batch); err != nil {
+		slog.Error("failed to store run results",
+			"run_id", runID,
+			"count", len(batch),
+			"error", err,
+		)
+		return nil, status.Errorf(codes.Internal, "storing run results: %v", err)
 	}
 
 	// Compute run status: if any error -> "failure", else "success".

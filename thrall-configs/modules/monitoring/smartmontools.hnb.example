@@ -12,8 +12,7 @@ resources:
 
   - name: smartd-conf
     type: file
-    targetpath: >-
-      {{ if eq .Traits.os.family "debian" }}/etc/smartmontools/smartd.conf{{ else }}/etc/smartd.conf{{ end }}
+    targetpath: /etc/smartmontools/smartd.conf
     content: |
       # Managed by Hobnob — do not edit manually
       #
@@ -30,13 +29,43 @@ resources:
     mode: "0644"
     depends_on: [install-smartmontools]
     notify: [smartd-service]
+    when: "os_family('debian')"
+
+  - name: smartd-conf
+    type: file
+    targetpath: /etc/smartd.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      #
+      # DEVICESCAN: scan all devices and apply these directives
+      #   -H   check SMART health status
+      #   -l error   report ATA error log increases
+      #   -l selftest   report self-test log failures
+      #   -f   check for usage attribute failures
+      #   -t   equivalent to -p and -u (track all attribute changes)
+      #   -m root   send email alerts to root
+      DEVICESCAN -H -l error -l selftest -f -t {{ .Vars.smartd_schedule }} -m root
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-smartmontools]
+    notify: [smartd-service]
+    when: "!os_family('debian')"
 
   - name: smartd-service
     type: service
-    # smartd on RHEL/generic, smartmontools on Debian
-    service: >-
-      {{ if eq .Traits.os.family "debian" }}smartmontools{{ else }}smartd{{ end }}
+    service: smartmontools
     enabled: true
     state: running
     depends_on: [smartd-conf]
     subscribes: [smartd-conf]
+    when: "os_family('debian')"
+
+  - name: smartd-service
+    type: service
+    service: smartd
+    enabled: true
+    state: running
+    depends_on: [smartd-conf]
+    subscribes: [smartd-conf]
+    when: "!os_family('debian')"

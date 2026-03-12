@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package secrets provides a pluggable interface for secret retrieval.
 // The production implementation (IsopassProvider) wraps isopass;
 // StaticProvider reads from a .env file for local dev and testing.

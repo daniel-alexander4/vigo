@@ -8,16 +8,21 @@ resources:
     package: traceroute
     state: present
 
-  - name: install-netcat
+  - name: install-netcat-debian
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}netcat-openbsd{{ else }}nmap-ncat{{ end }}
+    package: netcat-openbsd
     state: present
+    when: "os_family('debian')"
+
+  - name: install-netcat-rhel
+    type: package
+    package: nmap-ncat
+    state: present
+    when: "!os_family('debian')"
 
   - name: install-telnet
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}telnet{{ else }}telnet{{ end }}
+    package: telnet
     state: present
 
   - name: install-tcpdump
@@ -30,11 +35,17 @@ resources:
     package: nmap
     state: present
 
-  - name: install-dnsutils
+  - name: install-dnsutils-debian
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}dnsutils{{ else }}bind-utils{{ end }}
+    package: dnsutils
     state: present
+    when: "os_family('debian')"
+
+  - name: install-dnsutils-rhel
+    type: package
+    package: bind-utils
+    state: present
+    when: "!os_family('debian')"
 
   - name: install-mtr
     type: package

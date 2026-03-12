@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package metrics
 
 import (
@@ -12,7 +15,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	DriftDetected.WithLabelValues("test", "test").Add(0)
 	ModuleActions.WithLabelValues("test", "test").Add(0)
 	ComplianceStatus.WithLabelValues("test", "test").Set(0)
-	TimeSinceCheckin.WithLabelValues("test").Set(0)
+	CheckinAgeDist.Observe(0)
 	RunDuration.WithLabelValues("test").Observe(0)
 
 	// Gathering from the default registry should include all our metrics.
@@ -36,7 +39,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"hobnob_module_actions_total",
 		"hobnob_compliance_status",
 		"hobnob_compliance_pct",
-		"hobnob_time_since_checkin_seconds",
+		"hobnob_checkin_age_seconds",
 	}
 
 	for _, name := range required {
@@ -57,7 +60,7 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	ThrallsActive.Set(3)
 	CompliancePct.Set(0.85)
 	ComplianceStatus.WithLabelValues("testnode", "compliant").Set(1)
-	TimeSinceCheckin.WithLabelValues("testnode").Set(30.0)
+	CheckinAgeDist.Observe(30.0)
 
 	// Verify histogram can observe.
 	RunDuration.WithLabelValues("testnode").Observe(1.5)

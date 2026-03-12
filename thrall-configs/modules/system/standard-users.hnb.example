@@ -29,6 +29,7 @@ resources:
   - name: appuser
     type: user
     username: appuser
+    system: "true"
     uid: "900"
     shell: /usr/sbin/nologin
     group: nogroup

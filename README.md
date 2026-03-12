@@ -37,7 +37,7 @@ EOF
 
 ```bash
 sudo cp server-configs/server.yaml /etc/hobnob-server/
-sudo cp -r node-configs/modules node-configs/roles node-configs/templates /etc/hobnob-server/
+sudo cp -r thrall-configs/modules thrall-configs/roles thrall-configs/templates /etc/hobnob-server/
 ```
 
 ### 5. Start the server
@@ -115,10 +115,10 @@ This stops the service, removes the binary, and deletes `/etc/hobnob-node`. Then
 
 ### 7. Define desired state
 
-Edit `node-configs/nodes.hnb` to map hostnames to modules and roles:
+Edit `thrall-configs/nodes.hnb` to map hostnames to modules and roles:
 
 ```yaml
-# node-configs/nodes.hnb
+# thrall-configs/nodes.hnb
 nodes:
   - match: "web01.example.com"
     environment: production
@@ -127,7 +127,7 @@ nodes:
       doc_root: "/var/www/html"
 ```
 
-Modules are defined in `node-configs/modules/`. For example, `node-configs/modules/nginx.hnb`:
+Modules are defined in `thrall-configs/modules/`. For example, `thrall-configs/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -156,7 +156,7 @@ resources:
     subscribes: [nginx-conf]
 ```
 
-The `source` field references a template file relative to `node-configs/` (e.g. `node-configs/templates/nginx.conf.tmpl`). You can also use inline `content` — the two are mutually exclusive. Templates use Go template syntax with `.Traits` and `.Vars` namespaces.
+The `source` field references a template file relative to `thrall-configs/` (e.g. `thrall-configs/templates/nginx.conf.tmpl`). You can also use inline `content` — the two are mutually exclusive. Templates use Go template syntax with `.Traits` and `.Vars` namespaces.
 
 Use `baseindent` to prepend a fixed number of spaces to every non-empty line of `content`. Relative indentation within the content block is preserved:
 
@@ -175,15 +175,15 @@ Use `baseindent` to prepend a fixed number of spaces to every non-empty line of 
 
 This writes each line with 2 extra leading spaces (4 for the already-indented lines), while empty lines remain empty. Defaults to 0 (no extra indent).
 
-Group modules into roles in `node-configs/roles/`:
+Group modules into roles in `thrall-configs/roles/`:
 
 ```yaml
-# node-configs/roles/webserver.hnb
+# thrall-configs/roles/webserver.hnb
 name: webserver
 modules: [nginx, certbot]
 ```
 
-The server watches `node-configs/` and hot-reloads automatically. On the next check-in, the agent converges to the desired state.
+The server watches `thrall-configs/` and hot-reloads automatically. On the next check-in, the agent converges to the desired state.
 
 ### 8. Verify convergence
 
@@ -203,7 +203,7 @@ Or open the web dashboard at `http://<server-ip>:8181/`.
 ## Config structure
 
 ```
-node-configs/
+thrall-configs/
 ├── nodes.hnb             # Maps hostnames/globs to roles and modules
 ├── modules/              # Reusable resource sets with default vars
 │   ├── nginx.hnb
@@ -221,21 +221,21 @@ Config files use the `.hnb` extension (YAML syntax). The server also accepts `.y
 
 ## Examples
 
-Ready-to-use module definitions in `node-configs/modules/` and role groupings in `node-configs/roles/`:
+Ready-to-use module definitions in `thrall-configs/modules/` and role groupings in `thrall-configs/roles/`:
 
 | Module | File | What it configures |
 |--------|------|--------------------|
-| Nginx | `node-configs/modules/nginx.hnb` | Virtual host, worker tuning, `source:` template |
-| PostgreSQL | `node-configs/modules/postgresql.hnb` | `postgresql.conf` + `pg_hba.conf`, memory tuning |
-| MySQL | `node-configs/modules/mysql.hnb` | InnoDB tuning, slow query log, security hardening |
-| Redis | `node-configs/modules/redis.hnb` | LRU eviction, AOF persistence, `secret:` password |
-| Docker | `node-configs/modules/docker.hnb` | `daemon.json`, log rotation, containerd |
-| HAProxy | `node-configs/modules/haproxy.hnb` | Stats page, roundrobin backend, health checks |
-| OpenSSH + fail2ban | `node-configs/modules/openssh.hnb`, `node-configs/modules/fail2ban.hnb` | Hardened sshd, key-only auth, brute-force protection |
-| Prometheus + Grafana | `node-configs/modules/prometheus.hnb`, `node-configs/modules/grafana.hnb` | Prometheus, node-exporter, Grafana |
-| CLI tools | `node-configs/modules/charm-tools.hnb`, `node-configs/modules/github-tools.hnb` | `repository` for Charm repo, `archive` for GitHub releases |
+| Nginx | `thrall-configs/modules/nginx.hnb` | Virtual host, worker tuning, `source:` template |
+| PostgreSQL | `thrall-configs/modules/postgresql.hnb` | `postgresql.conf` + `pg_hba.conf`, memory tuning |
+| MySQL | `thrall-configs/modules/mysql.hnb` | InnoDB tuning, slow query log, security hardening |
+| Redis | `thrall-configs/modules/redis.hnb` | LRU eviction, AOF persistence, `secret:` password |
+| Docker | `thrall-configs/modules/docker.hnb` | `daemon.json`, log rotation, containerd |
+| HAProxy | `thrall-configs/modules/haproxy.hnb` | Stats page, roundrobin backend, health checks |
+| OpenSSH + fail2ban | `thrall-configs/modules/openssh.hnb`, `thrall-configs/modules/fail2ban.hnb` | Hardened sshd, key-only auth, brute-force protection |
+| Prometheus + Grafana | `thrall-configs/modules/prometheus.hnb`, `thrall-configs/modules/grafana.hnb` | Prometheus, node-exporter, Grafana |
+| CLI tools | `thrall-configs/modules/charm-tools.hnb`, `thrall-configs/modules/github-tools.hnb` | `repository` for Charm repo, `archive` for GitHub releases |
 
-Node-to-module mappings are in `node-configs/nodes.hnb`, with roles like `webserver`, `database`, `monitoring`, and `bastion` in `node-configs/roles/`.
+Node-to-module mappings are in `thrall-configs/nodes.hnb`, with roles like `webserver`, `database`, `monitoring`, and `bastion` in `thrall-configs/roles/`.
 
 Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`), Go template variables, per-environment overrides, and `secret:` references where appropriate.
 
@@ -345,15 +345,15 @@ Non-idempotent resources are rejected unless the server is started with `--dange
 
 ```bash
 # Validate .hnbfiles for YAML correctness + idempotency
-hobnobcli validate node-configs/modules/*.hnb
+hobnobcli validate thrall-configs/modules/*.hnb
 
 # Allow non-idempotent resources (shows errors but exits 0)
 hobnobcli validate --dangerous modules/risky.hnb
 
 # Edit with vim — syntax highlighting + validation on save
-hobnobcli vi node-configs/modules/nginx.hnb
+hobnobcli vi thrall-configs/modules/nginx.hnb
 # or via the hnbvi symlink:
-hnbvi node-configs/modules/nginx.hnb
+hnbvi thrall-configs/modules/nginx.hnb
 ```
 
 `hobnobcli validate` checks: (1) YAML syntax, (2) required fields (`name`, resource `name`/`type`), (3) idempotency rules. `hobnobcli vi` opens vim with `.hnb` syntax highlighting and blocks saves that fail validation.
@@ -462,7 +462,7 @@ Gates are checked first, then vetoes. Each field accepts a single string or a li
 The same four fields work on module references in `nodes.hnb` and role definitions, skipping entire modules:
 
 ```yaml
-# node-configs/nodes.hnb
+# thrall-configs/nodes.hnb
 nodes:
   - match: "*.example.com"
     vars:
@@ -573,10 +573,10 @@ Sensitive values in config files use the `secret:` prefix instead of plaintext. 
 
 ### Using secrets in node configs
 
-Reference secrets by path in `node-configs/nodes.hnb` or module definitions:
+Reference secrets by path in `thrall-configs/nodes.hnb` or module definitions:
 
 ```yaml
-# node-configs/nodes.hnb
+# thrall-configs/nodes.hnb
 nodes:
   - match: "cache01.example.com"
     modules: [redis]
@@ -585,14 +585,19 @@ nodes:
 ```
 
 ```yaml
-# node-configs/modules/grafana.hnb(inline in resource attributes)
+# thrall-configs/modules/grafana.hnb (secret in var, referenced in template)
+vars:
+  grafana_admin_password: "secret:hobnob/grafana/admin-password"
+
 resources:
   - name: grafana-ini
     type: file
     targetpath: /etc/grafana/grafana.ini
     content: |
-      admin_password = secret:hobnob/grafana/admin-password
+      admin_password = {{ .Vars.grafana_admin_password }}
 ```
+
+The `secret:` prefix is resolved on **var values** and **resource attributes**, not inside template strings. To use a secret in a `content:` template, put the `secret:` reference in a var and use `{{ .Vars.name }}`.
 
 Certain field names (`dsn`, `tls_cert_path`, `tls_key_path`, `webhook_secret`) are enforced — the server rejects configs that set these to plaintext values.
 
@@ -600,11 +605,14 @@ Certain field names (`dsn`, `tls_cert_path`, `tls_key_path`, `webhook_secret`) a
 
 Hobnob supports two secret backends via the `secrets.Provider` interface:
 
-**IsopassProvider (production)** — retrieves secrets from an [isopass](https://github.com/dansheldon/isopass) instance over HTTP. Authenticates with a service account bearer token, exchanges it for a short-lived API token, and searches for secrets by path. Configure with:
+**IsopassProvider (production)** — retrieves secrets from an [isopass](https://github.com/dansheldon/isopass) instance over HTTP. Authenticates with a service account bearer token, exchanges it for a short-lived API token, and searches for secrets by path. Configure in `server.yaml`:
 
-```bash
-ISOPASS_URL=https://isopass.internal:8443
-ISOPASS_BEARER_TOKEN=<service-account-token>
+```yaml
+secrets:
+  backend: isopass
+  url: https://localhost:8443
+  token_env: HOBNOB_SECRETS_TOKEN   # env var containing bearer token
+  tls_skip_verify: true             # skip TLS cert verification (e.g. self-signed)
 ```
 
 The server also polls isopass for secret version changes. When a secret rotates, all nodes referencing it are automatically queued for re-convergence.

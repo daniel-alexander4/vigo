@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package metrics defines Prometheus metrics for the Hobnob server.
 package metrics
 
@@ -56,11 +59,14 @@ var (
 		Help: "Fleet-wide compliance percentage (0.0 to 1.0).",
 	})
 
-	// TimeSinceCheckin tracks seconds since each thrall's last check-in (gauge).
-	TimeSinceCheckin = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "hobnob_time_since_checkin_seconds",
-		Help: "Seconds since last check-in per thrall.",
-	}, []string{"thrall"})
+	// CheckinAgeDist is a histogram of seconds-since-last-checkin across all
+	// thralls, replacing the per-thrall gauge that caused cardinality explosion
+	// at scale (50k nodes = 50k time-series).
+	CheckinAgeDist = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "hobnob_checkin_age_seconds",
+		Help:    "Distribution of seconds since last check-in across all thralls.",
+		Buckets: []float64{60, 120, 300, 600, 900, 1800, 3600, 7200},
+	})
 
 	// SigVerifyFailed counts signature verification failures by reason (counter).
 	SigVerifyFailed = promauto.NewCounterVec(prometheus.CounterOpts{

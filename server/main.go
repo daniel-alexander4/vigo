@@ -23,6 +23,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
 
+	hobnobai "github.com/hobnob/hobnob/server/ai"
 	"github.com/hobnob/hobnob/server/api"
 	"github.com/hobnob/hobnob/server/bootstrap"
 	"github.com/hobnob/hobnob/server/ca"
@@ -109,12 +110,19 @@ func run() error {
 	}
 	defer sqlDB.Close()
 
-	// Enable SQLite features.
-	if _, err := sqlDB.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
-		return fmt.Errorf("enabling foreign keys: %w", err)
+	// Enable SQLite features and tune for high-concurrency.
+	pragmas := []struct{ sql, desc string }{
+		{"PRAGMA foreign_keys = ON", "enabling foreign keys"},
+		{"PRAGMA journal_mode = WAL", "setting WAL mode"},
+		{"PRAGMA busy_timeout = 5000", "setting busy timeout"},       // wait 5s on lock instead of failing
+		{"PRAGMA synchronous = NORMAL", "setting synchronous mode"},  // WAL+NORMAL is safe and 2-5x faster
+		{"PRAGMA cache_size = -64000", "setting cache size"},         // 64MB page cache
+		{"PRAGMA temp_store = MEMORY", "setting temp store"},         // temp tables in RAM
 	}
-	if _, err := sqlDB.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
-		return fmt.Errorf("setting WAL mode: %w", err)
+	for _, p := range pragmas {
+		if _, err := sqlDB.ExecContext(ctx, p.sql); err != nil {
+			return fmt.Errorf("%s: %w", p.desc, err)
+		}
 	}
 
 	if err := sqlDB.PingContext(ctx); err != nil {
@@ -311,23 +319,24 @@ func run() error {
 
 	// Create and start gRPC server.
 	grpcSrv, _, lastSeenBatch, traitsBatch, traitsPruner, err := isgrpc.NewServer(isgrpc.ServerConfig{
-		CertFile:         cfg.Server.TLS.CertFile,
-		KeyFile:          cfg.Server.TLS.KeyFile,
-		CAFile:           cfg.Server.TLS.CAFile,
-		GRPCPort:         cfg.Server.GRPCListen,
-		Registry:         reg,
-		ConfigStore:      configStore,
-		Queries:          queries,
-		RunStore:         runStore,
-		BaseInterval:     baseInterval,
-		Dispatcher:       dispatcher,
-		TraitsDir:        traitsDir,
-		SignatureWindow:  sigWindow,
-		ThrallCacheTTL:     nodeCacheTTL,
-		TraitsScannerTTL: traitsScannerTTL,
-		Hub:              hub,
-		SMTPNotifier:     smtpNotifier,
-		LicenseEnforcer:  enforcer,
+		CertFile:             cfg.Server.TLS.CertFile,
+		KeyFile:              cfg.Server.TLS.KeyFile,
+		CAFile:               cfg.Server.TLS.CAFile,
+		GRPCPort:             cfg.Server.GRPCListen,
+		Registry:             reg,
+		ConfigStore:          configStore,
+		Queries:              queries,
+		RunStore:             runStore,
+		BaseInterval:         baseInterval,
+		Dispatcher:           dispatcher,
+		TraitsDir:            traitsDir,
+		SignatureWindow:      sigWindow,
+		ThrallCacheTTL:       nodeCacheTTL,
+		TraitsScannerTTL:     traitsScannerTTL,
+		MaxConcurrentStreams: cfg.Tuning.MaxConcurrentStreams,
+		Hub:                  hub,
+		SMTPNotifier:         smtpNotifier,
+		LicenseEnforcer:      enforcer,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
@@ -407,6 +416,40 @@ func run() error {
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
 	var httpSrv *http.Server
 	licenseHandler := api.NewLicenseHandler(enforcer)
+	doctorHandler := api.NewDoctorHandler(api.DoctorConfig{
+		SQLDB:          sqlDB,
+		CertFile:       cfg.Server.TLS.CertFile,
+		KeyFile:        cfg.Server.TLS.KeyFile,
+		Enforcer:       enforcer,
+		ConfigStore:    configStore,
+		Queries:        queries,
+		BaseInterval:   baseInterval,
+		Hub:            hub,
+		SMTPHost:       cfg.SMTP.Host,
+		SMTPPort:       cfg.SMTP.Port,
+		Role:           role,
+		SecretsBackend: secretsCfg.Backend,
+	})
+
+	federationHandler := api.NewFederationHandler(role, cfg.Federation.SpokeID, hub)
+
+	// Initialize AI assistant (optional — disabled by default).
+	var aiHandler *api.AIHandler
+	var assistant *hobnobai.Assistant
+	if cfg.AI.Enabled {
+		if err := hobnobai.ValidateConfig(cfg.AI); err != nil {
+			return fmt.Errorf("ai config: %w", err)
+		}
+
+		aiProvider, aiErr := createAIProvider(ctx, cfg.AI)
+		if aiErr != nil {
+			slog.Warn("AI assistant disabled: provider init failed", "error", aiErr)
+		} else {
+			assistant = hobnobai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, cfg.AI)
+			aiHandler = api.NewAIHandler(assistant)
+			slog.Info("AI assistant enabled", "provider", aiProvider.Name(), "model", cfg.AI.Model)
+		}
+	}
 
 	if role == config.RoleSpoke {
 		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Federation.SpokeID)
@@ -414,6 +457,11 @@ func run() error {
 			return fmt.Errorf("creating spoke gateway: %w", gwErr)
 		}
 		licenseHandler.RegisterRoutes(mux)
+		doctorHandler.RegisterRoutes(mux)
+		federationHandler.RegisterRoutes(mux)
+		if aiHandler != nil {
+			aiHandler.RegisterRoutes(mux)
+		}
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
 			Handler: mux,
@@ -453,11 +501,16 @@ func run() error {
 
 		version := envOrDefault("HOBNOB_VERSION", "dev")
 		agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
-		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, gwOpts...)
+		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, assistant, hub, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
 		licenseHandler.RegisterRoutes(gwMux)
+		doctorHandler.RegisterRoutes(gwMux)
+		federationHandler.RegisterRoutes(gwMux)
+		if aiHandler != nil {
+			aiHandler.RegisterRoutes(gwMux)
+		}
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
 			Handler: gwMux,
@@ -670,5 +723,32 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 			}
 			wasBelowThreshold = belowNow
 		}
+	}
+}
+
+// createAIProvider creates the LLM provider based on the AI config section.
+// Returns an error if the provider cannot be initialized (e.g. Ollama unreachable).
+func createAIProvider(ctx context.Context, cfg config.AISection) (hobnobai.Provider, error) {
+	switch cfg.Provider {
+	case "ollama", "":
+		p := hobnobai.NewOllamaProvider(cfg.BaseURL)
+		if err := p.EnsureModel(ctx, cfg.Model); err != nil {
+			return nil, fmt.Errorf("ollama: %w", err)
+		}
+		return p, nil
+	case "claude":
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("claude provider requires ai.api_key")
+		}
+		return hobnobai.NewClaudeProvider(cfg.APIKey), nil
+	case "openai":
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("openai provider requires ai.api_key")
+		}
+		return hobnobai.NewOpenAIProvider(cfg.APIKey), nil
+	case "openai-compat":
+		return hobnobai.NewOpenAICompatProvider(cfg.BaseURL, cfg.APIKey), nil
+	default:
+		return nil, fmt.Errorf("unknown AI provider: %s", cfg.Provider)
 	}
 }

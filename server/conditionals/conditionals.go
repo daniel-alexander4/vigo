@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package conditionals provides parsing and evaluation of conditional var
 // definitions. A conditional var is a structured YAML map with a "trait:"
 // field and exactly one operator field. It evaluates to a boolean based on

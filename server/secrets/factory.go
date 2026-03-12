@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package secrets
 
 import (
@@ -9,10 +12,11 @@ import (
 // Values in this struct must not use "secret:" prefixes — this config
 // is loaded before the provider exists.
 type Config struct {
-	Backend  string `yaml:"backend"`   // "static" or "isopass"
-	EnvFile  string `yaml:"env_file"`  // static: path to .env file
-	URL      string `yaml:"url"`       // isopass: API base URL
-	TokenEnv string `yaml:"token_env"` // isopass: env var containing bearer token
+	Backend       string `yaml:"backend"`         // "static" or "isopass"
+	EnvFile       string `yaml:"env_file"`        // static: path to .env file
+	URL           string `yaml:"url"`             // isopass: API base URL
+	TokenEnv      string `yaml:"token_env"`       // isopass: env var containing bearer token
+	TLSSkipVerify bool   `yaml:"tls_skip_verify"` // isopass: skip TLS certificate verification
 }
 
 // NewFromConfig creates a Provider based on the given config.
@@ -42,7 +46,7 @@ func NewFromConfig(cfg Config) (Provider, error) {
 		if token == "" {
 			return nil, fmt.Errorf("secrets backend %q: env var %q is empty", backend, tokenEnv)
 		}
-		return NewIsopassProvider(cfg.URL, token)
+		return NewIsopassProvider(cfg.URL, token, cfg.TLSSkipVerify)
 	default:
 		return nil, fmt.Errorf("unknown secrets backend %q (expected \"static\" or \"isopass\")", backend)
 	}

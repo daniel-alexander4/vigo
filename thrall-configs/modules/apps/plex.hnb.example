@@ -32,45 +32,45 @@ resources:
 
   - name: plex-media-dir
     type: file
-    targetpath: "{{ .Vars.plex_media_dir }}"
+    targetpath: /srv/media
     state: directory
-    owner: "{{ .Vars.plex_user }}"
-    group: "{{ .Vars.plex_group }}"
+    owner: plex
+    group: plex
     mode: "0755"
 
   - name: plex-movies-dir
     type: file
-    targetpath: "{{ .Vars.plex_media_dir }}/movies"
+    targetpath: /srv/media/movies
     state: directory
-    owner: "{{ .Vars.plex_user }}"
-    group: "{{ .Vars.plex_group }}"
+    owner: plex
+    group: plex
     mode: "0755"
     depends_on: [plex-media-dir]
 
   - name: plex-tv-dir
     type: file
-    targetpath: "{{ .Vars.plex_media_dir }}/tv"
+    targetpath: /srv/media/tv
     state: directory
-    owner: "{{ .Vars.plex_user }}"
-    group: "{{ .Vars.plex_group }}"
+    owner: plex
+    group: plex
     mode: "0755"
     depends_on: [plex-media-dir]
 
   - name: plex-music-dir
     type: file
-    targetpath: "{{ .Vars.plex_media_dir }}/music"
+    targetpath: /srv/media/music
     state: directory
-    owner: "{{ .Vars.plex_user }}"
-    group: "{{ .Vars.plex_group }}"
+    owner: plex
+    group: plex
     mode: "0755"
     depends_on: [plex-media-dir]
 
   - name: plex-transcode-dir
     type: file
-    targetpath: "{{ .Vars.plex_transcode_dir }}"
+    targetpath: /tmp/plex-transcode
     state: directory
-    owner: "{{ .Vars.plex_user }}"
-    group: "{{ .Vars.plex_group }}"
+    owner: plex
+    group: plex
     mode: "0755"
 
   - name: plex-env

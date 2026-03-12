@@ -6,4 +6,4 @@ vars:
 resources:
   - name: set-timezone
     type: timezone
-    timezone: "{{ .Vars.system_timezone }}"
+    timezone: "UTC"

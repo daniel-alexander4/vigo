@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package db
 
 import (
@@ -134,6 +137,41 @@ func (s *MemRunStore) CreateRunResult(_ context.Context, arg CreateRunResultPara
 	sh.mu.Unlock()
 
 	return result, nil
+}
+
+func (s *MemRunStore) BatchCreateRunResults(_ context.Context, args []CreateRunResultParams) error {
+	if len(args) == 0 {
+		return nil
+	}
+	// Group by runID to minimize shard lookups.
+	byRun := make(map[string][]RunResult, 1) // typically all same run
+	now := time.Now()
+	for _, a := range args {
+		byRun[a.RunID] = append(byRun[a.RunID], RunResult{
+			ID:           uuid.New().String(),
+			RunID:        a.RunID,
+			ModuleName:   a.ModuleName,
+			ResourceType: a.ResourceType,
+			ResourceName: a.ResourceName,
+			ActionTaken:  a.ActionTaken,
+			Changed:      a.Changed,
+			ErrorMessage: a.ErrorMessage,
+			DurationMs:   a.DurationMs,
+			CreatedAt:    now,
+		})
+	}
+	for runID, results := range byRun {
+		sh, _ := s.findRunShard(runID)
+		if sh == nil {
+			continue
+		}
+		sh.mu.Lock()
+		if mr, ok := sh.byID[runID]; ok {
+			mr.results = append(mr.results, results...)
+		}
+		sh.mu.Unlock()
+	}
+	return nil
 }
 
 func (s *MemRunStore) FinishRun(_ context.Context, arg FinishRunParams) error {

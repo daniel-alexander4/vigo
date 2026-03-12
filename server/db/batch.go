@@ -30,15 +30,19 @@ type ThrallWithLatestRun struct {
 }
 
 // ListThrallsWithLatestRun returns all non-revoked thralls joined with their
-// latest run in a single query (correlated subqueries), replacing N+1
-// per-thrall lookups.
+// latest run in a single query using a window function, replacing the O(N^2)
+// correlated subqueries that degraded at scale.
 func (q *Queries) ListThrallsWithLatestRun(ctx context.Context) ([]ThrallWithLatestRun, error) {
 	const query = `
 SELECT n.id, n.hostname, n.ip_address, n.pubkey_pem, n.enrolled_at,
        n.last_seen, n.revoked, n.revoked_at, n.force_push, n.pending_rotated_secrets,
-       (SELECT status FROM runs WHERE thrall_id = n.id ORDER BY started_at DESC LIMIT 1),
-       (SELECT changed_count FROM runs WHERE thrall_id = n.id ORDER BY started_at DESC LIMIT 1)
+       lr.status, lr.changed_count
 FROM thralls n
+LEFT JOIN (
+  SELECT thrall_id, status, changed_count,
+         ROW_NUMBER() OVER (PARTITION BY thrall_id ORDER BY started_at DESC) AS rn
+  FROM runs
+) lr ON lr.thrall_id = n.id AND lr.rn = 1
 WHERE n.revoked = 0
 ORDER BY n.enrolled_at DESC`
 

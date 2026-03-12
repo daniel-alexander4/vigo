@@ -9,26 +9,31 @@ vars:
   listen_socket: "/run/php/php-fpm.sock"
 
 resources:
-  - name: install-php-fpm
+  - name: install-php-fpm-debian
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}php{{ .Vars.php_version }}-fpm{{ else }}php-fpm{{ end }}
+    package: php8.2-fpm
     state: present
+    when: "os_family('debian')"
 
-  - name: php-fpm-pool
+  - name: install-php-fpm-redhat
+    type: package
+    package: php-fpm
+    state: present
+    when: "!os_family('debian')"
+
+  - name: php-fpm-pool-debian
     type: file
-    targetpath: >-
-      {{ if eq .Traits.os.family "debian" }}/etc/php/{{ .Vars.php_version }}/fpm/pool.d/www.conf{{ else }}/etc/php-fpm.d/www.conf{{ end }}
+    targetpath: /etc/php/8.2/fpm/pool.d/www.conf
     content: |
       ; Managed by Hobnob — do not edit manually
       [www]
 
-      user = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
-      group = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+      user = www-data
+      group = www-data
 
       listen = {{ .Vars.listen_socket }}
-      listen.owner = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
-      listen.group = {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+      listen.owner = www-data
+      listen.group = www-data
       listen.mode = 0660
 
       ; Process manager
@@ -49,24 +54,79 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    depends_on: [install-php-fpm]
-    notify: [php-fpm-service]
+    when: "os_family('debian')"
+    depends_on: [install-php-fpm-debian]
+    notify: [php-fpm-service-debian]
 
-  - name: php-fpm-log-dir
+  - name: php-fpm-pool-redhat
+    type: file
+    targetpath: /etc/php-fpm.d/www.conf
+    content: |
+      ; Managed by Hobnob — do not edit manually
+      [www]
+
+      user = apache
+      group = apache
+
+      listen = {{ .Vars.listen_socket }}
+      listen.owner = apache
+      listen.group = apache
+      listen.mode = 0660
+
+      ; Process manager
+      pm = dynamic
+      pm.max_children = {{ .Vars.pm_max_children }}
+      pm.start_servers = {{ .Vars.pm_start_servers }}
+      pm.min_spare_servers = {{ .Vars.pm_min_spare }}
+      pm.max_spare_servers = {{ .Vars.pm_max_spare }}
+      pm.max_requests = 500
+
+      ; Status page (restrict access in web server config)
+      pm.status_path = /fpm-status
+      ping.path = /fpm-ping
+
+      ; Logging
+      php_admin_value[error_log] = /var/log/php-fpm/www-error.log
+      php_admin_flag[log_errors] = on
+    owner: root
+    group: root
+    mode: "0644"
+    when: "!os_family('debian')"
+    depends_on: [install-php-fpm-redhat]
+    notify: [php-fpm-service-redhat]
+
+  - name: php-fpm-log-dir-debian
     type: file
     targetpath: /var/log/php-fpm
     state: directory
-    owner: >-
-      {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
-    group: >-
-      {{ if eq .Traits.os.family "debian" }}www-data{{ else }}apache{{ end }}
+    owner: www-data
+    group: www-data
     mode: "0755"
+    when: "os_family('debian')"
 
-  - name: php-fpm-service
+  - name: php-fpm-log-dir-redhat
+    type: file
+    targetpath: /var/log/php-fpm
+    state: directory
+    owner: apache
+    group: apache
+    mode: "0755"
+    when: "!os_family('debian')"
+
+  - name: php-fpm-service-debian
     type: service
-    service: >-
-      {{ if eq .Traits.os.family "debian" }}php{{ .Vars.php_version }}-fpm{{ else }}php-fpm{{ end }}
+    service: php8.2-fpm
     enabled: true
     state: running
-    depends_on: [php-fpm-pool, php-fpm-log-dir]
-    subscribes: [php-fpm-pool]
+    when: "os_family('debian')"
+    depends_on: [php-fpm-pool-debian, php-fpm-log-dir-debian]
+    subscribes: [php-fpm-pool-debian]
+
+  - name: php-fpm-service-redhat
+    type: service
+    service: php-fpm
+    enabled: true
+    state: running
+    when: "!os_family('debian')"
+    depends_on: [php-fpm-pool-redhat, php-fpm-log-dir-redhat]
+    subscribes: [php-fpm-pool-redhat]

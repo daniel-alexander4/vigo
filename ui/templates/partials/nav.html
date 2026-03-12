@@ -16,6 +16,16 @@
         <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">
             Compliance
         </a>
+        {{if .FederationEnabled}}
+        <a href="/federation" class="nav-link{{if eq .ActiveNav "federation"}} nav-link--active{{end}}">
+            Federation
+        </a>
+        {{end}}
+        {{if .AIEnabled}}
+        <a href="/ask" class="nav-link{{if eq .ActiveNav "ask"}} nav-link--active{{end}}">
+            Ask AI
+        </a>
+        {{end}}
     </nav>
 </aside>
 {{end}}

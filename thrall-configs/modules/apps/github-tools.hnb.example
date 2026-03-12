@@ -8,21 +8,21 @@ vars:
 resources:
   - name: install-bat
     type: archive
-    url: "https://github.com/sharkdp/bat/releases/download/v{{ .Vars.bat_version }}/bat-v{{ .Vars.bat_version }}-x86_64-unknown-linux-musl.tar.gz"
+    url: "https://github.com/sharkdp/bat/releases/download/v0.25.0/bat-v0.25.0-x86_64-unknown-linux-musl.tar.gz"
     targetpath: /usr/local/bin/bat
     binary: bat
-    unless: "bat --version | grep {{ .Vars.bat_version }}"
+    unless: "bat --version | grep 0.25.0"
 
   - name: install-fd
     type: archive
-    url: "https://github.com/sharkdp/fd/releases/download/v{{ .Vars.fd_version }}/fd-v{{ .Vars.fd_version }}-x86_64-unknown-linux-musl.tar.gz"
+    url: "https://github.com/sharkdp/fd/releases/download/v10.2.0/fd-v10.2.0-x86_64-unknown-linux-musl.tar.gz"
     targetpath: /usr/local/bin/fd
     binary: fd
-    unless: "fd --version | grep {{ .Vars.fd_version }}"
+    unless: "fd --version | grep 10.2.0"
 
   - name: install-ripgrep
     type: archive
-    url: "https://github.com/BurntSushi/ripgrep/releases/download/{{ .Vars.ripgrep_version }}/ripgrep-{{ .Vars.ripgrep_version }}-x86_64-unknown-linux-musl.tar.gz"
+    url: "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz"
     targetpath: /usr/local/bin/rg
     binary: rg
-    unless: "rg --version | grep {{ .Vars.ripgrep_version }}"
+    unless: "rg --version | grep 14.1.1"

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package secrets
 
 import (
@@ -66,10 +69,10 @@ func mockIsopassServer(t *testing.T) *httptest.Server {
 
 		secrets := map[string][]map[string]any{
 			"hobnob/db/dsn": {
-				{"id": "secret-1", "name": "hobnob/db/dsn", "value": "hobnob.db"},
+				{"id": "secret-1", "name": "hobnob/db/dsn", "value": "hobnob.db", "version": 2},
 			},
 			"hobnob/tls/cert": {
-				{"id": "secret-2", "name": "hobnob/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB..."},
+				{"id": "secret-2", "name": "hobnob/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB...", "version": 1},
 			},
 		}
 
@@ -81,26 +84,6 @@ func mockIsopassServer(t *testing.T) *httptest.Server {
 		json.NewEncoder(w).Encode(results)
 	})
 
-	// Versions endpoint.
-	mux.HandleFunc("GET /api/secrets/{id}/versions", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		versions := map[string][]map[string]any{
-			"secret-1": {
-				{"id": 1, "created_at": "2026-01-01T00:00:00Z"},
-				{"id": 2, "created_at": "2026-02-01T00:00:00Z"},
-			},
-			"secret-2": {
-				{"id": 1, "created_at": "2026-01-01T00:00:00Z"},
-			},
-		}
-		result, ok := versions[id]
-		if !ok {
-			result = []map[string]any{}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
-	})
-
 	return httptest.NewServer(mux)
 }
 
@@ -108,7 +91,7 @@ func TestIsopassGet(t *testing.T) {
 	srv := mockIsopassServer(t)
 	defer srv.Close()
 
-	p, err := NewIsopassProvider(srv.URL, "test-bearer-token")
+	p, err := NewIsopassProvider(srv.URL, "test-bearer-token", false)
 	require.NoError(t, err)
 	defer p.Close()
 
@@ -121,7 +104,7 @@ func TestIsopassGetNotFound(t *testing.T) {
 	srv := mockIsopassServer(t)
 	defer srv.Close()
 
-	p, err := NewIsopassProvider(srv.URL, "test-bearer-token")
+	p, err := NewIsopassProvider(srv.URL, "test-bearer-token", false)
 	require.NoError(t, err)
 	defer p.Close()
 
@@ -134,7 +117,7 @@ func TestIsopassGetBytes(t *testing.T) {
 	srv := mockIsopassServer(t)
 	defer srv.Close()
 
-	p, err := NewIsopassProvider(srv.URL, "test-bearer-token")
+	p, err := NewIsopassProvider(srv.URL, "test-bearer-token", false)
 	require.NoError(t, err)
 	defer p.Close()
 
@@ -147,7 +130,7 @@ func TestIsopassGetVersion(t *testing.T) {
 	srv := mockIsopassServer(t)
 	defer srv.Close()
 
-	p, err := NewIsopassProvider(srv.URL, "test-bearer-token")
+	p, err := NewIsopassProvider(srv.URL, "test-bearer-token", false)
 	require.NoError(t, err)
 	defer p.Close()
 
@@ -160,7 +143,7 @@ func TestIsopassTokenExchange(t *testing.T) {
 	srv := mockIsopassServer(t)
 	defer srv.Close()
 
-	p, err := NewIsopassProvider(srv.URL, "test-bearer-token")
+	p, err := NewIsopassProvider(srv.URL, "test-bearer-token", false)
 	require.NoError(t, err)
 	defer p.Close()
 
@@ -177,7 +160,7 @@ func TestIsopassTokenRenewalOnExpiry(t *testing.T) {
 	srv := mockIsopassServer(t)
 	defer srv.Close()
 
-	p, err := NewIsopassProvider(srv.URL, "test-bearer-token")
+	p, err := NewIsopassProvider(srv.URL, "test-bearer-token", false)
 	require.NoError(t, err)
 	defer p.Close()
 
@@ -197,7 +180,7 @@ func TestIsopassAuthFailure(t *testing.T) {
 	srv := mockIsopassServer(t)
 	defer srv.Close()
 
-	p, err := NewIsopassProvider(srv.URL, "wrong-bearer-token")
+	p, err := NewIsopassProvider(srv.URL, "wrong-bearer-token", false)
 	require.NoError(t, err)
 	defer p.Close()
 
@@ -207,7 +190,7 @@ func TestIsopassAuthFailure(t *testing.T) {
 }
 
 func TestIsopassUnreachable(t *testing.T) {
-	p, err := NewIsopassProvider("http://127.0.0.1:1", "token")
+	p, err := NewIsopassProvider("http://127.0.0.1:1", "token", false)
 	require.NoError(t, err)
 	defer p.Close()
 

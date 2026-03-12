@@ -11,4 +11,29 @@ services:
       - /etc/hobnob-server:/etc/hobnob-server
       - /usr/local/bin:/host-bin
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hobnob-ollama
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # GPU passthrough (optional — remove for CPU-only)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
   # Agent is NOT run in compose -- it is installed on each managed node separately
+
+volumes:
+  ollama-data:

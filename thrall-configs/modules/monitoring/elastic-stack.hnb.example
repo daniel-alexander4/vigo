@@ -13,9 +13,16 @@ resources:
   - name: elastic-repo
     type: repository
     key_url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
-    repo: >-
-      {{ if eq .Traits.os.family "debian" }}deb [signed-by=/etc/apt/keyrings/elastic.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main{{ else }}https://artifacts.elastic.co/packages/8.x/yum{{ end }}
+    repo: "deb [signed-by=/etc/apt/keyrings/elastic.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main"
     state: present
+    when: "os_family('debian')"
+
+  - name: elastic-repo
+    type: repository
+    key_url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    repo: "https://artifacts.elastic.co/packages/8.x/yum"
+    state: present
+    when: "!os_family('debian')"
 
   # --- Packages ---
 

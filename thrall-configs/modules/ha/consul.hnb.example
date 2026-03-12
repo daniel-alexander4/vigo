@@ -21,10 +21,10 @@ resources:
 
   - name: install-consul
     type: archive
-    url: "https://releases.hashicorp.com/consul/{{ .Vars.consul_version }}/consul_{{ .Vars.consul_version }}_linux_amd64.zip"
+    url: "https://releases.hashicorp.com/consul/1.18.1/consul_1.18.1_linux_amd64.zip"
     targetpath: /usr/local/bin/consul
     binary: consul
-    unless: "consul version | grep {{ .Vars.consul_version }}"
+    unless: "consul version | grep 1.18.1"
 
   # --- Data directory ---
 

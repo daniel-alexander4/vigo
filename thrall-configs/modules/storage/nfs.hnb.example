@@ -9,17 +9,23 @@ vars:
 resources:
   # --- Package (distro-specific) ---
 
-  - name: install-nfs
+  - name: install-nfs-debian
     type: package
-    package: >-
-      {{ if eq .Traits.os.family "debian" }}nfs-kernel-server{{ else }}nfs-utils{{ end }}
+    package: nfs-kernel-server
     state: present
+    when: "os_family('debian')"
+
+  - name: install-nfs-redhat
+    type: package
+    package: nfs-utils
+    state: present
+    when: "!os_family('debian')"
 
   # --- Export directory ---
 
   - name: nfs-export-dir
     type: file
-    targetpath: "{{ .Vars.nfs_export_path }}"
+    targetpath: /srv/nfs
     state: directory
     owner: root
     group: root
@@ -36,7 +42,7 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    depends_on: [install-nfs, nfs-export-dir]
+    depends_on: [install-nfs-debian, install-nfs-redhat, nfs-export-dir]
     notify: [reload-exports]
 
   # Re-export shares when /etc/exports changes
@@ -45,14 +51,23 @@ resources:
     command: "exportfs -ra"
     depends_on: [nfs-exports]
 
-  # --- Service ---
+  # --- Service (distro-specific) ---
 
-  - name: nfs-service
+  - name: nfs-service-debian
     type: service
-    service: >-
-      {{ if eq .Traits.os.family "debian" }}nfs-kernel-server{{ else }}nfs-server{{ end }}
+    service: nfs-kernel-server
     enabled: true
     state: running
+    when: "os_family('debian')"
+    depends_on: [nfs-exports]
+    subscribes: [nfs-exports]
+
+  - name: nfs-service-redhat
+    type: service
+    service: nfs-server
+    enabled: true
+    state: running
+    when: "!os_family('debian')"
     depends_on: [nfs-exports]
     subscribes: [nfs-exports]
 
@@ -60,7 +75,7 @@ resources:
 
   - name: nfs-mount-dir
     type: file
-    targetpath: "{{ .Vars.nfs_mount_point }}"
+    targetpath: /mnt/nfs
     state: directory
     owner: root
     group: root
@@ -68,8 +83,8 @@ resources:
 
   - name: nfs-mount
     type: mount
-    path: "{{ .Vars.nfs_mount_point }}"
-    device: "{{ .Vars.nfs_mount_source }}"
+    path: /mnt/nfs
+    device: "10.0.0.1:/srv/nfs"
     fstype: nfs
     options: "rw,hard,intr,timeo=600"
     state: mounted

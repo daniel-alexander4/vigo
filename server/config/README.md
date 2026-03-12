@@ -16,7 +16,7 @@ The config system loads module, role, and node definitions from YAML files (`.hn
 ## Config Hierarchy
 
 ```
-node-configs/
+thrall-configs/
 ├── modules/           # Reusable resource sets with default vars
 │   ├── nginx.hnb
 │   ├── openssh.hnb
@@ -73,7 +73,7 @@ resources:
 
 ### External template files
 
-Instead of inline `content`, use `source` to reference a file relative to the node-configs directory:
+Instead of inline `content`, use `source` to reference a file relative to the thrall-configs directory:
 
 ```yaml
 resources:
@@ -190,6 +190,18 @@ Values prefixed with `secret:` are resolved through the secrets provider at conf
 ```yaml
 database:
   dsn: "secret:hobnob/db/dsn"
+```
+
+The `secret:` prefix is resolved on **var values** and **resource attributes**, not inside template strings. To use a secret in a `content:` template, put the `secret:` reference in a var and use `{{ .Vars.name }}`.
+
+The secrets provider is configured in `server.yaml`. For isopass, set `tls_skip_verify: true` if using a self-signed certificate:
+
+```yaml
+secrets:
+  backend: isopass
+  url: https://localhost:8443
+  token_env: HOBNOB_SECRETS_TOKEN
+  tls_skip_verify: true
 ```
 
 Known secret fields (`dsn`, `tls_cert_path`, `tls_key_path`, `webhook_secret`) are required to use the `secret:` prefix. Plain values for these fields cause a load error. Resolved secrets never appear in logs, API responses, or gRPC payloads.
