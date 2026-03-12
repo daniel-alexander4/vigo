@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package runner
 
 import (
@@ -580,6 +583,108 @@ func TestEvaluateAgentWhen_NilTraits(t *testing.T) {
 	}
 	if got {
 		t.Error("expected false with nil traits")
+	}
+}
+
+func TestRunnerSubscribesSecretSkipped(t *testing.T) {
+	mock := newMockExecutor()
+	runner := NewRunner(
+		map[string]modules.Executor{"exec": mock, "file": mock},
+		nil, false, "",
+	)
+
+	// Build modules: one regular file, one exec with _subscribes_secret=true (not triggered).
+	mods := []*pb.Module{
+		{
+			Name: "grafana",
+			Resources: []*pb.Resource{
+				{
+					Name:   "grafana-ini",
+					Type:   "file",
+					Params: map[string]string{"_resource_name": "grafana-ini"},
+				},
+				{
+					Name: "grafana-set-password",
+					Type: "exec",
+					Params: map[string]string{
+						"_resource_name":    "grafana-set-password",
+						"_subscribes_secret": "true",
+					},
+				},
+			},
+		},
+	}
+
+	results, err := runner.Run(context.Background(), mods)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// grafana-ini should be executed, grafana-set-password should be skipped.
+	if len(results) != 2 {
+		t.Fatalf("results count = %d, want 2", len(results))
+	}
+
+	// Check the exec was skipped.
+	for _, r := range results {
+		if r.ResourceName == "grafana-set-password" {
+			if r.Action != modules.ActionSkipped {
+				t.Errorf("grafana-set-password action = %q, want %q", r.Action, modules.ActionSkipped)
+			}
+		}
+	}
+
+	// Verify the mock was only called for grafana-ini.
+	names := mock.callNames()
+	if len(names) != 1 || names[0] != "grafana-ini" {
+		t.Errorf("executor called for %v, want [grafana-ini]", names)
+	}
+}
+
+func TestRunnerSecretTriggeredExecutes(t *testing.T) {
+	mock := newMockExecutor()
+	runner := NewRunner(
+		map[string]modules.Executor{"exec": mock},
+		nil, false, "",
+	)
+
+	// Build module with _secret_triggered=true (server injected it).
+	mods := []*pb.Module{
+		{
+			Name: "grafana",
+			Resources: []*pb.Resource{
+				{
+					Name: "grafana-set-password",
+					Type: "exec",
+					Params: map[string]string{
+						"_resource_name":   "grafana-set-password",
+						"_secret_triggered": "true",
+						"command":          "grafana-cli reset",
+					},
+				},
+			},
+		},
+	}
+
+	results, err := runner.Run(context.Background(), mods)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("results count = %d, want 1", len(results))
+	}
+
+	// Should have been executed (not skipped).
+	names := mock.callNames()
+	if len(names) != 1 || names[0] != "grafana-set-password" {
+		t.Errorf("executor called for %v, want [grafana-set-password]", names)
+	}
+
+	// _triggered should be set so exec guards are bypassed.
+	call := mock.calls[0]
+	if call.Params["_triggered"] != "true" {
+		t.Error("_triggered should be set for secret-triggered exec resources")
 	}
 }
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package watcher polls isopass for secret version changes and triggers
 // force-push re-convergence for thralls whose configs reference rotated secrets.
 package watcher
@@ -8,7 +11,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
 )
 
 // VersionProvider retrieves version information for a secret path.
@@ -21,11 +23,17 @@ type ThrallStore interface {
 	ThrallsReferencingSecret(secretPath string) []string
 }
 
+// ConfigReloader triggers a full config reload (re-resolves secrets from provider).
+type ConfigReloader interface {
+	Reload() error
+}
+
 // DB abstracts the database operations needed by the watcher.
 type DB interface {
 	SetForcePush(ctx context.Context, id string) error
 	CreateSecretRotationEvent(ctx context.Context, params RotationRecord) error
 	GetThrallByHostname(ctx context.Context, hostname string) (string, error)
+	AppendRotatedSecret(ctx context.Context, id, secretPath string) error
 }
 
 // EventDispatcher fires webhook events for secret rotation.
@@ -50,16 +58,17 @@ type RotationRecord struct {
 // version changes. When a rotation is detected, all thralls referencing
 // that secret have their force_push flag set.
 type Watcher struct {
-	provider     VersionProvider
-	db           DB
-	configStore  ThrallStore
-	dispatcher   EventDispatcher
-	notifyFunc   NotifyFunc
-	pollInterval time.Duration
-	watchPaths   []string
-	versions     map[string]int
-	mu           sync.Mutex
-	consecutiveFailures int // for exponential backoff on provider errors
+	provider            VersionProvider
+	db                  DB
+	configStore         ThrallStore
+	configReloader      ConfigReloader
+	dispatcher          EventDispatcher
+	notifyFunc          NotifyFunc
+	pollInterval        time.Duration
+	watchPaths          []string
+	versions            map[string]int
+	mu                  sync.Mutex
+	consecutiveFailures int
 }
 
 // NewWatcher creates a watcher that monitors the given secret paths for
@@ -81,6 +90,12 @@ func NewWatcher(
 		watchPaths:   watchPaths,
 		versions:     make(map[string]int),
 	}
+}
+
+// SetConfigReloader sets the config reloader used to re-resolve secrets
+// when a rotation is detected.
+func (w *Watcher) SetConfigReloader(r ConfigReloader) {
+	w.configReloader = r
 }
 
 // SetNotifyFunc sets an optional callback invoked on secret rotation events.
@@ -145,6 +160,7 @@ func (w *Watcher) initVersions(ctx context.Context) {
 // triggers force-push + audit record if a version bump is detected.
 func (w *Watcher) checkRotations(ctx context.Context) {
 	hadError := false
+	rotated := false
 	for _, path := range w.watchPaths {
 		currentVersion, err := w.provider.GetVersion(ctx, path)
 		if err != nil {
@@ -171,6 +187,8 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 		w.versions[path] = currentVersion
 		w.mu.Unlock()
 
+		rotated = true
+
 		// Identify affected thralls.
 		hostnames := w.configStore.ThrallsReferencingSecret(path)
 		var affectedIDs []string
@@ -187,11 +205,15 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 			affectedIDs = append(affectedIDs, thrallID)
 		}
 
-		// Set force-push flag for each affected thrall.
+		// Set force-push flag and record pending rotation for each affected thrall.
 		for _, id := range affectedIDs {
 			if err := w.db.SetForcePush(ctx, id); err != nil {
 				slog.Error("watcher: setting force push",
-					"node_id", id, "error", err)
+					"thrall_id", id, "error", err)
+			}
+			if err := w.db.AppendRotatedSecret(ctx, id, path); err != nil {
+				slog.Error("watcher: appending rotated secret",
+					"thrall_id", id, "path", path, "error", err)
 			}
 		}
 
@@ -217,6 +239,13 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 				"path":     path,
 				"affected": len(affectedIDs),
 			})
+		}
+	}
+
+	// Re-resolve secrets in config store so next check-in gets fresh values.
+	if rotated && w.configReloader != nil {
+		if err := w.configReloader.Reload(); err != nil {
+			slog.Error("watcher: config reload after secret rotation failed", "error", err)
 		}
 	}
 

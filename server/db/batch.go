@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package db
 
 import (
@@ -32,7 +35,7 @@ type ThrallWithLatestRun struct {
 func (q *Queries) ListThrallsWithLatestRun(ctx context.Context) ([]ThrallWithLatestRun, error) {
 	const query = `
 SELECT n.id, n.hostname, n.ip_address, n.pubkey_pem, n.enrolled_at,
-       n.last_seen, n.revoked, n.revoked_at, n.force_push,
+       n.last_seen, n.revoked, n.revoked_at, n.force_push, n.pending_rotated_secrets,
        (SELECT status FROM runs WHERE thrall_id = n.id ORDER BY started_at DESC LIMIT 1),
        (SELECT changed_count FROM runs WHERE thrall_id = n.id ORDER BY started_at DESC LIMIT 1)
 FROM thralls n
@@ -51,6 +54,7 @@ ORDER BY n.enrolled_at DESC`
 		if err := rows.Scan(
 			&i.ID, &i.Hostname, &i.IpAddress, &i.PubkeyPem,
 			&i.EnrolledAt, &i.LastSeen, &i.Revoked, &i.RevokedAt, &i.ForcePush,
+			&i.PendingRotatedSecrets,
 			&i.LatestRunStatus, &i.LatestRunChangedCount,
 		); err != nil {
 			return nil, err

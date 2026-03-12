@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package config
 
 import (
@@ -57,6 +60,11 @@ func HashModuleContent(mod ModuleConfig) string {
 		}
 		io.WriteString(h, "|subscribes:")
 		for _, s := range res.Subscribes {
+			io.WriteString(h, s)
+			io.WriteString(h, ",")
+		}
+		io.WriteString(h, "|subscribes_secret:")
+		for _, s := range res.SubscribesSecret {
 			io.WriteString(h, s)
 			io.WriteString(h, ",")
 		}

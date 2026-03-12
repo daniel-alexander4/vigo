@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package validate provides static idempotency analysis for Hobnob resource
 // definitions. It checks that every resource in a module definition is provably
 // idempotent before the config is allowed to go live.
@@ -49,11 +52,12 @@ func (f Finding) String() string {
 // Resource mirrors the fields of config.ResourceConfig that we need for
 // validation, avoiding a circular import. The caller maps from their types.
 type Resource struct {
-	Name       string
-	Type       string
-	Attributes map[string]any
-	Notify     []string
-	Subscribes []string
+	Name             string
+	Type             string
+	Attributes       map[string]any
+	Notify           []string
+	Subscribes       []string
+	SubscribesSecret []string
 }
 
 // Module mirrors config.ModuleDefinition for validation purposes.
@@ -169,8 +173,10 @@ func validateExec(base Finding, res Resource) []Finding {
 	hasCreates := attrString(res.Attributes, "creates") != ""
 	hasOnlyIf := attrString(res.Attributes, "onlyif") != ""
 	hasUnless := attrString(res.Attributes, "unless") != ""
+	hasSubscribes := len(res.Subscribes) > 0
+	hasSubscribesSecret := len(res.SubscribesSecret) > 0
 
-	if !hasCreates && !hasOnlyIf && !hasUnless {
+	if !hasCreates && !hasOnlyIf && !hasUnless && !hasSubscribes && !hasSubscribesSecret {
 		f := base
 		f.Severity = SeverityError
 		f.Message = "exec resource has no idempotency guard — add creates, onlyif, or unless"

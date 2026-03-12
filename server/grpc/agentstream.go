@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc
 
 import (
@@ -6,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
@@ -232,6 +236,29 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 				Name:   te.Name,
 				Sha256: te.SHA256,
 			})
+		}
+	}
+
+	// Inject _secret_triggered for resources subscribing to rotated secrets.
+	// Re-read thrall to get fresh pending_rotated_secrets (may have changed
+	// since the stream connected or since the last check-in).
+	freshThrall, freshErr := s.queries.GetThrallByID(ctx, thrallID)
+	if freshErr != nil {
+		slog.Warn("failed to re-read thrall for pending secrets", "thrall_id", thrallID, "error", freshErr)
+	}
+	pending := freshThrall.PendingRotatedSecrets
+	if pending != "" && pending != "[]" {
+		var rotatedPaths []string
+		if err := json.Unmarshal([]byte(pending), &rotatedPaths); err == nil && len(rotatedPaths) > 0 {
+			injectSecretTriggers(bundle, rotatedPaths)
+			if clearErr := s.queries.ClearRotatedSecrets(ctx, thrallID); clearErr != nil {
+				slog.Error("failed to clear rotated secrets",
+					"thrall_id", thrallID, "error", clearErr)
+			} else {
+				slog.Info("delivered secret rotation triggers",
+					"thrall_id", thrallID,
+					"secrets", strings.Join(rotatedPaths, ", "))
+			}
 		}
 	}
 

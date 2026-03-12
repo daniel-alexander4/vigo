@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package main
 
 import (
@@ -149,11 +152,12 @@ func validateFile(path string) ([]validate.Finding, error) {
 	mod := validate.Module{Name: moduleName}
 	for _, r := range def.Resources {
 		mod.Resources = append(mod.Resources, validate.Resource{
-			Name:       r.Name,
-			Type:       r.Type,
-			Attributes: r.Attributes,
-			Notify:     r.Notify,
-			Subscribes: r.Subscribes,
+			Name:             r.Name,
+			Type:             r.Type,
+			Attributes:       r.Attributes,
+			Notify:           r.Notify,
+			Subscribes:       r.Subscribes,
+			SubscribesSecret: r.SubscribesSecret,
 		})
 	}
 	findings = append(findings, validate.ValidateModule(mod)...)

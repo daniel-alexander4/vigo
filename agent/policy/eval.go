@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package policy provides agent-side evaluation of server policy bundles.
 // When the server sends a PolicyBundle (raw templates, unevaluated conditionals),
 // this package evaluates everything locally using the agent's own traits,
@@ -90,6 +93,12 @@ func EvalBundle(bundle *pb.PolicyBundle, traits map[string]any) ([]*pb.Module, e
 						pres.Name, k, err)
 				}
 				params[k] = rendered
+			}
+
+			// Mark resources with subscribes_secret so the runner can skip them
+			// in the main pass unless the server injected _secret_triggered=true.
+			if len(pres.SubscribesSecret) > 0 && params["_secret_triggered"] != "true" {
+				params["_subscribes_secret"] = "true"
 			}
 
 			pbRes := &pb.Resource{

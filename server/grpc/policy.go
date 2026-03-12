@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc
 
 import (
@@ -80,17 +83,48 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 		}
 
 		pbRes := &pb.PolicyResource{
-			Name:       res.Name,
-			Type:       res.Type,
-			Attributes: attrs,
-			When:       res.When,
-			Notify:     res.Notify,
-			Subscribes: res.Subscribes,
+			Name:             res.Name,
+			Type:             res.Type,
+			Attributes:       attrs,
+			When:             res.When,
+			Notify:           res.Notify,
+			Subscribes:       res.Subscribes,
+			SubscribesSecret: res.SubscribesSecret,
 		}
 		pbMod.Resources = append(pbMod.Resources, pbRes)
 	}
 
 	return pbMod
+}
+
+// injectSecretTriggers sets _secret_triggered=true on resources whose
+// subscribes_secret list intersects the rotated paths. Since modules may be
+// shared from the policy cache, affected resources are cloned before mutation.
+func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
+	rotatedSet := make(map[string]bool, len(rotatedPaths))
+	for _, p := range rotatedPaths {
+		rotatedSet[p] = true
+	}
+	for mi, mod := range bundle.Modules {
+		if mod.Stub {
+			continue
+		}
+		for ri, res := range mod.Resources {
+			for _, sp := range res.SubscribesSecret {
+				if rotatedSet[sp] {
+					// Clone the resource to avoid mutating shared cache entries.
+					cloned := *res
+					cloned.Attributes = make(map[string]string, len(res.Attributes)+1)
+					for k, v := range res.Attributes {
+						cloned.Attributes[k] = v
+					}
+					cloned.Attributes["_secret_triggered"] = "true"
+					bundle.Modules[mi].Resources[ri] = &cloned
+					break
+				}
+			}
+		}
+	}
 }
 
 // hashPolicyModule computes a content hash from a PolicyModule proto.
@@ -108,12 +142,13 @@ func hashPolicyModule(mod *pb.PolicyModule) string {
 			attrs[k] = v
 		}
 		cfg.Resources = append(cfg.Resources, config.ResourceConfig{
-			Name:       res.Name,
-			Type:       res.Type,
-			When:       res.When,
-			Attributes: attrs,
-			Notify:     res.Notify,
-			Subscribes: res.Subscribes,
+			Name:             res.Name,
+			Type:             res.Type,
+			When:             res.When,
+			Attributes:       attrs,
+			Notify:           res.Notify,
+			Subscribes:       res.Subscribes,
+			SubscribesSecret: res.SubscribesSecret,
 		})
 	}
 	return config.HashModuleContent(cfg)

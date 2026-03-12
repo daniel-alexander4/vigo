@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package grpc
 
 import (
@@ -188,6 +191,106 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 	}
 	if len(pg.Resources) != 1 {
 		t.Errorf("postgres resources = %d, want 1", len(pg.Resources))
+	}
+}
+
+func TestInjectSecretTriggers(t *testing.T) {
+	bundle := &pb.PolicyBundle{
+		Modules: []*pb.PolicyModule{
+			{
+				Name: "grafana",
+				Resources: []*pb.PolicyResource{
+					{
+						Name:       "grafana-ini",
+						Type:       "file",
+						Attributes: map[string]string{"content": "test"},
+					},
+					{
+						Name:             "grafana-set-password",
+						Type:             "exec",
+						Attributes:       map[string]string{"command": "grafana-cli reset"},
+						SubscribesSecret: []string{"hobnob/grafana/admin-password"},
+					},
+					{
+						Name:             "grafana-tls",
+						Type:             "exec",
+						Attributes:       map[string]string{"command": "update-tls"},
+						SubscribesSecret: []string{"hobnob/grafana/tls-cert"},
+					},
+				},
+			},
+		},
+	}
+
+	injectSecretTriggers(bundle, []string{"hobnob/grafana/admin-password"})
+
+	res := bundle.Modules[0].Resources
+
+	// grafana-ini should be untouched.
+	if res[0].Attributes["_secret_triggered"] != "" {
+		t.Error("grafana-ini should not have _secret_triggered")
+	}
+
+	// grafana-set-password should be triggered.
+	if res[1].Attributes["_secret_triggered"] != "true" {
+		t.Error("grafana-set-password should have _secret_triggered=true")
+	}
+
+	// grafana-tls should NOT be triggered (different secret path).
+	if res[2].Attributes["_secret_triggered"] != "" {
+		t.Error("grafana-tls should not have _secret_triggered")
+	}
+}
+
+func TestInjectSecretTriggers_StubModuleSkipped(t *testing.T) {
+	bundle := &pb.PolicyBundle{
+		Modules: []*pb.PolicyModule{
+			{
+				Name: "stubbed",
+				Stub: true,
+				Resources: []*pb.PolicyResource{
+					{
+						Name:             "res",
+						Type:             "exec",
+						SubscribesSecret: []string{"hobnob/secret"},
+					},
+				},
+			},
+		},
+	}
+
+	injectSecretTriggers(bundle, []string{"hobnob/secret"})
+
+	// Stub module resources should not be modified.
+	if bundle.Modules[0].Resources[0].Attributes != nil {
+		t.Error("stub module resource should not have attributes modified")
+	}
+}
+
+func TestBuildPolicyBundle_SubscribesSecretSerialized(t *testing.T) {
+	mod := config.ModuleConfig{
+		Name: "grafana",
+		Resources: []config.ResourceConfig{
+			{
+				Name:             "set-pw",
+				Type:             "exec",
+				Attributes:       map[string]any{"command": "reset-pw"},
+				SubscribesSecret: []string{"hobnob/grafana/admin-password"},
+			},
+		},
+	}
+	mod.ContentHash = config.HashModuleContent(mod)
+
+	cfg := &config.ThrallConfig{Modules: []config.ModuleConfig{mod}}
+
+	bundle, err := buildPolicyBundle(cfg, 1, nil)
+	if err != nil {
+		t.Fatalf("buildPolicyBundle: %v", err)
+	}
+
+	res := bundle.Modules[0].Resources[0]
+	if len(res.SubscribesSecret) != 1 || res.SubscribesSecret[0] != "hobnob/grafana/admin-password" {
+		t.Errorf("subscribes_secret = %v, want [hobnob/grafana/admin-password]", res.SubscribesSecret)
 	}
 }
 

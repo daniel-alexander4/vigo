@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package config
 
 import "testing"
@@ -95,5 +98,30 @@ func TestHashModuleContent_DepsAffectHash(t *testing.T) {
 
 	if HashModuleContent(base) == HashModuleContent(withDeps) {
 		t.Error("depends_on should affect hash")
+	}
+}
+
+func TestHashModuleContent_SubscribesSecretAffectsHash(t *testing.T) {
+	base := ModuleConfig{
+		Name: "test",
+		Resources: []ResourceConfig{
+			{Name: "r", Type: "exec", Attributes: map[string]any{"command": "reset-pw"}},
+		},
+	}
+
+	withSecret := ModuleConfig{
+		Name: "test",
+		Resources: []ResourceConfig{
+			{
+				Name:             "r",
+				Type:             "exec",
+				Attributes:       map[string]any{"command": "reset-pw"},
+				SubscribesSecret: []string{"hobnob/grafana/admin-password"},
+			},
+		},
+	}
+
+	if HashModuleContent(base) == HashModuleContent(withSecret) {
+		t.Error("subscribes_secret should affect hash")
 	}
 }

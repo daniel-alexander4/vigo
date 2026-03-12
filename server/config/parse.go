@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package config
 
 import (
@@ -137,6 +140,10 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 		case key == "subscribes":
 			if err := val.Decode(&res.Subscribes); err != nil {
 				return res, fmt.Errorf("decoding subscribes: %w", err)
+			}
+		case key == "subscribes_secret":
+			if err := val.Decode(&res.SubscribesSecret); err != nil {
+				return res, fmt.Errorf("decoding subscribes_secret: %w", err)
 			}
 		case key == "depends_on" || key == "require":
 			if err := val.Decode(&res.DependsOn); err != nil {

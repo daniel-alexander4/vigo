@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // Package config handles loading, watching, and resolving per-thrall
 // configuration from YAML files on disk. It integrates with the secrets
 // provider to resolve "secret:" prefixes and supports hot-reload via fsnotify.
@@ -210,14 +213,15 @@ type ModuleConfig struct {
 
 // ResourceConfig describes a single resource within a module.
 type ResourceConfig struct {
-	Name       string         `yaml:"name"`
-	Type       string         `yaml:"type"`
-	When       string         `yaml:"when,omitempty"`
-	Attributes map[string]any `yaml:",inline"`
-	Notify     []string       `yaml:"notify"`
-	Subscribes []string       `yaml:"subscribes"`
-	DependsOn  []string       `yaml:"depends_on"`
-	Before     []string       `yaml:"before"`
+	Name             string         `yaml:"name"`
+	Type             string         `yaml:"type"`
+	When             string         `yaml:"when,omitempty"`
+	Attributes       map[string]any `yaml:",inline"`
+	Notify           []string       `yaml:"notify"`
+	Subscribes       []string       `yaml:"subscribes"`
+	SubscribesSecret []string       `yaml:"subscribes_secret"`
+	DependsOn        []string       `yaml:"depends_on"`
+	Before           []string       `yaml:"before"`
 }
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.

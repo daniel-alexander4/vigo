@@ -855,15 +855,16 @@ func (x *PolicyModule) GetStub() bool {
 
 // PolicyResource is a resource with raw template strings in attributes.
 type PolicyResource struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Attributes    map[string]string      `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // raw template strings (secrets resolved)
-	When          string                 `protobuf:"bytes,4,opt,name=when,proto3" json:"when,omitempty"`                                                                                       // when expression (unevaluated)
-	Notify        []string               `protobuf:"bytes,5,rep,name=notify,proto3" json:"notify,omitempty"`
-	Subscribes    []string               `protobuf:"bytes,6,rep,name=subscribes,proto3" json:"subscribes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Name             string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type             string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Attributes       map[string]string      `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // raw template strings (secrets resolved)
+	When             string                 `protobuf:"bytes,4,opt,name=when,proto3" json:"when,omitempty"`                                                                                       // when expression (unevaluated)
+	Notify           []string               `protobuf:"bytes,5,rep,name=notify,proto3" json:"notify,omitempty"`
+	Subscribes       []string               `protobuf:"bytes,6,rep,name=subscribes,proto3" json:"subscribes,omitempty"`
+	SubscribesSecret []string               `protobuf:"bytes,7,rep,name=subscribes_secret,json=subscribesSecret,proto3" json:"subscribes_secret,omitempty"` // secret paths that trigger this resource on rotation
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PolicyResource) Reset() {
@@ -934,6 +935,13 @@ func (x *PolicyResource) GetNotify() []string {
 func (x *PolicyResource) GetSubscribes() []string {
 	if x != nil {
 		return x.Subscribes
+	}
+	return nil
+}
+
+func (x *PolicyResource) GetSubscribesSecret() []string {
+	if x != nil {
+		return x.SubscribesSecret
 	}
 	return nil
 }
@@ -4447,7 +4455,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"depends_on\x18\x03 \x03(\tR\tdependsOn\x12\x12\n" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x12!\n" +
 	"\fcontent_hash\x18\x05 \x01(\tR\vcontentHash\x12\x12\n" +
-	"\x04stub\x18\x06 \x01(\bR\x04stub\"\x8e\x02\n" +
+	"\x04stub\x18\x06 \x01(\bR\x04stub\"\xbb\x02\n" +
 	"\x0ePolicyResource\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12I\n" +
@@ -4458,7 +4466,8 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x06notify\x18\x05 \x03(\tR\x06notify\x12\x1e\n" +
 	"\n" +
 	"subscribes\x18\x06 \x03(\tR\n" +
-	"subscribes\x1a=\n" +
+	"subscribes\x12+\n" +
+	"\x11subscribes_secret\x18\a \x03(\tR\x10subscribesSecret\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"|\n" +

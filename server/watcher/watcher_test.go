@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package watcher
 
 import (
@@ -46,6 +49,7 @@ func (m *mockThrallStore) ThrallsReferencingSecret(path string) []string {
 type mockDB struct {
 	mu              sync.Mutex
 	forcePushed     []string
+	rotatedSecrets  map[string][]string // thrall ID -> secret paths
 	rotationEvents  []RotationRecord
 	nodesByHost   map[string]string
 }
@@ -61,6 +65,16 @@ func (m *mockDB) CreateSecretRotationEvent(ctx context.Context, params RotationR
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.rotationEvents = append(m.rotationEvents, params)
+	return nil
+}
+
+func (m *mockDB) AppendRotatedSecret(ctx context.Context, id, secretPath string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.rotatedSecrets == nil {
+		m.rotatedSecrets = make(map[string][]string)
+	}
+	m.rotatedSecrets[id] = append(m.rotatedSecrets[id], secretPath)
 	return nil
 }
 
@@ -163,6 +177,34 @@ func TestNotifyFuncCalledOnRotation(t *testing.T) {
 	require.Len(t, notifiedDetails, 1)
 	assert.Equal(t, "hobnob/db/dsn", notifiedDetails[0]["path"])
 	assert.Equal(t, 1, notifiedDetails[0]["affected"])
+}
+
+func TestRotationAppendsRotatedSecret(t *testing.T) {
+	thrallID := uuid.New().String()
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
+	store := &mockThrallStore{refs: map[string][]string{
+		"hobnob/db/dsn": {"web-01.example.com"},
+	}}
+	database := &mockDB{
+		nodesByHost: map[string]string{
+			"web-01.example.com": thrallID,
+		},
+	}
+	dispatcher := &mockDispatcher{}
+
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+
+	ctx := context.Background()
+	w.initVersions(ctx)
+
+	provider.setVersion("hobnob/db/dsn", 2)
+	w.checkRotations(ctx)
+
+	database.mu.Lock()
+	defer database.mu.Unlock()
+
+	// Should have appended the rotated secret path.
+	assert.Contains(t, database.rotatedSecrets[thrallID], "hobnob/db/dsn")
 }
 
 func TestNoActionWhenVersionsUnchanged(t *testing.T) {

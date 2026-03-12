@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package runner
 
 import (
@@ -126,10 +129,52 @@ func (r *Runner) Run(ctx context.Context, protoModules []*pb.Module) ([]modules.
 		sorted = filtered
 	}
 
+	// Build set of all notify targets so exec resources that are
+	// only meant to run on trigger can be skipped in the main pass.
+	notifyTargetSet := map[string]bool{}
+	for _, targets := range notifyMap {
+		for _, t := range targets {
+			notifyTargetSet[t] = true
+		}
+	}
+
 	var results []modules.ResourceResult
 
 	// Main execution pass.
 	for _, node := range sorted {
+		// Skip resources with subscribes_secret that aren't triggered.
+		if node.Params["_subscribes_secret"] == "true" {
+			results = append(results, modules.ResourceResult{
+				ModuleName:   node.ModuleName,
+				ResourceType: node.Type,
+				ResourceName: node.Name,
+				Action:       modules.ActionSkipped,
+			})
+			continue
+		}
+
+		// Mark exec notify targets so they skip in main pass (run only when triggered).
+		if node.Type == "exec" && notifyTargetSet[node.Name] {
+			if node.Params["creates"] == "" && node.Params["onlyif"] == "" && node.Params["unless"] == "" {
+				p := make(map[string]string, len(node.Params)+1)
+				for k, v := range node.Params {
+					p[k] = v
+				}
+				p["_subscribes"] = "true"
+				node.Params = p
+			}
+		}
+
+		// For secret-triggered resources, set _triggered to bypass exec guards.
+		if node.Params["_secret_triggered"] == "true" && node.Type == "exec" {
+			p := make(map[string]string, len(node.Params)+1)
+			for k, v := range node.Params {
+				p[k] = v
+			}
+			p["_triggered"] = "true"
+			node.Params = p
+		}
+
 		result := r.executeResource(ctx, node)
 		results = append(results, result)
 	}
@@ -264,7 +309,7 @@ func (r *Runner) executeNotifyPass(
 		nodeByName[n.Name] = n
 	}
 
-	// Re-execute each notify target.
+	// Re-execute each notify target with _triggered flag to bypass guards.
 	var results []modules.ResourceResult
 	for _, targetName := range notifyTargets {
 		node, ok := nodeByName[targetName]
@@ -275,6 +320,13 @@ func (r *Runner) executeNotifyPass(
 			})
 			continue
 		}
+		// Set _triggered so exec guards are bypassed during notify.
+		triggered := make(map[string]string, len(node.Params)+1)
+		for k, v := range node.Params {
+			triggered[k] = v
+		}
+		triggered["_triggered"] = "true"
+		node.Params = triggered
 		result := r.executeResource(ctx, node)
 		results = append(results, result)
 	}

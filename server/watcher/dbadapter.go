@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package watcher
 
 import (
@@ -29,6 +32,10 @@ func (a *DBAdapter) GetThrallByHostname(ctx context.Context, hostname string) (s
 		return "", err
 	}
 	return thrall.ID, nil
+}
+
+func (a *DBAdapter) AppendRotatedSecret(ctx context.Context, id, secretPath string) error {
+	return a.q.AppendRotatedSecret(ctx, id, secretPath)
 }
 
 func (a *DBAdapter) CreateSecretRotationEvent(ctx context.Context, params RotationRecord) error {

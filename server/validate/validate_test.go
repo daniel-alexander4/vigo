@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package validate
 
 import (
@@ -242,6 +245,25 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 	}
 	if errorCount != 1 {
 		t.Errorf("expected 1 error, got %d: %s", errorCount, FormatFindings(findings))
+	}
+}
+
+func TestExecWithSubscribesSecret_IsClean(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{
+				Name:             "set-password",
+				Type:             "exec",
+				Attributes:       map[string]any{"command": "grafana-cli admin reset-admin-password 'secret'"},
+				SubscribesSecret: []string{"hobnob/grafana/admin-password"},
+			},
+		},
+	}
+
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("exec with subscribes_secret should pass validation, got: %s", FormatFindings(findings))
 	}
 }
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package checkin
 
 import (
@@ -128,6 +131,10 @@ func converge(ctx context.Context, resp *pb.CheckInResponse, reportFn func(ctx c
 	if err != nil {
 		return nil, fmt.Errorf("evaluating policy bundle: %w", err)
 	}
+
+	// Strip one-shot _secret_triggered flags from the bundle so subsequent
+	// no-change cycles (which reuse the cached bundle) don't re-trigger.
+	stripSecretTriggers(bundle)
 
 	if len(protoModules) == 0 {
 		slog.Warn("server returned zero modules — check server logs for config errors (missing modules/roles) and verify this thrall is matched in thralls/")
@@ -487,6 +494,23 @@ func logRunResult(logger *slog.Logger, rr *RunResult) {
 		"changed", changed,
 		"errors", errCount,
 	)
+}
+
+// stripSecretTriggers removes _secret_triggered from PolicyResource attributes
+// after evaluation. This prevents the one-shot trigger from persisting in the
+// cached bundle and re-firing on every subsequent no-change cycle.
+func stripSecretTriggers(bundle *pb.PolicyBundle) {
+	if bundle == nil {
+		return
+	}
+	for _, mod := range bundle.Modules {
+		if mod.Stub {
+			continue
+		}
+		for _, res := range mod.Resources {
+			delete(res.Attributes, "_secret_triggered")
+		}
+	}
 }
 
 // checkSelfUpdate queries the server for a newer agent version and applies the

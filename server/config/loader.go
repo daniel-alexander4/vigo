@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package config
 
 import (
@@ -79,6 +82,12 @@ func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (
 // Dir returns the thrall-configs directory path.
 func (cs *ConfigStore) Dir() string {
 	return cs.dir
+}
+
+// Reload re-reads all config files and re-resolves secrets from the provider.
+// Used by the secret rotation watcher to pick up changed values.
+func (cs *ConfigStore) Reload() error {
+	return cs.loadAll()
 }
 
 // Version returns the current config version. Incremented on each successful
@@ -915,11 +924,12 @@ func moduleToValidate(def *ModuleDefinition) validate.Module {
 	mod := validate.Module{Name: def.Name}
 	for _, r := range def.Resources {
 		mod.Resources = append(mod.Resources, validate.Resource{
-			Name:       r.Name,
-			Type:       r.Type,
-			Attributes: r.Attributes,
-			Notify:     r.Notify,
-			Subscribes: r.Subscribes,
+			Name:             r.Name,
+			Type:             r.Type,
+			Attributes:       r.Attributes,
+			Notify:           r.Notify,
+			Subscribes:       r.Subscribes,
+			SubscribesSecret: r.SubscribesSecret,
 		})
 	}
 	return mod

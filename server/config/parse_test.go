@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package config
 
 import (
@@ -182,5 +185,32 @@ func TestParseModuleFile_EmptyDocument(t *testing.T) {
 	_, err := ParseModuleFile([]byte(""))
 	if err == nil {
 		t.Fatal("expected error for empty document")
+	}
+}
+
+func TestParseModuleFile_SubscribesSecret(t *testing.T) {
+	data := []byte(`
+name: grafana
+resources:
+  - name: grafana-set-password
+    type: exec
+    command: "grafana-cli admin reset-admin-password 'secret'"
+    subscribes_secret: ["hobnob/grafana/admin-password"]
+`)
+
+	def, err := ParseModuleFile(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(def.Resources) != 1 {
+		t.Fatalf("resources count = %d, want 1", len(def.Resources))
+	}
+	res := def.Resources[0]
+	if len(res.SubscribesSecret) != 1 {
+		t.Fatalf("subscribes_secret count = %d, want 1", len(res.SubscribesSecret))
+	}
+	if res.SubscribesSecret[0] != "hobnob/grafana/admin-password" {
+		t.Errorf("subscribes_secret[0] = %q, want %q", res.SubscribesSecret[0], "hobnob/grafana/admin-password")
 	}
 }

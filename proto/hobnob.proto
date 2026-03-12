@@ -310,6 +310,7 @@ message PolicyResource {
   string when = 4;                     // when expression (unevaluated)
   repeated string notify = 5;
   repeated string subscribes = 6;
+  repeated string subscribes_secret = 7; // secret paths that trigger this resource on rotation
 }
 
 // ConditionalVarDef defines a trait-based conditional variable.

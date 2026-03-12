@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package api
 
 import (
@@ -26,15 +29,16 @@ func openTestDB(t *testing.T) *sql.DB {
 	// Minimal schema for traits tests.
 	_, err = sqlDB.Exec(`
 		CREATE TABLE thralls (
-			id          TEXT PRIMARY KEY,
-			hostname    TEXT NOT NULL,
-			ip_address  TEXT NOT NULL,
-			pubkey_pem  TEXT NOT NULL,
-			enrolled_at DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_seen   DATETIME,
-			revoked     INTEGER NOT NULL DEFAULT 0,
-			revoked_at  DATETIME,
-			force_push  INTEGER NOT NULL DEFAULT 0
+			id                       TEXT PRIMARY KEY,
+			hostname                 TEXT NOT NULL,
+			ip_address               TEXT NOT NULL,
+			pubkey_pem               TEXT NOT NULL,
+			enrolled_at              DATETIME NOT NULL DEFAULT (datetime('now')),
+			last_seen                DATETIME,
+			revoked                  INTEGER NOT NULL DEFAULT 0,
+			revoked_at               DATETIME,
+			force_push               INTEGER NOT NULL DEFAULT 0,
+			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]'
 		);
 		CREATE TABLE thrall_traits (
 			id           TEXT PRIMARY KEY,
