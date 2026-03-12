@@ -61,6 +61,18 @@ resources:
     depends_on: [install-haproxy]
     notify: [haproxy-service]
 
+  - name: haproxy-logrotate
+    type: logrotate
+    path: /var/log/haproxy/*.log
+    frequency: daily
+    rotate: "14"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 haproxy adm"
+    postrotate: "/bin/systemctl reload rsyslog.service > /dev/null 2>&1 || true"
+    depends_on: [install-haproxy]
+
   - name: haproxy-service
     type: service
     service: haproxy

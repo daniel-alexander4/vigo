@@ -104,6 +104,30 @@ resources:
     depends_on: [install-logstash]
     notify: [logstash-service]
 
+  # --- Logrotate ---
+
+  - name: elasticsearch-logrotate
+    type: logrotate
+    path: /var/log/elasticsearch/*.log
+    frequency: daily
+    rotate: "7"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    copytruncate: "true"
+    create: "0640 elasticsearch elasticsearch"
+
+  - name: logstash-logrotate
+    type: logrotate
+    path: /var/log/logstash/*.log
+    frequency: daily
+    rotate: "7"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    copytruncate: "true"
+    create: "0640 logstash logstash"
+
   # --- Services ---
 
   - name: elasticsearch-service

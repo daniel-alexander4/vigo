@@ -28,6 +28,17 @@ resources:
     depends_on: [install-fail2ban]
     notify: [fail2ban-service]
 
+  - name: fail2ban-logrotate
+    type: logrotate
+    path: /var/log/fail2ban.log
+    frequency: daily
+    rotate: "7"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    copytruncate: "true"
+    depends_on: [install-fail2ban]
+
   - name: fail2ban-service
     type: service
     service: fail2ban

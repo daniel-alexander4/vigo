@@ -1,7 +1,7 @@
 name: java
 
 vars:
-  # Leave empty to use the distro default package
+  java_version: "17"
   java_package_override: ""
   java_home: "/usr/lib/jvm/default-java"
 
@@ -9,8 +9,16 @@ resources:
   - name: install-java
     type: package
     package: >-
-      {{ if ne .Vars.java_package_override "" }}{{ .Vars.java_package_override }}{{ else if eq .Traits.os.family "debian" }}default-jdk{{ else }}java-17-openjdk-devel{{ end }}
+      {{ if ne .Vars.java_package_override "" }}{{ .Vars.java_package_override }}{{ else if eq .Traits.os.family "debian" }}openjdk-{{ .Vars.java_version }}-jdk{{ else }}java-{{ .Vars.java_version }}-openjdk-devel{{ end }}
     state: present
+
+  - name: set-java-alternative
+    type: alternatives
+    path: >-
+      {{ if eq .Traits.os.family "debian" }}/usr/lib/jvm/java-{{ .Vars.java_version }}-openjdk-amd64/bin/java{{ else }}/usr/lib/jvm/java-{{ .Vars.java_version }}-openjdk/bin/java{{ end }}
+    link: /usr/bin/java
+    priority: "100"
+    depends_on: [install-java]
 
   - name: java-profile
     type: file

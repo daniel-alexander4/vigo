@@ -62,6 +62,16 @@ resources:
     group: postgres
     mode: "0750"
 
+  - name: pg-logrotate
+    type: logrotate
+    path: "{{ .Vars.pg_log_dir }}/*.log"
+    frequency: daily
+    rotate: "14"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 postgres postgres"
+
   - name: postgresql-service
     type: service
     service: postgresql

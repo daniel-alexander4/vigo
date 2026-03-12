@@ -24,3 +24,11 @@ resources:
     type: kernel_module
     module: cramfs
     state: absent
+
+  # Reboot if kernel module changes require it
+  - name: reboot-after-kmod
+    type: reboot
+    delay: "1"
+    message: "Kernel module changes require reboot"
+    reboot_required_file: /var/run/reboot-required
+    subscribes: [br-netfilter, overlay, ip-vs, disable-cramfs]

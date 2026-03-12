@@ -68,29 +68,39 @@ type Module struct {
 
 // knownTypes are the resource types with built-in idempotent executors.
 var knownTypes = map[string]bool{
-	"file":       true,
-	"package":    true,
-	"service":    true,
-	"user":       true,
-	"exec":       true,
-	"repository": true,
-	"archive":    true,
-	"cron":       true,
-	"process":       true,
-	"file_line":     true,
-	"group":         true,
-	"host":          true,
-	"sysctl":        true,
-	"mount":         true,
-	"hostname":      true,
-	"timezone":      true,
-	"sshkey":        true,
-	"firewall":      true,
-	"kernel_module": true,
-	"swap":          true,
-	"tmpfile":       true,
-	"ini":           true,
-	"json_file":     true,
+	"file":             true,
+	"package":          true,
+	"service":          true,
+	"user":             true,
+	"exec":             true,
+	"repository":       true,
+	"archive":          true,
+	"cron":             true,
+	"process":          true,
+	"file_line":        true,
+	"group":            true,
+	"host":             true,
+	"sysctl":           true,
+	"mount":            true,
+	"hostname":         true,
+	"timezone":         true,
+	"sshkey":           true,
+	"firewall":         true,
+	"kernel_module":    true,
+	"swap":             true,
+	"tmpfile":          true,
+	"ini":              true,
+	"json_file":        true,
+	"logrotate":        true,
+	"git":              true,
+	"reboot":           true,
+	"alternatives":     true,
+	"pip":              true,
+	"gem":              true,
+	"npm":              true,
+	"blockinfile":      true,
+	"docker_container": true,
+	"docker_image":     true,
 }
 
 // ValidateModule checks all resources in a module for idempotency.
@@ -163,6 +173,8 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateExec(base, res)...)
 	case "service":
 		findings = append(findings, validateService(base, res)...)
+	case "reboot":
+		findings = append(findings, validateReboot(base, res)...)
 	}
 
 	return findings
@@ -199,6 +211,21 @@ func validateService(base Finding, res Resource) []Finding {
 	f := base
 	f.Severity = SeverityWarning
 	f.Message = fmt.Sprintf("service with state %q runs every convergence — consider adding subscribes", state)
+	return []Finding{f}
+}
+
+// validateReboot warns if a reboot resource has no subscribes guard.
+func validateReboot(base Finding, res Resource) []Finding {
+	if len(res.Subscribes) > 0 {
+		return nil
+	}
+	if attrString(res.Attributes, "reboot_required_file") != "" {
+		return nil
+	}
+
+	f := base
+	f.Severity = SeverityWarning
+	f.Message = "reboot resource has no subscribes guard and no reboot_required_file — will reboot every convergence"
 	return []Finding{f}
 }
 

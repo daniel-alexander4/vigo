@@ -35,6 +35,18 @@ resources:
     depends_on: [install-redis]
     notify: [redis-service]
 
+  - name: redis-logrotate
+    type: logrotate
+    path: /var/log/redis/*.log
+    frequency: daily
+    rotate: "7"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    copytruncate: "true"
+    create: "0640 redis redis"
+    depends_on: [install-redis]
+
   - name: redis-service
     type: service
     service: redis-server

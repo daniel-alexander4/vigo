@@ -48,6 +48,18 @@ resources:
     group: www-data
     mode: "0755"
 
+  - name: nginx-logrotate
+    type: logrotate
+    path: /var/log/nginx/*.log
+    frequency: daily
+    rotate: "14"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 www-data adm"
+    postrotate: "[ -s /run/nginx.pid ] && kill -USR1 $(cat /run/nginx.pid)"
+    depends_on: [install-nginx]
+
   - name: nginx-service
     type: service
     service: nginx

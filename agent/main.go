@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 package main
 
 import (
@@ -120,26 +123,36 @@ func buildExecutors(snapshotMgr *snapshots.Manager) map[string]modules.Executor 
 		"file": &modules.FileExecutor{
 			SnapshotMgr: snapshotMgr,
 		},
-		"service":       &modules.ServiceExecutor{},
-		"user":          &modules.UserExecutor{},
-		"exec":          &modules.ExecExecutor{},
-		"archive":       &modules.ArchiveExecutor{},
-		"cron":          &modules.CronExecutor{},
-		"process":       &modules.ProcessExecutor{},
-		"file_line":     &modules.FileLineExecutor{},
-		"group":         &modules.GroupExecutor{},
-		"host":          &modules.HostExecutor{},
-		"sysctl":        &modules.SysctlExecutor{},
-		"mount":         &modules.MountExecutor{},
-		"hostname":      &modules.HostnameExecutor{},
-		"timezone":      &modules.TimezoneExecutor{},
-		"sshkey":        &modules.SSHKeyExecutor{},
-		"firewall":      &modules.FirewallExecutor{},
-		"kernel_module": &modules.KernelModuleExecutor{},
-		"swap":          &modules.SwapExecutor{},
-		"tmpfile":       &modules.TmpfileExecutor{},
-		"ini":           &modules.INIExecutor{},
-		"json_file":     &modules.JSONFileExecutor{},
+		"service":          &modules.ServiceExecutor{},
+		"user":             &modules.UserExecutor{},
+		"exec":             &modules.ExecExecutor{},
+		"archive":          &modules.ArchiveExecutor{},
+		"cron":             &modules.CronExecutor{},
+		"process":          &modules.ProcessExecutor{},
+		"file_line":        &modules.FileLineExecutor{},
+		"group":            &modules.GroupExecutor{},
+		"host":             &modules.HostExecutor{},
+		"sysctl":           &modules.SysctlExecutor{},
+		"mount":            &modules.MountExecutor{},
+		"hostname":         &modules.HostnameExecutor{},
+		"timezone":         &modules.TimezoneExecutor{},
+		"sshkey":           &modules.SSHKeyExecutor{},
+		"firewall":         &modules.FirewallExecutor{},
+		"kernel_module":    &modules.KernelModuleExecutor{},
+		"swap":             &modules.SwapExecutor{},
+		"tmpfile":          &modules.TmpfileExecutor{},
+		"ini":              &modules.INIExecutor{},
+		"json_file":        &modules.JSONFileExecutor{},
+		"logrotate":        &modules.LogrotateExecutor{},
+		"git":              &modules.GitExecutor{},
+		"reboot":           &modules.RebootExecutor{},
+		"alternatives":     &modules.AlternativesExecutor{},
+		"pip":              &modules.PipExecutor{},
+		"gem":              &modules.GemExecutor{},
+		"npm":              &modules.NpmExecutor{},
+		"blockinfile":      &modules.BlockinfileExecutor{},
+		"docker_container": &modules.DockerContainerExecutor{},
+		"docker_image":     &modules.DockerImageExecutor{},
 	}
 
 	osFamily, osDistro := detectOSInfo()

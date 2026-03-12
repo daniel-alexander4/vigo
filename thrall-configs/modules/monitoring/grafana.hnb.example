@@ -42,6 +42,22 @@ resources:
     depends_on: [grafana-service]
     subscribes_secret: ["hobnob/grafana/admin-password"]
 
+  - name: grafana-logrotate
+    type: logrotate
+    path: /var/log/grafana/*.log
+    frequency: daily
+    rotate: "7"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    copytruncate: "true"
+    depends_on: [install-grafana]
+
+  - name: grafana-pip-deps
+    type: pip
+    package: grafana-client
+    state: present
+
   - name: grafana-service
     type: service
     service: grafana-server

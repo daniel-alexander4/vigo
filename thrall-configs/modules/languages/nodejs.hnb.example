@@ -2,7 +2,6 @@ name: nodejs
 
 vars:
   nodejs_version: "20"
-  npm_global_packages: "pm2"
 
 resources:
   - name: nodesource-repo-debian
@@ -25,8 +24,14 @@ resources:
     state: present
     depends_on: [nodesource-repo-debian, nodesource-repo-rhel]
 
-  - name: install-npm-globals
-    type: exec
-    command: "npm install -g {{ .Vars.npm_global_packages }}"
-    when: "!command_succeeds('npm list -g --depth=0 2>/dev/null | grep -q {{ .Vars.npm_global_packages }}')"
+  - name: install-pm2
+    type: npm
+    package: pm2
+    state: present
+    depends_on: [install-nodejs]
+
+  - name: install-yarn
+    type: npm
+    package: yarn
+    state: present
     depends_on: [install-nodejs]

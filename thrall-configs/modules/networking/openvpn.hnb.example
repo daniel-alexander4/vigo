@@ -1,0 +1,105 @@
+name: openvpn
+
+vars:
+  vpn_mode: "server"
+  vpn_port: "1194"
+  vpn_proto: "udp"
+  vpn_dev: "tun"
+  vpn_subnet: "10.8.0.0"
+  vpn_netmask: "255.255.255.0"
+  vpn_dns_1: "1.1.1.1"
+  vpn_dns_2: "8.8.8.8"
+  vpn_cipher: "AES-256-GCM"
+  vpn_auth: "SHA256"
+  vpn_keepalive_interval: "10"
+  vpn_keepalive_timeout: "120"
+  vpn_max_clients: "100"
+  vpn_log: "/var/log/openvpn/server.log"
+  vpn_status_log: "/var/log/openvpn/status.log"
+  vpn_ca: "/etc/openvpn/server/ca.crt"
+  vpn_cert: "/etc/openvpn/server/server.crt"
+  vpn_key: "/etc/openvpn/server/server.key"
+  vpn_dh: "/etc/openvpn/server/dh.pem"
+  vpn_tls_crypt: "/etc/openvpn/server/tc.key"
+  vpn_client_config_dir: ""
+  vpn_ip_forward: "1"
+
+resources:
+  - name: install-openvpn
+    type: package
+    package: openvpn
+    state: present
+
+  - name: openvpn-log-dir
+    type: file
+    targetpath: /var/log/openvpn
+    filetype: directory
+    owner: root
+    group: root
+    mode: "0750"
+    depends_on: [install-openvpn]
+
+  - name: ip-forwarding
+    type: sysctl
+    key: net.ipv4.ip_forward
+    value: "{{ .Vars.vpn_ip_forward }}"
+
+  - name: openvpn-server-conf
+    type: file
+    targetpath: /etc/openvpn/server/server.conf
+    content: |
+      # Managed by Hobnob — do not edit manually
+      port {{ .Vars.vpn_port }}
+      proto {{ .Vars.vpn_proto }}
+      dev {{ .Vars.vpn_dev }}
+
+      # Certificates
+      ca {{ .Vars.vpn_ca }}
+      cert {{ .Vars.vpn_cert }}
+      key {{ .Vars.vpn_key }}
+      dh {{ .Vars.vpn_dh }}
+      tls-crypt {{ .Vars.vpn_tls_crypt }}
+
+      # Network
+      server {{ .Vars.vpn_subnet }} {{ .Vars.vpn_netmask }}
+      push "dhcp-option DNS {{ .Vars.vpn_dns_1 }}"
+      push "dhcp-option DNS {{ .Vars.vpn_dns_2 }}"
+      push "redirect-gateway def1 bypass-dhcp"
+      {{ if ne .Vars.vpn_client_config_dir "" }}
+      client-config-dir {{ .Vars.vpn_client_config_dir }}
+      {{ end }}
+
+      # Security
+      cipher {{ .Vars.vpn_cipher }}
+      auth {{ .Vars.vpn_auth }}
+      tls-version-min 1.2
+      remote-cert-tls client
+
+      # Connection
+      keepalive {{ .Vars.vpn_keepalive_interval }} {{ .Vars.vpn_keepalive_timeout }}
+      max-clients {{ .Vars.vpn_max_clients }}
+      persist-key
+      persist-tun
+
+      # Privileges
+      user nobody
+      group nogroup
+
+      # Logging
+      log-append {{ .Vars.vpn_log }}
+      status {{ .Vars.vpn_status_log }} 30
+      verb 3
+      mute 20
+    owner: root
+    group: root
+    mode: "0600"
+    depends_on: [install-openvpn, openvpn-log-dir]
+    notify: [openvpn-service]
+
+  - name: openvpn-service
+    type: service
+    service: openvpn-server@server
+    enabled: true
+    state: running
+    depends_on: [openvpn-server-conf]
+    subscribes: [openvpn-server-conf]

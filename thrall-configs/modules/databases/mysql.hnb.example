@@ -45,6 +45,18 @@ resources:
     depends_on: [install-mysql]
     notify: [mysql-service]
 
+  - name: mysql-logrotate
+    type: logrotate
+    path: /var/log/mysql/*.log
+    frequency: daily
+    rotate: "7"
+    compress: "true"
+    copytruncate: "true"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 mysql adm"
+    depends_on: [install-mysql]
+
   - name: mysql-service
     type: service
     service: mysql

@@ -12,24 +12,16 @@ resources:
     package: logrotate
     state: present
 
-  - name: logrotate-hobnob-conf
-    type: file
-    targetpath: /etc/logrotate.d/hobnob
-    content: |
-      {{ .Vars.log_path }} {
-          rotate {{ .Vars.rotate_count }}
-          size {{ .Vars.rotate_size }}
-          missingok
-          notifempty
-          {{ if eq .Vars.compress "true" }}compress
-          delaycompress
-          {{ end }}create 0640 root adm
-          sharedscripts
-          postrotate
-              /usr/lib/rsyslog/rsyslog-rotate 2>/dev/null || true
-          endscript
-      }
-    owner: root
-    group: root
-    mode: "0644"
+  - name: app-logrotate
+    type: logrotate
+    path: "{{ .Vars.log_path }}"
+    frequency: daily
+    rotate: "{{ .Vars.rotate_count }}"
+    size: "{{ .Vars.rotate_size }}"
+    compress: "{{ .Vars.compress }}"
+    delaycompress: "{{ .Vars.compress }}"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 root adm"
+    postrotate: "/usr/lib/rsyslog/rsyslog-rotate 2>/dev/null || true"
     depends_on: [install-logrotate]

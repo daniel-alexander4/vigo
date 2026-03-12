@@ -93,6 +93,20 @@ resources:
     depends_on: [install-apache]
     notify: [apache-service]
 
+  - name: apache-logrotate
+    type: logrotate
+    path: >-
+      {{ if eq .Traits.os.family "debian" }}/var/log/apache2/*.log{{ else }}/var/log/httpd/*log{{ end }}
+    frequency: daily
+    rotate: "14"
+    compress: "true"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 root adm"
+    postrotate: >-
+      {{ if eq .Traits.os.family "debian" }}/usr/sbin/apachectl graceful > /dev/null 2>&1 || true{{ else }}/bin/systemctl reload httpd.service > /dev/null 2>&1 || true{{ end }}
+    depends_on: [install-apache]
+
   - name: apache-service
     type: service
     service: >-
