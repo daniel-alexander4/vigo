@@ -55,25 +55,21 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 - Non-Go agent implementations — single Go binary for all platforms
 - GUI-based config editing — config is YAML files on disk, edited directly
 
-## Current Milestone: v1.2 Structured Conditionals
+## Current Milestone: v1.3 Orchestration
 
-**Goal:** Replace freeform `when:` Go template expressions with structured `if:`/`not_if:` conditionals that validate exclusively against traits.
+**Goal:** Enable operators to run ad-hoc commands, one-off tasks, multi-step workflows, and live queries against managed thralls via the existing bidirectional gRPC streaming infrastructure.
 
 **Target features:**
-- Conditional vars with trait-based operators (`only`, `not`, `gt`, `lt`, `gte`, `lte`, `match`)
-- `if:` / `not_if:` on individual resources — replaces `when:`
-- `conditional_block:` — inline resource grouping with shared conditionals
-- Module-level `if:` / `not_if:` on module references in roles and clients.yaml
+- Ad-hoc command execution on targeted thralls with stdout/stderr collection
+- One-off task/script push, execution, and structured result collection
+- Multi-step workflows with conditionals (do A on group1, if success do B on group2)
+- Rolling execution with batch size, failure thresholds, and inter-batch health checks
+- Live query — ask thralls for current state without waiting for next check-in
 
 ## Current State
 
-**Shipped:** v1.0 MVP (2026-03-06), v1.1 Traits Visibility & Custom Traits (2026-03-07)
-**Codebase:** ~23,400 LOC Go, 6 phases, 23 plans executed
-
-**v1.1 delivered:**
-- `isogov-agent traits` CLI for local trait inspection with dot-path accessor
-- `gvctl clients traits` + REST endpoint for remote trait viewing
-- Server-distributed custom trait executables with SHA256 sync, 10s timeout execution, and `custom.*` namespace merging
+**Shipped:** v1.0 MVP (2026-03-06), v1.1 Traits Visibility (2026-03-07), v1.2 Structured Conditionals (2026-03-08)
+**Codebase:** ~25k LOC Go + Rust agent, 10 phases, 29 plans executed
 
 ## Context
 
@@ -105,5 +101,8 @@ Managed nodes converge to their declared desired state reliably, idempotently, a
 | Custom traits as executables (not plugins) | Language-agnostic, simple contract (JSON stdout), no Go SDK needed | ✓ Good |
 | Manifest in CheckInResponse (not separate RPC) | One round-trip, no extra complexity | ✓ Good |
 
+| Bidirectional gRPC streaming for push delivery | Enables orchestration without agents polling; force_push proves path | ✓ Good |
+| Structured conditionals (not freeform when:) | Type-safe, trait-validated, composable conditions | ✓ Good |
+
 ---
-*Last updated: 2026-03-07 after v1.2 milestone started*
+*Last updated: 2026-03-11 after v1.3 milestone started*
