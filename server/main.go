@@ -89,8 +89,15 @@ func run() error {
 
 	slog.Info("secrets provider initialized", "backend", secretsCfg.Backend)
 
+	// Auto-generate self-signed TLS certs on first start (local backend only).
+	if lp, ok := provider.(*secrets.LocalProvider); ok {
+		if err := lp.EnsureTLSCerts(); err != nil {
+			return fmt.Errorf("auto-generating TLS certificates: %w", err)
+		}
+	}
+
 	// Load full server config with secret resolution (second pass).
-	cfg, err := config.LoadServerConfig(configFile, provider)
+	cfg, err := config.LoadServerConfig(configFile, provider, secretsCfg.Backend)
 	if err != nil {
 		return fmt.Errorf("loading server config: %w", err)
 	}
@@ -246,6 +253,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initializing config store: %w", err)
 	}
+	configStore.SetBackend(secretsCfg.Backend)
 
 	// Start config file watcher in background.
 	go func() {

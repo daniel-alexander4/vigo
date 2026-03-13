@@ -34,7 +34,8 @@ func LoadSecretsConfig(path string) (secrets.Config, error) {
 
 // LoadServerConfig reads server.yaml from the given path and resolves any
 // secret: prefixed values using the provided secrets provider.
-func LoadServerConfig(path string, provider secrets.Provider) (*ServerConfig, error) {
+// The backend name is used for diagnostic hints on failure.
+func LoadServerConfig(path string, provider secrets.Provider, backend string) (*ServerConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading server config %s: %w", path, err)
@@ -46,7 +47,7 @@ func LoadServerConfig(path string, provider secrets.Provider) (*ServerConfig, er
 	}
 
 	// Resolve secret: prefixes in config values.
-	if err := resolveServerSecrets(&cfg, provider); err != nil {
+	if err := resolveServerSecrets(&cfg, provider, backend); err != nil {
 		return nil, fmt.Errorf("resolving server config secrets: %w", err)
 	}
 
@@ -55,7 +56,7 @@ func LoadServerConfig(path string, provider secrets.Provider) (*ServerConfig, er
 
 // resolveServerSecrets resolves secret: prefixed values in the server config.
 // Collects all failures so the operator can fix everything in one restart.
-func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider) error {
+func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider, backend string) error {
 	type field struct {
 		ptr  *string
 		name string
@@ -86,7 +87,7 @@ func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider) error {
 		}
 	}
 	if len(errs) > 0 {
-		return &SecretErrors{Errors: errs}
+		return &SecretErrors{Errors: errs, Backend: backend}
 	}
 
 	return nil

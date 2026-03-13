@@ -33,6 +33,7 @@ type SecretError struct {
 	Attr     string // attribute or var name
 	Secret   string // the secret key that failed
 	Err      error  // underlying error from provider
+	Backend  string // secrets backend name ("local", "isopass", "static")
 }
 
 func (e *SecretError) Error() string {
@@ -46,27 +47,49 @@ func (e *SecretError) Error() string {
 	return fmt.Sprintf("%s: secret %q (%s): %v", loc, e.Secret, e.Attr, e.Err)
 }
 
-// Hint returns an actionable fix suggestion based on the error message.
+// Hint returns an actionable fix suggestion based on the error message and backend.
 func (e *SecretError) Hint() string {
 	msg := e.Err.Error()
-	switch {
-	case strings.Contains(msg, "not found"):
-		return fmt.Sprintf("create this secret in isopass: isopass set %s", e.Secret)
-	case strings.Contains(msg, "unreachable"):
-		return "ensure isopass is running and HOBNOB_ISOPASS_URL is correct"
-	case strings.Contains(msg, "authentication failed"):
-		return "check HOBNOB_ISOPASS_TOKEN -- regenerate if expired"
-	case strings.Contains(msg, "must use \"secret:\" prefix"):
+
+	if strings.Contains(msg, "must use \"secret:\" prefix") {
 		return fmt.Sprintf("use \"secret:<path>\" instead of a plaintext value for %s", e.Attr)
+	}
+
+	switch e.Backend {
+	case "local", "":
+		switch {
+		case strings.Contains(msg, "not found"):
+			return fmt.Sprintf("hobnobcli secrets set %s", e.Secret)
+		case strings.Contains(msg, "wrong master key"), strings.Contains(msg, "message authentication failed"):
+			return "secret was written with a different key -- re-encrypt with: hobnobcli secrets set " + e.Secret
+		case strings.Contains(msg, "ciphertext too short"):
+			return "file may be plaintext from a previous config -- re-encrypt with: hobnobcli secrets set " + e.Secret
+		default:
+			return fmt.Sprintf("check %s in the secrets directory", e.Secret)
+		}
+	case "isopass":
+		switch {
+		case strings.Contains(msg, "not found"):
+			return fmt.Sprintf("create this secret in isopass: isopass set %s", e.Secret)
+		case strings.Contains(msg, "unreachable"):
+			return "ensure isopass is running and HOBNOB_ISOPASS_URL is correct"
+		case strings.Contains(msg, "authentication failed"):
+			return "check HOBNOB_ISOPASS_TOKEN -- regenerate if expired"
+		default:
+			return "check isopass logs for details"
+		}
+	case "static":
+		return fmt.Sprintf("set %s in your .env file", strings.ReplaceAll(strings.ToUpper(e.Secret), "/", "_"))
 	default:
-		return "check isopass logs for details"
+		return "check secrets provider configuration"
 	}
 }
 
 // SecretErrors collects multiple secret resolution failures so operators
 // can fix everything in one pass rather than restarting per error.
 type SecretErrors struct {
-	Errors []*SecretError
+	Errors  []*SecretError
+	Backend string // propagated to each error's Hint() during Format()
 }
 
 func (se *SecretErrors) Error() string {
@@ -83,6 +106,9 @@ func (se *SecretErrors) Format() string {
 	var b strings.Builder
 	b.WriteString("\n=== hobd failed to start: secret resolution errors ===\n\n")
 	for i, e := range se.Errors {
+		if e.Backend == "" && se.Backend != "" {
+			e.Backend = se.Backend
+		}
 		fmt.Fprintf(&b, "  %d) %s\n", i+1, e.Match)
 		if e.Module != "" {
 			fmt.Fprintf(&b, "     module:   %s\n", e.Module)
@@ -175,9 +201,15 @@ type ConfigStore struct {
 	rawModules map[string]*ModuleDefinition // unresolved, for secret ref scanning
 	dir        string                       // thrall-configs directory
 	provider   secrets.Provider
+	backend    string // secrets backend name for diagnostic hints
 	dangerous  bool // allow non-idempotent resources
 	version    atomic.Uint64 // incremented on each successful reload
 	onReloadFailure func(err error) // optional callback on reload failure
+}
+
+// SetBackend sets the secrets backend name for diagnostic hints.
+func (cs *ConfigStore) SetBackend(backend string) {
+	cs.backend = backend
 }
 
 // SetOnReloadFailure sets a callback invoked when a config reload fails.
@@ -451,7 +483,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		entries = append(entries, resolvedEntry{match: entry.Match, config: cfg})
 	}
 	if len(allSecretErrs) > 0 {
-		return &SecretErrors{Errors: allSecretErrs}
+		return &SecretErrors{Errors: allSecretErrs, Backend: cs.backend}
 	}
 
 	// Pre-compute module content hashes for delta transfer.
@@ -695,7 +727,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		secretErrs = append(secretErrs, cs.resolveModuleSecrets(entry.Match, &cfg.Modules[i])...)
 	}
 	if len(secretErrs) > 0 {
-		return nil, &SecretErrors{Errors: secretErrs}
+		return nil, &SecretErrors{Errors: secretErrs, Backend: cs.backend}
 	}
 
 	return cfg, nil

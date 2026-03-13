@@ -393,6 +393,48 @@ func TestLocalProviderInterfaceSatisfied(t *testing.T) {
 	var _ Provider = (*LocalProvider)(nil)
 }
 
+func TestEnsureTLSCertsGenerates(t *testing.T) {
+	p := setupAutoKeyProvider(t)
+	defer p.Close()
+
+	if err := p.EnsureTLSCerts(); err != nil {
+		t.Fatalf("EnsureTLSCerts: %v", err)
+	}
+
+	// All four secrets should exist.
+	for _, key := range []string{"hobnob/tls/ca", "hobnob/tls/ca_key", "hobnob/tls/cert", "hobnob/tls/key"} {
+		val, err := p.Get(context.Background(), key)
+		if err != nil {
+			t.Fatalf("Get %q: %v", key, err)
+		}
+		if !strings.Contains(val, "-----BEGIN") {
+			t.Errorf("%q does not look like PEM: %q", key, val[:50])
+		}
+	}
+}
+
+func TestEnsureTLSCertsIdempotent(t *testing.T) {
+	p := setupAutoKeyProvider(t)
+	defer p.Close()
+
+	if err := p.EnsureTLSCerts(); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+
+	// Get the CA cert from first generation.
+	first, _ := p.Get(context.Background(), "hobnob/tls/ca")
+
+	// Second call should be a no-op (certs already exist).
+	if err := p.EnsureTLSCerts(); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+
+	second, _ := p.Get(context.Background(), "hobnob/tls/ca")
+	if first != second {
+		t.Error("EnsureTLSCerts regenerated existing certs — should be idempotent")
+	}
+}
+
 func TestDeriveKeyHex(t *testing.T) {
 	raw := make([]byte, 32)
 	for i := range raw {

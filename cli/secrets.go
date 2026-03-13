@@ -4,13 +4,21 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/hobnob/hobnob/server/secrets"
 	"github.com/spf13/cobra"
@@ -69,6 +77,23 @@ var secretsInitCmd = &cobra.Command{
 	RunE:  runSecretsInit,
 }
 
+var secretsGenerateCertsCmd = &cobra.Command{
+	Use:   "generate-certs",
+	Short: "Generate self-signed CA and server TLS certificates",
+	Long: `Generate a self-signed CA keypair and server certificate, then store
+all four values as encrypted secrets:
+
+  hobnob/tls/ca       CA certificate (PEM)
+  hobnob/tls/ca_key   CA private key (PEM)
+  hobnob/tls/cert     Server certificate (PEM)
+  hobnob/tls/key      Server private key (PEM)
+
+Uses ECDSA P-256 keys. The server certificate includes SANs for
+localhost, the system hostname, and any additional names specified
+with --san. Refuses to overwrite existing certs unless --force is set.`,
+	RunE: runSecretsGenerateCerts,
+}
+
 func init() {
 	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
 	secretsCmd.PersistentFlags().String("secrets-dir", "/etc/hobnob-server/secrets", "Directory for secret files")
@@ -78,11 +103,17 @@ func init() {
 	secretsInitCmd.Flags().String("key-file", "", "Path to write the new master key")
 	secretsInitCmd.MarkFlagRequired("key-file")
 
+	secretsGenerateCertsCmd.Flags().StringSlice("san", nil, "Additional SANs (DNS names or IPs)")
+	secretsGenerateCertsCmd.Flags().Int("ca-days", 3650, "CA certificate validity in days")
+	secretsGenerateCertsCmd.Flags().Int("server-days", 365, "Server certificate validity in days")
+	secretsGenerateCertsCmd.Flags().Bool("force", false, "Overwrite existing certificates")
+
 	secretsCmd.AddCommand(secretsSetCmd)
 	secretsCmd.AddCommand(secretsGetCmd)
 	secretsCmd.AddCommand(secretsDeleteCmd)
 	secretsCmd.AddCommand(secretsListCmd)
 	secretsCmd.AddCommand(secretsInitCmd)
+	secretsCmd.AddCommand(secretsGenerateCertsCmd)
 }
 
 func newLocalProvider(cmd *cobra.Command) (*secrets.LocalProvider, error) {
@@ -243,5 +274,132 @@ func runSecretsInit(cmd *cobra.Command, _ []string) error {
 
 	fmt.Printf("  Master key written to %s (mode 0600).\n", keyFile)
 	fmt.Println("  Keep this file safe — losing it means losing access to all encrypted secrets.")
+	return nil
+}
+
+func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
+	provider, err := newLocalProvider(cmd)
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	force, _ := cmd.Flags().GetBool("force")
+	caDays, _ := cmd.Flags().GetInt("ca-days")
+	serverDays, _ := cmd.Flags().GetInt("server-days")
+	extraSANs, _ := cmd.Flags().GetStringSlice("san")
+
+	// Check for existing certs (GetVersion returns 0 for nonexistent, avoids builtin fallbacks).
+	certKeys := []string{"hobnob/tls/ca", "hobnob/tls/ca_key", "hobnob/tls/cert", "hobnob/tls/key"}
+	if !force {
+		for _, k := range certKeys {
+			if ver, _ := provider.GetVersion(cmd.Context(), k); ver > 0 {
+				return fmt.Errorf("secret %q already exists — use --force to overwrite", k)
+			}
+		}
+	}
+
+	// Build SAN list: always include localhost + hostname.
+	dnsNames := []string{"localhost"}
+	var ips []net.IP
+	ips = append(ips, net.IPv4(127, 0, 0, 1))
+
+	if hostname, err := os.Hostname(); err == nil && hostname != "localhost" {
+		dnsNames = append(dnsNames, hostname)
+	}
+
+	for _, san := range extraSANs {
+		if ip := net.ParseIP(san); ip != nil {
+			ips = append(ips, ip)
+		} else {
+			dnsNames = append(dnsNames, san)
+		}
+	}
+
+	// Generate CA keypair.
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generating CA key: %w", err)
+	}
+
+	caSerial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	now := time.Now()
+	caTemplate := &x509.Certificate{
+		SerialNumber: caSerial,
+		Subject:      pkix.Name{CommonName: "Hobnob CA"},
+		NotBefore:    now,
+		NotAfter:     now.AddDate(0, 0, caDays),
+		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		IsCA:         true,
+		BasicConstraintsValid: true,
+	}
+
+	caCertDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	if err != nil {
+		return fmt.Errorf("creating CA certificate: %w", err)
+	}
+	caCert, _ := x509.ParseCertificate(caCertDER)
+
+	// Generate server keypair.
+	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generating server key: %w", err)
+	}
+
+	serverSerial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	serverTemplate := &x509.Certificate{
+		SerialNumber: serverSerial,
+		Subject:      pkix.Name{CommonName: dnsNames[0]},
+		DNSNames:     dnsNames,
+		IPAddresses:  ips,
+		NotBefore:    now,
+		NotAfter:     now.AddDate(0, 0, serverDays),
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+
+	serverCertDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)
+	if err != nil {
+		return fmt.Errorf("creating server certificate: %w", err)
+	}
+
+	// Encode to PEM.
+	caCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCertDER})
+	caKeyDER, _ := x509.MarshalECPrivateKey(caKey)
+	caKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: caKeyDER})
+
+	serverCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverCertDER})
+	serverKeyDER, _ := x509.MarshalECPrivateKey(serverKey)
+	serverKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER})
+
+	// Store in encrypted secrets.
+	stores := []struct {
+		key   string
+		value string
+		label string
+	}{
+		{"hobnob/tls/ca", string(caCertPEM), "CA certificate"},
+		{"hobnob/tls/ca_key", string(caKeyPEM), "CA private key"},
+		{"hobnob/tls/cert", string(serverCertPEM), "Server certificate"},
+		{"hobnob/tls/key", string(serverKeyPEM), "Server private key"},
+	}
+
+	for _, s := range stores {
+		if err := provider.Set(s.key, s.value); err != nil {
+			return fmt.Errorf("storing %s: %w", s.label, err)
+		}
+		fmt.Printf("  %-20s → %s\n", s.label, s.key)
+	}
+
+	fmt.Printf("\n  CA valid for %d days, server cert valid for %d days.\n", caDays, serverDays)
+	fmt.Printf("  SANs: %s\n", strings.Join(dnsNames, ", "))
+	if len(ips) > 0 {
+		ipStrs := make([]string, len(ips))
+		for i, ip := range ips {
+			ipStrs[i] = ip.String()
+		}
+		fmt.Printf("  IPs:  %s\n", strings.Join(ipStrs, ", "))
+	}
 	return nil
 }

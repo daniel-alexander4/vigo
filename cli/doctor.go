@@ -121,7 +121,7 @@ func runDoctorPreStart() error {
 	var fullCfg *config.ServerConfig
 	if provider != nil && cfgErr == nil {
 		var err error
-		fullCfg, err = config.LoadServerConfig(doctorConfigFile, provider)
+		fullCfg, err = config.LoadServerConfig(doctorConfigFile, provider, secretsCfg.Backend)
 		if err != nil {
 			checks = append(checks, preStartCheck{"secret_resolution", "fail", err.Error()})
 			hasFailure = true

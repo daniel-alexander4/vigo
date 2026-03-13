@@ -304,9 +304,6 @@ thralls:
 		if e.Hint() == "" {
 			t.Errorf("empty hint for error: %v", e)
 		}
-		if !strings.Contains(e.Hint(), "isopass") {
-			t.Errorf("hint should mention isopass: %q", e.Hint())
-		}
 	}
 
 	// Verify formatted output is readable.
@@ -324,18 +321,27 @@ thralls:
 
 func TestSecretErrorHintCategories(t *testing.T) {
 	tests := []struct {
-		name string
-		err  error
-		want string
+		name    string
+		backend string
+		err     error
+		want    string
 	}{
-		{"not found", fmt.Errorf("secret %q not found in isopass", "x"), "isopass set"},
-		{"unreachable", fmt.Errorf("isopass unreachable at https://x"), "HOBNOB_ISOPASS_URL"},
-		{"auth failed", fmt.Errorf("isopass authentication failed"), "HOBNOB_ISOPASS_TOKEN"},
-		{"plaintext", fmt.Errorf("must use \"secret:\" prefix"), "secret:<path>"},
+		// Local backend hints.
+		{"local not found", "local", fmt.Errorf("secret %q not found in /etc/hobnob-server/secrets", "x"), "hobnobcli secrets set"},
+		{"local wrong key", "local", fmt.Errorf("decrypting: message authentication failed (wrong master key?)"), "re-encrypt"},
+		{"local too short", "local", fmt.Errorf("ciphertext too short"), "plaintext from a previous"},
+		// Isopass backend hints.
+		{"isopass not found", "isopass", fmt.Errorf("secret %q not found in isopass", "x"), "isopass set"},
+		{"isopass unreachable", "isopass", fmt.Errorf("isopass unreachable at https://x"), "HOBNOB_ISOPASS_URL"},
+		{"isopass auth failed", "isopass", fmt.Errorf("isopass authentication failed"), "HOBNOB_ISOPASS_TOKEN"},
+		// Static backend hint.
+		{"static not found", "static", fmt.Errorf("secret %q not found", "hobnob/db/dsn"), "HOBNOB_DB_DSN"},
+		// Backend-agnostic.
+		{"plaintext value", "", fmt.Errorf("must use \"secret:\" prefix"), "secret:<path>"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			se := &SecretError{Match: "test", Attr: "x", Secret: "x", Err: tt.err}
+			se := &SecretError{Match: "test", Attr: "x", Secret: "hobnob/db/dsn", Backend: tt.backend, Err: tt.err}
 			if !strings.Contains(se.Hint(), tt.want) {
 				t.Errorf("hint = %q, want substring %q", se.Hint(), tt.want)
 			}
