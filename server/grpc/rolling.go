@@ -28,6 +28,8 @@ type DispatchParams struct {
 	MaxFailures string // count ("2") or percentage ("10%")
 	HealthCheck string // shell command run between batches
 	DryRun      bool
+	TaskName    string            // named task to resolve from task store
+	Params      map[string]string // parameters for named tasks
 }
 
 // DispatchResult is the result of a task dispatch.
@@ -119,6 +121,7 @@ func (s *AgentService) runRollingExecution(
 	timeoutSecs int32,
 	maxFailuresSpec string,
 	healthCheck string,
+	env map[string]string,
 	totalConnected int,
 ) {
 	ctx := context.Background()
@@ -149,6 +152,7 @@ func (s *AgentService) runRollingExecution(
 						TaskId:         taskRunID,
 						Command:        command,
 						TimeoutSeconds: timeoutSecs,
+						Env:            env,
 					},
 				},
 			}

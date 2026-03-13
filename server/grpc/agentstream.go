@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
@@ -42,8 +43,16 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 	}
 	thrallID := checkin.GetThrallId()
 
-	// Validate thrall is not revoked.
-	if err := s.registry.ValidateThrall(stream.Context(), thrallID); err != nil {
+	// Validate thrall is not revoked — FleetIndex when available.
+	if s.fleetIndex != nil {
+		exists, revoked := s.fleetIndex.IsRevoked(thrallID)
+		if !exists {
+			return status.Error(codes.NotFound, "thrall not found")
+		}
+		if revoked {
+			return status.Error(codes.PermissionDenied, "thrall is revoked")
+		}
+	} else if err := s.registry.ValidateThrall(stream.Context(), thrallID); err != nil {
 		if errors.Is(err, registry.ErrThrallRevoked) {
 			return status.Error(codes.PermissionDenied, "thrall is revoked")
 		}
@@ -171,6 +180,15 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 			case *pb.AgentStreamMessage_QueryResponse:
 				s.queryRouter.handleQueryResponse(thrallID, m.QueryResponse)
+
+			case *pb.AgentStreamMessage_Delta:
+				ack := s.handleDelta(thrallID, thrall.Hostname, m.Delta)
+				if err := stream.Send(&pb.ServerStreamMessage{
+					Msg: &pb.ServerStreamMessage_DeltaAck{DeltaAck: ack},
+				}); err != nil {
+					errCh <- err
+					return
+				}
 			}
 		}
 	}()
@@ -182,11 +200,10 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 // buildCheckInResponse builds a CheckInResponse for both unary and stream contexts.
 // Extracted from CheckIn() to share logic.
 func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string, thrall db.Thrall, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
-	// Batch last-seen update.
-	if s.lastSeenBatch != nil {
-		s.lastSeenBatch.Mark(thrallID)
+	// Update last-seen: in-memory (FleetIndex) and batched DB write.
+	if s.fleetIndex != nil {
+		s.fleetIndex.MarkSeen(thrallID, time.Now())
 	}
-
 	// Batch inline traits for periodic flush (hash-deduplicated).
 	inlineTraits := req.GetTraitsJson()
 	if len(inlineTraits) > 0 && json.Valid(inlineTraits) {
@@ -202,9 +219,17 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 
 	// Short-circuit: agent has a cached bundle with matching config version
 	// AND there are no pending rotated secrets or force_push flags.
+	// When FleetIndex is available, check in-memory state for freshest flags.
+	forcePush := thrall.ForcePush != 0
+	hasPending := thrall.PendingRotatedSecrets != "" && thrall.PendingRotatedSecrets != "[]"
+	if s.fleetIndex != nil {
+		if freshState := s.fleetIndex.GetThrall(thrallID); freshState != nil {
+			forcePush = freshState.ForcePush
+			hasPending = len(freshState.PendingRotatedSecrets) > 0
+		}
+	}
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
-		thrall.ForcePush == 0 &&
-		(thrall.PendingRotatedSecrets == "" || thrall.PendingRotatedSecrets == "[]") {
+		!forcePush && !hasPending {
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 		return &pb.CheckInResponse{
 			NoChange:      true,
@@ -251,33 +276,51 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		}
 	}
 
-	// Re-read thrall to get fresh flags (may have changed since stream
-	// connected or since the last check-in due to watcher activity).
-	freshThrall, freshErr := s.queries.GetThrallByID(ctx, thrallID)
-	if freshErr != nil {
-		slog.Warn("failed to re-read thrall for pending flags", "thrall_id", thrallID, "error", freshErr)
-	} else {
-		// Inject _secret_triggered for resources subscribing to rotated secrets.
-		pending := freshThrall.PendingRotatedSecrets
-		if pending != "" && pending != "[]" {
-			var rotatedPaths []string
-			if err := json.Unmarshal([]byte(pending), &rotatedPaths); err == nil && len(rotatedPaths) > 0 {
-				injectSecretTriggers(bundle, rotatedPaths)
-				if clearErr := s.queries.ClearRotatedSecrets(ctx, thrallID); clearErr != nil {
-					slog.Error("failed to clear rotated secrets",
-						"thrall_id", thrallID, "error", clearErr)
-				} else {
-					slog.Info("delivered secret rotation triggers",
-						"thrall_id", thrallID,
-						"secrets", strings.Join(rotatedPaths, ", "))
-				}
+	// Read fresh flags from FleetIndex (in-memory, O(1)) or DB fallback.
+	if s.fleetIndex != nil {
+		freshState := s.fleetIndex.GetThrall(thrallID)
+		if freshState != nil {
+			// Inject secret rotation triggers.
+			if len(freshState.PendingRotatedSecrets) > 0 {
+				injectSecretTriggers(bundle, freshState.PendingRotatedSecrets)
+				s.fleetIndex.ClearPendingRotatedSecrets(thrallID)
+				slog.Info("delivered secret rotation triggers",
+					"thrall_id", thrallID,
+					"secrets", strings.Join(freshState.PendingRotatedSecrets, ", "))
+			}
+
+			// Clear force_push flag now that the agent has received the fresh bundle.
+			if freshState.ForcePush {
+				s.fleetIndex.SetForcePush(thrallID, false)
 			}
 		}
+	} else {
+		freshThrall, freshErr := s.queries.GetThrallByID(ctx, thrallID)
+		if freshErr != nil {
+			slog.Warn("failed to re-read thrall for pending flags", "thrall_id", thrallID, "error", freshErr)
+		} else {
+			// Inject _secret_triggered for resources subscribing to rotated secrets.
+			pending := freshThrall.PendingRotatedSecrets
+			if pending != "" && pending != "[]" {
+				var rotatedPaths []string
+				if err := json.Unmarshal([]byte(pending), &rotatedPaths); err == nil && len(rotatedPaths) > 0 {
+					injectSecretTriggers(bundle, rotatedPaths)
+					if clearErr := s.queries.ClearRotatedSecrets(ctx, thrallID); clearErr != nil {
+						slog.Error("failed to clear rotated secrets",
+							"thrall_id", thrallID, "error", clearErr)
+					} else {
+						slog.Info("delivered secret rotation triggers",
+							"thrall_id", thrallID,
+							"secrets", strings.Join(rotatedPaths, ", "))
+					}
+				}
+			}
 
-		// Clear force_push flag now that the agent has received the fresh bundle.
-		if freshThrall.ForcePush != 0 {
-			if err := s.queries.ClearForcePush(ctx, thrallID); err != nil {
-				slog.Warn("failed to clear force_push", "thrall_id", thrallID, "error", err)
+			// Clear force_push flag now that the agent has received the fresh bundle.
+			if freshThrall.ForcePush != 0 {
+				if err := s.queries.ClearForcePush(ctx, thrallID); err != nil {
+					slog.Warn("failed to clear force_push", "thrall_id", thrallID, "error", err)
+				}
 			}
 		}
 	}

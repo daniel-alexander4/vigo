@@ -56,5 +56,6 @@ func init() {
 		doctorCmd,
 		federationCmd,
 		askCmd,
+		workflowCmd,
 	)
 }

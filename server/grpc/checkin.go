@@ -27,8 +27,18 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	}
 	thrallID := req.GetThrallId()
 
-	// Validate thrall is not revoked.
-	if err := s.registry.ValidateThrall(ctx, thrallID); err != nil {
+	// Validate thrall is not revoked — use FleetIndex when available.
+	if s.fleetIndex != nil {
+		exists, revoked := s.fleetIndex.IsRevoked(thrallID)
+		if !exists {
+			metrics.CheckinsTotal.WithLabelValues("error").Inc()
+			return nil, status.Error(codes.NotFound, "thrall not found")
+		}
+		if revoked {
+			metrics.CheckinsTotal.WithLabelValues("error").Inc()
+			return nil, status.Error(codes.PermissionDenied, "thrall is revoked")
+		}
+	} else if err := s.registry.ValidateThrall(ctx, thrallID); err != nil {
 		metrics.CheckinsTotal.WithLabelValues("error").Inc()
 		if errors.Is(err, registry.ErrThrallRevoked) {
 			return nil, status.Error(codes.PermissionDenied, "thrall is revoked")
@@ -55,17 +65,17 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	return s.buildCheckInResponse(ctx, thrallID, thrall, req)
 }
 
-// lookupNode resolves a thrall from context, cache, or DB.
+// lookupThrall resolves a thrall from FleetIndex, context, cache, or DB.
 func (s *AgentService) lookupThrall(ctx context.Context, thrallID string) (db.Thrall, error) {
+	// Fastest: FleetIndex in-memory lookup.
+	if s.fleetIndex != nil {
+		ts := s.fleetIndex.GetThrall(thrallID)
+		if ts != nil {
+			return fleetThrallToDB(ts), nil
+		}
+	}
 	if n := db.ThrallFromContext(ctx); n != nil {
 		return *n, nil
-	}
-	if s.thrallCache != nil {
-		n, err := s.thrallCache.GetByID(ctx, thrallID)
-		if err != nil {
-			return db.Thrall{}, status.Errorf(codes.Internal, "looking up thrall: %v", err)
-		}
-		return n, nil
 	}
 	n, err := s.queries.GetThrallByID(ctx, thrallID)
 	if err != nil {

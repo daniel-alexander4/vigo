@@ -74,6 +74,17 @@ func (q *Queries) CreateWorkflowStepResult(ctx context.Context, arg CreateWorkfl
 	return i, err
 }
 
+const failInterruptedWorkflows = `-- name: FailInterruptedWorkflows :exec
+UPDATE workflow_runs
+SET status = 'failed', finished_at = datetime('now'), failure_reason = 'restart_interrupted'
+WHERE status IN ('running', 'pending')
+`
+
+func (q *Queries) FailInterruptedWorkflows(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, failInterruptedWorkflows)
+	return err
+}
+
 const getWorkflowRun = `-- name: GetWorkflowRun :one
 SELECT id, workflow_name, status, current_step, total_steps, operator, created_at, started_at, finished_at, failure_reason FROM workflow_runs WHERE id = ?
 `

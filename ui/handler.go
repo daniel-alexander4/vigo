@@ -38,6 +38,7 @@ type DataSource interface {
 type Handler struct {
 	renderer     *Renderer
 	dataSource   DataSource
+	queries      *db.Queries // direct DB access for task/workflow pages
 	baseInterval time.Duration
 	serverAddr   string
 	caFile       string
@@ -49,15 +50,25 @@ type Handler struct {
 
 // NewHandler creates a UI handler wired to real database queries.
 // The assistant parameter is optional — pass nil to disable the Ask page.
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub) (*Handler, error) {
+// The customDS parameter is optional — when provided, it replaces the default
+// DB-backed DataSource (used by FleetIndex integration).
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
 	}
 
+	var ds DataSource
+	if customDS != nil {
+		ds = customDS
+	} else {
+		ds = &dbDataSource{queries: queries, configStore: configStore}
+	}
+
 	return &Handler{
 		renderer:     renderer,
-		dataSource:   &dbDataSource{queries: queries, configStore: configStore},
+		dataSource:   ds,
+		queries:      queries,
 		baseInterval: baseInterval,
 		serverAddr:   serverAddr,
 		caFile:       caFile,
@@ -97,6 +108,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
 	mux.HandleFunc("GET /compliance", h.Compliance)
+	mux.HandleFunc("GET /tasks", h.Tasks)
+	mux.HandleFunc("GET /tasks/{id}", h.TaskDetail)
+	mux.HandleFunc("GET /workflows", h.Workflows)
+	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
+	mux.HandleFunc("GET /query", h.Query)
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
@@ -873,6 +889,303 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 		DeleteCount: deleteCount,
 		SkipCount:   skipCount,
 	}, nil
+}
+
+// --- Task and Workflow page types ---
+
+// TaskRow is a single task run displayed in the tasks list.
+type TaskRow struct {
+	ID           string
+	Command      string
+	Target       string
+	Operator     string
+	Status       string
+	TotalTargets int64
+	BatchSize    string
+	MaxFailures  string
+	CreatedAt    time.Time
+}
+
+// TasksPageData holds data for the tasks list page.
+type TasksPageData struct {
+	PageData
+	Tasks        []TaskRow
+	StatusFilter string
+	TaskCount    int
+}
+
+// TaskTargetRow is a per-thrall result in the task detail page.
+type TaskTargetRow struct {
+	ID         string
+	Hostname   string
+	Status     string
+	ExitCode   string
+	Stdout     string
+	Stderr     string
+	DurationMs string
+	ErrorMsg   string
+}
+
+// TaskDetailPageData holds data for the task detail page.
+type TaskDetailPageData struct {
+	PageData
+	Task      TaskRow
+	Targets   []TaskTargetRow
+	IsRunning bool
+}
+
+// WorkflowRow is a single workflow run displayed in the workflows list.
+type WorkflowRow struct {
+	ID            string
+	WorkflowName  string
+	Status        string
+	CurrentStep   int64
+	TotalSteps    int64
+	Operator      string
+	FailureReason string
+	CreatedAt     time.Time
+}
+
+// WorkflowsPageData holds data for the workflows list page.
+type WorkflowsPageData struct {
+	PageData
+	Workflows      []WorkflowRow
+	StatusFilter   string
+	WorkflowCount  int
+}
+
+// WorkflowStepRow is a step result in the workflow detail page.
+type WorkflowStepRow struct {
+	StepIndex  int64
+	StepName   string
+	TaskRunID  string
+	Status     string
+	StartedAt  time.Time
+	FinishedAt time.Time
+}
+
+// WorkflowDetailPageData holds data for the workflow detail page.
+type WorkflowDetailPageData struct {
+	PageData
+	Workflow       WorkflowRow
+	Steps          []WorkflowStepRow
+	CompletedSteps int
+	FailedSteps    int
+	IsRunning      bool
+}
+
+// QueryPageData holds data for the live query page.
+type QueryPageData struct {
+	PageData
+}
+
+// Tasks renders the task history page.
+func (h *Handler) Tasks(w http.ResponseWriter, r *http.Request) {
+	statusFilter := r.URL.Query().Get("status")
+	ctx := r.Context()
+
+	taskRuns, err := h.queries.ListTaskRuns(ctx, 100)
+	if err != nil {
+		slog.Error("failed to list task runs", "error", err)
+	}
+
+	var rows []TaskRow
+	for _, t := range taskRuns {
+		if statusFilter != "" && t.Status != statusFilter {
+			continue
+		}
+		rows = append(rows, taskRowFromDB(t))
+	}
+
+	data := TasksPageData{
+		PageData:     PageData{Title: "Tasks", ActiveNav: "tasks"},
+		Tasks:        rows,
+		StatusFilter: statusFilter,
+		TaskCount:    len(rows),
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "tasks", data)
+}
+
+// TaskDetail renders the task detail page with per-thrall results.
+func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ctx := r.Context()
+
+	task, err := h.queries.GetTaskRun(ctx, id)
+	if err != nil {
+		http.Error(w, "task not found", http.StatusNotFound)
+		return
+	}
+
+	targets, err := h.queries.ListTaskRunTargets(ctx, id)
+	if err != nil {
+		slog.Error("failed to list task run targets", "error", err)
+	}
+
+	var tgtRows []TaskTargetRow
+	for _, t := range targets {
+		row := TaskTargetRow{
+			ID:       t.ID,
+			Hostname: t.Hostname,
+			Status:   t.Status,
+		}
+		if t.ExitCode.Valid {
+			row.ExitCode = fmt.Sprintf("%d", t.ExitCode.Int64)
+		}
+		if t.Stdout.Valid {
+			row.Stdout = t.Stdout.String
+		}
+		if t.Stderr.Valid {
+			row.Stderr = t.Stderr.String
+		}
+		if t.DurationMs.Valid {
+			row.DurationMs = fmt.Sprintf("%d", t.DurationMs.Int64)
+		}
+		if t.ErrorMsg.Valid {
+			row.ErrorMsg = t.ErrorMsg.String
+		}
+		tgtRows = append(tgtRows, row)
+	}
+
+	data := TaskDetailPageData{
+		PageData:  PageData{Title: "Task Detail", ActiveNav: "tasks"},
+		Task:      taskRowFromDB(task),
+		Targets:   tgtRows,
+		IsRunning: task.Status == "running" || task.Status == "pending",
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "task-detail", data)
+}
+
+// Workflows renders the workflow list page.
+func (h *Handler) Workflows(w http.ResponseWriter, r *http.Request) {
+	statusFilter := r.URL.Query().Get("status")
+	ctx := r.Context()
+
+	runs, err := h.queries.ListWorkflowRuns(ctx, 100)
+	if err != nil {
+		slog.Error("failed to list workflow runs", "error", err)
+	}
+
+	var rows []WorkflowRow
+	for _, wf := range runs {
+		if statusFilter != "" && wf.Status != statusFilter {
+			continue
+		}
+		rows = append(rows, workflowRowFromDB(wf))
+	}
+
+	data := WorkflowsPageData{
+		PageData:      PageData{Title: "Workflows", ActiveNav: "workflows"},
+		Workflows:     rows,
+		StatusFilter:  statusFilter,
+		WorkflowCount: len(rows),
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "workflows", data)
+}
+
+// WorkflowDetail renders the workflow detail page with step-level results.
+func (h *Handler) WorkflowDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ctx := r.Context()
+
+	run, err := h.queries.GetWorkflowRun(ctx, id)
+	if err != nil {
+		http.Error(w, "workflow not found", http.StatusNotFound)
+		return
+	}
+
+	steps, err := h.queries.ListWorkflowStepResults(ctx, id)
+	if err != nil {
+		slog.Error("failed to list workflow step results", "error", err)
+	}
+
+	var stepRows []WorkflowStepRow
+	completedSteps, failedSteps := 0, 0
+	for _, s := range steps {
+		row := WorkflowStepRow{
+			StepIndex: s.StepIndex,
+			StepName:  s.StepName,
+			Status:    s.Status,
+		}
+		if s.TaskRunID.Valid {
+			row.TaskRunID = s.TaskRunID.String
+		}
+		if s.StartedAt.Valid {
+			row.StartedAt = s.StartedAt.Time
+		}
+		if s.FinishedAt.Valid {
+			row.FinishedAt = s.FinishedAt.Time
+		}
+		stepRows = append(stepRows, row)
+
+		switch s.Status {
+		case "complete":
+			completedSteps++
+		case "failed":
+			failedSteps++
+		}
+	}
+
+	wfRow := workflowRowFromDB(run)
+	data := WorkflowDetailPageData{
+		PageData:       PageData{Title: "Workflow: " + wfRow.WorkflowName, ActiveNav: "workflows"},
+		Workflow:       wfRow,
+		Steps:          stepRows,
+		CompletedSteps: completedSteps,
+		FailedSteps:    failedSteps,
+		IsRunning:      run.Status == "running" || run.Status == "pending",
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "workflow-detail", data)
+}
+
+// Query renders the live query page.
+func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
+	data := QueryPageData{
+		PageData: PageData{Title: "Live Query", ActiveNav: "query"},
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "query", data)
+}
+
+// taskRowFromDB converts a DB TaskRun to a TaskRow.
+func taskRowFromDB(t db.TaskRun) TaskRow {
+	row := TaskRow{
+		ID:           t.ID,
+		Command:      t.Command,
+		Target:       t.TargetGlob,
+		Operator:     t.Operator,
+		Status:       t.Status,
+		TotalTargets: t.TotalTargets,
+		CreatedAt:    t.CreatedAt,
+	}
+	if t.BatchSize.Valid {
+		row.BatchSize = t.BatchSize.String
+	}
+	if t.MaxFailures.Valid {
+		row.MaxFailures = t.MaxFailures.String
+	}
+	return row
+}
+
+// workflowRowFromDB converts a DB WorkflowRun to a WorkflowRow.
+func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
+	row := WorkflowRow{
+		ID:           w.ID,
+		WorkflowName: w.WorkflowName,
+		Status:       w.Status,
+		CurrentStep:  w.CurrentStep,
+		TotalSteps:   w.TotalSteps,
+		Operator:     w.Operator,
+		CreatedAt:    w.CreatedAt,
+	}
+	if w.FailureReason.Valid {
+		row.FailureReason = w.FailureReason.String
+	}
+	return row
 }
 
 // FederationSpokeRow represents a spoke in the federation UI table.

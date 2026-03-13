@@ -6,12 +6,14 @@ package grpc
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/tasks"
 )
 
 // taskRouter tracks in-flight task dispatches and routes incoming
@@ -244,10 +246,41 @@ func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
 
 // DispatchTask creates a task run, resolves targets, dispatches to connected
 // agents, and marks offline agents. Supports rolling execution with batch_size,
-// max_failures, and health_check parameters.
+// max_failures, and health_check parameters. If TaskName is set, the named
+// task definition is resolved from the task store, its parameters are validated,
+// and the script+env are injected into the dispatch.
 func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) (*DispatchResult, error) {
+	// Resolve named task if specified.
+	if params.TaskName != "" {
+		if s.taskStore == nil {
+			return nil, fmt.Errorf("task store not configured")
+		}
+		def, ok := s.taskStore.Get(params.TaskName)
+		if !ok {
+			return nil, fmt.Errorf("unknown task: %s", params.TaskName)
+		}
+		if err := tasks.ValidateParams(def, params.Params); err != nil {
+			return nil, fmt.Errorf("task %s: %s", params.TaskName, err)
+		}
+		params.Command = def.Script
+		if params.TimeoutSecs <= 0 {
+			params.TimeoutSecs = def.Timeout
+		}
+		if params.TargetSpec == "" && def.Target != "" {
+			params.TargetSpec = def.Target
+		}
+	}
+
+	// Build env vars for named tasks.
+	var taskEnv map[string]string
+	if params.TaskName != "" {
+		if def, ok := s.taskStore.Get(params.TaskName); ok {
+			taskEnv = tasks.BuildEnv(def, params.Params)
+		}
+	}
+
 	// Resolve targets.
-	targets, err := resolveTargets(ctx, s.queries, params.TargetSpec)
+	targets, err := resolveTargets(ctx, s.queries, params.TargetSpec, s.fleetIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +387,7 @@ func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) 
 			slog.Error("failed to start task run", "task_run_id", taskRun.ID, "error", err)
 		}
 
-		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.MaxFailures, params.HealthCheck, len(onlineTargets))
+		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.MaxFailures, params.HealthCheck, taskEnv, len(onlineTargets))
 	} else {
 		// Non-batched: dispatch all targets inline (original behavior).
 		dispatched := 0
@@ -379,6 +412,7 @@ func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) 
 						TaskId:         taskRun.ID,
 						Command:        params.Command,
 						TimeoutSeconds: timeoutSecs,
+						Env:            taskEnv,
 					},
 				},
 			}

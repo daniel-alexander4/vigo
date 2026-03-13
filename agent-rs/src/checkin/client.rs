@@ -83,6 +83,11 @@ impl Client {
         })
     }
 
+    /// Get the thrall ID this client authenticates as.
+    pub fn thrall_id(&self) -> &str {
+        &self.thrall_id
+    }
+
     /// Get current Unix timestamp as decimal string (matches Go's strconv.FormatInt).
     fn timestamp_str() -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -123,6 +128,7 @@ impl Client {
             policy_version,
             policy_mode: true,
             cached_module_hashes: cached_module_hashes.unwrap_or_default(),
+            capabilities: None,
         };
 
         let resp = self
@@ -227,6 +233,24 @@ impl Client {
         policy_version: u64,
         cached_module_hashes: Option<HashMap<String, String>>,
     ) -> CheckInRequest {
+        self.build_check_in_request_with_caps(
+            state_fingerprint,
+            traits_json,
+            policy_version,
+            cached_module_hashes,
+            None,
+        )
+    }
+
+    /// Build a signed CheckInRequest with optional StreamCapabilities.
+    pub fn build_check_in_request_with_caps(
+        &self,
+        state_fingerprint: &str,
+        traits_json: Option<Vec<u8>>,
+        policy_version: u64,
+        cached_module_hashes: Option<HashMap<String, String>>,
+        capabilities: Option<crate::proto::StreamCapabilities>,
+    ) -> CheckInRequest {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
 
@@ -239,6 +263,7 @@ impl Client {
             policy_version,
             policy_mode: true,
             cached_module_hashes: cached_module_hashes.unwrap_or_default(),
+            capabilities,
         }
     }
 

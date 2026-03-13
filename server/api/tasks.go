@@ -40,14 +40,16 @@ func (h *TasksHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type dispatchRequest struct {
-	Command     string `json:"command"`
-	Target      string `json:"target"`
-	Operator    string `json:"operator"`
-	Timeout     int32  `json:"timeout"`
-	BatchSize   string `json:"batchSize"`
-	MaxFailures string `json:"maxFailures"`
-	HealthCheck string `json:"healthCheck"`
-	DryRun      bool   `json:"dryRun"`
+	Command     string            `json:"command"`
+	Target      string            `json:"target"`
+	Operator    string            `json:"operator"`
+	Timeout     int32             `json:"timeout"`
+	BatchSize   string            `json:"batchSize"`
+	MaxFailures string            `json:"maxFailures"`
+	HealthCheck string            `json:"healthCheck"`
+	DryRun      bool              `json:"dryRun"`
+	TaskName    string            `json:"taskName"`
+	Params      map[string]string `json:"params"`
 }
 
 // HandleDispatch creates a new task run and dispatches the command to matching agents.
@@ -57,11 +59,11 @@ func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.Command == "" {
-		writeJSONError(w, http.StatusBadRequest, "command is required")
+	if req.Command == "" && req.TaskName == "" {
+		writeJSONError(w, http.StatusBadRequest, "command or taskName is required")
 		return
 	}
-	if req.Target == "" {
+	if req.Target == "" && req.TaskName == "" {
 		writeJSONError(w, http.StatusBadRequest, "target is required")
 		return
 	}
@@ -78,6 +80,8 @@ func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		MaxFailures: req.MaxFailures,
 		HealthCheck: req.HealthCheck,
 		DryRun:      req.DryRun,
+		TaskName:    req.TaskName,
+		Params:      req.Params,
 	})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())

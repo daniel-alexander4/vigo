@@ -227,6 +227,7 @@ message CheckInRequest {
   uint64 policy_version = 6;     // agent's cached policy version (0 = no cache, send full bundle)
   bool policy_mode = 7;          // true = agent supports policy bundles
   map<string, string> cached_module_hashes = 8;  // module name → content hash for delta transfer
+  StreamCapabilities capabilities = 9;  // agent protocol capabilities (delta streaming)
 }
 
 message CheckInResponse {
@@ -367,6 +368,7 @@ message AgentStreamMessage {
     TaskResult task_result = 4;
     TaskAck task_ack = 5;
     QueryResponse query_response = 6;
+    DeltaEvent delta = 7;
   }
 }
 
@@ -380,6 +382,7 @@ message ServerStreamMessage {
     StreamForcePush force_push = 5;
     TaskDispatch task_dispatch = 6;
     QueryRequest query_request = 7;
+    DeltaAck delta_ack = 8;
   }
 }
 
@@ -392,6 +395,53 @@ message StreamPolicyPush {
 
 // StreamForcePush signals the agent to run a convergence cycle immediately.
 message StreamForcePush {}
+
+// =============================================================================
+// Delta streaming protocol (Phase 22)
+// =============================================================================
+
+// DeltaEvent is sent by the agent on the bidi stream to report state changes
+// as lightweight deltas instead of full ReportResult messages.
+message DeltaEvent {
+  int64 sequence = 1;
+  oneof event {
+    RunCompleted run = 2;
+    TraitsDelta traits = 3;     // reserved for future use
+    HeartbeatDelta heartbeat = 4;
+  }
+}
+
+// RunCompleted reports the outcome of a convergence run with only changed/failed
+// resources (no-ops omitted). Replaces ReportResult on the delta path.
+message RunCompleted {
+  string run_id = 1;
+  string status = 2;           // success, failure
+  int32 total_count = 3;
+  int32 changed_count = 4;
+  int32 failed_count = 5;
+  int32 skipped_count = 6;
+  repeated ModuleResult results = 7;  // only changed/failed (no-ops omitted)
+}
+
+// TraitsDelta reports changed/removed traits (reserved for future use).
+message TraitsDelta {
+  map<string, string> changed = 1;
+  repeated string removed = 2;
+}
+
+// HeartbeatDelta is a no-op keepalive sent when there's nothing to report.
+message HeartbeatDelta {}
+
+// DeltaAck acknowledges receipt of a DeltaEvent by sequence number.
+message DeltaAck {
+  int64 acked_sequence = 1;
+}
+
+// StreamCapabilities advertises agent protocol support during handshake.
+message StreamCapabilities {
+  bool supports_delta = 1;
+  int64 last_acked_sequence = 2;
+}
 
 // =============================================================================
 // Orchestration messages (task dispatch, query, results)

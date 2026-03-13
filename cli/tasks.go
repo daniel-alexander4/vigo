@@ -20,9 +20,13 @@ var taskCmd = &cobra.Command{
 }
 
 var taskRunCmd = &cobra.Command{
-	Use:   "run <command>",
-	Short: "Run a command on targeted thralls",
-	Args:  cobra.ExactArgs(1),
+	Use:   "run <command-or-task-name>",
+	Short: "Run a command or named task on targeted thralls",
+	Long: `Run an ad-hoc command or a named task on targeted thralls.
+
+  Ad-hoc command:  hobnobcli task run "uptime" --target "*.web.*"
+  Named task:      hobnobcli task run restart-app --target "*.web.*" --param env=staging`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
 		timeout, _ := cmd.Flags().GetInt("timeout")
@@ -31,8 +35,9 @@ var taskRunCmd = &cobra.Command{
 		maxFailures, _ := cmd.Flags().GetString("max-failures")
 		healthCheck, _ := cmd.Flags().GetString("health-check")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		paramFlags, _ := cmd.Flags().GetStringArray("param")
 
-		if target == "" {
+		if target == "" && len(paramFlags) == 0 {
 			return fmt.Errorf("--target is required")
 		}
 		if operator == "" {
@@ -43,7 +48,34 @@ var taskRunCmd = &cobra.Command{
 			}
 		}
 
+		// Parse --param key=value flags.
+		params := make(map[string]string)
+		for _, p := range paramFlags {
+			k, v, ok := strings.Cut(p, "=")
+			if !ok {
+				return fmt.Errorf("invalid --param format %q (expected key=value)", p)
+			}
+			params[k] = v
+		}
+
 		client := newAPIClient()
+
+		// Build the dispatch request.
+		body := map[string]any{
+			"target":      target,
+			"operator":    operator,
+			"timeout":     timeout,
+			"batchSize":   batchSize,
+			"maxFailures": maxFailures,
+			"healthCheck": healthCheck,
+			"dryRun":      dryRun,
+		}
+		if len(params) > 0 {
+			body["taskName"] = args[0]
+			body["params"] = params
+		} else {
+			body["command"] = args[0]
+		}
 
 		// Dispatch the task.
 		var dispatchResp struct {
@@ -55,16 +87,7 @@ var taskRunCmd = &cobra.Command{
 			} `json:"batches"`
 			Offline []string `json:"offline"`
 		}
-		err := client.post("/api/v1/tasks", map[string]any{
-			"command":     args[0],
-			"target":      target,
-			"operator":    operator,
-			"timeout":     timeout,
-			"batchSize":   batchSize,
-			"maxFailures": maxFailures,
-			"healthCheck": healthCheck,
-			"dryRun":      dryRun,
-		}, &dispatchResp)
+		err := client.post("/api/v1/tasks", body, &dispatchResp)
 		if err != nil {
 			return err
 		}
@@ -296,6 +319,7 @@ func init() {
 	taskRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")
 	taskRunCmd.Flags().String("health-check", "", "Shell command to run between batches (abort if exit != 0)")
 	taskRunCmd.Flags().Bool("dry-run", false, "Display batch plan without executing")
+	taskRunCmd.Flags().StringArray("param", nil, "Task parameter (key=value), repeatable")
 	taskListCmd.Flags().Int("limit", 20, "Maximum number of tasks to display")
 
 	taskCmd.AddCommand(taskRunCmd, taskStatusCmd, taskListCmd)

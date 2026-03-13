@@ -57,8 +57,8 @@ type oaiToolFunction struct {
 }
 
 type oaiTool struct {
-	Type     string      `json:"type"`
-	Function oaiToolDef  `json:"function"`
+	Type     string     `json:"type"`
+	Function oaiToolDef `json:"function"`
 }
 
 type oaiToolDef struct {
@@ -90,6 +90,13 @@ type oaiResponse struct {
 }
 
 func (p *OpenAICompatProvider) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	return p.chat(ctx, req, req.MaxTokens)
+}
+
+// chat is the shared implementation. maxTokens is passed separately so
+// OllamaProvider can override it (Ollama hangs when max_tokens and tools
+// are both present in the OpenAI-compat endpoint).
+func (p *OpenAICompatProvider) chat(ctx context.Context, req ChatRequest, maxTokens int) (*ChatResponse, error) {
 	// Convert to OpenAI format.
 	var messages []oaiMessage
 	for _, m := range req.Messages {
@@ -127,7 +134,7 @@ func (p *OpenAICompatProvider) Chat(ctx context.Context, req ChatRequest) (*Chat
 		Model:     req.Model,
 		Messages:  messages,
 		Tools:     tools,
-		MaxTokens: req.MaxTokens,
+		MaxTokens: maxTokens,
 	}
 
 	data, err := json.Marshal(body)

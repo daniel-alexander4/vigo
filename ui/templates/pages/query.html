@@ -1,0 +1,110 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Live Query</h1>
+    <p>Query trait values from connected thralls in real time</p>
+</div>
+
+<form class="query-form mb-2" id="query-form" onsubmit="return submitQuery(event)">
+    <div class="query-inputs">
+        <div class="form-group">
+            <label for="trait-path">Trait Path</label>
+            <input type="text" id="trait-path" class="form-input" placeholder="os.distro" required>
+        </div>
+        <div class="form-group">
+            <label for="target-spec">Target</label>
+            <input type="text" id="target-spec" class="form-input" placeholder="*.web.* or os.family=debian" required>
+        </div>
+        <div class="form-group">
+            <label for="query-timeout">Timeout (s)</label>
+            <input type="number" id="query-timeout" class="form-input" value="10" min="1" max="60">
+        </div>
+        <div class="form-group form-group--btn">
+            <button type="submit" class="btn btn--primary" id="query-btn">Query</button>
+        </div>
+    </div>
+</form>
+
+<div id="query-results" style="display:none;">
+    <div class="stat-cards mb-2" id="query-stats"></div>
+    <div class="table-container" id="query-table"></div>
+</div>
+
+<script>
+function submitQuery(e) {
+    e.preventDefault();
+    var btn = document.getElementById('query-btn');
+    btn.disabled = true;
+    btn.textContent = 'Querying...';
+
+    var traitPath = document.getElementById('trait-path').value;
+    var target = document.getElementById('target-spec').value;
+    var timeout = parseInt(document.getElementById('query-timeout').value) || 10;
+
+    fetch('/api/v1/query', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({traitPath: traitPath, target: target, timeout: timeout})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        btn.textContent = 'Query';
+        renderQueryResults(data, traitPath);
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Query';
+        alert('Query failed: ' + err.message);
+    });
+    return false;
+}
+
+function renderQueryResults(data, traitPath) {
+    var results = document.getElementById('query-results');
+    results.style.display = '';
+
+    var counts = data.counts || {};
+    var stats = document.getElementById('query-stats');
+    stats.innerHTML =
+        '<div class="stat-card stat-card--success"><div class="stat-card__value">' + (counts.responded||0) + '</div><div class="stat-card__label">Responded</div></div>' +
+        '<div class="stat-card stat-card--warning"><div class="stat-card__value">' + (counts.timedOut||0) + '</div><div class="stat-card__label">Timed Out</div></div>' +
+        '<div class="stat-card stat-card--muted"><div class="stat-card__value">' + (counts.offline||0) + '</div><div class="stat-card__label">Offline</div></div>';
+
+    var html = '<h3>Results for <code>' + escapeHtml(traitPath) + '</code></h3>';
+    html += '<table class="table"><thead><tr><th>Hostname</th><th>Value</th><th>Status</th></tr></thead><tbody>';
+
+    var responded = data.responded || [];
+    for (var i = 0; i < responded.length; i++) {
+        var r = responded[i];
+        var val = r.found ? escapeHtml(String(r.value)) : '<span class="text-muted">(not found)</span>';
+        html += '<tr><td>' + escapeHtml(r.hostname) + '</td><td class="mono">' + val + '</td><td><span class="badge badge--complete">responded</span></td></tr>';
+    }
+
+    var offline = data.offline || [];
+    for (var i = 0; i < offline.length; i++) {
+        var o = offline[i];
+        var val = o.found ? escapeHtml(String(o.value)) : '<span class="text-muted">(not found)</span>';
+        var cached = o.collectedAt ? ' (cached)' : '';
+        html += '<tr><td>' + escapeHtml(o.hostname) + '</td><td class="mono">' + val + '</td><td><span class="badge badge--offline">offline' + cached + '</span></td></tr>';
+    }
+
+    var timedOut = data.timedOut || [];
+    for (var i = 0; i < timedOut.length; i++) {
+        html += '<tr><td>' + escapeHtml(timedOut[i].hostname) + '</td><td class="text-muted">-</td><td><span class="badge badge--timeout">timed_out</span></td></tr>';
+    }
+
+    if (responded.length === 0 && offline.length === 0 && timedOut.length === 0) {
+        html += '<tr><td colspan="3" class="text-muted" style="text-align:center; padding:40px;">No thralls matched the target spec.</td></tr>';
+    }
+
+    html += '</tbody></table>';
+    document.getElementById('query-table').innerHTML = html;
+}
+
+function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+</script>
+{{end}}

@@ -13,7 +13,7 @@ server:
   grpc_listen: ":1530"
   api_listen: ":8181"
   tls:
-    cert_file: "secret:hobnob.tls.cert"
+    cert_file: "secret:hobnob/tls/cert"
     key_file: "secret:hobnob/tls/key"
     ca_file: "secret:hobnob/tls/ca"
     ca_key_file: "secret:hobnob/tls/ca_key"  # enables CSR signing for bootstrap

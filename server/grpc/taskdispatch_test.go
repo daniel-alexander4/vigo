@@ -157,7 +157,7 @@ func TestStreamManagerDispatchCleanup(t *testing.T) {
 }
 
 func TestResolveTargetsEmptySpec(t *testing.T) {
-	_, err := resolveTargets(context.Background(), nil, "")
+	_, err := resolveTargets(context.Background(), nil, "", nil)
 	if err == nil {
 		t.Error("expected error for empty spec")
 	}

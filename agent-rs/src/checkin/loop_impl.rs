@@ -11,9 +11,14 @@ use crate::checkin::modulecache::{merge_stubs, ModuleCache};
 use crate::checkin::stream;
 use crate::customtraits;
 use crate::executors::{Executor, ResourceResult};
-use crate::proto::{CheckInResponse, CustomTraitEntry, ModuleResult, PolicyBundle};
+use crate::proto::{
+    agent_stream_message, delta_event, AgentStreamMessage, CheckInResponse, CustomTraitEntry,
+    DeltaEvent, HeartbeatDelta, ModuleResult, PolicyBundle, RunCompleted,
+    StreamCapabilities,
+};
 use crate::runner::{self, cache::ResultCache, RunOptions};
 use crate::snapshots;
+use crate::state::StateStore;
 use crate::traits::cached::CachedCollectors;
 use anyhow::Result;
 use rand::Rng;
@@ -36,6 +41,9 @@ pub struct LoopConfig {
     pub result_cache_cycles: usize,
     pub traits_cache_dir: Option<String>,
     pub update_cfg: Option<UpdateConfig>,
+    /// Directory for LMDB state store (enables offline convergence).
+    /// When None, the agent behaves exactly as before — no persistent state.
+    pub state_store: Option<StateStore>,
 }
 
 impl Default for LoopConfig {
@@ -45,6 +53,7 @@ impl Default for LoopConfig {
             result_cache_cycles: 5,
             traits_cache_dir: None,
             update_cfg: None,
+            state_store: None,
         }
     }
 }
@@ -357,10 +366,125 @@ impl<'a> customtraits::Downloader for ClientDownloader<'a> {
     }
 }
 
+/// Deliver any pending delta events from offline convergence.
+/// Called on reconnect (both stream and polling modes).
+async fn deliver_pending(client: &mut Client, store: &StateStore) {
+    let mut wtxn = match store.write_txn() {
+        Ok(t) => t,
+        Err(e) => {
+            warn!(error = %e, "failed to open write txn for pending drain");
+            return;
+        }
+    };
+
+    let pending = match store.pending.drain(&mut wtxn) {
+        Ok(p) => p,
+        Err(e) => {
+            warn!(error = %e, "failed to drain pending results");
+            return;
+        }
+    };
+
+    if pending.is_empty() {
+        let _ = wtxn.commit();
+        return;
+    }
+
+    info!(count = pending.len(), "delivering pending offline results");
+
+    // Extract results from delta events and report via legacy RPC.
+    // (Pending delivery happens before stream is set up, so we use
+    // the unary ReportResult RPC for simplicity.)
+    for delta in &pending {
+        if let Some(delta_event::Event::Run(ref run)) = delta.event {
+            let proto_results = run.results.clone();
+            if let Err(e) = client.report_result(&run.run_id, proto_results).await {
+                warn!(run_id = %run.run_id, error = %e, "failed to deliver pending result");
+            }
+        }
+    }
+
+    if let Err(e) = wtxn.commit() {
+        warn!(error = %e, "failed to commit pending drain");
+    }
+}
+
+/// Cache policy and traits to the state store after a successful online run.
+fn cache_state(store: &StateStore, policy_state: &PolicyState, traits_json: Option<&[u8]>) {
+    if let Some(ref bundle) = policy_state.bundle {
+        if let Ok(mut wtxn) = store.write_txn() {
+            if let Err(e) = store.policy.store(&mut wtxn, policy_state.version, bundle) {
+                warn!(error = %e, "failed to cache policy bundle");
+            }
+            if let Some(tj) = traits_json {
+                if let Err(e) = store.traits.store(&mut wtxn, tj) {
+                    warn!(error = %e, "failed to cache traits");
+                }
+            }
+            let _ = wtxn.commit();
+        }
+    }
+}
+
+/// Attempt offline convergence using cached policy and traits.
+/// Returns results to be enqueued for later delivery.
+fn try_offline_converge(
+    store: &StateStore,
+    executors: &HashMap<String, Box<dyn Executor>>,
+    result_cache: &mut ResultCache,
+    policy_state: &mut PolicyState,
+) -> Option<(RunResult, Vec<u8>)> {
+    let rtxn = store.read_txn().ok()?;
+
+    // Load cached policy.
+    let (version, bundle) = store.policy.load(&rtxn).ok()??;
+
+    // Load cached traits (any age — offline mode).
+    let traits_bytes = store.traits.load_any(&rtxn).ok()??;
+    drop(rtxn);
+
+    let traits_val: Value = serde_json::from_slice(&traits_bytes).ok()?;
+
+    info!(
+        policy_version = version,
+        "converging offline with cached policy"
+    );
+
+    // Build a synthetic response from cached data.
+    let synth_resp = CheckInResponse {
+        policy_bundle: Some(bundle.clone()),
+        policy_version: version,
+        ..Default::default()
+    };
+
+    match converge(
+        &synth_resp,
+        executors,
+        &traits_val,
+        result_cache,
+        policy_state,
+        false,
+        None,
+    ) {
+        Ok(rr) => {
+            // Update policy state so subsequent cycles use this bundle.
+            policy_state.version = version;
+            policy_state.bundle = Some(bundle);
+            Some((rr, traits_bytes))
+        }
+        Err(e) => {
+            warn!(error = %e, "offline convergence failed");
+            None
+        }
+    }
+}
+
 /// Run the daemon loop until the cancellation token fires.
 ///
 /// Attempts to open a persistent bidirectional stream first (push-based).
 /// Falls back to polling if streaming is unavailable or disconnects.
+/// When the server is completely unreachable and a state store is available,
+/// converges offline using cached policy and queues results for later delivery.
 pub async fn daemon_loop(
     cancel: tokio_util::sync::CancellationToken,
     client: &mut Client,
@@ -381,12 +505,14 @@ pub async fn daemon_loop(
 
     let traits_cache_dir = cfg.traits_cache_dir.clone();
     let update_cfg = cfg.update_cfg;
+    let state_store = cfg.state_store;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
     let mut policy_state = PolicyState::new();
     let collectors = CachedCollectors::new(trait_refresh);
     let mut result_cache = ResultCache::new(result_cache_cycles);
+    let mut pending_delivered = false;
 
     loop {
         if cancel.is_cancelled() {
@@ -404,11 +530,16 @@ pub async fn daemon_loop(
         .await;
 
         // Attempt stream mode.
-        let stream_req = client.build_check_in_request(
+        let caps = state_store.as_ref().map(|_| StreamCapabilities {
+            supports_delta: true,
+            last_acked_sequence: 0,
+        });
+        let stream_req = client.build_check_in_request_with_caps(
             &last_fingerprint,
             traits_json.clone(),
             policy_state.version,
             policy_state.module_cache.hashes(),
+            caps,
         );
 
         let mut agent_client = client.agent_client();
@@ -416,6 +547,14 @@ pub async fn daemon_loop(
             Ok((mut handle, initial_resp)) => {
                 info!("stream connected, switching to push mode");
                 bo.reset();
+
+                // Deliver pending offline results on reconnect.
+                if !pending_delivered {
+                    if let Some(ref store) = state_store {
+                        deliver_pending(client, store).await;
+                    }
+                    pending_delivered = true;
+                }
 
                 let stream_err = stream_loop(
                     &cancel,
@@ -428,14 +567,21 @@ pub async fn daemon_loop(
                     &mut result_cache,
                     &mut policy_state,
                     &mut last_fingerprint,
+                    state_store.as_ref(),
                 )
                 .await;
+
+                // Cache state after stream disconnect.
+                if let Some(ref store) = state_store {
+                    cache_state(store, &policy_state, traits_json.as_deref());
+                }
 
                 if cancel.is_cancelled() {
                     return Ok(());
                 }
 
                 info!(error = ?stream_err, "stream disconnected, falling back to polling");
+                pending_delivered = false;
                 continue;
             }
             Err(e) => {
@@ -448,7 +594,7 @@ pub async fn daemon_loop(
             client,
             executors,
             &traits_val,
-            traits_json,
+            traits_json.clone(),
             &mut result_cache,
             &mut policy_state,
             false,
@@ -461,6 +607,19 @@ pub async fn daemon_loop(
                 bo.reset();
                 update_state(&mut policy_state, &rr, Some(&mut last_fingerprint));
                 log_run_result(&rr);
+
+                // Deliver pending offline results on successful reconnect.
+                if !pending_delivered {
+                    if let Some(ref store) = state_store {
+                        deliver_pending(client, store).await;
+                    }
+                    pending_delivered = true;
+                }
+
+                // Cache state after successful online convergence.
+                if let Some(ref store) = state_store {
+                    cache_state(store, &policy_state, traits_json.as_deref());
+                }
 
                 // Self-update check (failures are logged, never crash the agent).
                 if let Some(ref ucfg) = update_cfg {
@@ -481,6 +640,42 @@ pub async fn daemon_loop(
                 }
             }
             Err(e) => {
+                // Server unreachable — attempt offline convergence.
+                if let Some(ref store) = state_store {
+                    if let Some((rr, _traits_bytes)) = try_offline_converge(
+                        store,
+                        executors,
+                        &mut result_cache,
+                        &mut policy_state,
+                    ) {
+                        log_run_result(&rr);
+                        pending_delivered = false;
+
+                        // Enqueue delta for delivery on reconnect.
+                        if !rr.results.is_empty() {
+                            if let Ok(mut wtxn) = store.write_txn() {
+                                let seq = store.pending.next_seq(&mut wtxn).unwrap_or(1) as i64;
+                                let (delta, _run_id) = build_run_delta(&rr.results, seq);
+                                match store.pending.enqueue(&mut wtxn, &delta) {
+                                    Ok(s) => {
+                                        let _ = wtxn.commit();
+                                        info!(seq = s, "enqueued offline delta for later delivery");
+                                    }
+                                    Err(e) => warn!(error = %e, "failed to enqueue offline delta"),
+                                }
+                            }
+                        }
+
+                        let wait = bo.next_backoff();
+                        info!(backoff = ?wait, "offline convergence complete, waiting to retry server");
+                        tokio::select! {
+                            _ = cancel.cancelled() => return Ok(()),
+                            _ = tokio::time::sleep(wait) => {}
+                        }
+                        continue;
+                    }
+                }
+
                 let wait = bo.next_backoff();
                 warn!(error = %e, backoff = ?wait, "convergence run failed, backing off");
 
@@ -491,6 +686,76 @@ pub async fn daemon_loop(
             }
         }
     }
+}
+
+/// Build a DeltaEvent with RunCompleted from convergence results.
+fn build_run_delta(results: &[ResourceResult], seq: i64) -> (DeltaEvent, String) {
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let mut changed_count: i32 = 0;
+    let mut failed_count: i32 = 0;
+    let mut skipped_count: i32 = 0;
+
+    // Filter to only changed/failed results (no-ops omitted).
+    let filtered: Vec<ModuleResult> = results
+        .iter()
+        .filter(|r| r.changed || r.error.is_some())
+        .map(|r| ModuleResult {
+            module_name: r.module_name.clone(),
+            resource_type: r.resource_type.clone(),
+            resource_name: r.resource_name.clone(),
+            action_taken: r.action.to_string(),
+            changed: r.changed,
+            error_message: r.error.clone().unwrap_or_default(),
+            duration_ms: r.duration_ms,
+        })
+        .collect();
+
+    for r in results {
+        if r.changed {
+            changed_count += 1;
+        }
+        if r.error.is_some() {
+            failed_count += 1;
+        }
+        if !r.changed && r.error.is_none() {
+            skipped_count += 1;
+        }
+    }
+
+    let status = if failed_count > 0 {
+        "failure".to_string()
+    } else {
+        "success".to_string()
+    };
+
+    let delta = DeltaEvent {
+        sequence: seq,
+        event: Some(delta_event::Event::Run(RunCompleted {
+            run_id: run_id.clone(),
+            status,
+            total_count: results.len() as i32,
+            changed_count,
+            failed_count,
+            skipped_count,
+            results: filtered,
+        })),
+    };
+
+    (delta, run_id)
+}
+
+/// Send a DeltaEvent on the stream.
+async fn send_delta(
+    request_tx: &tokio::sync::mpsc::Sender<AgentStreamMessage>,
+    delta: DeltaEvent,
+) -> Result<()> {
+    request_tx
+        .send(AgentStreamMessage {
+            msg: Some(agent_stream_message::Msg::Delta(delta)),
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("stream closed"))?;
+    Ok(())
 }
 
 /// Event-driven stream loop. Returns when the stream disconnects or
@@ -506,9 +771,13 @@ async fn stream_loop(
     result_cache: &mut ResultCache,
     policy_state: &mut PolicyState,
     _last_fingerprint: &mut String,
+    state_store: Option<&StateStore>,
 ) -> Result<()> {
-    // Helper: report results over the stream.
-    let report = |request_tx: &tokio::sync::mpsc::Sender<crate::proto::AgentStreamMessage>,
+    let use_delta = state_store.is_some();
+    let mut delta_seq: i64 = 0;
+
+    // Helper: report results over the stream (legacy path).
+    let report = |request_tx: &tokio::sync::mpsc::Sender<AgentStreamMessage>,
                   client: &Client,
                   results: &[ResourceResult]| {
         let run_id = uuid::Uuid::new_v4().to_string();
@@ -528,7 +797,15 @@ async fn stream_loop(
     ) {
         Ok(rr) => {
             if !rr.results.is_empty() {
-                report(&handle.request_tx, client, &rr.results).await;
+                if use_delta {
+                    delta_seq += 1;
+                    let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                    if let Err(e) = send_delta(&handle.request_tx, delta).await {
+                        warn!(error = %e, "failed to send delta on stream");
+                    }
+                } else {
+                    report(&handle.request_tx, client, &rr.results).await;
+                }
             }
             update_state(policy_state, &rr, None);
             log_run_result(&rr);
@@ -556,6 +833,7 @@ async fn stream_loop(
         ref mut check_in_resp_rx,
         ref mut task_dispatch_rx,
         ref mut query_request_rx,
+        ref mut delta_ack_rx,
         ref mut done,
     } = *handle;
 
@@ -586,7 +864,15 @@ async fn stream_loop(
                     match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None) {
                         Ok(rr) => {
                             if !rr.results.is_empty() {
-                                report(request_tx, client, &rr.results).await;
+                                if use_delta {
+                                    delta_seq += 1;
+                                    let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                                    if let Err(e) = send_delta(request_tx, delta).await {
+                                        warn!(error = %e, "failed to send delta on stream");
+                                    }
+                                } else {
+                                    report(request_tx, client, &rr.results).await;
+                                }
                             }
                             update_state(policy_state, &rr, None);
                             log_run_result(&rr);
@@ -613,7 +899,15 @@ async fn stream_loop(
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
-                                        report(request_tx, client, &rr.results).await;
+                                        if use_delta {
+                                            delta_seq += 1;
+                                            let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                                            if let Err(e) = send_delta(request_tx, delta).await {
+                                                warn!(error = %e, "failed to send delta on stream");
+                                            }
+                                        } else {
+                                            report(request_tx, client, &rr.results).await;
+                                        }
                                     }
                                     update_state(policy_state, &rr, None);
                                     log_run_result(&rr);
@@ -682,6 +976,12 @@ async fn stream_loop(
                     let _ = request_tx.send(resp).await;
                 }
 
+                // Drain delta acks (non-blocking).
+                _ack = delta_ack_rx.recv() => {
+                    // Delta acks confirm the server processed our delta.
+                    // We don't need to act on them since we don't re-queue.
+                }
+
                 _ = &mut next_checkin => {
                     // Periodic check-in.
                     let (traits_val, traits_json) = collect_traits_basic(collectors).await;
@@ -698,7 +998,25 @@ async fn stream_loop(
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
-                                        report(request_tx, client, &rr.results).await;
+                                        if use_delta {
+                                            delta_seq += 1;
+                                            let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                                            if let Err(e) = send_delta(request_tx, delta).await {
+                                                warn!(error = %e, "failed to send delta on stream");
+                                            }
+                                        } else {
+                                            report(request_tx, client, &rr.results).await;
+                                        }
+                                    } else if use_delta && rr.no_change {
+                                        // Send heartbeat on no-change cycles.
+                                        delta_seq += 1;
+                                        let heartbeat = DeltaEvent {
+                                            sequence: delta_seq,
+                                            event: Some(delta_event::Event::Heartbeat(HeartbeatDelta {})),
+                                        };
+                                        if let Err(e) = send_delta(request_tx, heartbeat).await {
+                                            warn!(error = %e, "failed to send heartbeat on stream");
+                                        }
                                     }
                                     update_state(policy_state, &rr, None);
                                     if rr.base_interval > Duration::ZERO {

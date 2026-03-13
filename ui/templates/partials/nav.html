@@ -16,6 +16,15 @@
         <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">
             Compliance
         </a>
+        <a href="/tasks" class="nav-link{{if eq .ActiveNav "tasks"}} nav-link--active{{end}}">
+            Tasks
+        </a>
+        <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
+            Workflows
+        </a>
+        <a href="/query" class="nav-link{{if eq .ActiveNav "query"}} nav-link--active{{end}}">
+            Query
+        </a>
         {{if .FederationEnabled}}
         <a href="/federation" class="nav-link{{if eq .ActiveNav "federation"}} nav-link--active{{end}}">
             Federation

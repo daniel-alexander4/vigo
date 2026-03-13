@@ -31,14 +31,17 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/fleet"
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/secrets"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
+	"github.com/hobnob/hobnob/server/tasks"
 	"github.com/hobnob/hobnob/server/watcher"
 	"github.com/hobnob/hobnob/server/webhook"
+	"github.com/hobnob/hobnob/server/workflows"
 )
 
 func main() {
@@ -227,7 +230,6 @@ func run() error {
 
 	// Parse tuning parameters (all optional, zero values use defaults).
 	sigWindow := parseDuration(cfg.Tuning.SignatureWindow, 0)
-	nodeCacheTTL := parseDuration(cfg.Tuning.ThrallCacheTTL, 0)
 	lastSeenFlush := parseDuration(cfg.Tuning.LastSeenFlush, 10*time.Second)
 	traitsPruneInterval := parseDuration(cfg.Tuning.TraitsPruneInterval, 5*time.Minute)
 	metricsInterval := parseDuration(cfg.Tuning.MetricsInterval, 30*time.Second)
@@ -317,8 +319,25 @@ func run() error {
 		slog.Info("federation hub initialized", "spokes", hub.SpokeCount())
 	}
 
+	// Load task definitions.
+	tasksDir := envOrDefault("HOBNOB_TASKS_DIR", "tasks")
+	taskStore := tasks.NewStore()
+	if err := taskStore.Load(tasksDir); err != nil {
+		return fmt.Errorf("loading tasks: %w", err)
+	}
+	slog.Info("tasks loaded", "count", len(taskStore.List()), "dir", tasksDir)
+
+	// Create and rehydrate FleetIndex.
+	fleetIndex := fleet.NewFleetIndex()
+	if err := fleet.Rehydrate(ctx, fleetIndex, queries, runStore, baseInterval); err != nil {
+		return fmt.Errorf("rehydrating fleet index: %w", err)
+	}
+
+	// Create async run batcher for delta events.
+	runBatcher := fleet.NewRunBatcher(runStore)
+
 	// Create and start gRPC server.
-	grpcSrv, _, lastSeenBatch, traitsBatch, traitsPruner, agentSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, _, traitsBatch, traitsPruner, agentSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:             cfg.Server.TLS.CertFile,
 		KeyFile:              cfg.Server.TLS.KeyFile,
 		CAFile:               cfg.Server.TLS.CAFile,
@@ -331,19 +350,25 @@ func run() error {
 		Dispatcher:           dispatcher,
 		TraitsDir:            traitsDir,
 		SignatureWindow:      sigWindow,
-		ThrallCacheTTL:       nodeCacheTTL,
 		TraitsScannerTTL:     traitsScannerTTL,
 		MaxConcurrentStreams: cfg.Tuning.MaxConcurrentStreams,
 		Hub:                  hub,
 		SMTPNotifier:         smtpNotifier,
 		LicenseEnforcer:      enforcer,
+		TaskStore:            taskStore,
+		FleetIndex:           fleetIndex,
+		RunBatcher:           runBatcher,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
 	}
 
-	// Start async last_seen batcher.
-	go lastSeenBatch.Start(ctx, lastSeenFlush)
+	// Start async state flusher (FleetIndex → SQLite).
+	stateFlusher := fleet.NewStateFlusher(fleetIndex, queries)
+	go stateFlusher.Start(ctx, lastSeenFlush)
+
+	// Start async run batcher (delta events → SQLite).
+	go runBatcher.Start(ctx, lastSeenFlush)
 
 	// Start async traits batcher (hash-deduplicated, flush every 10s).
 	go traitsBatch.Start(ctx, lastSeenFlush)
@@ -397,7 +422,7 @@ func run() error {
 	go metricsCollector.Run(ctx, metricsInterval)
 
 	// Start stale thrall checker — fires thrall.stale SMTP events on transition.
-	go runStaleChecker(ctx, queries, smtpNotifier, baseInterval)
+	go runStaleChecker(ctx, queries, fleetIndex, smtpNotifier, baseInterval)
 
 	// Start SMTP digest flush loop (if configured).
 	go smtpNotifier.Start(ctx)
@@ -410,7 +435,7 @@ func run() error {
 		}
 	}
 	if complianceThreshold > 0 {
-		go runComplianceChecker(ctx, queries, runStore, smtpNotifier, baseInterval, complianceThreshold)
+		go runComplianceChecker(ctx, queries, runStore, fleetIndex, smtpNotifier, baseInterval, complianceThreshold)
 	}
 
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
@@ -434,6 +459,21 @@ func run() error {
 	federationHandler := api.NewFederationHandler(role, cfg.Federation.SpokeID, hub)
 	tasksHandler := api.NewTasksHandler(queries, agentSvc)
 	queryHandler := api.NewQueryHandler(agentSvc)
+
+	// Load workflow definitions and create engine.
+	workflowsDir := envOrDefault("HOBNOB_WORKFLOWS_DIR", "workflows")
+	workflowEngine := workflows.NewEngine(queries, agentSvc)
+	if err := workflowEngine.Load(workflowsDir); err != nil {
+		return fmt.Errorf("loading workflows: %w", err)
+	}
+	slog.Info("workflows loaded", "count", len(workflowEngine.List()), "dir", workflowsDir)
+
+	// Mark interrupted workflows as failed on startup.
+	if err := workflows.RecoverInterrupted(ctx, queries); err != nil {
+		slog.Warn("failed to recover interrupted workflows", "error", err)
+	}
+
+	workflowHandler := api.NewWorkflowHandler(queries, workflowEngine)
 
 	// Initialize AI assistant (optional — disabled by default).
 	var aiHandler *api.AIHandler
@@ -463,6 +503,7 @@ func run() error {
 		federationHandler.RegisterRoutes(mux)
 		tasksHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
+		workflowHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
 		}
@@ -505,7 +546,7 @@ func run() error {
 
 		version := envOrDefault("HOBNOB_VERSION", "dev")
 		agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
-		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, assistant, hub, gwOpts...)
+		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, assistant, hub, runStore, fleetIndex, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
@@ -514,6 +555,7 @@ func run() error {
 		federationHandler.RegisterRoutes(gwMux)
 		tasksHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)
+		workflowHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)
 		}
@@ -591,7 +633,7 @@ func parseDuration(s string, def time.Duration) time.Duration {
 // notification when a thrall transitions from non-stale to stale. A thrall
 // is stale if it hasn't checked in within 2x the base interval. The checker
 // runs at the base interval frequency.
-func runStaleChecker(ctx context.Context, queries *db.Queries, notifier *hobnobsmtp.Notifier, baseInterval time.Duration) {
+func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, notifier *hobnobsmtp.Notifier, baseInterval time.Duration) {
 	if notifier == nil || !notifier.Enabled() {
 		return
 	}
@@ -607,6 +649,36 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, notifier *hobnobs
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// Use FleetIndex when available (zero DB queries).
+			if fleetIdx != nil {
+				allThralls := fleetIdx.AllThralls()
+				nowStale := make(map[string]bool, len(wasStale))
+				for _, ts := range allThralls {
+					if ts.Revoked || ts.LastSeen.IsZero() {
+						continue
+					}
+					if time.Since(ts.LastSeen) <= staleThreshold {
+						continue
+					}
+					nowStale[ts.ID] = true
+					if wasStale[ts.ID] {
+						continue
+					}
+					notifier.Notify(hobnobsmtp.Event{
+						Name:      "thrall.stale",
+						Timestamp: time.Now().UTC(),
+						Thrall: &hobnobsmtp.ThrallInfo{
+							ID: ts.ID, Hostname: ts.Hostname, IP: ts.IP,
+						},
+						Details: map[string]any{
+							"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC"),
+						},
+					})
+				}
+				wasStale = nowStale
+				continue
+			}
+
 			thralls, err := queries.ListThralls(ctx)
 			if err != nil {
 				slog.Error("stale checker: listing thralls", "error", err)
@@ -651,7 +723,7 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, notifier *hobnobs
 // runComplianceChecker periodically computes the compliance percentage across
 // all active thralls and fires a compliance.threshold SMTP notification when
 // it drops below the configured threshold. Only fires once per transition.
-func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, notifier *hobnobsmtp.Notifier, baseInterval time.Duration, threshold int) {
+func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, notifier *hobnobsmtp.Notifier, baseInterval time.Duration, threshold int) {
 	if notifier == nil || !notifier.Enabled() || threshold <= 0 {
 		return
 	}
@@ -667,6 +739,32 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// Use FleetIndex when available (O(1) compliance summary).
+			if fleetIdx != nil {
+				summary := fleetIdx.ComplianceSummary()
+				total := summary.Total
+				if total == 0 {
+					continue
+				}
+				pct := (summary.Compliant * 100) / total
+				belowNow := pct < threshold
+
+				if belowNow && !wasBelowThreshold {
+					notifier.Notify(hobnobsmtp.Event{
+						Name:      "compliance.threshold",
+						Timestamp: time.Now().UTC(),
+						Details: map[string]any{
+							"compliant_pct": pct,
+							"threshold":     threshold,
+							"compliant":     summary.Compliant,
+							"total":         total,
+						},
+					})
+				}
+				wasBelowThreshold = belowNow
+				continue
+			}
+
 			thralls, err := queries.ListThralls(ctx)
 			if err != nil {
 				slog.Error("compliance checker: listing thralls", "error", err)

@@ -142,6 +142,11 @@ func (s *AdminService) RevokeThrall(ctx context.Context, req *pb.RevokeThrallReq
 		return nil, status.Errorf(codes.Internal, "revoking thrall: %v", err)
 	}
 
+	// Dual-write: update FleetIndex.
+	if s.fleetIndex != nil {
+		s.fleetIndex.SetRevoked(req.Id, true)
+	}
+
 	slog.Warn("thrall revoked", "thrall_id", req.Id)
 
 	return &pb.RevokeThrallResponse{}, nil
@@ -156,6 +161,11 @@ func (s *AdminService) DeleteThrall(ctx context.Context, req *pb.DeleteThrallReq
 
 	if err := s.queries.DeleteThrall(ctx, req.Id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting thrall: %v", err)
+	}
+
+	// Dual-write: remove from FleetIndex.
+	if s.fleetIndex != nil {
+		s.fleetIndex.RemoveThrall(req.Id)
 	}
 
 	slog.Warn("thrall deleted", "thrall_id", req.Id)
@@ -183,6 +193,10 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 		if err := s.queries.SetForcePush(ctx, req.ThrallId); err != nil {
 			return nil, status.Errorf(codes.Internal, "setting force push: %v", err)
 		}
+		// Dual-write: update FleetIndex.
+		if s.fleetIndex != nil {
+			s.fleetIndex.SetForcePush(req.ThrallId, true)
+		}
 		return &pb.ForcePushResponse{ThrallsNotified: 1}, nil
 	}
 
@@ -190,6 +204,11 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 	affected, err := s.queries.SetForcePushAllActive(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "batch setting force push: %v", err)
+	}
+
+	// Dual-write: update FleetIndex.
+	if s.fleetIndex != nil {
+		s.fleetIndex.SetForcePushAll()
 	}
 
 	return &pb.ForcePushResponse{ThrallsNotified: int32(affected)}, nil

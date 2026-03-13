@@ -33,6 +33,9 @@ serde_json = "1"
 # HTTP (bootstrap + self-update only — blocking, no async runtime overhead)
 ureq = { version = "3", features = ["rustls", "json"] }
 
+# Persistent state (LMDB)
+heed = "0.20"
+
 # Misc
 regex-lite = "0.1"
 tracing = "0.1"

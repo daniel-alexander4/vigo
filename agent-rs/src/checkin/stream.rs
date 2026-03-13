@@ -9,8 +9,8 @@
 
 use crate::proto::{
     agent_stream_message, server_stream_message, AgentStreamMessage, CheckInRequest,
-    CheckInResponse, QueryRequest, ReportResultRequest, ServerStreamMessage, StreamPolicyPush,
-    TaskDispatch,
+    CheckInResponse, DeltaAck, QueryRequest, ReportResultRequest, ServerStreamMessage,
+    StreamPolicyPush, TaskDispatch,
 };
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
@@ -34,6 +34,8 @@ pub struct StreamHandle {
     pub task_dispatch_rx: mpsc::Receiver<TaskDispatch>,
     /// Server-dispatched live queries.
     pub query_request_rx: mpsc::Receiver<QueryRequest>,
+    /// Delta acknowledgements from server.
+    pub delta_ack_rx: mpsc::Receiver<DeltaAck>,
     /// Notified when the read loop exits. Clone-friendly.
     pub done: tokio::sync::watch::Receiver<bool>,
 }
@@ -127,6 +129,7 @@ pub async fn open(
     let (check_in_resp_tx, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
     let (task_dispatch_tx, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
     let (query_request_tx, query_request_rx) = mpsc::channel::<QueryRequest>(8);
+    let (delta_ack_tx, delta_ack_rx) = mpsc::channel::<DeltaAck>(8);
     let (done_tx, done_rx) = tokio::sync::watch::channel(false);
 
     // Spawn the read loop.
@@ -138,6 +141,7 @@ pub async fn open(
             check_in_resp_tx,
             task_dispatch_tx,
             query_request_tx,
+            delta_ack_tx,
         )
         .await;
         let _ = done_tx.send(true); // signal disconnect
@@ -150,6 +154,7 @@ pub async fn open(
         check_in_resp_rx,
         task_dispatch_rx,
         query_request_rx,
+        delta_ack_rx,
         done: done_rx,
     };
 
@@ -164,6 +169,7 @@ async fn read_loop(
     check_in_resp_tx: mpsc::Sender<CheckInResponse>,
     task_dispatch_tx: mpsc::Sender<TaskDispatch>,
     query_request_tx: mpsc::Sender<QueryRequest>,
+    delta_ack_tx: mpsc::Sender<DeltaAck>,
 ) {
     loop {
         match stream.message().await {
@@ -196,6 +202,9 @@ async fn read_loop(
                             if query_request_tx.try_send(req).is_err() {
                                 warn!("query request dropped (buffer full)");
                             }
+                        }
+                        server_stream_message::Msg::DeltaAck(ack) => {
+                            let _ = delta_ack_tx.try_send(ack);
                         }
                     }
                 }

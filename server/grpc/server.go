@@ -17,9 +17,11 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
+	"github.com/hobnob/hobnob/server/tasks"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc"
@@ -62,38 +64,33 @@ type ServerConfig struct {
 	Dispatcher      *webhook.Dispatcher
 	TraitsDir            string
 	SignatureWindow      time.Duration // 0 → default 5m
-	ThrallCacheTTL       time.Duration // 0 → default 60s
 	TraitsScannerTTL     time.Duration // 0 → default 30s
 	MaxConcurrentStreams uint32        // 0 → default 1000
 	Hub              *federation.Hub // non-nil when role=hub
 	SMTPNotifier     *hobnobsmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
+	TaskStore        *tasks.Store
+	FleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
+	RunBatcher       *fleet.RunBatcher  // async run persistence from delta events
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
 // TLS 1.3 minimum, client certificate required and verified against CA.
-// Returns the server, a CertCache for TLS hot reload, a LastSeenBatcher,
-// a TraitsBatcher, and a TraitsPruner whose Start methods should be called
-// in goroutines.
-func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher, *db.TraitsBatcher, *db.TraitsPruner, *AgentService, error) {
+// Returns the server, a CertCache for TLS hot reload, a TraitsBatcher,
+// and a TraitsPruner whose Start methods should be called in goroutines.
+func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *db.TraitsPruner, *AgentService, error) {
 	tlsCfg, certCache, err := buildTLSConfig(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
 
 	creds := credentials.NewTLS(tlsCfg)
 
-	thrallCacheTTL := cfg.ThrallCacheTTL
-	if thrallCacheTTL == 0 {
-		thrallCacheTTL = 60 * time.Second
-	}
 	traitsScannerTTL := cfg.TraitsScannerTTL
 	if traitsScannerTTL == 0 {
 		traitsScannerTTL = 30 * time.Second
 	}
 
-	thrallCache := db.NewThrallCache(cfg.Queries, thrallCacheTTL)
-	lastSeenBatch := db.NewLastSeenBatcher(cfg.Queries)
 	traitsBatch := db.NewTraitsBatcher(cfg.Queries)
 	traitsPruner := db.NewTraitsPruner(cfg.Queries)
 
@@ -104,7 +101,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 
 	srv := grpc.NewServer(
 		grpc.Creds(creds),
-		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, thrallCache, cfg.SignatureWindow)),
+		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex)),
 		grpc.MaxConcurrentStreams(maxStreams),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle: 15 * time.Minute,
@@ -125,16 +122,17 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		dispatcher:    cfg.Dispatcher,
 		smtpNotifier:  cfg.SMTPNotifier,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
-		thrallCache:   thrallCache,
-		lastSeenBatch: lastSeenBatch,
 		traitsBatch:   traitsBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
 		streamMgr:        newStreamManager(),
 		taskRouter:       newTaskRouter(cfg.Queries),
 		queryRouter:      newQueryRouter(),
+		taskStore:        cfg.TaskStore,
 		hub:              cfg.Hub,
 		licenseEnforcer:  cfg.LicenseEnforcer,
+		fleetIndex:       cfg.FleetIndex,
+		runBatcher:       cfg.RunBatcher,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
@@ -145,10 +143,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		configStore:  cfg.ConfigStore,
 		baseInterval: cfg.BaseInterval,
 		hub:          cfg.Hub,
+		fleetIndex:   cfg.FleetIndex,
 	}
 	pb.RegisterHobnobAdminServer(srv, adminSvc)
 
-	return srv, certCache, lastSeenBatch, traitsBatch, traitsPruner, agentSvc, nil
+	return srv, certCache, traitsBatch, traitsPruner, agentSvc, nil
 }
 
 // buildTLSConfig creates a tls.Config requiring client certificates verified

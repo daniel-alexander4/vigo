@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/fleet"
 )
 
 // targetInfo holds a resolved target thrall.
@@ -21,13 +22,15 @@ type targetInfo struct {
 }
 
 // resolveTargets resolves a target spec to a list of thralls.
+// When a FleetIndex is provided, glob and trait resolution use in-memory lookups
+// instead of DB queries, eliminating O(N) database round-trips.
 //
 // The spec is disambiguated as follows:
 //   - UUID format → single thrall by ID (TGT-03)
 //   - Contains "=" → trait filter, e.g. "os.distro=ubuntu" (TGT-02)
 //   - Contains "*" or "?" → hostname glob, e.g. "*.web.prod" (TGT-01)
 //   - Otherwise → single thrall by hostname (TGT-03)
-func resolveTargets(ctx context.Context, queries *db.Queries, spec string) ([]targetInfo, error) {
+func resolveTargets(ctx context.Context, queries *db.Queries, spec string, fi *fleet.FleetIndex) ([]targetInfo, error) {
 	spec = strings.TrimSpace(spec)
 	if spec == "" {
 		return nil, fmt.Errorf("target spec is empty")
@@ -35,6 +38,17 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string) ([]ta
 
 	// UUID → single thrall by ID.
 	if _, err := uuid.Parse(spec); err == nil {
+		// FleetIndex path.
+		if fi != nil {
+			ts := fi.GetThrall(spec)
+			if ts == nil {
+				return nil, fmt.Errorf("thrall %s not found", spec)
+			}
+			if ts.Revoked {
+				return nil, fmt.Errorf("thrall %s is revoked", spec)
+			}
+			return []targetInfo{{ThrallID: ts.ID, Hostname: ts.Hostname}}, nil
+		}
 		thrall, err := queries.GetThrallByID(ctx, spec)
 		if err != nil {
 			return nil, fmt.Errorf("thrall %s not found: %w", spec, err)
@@ -47,15 +61,29 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string) ([]ta
 
 	// Trait filter → key.path=value.
 	if strings.Contains(spec, "=") {
-		return resolveByTrait(ctx, queries, spec)
+		return resolveByTrait(ctx, queries, spec, fi)
 	}
 
 	// Hostname glob → match against all thralls.
 	if strings.ContainsAny(spec, "*?") {
-		return resolveByGlob(ctx, queries, spec)
+		return resolveByGlob(ctx, queries, spec, fi)
 	}
 
 	// Exact hostname.
+	if fi != nil {
+		id := fi.GetByHostname(spec)
+		if id == "" {
+			return nil, fmt.Errorf("thrall with hostname %q not found", spec)
+		}
+		ts := fi.GetThrall(id)
+		if ts == nil {
+			return nil, fmt.Errorf("thrall with hostname %q not found", spec)
+		}
+		if ts.Revoked {
+			return nil, fmt.Errorf("thrall %q is revoked", spec)
+		}
+		return []targetInfo{{ThrallID: ts.ID, Hostname: ts.Hostname}}, nil
+	}
 	thrall, err := queries.GetThrallByHostname(ctx, spec)
 	if err != nil {
 		return nil, fmt.Errorf("thrall with hostname %q not found: %w", spec, err)
@@ -67,7 +95,22 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string) ([]ta
 }
 
 // resolveByGlob matches a hostname glob pattern against all non-revoked thralls.
-func resolveByGlob(ctx context.Context, queries *db.Queries, pattern string) ([]targetInfo, error) {
+// Uses FleetIndex when available (O(N) in-memory, no DB).
+func resolveByGlob(ctx context.Context, queries *db.Queries, pattern string, fi *fleet.FleetIndex) ([]targetInfo, error) {
+	// FleetIndex fast path: in-memory glob match.
+	if fi != nil {
+		fleetTargets := fi.ListByGlob(pattern)
+		if len(fleetTargets) == 0 {
+			return nil, fmt.Errorf("no thralls match pattern %q", pattern)
+		}
+		targets := make([]targetInfo, len(fleetTargets))
+		for i, ft := range fleetTargets {
+			targets[i] = targetInfo{ThrallID: ft.ThrallID, Hostname: ft.Hostname}
+		}
+		return targets, nil
+	}
+
+	// DB fallback.
 	thralls, err := queries.ListThralls(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing thralls: %w", err)
@@ -94,8 +137,9 @@ func resolveByGlob(ctx context.Context, queries *db.Queries, pattern string) ([]
 }
 
 // resolveByTrait matches thralls whose latest traits contain key=value.
+// Uses FleetIndex inverted trait index when available (O(1) lookup).
 // The key is a dot-separated JSON path (e.g. "os.distro").
-func resolveByTrait(ctx context.Context, queries *db.Queries, filter string) ([]targetInfo, error) {
+func resolveByTrait(ctx context.Context, queries *db.Queries, filter string, fi *fleet.FleetIndex) ([]targetInfo, error) {
 	parts := strings.SplitN(filter, "=", 2)
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid trait filter %q (expected key=value)", filter)
@@ -107,6 +151,20 @@ func resolveByTrait(ctx context.Context, queries *db.Queries, filter string) ([]
 		return nil, fmt.Errorf("trait filter key is empty")
 	}
 
+	// FleetIndex fast path: inverted index lookup, zero DB queries.
+	if fi != nil {
+		fleetTargets := fi.ListByTrait(traitPath, wantValue)
+		if len(fleetTargets) == 0 {
+			return nil, fmt.Errorf("no thralls match trait filter %q", filter)
+		}
+		targets := make([]targetInfo, len(fleetTargets))
+		for i, ft := range fleetTargets {
+			targets[i] = targetInfo{ThrallID: ft.ThrallID, Hostname: ft.Hostname}
+		}
+		return targets, nil
+	}
+
+	// DB fallback: O(N) queries per thrall.
 	thralls, err := queries.ListThralls(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing thralls: %w", err)

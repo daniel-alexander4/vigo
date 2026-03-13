@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -29,14 +31,12 @@ const defaultSignatureWindow = 5 * time.Minute
 // ED25519 signatures on agent requests (SEC-03). The Register RPC is skipped
 // because the agent does not have a UUID yet during enrollment.
 //
-// When a ThrallCache is provided, thrall lookups are served from cache,
-// avoiding a DB round-trip on every request. The looked-up thrall is stored
-// in the request context so downstream handlers can reuse it without another
-// lookup.
+// The looked-up thrall is stored in the request context so downstream handlers
+// can reuse it without another lookup.
 //
 // sigWindow configures the maximum age of a signed request before rejection
 // for replay prevention. If zero, defaults to 5 minutes.
-func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.ThrallCache, sigWindow time.Duration) grpc.UnaryServerInterceptor {
+func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) grpc.UnaryServerInterceptor {
 	if sigWindow == 0 {
 		sigWindow = defaultSignatureWindow
 	}
@@ -54,19 +54,19 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.ThrallCache, 
 		// Only verify agent RPCs that carry signatures.
 		switch r := req.(type) {
 		case *pb.CheckInRequest:
-			newCtx, err := verifyCheckIn(ctx, queries, nodeCache, r, sigWindow)
+			newCtx, err := verifyCheckIn(ctx, queries, r, sigWindow, fleetIdx)
 			if err != nil {
 				return nil, err
 			}
 			ctx = newCtx
 		case *pb.ReportResultRequest:
-			newCtx, err := verifyReportResultCtx(ctx, queries, nodeCache, r, sigWindow)
+			newCtx, err := verifyReportResultCtx(ctx, queries, r, sigWindow, fleetIdx)
 			if err != nil {
 				return nil, err
 			}
 			ctx = newCtx
 		case *pb.ReportTraitsRequest:
-			if err := verifyReportTraits(ctx, queries, nodeCache, r, sigWindow); err != nil {
+			if err := verifyReportTraits(ctx, queries, r, sigWindow, fleetIdx); err != nil {
 				return nil, err
 			}
 		default:
@@ -79,13 +79,13 @@ func SignatureVerifyInterceptor(queries *db.Queries, nodeCache *db.ThrallCache, 
 
 // verifyCheckIn validates the signature on a CheckInRequest. On success, it
 // returns a context enriched with the looked-up thrall for handler reuse.
-func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, req *pb.CheckInRequest, sigWindow time.Duration) (context.Context, error) {
+func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) (context.Context, error) {
 	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
 	thrallID := req.GetThrallId()
 
-	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, cache, thrallID)
+	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, thrallID, fleetIdx)
 	if err != nil {
 		return ctx, err
 	}
@@ -114,13 +114,13 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, cache *db.ThrallCac
 
 // verifyReportResultCtx validates the signature on a ReportResultRequest and
 // stores the thrall in context for handler reuse.
-func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, req *pb.ReportResultRequest, sigWindow time.Duration) (context.Context, error) {
+func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.ReportResultRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) (context.Context, error) {
 	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
 	thrallID := req.GetThrallId()
 
-	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, cache, thrallID)
+	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, thrallID, fleetIdx)
 	if err != nil {
 		return ctx, err
 	}
@@ -146,13 +146,13 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, cache *db.T
 }
 
 // verifyReportTraits validates the signature on a ReportTraitsRequest.
-func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, req *pb.ReportTraitsRequest, sigWindow time.Duration) error {
+func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.ReportTraitsRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) error {
 	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
 	}
 	thrallID := req.GetThrallId()
 
-	_, pubKey, err := lookupThrallAndPubKey(ctx, queries, cache, thrallID)
+	_, pubKey, err := lookupThrallAndPubKey(ctx, queries, thrallID, fleetIdx)
 	if err != nil {
 		return err
 	}
@@ -178,19 +178,20 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, cache *db.Thra
 }
 
 // lookupThrallAndPubKey retrieves a thrall and its parsed ED25519 public key.
-// When a ThrallCache is available, the parsed pubkey is served from cache,
-// eliminating PEM decode + x509 parse on every RPC. Falls back to direct
-// DB queries + on-the-fly parsing when no cache is configured.
-func lookupThrallAndPubKey(ctx context.Context, queries *db.Queries, cache *db.ThrallCache, thrallID string) (db.Thrall, ed25519.PublicKey, error) {
-	// Fast path: cache returns both thrall and parsed pubkey.
-	if cache != nil {
-		thrall, pubKey, err := cache.GetByIDWithPubKey(ctx, thrallID)
-		if err != nil {
-			metrics.SigVerifyFailed.WithLabelValues("thrall_not_found").Inc()
-			slog.Error("thrall lookup failed", "thrall_id", thrallID, "error", err)
-			return db.Thrall{}, nil, status.Error(codes.Unauthenticated, "thrall not found")
+// When a FleetIndex is available, the parsed pubkey is served from memory (O(1),
+// no PEM parse). Falls back to direct DB query.
+func lookupThrallAndPubKey(ctx context.Context, queries *db.Queries, thrallID string, fleetIdx *fleet.FleetIndex) (db.Thrall, ed25519.PublicKey, error) {
+	// Fast path: FleetIndex returns parsed pubkey from memory.
+	if fleetIdx != nil {
+		pubKey := fleetIdx.GetPubKey(thrallID)
+		if pubKey != nil {
+			ts := fleetIdx.GetThrall(thrallID)
+			if ts != nil {
+				thrall := fleetThrallToDB(ts)
+				return thrall, pubKey, nil
+			}
 		}
-		return thrall, pubKey, nil
+		// Fall through to DB if not in FleetIndex.
 	}
 
 	// Slow path: direct DB query + parse.
@@ -217,6 +218,33 @@ func lookupThrallAndPubKey(ctx context.Context, queries *db.Queries, cache *db.T
 	}
 
 	return thrall, pubKey, nil
+}
+
+// fleetThrallToDB converts a FleetIndex ThrallState to a db.Thrall for
+// compatibility with code that expects the DB model.
+func fleetThrallToDB(ts *fleet.ThrallState) db.Thrall {
+	t := db.Thrall{
+		ID:        ts.ID,
+		Hostname:  ts.Hostname,
+		IpAddress: ts.IP,
+		PubkeyPem: ts.PubkeyPEM,
+		EnrolledAt: ts.EnrolledAt,
+	}
+	if !ts.LastSeen.IsZero() {
+		t.LastSeen.Time = ts.LastSeen
+		t.LastSeen.Valid = true
+	}
+	if ts.Revoked {
+		t.Revoked = 1
+	}
+	if ts.ForcePush {
+		t.ForcePush = 1
+	}
+	if len(ts.PendingRotatedSecrets) > 0 {
+		b, _ := json.Marshal(ts.PendingRotatedSecrets)
+		t.PendingRotatedSecrets = string(b)
+	}
+	return t
 }
 
 // verifyPayload verifies an ED25519 signature over payload+timestamp.

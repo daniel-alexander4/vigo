@@ -10,6 +10,8 @@ import (
 	"time"
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/registry"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/webhook"
@@ -88,6 +90,20 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 				)
 			}
 		}
+	}
+
+	// Insert into FleetIndex for immediate in-memory availability.
+	if s.fleetIndex != nil && spokeAddr == "" {
+		// Only index locally when not routed to a spoke.
+		pubKey, _ := db.ParsePubKey(req.GetPubkeyPem())
+		s.fleetIndex.AddThrall(fleet.ThrallState{
+			ID:               thrallID,
+			Hostname:         req.GetHostname(),
+			IP:               req.GetIpAddress(),
+			PubkeyPEM:        req.GetPubkeyPem(),
+			EnrolledAt:       time.Now(),
+			ComplianceStatus: "unknown",
+		}, pubKey)
 	}
 
 	slog.Info("thrall registered",

@@ -1,0 +1,190 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+package tasks
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+
+	"gopkg.in/yaml.v3"
+)
+
+// ParamDef defines a single task parameter.
+type ParamDef struct {
+	Type        string `yaml:"type"`        // "string", "int", "bool"
+	Required    bool   `yaml:"required"`
+	Default     string `yaml:"default"`
+	Description string `yaml:"description"`
+}
+
+// TaskDef is a reusable task definition loaded from a YAML file.
+type TaskDef struct {
+	Name        string              `yaml:"name"`
+	Description string              `yaml:"description"`
+	Timeout     int32               `yaml:"timeout"`
+	Target      string              `yaml:"target"`
+	Parameters  map[string]ParamDef `yaml:"parameters"`
+	Script      string              `yaml:"script"`
+}
+
+// Store holds loaded task definitions.
+type Store struct {
+	mu    sync.RWMutex
+	tasks map[string]*TaskDef
+}
+
+// NewStore creates an empty task store.
+func NewStore() *Store {
+	return &Store{tasks: make(map[string]*TaskDef)}
+}
+
+// Load reads all .yaml files from a directory and populates the store.
+func (s *Store) Load(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // no tasks directory is fine
+		}
+		return fmt.Errorf("reading tasks directory: %w", err)
+	}
+
+	tasks := make(map[string]*TaskDef)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(entry.Name())
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", entry.Name(), err)
+		}
+
+		var def TaskDef
+		if err := yaml.Unmarshal(data, &def); err != nil {
+			return fmt.Errorf("parsing %s: %w", entry.Name(), err)
+		}
+
+		if def.Name == "" {
+			def.Name = strings.TrimSuffix(entry.Name(), ext)
+		}
+		if def.Script == "" {
+			return fmt.Errorf("task %q has no script", def.Name)
+		}
+		if def.Timeout <= 0 {
+			def.Timeout = 60
+		}
+
+		// Default parameter type to "string".
+		for k, p := range def.Parameters {
+			if p.Type == "" {
+				p.Type = "string"
+				def.Parameters[k] = p
+			}
+		}
+
+		tasks[def.Name] = &def
+	}
+
+	s.mu.Lock()
+	s.tasks = tasks
+	s.mu.Unlock()
+	return nil
+}
+
+// Get returns a task definition by name.
+func (s *Store) Get(name string) (*TaskDef, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.tasks[name]
+	return t, ok
+}
+
+// List returns all task names sorted alphabetically.
+func (s *Store) List() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	names := make([]string, 0, len(s.tasks))
+	for name := range s.tasks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// All returns all task definitions.
+func (s *Store) All() []*TaskDef {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	defs := make([]*TaskDef, 0, len(s.tasks))
+	for _, d := range s.tasks {
+		defs = append(defs, d)
+	}
+	sort.Slice(defs, func(i, j int) bool { return defs[i].Name < defs[j].Name })
+	return defs
+}
+
+// ValidateParams checks that all required parameters are present and no
+// unknown parameters are supplied. Returns an error naming invalid params.
+func ValidateParams(def *TaskDef, params map[string]string) error {
+	var missing, unknown []string
+
+	// Check for unknown parameters.
+	for k := range params {
+		if _, ok := def.Parameters[k]; !ok {
+			unknown = append(unknown, k)
+		}
+	}
+
+	// Check for missing required parameters.
+	for k, p := range def.Parameters {
+		if p.Required {
+			if _, ok := params[k]; !ok {
+				if p.Default == "" {
+					missing = append(missing, k)
+				}
+			}
+		}
+	}
+
+	sort.Strings(missing)
+	sort.Strings(unknown)
+
+	if len(missing) > 0 && len(unknown) > 0 {
+		return fmt.Errorf("missing required parameters: %s; unknown parameters: %s",
+			strings.Join(missing, ", "), strings.Join(unknown, ", "))
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required parameters: %s", strings.Join(missing, ", "))
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown parameters: %s", strings.Join(unknown, ", "))
+	}
+	return nil
+}
+
+// BuildEnv converts parameter values into environment variables.
+// Parameter names are converted to UPPER_SNAKE_CASE with a PARAM_ prefix.
+// Missing optional parameters use their default value.
+func BuildEnv(def *TaskDef, params map[string]string) map[string]string {
+	env := make(map[string]string, len(def.Parameters))
+	for k, p := range def.Parameters {
+		val, ok := params[k]
+		if !ok {
+			val = p.Default
+		}
+		if val != "" {
+			envKey := "PARAM_" + strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
+			env[envKey] = val
+		}
+	}
+	return env
+}

@@ -33,3 +33,8 @@ ORDER BY step_index ASC;
 UPDATE workflow_step_results
 SET status = ?2, task_run_id = ?3, started_at = ?4, finished_at = ?5
 WHERE id = ?1;
+
+-- name: FailInterruptedWorkflows :exec
+UPDATE workflow_runs
+SET status = 'failed', finished_at = datetime('now'), failure_reason = 'restart_interrupted'
+WHERE status IN ('running', 'pending');

@@ -121,3 +121,15 @@ func (p *OllamaProvider) EnsureModel(ctx context.Context, model string) error {
 	slog.Info("ollama model pulled successfully", "model", model)
 	return nil
 }
+
+// Chat overrides the base OpenAICompatProvider to omit max_tokens when tools
+// are present. Ollama's OpenAI-compat endpoint hangs when both max_tokens
+// and tools are sent in the same request.
+func (p *OllamaProvider) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	maxTokens := req.MaxTokens
+	if len(req.Tools) > 0 {
+		slog.Info("ollama: omitting max_tokens (incompatible with tools)", "original", req.MaxTokens, "tools", len(req.Tools))
+		maxTokens = 0
+	}
+	return p.OpenAICompatProvider.chat(ctx, req, maxTokens)
+}

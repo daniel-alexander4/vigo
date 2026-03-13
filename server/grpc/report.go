@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/metrics"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/webhook"
@@ -123,6 +124,21 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	// Record run duration (use the run we already created — no re-fetch needed).
 	duration := time.Since(run.StartedAt).Seconds()
 	metrics.RunDuration.WithLabelValues(hostname).Observe(duration)
+
+	// Update FleetIndex with run status + append to recent runs.
+	if s.fleetIndex != nil {
+		now := time.Now()
+		s.fleetIndex.UpdateRunStatus(thrallID, runStatus, changedCount, now)
+		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
+			RunID:        runID,
+			ThrallID:     thrallID,
+			Hostname:     hostname,
+			Status:       runStatus,
+			ChangedCount: changedCount,
+			FailedCount:  failedCount,
+			FinishedAt:   now,
+		})
+	}
 
 	slog.Info("run completed",
 		"run_id", runID,

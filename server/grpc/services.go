@@ -10,9 +10,11 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
+	"github.com/hobnob/hobnob/server/tasks"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 )
@@ -27,16 +29,17 @@ type AgentService struct {
 	dispatcher     *webhook.Dispatcher
 	smtpNotifier   *hobnobsmtp.Notifier
 	traitsScanner   *traits.Scanner
-	thrallCache    *db.ThrallCache
-	lastSeenBatch  *db.LastSeenBatcher
 	traitsBatch    *db.TraitsBatcher
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache
 	streamMgr        *streamManager
 	taskRouter       *taskRouter
 	queryRouter      *queryRouter
+	taskStore        *tasks.Store
 	hub              *federation.Hub    // non-nil when role=hub; routes enrollment to spokes
 	licenseEnforcer  *license.Enforcer
+	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
+	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
 }
 
 // AdminService implements the HobnobAdmin gRPC service.
@@ -47,5 +50,6 @@ type AdminService struct {
 	runStore     db.RunStore
 	configStore  *config.ConfigStore
 	baseInterval time.Duration
-	hub          *federation.Hub // non-nil when role=hub; aggregates from spokes
+	hub          *federation.Hub   // non-nil when role=hub; aggregates from spokes
+	fleetIndex   *fleet.FleetIndex // in-memory index for hot-path operations
 }

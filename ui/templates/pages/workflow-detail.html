@@ -1,0 +1,65 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/workflows">Workflows</a> &rsaquo; {{truncUUID .Workflow.ID}}
+    </div>
+    <h1>{{.Workflow.WorkflowName}}</h1>
+    <p>
+        {{template "status-badge" dict "Status" .Workflow.Status}}
+        &middot; Step {{.Workflow.CurrentStep}}/{{.Workflow.TotalSteps}}
+        &middot; {{.Workflow.Operator}}
+        &middot; {{formatTime .Workflow.CreatedAt}}
+        {{if .Workflow.FailureReason}}&middot; <span class="text-danger">{{.Workflow.FailureReason}}</span>{{end}}
+    </p>
+</div>
+
+<div class="stat-cards mb-2">
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.Workflow.TotalSteps}}</div>
+        <div class="stat-card__label">Total Steps</div>
+    </div>
+    <div class="stat-card stat-card--success">
+        <div class="stat-card__value">{{.CompletedSteps}}</div>
+        <div class="stat-card__label">Completed</div>
+    </div>
+    <div class="stat-card stat-card--danger">
+        <div class="stat-card__value">{{.FailedSteps}}</div>
+        <div class="stat-card__label">Failed</div>
+    </div>
+</div>
+
+<div class="table-container"{{if .IsRunning}} hx-get="/workflows/{{.Workflow.ID}}" hx-trigger="every 3s" hx-select=".table-container" hx-swap="outerHTML"{{end}}>
+    <h3>Steps</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Step</th>
+                <th>Status</th>
+                <th>Task Run</th>
+                <th>Started</th>
+                <th>Finished</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Steps}}
+            <tr>
+                <td>{{.StepIndex}}</td>
+                <td>{{.StepName}}</td>
+                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td class="mono">
+                    {{if .TaskRunID}}<a href="/tasks/{{.TaskRunID}}">{{truncUUID .TaskRunID}}</a>{{else}}-{{end}}
+                </td>
+                <td class="text-muted">{{if not .StartedAt.IsZero}}{{formatTime .StartedAt}}{{else}}-{{end}}</td>
+                <td class="text-muted">{{if not .FinishedAt.IsZero}}{{formatTime .FinishedAt}}{{else}}-{{end}}</td>
+            </tr>
+            {{end}}
+            {{if not .Steps}}
+            <tr>
+                <td colspan="6" class="text-muted" style="text-align:center; padding:40px;">No steps recorded.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

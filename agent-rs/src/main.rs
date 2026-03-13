@@ -9,6 +9,7 @@ pub mod executors;
 pub mod policy;
 pub mod runner;
 pub mod snapshots;
+pub mod state;
 pub mod task;
 pub mod traits;
 pub mod update;
@@ -537,6 +538,19 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         cancel_clone.cancel();
     });
 
+    // Open persistent state store for offline convergence.
+    let state_dir = std::path::PathBuf::from("/var/lib/hobnob/state");
+    let state_store = match state::StateStore::open(&state_dir) {
+        Ok(s) => {
+            info!(path = %state_dir.display(), "persistent state store ready");
+            Some(s)
+        }
+        Err(e) => {
+            warn!(error = %e, "could not open state store, offline convergence disabled");
+            None
+        }
+    };
+
     // Configure daemon loop.
     let traits_cache_dir = cli.data_dir.join("traits").to_string_lossy().to_string();
     let cfg = checkin::loop_impl::LoopConfig {
@@ -547,6 +561,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
             api_addr: cli.api_addr.clone(),
             current_version: VERSION.to_string(),
         }),
+        state_store,
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await

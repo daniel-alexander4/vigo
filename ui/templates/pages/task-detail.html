@@ -1,0 +1,89 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/tasks">Tasks</a> &rsaquo; {{truncUUID .Task.ID}}
+    </div>
+    <h1>Task {{truncUUID .Task.ID}}</h1>
+    <p>
+        {{template "status-badge" dict "Status" .Task.Status}}
+        &middot; Target: <code>{{.Task.Target}}</code>
+        &middot; {{.Task.Operator}}
+        &middot; {{formatTime .Task.CreatedAt}}
+    </p>
+</div>
+
+<div class="stat-cards mb-2">
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.Task.TotalTargets}}</div>
+        <div class="stat-card__label">Targets</div>
+    </div>
+    {{if .Task.BatchSize}}
+    <div class="stat-card stat-card--info">
+        <div class="stat-card__value">{{.Task.BatchSize}}</div>
+        <div class="stat-card__label">Batch Size</div>
+    </div>
+    {{end}}
+    {{if .Task.MaxFailures}}
+    <div class="stat-card stat-card--warning">
+        <div class="stat-card__value">{{.Task.MaxFailures}}</div>
+        <div class="stat-card__label">Max Failures</div>
+    </div>
+    {{end}}
+</div>
+
+<div class="detail-section mb-2">
+    <h3>Command</h3>
+    <pre class="code-block">{{.Task.Command}}</pre>
+</div>
+
+<div class="table-container"{{if .IsRunning}} hx-get="/tasks/{{.Task.ID}}" hx-trigger="every 3s" hx-select=".table-container" hx-swap="outerHTML"{{end}}>
+    <h3>Per-Thrall Results</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Exit</th>
+                <th>Duration</th>
+                <th>Error</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Targets}}
+            <tr>
+                <td>{{.Hostname}}</td>
+                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td class="mono">{{if .ExitCode}}{{.ExitCode}}{{else}}-{{end}}</td>
+                <td class="mono">{{if .DurationMs}}{{.DurationMs}}ms{{else}}-{{end}}</td>
+                <td>{{if .ErrorMsg}}<span class="text-danger">{{.ErrorMsg}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+            </tr>
+            {{if .Stdout}}
+            <tr>
+                <td colspan="5">
+                    <details>
+                        <summary class="text-muted">stdout</summary>
+                        <pre class="output-block">{{.Stdout}}</pre>
+                    </details>
+                </td>
+            </tr>
+            {{end}}
+            {{if .Stderr}}
+            <tr>
+                <td colspan="5">
+                    <details>
+                        <summary class="text-danger">stderr</summary>
+                        <pre class="output-block output-block--error">{{.Stderr}}</pre>
+                    </details>
+                </td>
+            </tr>
+            {{end}}
+            {{end}}
+            {{if not .Targets}}
+            <tr>
+                <td colspan="5" class="text-muted" style="text-align:center; padding:40px;">No targets.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

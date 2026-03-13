@@ -39,6 +39,7 @@ func funcMap() template.FuncMap {
 		"sub":           func(a, b int) int { return a - b },
 		"dict":          dict,
 		"pct":           pct,
+		"truncCommand":  truncCommand,
 	}
 }
 
@@ -162,6 +163,18 @@ func highlightYAML(source string) template.HTML {
 	}
 
 	return template.HTML(buf.String())
+}
+
+// truncCommand returns a command string truncated to 50 chars for display.
+func truncCommand(cmd string) string {
+	// Show only the first line for multi-line scripts.
+	if idx := strings.IndexByte(cmd, '\n'); idx >= 0 {
+		cmd = cmd[:idx] + "..."
+	}
+	if len(cmd) > 50 {
+		return cmd[:47] + "..."
+	}
+	return cmd
 }
 
 // truncUUID returns the first 8 characters of a UUID string.

@@ -108,7 +108,7 @@ type LiveQueryResult struct {
 // DispatchQuery resolves targets, dispatches QueryRequest to connected agents,
 // fetches cached traits for offline agents, and collects responses with a timeout.
 func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec string, timeout time.Duration) (*LiveQueryResult, error) {
-	targets, err := resolveTargets(ctx, s.queries, targetSpec)
+	targets, err := resolveTargets(ctx, s.queries, targetSpec, s.fleetIndex)
 	if err != nil {
 		return nil, err
 	}
