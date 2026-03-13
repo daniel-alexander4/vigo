@@ -21,17 +21,30 @@ for arg in "$@"; do
 done
 
 echo "Stopping and removing hobnob service..."
-systemctl stop hobnob 2>/dev/null || true
-systemctl disable hobnob 2>/dev/null || true
-rm -f /etc/systemd/system/hobnob.service
+systemctl stop hobnob-thrall 2>/dev/null || true
+systemctl disable hobnob-thrall 2>/dev/null || true
+rm -f /etc/systemd/system/hobnob-thrall.service
 systemctl daemon-reload
-systemctl reset-failed hobnob 2>/dev/null || true
+systemctl reset-failed hobnob-thrall 2>/dev/null || true
 
-echo "Removing agent binary..."
+# Also clean up old isogov/hobnob service names if present.
+for old in hobnob isogov isogov-agent; do
+  systemctl stop "$old" 2>/dev/null || true
+  systemctl disable "$old" 2>/dev/null || true
+  rm -f "/etc/systemd/system/${old}.service"
+  systemctl reset-failed "$old" 2>/dev/null || true
+done
+systemctl daemon-reload
+
+echo "Removing agent binaries (current + legacy)..."
 rm -f /usr/local/bin/hobnob
+rm -f /usr/local/bin/isogov-agent
 
 echo "Removing agent data (/etc/hobnob-thrall)..."
 rm -rf /etc/hobnob-thrall
+
+echo "Removing agent LMDB state (/var/lib/hobnob)..."
+rm -rf /var/lib/hobnob
 
 echo "Removing server data (/etc/hobnob-server), preserving license..."
 find /etc/hobnob-server -mindepth 1 \

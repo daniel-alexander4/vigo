@@ -19,12 +19,15 @@ import (
 	"database/sql"
 
 	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
 	hobnobai "github.com/hobnob/hobnob/server/ai"
 	"github.com/hobnob/hobnob/server/api"
+	"github.com/hobnob/hobnob/server/backup"
 	"github.com/hobnob/hobnob/server/bootstrap"
 	"github.com/hobnob/hobnob/server/ca"
 	"github.com/hobnob/hobnob/server/compliance"
@@ -106,39 +109,63 @@ func run() error {
 		"api_listen", cfg.Server.APIListen,
 	)
 
-	// Connect to SQLite.
-	sqlDB, err := sql.Open("sqlite3", cfg.Database.DSN)
+	// Determine database driver.
+	dbDriver := cfg.Database.Driver
+	if dbDriver == "" {
+		dbDriver = "sqlite"
+	}
+	isPostgres := dbDriver == "postgres"
+
+	// Open database connection.
+	var sqlDB *sql.DB
+	if isPostgres {
+		sqlDB, err = sql.Open("postgres", cfg.Database.DSN)
+	} else {
+		sqlDB, err = sql.Open("sqlite3", cfg.Database.DSN)
+	}
 	if err != nil {
-		return fmt.Errorf("opening database: %w", err)
+		return fmt.Errorf("opening database (%s): %w", dbDriver, err)
 	}
 	defer sqlDB.Close()
 
-	// Enable SQLite features and tune for high-concurrency.
-	pragmas := []struct{ sql, desc string }{
-		{"PRAGMA foreign_keys = ON", "enabling foreign keys"},
-		{"PRAGMA journal_mode = WAL", "setting WAL mode"},
-		{"PRAGMA busy_timeout = 5000", "setting busy timeout"},       // wait 5s on lock instead of failing
-		{"PRAGMA synchronous = NORMAL", "setting synchronous mode"},  // WAL+NORMAL is safe and 2-5x faster
-		{"PRAGMA cache_size = -64000", "setting cache size"},         // 64MB page cache
-		{"PRAGMA temp_store = MEMORY", "setting temp store"},         // temp tables in RAM
-	}
-	for _, p := range pragmas {
-		if _, err := sqlDB.ExecContext(ctx, p.sql); err != nil {
-			return fmt.Errorf("%s: %w", p.desc, err)
+	// SQLite-specific tuning.
+	if !isPostgres {
+		pragmas := []struct{ sql, desc string }{
+			{"PRAGMA foreign_keys = ON", "enabling foreign keys"},
+			{"PRAGMA journal_mode = WAL", "setting WAL mode"},
+			{"PRAGMA busy_timeout = 5000", "setting busy timeout"},
+			{"PRAGMA synchronous = NORMAL", "setting synchronous mode"},
+			{"PRAGMA cache_size = -64000", "setting cache size"},
+			{"PRAGMA temp_store = MEMORY", "setting temp store"},
+			{"PRAGMA auto_vacuum = INCREMENTAL", "setting auto vacuum"},
+		}
+		for _, p := range pragmas {
+			if _, err := sqlDB.ExecContext(ctx, p.sql); err != nil {
+				return fmt.Errorf("%s: %w", p.desc, err)
+			}
 		}
 	}
 
 	if err := sqlDB.PingContext(ctx); err != nil {
 		return fmt.Errorf("pinging database: %w", err)
 	}
-	slog.Info("database connected")
+	slog.Info("database connected", "driver", dbDriver)
 
-	// Run migrations.
-	absPath, err := filepath.Abs(migrationsDir)
+	// Run migrations (use driver-specific migration directory for Postgres).
+	migDir := migrationsDir
+	if isPostgres {
+		migDir = filepath.Join(migrationsDir, "postgres")
+	}
+	absPath, err := filepath.Abs(migDir)
 	if err != nil {
 		return fmt.Errorf("resolving migrations path: %w", err)
 	}
-	migDSN := "sqlite3://" + cfg.Database.DSN
+	var migDSN string
+	if isPostgres {
+		migDSN = cfg.Database.DSN
+	} else {
+		migDSN = "sqlite3://" + cfg.Database.DSN
+	}
 	mig, err := migrate.New("file://"+absPath, migDSN)
 	if err != nil {
 		return fmt.Errorf("creating migrate instance: %w", err)
@@ -156,7 +183,13 @@ func run() error {
 	slog.Info("migrations complete")
 
 	// Initialize query layer early — needed for license thrall count.
-	queries := db.New(sqlDB)
+	// For Postgres, wrap DB with placeholder rewriter so sqlc-generated
+	// queries (which use ?) work with Postgres ($1, $2, ...).
+	var dbtx db.DBTX = sqlDB
+	if isPostgres {
+		dbtx = &db.PgDBTX{DB: sqlDB}
+	}
+	queries := db.New(dbtx)
 
 	// Load and validate license.
 	licenseDir := envOrDefault("HOBNOB_LICENSE_DIR", license.DefaultLicenseDir)
@@ -376,6 +409,34 @@ func run() error {
 	// Start async traits pruner.
 	go traitsPruner.Start(ctx, traitsPruneInterval)
 
+	// Start retention pruner (if configured).
+	if retention := parseRetention(cfg.Database.Retention); retention > 0 {
+		retentionPruner := db.NewRetentionPruner(queries, sqlDB, retention)
+		retentionPruner.SetPostgres(isPostgres)
+		go retentionPruner.Start(ctx, 24*time.Hour)
+		slog.Info("retention pruner enabled", "retention", retention, "interval", "24h")
+	}
+
+	// Start Litestream WAL replication (SQLite only, when backup.url is configured).
+	if !isPostgres && cfg.Backup.URL != "" {
+		replicator := backup.NewReplicator(backup.Config{
+			URL:             cfg.Backup.URL,
+			DBPath:          cfg.Database.DSN,
+			AccessKeyID:     cfg.Backup.AccessKeyID,
+			SecretAccessKey: cfg.Backup.SecretAccessKey,
+			Region:          cfg.Backup.Region,
+			Endpoint:        cfg.Backup.Endpoint,
+			ForcePathStyle:  cfg.Backup.ForcePathStyle,
+			Retention:       cfg.Backup.Retention,
+			SyncInterval:    cfg.Backup.SyncInterval,
+		})
+		go func() {
+			if err := replicator.Start(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("litestream replication failed", "error", err)
+			}
+		}()
+	}
+
 	// Start secret rotation watcher (hub and standalone only).
 	if role != config.RoleSpoke && cfg.Watcher.Enabled {
 		if vp, ok := provider.(watcher.VersionProvider); ok {
@@ -418,7 +479,7 @@ func run() error {
 	}()
 
 	// Start metrics collector in background.
-	metricsCollector := metrics.NewCollector(queries)
+	metricsCollector := metrics.NewCollector(queries, sqlDB)
 	go metricsCollector.Run(ctx, metricsInterval)
 
 	// Start stale thrall checker — fires thrall.stale SMTP events on transition.
@@ -618,6 +679,27 @@ func envOrDefault(key, def string) string {
 }
 
 // parseDuration parses a duration string, returning def if s is empty or invalid.
+// parseRetention parses a retention string like "90d" or "2160h" into a
+// time.Duration. Supports "d" suffix for days. Returns 0 if empty or invalid.
+func parseRetention(s string) time.Duration {
+	if s == "" {
+		return 0
+	}
+	// Support "Nd" shorthand for days.
+	if len(s) > 1 && s[len(s)-1] == 'd' {
+		var days int
+		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
+			return time.Duration(days) * 24 * time.Hour
+		}
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		slog.Warn("invalid retention duration, pruning disabled", "value", s, "error", err)
+		return 0
+	}
+	return d
+}
+
 func parseDuration(s string, def time.Duration) time.Duration {
 	if s == "" {
 		return def

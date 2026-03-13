@@ -45,8 +45,30 @@ server:
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
+# SQLite (default): dsn is a file path (e.g. "/etc/hobnob-server/db/hobnob.db").
+# Postgres: dsn is a connection string (e.g. "postgres://hobnob:pass@localhost/hobnob?sslmode=disable").
+# To enable Postgres: set driver: postgres, add COMPOSE_PROFILES=postgres to .env,
+# and set HOBNOB_DB_DRIVER=postgres in your environment or Docker Compose.
 database:
-  dsn: "secret:hobnob/db/dsn"   # SQLite path (secret:) — default: /etc/hobnob-server/db/hobnob.db
+  dsn: "secret:hobnob/db/dsn"   # SQLite path or Postgres connection string (secret:)
+  # driver: postgres             # "sqlite" (default) or "postgres"
+  # retention: "90d"             # auto-prune runs/tasks/workflows older than this (empty = no pruning)
+
+# ---------------------------------------------------------------------------
+# Backup (Litestream WAL Replication — SQLite only)
+# ---------------------------------------------------------------------------
+# Continuously streams SQLite WAL changes to a replica for disaster recovery.
+# Disabled when url is empty or when database.driver is "postgres".
+# Restore: litestream restore -config <generated> -o <db-path> <db-path>
+# backup:
+#   url: "s3://my-bucket/hobnob"              # s3://, gcs://, sftp://, file:///path
+#   access_key_id: "secret:hobnob/backup/aws_access_key"   # S3/GCS auth (secret:)
+#   secret_access_key: "secret:hobnob/backup/aws_secret_key"
+#   region: "us-east-1"                       # AWS region (optional)
+#   endpoint: ""                              # S3-compatible endpoint (MinIO, Backblaze)
+#   force_path_style: false                   # path-style S3 URLs (required for MinIO)
+#   retention: "720h"                         # snapshot retention (default: 30 days)
+#   sync_interval: "1s"                       # WAL sync frequency (default: 1s)
 
 # ---------------------------------------------------------------------------
 # Agent Check-In

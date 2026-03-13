@@ -366,7 +366,7 @@ hnbvi thrall-configs/modules/nginx.hnb
 - **ED25519 auth** — every agent request is signature-verified
 - **Dependency DAG** — resources declare `depends_on`, topologically sorted
 - **Notify/subscribe** — config change triggers service restart
-- **Conditional resources** — structured conditionals (`go_if_all_pass`, `skip_if_any_pass`, etc.) evaluated server-side
+- **Conditional resources** — `when:` expressions with boolean logic and builtin functions, evaluated server-side
 - **Idempotency enforcement** — `exec` resources require guards; validated at config load time
 - **Trait collection** — OS, hardware, network, packages, time, identity, virtual, uptime, load, mountpoints, processors, DMI, cloud reported every check-in
 - **Compliance tracking** — compliant/drifted/failing/stale/unknown per node
@@ -419,7 +419,7 @@ Missing traits evaluate to `false`. Conditional vars are evaluated before templa
 
 ### Resource conditionals
 
-Resources use four fields to reference conditional vars. Evaluation follows a **gate-then-veto** pattern:
+Resources use `when:` to control whether they run on a given node. The expression is a boolean formula over conditional vars and builtin functions:
 
 ```yaml
 resources:
@@ -427,39 +427,32 @@ resources:
     type: package
     package: nginx
     state: present
-    go_if_all_pass: [is_debian, has_enough_ram]   # gate: ALL must be true
+    when: "is_debian and has_enough_ram"
 
   - name: install-httpd
     type: package
     package: httpd
     state: present
-    go_if_any_pass: [is_rhel, is_centos]          # gate: at least ONE must be true
+    when: "is_rhel or is_centos"
 
   - name: dev-tools
     type: package
     package: strace, htop
     state: present
-    skip_if_all_pass: [is_production, is_locked]   # veto: skip if ALL are true
+    when: "not (is_production and is_locked)"
 
   - name: debug-config
     type: file
     targetpath: /etc/myapp/debug.conf
     content: "debug = true"
-    skip_if_any_pass: is_production                # veto: skip if ANY is true
+    when: "not is_production"
 ```
 
-| Field | Behavior |
-|-------|----------|
-| `go_if_all_pass` | Gate — ALL listed vars must be `"true"`, otherwise resource is skipped |
-| `go_if_any_pass` | Gate — at least ONE listed var must be `"true"`, otherwise skipped |
-| `skip_if_all_pass` | Veto — if ALL listed vars are `"true"`, resource is skipped |
-| `skip_if_any_pass` | Veto — if ANY listed var is `"true"`, resource is skipped |
-
-Gates are checked first, then vetoes. Each field accepts a single string or a list.
+Expressions support `and`, `or`, `not`, parentheses, and builtin function calls. Var references resolve to `"true"`/`"false"` from conditional vars. Builtin functions (e.g., `os_family('debian')`, `file_exists('/path')`) that depend on agent-side state are passed through to the agent for evaluation.
 
 ### Module conditionals
 
-The same four fields work on module references in `nodes.hnb` and role definitions, skipping entire modules:
+`when:` also works on module references in `nodes.hnb` and role definitions, skipping entire modules:
 
 ```yaml
 # thrall-configs/nodes.hnb
@@ -472,16 +465,16 @@ nodes:
     modules:
       - nginx
       - name: apt-cacher
-        go_if_all_pass: is_debian
+        when: "is_debian"
       - name: selinux-policy
-        skip_if_any_pass: is_debian
+        when: "not is_debian"
 ```
 
-Plain string module references (like `nginx` above) are always included. The object form with `name:` allows attaching conditional fields.
+Plain string module references (like `nginx` above) are always included. The object form with `name:` allows attaching `when:` expressions.
 
 ### Conditional blocks
 
-When multiple resources share the same conditions, use `conditional_block` to avoid repetition:
+When multiple resources share the same condition, use `conditional_block` to avoid repetition:
 
 ```yaml
 resources:
@@ -491,7 +484,7 @@ resources:
     state: present
 
   - conditional_block:
-      go_if_all_pass: is_debian
+      when: "is_debian"
       resources:
         - name: apt-transport-https
           type: package
@@ -510,7 +503,7 @@ resources:
     state: present
 ```
 
-Block-level conditionals are merged onto each child resource at config load time — the block flattens away. If a child resource also has its own conditional fields, both sets apply (block conditions are prepended).
+Block-level `when:` is merged onto each child resource at config load time — the block flattens away. If a child resource also has its own `when:`, both are combined with `and`.
 
 ### Full example
 
@@ -536,13 +529,13 @@ resources:
     type: package
     package: nginx
     state: present
-    go_if_all_pass: is_debian
+    when: "is_debian"
 
   - name: install-nginx-rpm
     type: package
     package: nginx
     state: present
-    go_if_all_pass: is_rhel
+    when: "is_rhel"
 
   - name: nginx-conf
     type: file
@@ -557,7 +550,7 @@ resources:
     content: |
       proxy_cache_path /var/cache/nginx levels=1:2
         keys_zone=default:10m max_size=1g;
-    go_if_all_pass: has_enough_ram
+    when: "has_enough_ram"
 
   - name: nginx-service
     type: service

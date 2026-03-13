@@ -87,7 +87,7 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 		insertThrall(t, sqlDB, fmt.Sprintf("t-%d", i), fmt.Sprintf("h-%d.example.com", i), ls, revoked)
 	}
 
-	c := NewCollector(db.New(sqlDB))
+	c := NewCollector(db.New(sqlDB), sqlDB)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -128,7 +128,7 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	insertThrall(t, sqlDB, "t-3", "noseen.example.com", nil, false)
 	insertThrall(t, sqlDB, "t-4", "revoked.example.com", &seen4, true)
 
-	c := NewCollector(db.New(sqlDB))
+	c := NewCollector(db.New(sqlDB), sqlDB)
 	ctx := context.Background()
 
 	if err := c.UpdateGauges(ctx); err != nil {

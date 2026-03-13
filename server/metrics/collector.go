@@ -5,6 +5,7 @@ package metrics
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"time"
 
@@ -14,11 +15,12 @@ import (
 // Collector periodically queries the database to update gauge metrics.
 type Collector struct {
 	queries *db.Queries
+	sqlDB   *sql.DB
 }
 
 // NewCollector creates a new metrics collector.
-func NewCollector(queries *db.Queries) *Collector {
-	return &Collector{queries: queries}
+func NewCollector(queries *db.Queries, sqlDB *sql.DB) *Collector {
+	return &Collector{queries: queries, sqlDB: sqlDB}
 }
 
 // UpdateGauges queries the database and updates all gauge metrics.
@@ -56,6 +58,13 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		CompliancePct.Set(float64(compliantCount) / float64(totalNonRevoked))
 	} else {
 		CompliancePct.Set(0)
+	}
+
+	// Update database size metric.
+	if c.sqlDB != nil {
+		if size, err := db.DatabaseSizeBytes(c.sqlDB); err == nil {
+			DatabaseSizeBytes.Set(float64(size))
+		}
 	}
 
 	return nil

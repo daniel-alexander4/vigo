@@ -72,7 +72,17 @@ seed_secret() {
     fi
 }
 
-seed_secret "hobnob/db/dsn" "/etc/hobnob-server/db/hobnob.db"
+# Default DSN: SQLite. Override via HOBNOB_DB_DRIVER=postgres for Postgres.
+if [ "${HOBNOB_DB_DRIVER}" = "postgres" ]; then
+    PG_HOST="${HOBNOB_PG_HOST:-hobnob-postgres}"
+    PG_PORT="${HOBNOB_PG_PORT:-5432}"
+    PG_USER="${HOBNOB_PG_USER:-hobnob}"
+    PG_PASS="${HOBNOB_PG_PASS:-hobnob}"
+    PG_DB="${HOBNOB_PG_DB:-hobnob}"
+    seed_secret "hobnob/db/dsn" "postgres://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}?sslmode=disable"
+else
+    seed_secret "hobnob/db/dsn" "/etc/hobnob-server/db/hobnob.db"
+fi
 seed_secret "hobnob/tls/cert" "certs/server.crt"
 seed_secret "hobnob/tls/key" "certs/server.key"
 seed_secret "hobnob/tls/ca" "certs/ca.crt"
@@ -115,9 +125,21 @@ if [ ! -f "$ENV_FILE" ]; then
 # HOBNOB_AI_MAX_TOKENS=4096
 
 # =============================================================================
+# DATABASE DRIVER — "sqlite" (default) or "postgres"
+# =============================================================================
+# To use Postgres, set HOBNOB_DB_DRIVER=postgres and add "postgres" to COMPOSE_PROFILES.
+# HOBNOB_DB_DRIVER=postgres
+# HOBNOB_PG_HOST=hobnob-postgres
+# HOBNOB_PG_PORT=5432
+# HOBNOB_PG_USER=hobnob
+# HOBNOB_PG_PASS=hobnob
+# HOBNOB_PG_DB=hobnob
+
+# =============================================================================
 # DOCKER COMPOSE — controls which optional services start.
 # =============================================================================
 # Set to "ollama" to start the local Ollama container alongside hobnob.
+# Add "postgres" to use the Postgres container (e.g. COMPOSE_PROFILES=ollama,postgres).
 # Leave empty for no-AI or API-based AI (claude, openai).
 # COMPOSE_PROFILES=ollama
 ENVEOF
@@ -172,6 +194,15 @@ set +a
 # ---------------------------------------------------------------------------
 # Generate ai: block in server.yaml from env vars
 # ---------------------------------------------------------------------------
+
+# Inject database.driver into server.yaml if set via env var.
+if [ "${HOBNOB_DB_DRIVER}" = "postgres" ]; then
+    # Add driver: postgres under database: section if not already present.
+    if ! grep -q 'driver:' "$SERVER_YAML"; then
+        sed -i '/^database:/a\  driver: postgres' "$SERVER_YAML"
+        echo "Database driver set to postgres."
+    fi
+fi
 
 # Strip any existing ai: block (from previous runs).
 sed -i '/^ai:/,/^[^ ]/{ /^ai:/d; /^  /d; }' "$SERVER_YAML"

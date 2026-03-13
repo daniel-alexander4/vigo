@@ -23,6 +23,8 @@ server:
 
 database:
   dsn: "secret:hobnob/db/dsn"
+  # driver: postgres           # "sqlite" (default) or "postgres"
+  # retention: "90d"           # auto-prune old runs/tasks/workflows (empty = no pruning)
 
 checkin:
   base_interval: "5m"

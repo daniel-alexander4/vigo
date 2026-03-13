@@ -9,6 +9,7 @@
 use anyhow::Result;
 use heed::types::{Bytes, Str};
 use heed::{Database, Env, RoTxn, RwTxn};
+use std::collections::HashSet;
 
 /// Entry in the checksum cache: SHA256 hash + file mtime (Unix seconds).
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +81,37 @@ impl ChecksumCache {
         self.db.delete(wtxn, path)?;
         Ok(())
     }
+
+    /// Remove entries for paths not in `active_paths`. Returns the number of
+    /// entries removed. Call after convergence with the set of file paths from
+    /// the current policy to prevent unbounded growth.
+    pub fn prune_stale(
+        &self,
+        wtxn: &mut RwTxn<'_>,
+        active_paths: &HashSet<&str>,
+    ) -> Result<usize> {
+        // Collect stale keys first (can't delete while iterating).
+        let mut stale: Vec<String> = Vec::new();
+        {
+            let iter = self.db.iter(wtxn)?;
+            for result in iter {
+                let (key, _) = result?;
+                if !active_paths.contains(key) {
+                    stale.push(key.to_owned());
+                }
+            }
+        }
+        let count = stale.len();
+        for path in &stale {
+            self.db.delete(wtxn, path)?;
+        }
+        Ok(count)
+    }
+
+    /// Count the total number of cached entries.
+    pub fn len(&self, rtxn: &RoTxn<'_>) -> Result<usize> {
+        Ok(self.db.len(rtxn)? as usize)
+    }
 }
 
 #[cfg(test)]
@@ -145,5 +177,81 @@ mod tests {
 
         let rtxn = store.read_txn().unwrap();
         assert!(store.checksums.get(&rtxn, "/tmp/test").unwrap().is_none());
+    }
+
+    #[test]
+    fn prune_stale_removes_old_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let entry = ChecksumEntry {
+            sha256: [0x11; 32],
+            mtime: 1700000000,
+        };
+
+        // Insert 3 paths.
+        let mut wtxn = store.write_txn().unwrap();
+        store.checksums.put(&mut wtxn, "/etc/a.conf", &entry).unwrap();
+        store.checksums.put(&mut wtxn, "/etc/b.conf", &entry).unwrap();
+        store.checksums.put(&mut wtxn, "/etc/c.conf", &entry).unwrap();
+        wtxn.commit().unwrap();
+
+        // Prune: only /etc/a.conf is still active.
+        let active: HashSet<&str> = ["/etc/a.conf"].into_iter().collect();
+        let mut wtxn = store.write_txn().unwrap();
+        let removed = store.checksums.prune_stale(&mut wtxn, &active).unwrap();
+        wtxn.commit().unwrap();
+
+        assert_eq!(removed, 2);
+
+        let rtxn = store.read_txn().unwrap();
+        assert!(store.checksums.get(&rtxn, "/etc/a.conf").unwrap().is_some());
+        assert!(store.checksums.get(&rtxn, "/etc/b.conf").unwrap().is_none());
+        assert!(store.checksums.get(&rtxn, "/etc/c.conf").unwrap().is_none());
+    }
+
+    #[test]
+    fn prune_stale_noop_when_all_active() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let entry = ChecksumEntry {
+            sha256: [0x22; 32],
+            mtime: 1700000000,
+        };
+
+        let mut wtxn = store.write_txn().unwrap();
+        store.checksums.put(&mut wtxn, "/etc/x", &entry).unwrap();
+        wtxn.commit().unwrap();
+
+        let active: HashSet<&str> = ["/etc/x"].into_iter().collect();
+        let mut wtxn = store.write_txn().unwrap();
+        let removed = store.checksums.prune_stale(&mut wtxn, &active).unwrap();
+        wtxn.commit().unwrap();
+
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn len_counts_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let entry = ChecksumEntry {
+            sha256: [0x33; 32],
+            mtime: 1700000000,
+        };
+
+        let rtxn = store.read_txn().unwrap();
+        assert_eq!(store.checksums.len(&rtxn).unwrap(), 0);
+        drop(rtxn);
+
+        let mut wtxn = store.write_txn().unwrap();
+        store.checksums.put(&mut wtxn, "/a", &entry).unwrap();
+        store.checksums.put(&mut wtxn, "/b", &entry).unwrap();
+        wtxn.commit().unwrap();
+
+        let rtxn = store.read_txn().unwrap();
+        assert_eq!(store.checksums.len(&rtxn).unwrap(), 2);
     }
 }

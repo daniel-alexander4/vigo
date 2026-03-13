@@ -81,4 +81,25 @@ impl StateStore {
     pub fn write_txn(&self) -> Result<heed::RwTxn<'_>> {
         Ok(self.env.write_txn()?)
     }
+
+    /// Return a summary of LMDB usage: pending queue depth and checksum
+    /// cache entry count. Useful for metrics and diagnostics.
+    pub fn stat(&self) -> Result<StateStats> {
+        let rtxn = self.read_txn()?;
+        let pending_count = self.pending.len(&rtxn)?;
+        let checksum_count = self.checksums.len(&rtxn)?;
+        Ok(StateStats {
+            pending_count,
+            checksum_count,
+        })
+    }
+}
+
+/// Summary of LMDB state store usage.
+#[derive(Debug)]
+pub struct StateStats {
+    /// Number of pending delta events awaiting delivery.
+    pub pending_count: usize,
+    /// Number of file paths in the checksum cache.
+    pub checksum_count: usize,
 }

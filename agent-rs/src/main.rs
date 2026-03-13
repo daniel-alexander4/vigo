@@ -83,8 +83,15 @@ fn parse_args() -> Result<Cli> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     let mut positional = Vec::new();
+    let mut in_subcommand = false;
 
     while i < args.len() {
+        // Once we hit a subcommand, all remaining args belong to it.
+        if in_subcommand {
+            positional.push(args[i].clone());
+            i += 1;
+            continue;
+        }
         match args[i].as_str() {
             "--help" | "-h" => {
                 print_usage();
@@ -104,7 +111,10 @@ fn parse_args() -> Result<Cli> {
             "--result-cache-cycles" => { i += 1; cli.result_cache_cycles = arg_val(&args, i)?.parse().context("--result-cache-cycles must be a number")?; }
             "--dry-run" => { cli.dry_run = true; }
             other if other.starts_with('-') => bail!("unknown flag: {}", other),
-            _ => { positional.push(args[i].clone()); }
+            _ => {
+                positional.push(args[i].clone());
+                in_subcommand = true;
+            }
         }
         i += 1;
     }

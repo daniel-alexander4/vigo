@@ -1,0 +1,206 @@
+-- Consolidated Postgres schema for Hobnob.
+-- All tables use TEXT UUIDs with auto-generated v4 defaults via gen_random_uuid().
+
+CREATE TABLE IF NOT EXISTS thralls (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    hostname    TEXT NOT NULL,
+    ip_address  TEXT NOT NULL,
+    pubkey_pem  TEXT NOT NULL,
+    enrolled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen   TIMESTAMP,
+    revoked     INTEGER NOT NULL DEFAULT 0,
+    revoked_at  TIMESTAMP,
+    force_push  INTEGER NOT NULL DEFAULT 0,
+    pending_rotated_secrets TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE INDEX IF NOT EXISTS idx_thralls_hostname ON thralls (hostname);
+
+CREATE TABLE IF NOT EXISTS approved_patterns (
+    id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    pattern    TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    used_at    TIMESTAMP,
+    used_by    TEXT REFERENCES thralls (id)
+);
+
+CREATE TABLE IF NOT EXISTS runs (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    thrall_id     TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    started_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at   TIMESTAMP,
+    status        TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'partial')),
+    module_count  INTEGER NOT NULL DEFAULT 0,
+    changed_count INTEGER NOT NULL DEFAULT 0,
+    failed_count  INTEGER NOT NULL DEFAULT 0,
+    skipped_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_thrall_id ON runs (thrall_id);
+
+CREATE TABLE IF NOT EXISTS run_results (
+    id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    run_id         TEXT NOT NULL REFERENCES runs (id) ON DELETE CASCADE,
+    module_name    TEXT NOT NULL,
+    resource_type  TEXT NOT NULL,
+    resource_name  TEXT NOT NULL,
+    action_taken   TEXT NOT NULL,
+    changed        INTEGER NOT NULL DEFAULT 0,
+    error_message  TEXT,
+    duration_ms    INTEGER NOT NULL DEFAULT 0,
+    created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_results_run_id ON run_results (run_id);
+
+CREATE TABLE IF NOT EXISTS thrall_traits (
+    id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    traits       TEXT NOT NULL DEFAULT '{}',
+    collected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_thrall_traits_thrall_id_collected ON thrall_traits (thrall_id, collected_at);
+
+CREATE TABLE IF NOT EXISTS plans (
+    id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    thrall_id  TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modules    TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS plan_results (
+    id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    plan_id        TEXT NOT NULL REFERENCES plans (id) ON DELETE CASCADE,
+    module_name    TEXT NOT NULL,
+    resource_type  TEXT NOT NULL,
+    resource_name  TEXT NOT NULL,
+    planned_action TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS file_snapshots (
+    id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    file_path    TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    content      BYTEA,
+    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    run_id       TEXT REFERENCES runs (id)
+);
+
+CREATE TABLE IF NOT EXISTS secret_rotation_events (
+    id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    secret_path      TEXT NOT NULL,
+    old_version      TEXT,
+    new_version      TEXT,
+    rotated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    affected_thralls INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS package_audit (
+    id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    thrall_id         TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    package_name      TEXT NOT NULL,
+    installed_version TEXT,
+    desired_version   TEXT,
+    detected_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS webhooks (
+    id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    url        TEXT NOT NULL,
+    secret     TEXT NOT NULL,
+    events     TEXT NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    active     INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS compliance_history (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    recorded_at TEXT NOT NULL DEFAULT TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
+    total       INTEGER NOT NULL DEFAULT 0,
+    compliant   INTEGER NOT NULL DEFAULT 0,
+    drifted     INTEGER NOT NULL DEFAULT 0,
+    failing     INTEGER NOT NULL DEFAULT 0,
+    stale       INTEGER NOT NULL DEFAULT 0,
+    unknown     INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(recorded_at)
+);
+
+CREATE TABLE IF NOT EXISTS env_promotions (
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    module_name TEXT NOT NULL,
+    from_env    TEXT NOT NULL,
+    to_env      TEXT NOT NULL,
+    diff        TEXT NOT NULL,
+    promoted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- Orchestration tables (task runs, workflows)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS task_runs (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    command       TEXT NOT NULL,
+    target_glob   TEXT NOT NULL,
+    operator      TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'cancelled')) DEFAULT 'pending',
+    total_targets INTEGER NOT NULL DEFAULT 0,
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at    TIMESTAMP,
+    finished_at   TIMESTAMP,
+    timeout_secs  INTEGER NOT NULL DEFAULT 60,
+    batch_size    TEXT,
+    max_failures  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_runs_status ON task_runs (status);
+CREATE INDEX IF NOT EXISTS idx_task_runs_created_at ON task_runs (created_at);
+
+CREATE TABLE IF NOT EXISTS task_run_targets (
+    id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    task_run_id  TEXT NOT NULL REFERENCES task_runs (id) ON DELETE CASCADE,
+    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    hostname     TEXT NOT NULL,
+    status       TEXT NOT NULL CHECK (status IN ('pending', 'dispatched', 'complete', 'failed', 'timeout', 'offline', 'rejected', 'skipped')) DEFAULT 'pending',
+    exit_code    INTEGER,
+    stdout       TEXT,
+    stderr       TEXT,
+    duration_ms  INTEGER,
+    error_msg    TEXT,
+    dispatched_at TIMESTAMP,
+    finished_at  TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_task_run_id ON task_run_targets (task_run_id);
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_thrall_id ON task_run_targets (thrall_id);
+
+CREATE TABLE IF NOT EXISTS workflow_runs (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    workflow_name   TEXT NOT NULL,
+    status          TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'aborted')) DEFAULT 'pending',
+    current_step    INTEGER NOT NULL DEFAULT 0,
+    total_steps     INTEGER NOT NULL DEFAULT 0,
+    operator        TEXT NOT NULL DEFAULT '',
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at      TIMESTAMP,
+    finished_at     TIMESTAMP,
+    failure_reason  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs (status);
+
+CREATE TABLE IF NOT EXISTS workflow_step_results (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    workflow_run_id TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE,
+    step_index      INTEGER NOT NULL,
+    step_name       TEXT NOT NULL,
+    task_run_id     TEXT REFERENCES task_runs (id),
+    status          TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'skipped')) DEFAULT 'pending',
+    started_at      TIMESTAMP,
+    finished_at     TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_step_results_workflow ON workflow_step_results (workflow_run_id);

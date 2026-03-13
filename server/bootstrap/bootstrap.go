@@ -128,11 +128,11 @@ chmod +x "${INSTALL_DIR}/hobnob"
 
 # Bootstrap the agent (generates keys, CSR, registers with server, receives certs).
 echo "Bootstrapping agent..."
-BOOTSTRAP_ARGS="--server ${SERVER_ADDR} --data-dir ${DATA_DIR}"
+BOOTSTRAP_ARGS="--server ${SERVER_ADDR}"
 if [ -n "$TOKEN" ]; then
     BOOTSTRAP_ARGS="${BOOTSTRAP_ARGS} --token ${TOKEN}"
 fi
-"${INSTALL_DIR}/hobnob" bootstrap ${BOOTSTRAP_ARGS}
+"${INSTALL_DIR}/hobnob" --data-dir "${DATA_DIR}" bootstrap ${BOOTSTRAP_ARGS}
 
 # Extract gRPC server address (strip protocol and port, add :1530).
 GRPC_HOST="$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')"

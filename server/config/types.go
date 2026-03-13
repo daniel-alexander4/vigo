@@ -85,6 +85,20 @@ type ServerConfig struct {
 	Tuning     TuningSection    `yaml:"tuning"`
 	SMTP       SMTPSection      `yaml:"smtp"`
 	AI         AISection        `yaml:"ai"`
+	Backup     BackupSection    `yaml:"backup"`
+}
+
+// BackupSection configures continuous SQLite WAL replication via Litestream.
+// Disabled when URL is empty. Only applies when database.driver is "sqlite".
+type BackupSection struct {
+	URL             string `yaml:"url"`               // replica URL: s3://bucket/path, gcs://bucket/path, file:///path, sftp://host/path
+	AccessKeyID     string `yaml:"access_key_id"`     // S3/GCS access key (supports secret: prefix)
+	SecretAccessKey string `yaml:"secret_access_key"` // S3/GCS secret key (supports secret: prefix)
+	Region          string `yaml:"region"`             // AWS region (optional, defaults to provider default)
+	Endpoint        string `yaml:"endpoint"`           // S3-compatible endpoint for MinIO, Backblaze, etc.
+	ForcePathStyle  bool   `yaml:"force_path_style"`   // use path-style URLs (required for MinIO)
+	Retention       string `yaml:"retention"`           // snapshot retention period (default "720h" = 30 days)
+	SyncInterval    string `yaml:"sync_interval"`       // WAL sync frequency (default "1s")
 }
 
 // AISection is the "ai:" block in server.yaml. Parsed here so it participates
@@ -189,7 +203,9 @@ type BootstrapConfig struct {
 
 // DatabaseSection holds database config.
 type DatabaseSection struct {
-	DSN string `yaml:"dsn"`
+	DSN       string `yaml:"dsn"`
+	Driver    string `yaml:"driver"`    // "sqlite" (default) or "postgres"
+	Retention string `yaml:"retention"` // age-based pruning for runs/tasks/workflows (e.g. "90d", "2160h"); empty = no pruning
 }
 
 // CheckInSection holds check-in interval settings.

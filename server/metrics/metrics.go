@@ -86,4 +86,10 @@ var (
 		Name: "hobnob_config_reload_errors_total",
 		Help: "Total number of config reload failures.",
 	})
+
+	// DatabaseSizeBytes is the current SQLite database file size (gauge).
+	DatabaseSizeBytes = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hobnob_database_size_bytes",
+		Help: "Current SQLite database file size in bytes.",
+	})
 )
