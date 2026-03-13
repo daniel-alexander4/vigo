@@ -17,6 +17,22 @@
         <div class="stat-card__value">{{.TotalThralls}}</div>
         <div class="stat-card__label">Total Thralls</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-success">{{.TotalCompliant}}</div>
+        <div class="stat-card__label">Compliant</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-warning">{{.TotalDrifted}}</div>
+        <div class="stat-card__label">Drifted</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-danger">{{.TotalFailing}}</div>
+        <div class="stat-card__label">Failing</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value">{{printf "%.1f" .CompliancePct}}%</div>
+        <div class="stat-card__label">Compliance</div>
+    </div>
 </div>
 
 {{if .Spokes}}
@@ -28,16 +44,22 @@
                 <th>Address</th>
                 <th>Patterns</th>
                 <th>Thralls</th>
+                <th>Compliant</th>
+                <th>Compliance</th>
+                <th>Latency</th>
                 <th>Status</th>
             </tr>
         </thead>
         <tbody>
             {{range .Spokes}}
             <tr>
-                <td><strong>{{.ID}}</strong></td>
+                <td><a href="/federation/spokes/{{.ID}}"><strong>{{.ID}}</strong></a></td>
                 <td class="text-muted">{{.Addr}}</td>
                 <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
                 <td>{{.ThrallCount}}</td>
+                <td>{{.Compliant}}/{{.ThrallCount}}</td>
+                <td>{{printf "%.1f" .CompliancePct}}%</td>
+                <td>{{.LatencyMs}}ms</td>
                 <td>
                     {{if .Healthy}}
                         <span class="badge badge--success">healthy</span>

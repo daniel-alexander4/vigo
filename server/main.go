@@ -509,7 +509,7 @@ func run() error {
 		}
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
-			Handler: mux,
+			Handler: api.MaxBodyMiddleware(mux),
 		}
 	} else {
 		// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
@@ -561,7 +561,7 @@ func run() error {
 		}
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
-			Handler: gwMux,
+			Handler: api.MaxBodyMiddleware(gwMux),
 		}
 	}
 

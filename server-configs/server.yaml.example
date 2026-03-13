@@ -1,0 +1,177 @@
+# =============================================================================
+# Hobnob Server Configuration — Full Option Reference
+# =============================================================================
+# Copy to server.yaml and edit. Required options are uncommented.
+# Optional sections are commented out with their defaults shown.
+#
+# Fields marked "secret:" support the secret: prefix for resolution through
+# the configured secrets backend (e.g. secret:hobnob/db/dsn).
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Secrets Backend
+# ---------------------------------------------------------------------------
+# Determines how secret: references are resolved. Only one backend is active.
+# Options: "static" (default), "local", "isopass"
+secrets:
+  backend: static
+  env_file: ".env"              # path to .env file (static backend only)
+
+# --- Local backend (encrypted files on disk, git-safe) ---
+# secrets:
+#   backend: local
+#   key_file: "/etc/hobnob-server/master.key"   # 32-byte hex master key (0600)
+#   secrets_dir: "/etc/hobnob-server/secrets"    # encrypted secret files
+
+# --- Isopass backend (external secrets API) ---
+# secrets:
+#   backend: isopass
+#   url: "https://isopass.internal:8443"         # isopass API base URL (required)
+#   token_env: "HOBNOB_SECRETS_TOKEN"            # env var with bearer token (default)
+#   tls_skip_verify: false                       # skip TLS verification (default: false)
+
+# ---------------------------------------------------------------------------
+# Server Listeners
+# ---------------------------------------------------------------------------
+server:
+  grpc_listen: ":1530"          # gRPC agent port (mTLS)
+  api_listen: ":8181"           # REST API + web UI + metrics port
+  tls:
+    cert_file: "secret:hobnob/tls/cert"       # server TLS certificate (secret:)
+    key_file: "secret:hobnob/tls/key"         # server TLS private key (secret:)
+    ca_file: "secret:hobnob/tls/ca"           # CA cert for mTLS verification (secret:)
+    ca_key_file: "secret:hobnob/tls/ca_key"   # CA private key — enables bootstrap CSR signing (secret:)
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+database:
+  dsn: "secret:hobnob/db/dsn"   # SQLite path (secret:) — default: /etc/hobnob-server/db/hobnob.db
+
+# ---------------------------------------------------------------------------
+# Agent Check-In
+# ---------------------------------------------------------------------------
+checkin:
+  base_interval: "5m"           # agent check-in frequency (stale threshold = 2x this)
+  jitter_percent: 20            # randomize check-in timing by 0-N% (avoids thundering herd)
+
+# ---------------------------------------------------------------------------
+# Secret Rotation Watcher
+# ---------------------------------------------------------------------------
+# Polls isopass for version changes. Disabled on spoke servers and non-isopass backends.
+watcher:
+  enabled: true                 # enable secret rotation polling (default: true)
+  poll_interval: "5m"           # how often to check for rotated secrets (default: "5m")
+
+# ---------------------------------------------------------------------------
+# Bootstrap Enrollment
+# ---------------------------------------------------------------------------
+# Requires server.tls.ca_key_file to be set. Without it, bootstrap is disabled.
+bootstrap:
+  cert_validity: "8760h"        # signed agent certificate lifetime (default: 1 year)
+  # Token-free enrollment patterns. Thralls matching pattern+CIDR enroll without a token.
+  # Tighten patterns and CIDRs for production.
+  trusted_enrollment:
+    - pattern: "*"
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8"]
+
+# ---------------------------------------------------------------------------
+# Federation (Hub-Spoke Scaling)
+# ---------------------------------------------------------------------------
+# Omit entirely or set role: standalone for single-server deployments.
+# federation:
+#   role: standalone              # standalone (default) | hub | spoke
+#
+# --- Hub mode: aggregates admin queries from spokes ---
+# federation:
+#   role: hub
+#   spokes:
+#     - id: dc1                   # unique spoke identifier (required)
+#       addr: "spoke1.example.com:1530"  # spoke gRPC address (required)
+#       patterns: ["*.dc1.*"]     # hostname globs routed to this spoke (optional)
+#     - id: dc2
+#       addr: "spoke2.example.com:1530"
+#       patterns: ["*.dc2.*"]
+#
+# --- Spoke mode: handles agent check-ins only ---
+# federation:
+#   role: spoke
+#   spoke_id: "dc1"              # unique spoke ID (required)
+#   hub_addr: "hub.example.com:1530"  # hub gRPC address (optional)
+
+# ---------------------------------------------------------------------------
+# Operational Tuning
+# ---------------------------------------------------------------------------
+# All fields are optional with sensible defaults.
+# tuning:
+#   signature_window: "5m"          # max age of signed agent requests (default: "5m")
+#   last_seen_flush: "10s"          # FleetIndex dirty-set flush interval (default: "10s")
+#   traits_prune_interval: "5m"     # stale trait cleanup frequency (default: "5m")
+#   metrics_interval: "30s"         # Prometheus metrics collection interval (default: "30s")
+#   traits_scanner_ttl: "30s"       # custom trait collector cache TTL (default: "30s")
+#   run_store: "database"           # run history backend: "database" or "memory" (default: "database")
+#   run_store_capacity: 20          # per-thrall run depth in memory mode (default: 20)
+#   max_concurrent_streams: 1000    # gRPC bidirectional stream limit (default: 1000)
+#   webhook:
+#     timeout: "10s"                # HTTP request timeout (default: "10s")
+#     max_retries: 3                # retry attempts on transient failures (default: 3)
+#     max_concurrent: 20            # max concurrent webhook deliveries (default: 20)
+#     retry_delay: "5s"             # base delay between retries, exponential backoff (default: "5s")
+
+# ---------------------------------------------------------------------------
+# Webhook Dispatch
+# ---------------------------------------------------------------------------
+# Configure webhook endpoints via hobnobcli or the REST API, not here.
+# The webhooks section only controls dispatch behavior.
+# webhooks:
+#   timeout: "10s"
+#   max_retries: 3
+
+# ---------------------------------------------------------------------------
+# SMTP Email Notifications
+# ---------------------------------------------------------------------------
+# Disabled when host is empty. Omit events map to enable all with default recipients.
+# smtp:
+#   host: "smtp.example.com"              # SMTP relay hostname (empty = disabled)
+#   port: 587                             # SMTP port (default: 587)
+#   from: "hobnob@example.com"            # sender address
+#   username: "hobnob"                    # SMTP auth username (optional)
+#   password: "secret:hobnob/smtp/password"  # SMTP auth password (secret:, optional)
+#   tls: true                             # use STARTTLS (default: true)
+#   recipients:                           # default recipients for all events
+#     - "admin@example.com"
+#   events:                               # omit to enable all with default recipients
+#     thrall.enrolled: {}                 # new thrall registered
+#     run.success: {}                     # convergence run succeeded
+#     run.failure:                        # convergence run failed
+#       recipients: ["ops@example.com"]   #   override recipients for this event
+#     drift.detected: {}                  # config drift corrected
+#     secret.rotated: {}                  # secret version bumped, thralls re-queued
+#     config.reload.failure: {}           # YAML config reload error
+#     thrall.stale: {}                    # thrall missed check-in window
+#     compliance.threshold:               # compliance % dropped below threshold
+#       threshold: 90
+#   digest:                               # batch low-priority events into summaries
+#     interval: "1h"                      # flush window (e.g. "1h", "30m"); empty = disabled
+#     events:                             # events routed to digest instead of immediate
+#       - "run.success"
+#       - "drift.detected"
+
+# ---------------------------------------------------------------------------
+# AI Assistant
+# ---------------------------------------------------------------------------
+# Disabled by default. Ollama (free, local) is the default provider.
+# Paid providers (claude, openai) require an API key.
+# ai:
+#   enabled: true                         # enable AI assistant (default: false)
+#   provider: "ollama"                    # ollama | claude | openai | openai-compat
+#   model: "qwen2.5:7b"                  # provider-specific model name
+#                                         #   ollama default: qwen2.5:7b
+#                                         #   claude default: claude-sonnet-4-20250514
+#                                         #   openai default: gpt-4o
+#   max_tokens: 4096                      # max tokens per response (default: 4096)
+#   base_url: ""                          # auto for ollama; required for openai-compat
+#   api_key: "secret:hobnob/ai/api_key"   # API key for paid providers (secret:)
+#   rate_limit: 0                         # requests/minute, 0 = unlimited (default: 0)
+#   max_tool_rounds: 10                   # max tool-use iterations per request (default: 10)
+#   context_mode: "auto"                  # tools | prefetch | auto (default: auto for ollama, tools otherwise)

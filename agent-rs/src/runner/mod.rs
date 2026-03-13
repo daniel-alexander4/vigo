@@ -655,4 +655,403 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].module_name, "keep");
     }
+
+    // ── Notify/subscribe trigger chain tests ──────────────────────────
+
+    use std::sync::{Arc, Mutex};
+
+    /// Executor that tracks per-resource behavior and records every call
+    /// with whether `_triggered` was set.
+    struct TrackingExecutor {
+        /// Maps resource name -> (action, changed) to return.
+        behaviors: HashMap<String, (Action, bool)>,
+        /// Records each (resource_name, was_triggered) call in order.
+        calls: Arc<Mutex<Vec<(String, bool)>>>,
+    }
+
+    impl TrackingExecutor {
+        fn new(behaviors: Vec<(&str, Action, bool)>) -> Self {
+            Self {
+                behaviors: behaviors
+                    .into_iter()
+                    .map(|(n, a, c)| (n.to_string(), (a, c)))
+                    .collect(),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    impl Executor for TrackingExecutor {
+        fn execute(
+            &self,
+            params: &HashMap<String, String>,
+            _dry_run: bool,
+        ) -> ResourceResult {
+            let name = params
+                .get("name")
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            let triggered = params
+                .get("_triggered")
+                .map(|s| s == "true")
+                .unwrap_or(false);
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), triggered));
+
+            let (action, changed) = self
+                .behaviors
+                .get(name)
+                .cloned()
+                .unwrap_or((Action::None, false));
+            ResourceResult {
+                module_name: String::new(),
+                resource_type: "mock".to_string(),
+                resource_name: name.to_string(),
+                action,
+                changed,
+                error: None,
+                duration_ms: 1,
+            }
+        }
+    }
+
+    /// Executor that also records whether dry_run was set on each call.
+    struct DryRunTrackingExecutor {
+        calls: Arc<Mutex<Vec<(String, bool)>>>,
+    }
+
+    impl DryRunTrackingExecutor {
+        fn new() -> Self {
+            Self {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    impl Executor for DryRunTrackingExecutor {
+        fn execute(
+            &self,
+            params: &HashMap<String, String>,
+            dry_run: bool,
+        ) -> ResourceResult {
+            let name = params
+                .get("name")
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), dry_run));
+
+            ResourceResult {
+                module_name: String::new(),
+                resource_type: "mock".to_string(),
+                resource_name: name.to_string(),
+                action: Action::None,
+                changed: false,
+                error: None,
+                duration_ms: 1,
+            }
+        }
+    }
+
+    fn make_module_with_notify(
+        name: &str,
+        resources: Vec<(&str, &str)>,
+        notify: Vec<&str>,
+    ) -> Module {
+        Module {
+            name: name.to_string(),
+            resource_type: String::new(),
+            resources: resources
+                .into_iter()
+                .map(|(rname, rtype)| Resource {
+                    name: rname.to_string(),
+                    r#type: rtype.to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), rname.to_string());
+                        p
+                    },
+                    when: String::new(),
+                })
+                .collect(),
+            depends_on: vec![],
+            notify: notify.into_iter().map(|s| s.to_string()).collect(),
+            subscribes: vec![],
+        }
+    }
+
+    fn make_module_with_subscribes(
+        name: &str,
+        resources: Vec<(&str, &str)>,
+        subscribes: Vec<&str>,
+    ) -> Module {
+        Module {
+            name: name.to_string(),
+            resource_type: String::new(),
+            resources: resources
+                .into_iter()
+                .map(|(rname, rtype)| Resource {
+                    name: rname.to_string(),
+                    r#type: rtype.to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), rname.to_string());
+                        p
+                    },
+                    when: String::new(),
+                })
+                .collect(),
+            depends_on: vec![],
+            notify: vec![],
+            subscribes: subscribes.into_iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    /// Module A (config file) changes -> notifies Module B (service).
+    /// B should be re-run in the second pass with _triggered=true.
+    #[test]
+    fn converge_notify_triggers_subscriber() {
+        let exec = TrackingExecutor::new(vec![
+            ("config-file", Action::Updated, true),   // A changes
+            ("app-service", Action::None, false),       // B no-op first pass
+        ]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        // Module A notifies Module B.
+        let modules = vec![
+            make_module_with_notify("A", vec![("config-file", "mock")], vec!["B"]),
+            make_module("B", vec![("app-service", "mock")]),
+        ];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        let results = converge(&modules, &executors, &mut cache, &opts);
+
+        let recorded = calls.lock().unwrap();
+        // First pass: config-file (not triggered), app-service (not triggered).
+        // Second pass: app-service (triggered).
+        assert_eq!(recorded.len(), 3, "expected 3 calls, got: {:?}", *recorded);
+        assert_eq!(recorded[0], ("config-file".to_string(), false));
+        assert_eq!(recorded[1], ("app-service".to_string(), false));
+        assert_eq!(recorded[2], ("app-service".to_string(), true));
+
+        // The final results should have 2 entries (one per resource).
+        assert_eq!(results.len(), 2);
+
+        // config-file should show as changed.
+        let config_result = results.iter().find(|r| r.resource_name == "config-file").unwrap();
+        assert!(config_result.changed);
+    }
+
+    /// Module A does NOT change -> Module B should NOT be re-run.
+    #[test]
+    fn converge_no_change_no_notify() {
+        let exec = TrackingExecutor::new(vec![
+            ("config-file", Action::None, false),   // A no change
+            ("app-service", Action::None, false),   // B no-op
+        ]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        let modules = vec![
+            make_module_with_notify("A", vec![("config-file", "mock")], vec!["B"]),
+            make_module("B", vec![("app-service", "mock")]),
+        ];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        converge(&modules, &executors, &mut cache, &opts);
+
+        let recorded = calls.lock().unwrap();
+        // Only first pass: each resource called once.
+        assert_eq!(recorded.len(), 2, "expected 2 calls, got: {:?}", *recorded);
+        assert_eq!(recorded[0], ("config-file".to_string(), false));
+        assert_eq!(recorded[1], ("app-service".to_string(), false));
+    }
+
+    /// Module B subscribes to Module A. When A changes, B should be
+    /// re-run with _triggered=true (subscribes is the inverse of notify).
+    #[test]
+    fn converge_subscribes_triggers_on_change() {
+        let exec = TrackingExecutor::new(vec![
+            ("config-file", Action::Updated, true),   // A changes
+            ("app-service", Action::None, false),      // B no-op first pass
+        ]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        // B subscribes to A (instead of A notifying B).
+        let modules = vec![
+            make_module("A", vec![("config-file", "mock")]),
+            make_module_with_subscribes("B", vec![("app-service", "mock")], vec!["A"]),
+        ];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        let results = converge(&modules, &executors, &mut cache, &opts);
+
+        let recorded = calls.lock().unwrap();
+        // First pass: config-file, app-service. Second pass: app-service (triggered).
+        assert_eq!(recorded.len(), 3, "expected 3 calls, got: {:?}", *recorded);
+        assert_eq!(recorded[0], ("config-file".to_string(), false));
+        assert_eq!(recorded[1], ("app-service".to_string(), false));
+        assert_eq!(recorded[2], ("app-service".to_string(), true));
+
+        assert_eq!(results.len(), 2);
+    }
+
+    /// If the notified resource already changed in the first pass, it
+    /// should NOT be re-run (line 130 optimization).
+    #[test]
+    fn converge_changed_notified_resource_not_rerun() {
+        let exec = TrackingExecutor::new(vec![
+            ("config-file", Action::Updated, true),     // A changes
+            ("app-service", Action::Updated, true),     // B also changes in first pass
+        ]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        let modules = vec![
+            make_module_with_notify("A", vec![("config-file", "mock")], vec!["B"]),
+            make_module("B", vec![("app-service", "mock")]),
+        ];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        converge(&modules, &executors, &mut cache, &opts);
+
+        let recorded = calls.lock().unwrap();
+        // B already changed, so second pass skips it. Only 2 calls total.
+        assert_eq!(recorded.len(), 2, "expected 2 calls, got: {:?}", *recorded);
+        assert_eq!(recorded[0], ("config-file".to_string(), false));
+        assert_eq!(recorded[1], ("app-service".to_string(), false));
+    }
+
+    /// dry_run=true should propagate to all executor calls.
+    #[test]
+    fn converge_dry_run_propagates_to_all() {
+        let exec = DryRunTrackingExecutor::new();
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        let modules = vec![make_module(
+            "test-mod",
+            vec![("res1", "mock"), ("res2", "mock"), ("res3", "mock")],
+        )];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: true,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        converge(&modules, &executors, &mut cache, &opts);
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3);
+        // Every call should have dry_run=true.
+        for (name, was_dry_run) in recorded.iter() {
+            assert!(
+                *was_dry_run,
+                "resource {:?} should have received dry_run=true",
+                name
+            );
+        }
+    }
+
+    /// Result cache prevents re-execution on second converge run.
+    /// Uses "file" resource type since the cache only stores cacheable types.
+    #[test]
+    fn converge_result_cache_prevents_reexecution() {
+        // Use "file" type so the cache actually stores results.
+        let exec = TrackingExecutor::new(vec![
+            ("config-file", Action::None, false), // no-op: cacheable
+        ]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("file".to_string(), Box::new(exec));
+
+        let modules = vec![{
+            Module {
+                name: "cache-test".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "config-file".to_string(),
+                    r#type: "file".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "config-file".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec![],
+                notify: vec![],
+                subscribes: vec![],
+            }
+        }];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        // First converge: executor called, result cached.
+        let results1 = converge(&modules, &executors, &mut cache, &opts);
+        assert_eq!(results1.len(), 1);
+        assert!(results1[0].error.is_none());
+
+        let count_after_first = calls.lock().unwrap().len();
+        assert_eq!(count_after_first, 1, "first converge should call executor once");
+
+        // Second converge: cache hit, executor NOT called again.
+        let results2 = converge(&modules, &executors, &mut cache, &opts);
+        assert_eq!(results2.len(), 1);
+        assert!(results2[0].error.is_none());
+
+        let count_after_second = calls.lock().unwrap().len();
+        assert_eq!(
+            count_after_second, 1,
+            "second converge should hit cache, not call executor again"
+        );
+    }
 }

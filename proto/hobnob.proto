@@ -198,6 +198,10 @@ service HobnobAdmin {
   // Used during enrollment routing: the hub validates the token, then calls
   // this on the target spoke to create the thrall without token re-validation.
   rpc EnrollThrall(EnrollThrallRequest) returns (EnrollThrallResponse);
+
+  // SetReassignment marks a thrall for reassignment to a different spoke.
+  // Called hub→spoke to set reassign_addr/reassign_id on the thrall.
+  rpc SetReassignment(SetReassignmentRequest) returns (SetReassignmentResponse);
 }
 
 // =============================================================================
@@ -239,6 +243,8 @@ message CheckInResponse {
   string response_fingerprint = 6;       // hash of this response for next check-in
   PolicyBundle policy_bundle = 7;        // raw policy for agent-side evaluation
   uint64 policy_version = 8;            // current config version, always set
+  string reassign_addr = 9;             // non-empty = agent should reconnect here
+  string reassign_id = 10;              // new UUID on target spoke
 }
 
 // CustomTraitEntry describes a custom trait executable in the server's traits directory.
@@ -765,4 +771,38 @@ message EnrollThrallRequest {
 
 message EnrollThrallResponse {
   string thrall_id = 1;
+}
+
+// =============================================================================
+// Reassignment messages (hub→spoke)
+// =============================================================================
+
+message SetReassignmentRequest {
+  string thrall_id = 1;
+  string target_addr = 2;
+  string new_thrall_id = 3;
+}
+
+message SetReassignmentResponse {}
+
+message ReassignThrallRequest {
+  string thrall_id = 1;
+  string from_spoke_id = 2;
+  string to_spoke_id = 3;
+}
+
+message ReassignThrallResponse {
+  string new_thrall_id = 1;
+  string target_addr = 2;
+}
+
+message DrainSpokeRequest {
+  string spoke_id = 1;
+  string target_spoke_id = 2;  // optional: specific target. Empty = auto-route by patterns
+}
+
+message DrainSpokeResponse {
+  int32 moved = 1;
+  int32 failed = 2;
+  repeated string errors = 3;
 }

@@ -154,3 +154,162 @@ impl Executor for HostExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    fn make_executor(hosts_path: &std::path::Path) -> HostExecutor {
+        HostExecutor {
+            hosts_file: hosts_path.to_str().unwrap().to_string(),
+        }
+    }
+
+    #[test]
+    fn missing_hostname_errors() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        std::fs::write(&hosts_path, "127.0.0.1\tlocalhost\n").unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("hostname param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn present_missing_ip_errors() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        std::fs::write(&hosts_path, "127.0.0.1\tlocalhost\n").unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(
+            &make_params(&[("hostname", "myhost")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("ip param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn present_adds_entry() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        std::fs::write(&hosts_path, "127.0.0.1\tlocalhost\n").unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(
+            &make_params(&[("hostname", "myhost"), ("ip", "192.168.1.1")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let content = std::fs::read_to_string(&hosts_path).unwrap();
+        assert!(
+            content.contains("192.168.1.1\tmyhost"),
+            "expected entry not found in:\n{}",
+            content
+        );
+        // Original entry preserved.
+        assert!(content.contains("127.0.0.1\tlocalhost"));
+    }
+
+    #[test]
+    fn present_entry_already_exists() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        std::fs::write(&hosts_path, "127.0.0.1\tlocalhost\n192.168.1.1\tmyhost\n").unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(
+            &make_params(&[("hostname", "myhost"), ("ip", "192.168.1.1")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn present_updates_ip() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        std::fs::write(&hosts_path, "127.0.0.1\tlocalhost\n10.0.0.1\tmyhost\n").unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(
+            &make_params(&[("hostname", "myhost"), ("ip", "192.168.1.1")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let content = std::fs::read_to_string(&hosts_path).unwrap();
+        assert!(content.contains("192.168.1.1\tmyhost"));
+        assert!(!content.contains("10.0.0.1\tmyhost"));
+    }
+
+    #[test]
+    fn absent_removes_entry() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        std::fs::write(&hosts_path, "127.0.0.1\tlocalhost\n192.168.1.1\tmyhost\n").unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(
+            &make_params(&[("hostname", "myhost"), ("state", "absent")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let content = std::fs::read_to_string(&hosts_path).unwrap();
+        assert!(!content.contains("myhost"));
+        assert!(content.contains("127.0.0.1\tlocalhost"));
+    }
+
+    #[test]
+    fn absent_entry_not_found() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        std::fs::write(&hosts_path, "127.0.0.1\tlocalhost\n").unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(
+            &make_params(&[("hostname", "myhost"), ("state", "absent")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn dry_run_does_not_modify_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let hosts_path = dir.path().join("hosts");
+        let original = "127.0.0.1\tlocalhost\n";
+        std::fs::write(&hosts_path, original).unwrap();
+        let exec = make_executor(&hosts_path);
+        let result = exec.execute(
+            &make_params(&[("hostname", "myhost"), ("ip", "192.168.1.1")]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        // File should be unchanged.
+        let content = std::fs::read_to_string(&hosts_path).unwrap();
+        assert_eq!(content, original, "dry_run should not modify the file");
+    }
+}

@@ -4,6 +4,8 @@
 package secrets
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -26,12 +28,77 @@ func TestNewFromConfigStatic(t *testing.T) {
 	}
 }
 
-func TestNewFromConfigDefaultsToStatic(t *testing.T) {
+func TestNewFromConfigDefaultsToLocal(t *testing.T) {
+	dir := t.TempDir()
 	p, err := NewFromConfig(Config{
-		EnvFile: "testdata/.env.test",
+		SecretsDir: filepath.Join(dir, "secrets"),
 	})
 	if err != nil {
 		t.Fatalf("NewFromConfig with empty backend: %v", err)
+	}
+	defer p.Close()
+
+	// Default backend is local — should resolve builtin defaults.
+	val, err := p.Get(t.Context(), "hobnob/db/dsn")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "/etc/hobnob-server/db/hobnob.db" {
+		t.Errorf("got %q, want %q", val, "/etc/hobnob-server/db/hobnob.db")
+	}
+}
+
+func TestNewFromConfigLocal(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "master.key")
+	os.WriteFile(keyFile, []byte("0000000000000000000000000000000000000000000000000000000000000000\n"), 0o600)
+
+	p, err := NewFromConfig(Config{
+		Backend:    "local",
+		KeyFile:    keyFile,
+		SecretsDir: filepath.Join(dir, "secrets"),
+	})
+	if err != nil {
+		t.Fatalf("NewFromConfig local: %v", err)
+	}
+	defer p.Close()
+
+	// Should resolve built-in default.
+	val, err := p.Get(t.Context(), "hobnob/db/dsn")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "/etc/hobnob-server/db/hobnob.db" {
+		t.Errorf("got %q, want %q", val, "/etc/hobnob-server/db/hobnob.db")
+	}
+}
+
+func TestNewFromConfigLocalPlaintext(t *testing.T) {
+	// No key_file = plaintext mode (no encryption).
+	dir := t.TempDir()
+	p, err := NewFromConfig(Config{
+		Backend:    "local",
+		SecretsDir: filepath.Join(dir, "secrets"),
+	})
+	if err != nil {
+		t.Fatalf("NewFromConfig local plaintext: %v", err)
+	}
+	defer p.Close()
+}
+
+func TestNewFromConfigLocalDefaultSecretsDir(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "master.key")
+	os.WriteFile(keyFile, []byte("0000000000000000000000000000000000000000000000000000000000000000\n"), 0o600)
+
+	// Default secrets_dir is /etc/hobnob-server/secrets. Use explicit dir in test.
+	p, err := NewFromConfig(Config{
+		Backend:    "local",
+		KeyFile:    keyFile,
+		SecretsDir: filepath.Join(dir, "secrets"),
+	})
+	if err != nil {
+		t.Fatalf("NewFromConfig local default dir: %v", err)
 	}
 	defer p.Close()
 }

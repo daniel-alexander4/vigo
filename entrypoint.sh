@@ -21,8 +21,10 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
+SECRETS_DIR="${DATA_DIR}/secrets"
+
 mkdir -p "$CERTS_DIR" "$THRALLS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "${DATA_DIR}/db"
-mkdir -p -m 700 "${DATA_DIR}/license"
+mkdir -p -m 700 "${DATA_DIR}/license" "$SECRETS_DIR"
 
 # ---------------------------------------------------------------------------
 # Lock down license file permissions if present
@@ -54,7 +56,32 @@ if [ ! -f "${CERTS_DIR}/ca.key" ] || [ ! -f "${CERTS_DIR}/server.crt" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Write default .env if missing
+# Seed default secrets if secrets directory is empty
+# ---------------------------------------------------------------------------
+# The local secrets backend reads files from /etc/hobnob-server/secrets/.
+# Secret path "hobnob/db/dsn" maps to file secrets/hobnob/db/dsn.
+# These are seeded as plaintext; add a key_file to server.yaml for encryption.
+
+seed_secret() {
+    local key="$1" value="$2"
+    local path="${SECRETS_DIR}/${key}"
+    if [ ! -f "$path" ]; then
+        mkdir -p "$(dirname "$path")"
+        printf '%s' "$value" > "$path"
+        chmod 600 "$path"
+    fi
+}
+
+seed_secret "hobnob/db/dsn" "/etc/hobnob-server/db/hobnob.db"
+seed_secret "hobnob/tls/cert" "certs/server.crt"
+seed_secret "hobnob/tls/key" "certs/server.key"
+seed_secret "hobnob/tls/ca" "certs/ca.crt"
+seed_secret "hobnob/tls/ca_key" "certs/ca.key"
+
+echo "Secrets seeded."
+
+# ---------------------------------------------------------------------------
+# Write default .env if missing (non-secret server environment only)
 # ---------------------------------------------------------------------------
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -62,33 +89,9 @@ if [ ! -f "$ENV_FILE" ]; then
 # =============================================================================
 # Hobnob Environment Configuration
 # =============================================================================
-# The StaticProvider reads these values to resolve secret: references in
-# server.yaml. Every secret:path/to/key maps to an env var:
-#   secret:hobnob/db/dsn  ->  HOBNOB_DB_DSN
-#   secret:hobnob/tls/cert -> HOBNOB_TLS_CERT
-# Rule: uppercase, slashes become underscores.
-#
-# REQUIRED — server will not start without these:
+# This file contains non-secret server environment variables only.
+# Secrets are stored in /etc/hobnob-server/secrets/ (local secrets backend).
 # =============================================================================
-
-HOBNOB_DB_DSN=db/hobnob.db
-HOBNOB_TLS_CERT=certs/server.crt
-HOBNOB_TLS_KEY=certs/server.key
-HOBNOB_TLS_CA=certs/ca.crt
-HOBNOB_TLS_CA_KEY=certs/ca.key
-
-# =============================================================================
-# OPTIONAL — uncomment and edit as needed:
-# =============================================================================
-
-# Server config file path (default: server.yaml)
-# HOBNOB_CONFIG_FILE=server.yaml
-
-# Config directory for modules, roles, thralls (default: . i.e. same as server dir)
-# HOBNOB_THRALL_CONFIGS_DIR=.
-
-# Migrations directory (default: migrations)
-# HOBNOB_MIGRATIONS_DIR=migrations
 
 # Server version string reported to agents for self-update (default: dev)
 # HOBNOB_VERSION=1.0.0
@@ -97,20 +100,9 @@ HOBNOB_TLS_CA_KEY=certs/ca.key
 # Used by GET /api/v1/agent/download/{os}/{arch} (default: dist/agent)
 # HOBNOB_AGENT_DIR=dist/agent
 
-# Webhook secret for HMAC-SHA256 payload signing
+# Webhook secret for HMAC-SHA256 payload signing — store in secrets dir instead:
+# echo 'my-webhook-secret' > /etc/hobnob-server/secrets/hobnob/webhook/secret
 # HOBNOB_WEBHOOK_SECRET=change-me-to-a-random-string
-
-# .env file path override (default: .env)
-# HOBNOB_ENV_FILE=.env
-
-# =============================================================================
-# MODULE SECRETS — uncomment when enabling the corresponding thrall entries.
-# Each maps to a secret: reference in node config vars.
-# =============================================================================
-
-# HOBNOB_REDIS_PASSWORD=changeme
-# HOBNOB_HAPROXY_STATS_PASSWORD=changeme
-# HOBNOB_MYSQL_ROOT_PASSWORD=changeme
 
 # =============================================================================
 # AI ASSISTANT — uncomment HOBNOB_AI_PROVIDER to enable.

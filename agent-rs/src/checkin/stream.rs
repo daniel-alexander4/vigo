@@ -162,6 +162,7 @@ pub async fn open(
 }
 
 /// Read server messages and dispatch to channels.
+#[allow(clippy::too_many_arguments)]
 async fn read_loop(
     mut stream: Streaming<ServerStreamMessage>,
     policy_push_tx: mpsc::Sender<StreamPolicyPush>,
@@ -213,6 +214,185 @@ async fn read_loop(
             Err(e) => {
                 warn!(error = %e, "stream read error");
                 return;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proto::agent_stream_message;
+
+    /// Test that check_in sends a CheckIn message and returns the response.
+    #[tokio::test]
+    async fn check_in_sends_request_and_receives_response() {
+        let (request_tx, mut request_rx) = mpsc::channel::<AgentStreamMessage>(4);
+        let (resp_tx, mut resp_rx) = mpsc::channel::<CheckInResponse>(1);
+        let (_done_tx, mut done_rx) = tokio::sync::watch::channel(false);
+
+        let req = CheckInRequest {
+            thrall_id: "test-uuid".into(),
+            state_fingerprint: "fp-1".into(),
+            ..Default::default()
+        };
+
+        // Spawn a task to handle the request and send back a response.
+        tokio::spawn(async move {
+            let msg = request_rx.recv().await.unwrap();
+            // Verify it's a CheckIn message.
+            match msg.msg {
+                Some(agent_stream_message::Msg::CheckIn(ci)) => {
+                    assert_eq!(ci.thrall_id, "test-uuid");
+                    assert_eq!(ci.state_fingerprint, "fp-1");
+                }
+                other => panic!("expected CheckIn, got {:?}", other),
+            }
+            // Send response.
+            resp_tx
+                .send(CheckInResponse {
+                    base_interval: "30s".into(),
+                    no_change: true,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+        });
+
+        let resp = StreamHandle::check_in(&request_tx, &mut resp_rx, &mut done_rx, req)
+            .await
+            .unwrap();
+        assert!(resp.no_change);
+        assert_eq!(resp.base_interval, "30s");
+    }
+
+    /// Test that check_in returns an error when the stream disconnects.
+    #[tokio::test]
+    async fn check_in_errors_on_disconnect() {
+        let (request_tx, _request_rx) = mpsc::channel::<AgentStreamMessage>(4);
+        let (_resp_tx, mut resp_rx) = mpsc::channel::<CheckInResponse>(1);
+        let (done_tx, mut done_rx) = tokio::sync::watch::channel(false);
+
+        let req = CheckInRequest::default();
+
+        // Signal disconnect before any response arrives.
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            let _ = done_tx.send(true);
+        });
+
+        let result = StreamHandle::check_in(&request_tx, &mut resp_rx, &mut done_rx, req).await;
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("disconnected"),
+            "expected disconnected error"
+        );
+    }
+
+    /// Test that check_in returns an error when the response channel closes.
+    #[tokio::test]
+    async fn check_in_errors_on_channel_close() {
+        let (request_tx, _request_rx) = mpsc::channel::<AgentStreamMessage>(4);
+        let (resp_tx, mut resp_rx) = mpsc::channel::<CheckInResponse>(1);
+        let (_done_tx, mut done_rx) = tokio::sync::watch::channel(false);
+
+        let req = CheckInRequest::default();
+
+        // Drop the response sender so recv returns None.
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            drop(resp_tx);
+        });
+
+        let result = StreamHandle::check_in(&request_tx, &mut resp_rx, &mut done_rx, req).await;
+        assert!(result.is_err());
+    }
+
+    /// Test that check_in errors when the request_tx side is closed.
+    #[tokio::test]
+    async fn check_in_errors_on_send_failure() {
+        let (request_tx, request_rx) = mpsc::channel::<AgentStreamMessage>(4);
+        let (_resp_tx, mut resp_rx) = mpsc::channel::<CheckInResponse>(1);
+        let (_done_tx, mut done_rx) = tokio::sync::watch::channel(false);
+
+        // Drop receiver so send fails.
+        drop(request_rx);
+
+        let result =
+            StreamHandle::check_in(&request_tx, &mut resp_rx, &mut done_rx, CheckInRequest::default())
+                .await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("stream closed"));
+    }
+
+    /// Test that report_result sends the message on the channel.
+    #[tokio::test]
+    async fn report_result_sends_message() {
+        let (request_tx, mut request_rx) = mpsc::channel::<AgentStreamMessage>(4);
+
+        let req = ReportResultRequest {
+            run_id: "run-1".into(),
+            thrall_id: "uuid-1".into(),
+            ..Default::default()
+        };
+
+        StreamHandle::report_result(&request_tx, req).await.unwrap();
+
+        let msg = request_rx.recv().await.unwrap();
+        match msg.msg {
+            Some(agent_stream_message::Msg::ReportResult(rr)) => {
+                assert_eq!(rr.run_id, "run-1");
+                assert_eq!(rr.thrall_id, "uuid-1");
+            }
+            other => panic!("expected ReportResult, got {:?}", other),
+        }
+    }
+
+    /// Test that report_result errors when the channel is closed.
+    #[tokio::test]
+    async fn report_result_errors_on_closed_channel() {
+        let (request_tx, request_rx) = mpsc::channel::<AgentStreamMessage>(4);
+        drop(request_rx);
+
+        let result =
+            StreamHandle::report_result(&request_tx, ReportResultRequest::default()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("stream closed"));
+    }
+
+    /// Test the done watch channel signals correctly.
+    #[tokio::test]
+    async fn done_watch_signals_disconnect() {
+        let (done_tx, mut done_rx) = tokio::sync::watch::channel(false);
+
+        assert!(!*done_rx.borrow());
+
+        let _ = done_tx.send(true);
+
+        done_rx.changed().await.unwrap();
+        assert!(*done_rx.borrow());
+    }
+
+    /// Test that multiple report_results can be sent in sequence.
+    #[tokio::test]
+    async fn report_result_multiple_sends() {
+        let (request_tx, mut request_rx) = mpsc::channel::<AgentStreamMessage>(16);
+
+        for i in 0..5 {
+            let req = ReportResultRequest {
+                run_id: format!("run-{}", i),
+                ..Default::default()
+            };
+            StreamHandle::report_result(&request_tx, req).await.unwrap();
+        }
+
+        for i in 0..5 {
+            let msg = request_rx.recv().await.unwrap();
+            match msg.msg {
+                Some(agent_stream_message::Msg::ReportResult(rr)) => {
+                    assert_eq!(rr.run_id, format!("run-{}", i));
+                }
+                other => panic!("expected ReportResult, got {:?}", other),
             }
         }
     }

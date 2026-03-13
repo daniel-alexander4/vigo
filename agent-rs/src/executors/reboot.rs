@@ -90,3 +90,171 @@ impl Executor for RebootExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), args.iter().map(|s| s.to_string()).collect()));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn reboot_required_file_missing_skips() {
+        // When reboot_required_file is set but doesn't exist, no reboot happens.
+        let mock = MockRunner::new(vec![]);
+        let calls = mock.calls.clone();
+        let exec = RebootExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("state", "present"),
+                ("reboot_required_file", "/tmp/nonexistent_hobnob_reboot_test_file"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 0, "no commands when reboot_required_file is absent");
+    }
+
+    #[test]
+    fn reboot_dry_run() {
+        // state=present with no reboot_required_file -> triggers reboot, but dry_run skips the command.
+        let mock = MockRunner::new(vec![]);
+        let calls = mock.calls.clone();
+        let exec = RebootExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("state", "present")]), true);
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 0, "dry_run should not call shutdown");
+    }
+
+    #[test]
+    fn reboot_calls_shutdown() {
+        // state=present with no file guard -> calls shutdown -r
+        let shutdown = MockRunner::ok_output("");
+        let mock = MockRunner::new(vec![shutdown]);
+        let calls = mock.calls.clone();
+        let exec = RebootExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("state", "present"), ("delay", "5"), ("message", "maintenance")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "shutdown");
+        assert_eq!(calls[0].1, vec!["-r", "+5", "maintenance"]);
+    }
+
+    #[test]
+    fn reboot_shutdown_failure() {
+        // shutdown fails -> error is reported
+        let shutdown = MockRunner::fail_output("not permitted");
+        let mock = MockRunner::new(vec![shutdown]);
+        let exec = RebootExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("state", "present")]), false);
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("shutdown -r"));
+    }
+
+    #[test]
+    fn cancel_reboot() {
+        // state=absent -> calls shutdown -c to cancel
+        let shutdown_cancel = MockRunner::ok_output("");
+        let mock = MockRunner::new(vec![shutdown_cancel]);
+        let calls = mock.calls.clone();
+        let exec = RebootExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("state", "absent")]), false);
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "shutdown");
+        assert_eq!(calls[0].1, vec!["-c"]);
+    }
+
+    #[test]
+    fn unknown_state_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = RebootExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("state", "bogus")]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
+    }
+}

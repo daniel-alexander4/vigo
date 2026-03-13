@@ -120,3 +120,114 @@ impl Executor for CustomExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    fn write_script(dir: &std::path::Path, name: &str, body: &str) -> String {
+        // Write as a non-executable temp file, then rename to the final path.
+        // This avoids "Text file busy" (ETXTBSY) on Linux, which can occur
+        // when set_permissions or write races with exec on tmpfs.
+        use std::io::Write;
+        let tmp_path = dir.join(format!(".{}.tmp", name));
+        let final_path = dir.join(name);
+        let content = format!("#!/bin/bash\n{}", body);
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o755)
+            .open(&tmp_path)
+            .unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        f.sync_all().unwrap();
+        drop(f);
+        std::fs::rename(&tmp_path, &final_path).unwrap();
+        final_path.to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn missing_script_errors() {
+        let exec = CustomExecutor {
+            script_path: "/tmp/hobnob-test-nonexistent-script-12345".into(),
+        };
+        let result = exec.execute(&make_params(&[("name", "test")]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("running /tmp/hobnob-test-nonexistent-script-12345"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn script_returns_changed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let script = write_script(
+            dir.path(),
+            "changed.sh",
+            r#"echo '{"action":"created","changed":true,"error":""}'"#,
+        );
+        let exec = CustomExecutor { script_path: script };
+        let result = exec.execute(&make_params(&[("name", "test")]), false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+    }
+
+    #[test]
+    fn script_returns_unchanged() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let script = write_script(
+            dir.path(),
+            "unchanged.sh",
+            r#"echo '{"action":"none","changed":false,"error":""}'"#,
+        );
+        let exec = CustomExecutor { script_path: script };
+        let result = exec.execute(&make_params(&[("name", "test")]), false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn script_returns_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let script = write_script(
+            dir.path(),
+            "error.sh",
+            r#"echo '{"action":"","changed":false,"error":"something failed"}'"#,
+        );
+        let exec = CustomExecutor { script_path: script };
+        let result = exec.execute(&make_params(&[("name", "test")]), false);
+        assert!(result.error.is_some());
+        assert_eq!(result.error.as_deref().unwrap(), "something failed");
+    }
+
+    #[test]
+    fn script_exit_nonzero() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let script = write_script(
+            dir.path(),
+            "fail.sh",
+            "echo 'boom' >&2\nexit 1\n",
+        );
+        let exec = CustomExecutor { script_path: script };
+        let result = exec.execute(&make_params(&[("name", "test")]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("exit"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+}

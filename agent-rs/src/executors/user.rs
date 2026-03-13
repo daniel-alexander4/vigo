@@ -500,3 +500,357 @@ impl Executor for UserExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn empty() -> Self {
+            Self {
+                responses: Mutex::new(Vec::new()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(
+            &self,
+            _: &[u8],
+            name: &str,
+            args: &[&str],
+        ) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("name param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn present_creates_new_user() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        // useradd succeeds
+        let mock = MockRunner::new(vec![MockRunner::ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("shell", "/bin/bash"),
+                ("home", "/home/deploy"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "useradd");
+        // Verify shell and home flags are present
+        let args = &calls[0].1;
+        assert!(args.contains(&"-s".to_string()));
+        assert!(args.contains(&"/bin/bash".to_string()));
+        assert!(args.contains(&"-d".to_string()));
+        assert!(args.contains(&"/home/deploy".to_string()));
+        assert!(args.contains(&"deploy".to_string()));
+    }
+
+    #[test]
+    fn present_user_already_matches() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001:Deploy User:/home/deploy:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndeploy:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+
+        // No runner calls expected — user already matches
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("shell", "/bin/bash"),
+                ("home", "/home/deploy"),
+                ("comment", "Deploy User"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(
+            calls.lock().unwrap().is_empty(),
+            "no commands should be called when user already matches"
+        );
+    }
+
+    #[test]
+    fn present_updates_shell() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001::/home/deploy:/bin/sh\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndeploy:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+
+        // usermod succeeds
+        let mock = MockRunner::new(vec![MockRunner::ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("shell", "/bin/bash"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "usermod");
+        assert!(calls[0].1.contains(&"-s".to_string()));
+        assert!(calls[0].1.contains(&"/bin/bash".to_string()));
+        assert!(calls[0].1.contains(&"deploy".to_string()));
+    }
+
+    #[test]
+    fn absent_user_not_found() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "ghost"), ("state", "absent")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn absent_deletes_user() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001::/home/deploy:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndeploy:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+
+        // userdel succeeds
+        let mock = MockRunner::new(vec![MockRunner::ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("state", "absent")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "userdel");
+        assert_eq!(calls[0].1, vec!["deploy"]);
+    }
+
+    #[test]
+    fn dry_run_does_not_call_useradd() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("state", "present")]),
+            true,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        assert!(
+            calls.lock().unwrap().is_empty(),
+            "dry_run should not invoke any commands"
+        );
+    }
+
+    #[test]
+    fn unknown_state_errors() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("state", "bogus")]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("unknown state"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+}

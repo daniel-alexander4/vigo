@@ -120,6 +120,19 @@ func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile st
 	return mux, nil
 }
 
+const maxRequestBodySize = 1 << 20 // 1 MB
+
+// MaxBodyMiddleware wraps an http.Handler to limit request body sizes to 1 MB.
+// This prevents unbounded memory consumption from oversized POST bodies.
+func MaxBodyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // buildGatewayTLS creates TLS credentials for the gateway's connection back
 // to the gRPC server. The gateway acts as a client to gRPC, so it needs
 // a client certificate and the CA to verify the server.

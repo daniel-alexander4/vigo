@@ -291,3 +291,305 @@ impl Executor for MountExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(
+            &self,
+            _: &[u8],
+            name: &str,
+            args: &[&str],
+        ) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        let mock = MockRunner::new(vec![]);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("path param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn mounted_adds_fstab_and_mounts() {
+        // Empty fstab, findmnt says not mounted -> adds fstab entry + calls mount
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output(""),  // findmnt -> not mounted
+            MockRunner::ok_output(""),    // mount
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/mnt/data"),
+                ("device", "/dev/sdb1"),
+                ("fstype", "ext4"),
+                ("state", "mounted"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        // Verify fstab was written
+        let content = std::fs::read_to_string(fstab.path()).unwrap();
+        assert!(content.contains("/dev/sdb1"), "fstab should contain device");
+        assert!(content.contains("/mnt/data"), "fstab should contain mount point");
+        // Verify mount was called
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, "mount");
+    }
+
+    #[test]
+    fn already_mounted_with_fstab() {
+        // fstab has entry, findmnt says mounted -> Action::None
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            fstab.path(),
+            "/dev/sdb1\t/mnt/data\text4\tdefaults\t0\t0\n",
+        )
+        .unwrap();
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("/mnt/data\n"),  // findmnt -> mounted
+        ]);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/mnt/data"),
+                ("device", "/dev/sdb1"),
+                ("fstype", "ext4"),
+                ("state", "mounted"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn present_adds_fstab_only() {
+        // state=present, not in fstab, not mounted -> adds fstab but doesn't mount
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output(""),  // findmnt -> not mounted
+            // No mount call expected for state=present
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/mnt/data"),
+                ("device", "/dev/sdb1"),
+                ("fstype", "ext4"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        // Verify fstab was written
+        let content = std::fs::read_to_string(fstab.path()).unwrap();
+        assert!(content.contains("/dev/sdb1"), "fstab should contain device");
+        // Only findmnt was called, no mount
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "state=present should not call mount, got {:?}", *calls);
+    }
+
+    #[test]
+    fn unmounted_calls_umount() {
+        // state=unmounted, findmnt says mounted -> umount called
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("/mnt/data\n"),  // findmnt -> mounted
+            MockRunner::ok_output(""),              // umount
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/mnt/data"),
+                ("state", "unmounted"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, "umount");
+    }
+
+    #[test]
+    fn absent_unmounts_and_removes_fstab() {
+        // mounted + in fstab, state=absent -> umount + fstab entry removed
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            fstab.path(),
+            "/dev/sdb1\t/mnt/data\text4\tdefaults\t0\t0\n",
+        )
+        .unwrap();
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("/mnt/data\n"),  // findmnt -> mounted
+            MockRunner::ok_output(""),              // umount
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/mnt/data"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        // Verify fstab entry was removed
+        let content = std::fs::read_to_string(fstab.path()).unwrap();
+        assert!(
+            !content.contains("/mnt/data"),
+            "fstab should not contain mount point after absent"
+        );
+        // Verify umount was called
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls[1].0, "umount");
+    }
+
+    #[test]
+    fn absent_noop_when_nothing() {
+        // state=absent, not mounted, not in fstab -> Action::None
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output(""),  // findmnt -> not mounted
+        ]);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/mnt/data"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn dry_run_does_not_modify() {
+        // dry_run=true, needs mount -> Created but fstab unchanged and no mount call
+        let fstab = tempfile::NamedTempFile::new().unwrap();
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output(""),  // findmnt -> not mounted
+            // No mount call expected in dry_run
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = MountExecutor {
+            runner: Box::new(mock),
+            fstab_path: fstab.path().to_str().unwrap().to_string(),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/mnt/data"),
+                ("device", "/dev/sdb1"),
+                ("fstype", "ext4"),
+                ("state", "mounted"),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        // Fstab should be unchanged (empty)
+        let content = std::fs::read_to_string(fstab.path()).unwrap();
+        assert!(content.is_empty(), "dry_run should not modify fstab, got: {}", content);
+        // Only findmnt was called
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call findmnt, got {:?}", *calls);
+    }
+}

@@ -27,9 +27,10 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	}
 	thrallID := req.GetThrallId()
 
-	// Validate thrall is not revoked — use FleetIndex when available.
+	// Validate thrall is not revoked + look up state in one lock acquisition.
+	var thrall db.Thrall
 	if s.fleetIndex != nil {
-		exists, revoked := s.fleetIndex.IsRevoked(thrallID)
+		ts, exists, revoked := s.fleetIndex.GetThrallLite(thrallID)
 		if !exists {
 			metrics.CheckinsTotal.WithLabelValues("error").Inc()
 			return nil, status.Error(codes.NotFound, "thrall not found")
@@ -38,6 +39,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 			metrics.CheckinsTotal.WithLabelValues("error").Inc()
 			return nil, status.Error(codes.PermissionDenied, "thrall is revoked")
 		}
+		thrall = fleetThrallToDB(ts)
 	} else if err := s.registry.ValidateThrall(ctx, thrallID); err != nil {
 		metrics.CheckinsTotal.WithLabelValues("error").Inc()
 		if errors.Is(err, registry.ErrThrallRevoked) {
@@ -47,6 +49,12 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 			return nil, status.Error(codes.NotFound, "thrall not found")
 		}
 		return nil, status.Errorf(codes.Internal, "validating thrall: %v", err)
+	} else {
+		var err error
+		thrall, err = s.lookupThrall(ctx, thrallID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Log warning on every check-in if license is in grace or enrollment-block.
@@ -56,21 +64,15 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		}
 	}
 
-	// Reuse thrall from interceptor context if available, otherwise cache lookup.
-	thrall, err := s.lookupThrall(ctx, thrallID)
-	if err != nil {
-		return nil, err
-	}
-
 	return s.buildCheckInResponse(ctx, thrallID, thrall, req)
 }
 
 // lookupThrall resolves a thrall from FleetIndex, context, cache, or DB.
 func (s *AgentService) lookupThrall(ctx context.Context, thrallID string) (db.Thrall, error) {
-	// Fastest: FleetIndex in-memory lookup.
+	// Fastest: FleetIndex in-memory lookup (no Traits copy needed).
 	if s.fleetIndex != nil {
-		ts := s.fleetIndex.GetThrall(thrallID)
-		if ts != nil {
+		ts, ok, _ := s.fleetIndex.GetThrallLite(thrallID)
+		if ok {
 			return fleetThrallToDB(ts), nil
 		}
 	}

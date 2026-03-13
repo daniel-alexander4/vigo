@@ -142,3 +142,107 @@ fn sha256_hex(data: &[u8]) -> String {
     let hash = Sha256::digest(data);
     hash.iter().map(|b| format!("{:02x}", b)).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let exec = LogrotateExecutor;
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("name param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let exec = LogrotateExecutor;
+        let result = exec.execute(
+            &make_params(&[("name", "myapp")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("path param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn build_config_defaults() {
+        let params = make_params(&[("name", "myapp"), ("path", "/var/log/myapp/*.log")]);
+        let config = build_logrotate_config(&params, "/var/log/myapp/*.log");
+        assert!(config.contains("/var/log/myapp/*.log {"), "missing path block:\n{}", config);
+        assert!(config.contains("weekly"), "missing weekly:\n{}", config);
+        assert!(config.contains("rotate 4"), "missing rotate 4:\n{}", config);
+        assert!(config.contains("compress"), "missing compress:\n{}", config);
+        assert!(config.contains("delaycompress"), "missing delaycompress:\n{}", config);
+        assert!(config.contains("missingok"), "missing missingok:\n{}", config);
+        assert!(config.contains("notifempty"), "missing notifempty:\n{}", config);
+        assert!(!config.contains("copytruncate"), "copytruncate should be off by default:\n{}", config);
+    }
+
+    #[test]
+    fn build_config_custom() {
+        let params = make_params(&[
+            ("name", "myapp"),
+            ("path", "/var/log/myapp.log"),
+            ("frequency", "daily"),
+            ("rotate", "7"),
+            ("compress", "false"),
+            ("delaycompress", "false"),
+            ("copytruncate", "true"),
+        ]);
+        let config = build_logrotate_config(&params, "/var/log/myapp.log");
+        assert!(config.contains("daily"), "missing daily:\n{}", config);
+        assert!(config.contains("rotate 7"), "missing rotate 7:\n{}", config);
+        assert!(!config.contains("    compress"), "compress should be off:\n{}", config);
+        assert!(!config.contains("delaycompress"), "delaycompress should be off:\n{}", config);
+        assert!(config.contains("copytruncate"), "missing copytruncate:\n{}", config);
+    }
+
+    #[test]
+    fn build_config_with_postrotate() {
+        let params = make_params(&[
+            ("name", "nginx"),
+            ("path", "/var/log/nginx/*.log"),
+            ("postrotate", "/usr/sbin/nginx -s reload"),
+        ]);
+        let config = build_logrotate_config(&params, "/var/log/nginx/*.log");
+        assert!(config.contains("postrotate"), "missing postrotate block:\n{}", config);
+        assert!(
+            config.contains("/usr/sbin/nginx -s reload"),
+            "missing postrotate command:\n{}",
+            config
+        );
+        assert!(config.contains("endscript"), "missing endscript:\n{}", config);
+    }
+
+    #[test]
+    fn dry_run_absent_noop() {
+        let exec = LogrotateExecutor;
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "hobnob-test-nonexistent-logrotate-99999"),
+                ("state", "absent"),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+}

@@ -324,3 +324,229 @@ fn walkdir(dir: &str) -> Vec<String> {
     }
     files
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(
+            &self,
+            _: &[u8],
+            name: &str,
+            args: &[&str],
+        ) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_url_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("url param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn missing_targetpath_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("url", "https://example.com/file.tar.gz")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("targetpath param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn absent_removes_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("mybin");
+        std::fs::write(&target, b"binary content").unwrap();
+        assert!(target.exists());
+
+        let mock = MockRunner::new(vec![]);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/file.tar.gz"),
+                ("targetpath", target.to_str().unwrap()),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        assert!(!target.exists(), "file should have been removed");
+    }
+
+    #[test]
+    fn absent_noop_when_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("nonexistent");
+
+        let mock = MockRunner::new(vec![]);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/file.tar.gz"),
+                ("targetpath", target.to_str().unwrap()),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn dry_run_does_not_download() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("mybin");
+
+        let mock = MockRunner::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/file.tar.gz"),
+                ("targetpath", target.to_str().unwrap()),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        // No curl/wget calls
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 0, "dry_run should not call any commands, got {:?}", *calls);
+    }
+
+    #[test]
+    fn sha256_match_skips_download() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("mybin");
+        let content = b"known binary content for hash test";
+        std::fs::write(&target, content).unwrap();
+
+        // Compute the actual sha256 of the content
+        let hash = file_sha256(target.to_str().unwrap()).unwrap();
+
+        let mock = MockRunner::new(vec![]);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/file.tar.gz"),
+                ("targetpath", target.to_str().unwrap()),
+                ("sha256", &hash),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn unless_guard_skips() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("mybin");
+
+        // unless command succeeds -> skip
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output(""),  // sh -c "unless_cmd" succeeds
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/file.tar.gz"),
+                ("targetpath", target.to_str().unwrap()),
+                ("unless", "test -f /usr/bin/something"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "sh");
+    }
+}

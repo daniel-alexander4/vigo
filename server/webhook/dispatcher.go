@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/hobnob/hobnob/server/db"
@@ -51,6 +53,7 @@ type Dispatcher struct {
 	maxRetries     int
 	retryBaseDelay time.Duration
 	sem            chan struct{} // bounds concurrent deliveries
+	skipSSRFCheck  bool          // test-only: bypass SSRF validation
 }
 
 // DispatcherConfig holds configurable parameters for the webhook dispatcher.
@@ -130,6 +133,14 @@ func (d *Dispatcher) DispatchRotation(ctx context.Context, event string, secretP
 func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, body []byte) {
 	signature := "sha256=" + sign(wh.Secret, body)
 
+	if !d.skipSSRFCheck {
+		if err := validateWebhookURL(wh.Url); err != nil {
+			slog.Error("webhook: URL rejected by SSRF policy",
+				"webhook_id", wh.ID, "url", wh.Url, "error", err)
+			return
+		}
+	}
+
 	for attempt := 0; attempt <= d.maxRetries; attempt++ {
 		if attempt > 0 {
 			delay := time.Duration(attempt) * d.retryBaseDelay
@@ -182,6 +193,50 @@ func sign(secret string, payload []byte) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// validateWebhookURL rejects URLs that target internal networks (SSRF protection).
+func validateWebhookURL(rawURL string) error {
+	if rawURL == "" {
+		return fmt.Errorf("empty webhook URL")
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("unsupported scheme %q: only http and https are allowed", u.Scheme)
+	}
+
+	hostname := u.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("empty hostname")
+	}
+
+	// Reject well-known localhost names.
+	if hostname == "localhost" || hostname == "localhost.localdomain" {
+		return fmt.Errorf("loopback address %q is not allowed", hostname)
+	}
+
+	ip := net.ParseIP(hostname)
+	if ip == nil {
+		// Not an IP literal — allow DNS names (resolution happens at delivery time).
+		return nil
+	}
+
+	if ip.IsLoopback() {
+		return fmt.Errorf("loopback address %s is not allowed", ip)
+	}
+	if ip.IsPrivate() {
+		return fmt.Errorf("private network address %s is not allowed", ip)
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return fmt.Errorf("link-local address %s is not allowed", ip)
+	}
+
+	return nil
 }
 
 // FormatRunEvent returns the appropriate event name for a run status.

@@ -185,8 +185,8 @@ func lookupThrallAndPubKey(ctx context.Context, queries *db.Queries, thrallID st
 	if fleetIdx != nil {
 		pubKey := fleetIdx.GetPubKey(thrallID)
 		if pubKey != nil {
-			ts := fleetIdx.GetThrall(thrallID)
-			if ts != nil {
+			ts, ok, _ := fleetIdx.GetThrallLite(thrallID)
+			if ok {
 				thrall := fleetThrallToDB(ts)
 				return thrall, pubKey, nil
 			}

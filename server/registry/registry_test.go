@@ -659,3 +659,124 @@ func TestRevokeNonExistentNode(t *testing.T) {
 		fmt.Printf("RevokeThrall for non-existent thrall returned error: %v (acceptable)\n", err)
 	}
 }
+
+func TestBcryptHashFormat(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	_, err := reg.AddApprovedPattern(ctx, "*.example.com", "test-token")
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+
+	patterns, _ := db.New(testDB).ListUnusedApprovedPatterns(ctx)
+	hash := patterns[0].TokenHash
+
+	// Verify it's a valid bcrypt hash (starts with $2a$ or $2b$).
+	if len(hash) < 4 || (hash[:4] != "$2a$" && hash[:4] != "$2b$") {
+		t.Errorf("token hash doesn't look like bcrypt: %q", hash[:10])
+	}
+
+	// Verify cost is at least 10.
+	cost, err := bcrypt.Cost([]byte(hash))
+	if err != nil {
+		t.Fatalf("bcrypt.Cost: %v", err)
+	}
+	if cost < 10 {
+		t.Errorf("bcrypt cost = %d, want >= 10", cost)
+	}
+}
+
+func TestRegisterEmptyInputs(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Empty hostname.
+	_, err := reg.Register(ctx, "", "10.0.0.1", "pubkey", "token")
+	if err == nil {
+		t.Error("expected error for empty hostname")
+	}
+
+	// Empty pubkey.
+	_, err = reg.Register(ctx, "host.example.com", "10.0.0.1", "", "token")
+	if err == nil {
+		t.Error("expected error for empty pubkey")
+	}
+
+	// Empty token.
+	_, err = reg.Register(ctx, "host.example.com", "10.0.0.1", "pubkey", "")
+	if err == nil {
+		t.Error("expected error for empty token")
+	}
+}
+
+func TestMatchesCIDR(t *testing.T) {
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.example.com", CIDRs: []string{"10.0.0.0/8", "172.16.0.0/12"}},
+	}
+
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Match: 10.x.x.x
+	id, err := reg.TrustedRegister(ctx, "a.example.com", "10.0.0.1", "pk1", patterns, "10.0.0.50")
+	if err != nil {
+		t.Fatalf("expected match for 10.x: %v", err)
+	}
+	if id == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	// Match: 172.16.x.x
+	id, err = reg.TrustedRegister(ctx, "b.example.com", "172.16.0.1", "pk2", patterns, "172.16.5.5")
+	if err != nil {
+		t.Fatalf("expected match for 172.16.x: %v", err)
+	}
+
+	// No match: 192.168.x.x
+	_, err = reg.TrustedRegister(ctx, "c.example.com", "192.168.1.1", "pk3", patterns, "192.168.1.100")
+	if err == nil {
+		t.Fatal("expected rejection for 192.168.x outside CIDR")
+	}
+
+	// Invalid CIDR format should not crash.
+	badPatterns := []config.TrustedEnrollment{
+		{Pattern: "*.example.com", CIDRs: []string{"not-a-cidr"}},
+	}
+	_, err = reg.TrustedRegister(ctx, "d.example.com", "10.0.0.1", "pk4", badPatterns, "10.0.0.1")
+	if err == nil {
+		t.Fatal("expected rejection with invalid CIDR")
+	}
+}
+
+func TestRevokeNonExistentThrallReturnsError(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	err := reg.RevokeThrall(ctx, "00000000-0000-0000-0000-000000000000")
+	if err == nil {
+		t.Fatal("expected error when revoking non-existent thrall")
+	}
+}
+
+func TestCreateThrallDirect(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	id, err := reg.CreateThrall(ctx, "direct.example.com", "10.0.0.1", "ed25519-pubkey")
+	if err != nil {
+		t.Fatalf("CreateThrall: %v", err)
+	}
+	if id == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	// Verify in DB.
+	thrall, err := db.New(testDB).GetThrallByID(ctx, id)
+	if err != nil {
+		t.Fatalf("GetThrallByID: %v", err)
+	}
+	if thrall.Hostname != "direct.example.com" {
+		t.Errorf("hostname = %q, want direct.example.com", thrall.Hostname)
+	}
+}

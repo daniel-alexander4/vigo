@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 // Package secrets provides a pluggable interface for secret retrieval.
-// The production implementation (IsopassProvider) wraps isopass;
-// StaticProvider reads from a .env file for local dev and testing.
+// The default backend is LocalProvider (plaintext or AES-256-GCM encrypted files).
+// IsopassProvider wraps isopass for production. StaticProvider reads from .env (legacy).
 package secrets
 
 import "context"

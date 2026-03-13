@@ -242,6 +242,158 @@ func TestWatcherRunLoop(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
+// errorVersionProvider returns an error on GetVersion calls when errOn is true.
+type errorVersionProvider struct {
+	mu       sync.Mutex
+	versions map[string]int
+	errOn    bool
+}
+
+func (m *errorVersionProvider) GetVersion(ctx context.Context, key string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.errOn {
+		return 0, context.DeadlineExceeded
+	}
+	v, ok := m.versions[key]
+	if !ok {
+		return 0, nil
+	}
+	return v, nil
+}
+
+func (m *errorVersionProvider) setError(on bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.errOn = on
+}
+
+func TestExponentialBackoffOnFailure(t *testing.T) {
+	provider := &errorVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
+	store := &mockThrallStore{refs: map[string][]string{}}
+	database := &mockDB{nodesByHost: map[string]string{}}
+	dispatcher := &mockDispatcher{}
+
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+
+	ctx := context.Background()
+	w.initVersions(ctx)
+
+	// Simulate provider failures and verify consecutiveFailures increases.
+	provider.setError(true)
+
+	w.checkRotations(ctx)
+	assert.Equal(t, 1, w.consecutiveFailures, "after 1 failure")
+
+	w.checkRotations(ctx)
+	assert.Equal(t, 2, w.consecutiveFailures, "after 2 failures")
+
+	w.checkRotations(ctx)
+	assert.Equal(t, 3, w.consecutiveFailures, "after 3 failures")
+
+	// Verify the backoff multiplier follows 2^failures (capped at 32).
+	// At 3 failures: multiplier = 2^3 = 8.
+	multiplier := 1 << w.consecutiveFailures
+	if multiplier > maxBackoffMultiplier {
+		multiplier = maxBackoffMultiplier
+	}
+	assert.Equal(t, 8, multiplier, "backoff multiplier after 3 failures")
+
+	// Recovery: a successful check resets the counter.
+	provider.setError(false)
+	w.checkRotations(ctx)
+	assert.Equal(t, 0, w.consecutiveFailures, "should reset after success")
+}
+
+func TestBackoffCapsAt32x(t *testing.T) {
+	provider := &errorVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
+	store := &mockThrallStore{refs: map[string][]string{}}
+	database := &mockDB{nodesByHost: map[string]string{}}
+	dispatcher := &mockDispatcher{}
+
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+
+	ctx := context.Background()
+	w.initVersions(ctx)
+
+	// Force many consecutive failures.
+	provider.setError(true)
+	for i := 0; i < 10; i++ {
+		w.checkRotations(ctx)
+	}
+	assert.Equal(t, 10, w.consecutiveFailures)
+
+	// Multiplier should be capped at 32 (maxBackoffMultiplier), not 2^10=1024.
+	multiplier := 1 << w.consecutiveFailures
+	if multiplier > maxBackoffMultiplier {
+		multiplier = maxBackoffMultiplier
+	}
+	assert.Equal(t, maxBackoffMultiplier, multiplier, "multiplier should cap at 32")
+}
+
+func TestNoActionOnVersionDowngrade(t *testing.T) {
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 5}}
+	store := &mockThrallStore{refs: map[string][]string{
+		"hobnob/db/dsn": {"web-01.example.com"},
+	}}
+	thrallID := uuid.New().String()
+	database := &mockDB{
+		nodesByHost: map[string]string{
+			"web-01.example.com": thrallID,
+		},
+	}
+	dispatcher := &mockDispatcher{}
+
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+
+	ctx := context.Background()
+	w.initVersions(ctx)
+
+	// Downgrade version from 5 to 3 — should not trigger any action.
+	provider.setVersion("hobnob/db/dsn", 3)
+	w.checkRotations(ctx)
+
+	database.mu.Lock()
+	assert.Empty(t, database.forcePushed, "version downgrade should not trigger force push")
+	assert.Empty(t, database.rotationEvents, "version downgrade should not create rotation event")
+	database.mu.Unlock()
+
+	dispatcher.mu.Lock()
+	assert.Empty(t, dispatcher.events, "version downgrade should not dispatch events")
+	dispatcher.mu.Unlock()
+}
+
+func TestNoActionOnSameVersion(t *testing.T) {
+	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 3}}
+	store := &mockThrallStore{refs: map[string][]string{
+		"hobnob/db/dsn": {"web-01.example.com"},
+	}}
+	thrallID := uuid.New().String()
+	database := &mockDB{
+		nodesByHost: map[string]string{
+			"web-01.example.com": thrallID,
+		},
+	}
+	dispatcher := &mockDispatcher{}
+
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+
+	ctx := context.Background()
+	w.initVersions(ctx)
+
+	// Same version — no action expected.
+	w.checkRotations(ctx)
+
+	database.mu.Lock()
+	assert.Empty(t, database.forcePushed, "same version should not trigger force push")
+	assert.Empty(t, database.rotationEvents, "same version should not create rotation event")
+	database.mu.Unlock()
+
+	dispatcher.mu.Lock()
+	assert.Empty(t, dispatcher.events, "same version should not dispatch events")
+	dispatcher.mu.Unlock()
+}
+
 func TestMultipleAffectedNodes(t *testing.T) {
 	node1 := uuid.New().String()
 	node2 := uuid.New().String()

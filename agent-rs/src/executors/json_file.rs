@@ -185,3 +185,163 @@ fn write_json(path: &str, doc: &serde_json::Value, indent: &str) -> Result<(), S
     let output = format!("{}\n", formatted);
     std::fs::write(path, output).map_err(|e| format!("write {}: {}", path, e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let exec = JsonFileExecutor;
+        let params = make_params(&[("key", "port"), ("value", "80")]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("path param is required"));
+    }
+
+    #[test]
+    fn missing_key_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        std::fs::write(&path, "{}").unwrap();
+
+        let exec = JsonFileExecutor;
+        let params = make_params(&[("path", path.to_str().unwrap())]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("key param is required"));
+    }
+
+    #[test]
+    fn present_creates_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        // File does not exist yet — executor should create it.
+
+        let exec = JsonFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("key", "app.name"),
+            ("value", "\"hobnob\""),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(doc["app"]["name"], "hobnob");
+    }
+
+    #[test]
+    fn present_updates_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        std::fs::write(&path, "{\"port\": 80}\n").unwrap();
+
+        let exec = JsonFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("key", "port"),
+            ("value", "90"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Updated);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(doc["port"], 90);
+    }
+
+    #[test]
+    fn present_key_already_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        std::fs::write(&path, "{\"port\": 80}\n").unwrap();
+
+        let exec = JsonFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("key", "port"),
+            ("value", "80"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn absent_removes_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        std::fs::write(&path, "{\"port\": 80, \"host\": \"localhost\"}\n").unwrap();
+
+        let exec = JsonFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("key", "port"),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Deleted);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert!(doc.get("port").is_none());
+        assert_eq!(doc["host"], "localhost");
+    }
+
+    #[test]
+    fn absent_key_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        std::fs::write(&path, "{\"host\": \"localhost\"}\n").unwrap();
+
+        let exec = JsonFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("key", "nonexistent"),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn dry_run_does_not_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        let original = "{\"port\": 80}\n";
+        std::fs::write(&path, original).unwrap();
+
+        let exec = JsonFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("key", "port"),
+            ("value", "443"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, true);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+
+        // File should be unchanged because of dry_run.
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, original);
+    }
+}

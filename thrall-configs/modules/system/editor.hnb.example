@@ -1,0 +1,13 @@
+name: editor
+resources:
+  - name: install-editor
+    type: package
+    state: present
+    case: "{{ .Traits.os_family }}"
+    match:
+      debian:
+        package: vim-nox
+      redhat:
+        package: vim-enhanced
+      default:
+        package: vim

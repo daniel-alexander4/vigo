@@ -40,11 +40,11 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string, fi *f
 	if _, err := uuid.Parse(spec); err == nil {
 		// FleetIndex path.
 		if fi != nil {
-			ts := fi.GetThrall(spec)
-			if ts == nil {
+			ts, exists, revoked := fi.GetThrallLite(spec)
+			if !exists {
 				return nil, fmt.Errorf("thrall %s not found", spec)
 			}
-			if ts.Revoked {
+			if revoked {
 				return nil, fmt.Errorf("thrall %s is revoked", spec)
 			}
 			return []targetInfo{{ThrallID: ts.ID, Hostname: ts.Hostname}}, nil
@@ -75,11 +75,11 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string, fi *f
 		if id == "" {
 			return nil, fmt.Errorf("thrall with hostname %q not found", spec)
 		}
-		ts := fi.GetThrall(id)
-		if ts == nil {
+		ts, exists, revoked := fi.GetThrallLite(id)
+		if !exists {
 			return nil, fmt.Errorf("thrall with hostname %q not found", spec)
 		}
-		if ts.Revoked {
+		if revoked {
 			return nil, fmt.Errorf("thrall %q is revoked", spec)
 		}
 		return []targetInfo{{ThrallID: ts.ID, Hostname: ts.Hostname}}, nil

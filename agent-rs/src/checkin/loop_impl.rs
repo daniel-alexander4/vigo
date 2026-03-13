@@ -129,6 +129,24 @@ fn strip_secret_triggers(bundle: &mut PolicyBundle) {
     }
 }
 
+/// Check a CheckInResponse for a reassignment directive.
+/// Returns an error (causing the loop to restart) if reassignment is pending.
+fn check_reassignment(resp: &CheckInResponse) -> Result<()> {
+    if !resp.reassign_addr.is_empty() {
+        info!(
+            target_addr = %resp.reassign_addr,
+            new_id = %resp.reassign_id,
+            "reassignment received, agent should reconnect to new spoke"
+        );
+        anyhow::bail!(
+            "reassignment to {} with new ID {}",
+            resp.reassign_addr,
+            resp.reassign_id
+        );
+    }
+    Ok(())
+}
+
 /// Perform a convergence cycle with an already-received CheckInResponse.
 ///
 /// Used by both RunOnce (poll) and the stream event loop.
@@ -250,6 +268,20 @@ pub async fn run_once(
             policy_state.module_cache.hashes(),
         )
         .await?;
+
+    // Check for reassignment before converging.
+    if !resp.reassign_addr.is_empty() {
+        info!(
+            target_addr = %resp.reassign_addr,
+            new_id = %resp.reassign_id,
+            "reassignment received, agent should reconnect to new spoke"
+        );
+        anyhow::bail!(
+            "reassignment to {} with new ID {}",
+            resp.reassign_addr,
+            resp.reassign_id
+        );
+    }
 
     let rr = converge(
         &resp, executors, traits_val, cache, policy_state, dry_run, module_filter,
@@ -792,6 +824,7 @@ async fn stream_loop(
     };
 
     // Process initial check-in response.
+    check_reassignment(initial_resp)?;
     match converge(
         initial_resp, executors, initial_traits, result_cache, policy_state, false, None,
     ) {
@@ -896,6 +929,7 @@ async fn stream_loop(
 
                     match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
                         Ok(resp) => {
+                            check_reassignment(&resp)?;
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
@@ -995,6 +1029,7 @@ async fn stream_loop(
 
                     match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
                         Ok(resp) => {
+                            check_reassignment(&resp)?;
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {

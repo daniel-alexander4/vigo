@@ -4,6 +4,7 @@
 package grpc
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/hobnob/hobnob/server/config"
@@ -208,4 +209,45 @@ func BenchmarkCustomizeStubs(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		customizeStubs(base, hashes)
 	}
+}
+
+func TestPolicyCache_ConcurrentVersionChange(t *testing.T) {
+	pc := newPolicyCache()
+	cfg := makeTestConfig()
+	const goroutines = 50
+
+	var wg sync.WaitGroup
+
+	// Phase 1: Concurrent hits on version 1.
+	pc.GetOrBuild("*.web.example.com", cfg, 1)
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b, err := pc.GetOrBuild("*.web.example.com", cfg, 1)
+			if err != nil {
+				t.Errorf("GetOrBuild v1: %v", err)
+			}
+			if b == nil {
+				t.Error("nil bundle from v1")
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Phase 2: Concurrent version bump.
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(v uint64) {
+			defer wg.Done()
+			b, err := pc.GetOrBuild("*.web.example.com", cfg, v)
+			if err != nil {
+				t.Errorf("GetOrBuild v%d: %v", v, err)
+			}
+			if b == nil {
+				t.Errorf("nil bundle from v%d", v)
+			}
+		}(uint64(2 + i%2)) // alternates between v2 and v3
+	}
+	wg.Wait()
 }

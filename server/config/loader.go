@@ -327,8 +327,8 @@ func (cs *ConfigStore) Watch(ctx context.Context) error {
 	}
 	defer watcher.Close()
 
-	// Watch the thralls, modules, roles, and templates trees recursively.
-	for _, dir := range []string{cs.thrallsDir(), cs.modulesDir(), cs.rolesDir(), cs.templatesDir()} {
+	// Watch the thralls, modules, roles, templates, and vars trees recursively.
+	for _, dir := range []string{cs.thrallsDir(), cs.modulesDir(), cs.rolesDir(), cs.templatesDir(), cs.varsDir()} {
 		if err := watchRecursive(watcher, dir); err != nil {
 			return fmt.Errorf("watching %s: %w", dir, err)
 		}
@@ -387,6 +387,9 @@ func (cs *ConfigStore) rolesDir() string { return filepath.Join(cs.dir, "roles")
 
 // templatesDir returns the path to the templates subdirectory.
 func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
+
+// varsDir returns the path to the vars subdirectory.
+func (cs *ConfigStore) varsDir() string { return filepath.Join(cs.dir, "vars") }
 
 // loadAll reads module defs, role defs, and thrall YAML files, resolves
 // all entries, and atomically swaps the config.
@@ -481,6 +484,73 @@ func (cs *ConfigStore) loadAllInner() error {
 	return nil
 }
 
+// loadVarsFile reads a YAML file containing a flat key-value map of vars.
+// The path is relative to the thrall-configs directory. Returns the vars map
+// and insertion-ordered keys.
+func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
+	fullPath := filepath.Clean(filepath.Join(baseDir, relPath))
+	if !strings.HasPrefix(fullPath, baseDir+string(filepath.Separator)) && fullPath != baseDir {
+		return nil, nil, fmt.Errorf("vars_from path %q escapes config directory", relPath)
+	}
+
+	// Resolve symlinks and re-check containment.
+	// If EvalSymlinks fails because the file doesn't exist, fall
+	// through to ReadFile which produces the expected error.
+	readPath := fullPath
+	resolved, err := filepath.EvalSymlinks(fullPath)
+	if err == nil {
+		resolvedBase, err := filepath.EvalSymlinks(baseDir)
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolving config directory: %w", err)
+		}
+		if !strings.HasPrefix(resolved, resolvedBase+string(filepath.Separator)) && resolved != resolvedBase {
+			return nil, nil, fmt.Errorf("vars_from path %q resolves outside config directory", relPath)
+		}
+		readPath = resolved
+	}
+
+	data, err := os.ReadFile(readPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading vars file %q: %w", relPath, err)
+	}
+
+	// Parse with yaml.Node to preserve key order.
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, nil, fmt.Errorf("parsing vars file %q: %w", relPath, err)
+	}
+
+	if doc.Kind == 0 {
+		// Empty file.
+		return nil, nil, nil
+	}
+
+	// doc is a document node wrapping the actual content.
+	root := &doc
+	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
+		root = root.Content[0]
+	}
+	if root.Kind != yaml.MappingNode {
+		return nil, nil, fmt.Errorf("vars file %q: expected a key-value mapping, got %v", relPath, root.Kind)
+	}
+
+	vars := make(map[string]any, len(root.Content)/2)
+	keys := make([]string, 0, len(root.Content)/2)
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		key := root.Content[i].Value
+		var val any
+		if err := root.Content[i+1].Decode(&val); err != nil {
+			return nil, nil, fmt.Errorf("vars file %q key %q: %w", relPath, key, err)
+		}
+		if _, exists := vars[key]; !exists {
+			keys = append(keys, key)
+		}
+		vars[key] = val
+	}
+
+	return vars, keys, nil
+}
+
 // resolveEntry converts a ThrallEntry into a fully resolved ThrallConfig.
 func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*ThrallConfig, error) {
 	// Collect module refs: roles first, then direct modules. First ref wins
@@ -556,7 +626,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		}
 	}
 
-	// Build vars: module defaults first, then thrall-level overrides.
+	// Build vars: module defaults → vars_from files → thrall-level overrides.
 	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
 	var varOrder []string
@@ -566,6 +636,19 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 				varOrder = append(varOrder, k)
 			}
 			vars[k] = v
+		}
+	}
+	// Load vars_from files in order. Later files override earlier ones.
+	for _, relPath := range entry.VarsFrom {
+		fileVars, fileKeys, err := loadVarsFile(cs.dir, relPath)
+		if err != nil {
+			return nil, fmt.Errorf("entry %q: %w", entry.Match, err)
+		}
+		for _, k := range fileKeys {
+			if _, exists := vars[k]; !exists {
+				varOrder = append(varOrder, k)
+			}
+			vars[k] = fileVars[k]
 		}
 	}
 	for k, v := range entry.Vars {
@@ -594,6 +677,15 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 
 	// Merge environment-specific vars.
 	mergeEnvVars(cfg)
+
+	// Expand foreach resources now that vars are fully merged.
+	for i := range cfg.Modules {
+		expanded, err := ExpandForEach(cfg.Modules[i].Resources, cfg.Vars)
+		if err != nil {
+			return nil, fmt.Errorf("module %q: %w", cfg.Modules[i].Name, err)
+		}
+		cfg.Modules[i].Resources = expanded
+	}
 
 	// Enforce known-secret fields and resolve secret: prefixes.
 	// Collect all failures so the operator can fix everything in one pass.
@@ -940,7 +1032,25 @@ func resolveSourceFiles(defs map[string]*ModuleDefinition, baseDir string) error
 				return fmt.Errorf("module %q resource %q: source path %q escapes config directory",
 					def.Name, def.Resources[i].Name, sourcePath)
 			}
-			data, err := os.ReadFile(fullPath)
+
+			// Resolve symlinks and re-check containment.
+			// If EvalSymlinks fails because the file doesn't exist, fall
+			// through to ReadFile which produces the expected error.
+			readPath := fullPath
+			resolved, err := filepath.EvalSymlinks(fullPath)
+			if err == nil {
+				resolvedBase, err := filepath.EvalSymlinks(baseDir)
+				if err != nil {
+					return fmt.Errorf("resolving config directory: %w", err)
+				}
+				if !strings.HasPrefix(resolved, resolvedBase+string(filepath.Separator)) && resolved != resolvedBase {
+					return fmt.Errorf("module %q resource %q: source path %q resolves outside config directory",
+						def.Name, def.Resources[i].Name, sourcePath)
+				}
+				readPath = resolved
+			}
+
+			data, err := os.ReadFile(readPath)
 			if err != nil {
 				return fmt.Errorf("module %q resource %q: reading source %q: %w",
 					def.Name, def.Resources[i].Name, sourcePath, err)

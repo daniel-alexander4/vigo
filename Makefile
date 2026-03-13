@@ -16,11 +16,14 @@ build-agent:
 	cp agent-rs/target/release/hobnob bin/hobnob
 
 test:
-	go test ./... -v -race -count=1
+	go test $(shell go list ./... | grep -v test/integration) -v -race -count=1
 	cd agent-rs && cargo test
 
 test-agent:
 	cd agent-rs && cargo test
+
+test-integration: build-agent
+	go test ./test/integration/... -v -count=1 -timeout 120s
 
 lint:
 	golangci-lint run ./...

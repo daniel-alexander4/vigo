@@ -69,8 +69,8 @@ func TestStaticProviderNoEnvFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get with builtin default: %v", err)
 	}
-	if val != "hobnob.db" {
-		t.Errorf("got %q, want %q", val, "hobnob.db")
+	if val != "/etc/hobnob-server/db/hobnob.db" {
+		t.Errorf("got %q, want %q", val, "/etc/hobnob-server/db/hobnob.db")
 	}
 }
 
@@ -85,7 +85,7 @@ func TestStaticProviderBuiltinDefaults(t *testing.T) {
 		key  string
 		want string
 	}{
-		{"hobnob/db/dsn", "hobnob.db"},
+		{"hobnob/db/dsn", "/etc/hobnob-server/db/hobnob.db"},
 		{"hobnob/tls/cert", "certs/server.crt"},
 		{"hobnob/tls/key", "certs/server.key"},
 		{"hobnob/tls/ca", "certs/ca.crt"},

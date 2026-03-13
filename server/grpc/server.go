@@ -114,6 +114,8 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		}),
 	)
 
+	reassignStore := NewReassignStore()
+
 	agentSvc := &AgentService{
 		registry:      cfg.Registry,
 		configStore:   cfg.ConfigStore,
@@ -133,17 +135,19 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		licenseEnforcer:  cfg.LicenseEnforcer,
 		fleetIndex:       cfg.FleetIndex,
 		runBatcher:       cfg.RunBatcher,
+		reassignStore:    reassignStore,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
 	adminSvc := &AdminService{
-		registry:     cfg.Registry,
-		queries:      cfg.Queries,
-		runStore:     cfg.RunStore,
-		configStore:  cfg.ConfigStore,
-		baseInterval: cfg.BaseInterval,
-		hub:          cfg.Hub,
-		fleetIndex:   cfg.FleetIndex,
+		registry:      cfg.Registry,
+		queries:       cfg.Queries,
+		runStore:      cfg.RunStore,
+		configStore:   cfg.ConfigStore,
+		baseInterval:  cfg.BaseInterval,
+		hub:           cfg.Hub,
+		fleetIndex:    cfg.FleetIndex,
+		reassignStore: reassignStore,
 	}
 	pb.RegisterHobnobAdminServer(srv, adminSvc)
 

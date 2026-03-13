@@ -118,9 +118,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/thralls-table", h.ThrallsTable)
 
-	// Federation page (only registered when running as hub)
+	// Federation pages (only registered when running as hub)
 	if h.hub != nil {
 		mux.HandleFunc("GET /federation", h.Federation)
+		mux.HandleFunc("GET /federation/spokes/{id}", h.SpokeDetail)
 	}
 
 	// AI chat page (only registered when assistant is available)
@@ -1190,21 +1191,32 @@ func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
 
 // FederationSpokeRow represents a spoke in the federation UI table.
 type FederationSpokeRow struct {
-	ID          string
-	Addr        string
-	Patterns    []string
-	Healthy     bool
-	ThrallCount int32
-	Error       string
+	ID            string
+	Addr          string
+	Patterns      []string
+	Healthy       bool
+	ThrallCount   int32
+	Compliant     int32
+	Drifted       int32
+	Failing       int32
+	Stale         int32
+	Unknown       int32
+	CompliancePct float32
+	LatencyMs     int64
+	Error         string
 }
 
 // FederationPageData holds data for the federation page.
 type FederationPageData struct {
 	PageData
-	SpokeCount   int
-	HealthyCount int
-	TotalThralls int32
-	Spokes       []FederationSpokeRow
+	SpokeCount     int
+	HealthyCount   int
+	TotalThralls   int32
+	TotalCompliant int32
+	TotalDrifted   int32
+	TotalFailing   int32
+	CompliancePct  float32
+	Spokes         []FederationSpokeRow
 }
 
 // Federation renders the federation hub status page.
@@ -1213,39 +1225,221 @@ func (h *Handler) Federation(w http.ResponseWriter, r *http.Request) {
 
 	var spokes []FederationSpokeRow
 	healthyCount := 0
-	var totalThralls int32
+	var totalThralls, totalCompliant, totalDrifted, totalFailing int32
 	for _, s := range statuses {
 		spokes = append(spokes, FederationSpokeRow{
-			ID:          s.ID,
-			Addr:        s.Addr,
-			Patterns:    s.Patterns,
-			Healthy:     s.Healthy,
-			ThrallCount: s.ThrallCount,
-			Error:       s.Error,
+			ID:            s.ID,
+			Addr:          s.Addr,
+			Patterns:      s.Patterns,
+			Healthy:       s.Healthy,
+			ThrallCount:   s.ThrallCount,
+			Compliant:     s.Compliant,
+			Drifted:       s.Drifted,
+			Failing:       s.Failing,
+			Stale:         s.Stale,
+			Unknown:       s.Unknown,
+			CompliancePct: s.CompliancePct,
+			LatencyMs:     s.LatencyMs,
+			Error:         s.Error,
 		})
 		if s.Healthy {
 			healthyCount++
 		}
 		totalThralls += s.ThrallCount
+		totalCompliant += s.Compliant
+		totalDrifted += s.Drifted
+		totalFailing += s.Failing
+	}
+
+	var compPct float32
+	if totalThralls > 0 {
+		compPct = float32(totalCompliant) / float32(totalThralls) * 100
 	}
 
 	data := FederationPageData{
-		PageData:     PageData{Title: "Federation", ActiveNav: "federation"},
-		SpokeCount:   len(spokes),
-		HealthyCount: healthyCount,
-		TotalThralls: totalThralls,
-		Spokes:       spokes,
+		PageData:       PageData{Title: "Federation", ActiveNav: "federation"},
+		SpokeCount:     len(spokes),
+		HealthyCount:   healthyCount,
+		TotalThralls:   totalThralls,
+		TotalCompliant: totalCompliant,
+		TotalDrifted:   totalDrifted,
+		TotalFailing:   totalFailing,
+		CompliancePct:  compPct,
+		Spokes:         spokes,
 	}
 	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "federation", data)
 }
 
-// AskPage renders the AI chat page.
+// SpokeDetailPageData holds data for the spoke detail page.
+type SpokeDetailPageData struct {
+	PageData
+	SpokeID       string
+	Addr          string
+	Healthy       bool
+	ThrallCount   int32
+	Compliant     int32
+	Drifted       int32
+	Failing       int32
+	Stale         int32
+	Unknown       int32
+	CompliancePct float32
+	LatencyMs     int64
+	Thralls       []SpokeDetailThrallRow
+	Runs          []SpokeDetailRunRow
+}
+
+// SpokeDetailThrallRow is a thrall on a spoke.
+type SpokeDetailThrallRow struct {
+	ID        string
+	Hostname  string
+	IPAddress string
+	LastSeen  string
+	Revoked   bool
+}
+
+// SpokeDetailRunRow is a run on a spoke.
+type SpokeDetailRunRow struct {
+	ID           string
+	ThrallID     string
+	Status       string
+	ModuleCount  int32
+	ChangedCount int32
+	FailedCount  int32
+	StartedAt    string
+}
+
+// SpokeDetail renders the spoke detail page with thralls and runs.
+func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ctx := r.Context()
+
+	statuses := h.hub.SpokeStatuses(ctx)
+	var spoke *federation.SpokeStatus
+	for i := range statuses {
+		if statuses[i].ID == id {
+			spoke = &statuses[i]
+			break
+		}
+	}
+	if spoke == nil {
+		http.Error(w, "spoke not found", http.StatusNotFound)
+		return
+	}
+
+	// Fetch thralls and runs from this spoke.
+	thralls, _ := h.hub.SpokeListThralls(ctx, id)
+	runs, _ := h.hub.SpokeListRuns(ctx, id, 20)
+
+	var thrallRows []SpokeDetailThrallRow
+	for _, t := range thralls {
+		row := SpokeDetailThrallRow{
+			ID:        t.Id,
+			Hostname:  t.Hostname,
+			IPAddress: t.IpAddress,
+			Revoked:   t.Revoked,
+		}
+		if t.LastSeen != nil {
+			row.LastSeen = t.LastSeen.AsTime().Format("2006-01-02 15:04:05")
+		}
+		thrallRows = append(thrallRows, row)
+	}
+
+	var runRows []SpokeDetailRunRow
+	for _, run := range runs {
+		row := SpokeDetailRunRow{
+			ID:           run.Id,
+			ThrallID:     run.ThrallId,
+			Status:       run.Status,
+			ModuleCount:  run.ModuleCount,
+			ChangedCount: run.ChangedCount,
+			FailedCount:  run.FailedCount,
+		}
+		if run.StartedAt != nil {
+			row.StartedAt = run.StartedAt.AsTime().Format("2006-01-02 15:04:05")
+		}
+		runRows = append(runRows, row)
+	}
+
+	data := SpokeDetailPageData{
+		PageData:      PageData{Title: "Spoke: " + id, ActiveNav: "federation"},
+		SpokeID:       spoke.ID,
+		Addr:          spoke.Addr,
+		Healthy:       spoke.Healthy,
+		ThrallCount:   spoke.ThrallCount,
+		Compliant:     spoke.Compliant,
+		Drifted:       spoke.Drifted,
+		Failing:       spoke.Failing,
+		Stale:         spoke.Stale,
+		Unknown:       spoke.Unknown,
+		CompliancePct: spoke.CompliancePct,
+		LatencyMs:     spoke.LatencyMs,
+		Thralls:       thrallRows,
+		Runs:          runRows,
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "spoke-detail", data)
+}
+
+// AskDriftRow represents a package drift entry for the ask/security page.
+type AskDriftRow struct {
+	Hostname         string
+	PackageName      string
+	InstalledVersion string
+	DesiredVersion   string
+}
+
+// AskPage renders the AI compliance & security dashboard.
 func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	compData := h.dataSource.ComplianceData(h.baseInterval)
+
+	var driftRows []AskDriftRow
+	if h.queries != nil {
+		rows, err := h.queries.ListPackageDrift(ctx)
+		if err == nil {
+			for _, row := range rows {
+				installed := ""
+				if row.InstalledVersion.Valid {
+					installed = row.InstalledVersion.String
+				}
+				desired := ""
+				if row.DesiredVersion.Valid {
+					desired = row.DesiredVersion.String
+				}
+				driftRows = append(driftRows, AskDriftRow{
+					Hostname:         row.Hostname,
+					PackageName:      row.PackageName,
+					InstalledVersion: installed,
+					DesiredVersion:   desired,
+				})
+			}
+		}
+	}
+
 	data := struct {
 		PageData
+		CompliancePct float64
+		Total         int64
+		Compliant     int64
+		Drifted       int64
+		Failing       int64
+		Stale         int64
+		Unknown       int64
+		DriftCount    int
+		DriftRows     []AskDriftRow
 	}{
-		PageData: PageData{Title: "Ask AI", ActiveNav: "ask"},
+		PageData:      PageData{Title: "Compliance & Security", ActiveNav: "ask"},
+		CompliancePct: compData.CompliancePct,
+		Total:         compData.Total,
+		Compliant:     compData.Compliant,
+		Drifted:       compData.Drifted,
+		Failing:       compData.Failing,
+		Stale:         compData.Stale,
+		Unknown:       compData.Unknown,
+		DriftCount:    len(driftRows),
+		DriftRows:     driftRows,
 	}
 	h.setCommon(&data.PageData)
 	h.renderer.Render(w, "ask", data)

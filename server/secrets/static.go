@@ -16,7 +16,7 @@ import (
 // builtinDefaults are sane zero-config defaults for core secrets so the
 // server starts out of the box without a .env file or env vars.
 var builtinDefaults = map[string]string{
-	"HOBNOB_DB_DSN":      "hobnob.db",
+	"HOBNOB_DB_DSN":      "/etc/hobnob-server/db/hobnob.db",
 	"HOBNOB_TLS_CERT":    "certs/server.crt",
 	"HOBNOB_TLS_KEY":     "certs/server.key",
 	"HOBNOB_TLS_CA":      "certs/ca.crt",
@@ -28,8 +28,9 @@ var builtinDefaults = map[string]string{
 //  2. OS environment variables
 //  3. Built-in defaults for core keys
 //
-// This is the default backend. In production with external secret
-// management, use IsopassProvider instead.
+// This is a legacy backend kept for backward compatibility. The default
+// backend is now LocalProvider. StaticProvider does not support secret
+// versioning (rotation watcher).
 type StaticProvider struct {
 	secrets map[string]string
 }

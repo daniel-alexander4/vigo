@@ -132,3 +132,169 @@ impl Executor for SshKeyExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_hostname_errors() {
+        let exec = SshKeyExecutor;
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("hostname param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn add_key_to_empty_file() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("known_hosts");
+        std::fs::write(&file_path, "").unwrap();
+        let exec = SshKeyExecutor;
+        let result = exec.execute(
+            &make_params(&[
+                ("hostname", "github.com"),
+                ("type", "ssh-ed25519"),
+                ("key", "AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+                ("file", file_path.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        assert!(
+            content.contains("github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+            "expected key not found in:\n{}",
+            content
+        );
+    }
+
+    #[test]
+    fn key_already_present() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("known_hosts");
+        std::fs::write(&file_path, "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest\n").unwrap();
+        let exec = SshKeyExecutor;
+        let result = exec.execute(
+            &make_params(&[
+                ("hostname", "github.com"),
+                ("type", "ssh-ed25519"),
+                ("key", "AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+                ("file", file_path.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn update_existing_key() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("known_hosts");
+        std::fs::write(&file_path, "github.com ssh-ed25519 OLDKEYdata\n").unwrap();
+        let exec = SshKeyExecutor;
+        let result = exec.execute(
+            &make_params(&[
+                ("hostname", "github.com"),
+                ("type", "ssh-ed25519"),
+                ("key", "NEWKEYdata"),
+                ("file", file_path.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        assert!(content.contains("github.com ssh-ed25519 NEWKEYdata"));
+        assert!(!content.contains("OLDKEYdata"));
+    }
+
+    #[test]
+    fn add_key_with_aliases() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("known_hosts");
+        std::fs::write(&file_path, "").unwrap();
+        let exec = SshKeyExecutor;
+        let result = exec.execute(
+            &make_params(&[
+                ("hostname", "github.com"),
+                ("type", "ssh-ed25519"),
+                ("key", "AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+                ("aliases", "gh.com ghproxy.com"),
+                ("file", file_path.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        assert!(
+            content.contains("github.com,gh.com,ghproxy.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+            "expected aliased host field not found in:\n{}",
+            content
+        );
+    }
+
+    #[test]
+    fn absent_removes_entry() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("known_hosts");
+        std::fs::write(
+            &file_path,
+            "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest\ngitlab.com ssh-rsa AAAAB3Nza\n",
+        )
+        .unwrap();
+        let exec = SshKeyExecutor;
+        let result = exec.execute(
+            &make_params(&[
+                ("hostname", "github.com"),
+                ("state", "absent"),
+                ("file", file_path.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let content = std::fs::read_to_string(&file_path).unwrap();
+        assert!(!content.contains("github.com"));
+        assert!(content.contains("gitlab.com"));
+    }
+
+    #[test]
+    fn absent_noop_when_missing() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("known_hosts");
+        std::fs::write(&file_path, "").unwrap();
+        let exec = SshKeyExecutor;
+        let result = exec.execute(
+            &make_params(&[
+                ("hostname", "github.com"),
+                ("state", "absent"),
+                ("file", file_path.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+}

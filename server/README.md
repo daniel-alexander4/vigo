@@ -133,7 +133,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 | `server/config/` | YAML config loader with secret resolution, fsnotify hot-reload, Go template rendering. See [config/README.md](config/README.md). |
 | `server/db/` | SQLite query layer, ThrallCache (60s TTL), LastSeenBatcher (10s flush) |
 | `server/registry/` | Thrall enrollment: hostname pattern matching, bcrypt token validation, revocation |
-| `server/secrets/` | Provider interface: `IsopassProvider` (prod) + `StaticProvider` (dev/test) |
+| `server/secrets/` | Provider interface: `LocalProvider` (default, file-based) + `IsopassProvider` (prod) + `StaticProvider` (legacy) |
 | `server/compliance/` | Status computation: compliant / drifted / failing / stale / unknown |
 | `server/webhook/` | HMAC-signed webhook dispatch (max 20 concurrent, 3 retries, 10s HTTP timeout) |
 | `server/smtp/` | SMTP email notifications with Go templates (enrollment, run failure, drift, secret rotation) |

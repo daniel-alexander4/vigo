@@ -346,6 +346,7 @@ const (
 	HobnobAdmin_ListPackageDrift_FullMethodName      = "/hobnob.v1.HobnobAdmin/ListPackageDrift"
 	HobnobAdmin_PromoteEnv_FullMethodName            = "/hobnob.v1.HobnobAdmin/PromoteEnv"
 	HobnobAdmin_EnrollThrall_FullMethodName          = "/hobnob.v1.HobnobAdmin/EnrollThrall"
+	HobnobAdmin_SetReassignment_FullMethodName       = "/hobnob.v1.HobnobAdmin/SetReassignment"
 )
 
 // HobnobAdminClient is the client API for HobnobAdmin service.
@@ -398,6 +399,9 @@ type HobnobAdminClient interface {
 	// Used during enrollment routing: the hub validates the token, then calls
 	// this on the target spoke to create the thrall without token re-validation.
 	EnrollThrall(ctx context.Context, in *EnrollThrallRequest, opts ...grpc.CallOption) (*EnrollThrallResponse, error)
+	// SetReassignment marks a thrall for reassignment to a different spoke.
+	// Called hub→spoke to set reassign_addr/reassign_id on the thrall.
+	SetReassignment(ctx context.Context, in *SetReassignmentRequest, opts ...grpc.CallOption) (*SetReassignmentResponse, error)
 }
 
 type hobnobAdminClient struct {
@@ -628,6 +632,16 @@ func (c *hobnobAdminClient) EnrollThrall(ctx context.Context, in *EnrollThrallRe
 	return out, nil
 }
 
+func (c *hobnobAdminClient) SetReassignment(ctx context.Context, in *SetReassignmentRequest, opts ...grpc.CallOption) (*SetReassignmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetReassignmentResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_SetReassignment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HobnobAdminServer is the server API for HobnobAdmin service.
 // All implementations must embed UnimplementedHobnobAdminServer
 // for forward compatibility.
@@ -678,6 +692,9 @@ type HobnobAdminServer interface {
 	// Used during enrollment routing: the hub validates the token, then calls
 	// this on the target spoke to create the thrall without token re-validation.
 	EnrollThrall(context.Context, *EnrollThrallRequest) (*EnrollThrallResponse, error)
+	// SetReassignment marks a thrall for reassignment to a different spoke.
+	// Called hub→spoke to set reassign_addr/reassign_id on the thrall.
+	SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error)
 	mustEmbedUnimplementedHobnobAdminServer()
 }
 
@@ -753,6 +770,9 @@ func (UnimplementedHobnobAdminServer) PromoteEnv(context.Context, *PromoteEnvReq
 }
 func (UnimplementedHobnobAdminServer) EnrollThrall(context.Context, *EnrollThrallRequest) (*EnrollThrallResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnrollThrall not implemented")
+}
+func (UnimplementedHobnobAdminServer) SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetReassignment not implemented")
 }
 func (UnimplementedHobnobAdminServer) mustEmbedUnimplementedHobnobAdminServer() {}
 func (UnimplementedHobnobAdminServer) testEmbeddedByValue()                     {}
@@ -1171,6 +1191,24 @@ func _HobnobAdmin_EnrollThrall_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HobnobAdmin_SetReassignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetReassignmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HobnobAdminServer).SetReassignment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HobnobAdmin_SetReassignment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HobnobAdminServer).SetReassignment(ctx, req.(*SetReassignmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HobnobAdmin_ServiceDesc is the grpc.ServiceDesc for HobnobAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1265,6 +1303,10 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EnrollThrall",
 			Handler:    _HobnobAdmin_EnrollThrall_Handler,
+		},
+		{
+			MethodName: "SetReassignment",
+			Handler:    _HobnobAdmin_SetReassignment_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

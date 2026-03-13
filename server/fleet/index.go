@@ -109,6 +109,21 @@ func (f *FleetIndex) GetThrall(id string) *ThrallState {
 	return &cp
 }
 
+// GetThrallLite returns a shallow copy of the ThrallState without deep-copying
+// Traits or PendingRotatedSecrets. It also returns existence and revoked status,
+// collapsing IsRevoked + GetThrall into one lock acquisition. The caller must
+// not mutate the Traits or PendingRotatedSecrets slices on the returned value.
+func (f *FleetIndex) GetThrallLite(id string) (ts *ThrallState, exists, revoked bool) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	src := f.thralls[id]
+	if src == nil {
+		return nil, false, false
+	}
+	cp := *src // shallow copy — shares Traits/PendingRotatedSecrets slices
+	return &cp, true, src.Revoked
+}
+
 // GetPubKey returns the parsed ED25519 public key for the given thrall ID.
 // Returns nil if not found.
 func (f *FleetIndex) GetPubKey(id string) ed25519.PublicKey {
@@ -141,7 +156,12 @@ func (f *FleetIndex) IsRevoked(id string) (exists bool, revoked bool) {
 func (f *FleetIndex) ListByGlob(pattern string) []TargetInfo {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	var results []TargetInfo
+	// Pre-allocate for ~10% match rate to avoid repeated slice growth.
+	estimate := len(f.thralls) / 10
+	if estimate < 8 {
+		estimate = 8
+	}
+	results := make([]TargetInfo, 0, estimate)
 	for _, ts := range f.thralls {
 		if ts.Revoked {
 			continue

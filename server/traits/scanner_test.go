@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestScanDir_FiltersExecutables(t *testing.T) {
@@ -202,4 +204,94 @@ func writeFile(t *testing.T, dir, name, content string) {
 func sha256Hex(data []byte) string {
 	h := sha256.Sum256(data)
 	return fmt.Sprintf("%x", h)
+}
+
+func TestScanDir_TTLCaching(t *testing.T) {
+	dir := t.TempDir()
+	writeExec(t, dir, "trait1.sh", "v1")
+
+	scanner := NewScanner(dir, 10*time.Second)
+
+	// First scan populates cache.
+	entries1, err := scanner.ScanDir()
+	if err != nil {
+		t.Fatalf("first ScanDir: %v", err)
+	}
+	if len(entries1) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries1))
+	}
+
+	// Add a new file — should NOT appear due to cache TTL.
+	writeExec(t, dir, "trait2.sh", "v2")
+	entries2, err := scanner.ScanDir()
+	if err != nil {
+		t.Fatalf("cached ScanDir: %v", err)
+	}
+	if len(entries2) != 1 {
+		t.Errorf("expected 1 entry (cached), got %d", len(entries2))
+	}
+}
+
+func TestScanDir_TTLExpiry(t *testing.T) {
+	dir := t.TempDir()
+	writeExec(t, dir, "trait1.sh", "v1")
+
+	scanner := NewScanner(dir, 1*time.Millisecond)
+
+	_, err := scanner.ScanDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for TTL to expire.
+	time.Sleep(5 * time.Millisecond)
+
+	// Add a new file.
+	writeExec(t, dir, "trait2.sh", "v2")
+
+	entries, err := scanner.ScanDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("expected 2 entries after TTL expiry, got %d", len(entries))
+	}
+}
+
+func TestScanDir_ConcurrentAccess(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 10; i++ {
+		writeExec(t, dir, fmt.Sprintf("trait-%d.sh", i), fmt.Sprintf("content-%d", i))
+	}
+
+	scanner := NewScanner(dir, time.Second)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			entries, err := scanner.ScanDir()
+			if err != nil {
+				t.Errorf("ScanDir: %v", err)
+			}
+			if len(entries) != 10 {
+				t.Errorf("expected 10 entries, got %d", len(entries))
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestReadFile_BeforeScanDir(t *testing.T) {
+	dir := t.TempDir()
+	writeExec(t, dir, "trait.sh", "data")
+
+	scanner := NewScanner(dir, 0)
+
+	// ReadFile before ScanDir should return a clear error.
+	_, err := scanner.ReadFile("trait")
+	if err == nil {
+		t.Fatal("expected error when ReadFile called before ScanDir")
+	}
 }

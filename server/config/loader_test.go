@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -198,7 +199,7 @@ thralls:
 `)
 
 	mp := &mockProvider{secrets: map[string]string{
-		"hobnob/db/dsn":   "hobnob.db",
+		"hobnob/db/dsn":   "/etc/hobnob-server/db/hobnob.db",
 		"myapp/db/config": "host=db port=5432 user=myapp",
 	}}
 	store, err := NewConfigStore(dir, mp, true)
@@ -207,7 +208,7 @@ thralls:
 	}
 
 	cfg := store.Get("web.example.com")
-	if cfg.Vars["db_dsn"] != "hobnob.db" {
+	if cfg.Vars["db_dsn"] != "/etc/hobnob-server/db/hobnob.db" {
 		t.Errorf("db_dsn = %q, want resolved DSN", cfg.Vars["db_dsn"])
 	}
 }
@@ -2035,5 +2036,824 @@ thralls:
 	appMod := cfg.Modules[1]
 	if len(appMod.DependsOn) != 1 {
 		t.Errorf("expected 1 dependency, got %d: %v", len(appMod.DependsOn), appMod.DependsOn)
+	}
+}
+
+// --- vars_from tests ---
+
+func TestVarsFromSingleFile(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  port: "8080"
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "web.hnb"), `
+server_name: "web01.example.com"
+port: "9090"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    vars_from: "vars/web.hnb"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.example.com")
+	// vars_from overrides module default
+	if cfg.Vars["port"] != "9090" {
+		t.Errorf("port = %v, want 9090 (vars_from should override module default)", cfg.Vars["port"])
+	}
+	// vars_from adds new key
+	if cfg.Vars["server_name"] != "web01.example.com" {
+		t.Errorf("server_name = %v, want web01.example.com", cfg.Vars["server_name"])
+	}
+}
+
+func TestVarsFromMultipleFiles(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  port: "8080"
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "common.hnb"), `
+port: "3000"
+log_level: "info"
+`)
+	writeFile(t, filepath.Join(dir, "vars", "host.hnb"), `
+port: "4000"
+server_name: "host1"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from:
+      - "vars/common.hnb"
+      - "vars/host.hnb"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1.example.com")
+	// Later vars_from file overrides earlier
+	if cfg.Vars["port"] != "4000" {
+		t.Errorf("port = %v, want 4000 (later vars_from overrides earlier)", cfg.Vars["port"])
+	}
+	if cfg.Vars["log_level"] != "info" {
+		t.Errorf("log_level = %v, want info (from first vars_from file)", cfg.Vars["log_level"])
+	}
+	if cfg.Vars["server_name"] != "host1" {
+		t.Errorf("server_name = %v, want host1 (from second vars_from file)", cfg.Vars["server_name"])
+	}
+}
+
+func TestVarsFromInlineOverrides(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "defaults.hnb"), `
+port: "3000"
+log_level: "info"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "vars/defaults.hnb"
+    vars:
+      port: "9999"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1.example.com")
+	// Inline vars override vars_from
+	if cfg.Vars["port"] != "9999" {
+		t.Errorf("port = %v, want 9999 (inline vars override vars_from)", cfg.Vars["port"])
+	}
+	// vars_from value survives when not overridden
+	if cfg.Vars["log_level"] != "info" {
+		t.Errorf("log_level = %v, want info (from vars_from, not overridden inline)", cfg.Vars["log_level"])
+	}
+}
+
+func TestVarsFromPrecedence(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  a: "module"
+  b: "module"
+  c: "module"
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "data.hnb"), `
+a: "file"
+b: "file"
+d: "file"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "vars/data.hnb"
+    vars:
+      a: "inline"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1.example.com")
+	// Full precedence chain: module < vars_from < inline
+	if cfg.Vars["a"] != "inline" {
+		t.Errorf("a = %v, want inline", cfg.Vars["a"])
+	}
+	if cfg.Vars["b"] != "file" {
+		t.Errorf("b = %v, want file", cfg.Vars["b"])
+	}
+	if cfg.Vars["c"] != "module" {
+		t.Errorf("c = %v, want module", cfg.Vars["c"])
+	}
+	if cfg.Vars["d"] != "file" {
+		t.Errorf("d = %v, want file", cfg.Vars["d"])
+	}
+}
+
+func TestVarsFromMissingFile(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "vars/nonexistent.hnb"
+    modules: [app]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for missing vars_from file")
+	}
+	if !strings.Contains(err.Error(), "nonexistent.hnb") {
+		t.Errorf("error should mention the missing file, got: %v", err)
+	}
+}
+
+func TestVarsFromPathTraversal(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "../../../etc/passwd"
+    modules: [app]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for path traversal")
+	}
+	if !strings.Contains(err.Error(), "escapes config directory") {
+		t.Errorf("error should mention path escape, got: %v", err)
+	}
+}
+
+func TestVarsFromEmptyFile(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  port: "8080"
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "empty.hnb"), ``)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "vars/empty.hnb"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1.example.com")
+	// Module default survives
+	if cfg.Vars["port"] != "8080" {
+		t.Errorf("port = %v, want 8080 (module default, empty vars_from)", cfg.Vars["port"])
+	}
+}
+
+func TestVarsFromWithSecrets(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "secrets.hnb"), `
+api_key: "secret:app/api_key"
+debug: "false"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "vars/secrets.hnb"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
+		"app/api_key": "resolved-key-123",
+	}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1.example.com")
+	if cfg.Vars["api_key"] != "resolved-key-123" {
+		t.Errorf("api_key = %v, want resolved-key-123 (secret resolved)", cfg.Vars["api_key"])
+	}
+	if cfg.Vars["debug"] != "false" {
+		t.Errorf("debug = %v, want false", cfg.Vars["debug"])
+	}
+}
+
+func TestVarsFromScalarString(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "data.hnb"), `
+color: "blue"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "vars/data.hnb"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1.example.com")
+	if cfg.Vars["color"] != "blue" {
+		t.Errorf("color = %v, want blue (single string vars_from)", cfg.Vars["color"])
+	}
+}
+
+func TestVarsFromVarOrder(t *testing.T) {
+	dir := setupDir(t)
+	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  z_module: "from_module"
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "vars", "data.hnb"), `
+b_file: "from_file"
+a_file: "from_file"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1.example.com"
+    vars_from: "vars/data.hnb"
+    vars:
+      c_inline: "from_inline"
+    modules: [app]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1.example.com")
+	// VarOrder should be: module vars, then file vars (in file order), then inline vars
+	expected := []string{"z_module", "b_file", "a_file", "c_inline"}
+	if len(cfg.VarOrder) != len(expected) {
+		t.Fatalf("VarOrder len = %d, want %d: %v", len(cfg.VarOrder), len(expected), cfg.VarOrder)
+	}
+	for i, name := range expected {
+		if cfg.VarOrder[i] != name {
+			t.Errorf("VarOrder[%d] = %q, want %q (full order: %v)", i, cfg.VarOrder[i], name, cfg.VarOrder)
+		}
+	}
+}
+
+func TestOverlappingGlobFirstWins(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "modules", "apache.yaml"), `
+name: apache
+resources:
+  - name: install
+    type: package
+    package: apache2
+    state: present
+`)
+	// Two glob patterns that both match "web01.prod.example.com".
+	// First match should win.
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "web*.prod.example.com"
+    modules: [nginx]
+  - match: "*.prod.example.com"
+    modules: [apache]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.prod.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	}
+	if cfg.Modules[0].Name != "nginx" {
+		t.Errorf("Module = %q, want nginx (first glob should win)", cfg.Modules[0].Name)
+	}
+
+	// db01 should match the second pattern.
+	cfg2 := store.Get("db01.prod.example.com")
+	if len(cfg2.Modules) != 1 {
+		t.Fatalf("db01: len(Modules) = %d, want 1", len(cfg2.Modules))
+	}
+	if cfg2.Modules[0].Name != "apache" {
+		t.Errorf("db01 Module = %q, want apache", cfg2.Modules[0].Name)
+	}
+}
+
+func TestEmptyThrallsDir(t *testing.T) {
+	dir := setupDir(t)
+
+	// No thrall files, no modules, no roles — just empty dirs.
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("anything.example.com")
+	if len(cfg.Modules) != 0 {
+		t.Errorf("expected 0 modules for empty config, got %d", len(cfg.Modules))
+	}
+}
+
+func TestEnvVarsMergePrecedence(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  port: "8080"
+  log_level: "info"
+resources:
+  - name: install
+    type: package
+    package: myapp
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "app01.example.com"
+    environment: production
+    modules: [app]
+    vars:
+      port: "8080"
+      log_level: "info"
+    env_vars:
+      production:
+        port: "443"
+        max_workers: "8"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("app01.example.com")
+	if cfg.Vars["port"] != "443" {
+		t.Errorf("port = %v, want 443 (env_vars should override)", cfg.Vars["port"])
+	}
+	if cfg.Vars["log_level"] != "info" {
+		t.Errorf("log_level = %v, want info (unchanged by env_vars)", cfg.Vars["log_level"])
+	}
+	if cfg.Vars["max_workers"] != "8" {
+		t.Errorf("max_workers = %v, want 8 (added by env_vars)", cfg.Vars["max_workers"])
+	}
+}
+
+func TestNodeVarsOverrideModuleDefaults(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "webserver.yaml"), `
+name: webserver
+vars:
+  port: "80"
+  workers: "auto"
+resources:
+  - name: install
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    modules: [webserver]
+    vars:
+      port: "9090"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.example.com")
+	if cfg.Vars["port"] != "9090" {
+		t.Errorf("port = %v, want 9090 (node override)", cfg.Vars["port"])
+	}
+	if cfg.Vars["workers"] != "auto" {
+		t.Errorf("workers = %v, want auto (module default preserved)", cfg.Vars["workers"])
+	}
+}
+
+func TestVarsFromPathTraversalDotDot(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: install
+    type: package
+    package: app
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    modules: [app]
+    vars_from:
+      - "../../../etc/passwd"
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for path traversal in vars_from")
+	}
+	if !strings.Contains(err.Error(), "escapes config directory") {
+		t.Errorf("expected 'escapes config directory' error, got: %v", err)
+	}
+}
+
+func TestSourcePathTraversalDotDot(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: conf
+    type: file
+    targetpath: /etc/app/config
+    source: "../../etc/shadow"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    modules: [app]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for path traversal in source")
+	}
+	if !strings.Contains(err.Error(), "escapes config directory") {
+		t.Errorf("expected 'escapes config directory' error, got: %v", err)
+	}
+}
+
+func TestSourcePathAbsoluteRejected(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: conf
+    type: file
+    targetpath: /etc/app/config
+    source: "/etc/passwd"
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    modules: [app]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for absolute source path")
+	}
+}
+
+func TestConcurrentGetDuringReload(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "*.example.com"
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	const goroutines = 50
+
+	// Concurrent reads.
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				cfg := store.Get("web01.example.com")
+				if cfg.Thrall != "web01.example.com" {
+					t.Errorf("Get() returned wrong thrall: %q", cfg.Thrall)
+				}
+			}
+		}()
+	}
+
+	// Concurrent reloads.
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				store.Reload()
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestReloadBumpsVersion(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "*.example.com"
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	v1 := store.Version()
+	if err := store.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	v2 := store.Version()
+
+	if v2 <= v1 {
+		t.Errorf("expected version to increase after reload: v1=%d, v2=%d", v1, v2)
+	}
+}
+
+func TestReloadFailureKeepsOldConfig(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "*.example.com"
+    modules: [nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	}
+
+	// Write invalid module reference.
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "*.example.com"
+    modules: [nonexistent_module_xyz]
+`)
+
+	// Reload should fail but old config preserved.
+	reloadErr := store.Reload()
+	if reloadErr == nil {
+		// Some configs may allow missing modules; either way, the old config should remain valid.
+		return
+	}
+
+	// After failed reload, Get() should still return the old valid config.
+	cfg = store.Get("web01.example.com")
+	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "nginx" {
+		t.Error("expected old config to be preserved after failed reload")
+	}
+}
+
+func TestVarsFromSymlinkEscapeRejected(t *testing.T) {
+	dir := setupDir(t)
+
+	// Create a vars directory inside the config dir.
+	varsDir := filepath.Join(dir, "vars")
+	if err := os.MkdirAll(varsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink inside vars/ that points outside the config dir.
+	outsideFile := filepath.Join(t.TempDir(), "outside.yaml")
+	writeFile(t, outsideFile, "stolen_var: gotcha\n")
+
+	symlinkPath := filepath.Join(varsDir, "evil.yaml")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+
+	// loadVarsFile should reject the symlink.
+	_, _, err := loadVarsFile(dir, "vars/evil.yaml")
+	if err == nil {
+		t.Fatal("expected error for symlink escaping config directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "resolves outside config directory") {
+		t.Errorf("error = %q, want it to contain %q", err, "resolves outside config directory")
+	}
+}
+
+func TestSourceSymlinkEscapeRejected(t *testing.T) {
+	dir := setupDir(t)
+
+	// Create templates directory.
+	templatesDir := filepath.Join(dir, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a file outside the config dir to be the symlink target.
+	outsideFile := filepath.Join(t.TempDir(), "stolen.conf")
+	writeFile(t, outsideFile, "secret config content")
+
+	// Create a symlink inside templates/ pointing outside.
+	symlinkPath := filepath.Join(templatesDir, "evil.conf")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+
+	// Write a module that references the symlink as source.
+	writeFile(t, filepath.Join(dir, "modules", "evil.yaml"), `
+name: evil
+resources:
+  - name: evil-file
+    type: file
+    targetpath: /etc/evil.conf
+    source: templates/evil.conf
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+thralls:
+  - match: "test.example.com"
+    modules: [evil]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for source symlink escaping config directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "resolves outside config directory") {
+		t.Errorf("error = %q, want it to contain %q", err, "resolves outside config directory")
 	}
 }

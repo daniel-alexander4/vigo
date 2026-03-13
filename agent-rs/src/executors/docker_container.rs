@@ -299,3 +299,277 @@ impl Executor for DockerContainerExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(
+            &self,
+            _: &[u8],
+            name: &str,
+            args: &[&str],
+        ) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("name param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn running_container_already_running_same_image() {
+        // container_status() -> docker inspect --format {{.State.Status}} -> "running"
+        // container_image()  -> docker inspect --format {{.Config.Image}} -> "nginx:latest"
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("running\n"),
+            MockRunner::ok_output("nginx:latest\n"),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "web"),
+                ("image", "nginx:latest"),
+                ("state", "running"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        // Both calls are docker inspect
+        assert_eq!(calls[0].0, "docker");
+        assert_eq!(calls[1].0, "docker");
+    }
+
+    #[test]
+    fn create_and_start_new_container() {
+        // container_status() -> inspect fails (not exists)
+        // pull, create, start
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output("No such container"),  // inspect (status)
+            MockRunner::ok_output(""),                      // docker pull
+            MockRunner::ok_output(""),                      // docker create
+            MockRunner::ok_output(""),                      // docker start
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "web"),
+                ("image", "nginx:latest"),
+                ("state", "running"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 4);
+        assert_eq!(calls[0].0, "docker"); // inspect
+        assert_eq!(calls[1].1[0], "pull");
+        assert_eq!(calls[2].1[0], "create");
+        assert_eq!(calls[3].1[0], "start");
+    }
+
+    #[test]
+    fn start_stopped_container() {
+        // container_status() -> "exited" (exists but not running)
+        // docker start
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("exited\n"),  // inspect (status)
+            MockRunner::ok_output(""),           // docker start
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "web"),
+                ("image", "nginx:latest"),
+                ("state", "running"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].1[0], "start");
+    }
+
+    #[test]
+    fn stop_running_container() {
+        // container_status() -> "running"
+        // docker stop
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("running\n"),  // inspect (status)
+            MockRunner::ok_output(""),            // docker stop
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "web"),
+                ("state", "stopped"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].1[0], "stop");
+    }
+
+    #[test]
+    fn absent_stops_and_removes() {
+        // container_status() -> "running"
+        // docker stop, docker rm
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("running\n"),  // inspect (status)
+            MockRunner::ok_output(""),            // docker stop
+            MockRunner::ok_output(""),            // docker rm
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "web"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 3);
+        assert_eq!(calls[1].1[0], "stop");
+        assert_eq!(calls[2].1[0], "rm");
+    }
+
+    #[test]
+    fn absent_noop_when_missing() {
+        // container_status() -> None (inspect fails)
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output("No such container"),
+        ]);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "web"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn dry_run_does_not_create() {
+        // container_status() -> fails (not exists)
+        // dry_run=true: should not call pull/create/start
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output("No such container"),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = DockerContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "web"),
+                ("image", "nginx:latest"),
+                ("state", "running"),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        // Only the inspect call should have been made
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call inspect, got {:?}", *calls);
+    }
+}

@@ -121,3 +121,44 @@ func TestSummaryEmpty(t *testing.T) {
 		t.Errorf("Summary(nil) should return empty map, got %v", got)
 	}
 }
+
+func TestComputeStatusBoundary(t *testing.T) {
+	base := 5 * time.Minute
+
+	// Exactly at 2x boundary (10min) — should be stale (> check).
+	staleAt := time.Now().Add(-2*base - time.Millisecond)
+	got := ComputeStatus(&RunInfo{Status: "success", ChangedCount: 0}, staleAt, base)
+	if got != "stale" {
+		t.Errorf("at 2x+1ms boundary: got %q, want stale", got)
+	}
+
+	// Just inside 2x boundary — should NOT be stale.
+	freshAt := time.Now().Add(-2*base + time.Second)
+	got = ComputeStatus(&RunInfo{Status: "success", ChangedCount: 0}, freshAt, base)
+	if got != "compliant" {
+		t.Errorf("at 2x-1s boundary: got %q, want compliant", got)
+	}
+}
+
+func TestComputeStatusZeroBaseInterval(t *testing.T) {
+	// With zero base interval, 2*0 = 0, so any non-zero time.Since will exceed it.
+	got := ComputeStatus(&RunInfo{Status: "success"}, time.Now().Add(-time.Millisecond), 0)
+	if got != "stale" {
+		t.Errorf("zero interval: got %q, want stale", got)
+	}
+}
+
+func TestComputeStatusNegativeChangedCount(t *testing.T) {
+	// Negative ChangedCount should still be treated as "drifted" (not zero).
+	got := ComputeStatus(&RunInfo{Status: "success", ChangedCount: -1}, time.Now(), 5*time.Minute)
+	if got != "drifted" {
+		t.Errorf("negative ChangedCount: got %q, want drifted", got)
+	}
+}
+
+func TestComputeStatusEmptyStatus(t *testing.T) {
+	got := ComputeStatus(&RunInfo{Status: "", ChangedCount: 0}, time.Now(), 5*time.Minute)
+	if got != "unknown" {
+		t.Errorf("empty status: got %q, want unknown", got)
+	}
+}

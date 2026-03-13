@@ -1,0 +1,9 @@
+# Common vars for all web servers.
+# Referenced via vars_from in thralls.hnb entries.
+
+worker_processes: "auto"
+keepalive_timeout: "65"
+ssl_protocols: "TLSv1.2 TLSv1.3"
+ssl_ciphers: "HIGH:!aNULL:!MD5"
+access_log: "/var/log/nginx/access.log"
+error_log: "/var/log/nginx/error.log"

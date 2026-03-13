@@ -214,3 +214,214 @@ impl Executor for KernelModuleExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256), // exit code 1
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), args.iter().map(|s| s.to_string()).collect()));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_module_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = KernelModuleExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("module param is required"));
+    }
+
+    #[test]
+    fn present_already_loaded_and_persisted() {
+        // Module is loaded (appears in lsmod) and persist=false so we skip the
+        // filesystem check entirely. This avoids needing /etc/modules-load.d/.
+        let lsmod = MockRunner::ok_output(
+            "Module                  Size  Used by\n\
+             br_netfilter           32768  0\n\
+             overlay                163840  0\n",
+        );
+        let mock = MockRunner::new(vec![lsmod]);
+        let exec = KernelModuleExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("module", "br_netfilter"),
+                ("state", "present"),
+                ("persist", "false"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn present_loads_module_dry_run() {
+        // Module not loaded, dry_run=true => Action::Created, only 1 call (lsmod).
+        let lsmod = MockRunner::ok_output(
+            "Module                  Size  Used by\n\
+             ip_tables              32768  0\n",
+        );
+        let mock = MockRunner::new(vec![lsmod]);
+        let calls = mock.calls.clone();
+        let exec = KernelModuleExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("module", "br_netfilter"),
+                ("state", "present"),
+                ("persist", "false"),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call lsmod, not modprobe");
+        assert_eq!(calls[0].0, "lsmod");
+    }
+
+    #[test]
+    fn absent_not_loaded() {
+        // Module not loaded (not in lsmod) and not persisted (persist=false
+        // so we skip the filesystem check) => Action::None.
+        let lsmod = MockRunner::ok_output(
+            "Module                  Size  Used by\n\
+             ip_tables              32768  0\n",
+        );
+        let mock = MockRunner::new(vec![lsmod]);
+        let exec = KernelModuleExecutor {
+            runner: Box::new(mock),
+        };
+        // Persist is true by default which would check /etc/modules-load.d/
+        // which won't exist in test. That's fine — is_persisted returns false
+        // for non-existent file, so need_unpersist = false.
+        let result = exec.execute(
+            &make_params(&[("module", "br_netfilter"), ("state", "absent")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn absent_unloads_module_dry_run() {
+        // Module loaded, dry_run=true => Action::Deleted, only 1 call (lsmod).
+        let lsmod = MockRunner::ok_output(
+            "Module                  Size  Used by\n\
+             br_netfilter           32768  0\n",
+        );
+        let mock = MockRunner::new(vec![lsmod]);
+        let calls = mock.calls.clone();
+        let exec = KernelModuleExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("module", "br_netfilter"), ("state", "absent")]),
+            true,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call lsmod, not modprobe -r");
+    }
+
+    #[test]
+    fn unknown_state_errors() {
+        let lsmod = MockRunner::ok_output("Module                  Size  Used by\n");
+        let mock = MockRunner::new(vec![lsmod]);
+        let exec = KernelModuleExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("module", "br_netfilter"), ("state", "bogus")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
+    }
+
+    #[test]
+    fn loaded_state_only_runtime() {
+        // state="loaded" — runtime only, no persistence check.
+        // Module not loaded => Action::Created. dry_run so no modprobe call.
+        let lsmod = MockRunner::ok_output(
+            "Module                  Size  Used by\n\
+             ip_tables              32768  0\n",
+        );
+        let mock = MockRunner::new(vec![lsmod]);
+        let calls = mock.calls.clone();
+        let exec = KernelModuleExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("module", "br_netfilter"), ("state", "loaded")]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "lsmod");
+    }
+}

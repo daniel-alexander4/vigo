@@ -52,6 +52,39 @@ func HashModuleContent(mod ModuleConfig) string {
 			io.WriteString(h, fmt.Sprintf("%v", res.Attributes[k]))
 		}
 
+		// Case/match for dynamic expansion.
+		if res.Case != "" {
+			io.WriteString(h, "|case:")
+			io.WriteString(h, res.Case)
+			matchKeys := make([]string, 0, len(res.CaseMatch))
+			for k := range res.CaseMatch {
+				matchKeys = append(matchKeys, k)
+			}
+			sort.Strings(matchKeys)
+			for _, mk := range matchKeys {
+				io.WriteString(h, "|match:")
+				io.WriteString(h, mk)
+				io.WriteString(h, "=")
+				branchKeys := make([]string, 0, len(res.CaseMatch[mk]))
+				for bk := range res.CaseMatch[mk] {
+					branchKeys = append(branchKeys, bk)
+				}
+				sort.Strings(branchKeys)
+				for _, bk := range branchKeys {
+					io.WriteString(h, bk)
+					io.WriteString(h, ":")
+					io.WriteString(h, fmt.Sprintf("%v", res.CaseMatch[mk][bk]))
+					io.WriteString(h, ",")
+				}
+			}
+		}
+
+		// ForEach (included so hash changes if foreach is added/removed).
+		if res.ForEach != "" {
+			io.WriteString(h, "|foreach:")
+			io.WriteString(h, res.ForEach)
+		}
+
 		// Notify and subscribes.
 		io.WriteString(h, "|notify:")
 		for _, n := range res.Notify {

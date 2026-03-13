@@ -236,23 +236,100 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 	return resp.ThrallId, nil
 }
 
+// SpokeByID returns the spoke connection for the given ID, or nil if not found.
+func (h *Hub) SpokeByID(id string) *spokeConn {
+	for i := range h.spokes {
+		if h.spokes[i].id == id {
+			return &h.spokes[i]
+		}
+	}
+	return nil
+}
+
+// SpokeListThralls queries a single spoke for its thrall list.
+func (h *Hub) SpokeListThralls(ctx context.Context, spokeID string) ([]*pb.Thrall, error) {
+	sc := h.SpokeByID(spokeID)
+	if sc == nil {
+		return nil, fmt.Errorf("spoke %q not found", spokeID)
+	}
+	resp, err := sc.admin.ListThralls(ctx, &pb.ListThrallsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("ListThralls on spoke %s: %w", spokeID, err)
+	}
+	return resp.Thralls, nil
+}
+
+// SpokeListRuns queries a single spoke for its run list.
+func (h *Hub) SpokeListRuns(ctx context.Context, spokeID string, limit int32) ([]*pb.Run, error) {
+	sc := h.SpokeByID(spokeID)
+	if sc == nil {
+		return nil, fmt.Errorf("spoke %q not found", spokeID)
+	}
+	resp, err := sc.admin.ListRuns(ctx, &pb.ListRunsRequest{Limit: limit})
+	if err != nil {
+		return nil, fmt.Errorf("ListRuns on spoke %s: %w", spokeID, err)
+	}
+	return resp.Runs, nil
+}
+
+// SpokeComplianceSummary queries a single spoke for its compliance summary.
+func (h *Hub) SpokeComplianceSummary(ctx context.Context, spokeID string) (*pb.GetComplianceSummaryResponse, error) {
+	sc := h.SpokeByID(spokeID)
+	if sc == nil {
+		return nil, fmt.Errorf("spoke %q not found", spokeID)
+	}
+	return sc.admin.GetComplianceSummary(ctx, &pb.GetComplianceSummaryRequest{})
+}
+
+// SpokeForcePush sends a ForcePush to a single spoke.
+func (h *Hub) SpokeForcePush(ctx context.Context, spokeID, thrallID string) (int32, error) {
+	sc := h.SpokeByID(spokeID)
+	if sc == nil {
+		return 0, fmt.Errorf("spoke %q not found", spokeID)
+	}
+	resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{ThrallId: thrallID})
+	if err != nil {
+		return 0, fmt.Errorf("ForcePush on spoke %s: %w", spokeID, err)
+	}
+	return resp.ThrallsNotified, nil
+}
+
 // SpokeStatus describes the health and summary of a single spoke.
 type SpokeStatus struct {
-	ID          string   `json:"id"`
-	Addr        string   `json:"addr"`
-	Patterns    []string `json:"patterns"`
-	Healthy     bool     `json:"healthy"`
-	ThrallCount int32    `json:"thrall_count"`
-	Error       string   `json:"error,omitempty"`
+	ID            string   `json:"id"`
+	Addr          string   `json:"addr"`
+	Patterns      []string `json:"patterns"`
+	Healthy       bool     `json:"healthy"`
+	ThrallCount   int32    `json:"thrall_count"`
+	Compliant     int32    `json:"compliant"`
+	Drifted       int32    `json:"drifted"`
+	Failing       int32    `json:"failing"`
+	Stale         int32    `json:"stale"`
+	Unknown       int32    `json:"unknown"`
+	CompliancePct float32  `json:"compliance_pct"`
+	LatencyMs     int64    `json:"latency_ms"`
+	Error         string   `json:"error,omitempty"`
+}
+
+// probeResult carries both the compliance response and the latency from a spoke probe.
+type probeResult struct {
+	resp    *pb.GetComplianceSummaryResponse
+	latency time.Duration
 }
 
 // SpokeStatuses probes each spoke's health by calling GetComplianceSummary
-// with a short timeout and returns the results.
+// with a short timeout and returns the results with compliance breakdown and latency.
 func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
 		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
-		return sc.admin.GetComplianceSummary(probeCtx, &pb.GetComplianceSummaryRequest{})
+		start := time.Now()
+		resp, err := sc.admin.GetComplianceSummary(probeCtx, &pb.GetComplianceSummaryRequest{})
+		latency := time.Since(start)
+		if err != nil {
+			return &probeResult{latency: latency}, err
+		}
+		return &probeResult{resp: resp, latency: latency}, nil
 	})
 
 	statuses := make([]SpokeStatus, len(h.spokes))
@@ -265,9 +342,20 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 		r := results[i]
 		if r.err != nil {
 			statuses[i].Error = r.err.Error()
+			if pr, ok := r.value.(*probeResult); ok {
+				statuses[i].LatencyMs = pr.latency.Milliseconds()
+			}
 		} else {
+			pr := r.value.(*probeResult)
 			statuses[i].Healthy = true
-			statuses[i].ThrallCount = r.value.(*pb.GetComplianceSummaryResponse).Total
+			statuses[i].ThrallCount = pr.resp.Total
+			statuses[i].Compliant = pr.resp.Compliant
+			statuses[i].Drifted = pr.resp.Drifted
+			statuses[i].Failing = pr.resp.Failing
+			statuses[i].Stale = pr.resp.Stale
+			statuses[i].Unknown = pr.resp.Unknown
+			statuses[i].CompliancePct = pr.resp.CompliancePct
+			statuses[i].LatencyMs = pr.latency.Milliseconds()
 		}
 	}
 	return statuses
@@ -300,6 +388,132 @@ func (h *Hub) fanOut(ctx context.Context, fn func(ctx context.Context, sc spokeC
 
 	wg.Wait()
 	return results
+}
+
+// ReassignResult holds the outcome of a single thrall reassignment.
+type ReassignResult struct {
+	NewThrallID string
+	TargetAddr  string
+}
+
+// ReassignThrall moves a thrall from one spoke to another.
+// 1. Gets thrall info from source spoke.
+// 2. Enrolls thrall on target spoke.
+// 3. Sets reassignment on source spoke so agent reconnects.
+func (h *Hub) ReassignThrall(ctx context.Context, thrallID, fromSpokeID, toSpokeID string) (*ReassignResult, error) {
+	from := h.SpokeByID(fromSpokeID)
+	if from == nil {
+		return nil, fmt.Errorf("source spoke %q not found", fromSpokeID)
+	}
+	to := h.SpokeByID(toSpokeID)
+	if to == nil {
+		return nil, fmt.Errorf("target spoke %q not found", toSpokeID)
+	}
+
+	// Get thrall info from source.
+	resp, err := from.admin.GetThrall(ctx, &pb.GetThrallRequest{Id: thrallID})
+	if err != nil {
+		return nil, fmt.Errorf("getting thrall from source spoke: %w", err)
+	}
+	thrall := resp.Thrall
+
+	// Enroll on target spoke.
+	newID, err := h.EnrollOnSpoke(ctx, to.addr, thrall.Hostname, thrall.IpAddress, "")
+	if err != nil {
+		return nil, fmt.Errorf("enrolling on target spoke: %w", err)
+	}
+
+	// Set reassignment on source spoke so agent reconnects on next check-in.
+	_, err = from.admin.SetReassignment(ctx, &pb.SetReassignmentRequest{
+		ThrallId:    thrallID,
+		TargetAddr:  to.addr,
+		NewThrallId: newID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("setting reassignment on source spoke: %w", err)
+	}
+
+	slog.Info("thrall reassigned",
+		"thrall_id", thrallID,
+		"from_spoke", fromSpokeID,
+		"to_spoke", toSpokeID,
+		"new_thrall_id", newID,
+	)
+
+	return &ReassignResult{
+		NewThrallID: newID,
+		TargetAddr:  to.addr,
+	}, nil
+}
+
+// DrainResult holds the outcome of draining a spoke.
+type DrainResult struct {
+	Moved  int32
+	Failed int32
+	Errors []string
+}
+
+// DrainSpoke moves all thralls from a spoke to other spokes.
+// If targetSpokeID is empty, routes each thrall by hostname pattern.
+// If targetSpokeID is set, all thralls go to that specific spoke.
+func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*DrainResult, error) {
+	src := h.SpokeByID(spokeID)
+	if src == nil {
+		return nil, fmt.Errorf("spoke %q not found", spokeID)
+	}
+
+	// Get all thralls on source spoke.
+	thralls, err := h.SpokeListThralls(ctx, spokeID)
+	if err != nil {
+		return nil, fmt.Errorf("listing thralls on spoke %s: %w", spokeID, err)
+	}
+
+	result := &DrainResult{}
+	for _, t := range thralls {
+		if t.Revoked {
+			continue
+		}
+
+		target := targetSpokeID
+		if target == "" {
+			// Auto-route by hostname against remaining spokes' patterns.
+			for _, sc := range h.spokes {
+				if sc.id == spokeID {
+					continue
+				}
+				for _, pattern := range sc.patterns {
+					matched, matchErr := filepath.Match(pattern, t.Hostname)
+					if matchErr != nil {
+						continue
+					}
+					if matched {
+						target = sc.id
+						break
+					}
+				}
+				if target != "" {
+					break
+				}
+			}
+		}
+
+		if target == "" {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("no target spoke for %s", t.Hostname))
+			continue
+		}
+
+		_, err := h.ReassignThrall(ctx, t.Id, spokeID, target)
+		if err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, fmt.Sprintf("reassign %s: %v", t.Hostname, err))
+			continue
+		}
+		result.Moved++
+	}
+
+	slog.Info("spoke drained", "spoke_id", spokeID, "moved", result.Moved, "failed", result.Failed)
+	return result, nil
 }
 
 // buildClientTLS creates TLS credentials for the hub's connections to spokes.

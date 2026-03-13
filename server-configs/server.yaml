@@ -1,8 +1,11 @@
-# Secrets backend. Options: "static" (default) or "isopass".
-# Static reads from a .env file. Isopass connects to an isopass API instance.
+# Secrets backend. Options: "local" (default), "isopass", or "static" (legacy).
+# Local stores secrets as files in secrets_dir. With key_file, files are AES-256-GCM
+# encrypted; without key_file, files are plaintext (suitable for dev/single-server).
+# Secret path "hobnob/db/dsn" maps to file <secrets_dir>/hobnob/db/dsn.
 secrets:
-  backend: static
-  env_file: ".env"
+  backend: local
+  # key_file: "/etc/hobnob-server/master.key"  # optional: 32-byte key (hex or raw) for encryption
+  # secrets_dir: "/etc/hobnob-server/secrets"   # default; override if needed
 # secrets:
 #   backend: isopass
 #   url: https://localhost:8443

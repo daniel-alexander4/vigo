@@ -116,3 +116,148 @@ fn sha256_hex(data: &[u8]) -> String {
     let hash = Sha256::digest(data);
     hash.iter().map(|b| format!("{:02x}", b)).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn empty() -> Self {
+            Self {
+                responses: Mutex::new(Vec::new()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(
+            &self,
+            _: &[u8],
+            name: &str,
+            args: &[&str],
+        ) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let mock = MockRunner::empty();
+        let exec = TmpfileExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("name param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let mock = MockRunner::empty();
+        let exec = TmpfileExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("name", "myapp")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("path param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn dry_run_absent_noop() {
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = TmpfileExecutor {
+            runner: Box::new(mock),
+        };
+        // state=absent on a file that doesn't exist under /etc/tmpfiles.d/.
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "hobnob-test-nonexistent-tmpfile-99999"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        // No commands should have been called.
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn dry_run_present_creates() {
+        let mock = MockRunner::new(vec![MockRunner::ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = TmpfileExecutor {
+            runner: Box::new(mock),
+        };
+        // The conf file /etc/tmpfiles.d/hobnob-test-nonexistent-99999.conf doesn't exist,
+        // so with state=present this would be Created. dry_run=true means no write, no
+        // systemd-tmpfiles call.
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "hobnob-test-nonexistent-99999"),
+                ("path", "/run/myapp"),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        // No runner calls in dry_run mode.
+        assert!(
+            calls.lock().unwrap().is_empty(),
+            "dry_run should not invoke any commands"
+        );
+    }
+}

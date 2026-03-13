@@ -222,3 +222,189 @@ fn render_ini(elements: &[IniElement]) -> String {
     }
     output
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let exec = IniExecutor;
+        let params = make_params(&[("key", "port"), ("value", "80")]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("path param is required"));
+    }
+
+    #[test]
+    fn missing_key_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        std::fs::write(&path, "[app]\n").unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[("path", path.to_str().unwrap())]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("key param is required"));
+    }
+
+    #[test]
+    fn present_missing_value_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        std::fs::write(&path, "[app]\n").unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("key", "port"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("value param is required"));
+    }
+
+    #[test]
+    fn present_creates_key_in_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        std::fs::write(&path, "[database]\nhost = localhost\n").unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("section", "database"),
+            ("key", "port"),
+            ("value", "5432"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("port = 5432"));
+        assert!(content.contains("[database]"));
+    }
+
+    #[test]
+    fn present_updates_existing_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        std::fs::write(&path, "[app]\nport = 80\n").unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("section", "app"),
+            ("key", "port"),
+            ("value", "443"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Updated);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("port = 443"));
+        assert!(!content.contains("port = 80"));
+    }
+
+    #[test]
+    fn present_key_already_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        std::fs::write(&path, "[app]\nport = 443\n").unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("section", "app"),
+            ("key", "port"),
+            ("value", "443"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+
+        // File should be unchanged.
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "[app]\nport = 443\n");
+    }
+
+    #[test]
+    fn absent_removes_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        std::fs::write(&path, "[app]\nport = 80\nhost = localhost\n").unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("section", "app"),
+            ("key", "port"),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Deleted);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(!content.contains("port"));
+        assert!(content.contains("host = localhost"));
+    }
+
+    #[test]
+    fn absent_key_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        std::fs::write(&path, "[app]\nhost = localhost\n").unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("section", "app"),
+            ("key", "nonexistent"),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn dry_run_does_not_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.ini");
+        let original = "[app]\nport = 80\n";
+        std::fs::write(&path, original).unwrap();
+
+        let exec = IniExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("section", "app"),
+            ("key", "port"),
+            ("value", "443"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, true);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+
+        // File should be unchanged because of dry_run.
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, original);
+    }
+}

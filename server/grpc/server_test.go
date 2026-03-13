@@ -583,3 +583,546 @@ func writePrivKeyPEM(path string, key ed25519.PrivateKey) error {
 		Bytes: der,
 	}), 0600)
 }
+
+func TestCheckInStaleTimestamp(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	token := "stale-ts-token"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM, err := publicKeyPEM(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	thrallID, err := reg.Register(ctx, "stale1.test.example.com", "10.0.1.10", pubPEM, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Timestamp 6 minutes in the past — outside the 5-minute window.
+	now := time.Now().Add(-6 * time.Minute)
+	tsStr := fmt.Sprintf("%d", now.Unix())
+	payload := []byte("fp")
+	sig := signPayload(payload, tsStr, priv)
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp",
+		Signature:        sig,
+		Timestamp:        timestamppb.New(now),
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail with stale timestamp")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestCheckInFutureTimestamp(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	token := "future-ts-token"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM, err := publicKeyPEM(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	thrallID, err := reg.Register(ctx, "future1.test.example.com", "10.0.1.11", pubPEM, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Timestamp 6 minutes in the future — outside the 5-minute window.
+	now := time.Now().Add(6 * time.Minute)
+	tsStr := fmt.Sprintf("%d", now.Unix())
+	payload := []byte("fp")
+	sig := signPayload(payload, tsStr, priv)
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp",
+		Signature:        sig,
+		Timestamp:        timestamppb.New(now),
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail with future timestamp")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestCheckInTimestampBoundary(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	token := "boundary-ts-token"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM, err := publicKeyPEM(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	thrallID, err := reg.Register(ctx, "boundary1.test.example.com", "10.0.1.12", pubPEM, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+
+	// 4min59s ago — should succeed (within the 5-minute window).
+	withinWindow := time.Now().Add(-4*time.Minute - 59*time.Second)
+	tsStr := fmt.Sprintf("%d", withinWindow.Unix())
+	payload := []byte("fp-ok")
+	sig := signPayload(payload, tsStr, priv)
+
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp-ok",
+		Signature:        sig,
+		Timestamp:        timestamppb.New(withinWindow),
+	})
+	if err != nil {
+		t.Fatalf("expected CheckIn to succeed with 4m59s-old timestamp, got: %v", err)
+	}
+
+	// 5min1s ago — should fail (outside the 5-minute window).
+	outsideWindow := time.Now().Add(-5*time.Minute - 1*time.Second)
+	tsStr = fmt.Sprintf("%d", outsideWindow.Unix())
+	payload = []byte("fp-fail")
+	sig = signPayload(payload, tsStr, priv)
+
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp-fail",
+		Signature:        sig,
+		Timestamp:        timestamppb.New(outsideWindow),
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail with 5m1s-old timestamp")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestCheckInTamperedSignature(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	token := "tampered-sig-token"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM, err := publicKeyPEM(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	thrallID, err := reg.Register(ctx, "tampered1.test.example.com", "10.0.1.13", pubPEM, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	tsStr := fmt.Sprintf("%d", now.Unix())
+	payload := []byte("fp")
+	sig := signPayload(payload, tsStr, priv)
+	sig[len(sig)-1] ^= 0xff // flip last byte
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp",
+		Signature:        sig,
+		Timestamp:        timestamppb.New(now),
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail with tampered signature")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestCheckInTruncatedSignature(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	token := "truncated-sig-token"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM, err := publicKeyPEM(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	thrallID, err := reg.Register(ctx, "truncated1.test.example.com", "10.0.1.14", pubPEM, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	tsStr := fmt.Sprintf("%d", now.Unix())
+	payload := []byte("fp")
+	sig := signPayload(payload, tsStr, priv)
+	sig = sig[:32] // truncate to 32 bytes (ED25519 signatures are 64 bytes)
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp",
+		Signature:        sig,
+		Timestamp:        timestamppb.New(now),
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail with truncated signature")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestCheckInMissingTimestamp(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	token := "missing-ts-token"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM, err := publicKeyPEM(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	thrallID, err := reg.Register(ctx, "missingts1.test.example.com", "10.0.1.15", pubPEM, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a valid signature with the current time, but omit the timestamp from the request.
+	now := time.Now()
+	tsStr := fmt.Sprintf("%d", now.Unix())
+	payload := []byte("fp")
+	sig := signPayload(payload, tsStr, priv)
+	_ = priv // used above
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp",
+		Signature:        sig,
+		Timestamp:        nil, // deliberately missing
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail with missing timestamp")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestCheckInMalformedUUID(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	now := time.Now()
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+	_, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         "not-a-uuid",
+		StateFingerprint: "fp",
+		Signature:        []byte("fake-sig"),
+		Timestamp:        timestamppb.New(now),
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail with malformed UUID")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestRevokePreventReregistration(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	// Register a thrall.
+	token1 := "rereg-block-token-1"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub1, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM1, err := publicKeyPEM(pub1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+	resp, err := agentClient.Register(ctx, &pb.RegisterRequest{
+		Hostname:  "reregfail.test.example.com",
+		IpAddress: "10.0.1.16",
+		PubkeyPem: pubPEM1,
+		Token:     token1,
+	})
+	if err != nil {
+		t.Fatalf("initial Register failed: %v", err)
+	}
+	if !resp.GetSuccess() {
+		t.Fatalf("initial Register returned success=false: %s", resp.GetMessage())
+	}
+	thrallID := resp.GetThrallId()
+
+	// Revoke the thrall.
+	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
+		t.Fatalf("RevokeThrall failed: %v", err)
+	}
+
+	// Generate a new keypair and add a new approved pattern for re-registration.
+	token2 := "rereg-block-token-2"
+	_, err = reg.AddApprovedPattern(ctx, "*.test.example.com", token2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub2, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM2, err := publicKeyPEM(pub2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to re-register the same hostname — should be blocked.
+	_, err = agentClient.Register(ctx, &pb.RegisterRequest{
+		Hostname:  "reregfail.test.example.com",
+		IpAddress: "10.0.1.16",
+		PubkeyPem: pubPEM2,
+		Token:     token2,
+	})
+	if err == nil {
+		t.Fatal("expected re-registration of revoked hostname to fail")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.PermissionDenied {
+		t.Errorf("expected PermissionDenied, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+func TestRevokeAfterCheckIn(t *testing.T) {
+	addr, cleanup := startTestServer(t)
+	defer cleanup()
+
+	conn := dialTLS(t, addr)
+	defer conn.Close()
+
+	ctx := context.Background()
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+
+	token := "revoke-after-checkin-token"
+	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubPEM, err := publicKeyPEM(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	thrallID, err := reg.Register(ctx, "revokeafter1.test.example.com", "10.0.1.17", pubPEM, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	agentClient := pb.NewHobnobAgentClient(conn)
+
+	// First CheckIn should succeed.
+	now := time.Now()
+	tsStr := fmt.Sprintf("%d", now.Unix())
+	payload := []byte("fp-before-revoke")
+	sig := signPayload(payload, tsStr, priv)
+
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp-before-revoke",
+		Signature:        sig,
+		Timestamp:        timestamppb.New(now),
+	})
+	if err != nil {
+		t.Fatalf("first CheckIn (before revoke) failed: %v", err)
+	}
+
+	// Revoke the thrall.
+	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
+		t.Fatalf("RevokeThrall failed: %v", err)
+	}
+
+	// Second CheckIn should fail with PermissionDenied.
+	now2 := time.Now()
+	tsStr2 := fmt.Sprintf("%d", now2.Unix())
+	payload2 := []byte("fp-after-revoke")
+	sig2 := signPayload(payload2, tsStr2, priv)
+
+	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
+		ThrallId:         thrallID,
+		StateFingerprint: "fp-after-revoke",
+		Signature:        sig2,
+		Timestamp:        timestamppb.New(now2),
+	})
+	if err == nil {
+		t.Fatal("expected CheckIn to fail after revocation")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected gRPC status error, got: %v", err)
+	}
+	if st.Code() != codes.PermissionDenied {
+		t.Errorf("expected PermissionDenied, got %v: %s", st.Code(), st.Message())
+	}
+}

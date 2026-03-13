@@ -1,23 +1,107 @@
 {{define "page-content"}}
-<div class="chat-container">
-    <div class="chat-messages" id="chat-messages">
-        <div class="chat-welcome">
-            <h2>Ask Hobnob AI</h2>
-            <p>Ask questions about your fleet — diagnostics, config authoring, compliance, impact analysis.</p>
-            <div class="chat-suggestions">
-                <button class="chat-suggestion" onclick="askSuggestion(this)">How many thralls do I have?</button>
-                <button class="chat-suggestion" onclick="askSuggestion(this)">Which thralls are failing?</button>
-                <button class="chat-suggestion" onclick="askSuggestion(this)">Show me the compliance summary</button>
+<div class="page-header">
+    <h1>Compliance & Security</h1>
+    <p>Fleet compliance overview, security insights, and AI-powered diagnostics</p>
+</div>
+
+<div class="ask-dashboard">
+    {{/* ── Left panel: compliance + reports + security ── */}}
+    <div class="ask-panel">
+        {{/* Compliance summary */}}
+        <div class="ask-section">
+            <h3>Fleet Compliance</h3>
+            <div class="ask-compliance-bar">
+                <div class="ask-compliance-fill ask-compliance-fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
+                     style="width: {{printf "%.0f" .CompliancePct}}%"></div>
+                <span class="ask-compliance-label">{{printf "%.0f" .CompliancePct}}%</span>
+            </div>
+            <div class="ask-stats">
+                <div class="ask-stat ask-stat--success">
+                    <span class="ask-stat__val">{{.Compliant}}</span>
+                    <span class="ask-stat__lbl">Compliant</span>
+                </div>
+                <div class="ask-stat ask-stat--warning">
+                    <span class="ask-stat__val">{{.Drifted}}</span>
+                    <span class="ask-stat__lbl">Drifted</span>
+                </div>
+                <div class="ask-stat ask-stat--danger">
+                    <span class="ask-stat__val">{{.Failing}}</span>
+                    <span class="ask-stat__lbl">Failing</span>
+                </div>
+                <div class="ask-stat ask-stat--muted">
+                    <span class="ask-stat__val">{{.Stale}}</span>
+                    <span class="ask-stat__lbl">Stale</span>
+                </div>
             </div>
         </div>
-    </div>
-    <form class="chat-input-form" id="chat-form" onsubmit="return handleSubmit(event)">
-        <div class="chat-input-wrapper">
-            <textarea class="chat-input" id="chat-input" placeholder="Ask a question..." rows="1"
-                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSubmit(event)}"></textarea>
-            <button class="chat-send" type="submit" id="chat-send">Send</button>
+
+        {{/* Report buttons */}}
+        <div class="ask-section">
+            <h3>Reports</h3>
+            <div class="ask-reports">
+                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Give me a drift summary: which thralls have drifted and what changed?">Drift Summary</button>
+                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show compliance status for every thrall. List each hostname with its status.">Per-Thrall Status</button>
+                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show me the compliance trend over the last 30 days. Is it improving or degrading?">Compliance Trend</button>
+                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show all failing thralls with their last run details. What failed and why?">Failure Analysis</button>
+                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="List all stale thralls that haven't checked in recently. How long has each been offline?">Stale Thralls</button>
+                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show the recent run history across the fleet. Highlight any patterns in failures.">Run History</button>
+            </div>
         </div>
-    </form>
+
+        {{/* Package drift / security */}}
+        <div class="ask-section">
+            <h3>Package Drift{{if .DriftCount}} <span class="ask-badge ask-badge--warning">{{.DriftCount}}</span>{{end}}</h3>
+            {{if .DriftRows}}
+            <div class="ask-drift-table-wrap">
+                <table class="ask-drift-table">
+                    <thead>
+                        <tr><th>Host</th><th>Package</th><th>Installed</th><th>Desired</th></tr>
+                    </thead>
+                    <tbody>
+                        {{range .DriftRows}}
+                        <tr>
+                            <td>{{.Hostname}}</td>
+                            <td class="mono">{{.PackageName}}</td>
+                            <td class="text-danger">{{if .InstalledVersion}}{{.InstalledVersion}}{{else}}<em>missing</em>{{end}}</td>
+                            <td class="text-success">{{if .DesiredVersion}}{{.DesiredVersion}}{{else}}-{{end}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            <button class="ask-report-btn ask-report-btn--full" onclick="askSuggestion(this)"
+                data-question="Analyze the current package drift across the fleet. For each drifted package, suggest a hobnob module or remediation step to fix it.">
+                Analyze & Remediate Drift
+            </button>
+            {{else}}
+            <p class="text-muted">No package drift detected.</p>
+            {{end}}
+        </div>
+    </div>
+
+    {{/* ── Right panel: AI chat ── */}}
+    <div class="ask-chat">
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-welcome">
+                    <h2>AI Diagnostics</h2>
+                    <p>Ask questions or click a report button to investigate.</p>
+                    <div class="chat-suggestions">
+                        <button class="chat-suggestion" onclick="askSuggestion(this)" data-question="How many thralls do I have?">How many thralls?</button>
+                        <button class="chat-suggestion" onclick="askSuggestion(this)" data-question="Which thralls are failing and why?">Failing thralls?</button>
+                        <button class="chat-suggestion" onclick="askSuggestion(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>
+                    </div>
+                </div>
+            </div>
+            <form class="chat-input-form" id="chat-form" onsubmit="return handleSubmit(event)">
+                <div class="chat-input-wrapper">
+                    <textarea class="chat-input" id="chat-input" placeholder="Ask a question..." rows="1"
+                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSubmit(event)}"></textarea>
+                    <button class="chat-send" type="submit" id="chat-send">Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script src="/static/js/ask.js"></script>

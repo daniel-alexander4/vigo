@@ -43,29 +43,32 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 	}
 	thrallID := checkin.GetThrallId()
 
-	// Validate thrall is not revoked — FleetIndex when available.
+	// Validate thrall + look up state in one lock acquisition.
+	var thrall db.Thrall
 	if s.fleetIndex != nil {
-		exists, revoked := s.fleetIndex.IsRevoked(thrallID)
+		ts, exists, revoked := s.fleetIndex.GetThrallLite(thrallID)
 		if !exists {
 			return status.Error(codes.NotFound, "thrall not found")
 		}
 		if revoked {
 			return status.Error(codes.PermissionDenied, "thrall is revoked")
 		}
-	} else if err := s.registry.ValidateThrall(stream.Context(), thrallID); err != nil {
-		if errors.Is(err, registry.ErrThrallRevoked) {
-			return status.Error(codes.PermissionDenied, "thrall is revoked")
+		thrall = fleetThrallToDB(ts)
+	} else {
+		if err := s.registry.ValidateThrall(stream.Context(), thrallID); err != nil {
+			if errors.Is(err, registry.ErrThrallRevoked) {
+				return status.Error(codes.PermissionDenied, "thrall is revoked")
+			}
+			if errors.Is(err, registry.ErrThrallNotFound) {
+				return status.Error(codes.NotFound, "thrall not found")
+			}
+			return status.Errorf(codes.Internal, "validating thrall: %v", err)
 		}
-		if errors.Is(err, registry.ErrThrallNotFound) {
-			return status.Error(codes.NotFound, "thrall not found")
+		var err error
+		thrall, err = s.lookupThrall(stream.Context(), thrallID)
+		if err != nil {
+			return err
 		}
-		return status.Errorf(codes.Internal, "validating thrall: %v", err)
-	}
-
-	// Look up thrall for hostname.
-	thrall, err := s.lookupThrall(stream.Context(), thrallID)
-	if err != nil {
-		return err
 	}
 
 	// Register the stream for push notifications.
@@ -223,7 +226,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	forcePush := thrall.ForcePush != 0
 	hasPending := thrall.PendingRotatedSecrets != "" && thrall.PendingRotatedSecrets != "[]"
 	if s.fleetIndex != nil {
-		if freshState := s.fleetIndex.GetThrall(thrallID); freshState != nil {
+		if freshState, ok, _ := s.fleetIndex.GetThrallLite(thrallID); ok {
 			forcePush = freshState.ForcePush
 			hasPending = len(freshState.PendingRotatedSecrets) > 0
 		}
@@ -231,10 +234,23 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
 		!forcePush && !hasPending {
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
-		return &pb.CheckInResponse{
+		resp := &pb.CheckInResponse{
 			NoChange:      true,
 			PolicyVersion: configVersion,
-		}, nil
+		}
+		// Check for pending reassignment even on no-change cycles.
+		if s.reassignStore != nil {
+			if info, ok := s.reassignStore.Pop(thrallID); ok {
+				resp.ReassignAddr = info.TargetAddr
+				resp.ReassignId = info.NewThrallID
+				slog.Info("returning reassignment (no-change path)",
+					"thrall_id", thrallID,
+					"target_addr", info.TargetAddr,
+					"new_thrall_id", info.NewThrallID,
+				)
+			}
+		}
+		return resp, nil
 	}
 
 	// Look up config using pattern index.
@@ -247,9 +263,32 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		pattern = ""
 	}
 
+	// If config has case resources, expand them per-thrall using traits.
+	// This bypasses the pattern-level policy cache since expansion varies per thrall.
+	hasCaseRes := config.HasCaseResources(cfg)
+	if hasCaseRes {
+		var traits map[string]any
+		if len(inlineTraits) > 0 {
+			_ = json.Unmarshal(inlineTraits, &traits)
+		}
+		if traits == nil {
+			traits = make(map[string]any)
+		}
+		// Clone config so we don't mutate the shared ConfigStore entry.
+		cloned := cfg.Clone()
+		for i := range cloned.Modules {
+			expanded, err := config.ExpandCase(cloned.Modules[i].Resources, traits, cloned.Vars)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "expanding case for module %q: %v", cloned.Modules[i].Name, err)
+			}
+			cloned.Modules[i].Resources = expanded
+		}
+		cfg = cloned
+	}
+
 	// Get or build cached base bundle, then customize stubs.
 	var bundle *pb.PolicyBundle
-	if s.policyCache != nil && pattern != "" {
+	if s.policyCache != nil && pattern != "" && !hasCaseRes {
 		base, err := s.policyCache.GetOrBuild(pattern, cfg, configVersion)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
@@ -278,8 +317,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 
 	// Read fresh flags from FleetIndex (in-memory, O(1)) or DB fallback.
 	if s.fleetIndex != nil {
-		freshState := s.fleetIndex.GetThrall(thrallID)
-		if freshState != nil {
+		freshState, freshExists, _ := s.fleetIndex.GetThrallLite(thrallID)
+		if freshExists {
 			// Inject secret rotation triggers.
 			if len(freshState.PendingRotatedSecrets) > 0 {
 				injectSecretTriggers(bundle, freshState.PendingRotatedSecrets)
@@ -327,8 +366,23 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 
 	metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
 
-	return &pb.CheckInResponse{
+	resp := &pb.CheckInResponse{
 		PolicyBundle:  bundle,
 		PolicyVersion: configVersion,
-	}, nil
+	}
+
+	// Check for pending reassignment (thrall moving to a different spoke).
+	if s.reassignStore != nil {
+		if info, ok := s.reassignStore.Pop(thrallID); ok {
+			resp.ReassignAddr = info.TargetAddr
+			resp.ReassignId = info.NewThrallID
+			slog.Info("returning reassignment",
+				"thrall_id", thrallID,
+				"target_addr", info.TargetAddr,
+				"new_thrall_id", info.NewThrallID,
+			)
+		}
+	}
+
+	return resp, nil
 }

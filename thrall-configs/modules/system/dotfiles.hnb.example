@@ -1,0 +1,21 @@
+name: dotfiles
+defaults:
+  owner: "{{ .Item }}"
+  group: "{{ .Item }}"
+  mode: "0644"
+vars:
+  vimrc_content: "set number\nset expandtab\nset shiftwidth=2"
+  bashrc_content: "export PS1='\\u@\\h:\\w\\$ '"
+resources:
+  - name: "vimrc-{{ .Item }}"
+    type: file
+    foreach: users
+    targetpath: "/home/{{ .Item }}/.vimrc"
+    content: "{{ .Vars.vimrc_content }}"
+
+  - name: "bashrc-{{ .Item }}"
+    type: file
+    foreach: users
+    targetpath: "/home/{{ .Item }}/.bashrc"
+    content: "{{ .Vars.bashrc_content }}"
+    mode: "0755"

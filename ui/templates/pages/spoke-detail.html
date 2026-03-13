@@ -1,0 +1,127 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/federation">Federation</a> &rsaquo; {{.SpokeID}}
+    </div>
+    <h1>Spoke: {{.SpokeID}}</h1>
+    <p class="mono">{{.Addr}}</p>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__value">{{.ThrallCount}}</div>
+        <div class="stat-card__label">Thralls</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-{{if ge .CompliancePct 90.0}}success{{else if ge .CompliancePct 50.0}}warning{{else}}danger{{end}}">{{printf "%.1f%%" .CompliancePct}}</div>
+        <div class="stat-card__label">Compliance</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value">{{.LatencyMs}}ms</div>
+        <div class="stat-card__label">Latency</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value">
+            {{if .Healthy}}
+                <span class="badge badge--success">healthy</span>
+            {{else}}
+                <span class="badge badge--danger">unreachable</span>
+            {{end}}
+        </div>
+        <div class="stat-card__label">Health</div>
+    </div>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__value text-success">{{.Compliant}}</div>
+        <div class="stat-card__label">Compliant</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-warning">{{.Drifted}}</div>
+        <div class="stat-card__label">Drifted</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-danger">{{.Failing}}</div>
+        <div class="stat-card__label">Failing</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-warning">{{.Stale}}</div>
+        <div class="stat-card__label">Stale</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-muted">{{.Unknown}}</div>
+        <div class="stat-card__label">Unknown</div>
+    </div>
+</div>
+
+<div class="table-container mb-2">
+    <h3>Thralls</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>IP Address</th>
+                <th>Last Seen</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Thralls}}
+            <tr>
+                <td><strong>{{.Hostname}}</strong></td>
+                <td class="mono">{{.IPAddress}}</td>
+                <td class="text-muted">{{.LastSeen}}</td>
+                <td>
+                    {{if .Revoked}}
+                        <span class="badge badge--danger">revoked</span>
+                    {{else}}
+                        <span class="badge badge--success">active</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+            {{if not .Thralls}}
+            <tr>
+                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No thralls on this spoke.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+<div class="table-container">
+    <h3>Recent Runs</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Run</th>
+                <th>Thrall</th>
+                <th>Status</th>
+                <th>Modules</th>
+                <th>Changed</th>
+                <th>Failed</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Runs}}
+            <tr>
+                <td class="mono">{{truncUUID .ID}}</td>
+                <td class="mono">{{truncUUID .ThrallID}}</td>
+                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{.ModuleCount}}</td>
+                <td>{{.ChangedCount}}</td>
+                <td>{{.FailedCount}}</td>
+                <td class="text-muted">{{.StartedAt}}</td>
+            </tr>
+            {{end}}
+            {{if not .Runs}}
+            <tr>
+                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs on this spoke.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

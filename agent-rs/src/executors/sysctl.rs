@@ -144,3 +144,201 @@ impl Executor for SysctlExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256), // exit code 1
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), args.iter().map(|s| s.to_string()).collect()));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_key_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = SysctlExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("key param is required"));
+    }
+
+    #[test]
+    fn missing_value_errors() {
+        let sysctl_read = MockRunner::ok_output("1\n");
+        let mock = MockRunner::new(vec![sysctl_read]);
+        let exec = SysctlExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("key", "net.ipv4.ip_forward"), ("state", "present")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("value param is required"));
+    }
+
+    #[test]
+    fn present_already_matches() {
+        // current value matches desired, persist=false so conf check is skipped.
+        let sysctl_read = MockRunner::ok_output("1\n");
+        let mock = MockRunner::new(vec![sysctl_read]);
+        let exec = SysctlExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("key", "net.ipv4.ip_forward"),
+                ("value", "1"),
+                ("persist", "false"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn present_value_differs_dry_run() {
+        // Current value is "0", desired is "1", persist=false, dry_run=true.
+        // Should report changed but not call sysctl -w.
+        let sysctl_read = MockRunner::ok_output("0\n");
+        let mock = MockRunner::new(vec![sysctl_read]);
+        let calls = mock.calls.clone();
+        let exec = SysctlExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("key", "net.ipv4.ip_forward"),
+                ("value", "1"),
+                ("persist", "false"),
+            ]),
+            true,
+        );
+        assert!(result.changed);
+        // Action should be Created (runtime doesn't match and no conf file exists).
+        assert_eq!(result.action, Action::Created);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call sysctl -n, not sysctl -w");
+        assert_eq!(calls[0].0, "sysctl");
+        assert!(calls[0].1.contains(&"-n".to_string()));
+    }
+
+    #[test]
+    fn absent_no_conf_file() {
+        // state=absent, conf file doesn't exist => Action::None.
+        let mock = MockRunner::new(vec![]);
+        let exec = SysctlExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("key", "net.ipv4.ip_forward"), ("state", "absent")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn unknown_state_implicitly_present() {
+        // No explicit "state" param defaults to "present", which requires value.
+        let sysctl_read = MockRunner::ok_output("0\n");
+        let mock = MockRunner::new(vec![sysctl_read]);
+        let exec = SysctlExecutor {
+            runner: Box::new(mock),
+        };
+        // Omit state entirely, provide key + value + persist=false.
+        let result = exec.execute(
+            &make_params(&[
+                ("key", "net.ipv4.ip_forward"),
+                ("value", "1"),
+                ("persist", "false"),
+            ]),
+            true,
+        );
+        // Should behave as state=present — value differs so changed=true.
+        assert!(result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn dry_run_does_not_call_sysctl_w() {
+        // Verify that dry_run prevents the sysctl -w mutation call.
+        let sysctl_read = MockRunner::ok_output("0\n");
+        let mock = MockRunner::new(vec![sysctl_read]);
+        let calls = mock.calls.clone();
+        let exec = SysctlExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("key", "vm.swappiness"),
+                ("value", "10"),
+                ("persist", "false"),
+            ]),
+            true,
+        );
+        assert!(result.changed);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        // The only call should be the read (sysctl -n), not a write (sysctl -w).
+        assert_eq!(calls[0].1[0], "-n");
+    }
+}

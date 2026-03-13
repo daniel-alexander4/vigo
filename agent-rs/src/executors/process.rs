@@ -245,3 +245,187 @@ impl Executor for ProcessExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256), // exit code 1
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), args.iter().map(|s| s.to_string()).collect()));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = ProcessExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("name param is required"));
+    }
+
+    #[test]
+    fn running_process_exists() {
+        // pgrep finds the process (exit 0, one PID)
+        let pgrep = MockRunner::ok_output("1234\n");
+        let mock = MockRunner::new(vec![pgrep]);
+        let exec = ProcessExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("name", "nginx"), ("state", "running")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn running_process_missing_no_restart() {
+        // pgrep finds no match (exit code 1)
+        let pgrep = MockRunner::fail_output("");
+        let mock = MockRunner::new(vec![pgrep]);
+        let exec = ProcessExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("name", "nginx"), ("state", "running")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("not running"));
+    }
+
+    #[test]
+    fn stopped_already_stopped() {
+        // pgrep finds no match
+        let pgrep = MockRunner::fail_output("");
+        let mock = MockRunner::new(vec![pgrep]);
+        let exec = ProcessExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("name", "nginx"), ("state", "stopped")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn stopped_kills_process() {
+        // pgrep finds match, then pkill succeeds
+        let pgrep = MockRunner::ok_output("1234\n");
+        let pkill = MockRunner::ok_output("");
+        let mock = MockRunner::new(vec![pgrep, pkill]);
+        let calls = mock.calls.clone();
+        let exec = ProcessExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("name", "nginx"), ("state", "stopped")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, "pkill");
+        assert!(calls[1].1.contains(&"-TERM".to_string()));
+        assert!(calls[1].1.contains(&"-x".to_string()));
+    }
+
+    #[test]
+    fn count_constraint_satisfied() {
+        // pgrep returns 3 PIDs, count=3 -> no change
+        let pgrep = MockRunner::ok_output("100\n200\n300\n");
+        let mock = MockRunner::new(vec![pgrep]);
+        let exec = ProcessExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("name", "worker"), ("state", "running"), ("count", "3")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn dry_run_does_not_kill() {
+        // Process running, state=stopped, dry_run -> changed but only pgrep called
+        let pgrep = MockRunner::ok_output("1234\n");
+        let mock = MockRunner::new(vec![pgrep]);
+        let calls = mock.calls.clone();
+        let exec = ProcessExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("name", "nginx"), ("state", "stopped")]),
+            true,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call pgrep, not pkill");
+        assert_eq!(calls[0].0, "pgrep");
+    }
+}

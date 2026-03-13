@@ -186,3 +186,179 @@ impl Executor for BlockInFileExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[("block", "some content")]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("path param is required"));
+    }
+
+    #[test]
+    fn present_appends_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.conf");
+        std::fs::write(&path, "# existing content\nfoo=bar\n").unwrap();
+
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("block", "nameserver 8.8.8.8\nnameserver 8.8.4.4"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# BEGIN HOBNOB MANAGED BLOCK"));
+        assert!(content.contains("nameserver 8.8.8.8"));
+        assert!(content.contains("nameserver 8.8.4.4"));
+        assert!(content.contains("# END HOBNOB MANAGED BLOCK"));
+        // Original content should still be present.
+        assert!(content.contains("foo=bar"));
+    }
+
+    #[test]
+    fn present_block_already_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.conf");
+        let content = "# existing\n# BEGIN HOBNOB MANAGED BLOCK\nhello world\n# END HOBNOB MANAGED BLOCK\n";
+        std::fs::write(&path, content).unwrap();
+
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("block", "hello world"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn present_updates_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.conf");
+        let content = "header\n# BEGIN HOBNOB MANAGED BLOCK\nold content\n# END HOBNOB MANAGED BLOCK\nfooter\n";
+        std::fs::write(&path, content).unwrap();
+
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("block", "new content"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Updated);
+
+        let updated = std::fs::read_to_string(&path).unwrap();
+        assert!(updated.contains("new content"));
+        assert!(!updated.contains("old content"));
+        assert!(updated.contains("header"));
+        assert!(updated.contains("footer"));
+    }
+
+    #[test]
+    fn absent_removes_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.conf");
+        let content = "header\n# BEGIN HOBNOB MANAGED BLOCK\nmanaged content\n# END HOBNOB MANAGED BLOCK\nfooter\n";
+        std::fs::write(&path, content).unwrap();
+
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Deleted);
+
+        let updated = std::fs::read_to_string(&path).unwrap();
+        assert!(!updated.contains("BEGIN HOBNOB MANAGED BLOCK"));
+        assert!(!updated.contains("managed content"));
+        assert!(!updated.contains("END HOBNOB MANAGED BLOCK"));
+        assert!(updated.contains("header"));
+        assert!(updated.contains("footer"));
+    }
+
+    #[test]
+    fn absent_no_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.conf");
+        std::fs::write(&path, "just normal content\n").unwrap();
+
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn dry_run_does_not_modify() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.conf");
+        let original = "existing content\n";
+        std::fs::write(&path, original).unwrap();
+
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("block", "new block content"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, true);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+
+        // File should be unchanged because of dry_run.
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, original);
+    }
+
+    #[test]
+    fn custom_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.conf");
+        std::fs::write(&path, "existing\n").unwrap();
+
+        let exec = BlockInFileExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("block", "labeled content"),
+            ("label", "myapp"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("# BEGIN HOBNOB MANAGED BLOCK myapp"));
+        assert!(content.contains("# END HOBNOB MANAGED BLOCK myapp"));
+        assert!(content.contains("labeled content"));
+    }
+}

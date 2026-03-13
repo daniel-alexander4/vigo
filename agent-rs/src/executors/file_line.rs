@@ -160,3 +160,172 @@ fn insert_line(lines: &mut Vec<String>, line: &str, position: &str) {
         lines.push(line.to_string());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let exec = FileLineExecutor;
+        let params = make_params(&[("line", "some line")]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("path param is required"));
+    }
+
+    #[test]
+    fn present_adds_line_at_end() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "first line\nsecond line\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "third line"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("third line"));
+        // The new line should be at the end.
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.last().unwrap(), &"third line");
+    }
+
+    #[test]
+    fn present_line_already_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "first line\nsecond line\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "second line"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn present_replaces_matching_regex() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "host=localhost\nport=80\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "port=443"),
+            ("match", "^port="),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Updated);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("port=443"));
+        assert!(!content.contains("port=80"));
+        assert!(content.contains("host=localhost"));
+    }
+
+    #[test]
+    fn absent_removes_exact_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "keep this\nremove this\nkeep too\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "remove this"),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Deleted);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(!content.contains("remove this"));
+        assert!(content.contains("keep this"));
+        assert!(content.contains("keep too"));
+    }
+
+    #[test]
+    fn absent_removes_by_regex() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "port=80\nhost=localhost\nport=8080\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("match", "^port="),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Deleted);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(!content.contains("port="));
+        assert!(content.contains("host=localhost"));
+    }
+
+    #[test]
+    fn absent_line_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "first line\nsecond line\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "nonexistent line"),
+            ("state", "absent"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn dry_run_does_not_modify() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        let original = "existing line\n";
+        std::fs::write(&path, original).unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "new line"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, true);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+
+        // File should be unchanged because of dry_run.
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, original);
+    }
+}

@@ -8,7 +8,9 @@
     var busy = false;
 
     window.askSuggestion = function(btn) {
-        input.value = btn.textContent;
+        // Support data-question attribute or fall back to textContent.
+        var q = btn.getAttribute('data-question') || btn.textContent;
+        input.value = q;
         handleSubmit(new Event('submit'));
     };
 

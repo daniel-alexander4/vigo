@@ -57,5 +57,6 @@ func init() {
 		federationCmd,
 		askCmd,
 		workflowCmd,
+		secretsCmd,
 	)
 }

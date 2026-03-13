@@ -219,6 +219,27 @@ type ThrallConfig struct {
 	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
 }
 
+// Clone returns a deep-enough copy of the ThrallConfig. Safe to mutate
+// modules and vars without affecting the original.
+func (c *ThrallConfig) Clone() *ThrallConfig {
+	clone := *c
+	clone.Modules = make([]ModuleConfig, len(c.Modules))
+	for i, mod := range c.Modules {
+		clone.Modules[i] = mod
+		clone.Modules[i].Resources = cloneResources(mod.Resources)
+		if mod.DependsOn != nil {
+			clone.Modules[i].DependsOn = append([]string(nil), mod.DependsOn...)
+		}
+	}
+	clone.Vars = make(map[string]any, len(c.Vars))
+	for k, v := range c.Vars {
+		clone.Vars[k] = v
+	}
+	clone.VarOrder = append([]string(nil), c.VarOrder...)
+	clone.ConditionalVars = append([]conditionals.ConditionalVar(nil), c.ConditionalVars...)
+	return &clone
+}
+
 // ModuleConfig describes a module assigned to a thrall.
 type ModuleConfig struct {
 	Name        string           `yaml:"name"`
@@ -230,15 +251,18 @@ type ModuleConfig struct {
 
 // ResourceConfig describes a single resource within a module.
 type ResourceConfig struct {
-	Name             string         `yaml:"name"`
-	Type             string         `yaml:"type"`
-	When             string         `yaml:"when,omitempty"`
-	Attributes       map[string]any `yaml:",inline"`
-	Notify           []string       `yaml:"notify"`
-	Subscribes       []string       `yaml:"subscribes"`
-	SubscribesSecret []string       `yaml:"subscribes_secret"`
-	DependsOn        []string       `yaml:"depends_on"`
-	Before           []string       `yaml:"before"`
+	Name             string                    `yaml:"name"`
+	Type             string                    `yaml:"type"`
+	When             string                    `yaml:"when,omitempty"`
+	Attributes       map[string]any            `yaml:",inline"`
+	Notify           []string                  `yaml:"notify"`
+	Subscribes       []string                  `yaml:"subscribes"`
+	SubscribesSecret []string                  `yaml:"subscribes_secret"`
+	DependsOn        []string                  `yaml:"depends_on"`
+	Before           []string                  `yaml:"before"`
+	ForEach          string                    `yaml:"-"` // var name to iterate (config-load-time expansion)
+	Case             string                    `yaml:"-"` // template expression for case switching (check-in-time)
+	CaseMatch        map[string]map[string]any `yaml:"-"` // case branch → attribute overrides
 }
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
@@ -248,6 +272,7 @@ type ModuleDefinition struct {
 	Name            string                        `yaml:"name"`
 	DependsOn       []string                      `yaml:"depends_on"`
 	Before          []string                      `yaml:"before"`
+	Defaults        map[string]any                `yaml:"defaults"`
 	Resources       []ResourceConfig              `yaml:"resources"`
 	Vars            map[string]any                `yaml:"vars"`
 	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
@@ -280,6 +305,10 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 			if err := val.Decode(&m.Before); err != nil {
 				return fmt.Errorf("decoding before: %w", err)
 			}
+		case "defaults":
+			if err := val.Decode(&m.Defaults); err != nil {
+				return fmt.Errorf("decoding defaults: %w", err)
+			}
 		case "vars":
 			if err := val.Decode(&m.Vars); err != nil {
 				return fmt.Errorf("decoding vars: %w", err)
@@ -296,6 +325,7 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 		}
 	}
 
+	applyDefaults(m.Resources, m.Defaults)
 	return nil
 }
 
@@ -347,6 +377,7 @@ type ThrallEntry struct {
 	Environment string                    `yaml:"environment"`
 	Roles       []string                  `yaml:"roles"`
 	Modules     []ModuleRef               `yaml:"modules"`
+	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to thrall-configs/)
 	Vars        map[string]any            `yaml:"vars"`
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
 }
@@ -382,6 +413,17 @@ func (n *ThrallEntry) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("decoding modules: %w", err)
 			}
 			n.Modules = append(n.Modules, extra...)
+		case "vars_from":
+			// Accept both scalar string and list of strings.
+			if val.Kind == yaml.ScalarNode {
+				n.VarsFrom = append(n.VarsFrom, val.Value)
+			} else {
+				var paths []string
+				if err := val.Decode(&paths); err != nil {
+					return fmt.Errorf("decoding vars_from: %w", err)
+				}
+				n.VarsFrom = append(n.VarsFrom, paths...)
+			}
 		case "vars":
 			if err := val.Decode(&n.Vars); err != nil {
 				return fmt.Errorf("decoding vars: %w", err)

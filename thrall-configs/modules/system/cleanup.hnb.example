@@ -1,0 +1,25 @@
+name: cleanup
+resources:
+  # Remove unwanted packages
+  - name: remove-telnet
+    type: package
+    package: telnet
+    state: absent
+
+  # Remove stale config file
+  - name: remove-old-config
+    type: file
+    targetpath: /etc/old-app.conf
+    state: absent
+
+  # Remove decommissioned user
+  - name: remove-contractor
+    type: user
+    username: contractor
+    state: absent
+
+  # Disable and stop unwanted service
+  - name: stop-cups
+    type: service
+    service: cups
+    state: stopped

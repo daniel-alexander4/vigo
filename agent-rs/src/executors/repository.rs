@@ -201,3 +201,171 @@ impl Executor for RepositoryExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRepoManager {
+        present: Mutex<Vec<String>>,
+        add_calls: Arc<Mutex<Vec<(String, String, String)>>>,
+        remove_calls: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl MockRepoManager {
+        fn new(present: Vec<&str>) -> Self {
+            Self {
+                present: Mutex::new(present.into_iter().map(|s| s.to_string()).collect()),
+                add_calls: Arc::new(Mutex::new(Vec::new())),
+                remove_calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    impl RepoManager for MockRepoManager {
+        fn is_present(&self, name: &str) -> bool {
+            self.present.lock().unwrap().contains(&name.to_string())
+        }
+
+        fn add(&self, name: &str, repo: &str, key_url: &str) -> Result<(), String> {
+            self.add_calls
+                .lock()
+                .unwrap()
+                .push((name.into(), repo.into(), key_url.into()));
+            Ok(())
+        }
+
+        fn remove(&self, name: &str) -> Result<(), String> {
+            self.remove_calls.lock().unwrap().push(name.into());
+            Ok(())
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let mgr = MockRepoManager::new(vec![]);
+        let exec = RepositoryExecutor {
+            repo_mgr: Box::new(mgr),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("repo_name param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn add_new_repo() {
+        let mgr = MockRepoManager::new(vec![]);
+        let add_calls = Arc::clone(&mgr.add_calls);
+        let exec = RepositoryExecutor {
+            repo_mgr: Box::new(mgr),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "docker-ce"),
+                ("repo", "deb https://download.docker.com/linux/ubuntu jammy stable"),
+                ("key_url", "https://download.docker.com/linux/ubuntu/gpg"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let add_calls = add_calls.lock().unwrap();
+        assert_eq!(add_calls.len(), 1);
+        assert_eq!(add_calls[0].0, "docker-ce");
+        assert!(add_calls[0].1.contains("download.docker.com"));
+    }
+
+    #[test]
+    fn repo_already_present() {
+        let mgr = MockRepoManager::new(vec!["docker-ce"]);
+        let exec = RepositoryExecutor {
+            repo_mgr: Box::new(mgr),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "docker-ce"),
+                ("state", "present"),
+                ("repo", "deb https://download.docker.com/linux/ubuntu jammy stable"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn missing_repo_param() {
+        let mgr = MockRepoManager::new(vec![]);
+        let exec = RepositoryExecutor {
+            repo_mgr: Box::new(mgr),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "docker-ce"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("repo param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn absent_removes_repo() {
+        let mgr = MockRepoManager::new(vec!["docker-ce"]);
+        let remove_calls = Arc::clone(&mgr.remove_calls);
+        let exec = RepositoryExecutor {
+            repo_mgr: Box::new(mgr),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "docker-ce"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        let remove_calls = remove_calls.lock().unwrap();
+        assert_eq!(remove_calls.len(), 1);
+        assert_eq!(remove_calls[0], "docker-ce");
+    }
+
+    #[test]
+    fn absent_noop_when_missing() {
+        let mgr = MockRepoManager::new(vec![]);
+        let exec = RepositoryExecutor {
+            repo_mgr: Box::new(mgr),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "docker-ce"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+}

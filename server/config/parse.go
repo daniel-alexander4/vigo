@@ -44,6 +44,10 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 			if err := val.Decode(&def.Before); err != nil {
 				return nil, fmt.Errorf("decoding before: %w", err)
 			}
+		case "defaults":
+			if err := val.Decode(&def.Defaults); err != nil {
+				return nil, fmt.Errorf("decoding defaults: %w", err)
+			}
 		case "vars":
 			if err := val.Decode(&def.Vars); err != nil {
 				return nil, fmt.Errorf("decoding vars: %w", err)
@@ -60,6 +64,7 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 		}
 	}
 
+	applyDefaults(def.Resources, def.Defaults)
 	return &def, nil
 }
 
@@ -153,6 +158,16 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 			if err := val.Decode(&res.Before); err != nil {
 				return res, fmt.Errorf("decoding before: %w", err)
 			}
+		case key == "foreach":
+			res.ForEach = val.Value
+		case key == "case":
+			res.Case = val.Value
+		case key == "match":
+			var m map[string]map[string]any
+			if err := val.Decode(&m); err != nil {
+				return res, fmt.Errorf("decoding match: %w", err)
+			}
+			res.CaseMatch = m
 		default:
 			var v any
 			if err := val.Decode(&v); err != nil {
@@ -162,5 +177,47 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 		}
 	}
 
+	// Validate case/match pairing.
+	if res.Case != "" && res.CaseMatch == nil {
+		return res, fmt.Errorf("resource %q: 'case' requires 'match'", res.Name)
+	}
+	if res.CaseMatch != nil && res.Case == "" {
+		return res, fmt.Errorf("resource %q: 'match' requires 'case'", res.Name)
+	}
+	if res.CaseMatch != nil {
+		if _, ok := res.CaseMatch["default"]; !ok {
+			return res, fmt.Errorf("resource %q: 'match' must include a 'default' branch", res.Name)
+		}
+	}
+
 	return res, nil
+}
+
+// structuralFields are resource keys that should not be set via defaults.
+var structuralFields = map[string]bool{
+	"name": true, "type": true, "when": true,
+	"notify": true, "subscribes": true, "subscribes_secret": true,
+	"depends_on": true, "require": true, "before": true,
+	"foreach": true, "case": true, "match": true,
+}
+
+// applyDefaults merges module-level defaults into each resource's Attributes.
+// Only sets keys that are not already present and not structural fields.
+func applyDefaults(resources []ResourceConfig, defaults map[string]any) {
+	if len(defaults) == 0 {
+		return
+	}
+	for i := range resources {
+		if resources[i].Attributes == nil {
+			resources[i].Attributes = make(map[string]any)
+		}
+		for k, v := range defaults {
+			if structuralFields[k] {
+				continue
+			}
+			if _, exists := resources[i].Attributes[k]; !exists {
+				resources[i].Attributes[k] = v
+			}
+		}
+	}
 }

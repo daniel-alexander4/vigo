@@ -113,3 +113,97 @@ fn sha256_hex(data: &[u8]) -> String {
     let hash = Sha256::digest(data);
     hash.iter().map(|b| format!("{:02x}", b)).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let exec = CronExecutor;
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("name param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn missing_job_errors() {
+        let exec = CronExecutor;
+        let result = exec.execute(
+            &make_params(&[("name", "backup")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("job param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn build_schedule_from_fields() {
+        let params = make_params(&[
+            ("minute", "30"),
+            ("hour", "2"),
+            ("day", "15"),
+            ("month", "6"),
+            ("weekday", "1"),
+        ]);
+        let schedule = build_schedule(&params);
+        assert_eq!(schedule, "30 2 15 6 1");
+    }
+
+    #[test]
+    fn build_schedule_from_schedule_param() {
+        let params = make_params(&[
+            ("schedule", "*/5 * * * *"),
+            ("minute", "30"),
+            ("hour", "2"),
+        ]);
+        let schedule = build_schedule(&params);
+        assert_eq!(schedule, "*/5 * * * *");
+    }
+
+    #[test]
+    fn build_schedule_defaults_stars() {
+        let params = make_params(&[]);
+        let schedule = build_schedule(&params);
+        assert_eq!(schedule, "* * * * *");
+    }
+
+    #[test]
+    fn sanitize_cron_name_special_chars() {
+        assert_eq!(sanitize_cron_name("my backup job"), "my-backup-job");
+        assert_eq!(sanitize_cron_name("backup@daily!"), "backup-daily-");
+        assert_eq!(sanitize_cron_name("clean_tmp-2"), "clean_tmp-2");
+        assert_eq!(sanitize_cron_name("a/b.c:d"), "a-b-c-d");
+    }
+
+    #[test]
+    fn dry_run_does_not_write() {
+        let exec = CronExecutor;
+        // state=absent on a file that won't exist under /etc/cron.d/ (nonexistent name).
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "hobnob-test-nonexistent-cron-99999"),
+                ("state", "absent"),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+}

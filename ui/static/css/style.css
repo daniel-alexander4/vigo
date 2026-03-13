@@ -659,12 +659,169 @@ body {
 }
 
 /* === Chat === */
+/* === Ask Dashboard Layout === */
+.ask-dashboard {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+    height: calc(100vh - 160px);
+    min-height: 500px;
+}
+@media (max-width: 960px) {
+    .ask-dashboard {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+    .ask-chat { height: 60vh; }
+}
+
+.ask-panel {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.ask-chat {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ask-section {
+    background: var(--color-card-bg);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+}
+.ask-section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ask-compliance-bar {
+    height: 8px;
+    background: var(--color-bg);
+    border-radius: 4px;
+    position: relative;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+.ask-compliance-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+.ask-compliance-fill--success { background: var(--color-success); }
+.ask-compliance-fill--warning { background: var(--color-warning); }
+.ask-compliance-fill--danger { background: var(--color-danger); }
+.ask-compliance-label {
+    position: absolute;
+    right: 0;
+    top: -18px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.ask-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+.ask-stat {
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: var(--radius);
+    background: var(--color-bg);
+}
+.ask-stat__val {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.ask-stat__lbl {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.ask-stat--success .ask-stat__val { color: var(--color-success); }
+.ask-stat--warning .ask-stat__val { color: var(--color-warning); }
+.ask-stat--danger .ask-stat__val { color: var(--color-danger); }
+.ask-stat--muted .ask-stat__val { color: var(--color-text-muted); }
+
+.ask-reports {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.ask-report-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.ask-report-btn:hover {
+    border-color: var(--color-brand);
+    background: rgba(66, 153, 225, 0.06);
+}
+.ask-report-btn--full {
+    width: 100%;
+    margin-top: 8px;
+    font-weight: 600;
+}
+
+.ask-badge {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+.ask-badge--warning {
+    background: rgba(237, 137, 54, 0.15);
+    color: var(--color-warning);
+}
+
+.ask-drift-table-wrap {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 4px;
+}
+.ask-drift-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.ask-drift-table th {
+    text-align: left;
+    padding: 4px 8px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    background: var(--color-card-bg);
+}
+.ask-drift-table td {
+    padding: 3px 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
 .chat-container {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 64px);
-    max-width: 860px;
-    margin: 0 auto;
+    height: 100%;
+    max-width: none;
+    margin: 0;
 }
 
 .chat-messages {
@@ -675,7 +832,7 @@ body {
 
 .chat-welcome {
     text-align: center;
-    padding: 80px 20px 40px;
+    padding: 40px 16px 24px;
     color: var(--color-text-muted);
 }
 
@@ -727,7 +884,7 @@ body {
 }
 
 .chat-bubble {
-    max-width: 720px;
+    max-width: 100%;
     border-radius: var(--radius-lg);
     padding: 12px 16px;
     line-height: 1.6;

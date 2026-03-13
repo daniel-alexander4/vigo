@@ -127,3 +127,258 @@ impl Executor for GroupExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn empty() -> Self {
+            Self {
+                responses: Mutex::new(Vec::new()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(
+            &self,
+            _: &[u8],
+            name: &str,
+            args: &[&str],
+        ) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_name_errors() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn present_creates_group() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\n").unwrap();
+
+        // groupadd succeeds
+        let mock = MockRunner::new(vec![MockRunner::ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("state", "present")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "groupadd");
+        assert_eq!(calls[0].1, vec!["deploy"]);
+    }
+
+    #[test]
+    fn present_group_exists_matches() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\ndeploy:x:1001:\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("gid", "1001"), ("state", "present")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn present_updates_gid() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\ndeploy:x:1001:\n").unwrap();
+
+        // groupmod succeeds
+        let mock = MockRunner::new(vec![MockRunner::ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("gid", "2000"), ("state", "present")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "groupmod");
+        assert_eq!(calls[0].1, vec!["-g", "2000", "deploy"]);
+    }
+
+    #[test]
+    fn absent_group_not_found() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "ghost"), ("state", "absent")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn absent_deletes_group() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\ndeploy:x:1001:\n").unwrap();
+
+        // groupdel succeeds
+        let mock = MockRunner::new(vec![MockRunner::ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("state", "absent")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "groupdel");
+        assert_eq!(calls[0].1, vec!["deploy"]);
+    }
+
+    #[test]
+    fn dry_run_does_not_call_groupadd() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "deploy"), ("state", "present")]),
+            true,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+        assert!(
+            calls.lock().unwrap().is_empty(),
+            "dry_run should not invoke any commands"
+        );
+    }
+}

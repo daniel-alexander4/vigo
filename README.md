@@ -603,9 +603,23 @@ Certain field names (`dsn`, `tls_cert_path`, `tls_key_path`, `webhook_secret`) a
 
 ### Secrets providers
 
-Hobnob supports two secret backends via the `secrets.Provider` interface:
+Hobnob supports three secret backends via the `secrets.Provider` interface:
 
-**IsopassProvider (production)** — retrieves secrets from an [isopass](https://github.com/dansheldon/isopass) instance over HTTP. Authenticates with a service account bearer token, exchanges it for a short-lived API token, and searches for secrets by path. Configure in `server.yaml`:
+**LocalProvider (default)** — stores secrets as files on disk. Secret path `hobnob/db/dsn` maps to file `/etc/hobnob-server/secrets/hobnob/db/dsn`. Two modes:
+
+- **Plaintext** (no `key_file`): files are read/written as-is. Suitable for dev, single-server, or when disk encryption provides at-rest protection.
+- **Encrypted** (with `key_file`): files are AES-256-GCM encrypted with a master key.
+
+```yaml
+secrets:
+  backend: local                                    # default when omitted
+  # key_file: "/etc/hobnob-server/master.key"       # optional: enables encryption
+  # secrets_dir: "/etc/hobnob-server/secrets"        # default
+```
+
+Supports secret versioning (file mtime) — the watcher detects changes and queues affected nodes for re-convergence. Manage secrets via CLI: `hobnobcli secrets set/get/list/delete`.
+
+**IsopassProvider (production)** — retrieves secrets from an [isopass](https://github.com/dansheldon/isopass) instance over HTTP. Authenticates with a service account bearer token, exchanges it for a short-lived API token, and searches for secrets by path.
 
 ```yaml
 secrets:
@@ -617,7 +631,7 @@ secrets:
 
 The server also polls isopass for secret version changes. When a secret rotates, all nodes referencing it are automatically queued for re-convergence.
 
-**StaticProvider (development)** — reads from a `.env` file. Secret paths are converted to environment variable names: `secret:hobnob/db/dsn` -> `HOBNOB_DB_DSN` (uppercase, slashes to underscores).
+**StaticProvider (legacy)** — reads from a `.env` file. Secret paths are converted to environment variable names: `secret:hobnob/db/dsn` -> `HOBNOB_DB_DSN` (uppercase, slashes to underscores). Does not support secret versioning.
 
 ### Security guarantees
 
@@ -625,20 +639,19 @@ The server also polls isopass for secret version changes. When a secret rotates,
 - If the secrets provider is unreachable, the server fails fast — no fallback to insecure defaults
 - Resolved secret values are wrapped in `SecretString`, which prints `[REDACTED]` on `String()`
 
-## Environment configuration
+## Server secrets
 
-The server's own config (`server-configs/server.yaml`) also uses `secret:` references, resolved from `.env` via the StaticProvider:
+The server's own config (`server-configs/server.yaml`) uses `secret:` references resolved by the secrets backend. With the default `local` backend, these map to files in `/etc/hobnob-server/secrets/`:
 
-| `.env` variable | Required | Description |
-|-----------------|----------|-------------|
-| `HOBNOB_DB_DSN` | Yes | SQLite database file path |
-| `HOBNOB_TLS_CERT` | Yes | Path to server TLS certificate |
-| `HOBNOB_TLS_KEY` | Yes | Path to server TLS private key |
-| `HOBNOB_TLS_CA` | Yes | Path to CA certificate |
-| `HOBNOB_TLS_CA_KEY` | No | Path to CA private key (enables bootstrap CSR signing) |
-| `HOBNOB_WEBHOOK_SECRET` | No | HMAC secret for webhook signing |
-| `HOBNOB_VERSION` | No | Version string for agent self-update |
-| `HOBNOB_AGENT_DIR` | No | Directory with cross-compiled agent binaries |
+| Secret path | File | Default value |
+|-------------|------|---------------|
+| `hobnob/db/dsn` | `secrets/hobnob/db/dsn` | `/etc/hobnob-server/db/hobnob.db` |
+| `hobnob/tls/cert` | `secrets/hobnob/tls/cert` | `certs/server.crt` |
+| `hobnob/tls/key` | `secrets/hobnob/tls/key` | `certs/server.key` |
+| `hobnob/tls/ca` | `secrets/hobnob/tls/ca` | `certs/ca.crt` |
+| `hobnob/tls/ca_key` | `secrets/hobnob/tls/ca_key` | `certs/ca.key` |
+
+If a secret file is missing, the built-in default is used. The entrypoint seeds these files on first run.
 
 ## Development
 

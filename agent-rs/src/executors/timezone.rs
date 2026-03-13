@@ -95,3 +95,171 @@ impl Executor for TimezoneExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), args.iter().map(|s| s.to_string()).collect()));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    /// Helper to detect current system timezone the same way the executor does.
+    fn detect_system_timezone() -> String {
+        if let Ok(s) = std::fs::read_to_string("/etc/timezone") {
+            let trimmed = s.trim().to_string();
+            if !trimmed.is_empty() {
+                return trimmed;
+            }
+        }
+        if let Ok(target) = std::fs::read_link("/etc/localtime") {
+            let s = target.to_string_lossy().to_string();
+            if let Some(pos) = s.find("/zoneinfo/") {
+                return s[pos + 10..].to_string();
+            }
+        }
+        String::new()
+    }
+
+    #[test]
+    fn missing_timezone_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = TimezoneExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result
+                .error
+                .unwrap()
+                .contains("timezone param is required")
+        );
+    }
+
+    #[test]
+    fn already_correct() {
+        let current = detect_system_timezone();
+        if current.is_empty() {
+            // Cannot determine system timezone — skip test gracefully.
+            return;
+        }
+        // No commands should be called since timezone already matches.
+        let mock = MockRunner::new(vec![]);
+        let calls = mock.calls.clone();
+        let exec = TimezoneExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("timezone", &current)]), false);
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 0, "no commands should be run when timezone already matches");
+    }
+
+    #[test]
+    fn updates_timezone() {
+        // Use a timezone that definitely differs from any real system timezone.
+        let desired = "Fake/Nonexistent_Zone_For_Test";
+        let timedatectl = MockRunner::ok_output("");
+        let mock = MockRunner::new(vec![timedatectl]);
+        let calls = mock.calls.clone();
+        let exec = TimezoneExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("timezone", desired)]), false);
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "timedatectl");
+        assert_eq!(calls[0].1, vec!["set-timezone", desired]);
+    }
+
+    #[test]
+    fn dry_run_does_not_call_timedatectl_set() {
+        let desired = "Fake/Nonexistent_Zone_For_Test";
+        let mock = MockRunner::new(vec![]);
+        let calls = mock.calls.clone();
+        let exec = TimezoneExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("timezone", desired)]), true);
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 0, "dry_run should not call timedatectl");
+    }
+
+    #[test]
+    fn unknown_state_uses_name_alias() {
+        // The "name" param is accepted as an alias for "timezone".
+        let desired = "Fake/Another_Test_Zone";
+        let timedatectl = MockRunner::ok_output("");
+        let mock = MockRunner::new(vec![timedatectl]);
+        let exec = TimezoneExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("name", desired)]), false);
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+    }
+}

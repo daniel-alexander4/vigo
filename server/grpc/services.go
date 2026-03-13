@@ -40,16 +40,18 @@ type AgentService struct {
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
+	reassignStore    *ReassignStore     // pending thrall reassignments (spoke side)
 }
 
 // AdminService implements the HobnobAdmin gRPC service.
 type AdminService struct {
 	pb.UnimplementedHobnobAdminServer
-	registry     *registry.Registry
-	queries      *db.Queries
-	runStore     db.RunStore
-	configStore  *config.ConfigStore
-	baseInterval time.Duration
-	hub          *federation.Hub   // non-nil when role=hub; aggregates from spokes
-	fleetIndex   *fleet.FleetIndex // in-memory index for hot-path operations
+	registry      *registry.Registry
+	queries       *db.Queries
+	runStore      db.RunStore
+	configStore   *config.ConfigStore
+	baseInterval  time.Duration
+	hub           *federation.Hub   // non-nil when role=hub; aggregates from spokes
+	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
+	reassignStore *ReassignStore    // pending thrall reassignments (spoke side)
 }

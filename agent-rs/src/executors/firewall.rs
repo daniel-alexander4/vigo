@@ -144,3 +144,240 @@ impl Executor for FirewallExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256), // exit code 1
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((name.to_string(), args.iter().map(|s| s.to_string()).collect()));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_port_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("port param is required"));
+    }
+
+    #[test]
+    fn present_missing_action_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[("port", "443"), ("state", "present")]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result
+                .error
+                .unwrap()
+                .contains("action param is required")
+        );
+    }
+
+    #[test]
+    fn present_rule_already_exists() {
+        let ufw_status = MockRunner::ok_output(
+            "Status: active\n\
+             22/tcp                     ALLOW IN    Anywhere\n\
+             443/tcp                    ALLOW IN    Anywhere\n",
+        );
+        let mock = MockRunner::new(vec![ufw_status]);
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("port", "443"),
+                ("proto", "tcp"),
+                ("action", "allow"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn present_rule_created() {
+        let ufw_status = MockRunner::ok_output(
+            "Status: active\n\
+             22/tcp                     ALLOW IN    Anywhere\n",
+        );
+        let ufw_allow = MockRunner::ok_output("Rule added");
+        let mock = MockRunner::new(vec![ufw_status, ufw_allow]);
+        let calls = mock.calls.clone();
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("port", "443"),
+                ("proto", "tcp"),
+                ("action", "allow"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, "ufw");
+        assert!(calls[1].1.contains(&"443".to_string()));
+    }
+
+    #[test]
+    fn absent_rule_not_found() {
+        let ufw_status = MockRunner::ok_output(
+            "Status: active\n\
+             22/tcp                     ALLOW IN    Anywhere\n",
+        );
+        let mock = MockRunner::new(vec![ufw_status]);
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("port", "443"), ("proto", "tcp"), ("state", "absent")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn absent_rule_deleted() {
+        let ufw_status = MockRunner::ok_output(
+            "Status: active\n\
+             22/tcp                     ALLOW IN    Anywhere\n\
+             443/tcp                    ALLOW IN    Anywhere\n",
+        );
+        let ufw_delete = MockRunner::ok_output("Rule deleted");
+        let mock = MockRunner::new(vec![ufw_status, ufw_delete]);
+        let calls = mock.calls.clone();
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("port", "443"),
+                ("proto", "tcp"),
+                ("action", "allow"),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, "ufw");
+        assert!(calls[1].1.contains(&"delete".to_string()));
+    }
+
+    #[test]
+    fn dry_run_does_not_call_ufw_mutate() {
+        let ufw_status = MockRunner::ok_output(
+            "Status: active\n\
+             22/tcp                     ALLOW IN    Anywhere\n",
+        );
+        let mock = MockRunner::new(vec![ufw_status]);
+        let calls = mock.calls.clone();
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("port", "443"),
+                ("proto", "tcp"),
+                ("action", "allow"),
+                ("state", "present"),
+            ]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call ufw status, not ufw allow");
+    }
+
+    #[test]
+    fn unknown_state_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("port", "443"),
+                ("action", "allow"),
+                ("state", "bogus"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
+    }
+}

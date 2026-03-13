@@ -158,3 +158,204 @@ impl Executor for PipExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn missing_package_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("package param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn install_new_package() {
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output(""),  // pip3 show requests → not installed
+            MockRunner::ok_output(""),    // pip3 install requests
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].1, vec!["show", "requests"]);
+        assert_eq!(calls[1].0, "pip3");
+        assert!(calls[1].1.contains(&"install".to_string()));
+        assert!(calls[1].1.contains(&"requests".to_string()));
+    }
+
+    #[test]
+    fn already_installed_no_version() {
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("Name: requests\nVersion: 1.0.0\nSummary: HTTP lib\n"),
+        ]);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn version_mismatch_upgrades() {
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("Name: requests\nVersion: 1.0.0\n"), // pip3 show
+            MockRunner::ok_output(""),                                  // pip3 install requests==2.0.0
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests"), ("version", "2.0.0")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert!(calls[1].1.contains(&"install".to_string()));
+        assert!(calls[1].1.contains(&"requests==2.0.0".to_string()));
+    }
+
+    #[test]
+    fn absent_uninstalls() {
+        let mock = MockRunner::new(vec![
+            MockRunner::ok_output("Name: requests\nVersion: 2.0.0\n"), // pip3 show
+            MockRunner::ok_output(""),                                  // pip3 uninstall -y
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests"), ("state", "absent")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert!(calls[1].1.contains(&"uninstall".to_string()));
+        assert!(calls[1].1.contains(&"-y".to_string()));
+    }
+
+    #[test]
+    fn absent_noop_when_missing() {
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output(""), // pip3 show → not installed
+        ]);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests"), ("state", "absent")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn dry_run_install_no_pip_call() {
+        let mock = MockRunner::new(vec![
+            MockRunner::fail_output(""), // pip3 show → not installed
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests")]),
+            true,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "dry_run should only call pip show, got {:?}", *calls);
+        assert_eq!(calls[0].1, vec!["show", "requests"]);
+    }
+}

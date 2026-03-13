@@ -225,3 +225,173 @@ impl Executor for SwapExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Output;
+    use std::sync::{Arc, Mutex};
+
+    struct MockRunner {
+        responses: Mutex<Vec<std::io::Result<Output>>>,
+        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    }
+
+    impl MockRunner {
+        fn new(responses: Vec<Output>) -> Self {
+            Self {
+                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn ok_output(stdout: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: stdout.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }
+        }
+
+        #[allow(dead_code)]
+        fn fail_output(stderr: &str) -> Output {
+            Output {
+                status: std::process::ExitStatus::from_raw(256),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            }
+        }
+    }
+
+    impl CommandRunner for MockRunner {
+        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
+            self.calls.lock().unwrap().push((
+                name.to_string(),
+                args.iter().map(|s| s.to_string()).collect(),
+            ));
+            self.responses.lock().unwrap().remove(0)
+        }
+
+        fn run_with_stdin(
+            &self,
+            _: &[u8],
+            name: &str,
+            args: &[&str],
+        ) -> std::io::Result<Output> {
+            self.run(name, args)
+        }
+    }
+
+    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn missing_path_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = SwapExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&make_params(&[]), false);
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("path param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn dry_run_present_new_swap() {
+        // Use a path that definitely doesn't exist, dry_run=true -> Created, no commands
+        let mock = MockRunner::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = SwapExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/tmp/nonexistent_swap_file_test_abc123"),
+                ("state", "present"),
+                ("size", "512"),
+            ]),
+            true,
+        );
+        // The file doesn't exist, not active, not in fstab -> Created
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        // No commands should have been called in dry_run
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 0, "dry_run should not run any commands, got {:?}", *calls);
+    }
+
+    #[test]
+    fn dry_run_absent() {
+        // path doesn't exist, state=absent, dry_run=true -> no error, no commands
+        let mock = MockRunner::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = SwapExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/tmp/nonexistent_swap_file_test_xyz789"),
+                ("state", "absent"),
+            ]),
+            true,
+        );
+        // file doesn't exist, not active (/proc/swaps won't have it), not in fstab -> None
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 0, "should not run any commands, got {:?}", *calls);
+    }
+
+    #[test]
+    fn missing_size_for_new_swap() {
+        // Path doesn't exist, no size param -> error
+        let mock = MockRunner::new(vec![]);
+        let exec = SwapExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/tmp/nonexistent_swap_file_test_size"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("size param is required"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn unknown_state_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = SwapExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("path", "/tmp/nonexistent_swap_file_test_bogus"),
+                ("state", "bogus"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("unknown state"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+}
