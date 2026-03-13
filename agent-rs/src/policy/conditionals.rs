@@ -7,7 +7,7 @@
 //! A conditional var has a trait dot-path and an operator (in, not_in, gt, lt,
 //! gte, lte, regex). It evaluates to a boolean based on the trait value.
 
-use regex::Regex;
+use regex_lite::Regex;
 use serde_json::Value;
 
 /// Parsed conditional variable (matches Go's ConditionalVar struct).

@@ -972,15 +972,19 @@ func (h *Handler) AskStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	aiReq := ai.AskRequest{Question: req.Question}
-	for _, m := range req.History {
-		aiReq.History = append(aiReq.History, ai.HistoryMessage{Role: m.Role, Content: m.Content})
-	}
-
 	sendSSE := func(data any) {
 		b, _ := json.Marshal(data)
 		fmt.Fprintf(w, "data: %s\n\n", b)
 		flusher.Flush()
+	}
+
+	// Flush headers and send initial event immediately so the browser
+	// knows the SSE stream is open before the (potentially slow) LLM call.
+	sendSSE(map[string]any{"type": "status", "status": "processing"})
+
+	aiReq := ai.AskRequest{Question: req.Question}
+	for _, m := range req.History {
+		aiReq.History = append(aiReq.History, ai.HistoryMessage{Role: m.Role, Content: m.Content})
 	}
 
 	var rawAnswer string

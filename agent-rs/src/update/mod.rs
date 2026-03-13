@@ -32,17 +32,24 @@ pub async fn check_for_update(
 ) -> Result<Option<VersionInfo>> {
     let url = format!("{}/api/v1/agent/latest?os={}&arch={}", api_addr, os, arch);
 
-    let resp = reqwest::Client::new()
-        .get(&url)
-        .send()
-        .await
-        .context("version check request")?;
+    let resp_bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let resp = ureq::get(&url)
+            .call()
+            .map_err(|e| anyhow::anyhow!("version check request: {}", e))?;
 
-    if !resp.status().is_success() {
-        bail!("version check returned status {}", resp.status());
-    }
+        if resp.status() != 200 {
+            bail!("version check returned status {}", resp.status());
+        }
 
-    let mut info: VersionInfo = resp.json().await.context("decode version response")?;
+        resp.into_body()
+            .read_to_vec()
+            .context("read version response body")
+    })
+    .await
+    .context("spawn_blocking join")??;
+
+    let mut info: VersionInfo =
+        serde_json::from_slice(&resp_bytes).context("decode version response")?;
 
     // No update if version is empty (no binaries available) or matches current.
     if info.version.is_empty() || info.version == current_version {
@@ -78,22 +85,27 @@ pub async fn apply(
     let tmp_path = dir.join(format!(".hobnob-update-{}", std::process::id()));
     let _cleanup = TempFileGuard(tmp_path.clone());
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
-        .build()
-        .context("build HTTP client")?;
+    let download_url = info.download_url.clone();
+    let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let resp = ureq::Agent::new_with_config(
+            ureq::config::Config::builder()
+                .timeout_global(Some(std::time::Duration::from_secs(60)))
+                .build(),
+        )
+        .get(&download_url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("download binary: {}", e))?;
 
-    let resp = client
-        .get(&info.download_url)
-        .send()
-        .await
-        .context("download binary")?;
+        if resp.status() != 200 {
+            bail!("download returned status {}", resp.status());
+        }
 
-    if !resp.status().is_success() {
-        bail!("download returned status {}", resp.status());
-    }
-
-    let body = resp.bytes().await.context("download binary body")?;
+        resp.into_body()
+            .read_to_vec()
+            .context("download binary body")
+    })
+    .await
+    .context("spawn_blocking join")??;
 
     // Compute SHA256.
     let mut hasher = Sha256::new();

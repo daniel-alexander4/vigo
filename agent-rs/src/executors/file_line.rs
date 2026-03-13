@@ -4,7 +4,7 @@
 //! FileLine executor — manages individual lines in files idempotently.
 
 use super::{Action, Executor, ResourceResult};
-use regex::Regex;
+use regex_lite::Regex;
 use std::collections::HashMap;
 use std::time::Instant;
 

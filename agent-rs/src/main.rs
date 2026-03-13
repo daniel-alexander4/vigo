@@ -9,6 +9,7 @@ pub mod executors;
 pub mod policy;
 pub mod runner;
 pub mod snapshots;
+pub mod task;
 pub mod traits;
 pub mod update;
 
@@ -16,118 +17,203 @@ pub mod proto {
     tonic::include_proto!("hobnob.v1");
 }
 
-use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
 use tracing::{info, warn};
 
 /// Version injected at build time.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[derive(Parser)]
-#[command(name = "hobnob", about = "Hobnob configuration management agent")]
 struct Cli {
-    /// Directory for agent data (keypair, UUID, certs)
-    #[arg(long, default_value = "/etc/hobnob-thrall")]
     data_dir: PathBuf,
-
-    /// Server gRPC address
-    #[arg(long, default_value = "localhost:1530")]
     server: String,
-
-    /// CA certificate file for server verification
-    #[arg(long)]
     ca_file: Option<String>,
-
-    /// Client certificate file for mTLS
-    #[arg(long)]
     cert_file: Option<String>,
-
-    /// Client key file for mTLS
-    #[arg(long)]
     key_file: Option<String>,
-
-    /// Log level (debug, info, warn, error)
-    #[arg(long, default_value = "info")]
     log_level: String,
-
-    /// Server REST API address for self-update
-    #[arg(long, default_value = "http://localhost:8181")]
     api_addr: String,
-
-    /// Directory for custom executor scripts
-    #[arg(long, default_value = "/etc/hobnob-thrall/executors")]
     executors_dir: String,
-
-    /// Directory for file snapshots (rollback)
-    #[arg(long, default_value = "/var/lib/hobnob/snapshots")]
     snapshot_dir: String,
-
-    /// Max snapshots to keep per file path
-    #[arg(long, default_value = "5")]
     snapshot_retention: usize,
-
-    /// Stable trait collectors refresh every N check-in cycles
-    #[arg(long, default_value = "10")]
     trait_refresh_cycles: usize,
-
-    /// No-op resource results cached for N check-in cycles
-    #[arg(long, default_value = "5")]
     result_cache_cycles: usize,
-
-    /// Preview mode: show what would change without applying
-    #[arg(long)]
     dry_run: bool,
-
-    #[command(subcommand)]
     command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
 enum Commands {
-    /// Run a single convergence cycle and exit
     Run {
-        /// Apply only the named module
-        #[arg(long)]
         module: Option<String>,
-        /// Preview mode
-        #[arg(long)]
         dry_run: bool,
     },
-    /// Register this agent with the Hobnob server
     Register {
-        /// One-time registration token
-        #[arg(long)]
         token: String,
     },
-    /// Bootstrap this agent (register + TLS certs + optional systemd service)
     Bootstrap {
-        /// Server REST API address
-        #[arg(long)]
         server: String,
-        /// One-time registration token
-        #[arg(long)]
         token: Option<String>,
-        /// Install and start a systemd service
-        #[arg(long)]
         install_service: bool,
-        /// gRPC port for the systemd service
-        #[arg(long, default_value = "1530")]
         grpc_port: String,
     },
-    /// Print the agent version
     Version,
-    /// Print collected traits as JSON
     Traits {
-        /// Specific collectors to run (or dot-path query)
         collectors: Vec<String>,
     },
 }
 
+fn parse_args() -> Result<Cli> {
+    let mut cli = Cli {
+        data_dir: PathBuf::from("/etc/hobnob-thrall"),
+        server: "localhost:1530".into(),
+        ca_file: None,
+        cert_file: None,
+        key_file: None,
+        log_level: "info".into(),
+        api_addr: "http://localhost:8181".into(),
+        executors_dir: "/etc/hobnob-thrall/executors".into(),
+        snapshot_dir: "/var/lib/hobnob/snapshots".into(),
+        snapshot_retention: 5,
+        trait_refresh_cycles: 10,
+        result_cache_cycles: 5,
+        dry_run: false,
+        command: None,
+    };
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut i = 0;
+    let mut positional = Vec::new();
+
+    while i < args.len() {
+        match args[i].as_str() {
+            "--help" | "-h" => {
+                print_usage();
+                std::process::exit(0);
+            }
+            "--data-dir" => { i += 1; cli.data_dir = PathBuf::from(arg_val(&args, i)?); }
+            "--server" => { i += 1; cli.server = arg_val(&args, i)?; }
+            "--ca-file" => { i += 1; cli.ca_file = Some(arg_val(&args, i)?); }
+            "--cert-file" => { i += 1; cli.cert_file = Some(arg_val(&args, i)?); }
+            "--key-file" => { i += 1; cli.key_file = Some(arg_val(&args, i)?); }
+            "--log-level" => { i += 1; cli.log_level = arg_val(&args, i)?; }
+            "--api-addr" => { i += 1; cli.api_addr = arg_val(&args, i)?; }
+            "--executors-dir" => { i += 1; cli.executors_dir = arg_val(&args, i)?; }
+            "--snapshot-dir" => { i += 1; cli.snapshot_dir = arg_val(&args, i)?; }
+            "--snapshot-retention" => { i += 1; cli.snapshot_retention = arg_val(&args, i)?.parse().context("--snapshot-retention must be a number")?; }
+            "--trait-refresh-cycles" => { i += 1; cli.trait_refresh_cycles = arg_val(&args, i)?.parse().context("--trait-refresh-cycles must be a number")?; }
+            "--result-cache-cycles" => { i += 1; cli.result_cache_cycles = arg_val(&args, i)?.parse().context("--result-cache-cycles must be a number")?; }
+            "--dry-run" => { cli.dry_run = true; }
+            other if other.starts_with('-') => bail!("unknown flag: {}", other),
+            _ => { positional.push(args[i].clone()); }
+        }
+        i += 1;
+    }
+
+    if let Some(cmd) = positional.first() {
+        cli.command = Some(match cmd.as_str() {
+            "version" => Commands::Version,
+            "run" => {
+                let mut module = None;
+                let mut dry_run = false;
+                let mut j = 1;
+                while j < positional.len() {
+                    match positional[j].as_str() {
+                        "--module" => { j += 1; module = Some(positional.get(j).cloned().context("--module requires a value")?); }
+                        "--dry-run" => { dry_run = true; }
+                        _ => bail!("unknown run flag: {}", positional[j]),
+                    }
+                    j += 1;
+                }
+                Commands::Run { module, dry_run }
+            }
+            "register" => {
+                let mut token = None;
+                let mut j = 1;
+                while j < positional.len() {
+                    match positional[j].as_str() {
+                        "--token" => { j += 1; token = Some(positional.get(j).cloned().context("--token requires a value")?); }
+                        _ => bail!("unknown register flag: {}", positional[j]),
+                    }
+                    j += 1;
+                }
+                Commands::Register { token: token.context("register requires --token")? }
+            }
+            "bootstrap" => {
+                let mut server = None;
+                let mut token = None;
+                let mut install_service = false;
+                let mut grpc_port = "1530".to_string();
+                let mut j = 1;
+                while j < positional.len() {
+                    match positional[j].as_str() {
+                        "--server" => { j += 1; server = Some(positional.get(j).cloned().context("--server requires a value")?); }
+                        "--token" => { j += 1; token = Some(positional.get(j).cloned().context("--token requires a value")?); }
+                        "--install-service" => { install_service = true; }
+                        "--grpc-port" => { j += 1; grpc_port = positional.get(j).cloned().context("--grpc-port requires a value")?; }
+                        _ => bail!("unknown bootstrap flag: {}", positional[j]),
+                    }
+                    j += 1;
+                }
+                Commands::Bootstrap {
+                    server: server.context("bootstrap requires --server")?,
+                    token,
+                    install_service,
+                    grpc_port,
+                }
+            }
+            "traits" => {
+                Commands::Traits { collectors: positional[1..].to_vec() }
+            }
+            other => bail!("unknown command: {}\nRun with --help for usage", other),
+        });
+    }
+
+    Ok(cli)
+}
+
+fn arg_val(args: &[String], i: usize) -> Result<String> {
+    args.get(i).cloned().context("expected value after flag")
+}
+
+fn print_usage() {
+    eprintln!("hobnob — Hobnob configuration management agent
+
+USAGE:
+    hobnob [FLAGS] [COMMAND]
+
+FLAGS:
+    --data-dir <PATH>             Agent data directory [default: /etc/hobnob-thrall]
+    --server <ADDR>               Server gRPC address [default: localhost:1530]
+    --ca-file <PATH>              CA certificate file
+    --cert-file <PATH>            Client certificate file
+    --key-file <PATH>             Client key file
+    --log-level <LEVEL>           Log level [default: info]
+    --api-addr <URL>              Server REST API address [default: http://localhost:8181]
+    --executors-dir <PATH>        Custom executor scripts [default: /etc/hobnob-thrall/executors]
+    --snapshot-dir <PATH>         File snapshots directory [default: /var/lib/hobnob/snapshots]
+    --snapshot-retention <N>      Max snapshots per file [default: 5]
+    --trait-refresh-cycles <N>    Trait refresh interval in cycles [default: 10]
+    --result-cache-cycles <N>     Result cache lifetime in cycles [default: 5]
+    --dry-run                     Preview mode
+
+COMMANDS:
+    run         Run a single convergence cycle and exit
+    register    Register with the server (--token <TOKEN>)
+    bootstrap   Bootstrap agent (--server <URL> [--token <TOKEN>] [--install-service])
+    version     Print agent version
+    traits      Print collected traits as JSON [COLLECTORS...]
+
+With no command, runs as a daemon.");
+}
+
 fn setup_logger(level: &str) {
-    use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+    let level = match level {
+        "trace" => tracing::Level::TRACE,
+        "debug" => tracing::Level::DEBUG,
+        "warn" => tracing::Level::WARN,
+        "error" => tracing::Level::ERROR,
+        _ => tracing::Level::INFO,
+    };
+    tracing_subscriber::fmt().with_max_level(level).init();
 }
 
 /// Read thrall UUID from <data-dir>/thrall.uuid.
@@ -485,7 +571,7 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("failed to install default CryptoProvider");
 
-    let cli = Cli::parse();
+    let cli = parse_args()?;
     setup_logger(&cli.log_level);
 
     // Ensure data directory exists.

@@ -11,7 +11,7 @@ prost = "0.13"
 prost-types = "0.13"
 
 # TLS + Crypto
-rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std"] }
 rustls-pki-types = "1"
 rustls-pemfile = "2"
 rcgen = "0.13"
@@ -26,18 +26,17 @@ spki = { version = "0.7", features = ["pem", "std"] }
 # Async
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "process", "fs"] }
 
-# CLI + Serialization
-clap = { version = "4", features = ["derive"] }
+# Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# HTTP (archive downloads + self-update only)
-reqwest = { version = "0.12", features = ["rustls-tls-manual-roots", "json"], default-features = false }
+# HTTP (bootstrap + self-update only — blocking, no async runtime overhead)
+ureq = { version = "3", features = ["rustls", "json"] }
 
 # Misc
-regex = "1"
+regex-lite = "0.1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi", "smallvec", "std"] }
 uuid = { version = "1", features = ["v4"] }
 nix = { version = "0.29", features = ["user", "fs", "signal", "process"] }
 libc = "0.2"

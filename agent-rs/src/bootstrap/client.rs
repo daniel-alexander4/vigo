@@ -30,32 +30,45 @@ pub async fn register(server: &str, req: &RegisterRequest) -> Result<RegisterRes
         server.trim_end_matches('/')
     );
 
-    let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true) // Bootstrap happens before we have TLS certs
-        .build()
-        .context("build HTTP client")?;
+    let body = serde_json::to_vec(req).context("serialize register request")?;
+    let url_clone = url.clone();
 
-    let http_resp = client
-        .post(&url)
-        .json(req)
-        .send()
-        .await
-        .with_context(|| format!("bootstrap request to {}", url))?;
+    let resp_bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let tls = ureq::tls::TlsConfig::builder()
+            .disable_verification(true) // Bootstrap happens before we have TLS certs
+            .build();
 
-    let status = http_resp.status();
-    if !status.is_success() {
-        let body = http_resp.text().await.unwrap_or_default();
-        bail!(
-            "bootstrap rejected (HTTP {}): {}",
-            status.as_u16(),
-            body.trim()
+        let agent = ureq::Agent::new_with_config(
+            ureq::config::Config::builder()
+                .tls_config(tls)
+                .build(),
         );
-    }
 
-    let resp: RegisterResponse = http_resp
-        .json()
-        .await
-        .context("parse bootstrap JSON response")?;
+        let http_resp = agent
+            .post(&url_clone)
+            .header("Content-Type", "application/json")
+            .send(&body[..])
+            .map_err(|e| anyhow::anyhow!("bootstrap request to {}: {}", url_clone, e))?;
+
+        let status = http_resp.status();
+        let resp_body = http_resp
+            .into_body()
+            .read_to_vec()
+            .context("read response body")?;
+
+        if status != 200 {
+            let text = String::from_utf8_lossy(&resp_body);
+            bail!("bootstrap rejected (HTTP {}): {}", status, text.trim());
+        }
+
+        Ok(resp_body)
+    })
+    .await
+    .context("spawn_blocking join")?
+    .with_context(|| format!("bootstrap request to {}", url))?;
+
+    let resp: RegisterResponse =
+        serde_json::from_slice(&resp_bytes).context("parse bootstrap JSON response")?;
 
     if resp.thrall_id.is_empty() {
         bail!("server returned empty thrall_id");

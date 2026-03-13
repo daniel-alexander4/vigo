@@ -14,7 +14,7 @@
 use crate::policy::{conditionals, template, when};
 use crate::proto;
 use anyhow::{Context, Result};
-use regex::Regex;
+use regex_lite::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::OnceLock;
