@@ -87,7 +87,7 @@ pub fn check_resource(
     params: &HashMap<String, String>,
 ) -> Option<Violation> {
     match resource_type {
-        "file" | "directory" | "file_line" | "blockinfile" | "ini" | "json_file" | "replace" | "field_edit" => {
+        "file" | "directory" | "symlink" | "file_line" | "blockinfile" | "ini" | "json_file" | "replace" | "field_edit" => {
             check_file_resource(resource_name, resource_type, params)
         }
         "service" => check_service_resource(resource_name, resource_type, params),

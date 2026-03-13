@@ -14,7 +14,7 @@ import (
 type Config struct {
 	Backend       string `yaml:"backend"`         // "local" (default), "static", or "isopass"
 	EnvFile       string `yaml:"env_file"`        // static: path to .env file
-	KeyFile       string `yaml:"key_file"`        // local: path to master encryption key (empty = plaintext)
+	KeyFile       string `yaml:"key_file"`        // local: path to master encryption key (empty = auto-generate)
 	SecretsDir    string `yaml:"secrets_dir"`     // local: directory for secret files (default: /etc/hobnob-server/secrets)
 	URL           string `yaml:"url"`             // isopass: API base URL
 	TokenEnv      string `yaml:"token_env"`       // isopass: env var containing bearer token
@@ -22,7 +22,7 @@ type Config struct {
 }
 
 // NewFromConfig creates a Provider based on the given config.
-// If Backend is empty, it defaults to "local" (plaintext mode, no encryption key required).
+// If Backend is empty, it defaults to "local" (auto-generates encryption key if none specified).
 func NewFromConfig(cfg Config) (Provider, error) {
 	backend := cfg.Backend
 	if backend == "" {

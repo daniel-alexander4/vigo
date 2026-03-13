@@ -577,6 +577,56 @@ func TestDirectoryType_MissingTargetpath(t *testing.T) {
 	}
 }
 
+func TestSymlinkType_Valid(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "enable-site", Type: "symlink", Attributes: map[string]any{
+				"targetpath": "/etc/nginx/sites-enabled/mysite",
+				"to":         "../sites-available/mysite",
+			}},
+		},
+	}
+
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("expected no errors for valid symlink, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestSymlinkType_MissingTo(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "bad-link", Type: "symlink", Attributes: map[string]any{
+				"targetpath": "/some/link",
+			}},
+		},
+	}
+
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for symlink without to")
+	}
+}
+
+func TestSymlinkType_AbsentSkipsTo(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "rm-link", Type: "symlink", Attributes: map[string]any{
+				"targetpath": "/some/link",
+				"state":      "absent",
+			}},
+		},
+	}
+
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("expected no errors for absent symlink without to, got: %s", FormatFindings(findings))
+	}
+}
+
 func TestFindingString_Format(t *testing.T) {
 	f := Finding{
 		Severity:     SeverityError,

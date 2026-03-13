@@ -254,20 +254,20 @@ func TestLocalProviderMissingKeyFile(t *testing.T) {
 	}
 }
 
-// --- Plaintext mode tests (no key_file) ---
+// --- Auto-generated key tests (no key_file specified) ---
 
-func setupPlaintextProvider(t *testing.T) *LocalProvider {
+func setupAutoKeyProvider(t *testing.T) *LocalProvider {
 	t.Helper()
 	secretsDir := filepath.Join(t.TempDir(), "secrets")
 	p, err := NewLocalProvider("", secretsDir)
 	if err != nil {
-		t.Fatalf("NewLocalProvider plaintext: %v", err)
+		t.Fatalf("NewLocalProvider auto-key: %v", err)
 	}
 	return p
 }
 
-func TestPlaintextProviderSetAndGet(t *testing.T) {
-	p := setupPlaintextProvider(t)
+func TestAutoKeyProviderSetAndGet(t *testing.T) {
+	p := setupAutoKeyProvider(t)
 	defer p.Close()
 
 	if err := p.Set("hobnob/db/dsn", "my-database.db"); err != nil {
@@ -283,45 +283,80 @@ func TestPlaintextProviderSetAndGet(t *testing.T) {
 	}
 }
 
-func TestPlaintextProviderFileIsReadable(t *testing.T) {
-	p := setupPlaintextProvider(t)
+func TestAutoKeyProviderGeneratesKeyFile(t *testing.T) {
+	secretsDir := filepath.Join(t.TempDir(), "secrets")
+	p, err := NewLocalProvider("", secretsDir)
+	if err != nil {
+		t.Fatalf("NewLocalProvider: %v", err)
+	}
+	defer p.Close()
+
+	keyFile := filepath.Join(secretsDir, ".master.key")
+	info, err := os.Stat(keyFile)
+	if err != nil {
+		t.Fatalf("master key not created: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("master key perms = %o, want 0600", info.Mode().Perm())
+	}
+
+	data, _ := os.ReadFile(keyFile)
+	trimmed := strings.TrimSpace(string(data))
+	if len(trimmed) != 64 {
+		t.Errorf("master key hex length = %d, want 64", len(trimmed))
+	}
+}
+
+func TestAutoKeyProviderFileIsEncrypted(t *testing.T) {
+	p := setupAutoKeyProvider(t)
 	defer p.Close()
 
 	if err := p.Set("test/secret", "hello-world"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	// The file should be plaintext — readable without decryption.
+	// The file on disk must NOT be readable as plaintext.
 	path := filepath.Join(p.secretsDir, "test", "secret")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	if string(data) != "hello-world" {
-		t.Errorf("file content = %q, want %q", string(data), "hello-world")
+	if string(data) == "hello-world" {
+		t.Error("secret file is plaintext — should be encrypted")
 	}
 }
 
-func TestPlaintextProviderManualFile(t *testing.T) {
-	p := setupPlaintextProvider(t)
-	defer p.Close()
+func TestAutoKeyProviderReusesExistingKey(t *testing.T) {
+	secretsDir := filepath.Join(t.TempDir(), "secrets")
 
-	// Manually write a secret file (simulating user creating it).
-	dir := filepath.Join(p.secretsDir, "hobnob", "db")
-	os.MkdirAll(dir, 0o700)
-	os.WriteFile(filepath.Join(dir, "dsn"), []byte("manual-secret\n"), 0o600)
-
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	// First provider auto-generates a key.
+	p1, err := NewLocalProvider("", secretsDir)
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("NewLocalProvider 1: %v", err)
 	}
-	if val != "manual-secret" {
-		t.Errorf("Get = %q, want %q (trailing newline should be trimmed)", val, "manual-secret")
+	if err := p1.Set("test/key", "secret-value"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	p1.Close()
+
+	// Second provider should reuse the same key and decrypt successfully.
+	p2, err := NewLocalProvider("", secretsDir)
+	if err != nil {
+		t.Fatalf("NewLocalProvider 2: %v", err)
+	}
+	defer p2.Close()
+
+	val, err := p2.Get(context.Background(), "test/key")
+	if err != nil {
+		t.Fatalf("Get with reused key: %v", err)
+	}
+	if val != "secret-value" {
+		t.Errorf("Get = %q, want %q", val, "secret-value")
 	}
 }
 
-func TestPlaintextProviderBuiltinFallback(t *testing.T) {
-	p := setupPlaintextProvider(t)
+func TestAutoKeyProviderBuiltinFallback(t *testing.T) {
+	p := setupAutoKeyProvider(t)
 	defer p.Close()
 
 	val, err := p.Get(context.Background(), "hobnob/db/dsn")
@@ -333,22 +368,8 @@ func TestPlaintextProviderBuiltinFallback(t *testing.T) {
 	}
 }
 
-func TestPlaintextProviderDelete(t *testing.T) {
-	p := setupPlaintextProvider(t)
-	defer p.Close()
-
-	p.Set("temp/key", "value")
-	if err := p.Delete("temp/key"); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-	_, err := p.Get(context.Background(), "temp/key")
-	if err == nil {
-		t.Fatal("expected error after delete")
-	}
-}
-
-func TestPlaintextProviderList(t *testing.T) {
-	p := setupPlaintextProvider(t)
+func TestAutoKeyProviderListExcludesMasterKey(t *testing.T) {
+	p := setupAutoKeyProvider(t)
 	defer p.Close()
 
 	p.Set("a/one", "v1")
@@ -359,7 +380,12 @@ func TestPlaintextProviderList(t *testing.T) {
 		t.Fatalf("List: %v", err)
 	}
 	if len(keys) != 2 {
-		t.Fatalf("List returned %d keys, want 2", len(keys))
+		t.Fatalf("List returned %d keys, want 2: %v", len(keys), keys)
+	}
+	for _, k := range keys {
+		if k == ".master.key" {
+			t.Error("List should exclude .master.key")
+		}
 	}
 }
 

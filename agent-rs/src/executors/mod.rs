@@ -42,6 +42,7 @@ pub mod repository;
 pub mod service;
 pub mod sshkey;
 pub mod swap;
+pub mod symlink;
 pub mod sysctl;
 pub mod timezone;
 pub mod tmpfile;

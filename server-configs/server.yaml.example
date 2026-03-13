@@ -12,16 +12,17 @@
 # Secrets Backend
 # ---------------------------------------------------------------------------
 # Determines how secret: references are resolved. Only one backend is active.
-# Options: "static" (default), "local", "isopass"
+# Options: "local" (default), "static", "isopass"
+# Local backend is recommended — secrets are always AES-256-GCM encrypted at rest.
 secrets:
-  backend: static
-  env_file: ".env"              # path to .env file (static backend only)
+  backend: local
+  # key_file: "/etc/hobnob-server/master.key"   # 32-byte hex master key (0600); omit to auto-generate
+  # secrets_dir: "/etc/hobnob-server/secrets"    # encrypted secret files (default)
 
-# --- Local backend (encrypted files on disk, git-safe) ---
+# --- Static backend (legacy .env file, plaintext) ---
 # secrets:
-#   backend: local
-#   key_file: "/etc/hobnob-server/master.key"   # 32-byte hex master key (0600)
-#   secrets_dir: "/etc/hobnob-server/secrets"    # encrypted secret files
+#   backend: static
+#   env_file: ".env"              # path to .env file
 
 # --- Isopass backend (external secrets API) ---
 # secrets:

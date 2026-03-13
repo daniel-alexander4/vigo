@@ -14,19 +14,33 @@ import (
 
 	"github.com/hobnob/hobnob/server/secrets"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var secretsCmd = &cobra.Command{
 	Use:   "secrets",
-	Short: "Manage local secrets",
-	Long:  "Manage secrets stored as files. With --key-file, files are AES-256-GCM encrypted; without, plaintext.",
+	Short: "Manage local encrypted secrets",
+	Long:  "Manage secrets stored as AES-256-GCM encrypted files.",
 }
 
 var secretsSetCmd = &cobra.Command{
-	Use:   "set <key> <value>",
+	Use:   "set <key> [value]",
 	Short: "Encrypt and store a secret",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runSecretsSet,
+	Long: `Encrypt and store a secret value.
+
+The value can be provided in three ways (in priority order):
+  1. --from-file <path>   Read value from a file
+  2. Positional argument   hobnobcli secrets set mykey myvalue
+  3. Interactive prompt    Reads from terminal with echo disabled (default)
+
+When stdin is a pipe, reads from stdin automatically:
+  echo "myvalue" | hobnobcli secrets set mykey
+
+WARNING: Passing the value as a CLI argument exposes it in shell
+history and process listings. Prefer --from-file or the interactive
+prompt for sensitive values.`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: runSecretsSet,
 }
 
 var secretsGetCmd = &cobra.Command{
@@ -56,8 +70,10 @@ var secretsInitCmd = &cobra.Command{
 }
 
 func init() {
-	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit for plaintext mode)")
+	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
 	secretsCmd.PersistentFlags().String("secrets-dir", "/etc/hobnob-server/secrets", "Directory for secret files")
+
+	secretsSetCmd.Flags().String("from-file", "", "Read secret value from a file")
 
 	secretsInitCmd.Flags().String("key-file", "", "Path to write the new master key")
 	secretsInitCmd.MarkFlagRequired("key-file")
@@ -75,6 +91,54 @@ func newLocalProvider(cmd *cobra.Command) (*secrets.LocalProvider, error) {
 	return secrets.NewLocalProvider(keyFile, secretsDir)
 }
 
+// readSecretValue determines the secret value from flags, args, stdin, or interactive prompt.
+func readSecretValue(cmd *cobra.Command, args []string) (string, error) {
+	// Priority 1: --from-file flag.
+	fromFile, _ := cmd.Flags().GetString("from-file")
+	if fromFile != "" {
+		data, err := os.ReadFile(fromFile)
+		if err != nil {
+			return "", fmt.Errorf("reading secret from file: %w", err)
+		}
+		return strings.TrimRight(string(data), "\n"), nil
+	}
+
+	// Priority 2: Positional argument (value provided on command line).
+	if len(args) >= 2 {
+		value := args[1]
+		// Legacy stdin mode: explicit "-" reads from stdin pipe.
+		if value == "-" {
+			data, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return "", fmt.Errorf("reading stdin: %w", err)
+			}
+			return strings.TrimRight(string(data), "\n"), nil
+		}
+		return value, nil
+	}
+
+	// Priority 3: Stdin is a pipe (not a terminal).
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("reading stdin: %w", err)
+		}
+		return strings.TrimRight(string(data), "\n"), nil
+	}
+
+	// Priority 4: Interactive prompt with echo disabled.
+	fmt.Fprint(os.Stderr, "Enter secret value: ")
+	value, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr) // newline after hidden input
+	if err != nil {
+		return "", fmt.Errorf("reading secret: %w", err)
+	}
+	if len(value) == 0 {
+		return "", fmt.Errorf("empty secret value")
+	}
+	return string(value), nil
+}
+
 func runSecretsSet(cmd *cobra.Command, args []string) error {
 	provider, err := newLocalProvider(cmd)
 	if err != nil {
@@ -82,15 +146,10 @@ func runSecretsSet(cmd *cobra.Command, args []string) error {
 	}
 	defer provider.Close()
 
-	key, value := args[0], args[1]
-
-	// Read from stdin if value is "-".
-	if value == "-" {
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("reading stdin: %w", err)
-		}
-		value = strings.TrimRight(string(data), "\n")
+	key := args[0]
+	value, err := readSecretValue(cmd, args)
+	if err != nil {
+		return err
 	}
 
 	if err := provider.Set(key, value); err != nil {

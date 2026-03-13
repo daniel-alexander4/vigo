@@ -18,36 +18,47 @@ import (
 	"sync"
 )
 
-// LocalProvider is the default secrets backend. It stores secrets as files
-// under a directory, one file per secret path.
+// LocalProvider is the default secrets backend. It stores secrets as
+// AES-256-GCM encrypted files under a directory, one file per secret path.
 //
 // Secret path "hobnob/db/dsn" maps to file "<secrets_dir>/hobnob/db/dsn".
+// Each file contains: 12-byte nonce || ciphertext || GCM tag (16 bytes).
 //
-// Two modes:
-//   - Plaintext (no key_file): files are read/written as-is. Suitable for
-//     dev, single-server, or when disk encryption provides at-rest protection.
-//   - Encrypted (with key_file): files are AES-256-GCM encrypted. Each file
-//     contains: 12-byte nonce || ciphertext || GCM tag (16 bytes).
+// If no key_file is specified, a master key is auto-generated at
+// <secrets_dir>/.master.key on first use. Secrets are never stored as plaintext.
 //
 // For core keys not present in the secrets dir, falls back to built-in defaults.
 type LocalProvider struct {
 	secretsDir string
-	gcm        cipher.AEAD // nil = plaintext mode (no encryption)
+	gcm        cipher.AEAD
 	mu         sync.RWMutex
 }
 
 // NewLocalProvider creates a provider that reads encrypted secrets from
 // secretsDir using the master key in keyFile. The key file must be exactly
 // 32 bytes (raw) or 64 hex characters, or any length (hashed with SHA-256).
+//
+// If keyFile is empty, a 32-byte master key is auto-generated at
+// <secretsDir>/.master.key. Secrets are always encrypted at rest.
 func NewLocalProvider(keyFile, secretsDir string) (*LocalProvider, error) {
 	// Ensure secrets directory exists.
 	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
 		return nil, fmt.Errorf("creating secrets directory %q: %w", secretsDir, err)
 	}
 
-	// No key file = plaintext mode. Secret files are read as-is.
+	// No key file = auto-generate one inside the secrets directory.
 	if keyFile == "" {
-		return &LocalProvider{secretsDir: secretsDir}, nil
+		keyFile = filepath.Join(secretsDir, ".master.key")
+		if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+			key := make([]byte, 32)
+			if _, err := io.ReadFull(rand.Reader, key); err != nil {
+				return nil, fmt.Errorf("generating master key: %w", err)
+			}
+			encoded := []byte(hex.EncodeToString(key) + "\n")
+			if err := os.WriteFile(keyFile, encoded, 0o600); err != nil {
+				return nil, fmt.Errorf("writing auto-generated master key %q: %w", keyFile, err)
+			}
+		}
 	}
 
 	keyData, err := os.ReadFile(keyFile)
@@ -142,6 +153,10 @@ func (p *LocalProvider) List() ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
+		// Skip the auto-generated master key file.
+		if d.Name() == ".master.key" {
+			return nil
+		}
 		rel, err := filepath.Rel(p.secretsDir, path)
 		if err != nil {
 			return err
@@ -203,11 +218,6 @@ func (p *LocalProvider) readAndDecrypt(key string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Plaintext mode: no encryption, return file contents as-is.
-	if p.gcm == nil {
-		return []byte(strings.TrimSpace(string(data))), nil
-	}
-
 	nonceSize := p.gcm.NonceSize()
 	if len(data) < nonceSize {
 		return nil, fmt.Errorf("secret %q: ciphertext too short", key)
@@ -263,17 +273,11 @@ func (p *LocalProvider) encryptAndWrite(key string, plaintext []byte) error {
 		return fmt.Errorf("creating directory for %q: %w", key, err)
 	}
 
-	var fileData []byte
-	if p.gcm == nil {
-		// Plaintext mode: write value directly.
-		fileData = plaintext
-	} else {
-		nonce := make([]byte, p.gcm.NonceSize())
-		if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-			return fmt.Errorf("generating nonce: %w", err)
-		}
-		fileData = p.gcm.Seal(nonce, nonce, plaintext, nil)
+	nonce := make([]byte, p.gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return fmt.Errorf("generating nonce: %w", err)
 	}
+	fileData := p.gcm.Seal(nonce, nonce, plaintext, nil)
 
 	p.mu.Lock()
 	defer p.mu.Unlock()

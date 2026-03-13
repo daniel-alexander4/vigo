@@ -73,17 +73,23 @@ func TestNewFromConfigLocal(t *testing.T) {
 	}
 }
 
-func TestNewFromConfigLocalPlaintext(t *testing.T) {
-	// No key_file = plaintext mode (no encryption).
+func TestNewFromConfigLocalAutoKey(t *testing.T) {
+	// No key_file = auto-generated key (always encrypted).
 	dir := t.TempDir()
+	secretsDir := filepath.Join(dir, "secrets")
 	p, err := NewFromConfig(Config{
 		Backend:    "local",
-		SecretsDir: filepath.Join(dir, "secrets"),
+		SecretsDir: secretsDir,
 	})
 	if err != nil {
-		t.Fatalf("NewFromConfig local plaintext: %v", err)
+		t.Fatalf("NewFromConfig local auto-key: %v", err)
 	}
 	defer p.Close()
+
+	// Master key should have been created.
+	if _, err := os.Stat(filepath.Join(secretsDir, ".master.key")); err != nil {
+		t.Fatalf("auto-generated master key not found: %v", err)
+	}
 }
 
 func TestNewFromConfigLocalDefaultSecretsDir(t *testing.T) {

@@ -70,6 +70,7 @@ type Module struct {
 var knownTypes = map[string]bool{
 	"file":             true,
 	"directory":        true,
+	"symlink":          true,
 	"package":          true,
 	"service":          true,
 	"user":             true,
@@ -176,6 +177,8 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateFile(base, res)...)
 	case "directory":
 		findings = append(findings, validateDirectory(base, res)...)
+	case "symlink":
+		findings = append(findings, validateSymlink(base, res)...)
 	case "exec":
 		findings = append(findings, validateExec(base, res)...)
 	case "service":
@@ -231,6 +234,28 @@ func validateDirectory(base Finding, res Resource) []Finding {
 		f := base
 		f.Severity = SeverityError
 		f.Message = "directory resource missing required attribute \"targetpath\""
+		findings = append(findings, f)
+	}
+
+	return findings
+}
+
+// validateSymlink checks that symlink resources have targetpath and to.
+func validateSymlink(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	if attrString(res.Attributes, "targetpath") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "symlink resource missing required attribute \"targetpath\""
+		findings = append(findings, f)
+	}
+
+	state := attrString(res.Attributes, "state")
+	if state != "absent" && attrString(res.Attributes, "to") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "symlink resource missing required attribute \"to\""
 		findings = append(findings, f)
 	}
 

@@ -382,6 +382,7 @@ pub fn build_executors_with_snapshots(
     // Core executors (Phase 3).
     executors.insert("file".to_string(), Box::new(file::FileExecutor::new(snapshot_mgr)));
     executors.insert("directory".to_string(), Box::new(directory::DirectoryExecutor::new()));
+    executors.insert("symlink".to_string(), Box::new(symlink::SymlinkExecutor::new()));
     executors.insert("exec".to_string(), Box::new(exec::ExecExecutor::new()));
     executors.insert("service".to_string(), Box::new(service::ServiceExecutor::new()));
 

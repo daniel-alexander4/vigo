@@ -85,7 +85,7 @@ func checkSelfProtection(moduleName string, res Resource) []Finding {
 	}
 
 	switch res.Type {
-	case "file", "directory", "file_line", "blockinfile", "ini", "json_file", "replace", "field_edit":
+	case "file", "directory", "symlink", "file_line", "blockinfile", "ini", "json_file", "replace", "field_edit":
 		return checkFileProtection(base, res)
 	case "service":
 		return checkServiceProtection(base, res)
