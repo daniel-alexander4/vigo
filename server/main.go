@@ -318,7 +318,7 @@ func run() error {
 	}
 
 	// Create and start gRPC server.
-	grpcSrv, _, lastSeenBatch, traitsBatch, traitsPruner, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, _, lastSeenBatch, traitsBatch, traitsPruner, agentSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:             cfg.Server.TLS.CertFile,
 		KeyFile:              cfg.Server.TLS.KeyFile,
 		CAFile:               cfg.Server.TLS.CAFile,
@@ -432,6 +432,8 @@ func run() error {
 	})
 
 	federationHandler := api.NewFederationHandler(role, cfg.Federation.SpokeID, hub)
+	tasksHandler := api.NewTasksHandler(queries, agentSvc)
+	queryHandler := api.NewQueryHandler(agentSvc)
 
 	// Initialize AI assistant (optional — disabled by default).
 	var aiHandler *api.AIHandler
@@ -459,6 +461,8 @@ func run() error {
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
 		federationHandler.RegisterRoutes(mux)
+		tasksHandler.RegisterRoutes(mux)
+		queryHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
 		}
@@ -508,6 +512,8 @@ func run() error {
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		federationHandler.RegisterRoutes(gwMux)
+		tasksHandler.RegisterRoutes(gwMux)
+		queryHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)
 		}

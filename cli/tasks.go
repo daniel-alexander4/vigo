@@ -1,0 +1,302 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"os/user"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	"github.com/spf13/cobra"
+)
+
+var taskCmd = &cobra.Command{
+	Use:   "task",
+	Short: "Dispatch and monitor ad-hoc commands on thralls",
+}
+
+var taskRunCmd = &cobra.Command{
+	Use:   "run <command>",
+	Short: "Run a command on targeted thralls",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target, _ := cmd.Flags().GetString("target")
+		timeout, _ := cmd.Flags().GetInt("timeout")
+		operator, _ := cmd.Flags().GetString("operator")
+		batchSize, _ := cmd.Flags().GetString("batch-size")
+		maxFailures, _ := cmd.Flags().GetString("max-failures")
+		healthCheck, _ := cmd.Flags().GetString("health-check")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+		if target == "" {
+			return fmt.Errorf("--target is required")
+		}
+		if operator == "" {
+			if u, err := user.Current(); err == nil {
+				operator = u.Username
+			} else {
+				operator = "hobnobcli"
+			}
+		}
+
+		client := newAPIClient()
+
+		// Dispatch the task.
+		var dispatchResp struct {
+			ID      string `json:"id"`
+			Status  string `json:"status"`
+			Batches []struct {
+				Index     int      `json:"index"`
+				Hostnames []string `json:"hostnames"`
+			} `json:"batches"`
+			Offline []string `json:"offline"`
+		}
+		err := client.post("/api/v1/tasks", map[string]any{
+			"command":     args[0],
+			"target":      target,
+			"operator":    operator,
+			"timeout":     timeout,
+			"batchSize":   batchSize,
+			"maxFailures": maxFailures,
+			"healthCheck": healthCheck,
+			"dryRun":      dryRun,
+		}, &dispatchResp)
+		if err != nil {
+			return err
+		}
+
+		// Dry-run: display batch plan and exit.
+		if dispatchResp.Status == "dry_run" {
+			fmt.Println("Dry-run batch plan:")
+			fmt.Println()
+			for _, b := range dispatchResp.Batches {
+				fmt.Printf("  Batch %d: %s\n", b.Index, strings.Join(b.Hostnames, ", "))
+			}
+			if len(dispatchResp.Offline) > 0 {
+				fmt.Printf("\n  Offline (excluded): %s\n", strings.Join(dispatchResp.Offline, ", "))
+			}
+			fmt.Printf("\n%d batch(es), %d target(s), %d offline\n",
+				len(dispatchResp.Batches),
+				countBatchTargets(dispatchResp.Batches),
+				len(dispatchResp.Offline))
+			return nil
+		}
+
+		fmt.Printf("Task %s dispatched", dispatchResp.ID)
+		if batchSize != "" {
+			fmt.Printf(" (rolling, batch_size=%s)", batchSize)
+		}
+		fmt.Println()
+
+		// Poll until the task finishes.
+		deadline := time.Now().Add(time.Duration(timeout+30) * time.Second)
+		for time.Now().Before(deadline) {
+			time.Sleep(1 * time.Second)
+
+			resp, err := fetchTask(client, dispatchResp.ID)
+			if err != nil {
+				return err
+			}
+
+			if resp.Task.Status == "running" || resp.Task.Status == "pending" {
+				continue
+			}
+
+			// Task is done — display results.
+			printTaskResults(resp)
+			return nil
+		}
+
+		// Timed out waiting — show current state.
+		resp, err := fetchTask(client, dispatchResp.ID)
+		if err != nil {
+			return err
+		}
+		printTaskResults(resp)
+		return nil
+	},
+}
+
+var taskStatusCmd = &cobra.Command{
+	Use:   "status <id>",
+	Short: "Show status and results for a task run",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+		resp, err := fetchTask(client, args[0])
+		if err != nil {
+			return err
+		}
+		printTaskResults(resp)
+		return nil
+	},
+}
+
+var taskListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List recent task runs",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		limit, _ := cmd.Flags().GetInt("limit")
+
+		client := newAPIClient()
+		var resp struct {
+			Tasks []struct {
+				ID           string `json:"id"`
+				Command      string `json:"command"`
+				Target       string `json:"target"`
+				Operator     string `json:"operator"`
+				Status       string `json:"status"`
+				TotalTargets int64  `json:"totalTargets"`
+				CreatedAt    string `json:"createdAt"`
+				FinishedAt   string `json:"finishedAt"`
+			} `json:"tasks"`
+		}
+
+		path := fmt.Sprintf("/api/v1/tasks?limit=%d", limit)
+		if err := client.get(path, &resp); err != nil {
+			return err
+		}
+
+		if len(resp.Tasks) == 0 {
+			fmt.Println("No tasks found.")
+			return nil
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "ID\tCOMMAND\tTARGET\tSTATUS\tTARGETS\tCREATED")
+		for _, t := range resp.Tasks {
+			// Truncate long commands for display.
+			command := t.Command
+			if len(command) > 40 {
+				command = command[:37] + "..."
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
+				t.ID, command, t.Target, t.Status,
+				t.TotalTargets, formatTimestamp(t.CreatedAt))
+		}
+		return w.Flush()
+	},
+}
+
+type taskResponse struct {
+	Task struct {
+		ID           string `json:"id"`
+		Command      string `json:"command"`
+		Target       string `json:"target"`
+		Operator     string `json:"operator"`
+		Status       string `json:"status"`
+		TotalTargets int64  `json:"totalTargets"`
+		TimeoutSecs  int64  `json:"timeoutSecs"`
+		BatchSize    string `json:"batchSize"`
+		MaxFailures  string `json:"maxFailures"`
+		CreatedAt    string `json:"createdAt"`
+		StartedAt    string `json:"startedAt"`
+		FinishedAt   string `json:"finishedAt"`
+	} `json:"task"`
+	Targets []struct {
+		ID         string `json:"id"`
+		Hostname   string `json:"hostname"`
+		Status     string `json:"status"`
+		ExitCode   *int64 `json:"exitCode"`
+		Stdout     string `json:"stdout"`
+		Stderr     string `json:"stderr"`
+		DurationMs *int64 `json:"durationMs"`
+		ErrorMsg   string `json:"errorMsg"`
+		FinishedAt string `json:"finishedAt"`
+	} `json:"targets"`
+}
+
+func fetchTask(client *apiClient, id string) (*taskResponse, error) {
+	var resp taskResponse
+	if err := client.get("/api/v1/tasks/"+id, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func printTaskResults(resp *taskResponse) {
+	t := resp.Task
+	fmt.Printf("Task:     %s\n", t.ID)
+	fmt.Printf("Command:  %s\n", t.Command)
+	fmt.Printf("Target:   %s\n", t.Target)
+	fmt.Printf("Operator: %s\n", t.Operator)
+	fmt.Printf("Status:   %s\n", t.Status)
+	fmt.Printf("Targets:  %d\n", t.TotalTargets)
+	if t.BatchSize != "" {
+		fmt.Printf("Batch:    %s\n", t.BatchSize)
+	}
+	if t.MaxFailures != "" {
+		fmt.Printf("MaxFail:  %s\n", t.MaxFailures)
+	}
+	fmt.Printf("Created:  %s\n", formatTimestamp(t.CreatedAt))
+	if t.StartedAt != "" {
+		fmt.Printf("Started:  %s\n", formatTimestamp(t.StartedAt))
+	}
+	if t.FinishedAt != "" {
+		fmt.Printf("Finished: %s\n", formatTimestamp(t.FinishedAt))
+	}
+
+	if len(resp.Targets) == 0 {
+		return
+	}
+
+	fmt.Println()
+	for _, tgt := range resp.Targets {
+		fmt.Printf("--- %s [%s]", tgt.Hostname, tgt.Status)
+		if tgt.ExitCode != nil {
+			fmt.Printf(" exit=%d", *tgt.ExitCode)
+		}
+		if tgt.DurationMs != nil {
+			fmt.Printf(" %dms", *tgt.DurationMs)
+		}
+		fmt.Println()
+
+		if tgt.Stdout != "" {
+			stdout := tgt.Stdout
+			if len(stdout) > 1048576 {
+				stdout = stdout[:1048576] + "\n[output truncated]"
+			}
+			fmt.Print(stdout)
+			if !strings.HasSuffix(stdout, "\n") {
+				fmt.Println()
+			}
+		}
+		if tgt.Stderr != "" {
+			fmt.Fprintf(os.Stderr, "%s", tgt.Stderr)
+			if !strings.HasSuffix(tgt.Stderr, "\n") {
+				fmt.Fprintln(os.Stderr)
+			}
+		}
+		if tgt.ErrorMsg != "" {
+			fmt.Printf("error: %s\n", tgt.ErrorMsg)
+		}
+	}
+}
+
+func countBatchTargets(batches []struct {
+	Index     int      `json:"index"`
+	Hostnames []string `json:"hostnames"`
+}) int {
+	total := 0
+	for _, b := range batches {
+		total += len(b.Hostnames)
+	}
+	return total
+}
+
+func init() {
+	taskRunCmd.Flags().String("target", "", "Target spec: hostname, glob (*.web.*), UUID, or trait filter (os.distro=ubuntu)")
+	taskRunCmd.Flags().Int("timeout", 60, "Command timeout in seconds")
+	taskRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
+	taskRunCmd.Flags().String("batch-size", "", "Batch size: count (5) or percentage (25%)")
+	taskRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")
+	taskRunCmd.Flags().String("health-check", "", "Shell command to run between batches (abort if exit != 0)")
+	taskRunCmd.Flags().Bool("dry-run", false, "Display batch plan without executing")
+	taskListCmd.Flags().Int("limit", 20, "Maximum number of tasks to display")
+
+	taskCmd.AddCommand(taskRunCmd, taskStatusCmd, taskListCmd)
+}

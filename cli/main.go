@@ -42,6 +42,8 @@ func init() {
 		tokensCmd,
 		pushCmd,
 		runsCmd,
+		taskCmd,
+		queryCmd,
 		webhooksCmd,
 		previewCmd,
 		rollbackCmd,

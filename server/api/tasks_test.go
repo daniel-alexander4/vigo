@@ -1,0 +1,339 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+package api
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/hobnob/hobnob/server/db"
+	isgrpc "github.com/hobnob/hobnob/server/grpc"
+)
+
+// openTaskTestDB creates an in-memory SQLite database with task_runs and task_run_targets tables.
+func openTaskTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+
+	_, err = sqlDB.Exec(`
+		CREATE TABLE task_runs (
+			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
+			command        TEXT NOT NULL,
+			target_glob    TEXT NOT NULL,
+			operator       TEXT NOT NULL DEFAULT '',
+			status         TEXT NOT NULL DEFAULT 'pending',
+			total_targets  INTEGER NOT NULL DEFAULT 0,
+			created_at     DATETIME NOT NULL DEFAULT (datetime('now')),
+			started_at     DATETIME,
+			finished_at    DATETIME,
+			timeout_secs   INTEGER NOT NULL DEFAULT 60,
+			batch_size     TEXT,
+			max_failures   TEXT
+		);
+		CREATE TABLE task_run_targets (
+			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
+			task_run_id    TEXT NOT NULL REFERENCES task_runs (id) ON DELETE CASCADE,
+			thrall_id      TEXT NOT NULL,
+			hostname       TEXT NOT NULL,
+			status         TEXT NOT NULL DEFAULT 'pending',
+			exit_code      INTEGER,
+			stdout         TEXT,
+			stderr         TEXT,
+			duration_ms    INTEGER,
+			error_msg      TEXT,
+			dispatched_at  DATETIME,
+			finished_at    DATETIME
+		);
+	`)
+	if err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	return sqlDB
+}
+
+// stubDispatcher records dispatch calls and returns a fixed result.
+type stubDispatcher struct {
+	lastParams   isgrpc.DispatchParams
+	returnResult *isgrpc.DispatchResult
+	returnErr    error
+}
+
+func (s *stubDispatcher) DispatchTask(_ context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error) {
+	s.lastParams = params
+	if s.returnErr != nil {
+		return nil, s.returnErr
+	}
+	return s.returnResult, nil
+}
+
+func TestTasksHandler_Dispatch(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	dispatcher := &stubDispatcher{returnResult: &isgrpc.DispatchResult{ID: "task-123", Status: "running"}}
+	handler := NewTasksHandler(db.New(sqlDB), dispatcher)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"command":"uptime","target":"*.web.*","operator":"admin"}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp isgrpc.DispatchResult
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp.ID != "task-123" {
+		t.Errorf("expected id task-123, got %s", resp.ID)
+	}
+	if dispatcher.lastParams.Command != "uptime" {
+		t.Errorf("expected command uptime, got %s", dispatcher.lastParams.Command)
+	}
+	if dispatcher.lastParams.TargetSpec != "*.web.*" {
+		t.Errorf("expected target *.web.*, got %s", dispatcher.lastParams.TargetSpec)
+	}
+}
+
+func TestTasksHandler_DispatchDryRun(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	dispatcher := &stubDispatcher{returnResult: &isgrpc.DispatchResult{
+		Status: "dry_run",
+		Batches: []isgrpc.DryRunBatch{
+			{Index: 1, Hostnames: []string{"web01", "web02"}},
+			{Index: 2, Hostnames: []string{"web03"}},
+		},
+		Offline: []string{"web04"},
+	}}
+	handler := NewTasksHandler(db.New(sqlDB), dispatcher)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"command":"uptime","target":"*.web.*","batchSize":"2","dryRun":true}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for dry_run, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp isgrpc.DispatchResult
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp.Status != "dry_run" {
+		t.Errorf("expected dry_run status, got %s", resp.Status)
+	}
+	if len(resp.Batches) != 2 {
+		t.Errorf("expected 2 batches, got %d", len(resp.Batches))
+	}
+	if len(resp.Offline) != 1 || resp.Offline[0] != "web04" {
+		t.Errorf("expected offline [web04], got %v", resp.Offline)
+	}
+	if !dispatcher.lastParams.DryRun {
+		t.Error("expected DryRun=true in params")
+	}
+	if dispatcher.lastParams.BatchSize != "2" {
+		t.Errorf("expected batchSize 2, got %s", dispatcher.lastParams.BatchSize)
+	}
+}
+
+func TestTasksHandler_DispatchMissingCommand(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"target":"*.web.*"}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestTasksHandler_DispatchMissingTarget(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"command":"uptime"}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestTasksHandler_DispatchError(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	dispatcher := &stubDispatcher{returnErr: fmt.Errorf("no thralls matched")}
+	handler := NewTasksHandler(db.New(sqlDB), dispatcher)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"command":"uptime","target":"nonexistent"}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestTasksHandler_List(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	queries := db.New(sqlDB)
+	handler := NewTasksHandler(queries, &stubDispatcher{})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Insert task runs directly.
+	for i := 0; i < 3; i++ {
+		_, err := sqlDB.Exec(
+			`INSERT INTO task_runs (id, command, target_glob, operator, status, total_targets) VALUES (?, ?, ?, ?, ?, ?)`,
+			uuid.New().String(), fmt.Sprintf("cmd-%d", i), "*.web.*", "admin", "complete", 2,
+		)
+		if err != nil {
+			t.Fatalf("insert task run: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/tasks?limit=2", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Tasks []taskSummary `json:"tasks"`
+	}
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if len(resp.Tasks) != 2 {
+		t.Errorf("expected 2 tasks, got %d", len(resp.Tasks))
+	}
+}
+
+func TestTasksHandler_ListEmpty(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/tasks", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Tasks []taskSummary `json:"tasks"`
+	}
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if len(resp.Tasks) != 0 {
+		t.Errorf("expected 0 tasks, got %d", len(resp.Tasks))
+	}
+}
+
+func TestTasksHandler_Get(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	taskID := uuid.New().String()
+	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+
+	_, err := sqlDB.Exec(
+		`INSERT INTO task_runs (id, command, target_glob, operator, status, total_targets, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		taskID, "uptime", "*.web.*", "admin", "complete", 2, now,
+	)
+	if err != nil {
+		t.Fatalf("insert task run: %v", err)
+	}
+
+	targetID := uuid.New().String()
+	_, err = sqlDB.Exec(
+		`INSERT INTO task_run_targets (id, task_run_id, thrall_id, hostname, status, exit_code, stdout, duration_ms, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		targetID, taskID, uuid.New().String(), "web01.prod", "complete", 0, " 10:30:00 up 5 days\n", 42, now,
+	)
+	if err != nil {
+		t.Fatalf("insert target: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/tasks/"+taskID, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Task    taskDetail     `json:"task"`
+		Targets []targetDetail `json:"targets"`
+	}
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	if resp.Task.ID != taskID {
+		t.Errorf("expected task ID %s, got %s", taskID, resp.Task.ID)
+	}
+	if resp.Task.Command != "uptime" {
+		t.Errorf("expected command uptime, got %s", resp.Task.Command)
+	}
+	if resp.Task.Status != "complete" {
+		t.Errorf("expected status complete, got %s", resp.Task.Status)
+	}
+	if len(resp.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(resp.Targets))
+	}
+	if resp.Targets[0].Hostname != "web01.prod" {
+		t.Errorf("expected hostname web01.prod, got %s", resp.Targets[0].Hostname)
+	}
+	if resp.Targets[0].ExitCode == nil || *resp.Targets[0].ExitCode != 0 {
+		t.Errorf("expected exit code 0, got %v", resp.Targets[0].ExitCode)
+	}
+	if resp.Targets[0].Stdout != " 10:30:00 up 5 days\n" {
+		t.Errorf("unexpected stdout: %q", resp.Targets[0].Stdout)
+	}
+}
+
+func TestTasksHandler_GetNotFound(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/tasks/nonexistent", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}

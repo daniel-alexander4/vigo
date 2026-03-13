@@ -33,6 +33,8 @@ type AgentService struct {
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache
 	streamMgr        *streamManager
+	taskRouter       *taskRouter
+	queryRouter      *queryRouter
 	hub              *federation.Hub    // non-nil when role=hub; routes enrollment to spokes
 	licenseEnforcer  *license.Enforcer
 }

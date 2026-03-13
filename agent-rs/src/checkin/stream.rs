@@ -9,7 +9,8 @@
 
 use crate::proto::{
     agent_stream_message, server_stream_message, AgentStreamMessage, CheckInRequest,
-    CheckInResponse, ReportResultRequest, ServerStreamMessage, StreamPolicyPush,
+    CheckInResponse, QueryRequest, ReportResultRequest, ServerStreamMessage, StreamPolicyPush,
+    TaskDispatch,
 };
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
@@ -29,6 +30,10 @@ pub struct StreamHandle {
     pub force_push_rx: mpsc::Receiver<()>,
     /// Check-in response correlation.
     pub check_in_resp_rx: mpsc::Receiver<CheckInResponse>,
+    /// Server-dispatched ad-hoc tasks.
+    pub task_dispatch_rx: mpsc::Receiver<TaskDispatch>,
+    /// Server-dispatched live queries.
+    pub query_request_rx: mpsc::Receiver<QueryRequest>,
     /// Notified when the read loop exits. Clone-friendly.
     pub done: tokio::sync::watch::Receiver<bool>,
 }
@@ -120,11 +125,21 @@ pub async fn open(
     let (policy_push_tx, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
     let (force_push_tx, force_push_rx) = mpsc::channel::<()>(4);
     let (check_in_resp_tx, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
+    let (task_dispatch_tx, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
+    let (query_request_tx, query_request_rx) = mpsc::channel::<QueryRequest>(8);
     let (done_tx, done_rx) = tokio::sync::watch::channel(false);
 
     // Spawn the read loop.
     tokio::spawn(async move {
-        read_loop(recv_stream, policy_push_tx, force_push_tx, check_in_resp_tx).await;
+        read_loop(
+            recv_stream,
+            policy_push_tx,
+            force_push_tx,
+            check_in_resp_tx,
+            task_dispatch_tx,
+            query_request_tx,
+        )
+        .await;
         let _ = done_tx.send(true); // signal disconnect
     });
 
@@ -133,6 +148,8 @@ pub async fn open(
         policy_push_rx,
         force_push_rx,
         check_in_resp_rx,
+        task_dispatch_rx,
+        query_request_rx,
         done: done_rx,
     };
 
@@ -145,6 +162,8 @@ async fn read_loop(
     policy_push_tx: mpsc::Sender<StreamPolicyPush>,
     force_push_tx: mpsc::Sender<()>,
     check_in_resp_tx: mpsc::Sender<CheckInResponse>,
+    task_dispatch_tx: mpsc::Sender<TaskDispatch>,
+    query_request_tx: mpsc::Sender<QueryRequest>,
 ) {
     loop {
         match stream.message().await {
@@ -167,6 +186,16 @@ async fn read_loop(
                         }
                         server_stream_message::Msg::ForcePush(_) => {
                             let _ = force_push_tx.try_send(());
+                        }
+                        server_stream_message::Msg::TaskDispatch(dispatch) => {
+                            if task_dispatch_tx.try_send(dispatch).is_err() {
+                                warn!("task dispatch dropped (buffer full)");
+                            }
+                        }
+                        server_stream_message::Msg::QueryRequest(req) => {
+                            if query_request_tx.try_send(req).is_err() {
+                                warn!("query request dropped (buffer full)");
+                            }
                         }
                     }
                 }

@@ -162,6 +162,15 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 					errCh <- err
 					return
 				}
+
+			case *pb.AgentStreamMessage_TaskAck:
+				s.taskRouter.handleTaskAck(stream.Context(), thrallID, m.TaskAck)
+
+			case *pb.AgentStreamMessage_TaskResult:
+				s.taskRouter.handleTaskResult(stream.Context(), thrallID, m.TaskResult)
+
+			case *pb.AgentStreamMessage_QueryResponse:
+				s.queryRouter.handleQueryResponse(thrallID, m.QueryResponse)
 			}
 		}
 	}()

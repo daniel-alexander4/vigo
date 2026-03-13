@@ -134,3 +134,41 @@ func (sm *streamManager) connectedCount() int {
 	defer sm.mu.RUnlock()
 	return len(sm.streams)
 }
+
+// isConnected returns true if the thrall has an active stream.
+func (sm *streamManager) isConnected(thrallID string) bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	_, ok := sm.streams[thrallID]
+	return ok
+}
+
+// connectedThrallIDs returns the set of currently connected thrall IDs.
+func (sm *streamManager) connectedThrallIDs() map[string]bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	ids := make(map[string]bool, len(sm.streams))
+	for id := range sm.streams {
+		ids[id] = true
+	}
+	return ids
+}
+
+// dispatchTask sends a TaskDispatch to a specific agent. Uses a blocking
+// send with a short timeout to avoid silent drops (Pitfall 6).
+// Returns false if the agent is not connected or the send buffer is full.
+func (sm *streamManager) dispatchTask(thrallID string, msg *pb.ServerStreamMessage) bool {
+	sm.mu.RLock()
+	as, ok := sm.streams[thrallID]
+	sm.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	select {
+	case as.send <- msg:
+		return true
+	default:
+		slog.Warn("task dispatch dropped (buffer full)", "thrall_id", thrallID)
+		return false
+	}
+}

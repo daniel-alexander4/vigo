@@ -545,119 +545,187 @@ async fn stream_loop(
     let next_checkin = tokio::time::sleep(jittered_duration(interval, jitter_pct));
     tokio::pin!(next_checkin);
 
+    // Create a cancellation token tied to this stream's lifetime for task cleanup.
+    let task_cancel = tokio_util::sync::CancellationToken::new();
+
     // Destructure handle so each field can be borrowed independently in select!.
     let stream::StreamHandle {
         ref request_tx,
         ref mut policy_push_rx,
         ref mut force_push_rx,
         ref mut check_in_resp_rx,
+        ref mut task_dispatch_rx,
+        ref mut query_request_rx,
         ref mut done,
     } = *handle;
 
-    loop {
-        tokio::select! {
-            _ = cancel.cancelled() => return Ok(()),
+    let result = async {
+        loop {
+            tokio::select! {
+                _ = cancel.cancelled() => return Ok(()),
 
-            _ = done.changed() => {
-                anyhow::bail!("stream disconnected");
-            }
-
-            push = policy_push_rx.recv() => {
-                let push = match push {
-                    Some(p) => p,
-                    None => anyhow::bail!("stream disconnected (policy push channel closed)"),
-                };
-
-                info!(version = push.policy_version, "received policy push via stream");
-                let (traits_val, _) = collect_traits_basic(collectors).await;
-
-                let synth_resp = CheckInResponse {
-                    policy_bundle: push.policy_bundle,
-                    policy_version: push.policy_version,
-                    ..Default::default()
-                };
-
-                match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None) {
-                    Ok(rr) => {
-                        if !rr.results.is_empty() {
-                            report(request_tx, client, &rr.results).await;
-                        }
-                        update_state(policy_state, &rr, None);
-                        log_run_result(&rr);
-                    }
-                    Err(e) => warn!(error = %e, "stream policy push convergence failed"),
+                _ = done.changed() => {
+                    anyhow::bail!("stream disconnected");
                 }
 
-                next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
-            }
+                push = policy_push_rx.recv() => {
+                    let push = match push {
+                        Some(p) => p,
+                        None => anyhow::bail!("stream disconnected (policy push channel closed)"),
+                    };
 
-            _ = force_push_rx.recv() => {
-                info!("received force push via stream");
-                let (traits_val, traits_json) = collect_traits_basic(collectors).await;
+                    info!(version = push.policy_version, "received policy push via stream");
+                    let (traits_val, _) = collect_traits_basic(collectors).await;
 
-                let req = client.build_check_in_request(
-                    "",
-                    traits_json,
-                    policy_state.version,
-                    policy_state.module_cache.hashes(),
-                );
+                    let synth_resp = CheckInResponse {
+                        policy_bundle: push.policy_bundle,
+                        policy_version: push.policy_version,
+                        ..Default::default()
+                    };
 
-                match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
-                    Ok(resp) => {
-                        match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
-                            Ok(rr) => {
-                                if !rr.results.is_empty() {
-                                    report(request_tx, client, &rr.results).await;
-                                }
-                                update_state(policy_state, &rr, None);
-                                log_run_result(&rr);
+                    match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None) {
+                        Ok(rr) => {
+                            if !rr.results.is_empty() {
+                                report(request_tx, client, &rr.results).await;
                             }
-                            Err(e) => warn!(error = %e, "stream force push convergence failed"),
+                            update_state(policy_state, &rr, None);
+                            log_run_result(&rr);
                         }
+                        Err(e) => warn!(error = %e, "stream policy push convergence failed"),
                     }
-                    Err(e) => warn!(error = %e, "stream check-in after force push failed"),
+
+                    next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
                 }
 
-                next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
-            }
+                _ = force_push_rx.recv() => {
+                    info!("received force push via stream");
+                    let (traits_val, traits_json) = collect_traits_basic(collectors).await;
 
-            _ = &mut next_checkin => {
-                // Periodic check-in.
-                let (traits_val, traits_json) = collect_traits_basic(collectors).await;
+                    let req = client.build_check_in_request(
+                        "",
+                        traits_json,
+                        policy_state.version,
+                        policy_state.module_cache.hashes(),
+                    );
 
-                let req = client.build_check_in_request(
-                    "",
-                    traits_json,
-                    policy_state.version,
-                    policy_state.module_cache.hashes(),
-                );
-
-                match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
-                    Ok(resp) => {
-                        match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
-                            Ok(rr) => {
-                                if !rr.results.is_empty() {
-                                    report(request_tx, client, &rr.results).await;
+                    match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
+                        Ok(resp) => {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
+                                Ok(rr) => {
+                                    if !rr.results.is_empty() {
+                                        report(request_tx, client, &rr.results).await;
+                                    }
+                                    update_state(policy_state, &rr, None);
+                                    log_run_result(&rr);
                                 }
-                                update_state(policy_state, &rr, None);
-                                if rr.base_interval > Duration::ZERO {
-                                    interval = rr.base_interval;
-                                }
-                                if rr.jitter_pct > 0 {
-                                    jitter_pct = rr.jitter_pct;
-                                }
-                                log_run_result(&rr);
+                                Err(e) => warn!(error = %e, "stream force push convergence failed"),
                             }
-                            Err(e) => warn!(error = %e, "stream periodic convergence failed"),
                         }
+                        Err(e) => warn!(error = %e, "stream check-in after force push failed"),
                     }
-                    Err(e) => warn!(error = %e, "stream periodic check-in failed"),
+
+                    next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
                 }
 
-                next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
+                dispatch = task_dispatch_rx.recv() => {
+                    let dispatch = match dispatch {
+                        Some(d) => d,
+                        None => continue, // channel closed, keep running
+                    };
+
+                    info!(task_id = %dispatch.task_id, command = %dispatch.command, "received task dispatch");
+
+                    // Acknowledge the task immediately.
+                    crate::task::send_ack(request_tx, &dispatch.task_id, true, "").await;
+
+                    // Execute the task synchronously (blocks this select arm,
+                    // providing mutual exclusion with convergence).
+                    let result = crate::task::execute(&dispatch, &task_cancel).await;
+
+                    info!(
+                        task_id = %result.task_id,
+                        status = %result.status,
+                        exit_code = result.exit_code,
+                        duration_ms = result.duration_ms,
+                        "task execution complete"
+                    );
+
+                    crate::task::send_result(request_tx, result).await;
+                }
+
+                query = query_request_rx.recv() => {
+                    let query = match query {
+                        Some(q) => q,
+                        None => continue,
+                    };
+
+                    // Collect traits (uses cache, so this is fast).
+                    let (traits_val, _) = collect_traits_basic(collectors).await;
+
+                    // Look up the requested trait path.
+                    let (value, found) = match crate::traits::traverse_dot_path(&traits_val, &query.trait_path) {
+                        Some(v) => (serde_json::to_string(&v).unwrap_or_default(), true),
+                        None => (String::new(), false),
+                    };
+
+                    // Send the response.
+                    let resp = crate::proto::AgentStreamMessage {
+                        msg: Some(crate::proto::agent_stream_message::Msg::QueryResponse(
+                            crate::proto::QueryResponse {
+                                query_id: query.query_id,
+                                trait_path: query.trait_path,
+                                value,
+                                found,
+                            },
+                        )),
+                    };
+                    let _ = request_tx.send(resp).await;
+                }
+
+                _ = &mut next_checkin => {
+                    // Periodic check-in.
+                    let (traits_val, traits_json) = collect_traits_basic(collectors).await;
+
+                    let req = client.build_check_in_request(
+                        "",
+                        traits_json,
+                        policy_state.version,
+                        policy_state.module_cache.hashes(),
+                    );
+
+                    match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
+                        Ok(resp) => {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
+                                Ok(rr) => {
+                                    if !rr.results.is_empty() {
+                                        report(request_tx, client, &rr.results).await;
+                                    }
+                                    update_state(policy_state, &rr, None);
+                                    if rr.base_interval > Duration::ZERO {
+                                        interval = rr.base_interval;
+                                    }
+                                    if rr.jitter_pct > 0 {
+                                        jitter_pct = rr.jitter_pct;
+                                    }
+                                    log_run_result(&rr);
+                                }
+                                Err(e) => warn!(error = %e, "stream periodic convergence failed"),
+                            }
+                        }
+                        Err(e) => warn!(error = %e, "stream periodic check-in failed"),
+                    }
+
+                    next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
+                }
             }
         }
     }
+    .await;
+
+    // Cancel any in-flight task subprocess when the stream loop exits.
+    task_cancel.cancel();
+
+    result
 }
 
 /// Parse a Go-style duration string (e.g., "5m", "30s", "1h30m").

@@ -75,10 +75,10 @@ type ServerConfig struct {
 // Returns the server, a CertCache for TLS hot reload, a LastSeenBatcher,
 // a TraitsBatcher, and a TraitsPruner whose Start methods should be called
 // in goroutines.
-func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher, *db.TraitsBatcher, *db.TraitsPruner, error) {
+func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher, *db.TraitsBatcher, *db.TraitsPruner, *AgentService, error) {
 	tlsCfg, certCache, err := buildTLSConfig(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
 
 	creds := credentials.NewTLS(tlsCfg)
@@ -131,6 +131,8 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
 		streamMgr:        newStreamManager(),
+		taskRouter:       newTaskRouter(cfg.Queries),
+		queryRouter:      newQueryRouter(),
 		hub:              cfg.Hub,
 		licenseEnforcer:  cfg.LicenseEnforcer,
 	}
@@ -146,7 +148,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.LastSeenBatcher,
 	}
 	pb.RegisterHobnobAdminServer(srv, adminSvc)
 
-	return srv, certCache, lastSeenBatch, traitsBatch, traitsPruner, nil
+	return srv, certCache, lastSeenBatch, traitsBatch, traitsPruner, agentSvc, nil
 }
 
 // buildTLSConfig creates a tls.Config requiring client certificates verified
