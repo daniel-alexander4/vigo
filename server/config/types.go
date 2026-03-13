@@ -154,7 +154,7 @@ type TuningSection struct {
 	TraitsScannerTTL    string        `yaml:"traits_scanner_ttl"`    // default "30s"
 	RunStore            string        `yaml:"run_store"`             // "database" (default) or "memory"
 	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-thrall run history depth for memory mode (default 20)
-	MaxConcurrentStreams uint32       `yaml:"max_concurrent_streams"` // gRPC bidirectional stream limit (default 1000)
+	MaxConcurrentStreams uint32       `yaml:"max_concurrent_streams"` // gRPC bidirectional stream limit (default 5000)
 	Webhook             WebhookTuning `yaml:"webhook"`
 }
 
@@ -212,6 +212,7 @@ type DatabaseSection struct {
 type CheckInSection struct {
 	BaseInterval  string `yaml:"base_interval"`
 	JitterPercent int    `yaml:"jitter_percent"`
+	BundleMaxAge  string `yaml:"bundle_max_age"` // how long signed bundles remain valid on agents (e.g. "24h"); default "24h", "0" = forever
 }
 
 // ConditionalBlock groups resources under a shared when expression.

@@ -69,6 +69,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
+	bh.SetFleetIndex(fleetIndex)
 	for _, opt := range gwOpts {
 		opt(bh)
 	}

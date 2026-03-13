@@ -9,6 +9,7 @@
 pub mod checksums;
 pub mod pending;
 pub mod policy;
+pub mod server_key;
 pub mod traits;
 
 use anyhow::{Context, Result};
@@ -25,14 +26,15 @@ const MAX_DBS: u32 = 8;
 /// Persistent state store backed by LMDB.
 ///
 /// Contains separate databases for policy bundles, file checksums,
-/// traits snapshots, and a pending results queue. All operations are
-/// ACID-safe and survive agent restarts.
+/// traits snapshots, a pending results queue, and the server's signing
+/// public key. All operations are ACID-safe and survive agent restarts.
 pub struct StateStore {
     env: heed::Env,
     pub policy: policy::PolicyCache,
     pub checksums: checksums::ChecksumCache,
     pub traits: traits::TraitsCache,
     pub pending: pending::PendingQueue,
+    pub server_key: server_key::ServerKeyCache,
 }
 
 impl StateStore {
@@ -58,6 +60,7 @@ impl StateStore {
         let checksums = checksums::ChecksumCache::open(&env, &mut wtxn)?;
         let traits = traits::TraitsCache::open(&env, &mut wtxn)?;
         let pending = pending::PendingQueue::open(&env, &mut wtxn)?;
+        let server_key = server_key::ServerKeyCache::open(&env, &mut wtxn)?;
 
         wtxn.commit()?;
 
@@ -69,6 +72,7 @@ impl StateStore {
             checksums,
             traits,
             pending,
+            server_key,
         })
     }
 

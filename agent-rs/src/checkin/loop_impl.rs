@@ -9,6 +9,7 @@ use crate::checkin::backoff::Backoff;
 use crate::checkin::client::Client;
 use crate::checkin::modulecache::{merge_stubs, ModuleCache};
 use crate::checkin::stream;
+use crate::checkin::verify;
 use crate::customtraits;
 use crate::executors::{Executor, ResourceResult};
 use crate::proto::{
@@ -25,7 +26,7 @@ use rand::Rng;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -44,6 +45,8 @@ pub struct LoopConfig {
     /// Directory for LMDB state store (enables offline convergence).
     /// When None, the agent behaves exactly as before — no persistent state.
     pub state_store: Option<StateStore>,
+    /// Server's bundle-signing public key PEM (empty = no verification).
+    pub server_pubkey_pem: String,
 }
 
 impl Default for LoopConfig {
@@ -54,6 +57,7 @@ impl Default for LoopConfig {
             traits_cache_dir: None,
             update_cfg: None,
             state_store: None,
+            server_pubkey_pem: String::new(),
         }
     }
 }
@@ -69,22 +73,65 @@ pub struct RunResult {
     pub policy_bundle: Option<PolicyBundle>,
 }
 
-/// Cached policy state across check-in cycles.
+/// Accepted policy state across convergence cycles.
 pub struct PolicyState {
     pub version: u64,
-    pub bundle: Option<PolicyBundle>,
+    pub accepted_bundle: Option<PolicyBundle>,
     pub module_cache: ModuleCache,
     pub custom_traits: Vec<CustomTraitEntry>,
+    /// When the current bundle was accepted (Unix seconds).
+    pub accepted_at: u64,
 }
 
 impl PolicyState {
     pub fn new() -> Self {
         Self {
             version: 0,
-            bundle: None,
+            accepted_bundle: None,
             module_cache: ModuleCache::new(),
             custom_traits: Vec::new(),
+            accepted_at: 0,
         }
+    }
+
+    /// Age of the accepted bundle in seconds (0 if no bundle).
+    pub fn bundle_age_secs(&self) -> u64 {
+        if self.accepted_at == 0 {
+            return 0;
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        now.saturating_sub(self.accepted_at)
+    }
+
+    /// Check if the accepted bundle has expired based on max_age_seconds.
+    /// Returns false if max_age is 0 (no expiry) or no bundle is accepted.
+    pub fn is_bundle_expired(&self) -> bool {
+        let bundle = match &self.accepted_bundle {
+            Some(b) => b,
+            None => return false,
+        };
+        let max_age = bundle.max_age_seconds;
+        if max_age == 0 || self.accepted_at == 0 {
+            return false;
+        }
+        self.bundle_age_secs() > max_age as u64
+    }
+
+    /// Check if the bundle is approaching expiry (>80% of max_age).
+    /// Returns false if max_age is 0 or no bundle.
+    pub fn needs_renewal(&self) -> bool {
+        let bundle = match &self.accepted_bundle {
+            Some(b) => b,
+            None => return false,
+        };
+        let max_age = bundle.max_age_seconds;
+        if max_age == 0 || self.accepted_at == 0 {
+            return false;
+        }
+        self.bundle_age_secs() > (max_age as u64 * 4 / 5)
     }
 }
 
@@ -172,9 +219,9 @@ fn converge(
     };
 
     // Determine which policy bundle to evaluate.
-    let mut bundle = if resp.no_change && policy_state.bundle.is_some() {
+    let mut bundle = if resp.no_change && policy_state.accepted_bundle.is_some() {
         // Config unchanged — evaluate cached bundle with fresh traits.
-        policy_state.bundle.clone().unwrap()
+        policy_state.accepted_bundle.clone().unwrap()
     } else if let Some(ref b) = resp.policy_bundle {
         b.clone()
     } else if resp.no_change {
@@ -299,7 +346,8 @@ pub async fn run_once(
     Ok(rr)
 }
 
-/// Update policy state from a run result.
+/// Update policy state from a run result. When a new bundle is accepted,
+/// records the acceptance time for TTL tracking.
 fn update_state(
     ps: &mut PolicyState,
     rr: &RunResult,
@@ -317,7 +365,11 @@ fn update_state(
         if !bundle.custom_traits.is_empty() {
             ps.custom_traits = bundle.custom_traits.clone();
         }
-        ps.bundle = Some(bundle.clone());
+        ps.accepted_bundle = Some(bundle.clone());
+        ps.accepted_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
     }
 }
 
@@ -441,16 +493,24 @@ async fn deliver_pending(client: &mut Client, store: &StateStore) {
     }
 }
 
-/// Cache policy and traits to the state store after a successful online run.
-fn cache_state(store: &StateStore, policy_state: &PolicyState, traits_json: Option<&[u8]>) {
-    if let Some(ref bundle) = policy_state.bundle {
+/// Accept a policy bundle: persist to LMDB and cache trait scripts.
+/// The agent owns this bundle once accepted — it is the source of truth
+/// for convergence until a newer bundle replaces it.
+fn accept_bundle(store: &StateStore, policy_state: &PolicyState, traits_json: Option<&[u8]>) {
+    if let Some(ref bundle) = policy_state.accepted_bundle {
         if let Ok(mut wtxn) = store.write_txn() {
             if let Err(e) = store.policy.store(&mut wtxn, policy_state.version, bundle) {
-                warn!(error = %e, "failed to cache policy bundle");
+                warn!(error = %e, "failed to persist accepted bundle");
             }
             if let Some(tj) = traits_json {
                 if let Err(e) = store.traits.store(&mut wtxn, tj) {
-                    warn!(error = %e, "failed to cache traits");
+                    warn!(error = %e, "failed to persist traits");
+                }
+            }
+            // Persist custom trait script entries for offline re-collection.
+            if !bundle.custom_traits.is_empty() {
+                if let Err(e) = store.traits.store_scripts(&mut wtxn, &bundle.custom_traits) {
+                    warn!(error = %e, "failed to persist trait scripts");
                 }
             }
             let _ = wtxn.commit();
@@ -458,9 +518,10 @@ fn cache_state(store: &StateStore, policy_state: &PolicyState, traits_json: Opti
     }
 }
 
-/// Attempt offline convergence using cached policy and traits.
-/// Returns results to be enqueued for later delivery.
-fn try_offline_converge(
+/// Converge locally using accepted policy bundle and cached traits.
+/// This is normal autonomous operation, not a degraded mode.
+/// Returns results to be enqueued for delivery when the server is reachable.
+fn converge_local(
     store: &StateStore,
     executors: &HashMap<String, Box<dyn Executor>>,
     result_cache: &mut ResultCache,
@@ -468,21 +529,37 @@ fn try_offline_converge(
 ) -> Option<(RunResult, Vec<u8>)> {
     let rtxn = store.read_txn().ok()?;
 
-    // Load cached policy.
+    // Load accepted policy bundle.
     let (version, bundle) = store.policy.load(&rtxn).ok()??;
 
-    // Load cached traits (any age — offline mode).
+    // Check bundle expiry before converging.
+    if bundle.max_age_seconds > 0 && policy_state.accepted_at > 0 {
+        let age = policy_state.bundle_age_secs();
+        if age > bundle.max_age_seconds as u64 {
+            warn!(
+                version = version,
+                age_secs = age,
+                max_age_secs = bundle.max_age_seconds,
+                "bundle expired, skipping convergence until refreshed"
+            );
+            return None;
+        }
+    }
+
+    // Load cached traits (any age — local convergence uses what's available).
     let traits_bytes = store.traits.load_any(&rtxn).ok()??;
     drop(rtxn);
 
     let traits_val: Value = serde_json::from_slice(&traits_bytes).ok()?;
 
+    let age = policy_state.bundle_age_secs();
     info!(
-        policy_version = version,
-        "converging offline with cached policy"
+        version = version,
+        accepted_ago_secs = age,
+        "converging bundle v{version} (accepted {age}s ago)"
     );
 
-    // Build a synthetic response from cached data.
+    // Build a synthetic response from accepted bundle.
     let synth_resp = CheckInResponse {
         policy_bundle: Some(bundle.clone()),
         policy_version: version,
@@ -501,11 +578,11 @@ fn try_offline_converge(
         Ok(rr) => {
             // Update policy state so subsequent cycles use this bundle.
             policy_state.version = version;
-            policy_state.bundle = Some(bundle);
+            policy_state.accepted_bundle = Some(bundle);
             Some((rr, traits_bytes))
         }
         Err(e) => {
-            warn!(error = %e, "offline convergence failed");
+            warn!(error = %e, "local convergence failed");
             None
         }
     }
@@ -538,6 +615,7 @@ pub async fn daemon_loop(
     let traits_cache_dir = cfg.traits_cache_dir.clone();
     let update_cfg = cfg.update_cfg;
     let state_store = cfg.state_store;
+    let server_pubkey_pem = cfg.server_pubkey_pem;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -585,7 +663,6 @@ pub async fn daemon_loop(
                     if let Some(ref store) = state_store {
                         deliver_pending(client, store).await;
                     }
-                    pending_delivered = true;
                 }
 
                 let stream_err = stream_loop(
@@ -605,7 +682,7 @@ pub async fn daemon_loop(
 
                 // Cache state after stream disconnect.
                 if let Some(ref store) = state_store {
-                    cache_state(store, &policy_state, traits_json.as_deref());
+                    accept_bundle(store, &policy_state, traits_json.as_deref());
                 }
 
                 if cancel.is_cancelled() {
@@ -637,10 +714,25 @@ pub async fn daemon_loop(
         {
             Ok(rr) => {
                 bo.reset();
+
+                // Verify bundle signature before accepting.
+                if let Some(ref bundle) = rr.policy_bundle {
+                    if let Err(e) = verify::verify_bundle(bundle, &server_pubkey_pem) {
+                        warn!(error = %e, "bundle signature verification failed, rejecting");
+                        // Don't update state — continue converging with previously accepted bundle.
+                        let wait = bo.next_backoff();
+                        tokio::select! {
+                            _ = cancel.cancelled() => return Ok(()),
+                            _ = tokio::time::sleep(wait) => {}
+                        }
+                        continue;
+                    }
+                }
+
                 update_state(&mut policy_state, &rr, Some(&mut last_fingerprint));
                 log_run_result(&rr);
 
-                // Deliver pending offline results on successful reconnect.
+                // Deliver pending results on successful reconnect.
                 if !pending_delivered {
                     if let Some(ref store) = state_store {
                         deliver_pending(client, store).await;
@@ -648,9 +740,9 @@ pub async fn daemon_loop(
                     pending_delivered = true;
                 }
 
-                // Cache state after successful online convergence.
+                // Accept bundle after successful online convergence.
                 if let Some(ref store) = state_store {
-                    cache_state(store, &policy_state, traits_json.as_deref());
+                    accept_bundle(store, &policy_state, traits_json.as_deref());
                 }
 
                 // Self-update check (failures are logged, never crash the agent).
@@ -660,7 +752,20 @@ pub async fn daemon_loop(
                     }
                 }
 
-                let sleep_dur = jittered_duration(rr.base_interval, rr.jitter_pct);
+                // Proactive renewal: if bundle is approaching expiry (>80% of max_age),
+                // reduce jitter to 0 for faster check-in.
+                let effective_jitter = if policy_state.needs_renewal() {
+                    info!(
+                        version = policy_state.version,
+                        age_secs = policy_state.bundle_age_secs(),
+                        "bundle approaching expiry, prioritizing renewal"
+                    );
+                    0
+                } else {
+                    rr.jitter_pct
+                };
+
+                let sleep_dur = jittered_duration(rr.base_interval, effective_jitter);
                 info!(
                     duration = ?sleep_dur,
                     "sleeping until next check-in"
@@ -674,7 +779,7 @@ pub async fn daemon_loop(
             Err(e) => {
                 // Server unreachable — attempt offline convergence.
                 if let Some(ref store) = state_store {
-                    if let Some((rr, _traits_bytes)) = try_offline_converge(
+                    if let Some((rr, _traits_bytes)) = converge_local(
                         store,
                         executors,
                         &mut result_cache,
@@ -687,7 +792,7 @@ pub async fn daemon_loop(
                         if !rr.results.is_empty() {
                             if let Ok(mut wtxn) = store.write_txn() {
                                 let seq = store.pending.next_seq(&mut wtxn).unwrap_or(1) as i64;
-                                let (delta, _run_id) = build_run_delta(&rr.results, seq);
+                                let (delta, _run_id) = build_run_delta(&rr.results, seq, policy_state.version);
                                 match store.pending.enqueue(&mut wtxn, &delta) {
                                     Ok(s) => {
                                         let _ = wtxn.commit();
@@ -699,7 +804,7 @@ pub async fn daemon_loop(
                         }
 
                         let wait = bo.next_backoff();
-                        info!(backoff = ?wait, "offline convergence complete, waiting to retry server");
+                        info!(backoff = ?wait, "local convergence complete, waiting to retry server");
                         tokio::select! {
                             _ = cancel.cancelled() => return Ok(()),
                             _ = tokio::time::sleep(wait) => {}
@@ -721,7 +826,8 @@ pub async fn daemon_loop(
 }
 
 /// Build a DeltaEvent with RunCompleted from convergence results.
-fn build_run_delta(results: &[ResourceResult], seq: i64) -> (DeltaEvent, String) {
+/// Includes bundle_version so the server can correlate results to policy versions.
+fn build_run_delta(results: &[ResourceResult], seq: i64, bundle_version: u64) -> (DeltaEvent, String) {
     let run_id = uuid::Uuid::new_v4().to_string();
     let mut changed_count: i32 = 0;
     let mut failed_count: i32 = 0;
@@ -770,6 +876,7 @@ fn build_run_delta(results: &[ResourceResult], seq: i64) -> (DeltaEvent, String)
             failed_count,
             skipped_count,
             results: filtered,
+            bundle_version,
         })),
     };
 
@@ -832,7 +939,7 @@ async fn stream_loop(
             if !rr.results.is_empty() {
                 if use_delta {
                     delta_seq += 1;
-                    let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                    let (delta, _) = build_run_delta(&rr.results, delta_seq, policy_state.version);
                     if let Err(e) = send_delta(&handle.request_tx, delta).await {
                         warn!(error = %e, "failed to send delta on stream");
                     }
@@ -899,7 +1006,7 @@ async fn stream_loop(
                             if !rr.results.is_empty() {
                                 if use_delta {
                                     delta_seq += 1;
-                                    let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                                    let (delta, _) = build_run_delta(&rr.results, delta_seq, policy_state.version);
                                     if let Err(e) = send_delta(request_tx, delta).await {
                                         warn!(error = %e, "failed to send delta on stream");
                                     }
@@ -935,7 +1042,7 @@ async fn stream_loop(
                                     if !rr.results.is_empty() {
                                         if use_delta {
                                             delta_seq += 1;
-                                            let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                                            let (delta, _) = build_run_delta(&rr.results, delta_seq, policy_state.version);
                                             if let Err(e) = send_delta(request_tx, delta).await {
                                                 warn!(error = %e, "failed to send delta on stream");
                                             }
@@ -962,6 +1069,18 @@ async fn stream_loop(
                     };
 
                     info!(task_id = %dispatch.task_id, command = %dispatch.command, "received task dispatch");
+
+                    // Self-protection guardrails — reject dangerous commands.
+                    if let Some(reason) = crate::guardrails::check_task_command(&dispatch.command) {
+                        warn!(
+                            task_id = %dispatch.task_id,
+                            command = %dispatch.command,
+                            reason = %reason,
+                            "GUARDRAIL BLOCKED task dispatch"
+                        );
+                        crate::task::send_ack(request_tx, &dispatch.task_id, false, &format!("guardrail violation: {}", reason)).await;
+                        continue;
+                    }
 
                     // Acknowledge the task immediately.
                     crate::task::send_ack(request_tx, &dispatch.task_id, true, "").await;
@@ -1035,7 +1154,7 @@ async fn stream_loop(
                                     if !rr.results.is_empty() {
                                         if use_delta {
                                             delta_seq += 1;
-                                            let (delta, _) = build_run_delta(&rr.results, delta_seq);
+                                            let (delta, _) = build_run_delta(&rr.results, delta_seq, policy_state.version);
                                             if let Err(e) = send_delta(request_tx, delta).await {
                                                 warn!(error = %e, "failed to send delta on stream");
                                             }
@@ -1225,7 +1344,7 @@ mod tests {
         update_state(&mut ps, &rr, Some(&mut fp));
         assert_eq!(ps.version, 42);
         assert_eq!(fp, "fp-abc");
-        assert!(ps.bundle.is_some());
+        assert!(ps.accepted_bundle.is_some());
     }
 
     #[test]
@@ -1243,5 +1362,225 @@ mod tests {
 
         update_state(&mut ps, &rr, None);
         assert_eq!(ps.version, 10);
+    }
+
+    #[test]
+    fn accept_bundle_stores_and_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let bundle = PolicyBundle {
+            policy_version: 7,
+            matched_pattern: "*.web".into(),
+            environment: "staging".into(),
+            modules: vec![PolicyModule {
+                name: "nginx".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut ps = PolicyState::new();
+        ps.version = 7;
+        ps.accepted_bundle = Some(bundle.clone());
+
+        let traits_json = br#"{"os":"linux"}"#;
+        accept_bundle(&store, &ps, Some(traits_json));
+
+        // Verify bundle was persisted.
+        let rtxn = store.read_txn().unwrap();
+        let (ver, loaded) = store.policy.load(&rtxn).unwrap().unwrap();
+        assert_eq!(ver, 7);
+        assert_eq!(loaded.matched_pattern, "*.web");
+        assert_eq!(loaded.modules.len(), 1);
+
+        // Verify traits were persisted.
+        let traits = store
+            .traits
+            .load(&rtxn, Duration::from_secs(3600))
+            .unwrap()
+            .unwrap();
+        assert_eq!(traits, traits_json);
+    }
+
+    #[test]
+    fn converge_local_uses_accepted_bundle() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        // Pre-populate LMDB with a bundle and traits.
+        let bundle = PolicyBundle {
+            policy_version: 5,
+            modules: vec![PolicyModule {
+                name: "test_mod".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let traits_json = br#"{"os":{"family":"debian"}}"#;
+        {
+            let mut wtxn = store.write_txn().unwrap();
+            store.policy.store(&mut wtxn, 5, &bundle).unwrap();
+            store.traits.store(&mut wtxn, traits_json).unwrap();
+            wtxn.commit().unwrap();
+        }
+
+        let executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        let mut result_cache = ResultCache::new(5);
+        let mut ps = PolicyState::new();
+
+        // converge_local should load the bundle and produce a result.
+        let result = converge_local(&store, &executors, &mut result_cache, &mut ps);
+        assert!(result.is_some(), "converge_local should succeed with stored bundle");
+
+        let (rr, traits_bytes) = result.unwrap();
+        // With no executors matching the module, results may be empty — that's fine.
+        // The important thing is that it ran without error.
+        assert_eq!(rr.policy_version, 5);
+        assert_eq!(traits_bytes, traits_json);
+
+        // Policy state should be updated.
+        assert_eq!(ps.version, 5);
+        assert!(ps.accepted_bundle.is_some());
+    }
+
+    #[test]
+    fn expired_bundle_skips_convergence() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        // Store a bundle with a short max_age.
+        let bundle = PolicyBundle {
+            policy_version: 3,
+            max_age_seconds: 1, // 1 second max age
+            modules: vec![PolicyModule {
+                name: "test".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let traits_json = br#"{}"#;
+        {
+            let mut wtxn = store.write_txn().unwrap();
+            store.policy.store(&mut wtxn, 3, &bundle).unwrap();
+            store.traits.store(&mut wtxn, traits_json).unwrap();
+            wtxn.commit().unwrap();
+        }
+
+        let executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        let mut result_cache = ResultCache::new(5);
+        let mut ps = PolicyState::new();
+        // Simulate that bundle was accepted 10 seconds ago.
+        ps.accepted_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 10;
+
+        let result = converge_local(&store, &executors, &mut result_cache, &mut ps);
+        assert!(result.is_none(), "should skip convergence for expired bundle");
+    }
+
+    #[test]
+    fn build_run_delta_includes_bundle_version() {
+        use crate::executors::Action;
+
+        let results = vec![ResourceResult {
+            module_name: "nginx".into(),
+            resource_type: "file".into(),
+            resource_name: "/etc/nginx.conf".into(),
+            action: Action::Updated,
+            changed: true,
+            error: None,
+            duration_ms: 10,
+        }];
+
+        let (delta, run_id) = build_run_delta(&results, 1, 42);
+        assert!(!run_id.is_empty());
+
+        match delta.event {
+            Some(delta_event::Event::Run(ref run)) => {
+                assert_eq!(run.bundle_version, 42);
+                assert_eq!(run.changed_count, 1);
+                assert_eq!(run.status, "success");
+            }
+            _ => panic!("expected RunCompleted delta event"),
+        }
+    }
+
+    #[test]
+    fn update_state_sets_accepted_at() {
+        let mut ps = PolicyState::new();
+        assert_eq!(ps.accepted_at, 0);
+
+        let rr = RunResult {
+            results: vec![],
+            base_interval: Duration::from_secs(300),
+            jitter_pct: 10,
+            no_change: false,
+            response_fingerprint: String::new(),
+            policy_version: 1,
+            policy_bundle: Some(PolicyBundle {
+                policy_version: 1,
+                ..Default::default()
+            }),
+        };
+
+        update_state(&mut ps, &rr, None);
+        assert!(ps.accepted_at > 0, "accepted_at should be set on bundle acceptance");
+    }
+
+    #[test]
+    fn bundle_expiry_and_renewal() {
+        let mut ps = PolicyState::new();
+        ps.accepted_bundle = Some(PolicyBundle {
+            max_age_seconds: 100,
+            ..Default::default()
+        });
+
+        // No accepted_at — not expired, no renewal.
+        assert!(!ps.is_bundle_expired());
+        assert!(!ps.needs_renewal());
+
+        // Just accepted — not expired, no renewal.
+        ps.accepted_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert!(!ps.is_bundle_expired());
+        assert!(!ps.needs_renewal());
+
+        // 85% of max_age (85s ago) — needs renewal but not expired.
+        ps.accepted_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 85;
+        assert!(!ps.is_bundle_expired());
+        assert!(ps.needs_renewal());
+
+        // 110% of max_age (110s ago) — expired AND needs renewal.
+        ps.accepted_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 110;
+        assert!(ps.is_bundle_expired());
+        assert!(ps.needs_renewal());
+    }
+
+    #[test]
+    fn max_age_zero_never_expires() {
+        let mut ps = PolicyState::new();
+        ps.accepted_bundle = Some(PolicyBundle {
+            max_age_seconds: 0, // No expiry
+            ..Default::default()
+        });
+        ps.accepted_at = 1; // Very old
+
+        assert!(!ps.is_bundle_expired());
+        assert!(!ps.needs_renewal());
     }
 }

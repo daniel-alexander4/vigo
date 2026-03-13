@@ -3,6 +3,7 @@
 
 //! JSON file executor — manages individual keys in JSON files idempotently.
 
+use super::atomic;
 use super::{Action, Executor, ResourceResult};
 use std::collections::HashMap;
 use std::time::Instant;
@@ -183,7 +184,7 @@ fn write_json(path: &str, doc: &serde_json::Value, indent: &str) -> Result<(), S
     };
 
     let output = format!("{}\n", formatted);
-    std::fs::write(path, output).map_err(|e| format!("write {}: {}", path, e))
+    atomic::atomic_write(path, &output).map(|_| ())
 }
 
 #[cfg(test)]

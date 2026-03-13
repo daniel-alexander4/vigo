@@ -3,6 +3,7 @@
 
 //! INI file executor — manages key-value pairs in INI files idempotently.
 
+use super::atomic;
 use super::{Action, Executor, ResourceResult};
 use std::collections::HashMap;
 use std::time::Instant;
@@ -83,8 +84,8 @@ impl Executor for IniExecutor {
 
         if result.changed && !dry_run {
             let output = render_ini(&elements);
-            if let Err(e) = std::fs::write(&path, output) {
-                result.error = Some(format!("write {}: {}", path, e));
+            if let Err(e) = atomic::atomic_write(&path, &output) {
+                result.error = Some(e);
             }
         }
 

@@ -419,6 +419,164 @@ func TestCronValidation_Absent_SkipsChecks(t *testing.T) {
 	}
 }
 
+// ── Replace validation tests ─────────────────────────────────────
+
+func TestReplaceValidation_MissingPath(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "bad-replace", Type: "replace", Attributes: map[string]any{
+				"match": "foo", "replace": "bar",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for replace without path")
+	}
+}
+
+func TestReplaceValidation_MissingMatch(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "bad-replace", Type: "replace", Attributes: map[string]any{
+				"path": "/etc/foo", "replace": "bar",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for replace without match")
+	}
+}
+
+func TestReplaceValidation_ValidConfig(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "good-replace", Type: "replace", Attributes: map[string]any{
+				"path": "/etc/ssh/sshd_config", "match": "^PermitRootLogin", "replace": "PermitRootLogin no",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("expected no errors, got: %s", FormatFindings(findings))
+	}
+}
+
+// ── FieldEdit validation tests ───────────────────────────────────
+
+func TestFieldEditValidation_MissingRequired(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "bad-fe", Type: "field_edit", Attributes: map[string]any{}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected errors for field_edit without required fields")
+	}
+	// Should require: path, line_match, select_field, field_value = 4 errors.
+	errorCount := 0
+	for _, f := range findings {
+		if f.Severity == SeverityError {
+			errorCount++
+		}
+	}
+	if errorCount != 4 {
+		t.Errorf("expected 4 errors, got %d: %s", errorCount, FormatFindings(findings))
+	}
+}
+
+func TestFieldEditValidation_MissingFieldValue(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "no-value-fe", Type: "field_edit", Attributes: map[string]any{
+				"path": "/etc/group", "line_match": "^docker:", "select_field": "4",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for field_edit without field_value")
+	}
+}
+
+func TestFieldEditValidation_ValidConfig(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "good-fe", Type: "field_edit", Attributes: map[string]any{
+				"path": "/etc/group", "line_match": "^docker:", "select_field": "4",
+				"field_value": "deploy", "field_operation": "append",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("expected no errors, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestFileWithoutContent_IsError(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "config", Type: "file", Attributes: map[string]any{
+				"targetpath": "/etc/myapp/config",
+				"owner":      "root",
+				"group":      "root",
+				"mode":       "0644",
+			}},
+		},
+	}
+
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for file without content")
+	}
+}
+
+func TestDirectoryType_NoContentRequired(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "datadir", Type: "directory", Attributes: map[string]any{
+				"targetpath": "/var/lib/myapp/data",
+				"owner":      "root",
+				"group":      "root",
+				"mode":       "0755",
+			}},
+		},
+	}
+
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("expected no errors for directory, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestDirectoryType_MissingTargetpath(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "baddir", Type: "directory", Attributes: map[string]any{
+				"owner": "root",
+				"mode":  "0755",
+			}},
+		},
+	}
+
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for directory without targetpath")
+	}
+}
+
 func TestFindingString_Format(t *testing.T) {
 	f := Finding{
 		Severity:     SeverityError,

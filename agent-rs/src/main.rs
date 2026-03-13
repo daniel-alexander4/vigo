@@ -6,6 +6,7 @@ pub mod bootstrap;
 pub mod checkin;
 pub mod customtraits;
 pub mod executors;
+pub mod guardrails;
 pub mod policy;
 pub mod runner;
 pub mod snapshots;
@@ -263,6 +264,21 @@ fn save_spoke_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
 /// Load spoke address. Returns empty string if not set.
 fn load_spoke_addr(data_dir: &std::path::Path) -> String {
     let path = data_dir.join("spoke.addr");
+    std::fs::read_to_string(path)
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Save server's bundle-signing public key to <data-dir>/server_pubkey.pem.
+fn save_server_pubkey(data_dir: &std::path::Path, pem: &str) -> Result<()> {
+    let path = data_dir.join("server_pubkey.pem");
+    std::fs::write(&path, pem)?;
+    Ok(())
+}
+
+/// Load server's bundle-signing public key. Returns empty string if not set.
+fn load_server_pubkey(data_dir: &std::path::Path) -> String {
+    let path = data_dir.join("server_pubkey.pem");
     std::fs::read_to_string(path)
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
@@ -572,6 +588,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
             current_version: VERSION.to_string(),
         }),
         state_store,
+        server_pubkey_pem: load_server_pubkey(&cli.data_dir),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
@@ -642,6 +659,12 @@ async fn main() -> Result<()> {
             }
 
             save_thrall_id(&cli.data_dir, &resp.thrall_id)?;
+
+            // Store server's bundle-signing public key for future verification.
+            if !resp.server_pubkey_pem.is_empty() {
+                save_server_pubkey(&cli.data_dir, &resp.server_pubkey_pem)?;
+                info!("stored server bundle-signing public key");
+            }
 
             if !resp.spoke_addr.is_empty() {
                 save_spoke_addr(&cli.data_dir, &resp.spoke_addr)?;

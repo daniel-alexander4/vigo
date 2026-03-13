@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! FileLine executor — manages individual lines in files idempotently.
+//!
+//! Supports `before:regex` and `after:regex` positioning, optional
+//! `region_start`/`region_end` to constrain operations, and atomic writes.
 
+use super::atomic;
+use super::region;
 use super::{Action, Executor, ResourceResult};
 use regex_lite::Regex;
 use std::collections::HashMap;
@@ -26,9 +31,26 @@ impl Executor for FileLineExecutor {
         let line = params.get("line").cloned().unwrap_or_default();
         let match_pattern = params.get("match").cloned().unwrap_or_default();
         let position = params.get("position").map(|s| s.as_str()).unwrap_or("end");
+        let region_start = params.get("region_start").map(|s| s.as_str());
+        let region_end = params.get("region_end").map(|s| s.as_str());
 
         let content = std::fs::read_to_string(&path).unwrap_or_default();
         let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+
+        // Compute region bounds if specified.
+        let has_region = region_start.is_some() || region_end.is_some();
+        let (region_lo, region_hi) = if has_region && !lines.is_empty() {
+            match region::compute_region(&lines, region_start, region_end) {
+                Ok(r) => r,
+                Err(e) => {
+                    result.error = Some(e);
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            }
+        } else {
+            (0, if lines.is_empty() { 0 } else { lines.len() - 1 })
+        };
 
         match state {
             "present" => {
@@ -39,7 +61,7 @@ impl Executor for FileLineExecutor {
                 }
 
                 if !match_pattern.is_empty() {
-                    // Replace matching lines.
+                    // Replace matching lines (within region if specified).
                     let re = match Regex::new(&match_pattern) {
                         Ok(r) => r,
                         Err(e) => {
@@ -50,19 +72,26 @@ impl Executor for FileLineExecutor {
                     };
 
                     let mut replaced = false;
-                    for l in &mut lines {
-                        if re.is_match(l) {
-                            if *l != line {
-                                *l = line.clone();
-                                replaced = true;
+                    let scan_range = if has_region {
+                        region_lo..=region_hi
+                    } else {
+                        0..=if lines.is_empty() { 0 } else { lines.len() - 1 }
+                    };
+
+                    if !lines.is_empty() {
+                        for i in scan_range {
+                            if re.is_match(&lines[i]) {
+                                if lines[i] != line {
+                                    lines[i] = line.clone();
+                                    replaced = true;
+                                }
+                                if !replaced {
+                                    result.action = Action::None;
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                                break;
                             }
-                            // Already replaced (or already matches), stop.
-                            if !replaced {
-                                result.action = Action::None;
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
-                            }
-                            break;
                         }
                     }
 
@@ -76,8 +105,14 @@ impl Executor for FileLineExecutor {
                         insert_line(&mut lines, &line, position);
                     }
                 } else {
-                    // Exact line check.
-                    if lines.iter().any(|l| *l == line) {
+                    // Exact line check (within region if specified).
+                    let exists = if has_region && !lines.is_empty() {
+                        lines[region_lo..=region_hi].iter().any(|l| *l == line)
+                    } else {
+                        lines.iter().any(|l| *l == line)
+                    };
+
+                    if exists {
                         result.action = Action::None;
                         result.duration_ms = start.elapsed().as_millis() as i32;
                         return result;
@@ -93,26 +128,59 @@ impl Executor for FileLineExecutor {
                     if content.ends_with('\n') || output.is_empty() {
                         output.push('\n');
                     }
-                    if let Err(e) = std::fs::write(&path, output) {
-                        result.error = Some(format!("write {}: {}", path, e));
+                    if let Err(e) = atomic::atomic_write(&path, &output) {
+                        result.error = Some(e);
                     }
                 }
             }
             "absent" => {
                 let original_count = lines.len();
 
-                if !match_pattern.is_empty() {
-                    let re = match Regex::new(&match_pattern) {
-                        Ok(r) => r,
-                        Err(e) => {
-                            result.error = Some(format!("invalid regex {:?}: {}", match_pattern, e));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
+                if has_region && !lines.is_empty() {
+                    // Only remove within region.
+                    if !match_pattern.is_empty() {
+                        let re = match Regex::new(&match_pattern) {
+                            Ok(r) => r,
+                            Err(e) => {
+                                result.error = Some(format!("invalid regex {:?}: {}", match_pattern, e));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                        };
+                        let mut to_remove = Vec::new();
+                        for i in region_lo..=region_hi {
+                            if re.is_match(&lines[i]) {
+                                to_remove.push(i);
+                            }
                         }
-                    };
-                    lines.retain(|l| !re.is_match(l));
-                } else if !line.is_empty() {
-                    lines.retain(|l| *l != line);
+                        for (offset, i) in to_remove.iter().enumerate() {
+                            lines.remove(i - offset);
+                        }
+                    } else if !line.is_empty() {
+                        let mut to_remove = Vec::new();
+                        for i in region_lo..=region_hi {
+                            if lines[i] == line {
+                                to_remove.push(i);
+                            }
+                        }
+                        for (offset, i) in to_remove.iter().enumerate() {
+                            lines.remove(i - offset);
+                        }
+                    }
+                } else {
+                    if !match_pattern.is_empty() {
+                        let re = match Regex::new(&match_pattern) {
+                            Ok(r) => r,
+                            Err(e) => {
+                                result.error = Some(format!("invalid regex {:?}: {}", match_pattern, e));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                        };
+                        lines.retain(|l| !re.is_match(l));
+                    } else if !line.is_empty() {
+                        lines.retain(|l| *l != line);
+                    }
                 }
 
                 if lines.len() == original_count {
@@ -126,8 +194,8 @@ impl Executor for FileLineExecutor {
                         if content.ends_with('\n') && !output.is_empty() {
                             output.push('\n');
                         }
-                        if let Err(e) = std::fs::write(&path, output) {
-                            result.error = Some(format!("write {}: {}", path, e));
+                        if let Err(e) = atomic::atomic_write(&path, &output) {
+                            result.error = Some(e);
                         }
                     }
                 }
@@ -150,6 +218,15 @@ fn insert_line(lines: &mut Vec<String>, line: &str, position: &str) {
             let idx = lines.iter().rposition(|l| re.is_match(l));
             match idx {
                 Some(i) => lines.insert(i + 1, line.to_string()),
+                None => lines.push(line.to_string()),
+            }
+        } else {
+            lines.push(line.to_string());
+        }
+    } else if let Some(pattern) = position.strip_prefix("before:") {
+        if let Ok(re) = Regex::new(pattern) {
+            match lines.iter().position(|l| re.is_match(l)) {
+                Some(i) => lines.insert(i, line.to_string()),
                 None => lines.push(line.to_string()),
             }
         } else {
@@ -197,7 +274,6 @@ mod tests {
 
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains("third line"));
-        // The new line should be at the end.
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.last().unwrap(), &"third line");
     }
@@ -324,8 +400,186 @@ mod tests {
         assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
         assert!(result.changed);
 
-        // File should be unchanged because of dry_run.
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, original);
+    }
+
+    // ── before:regex tests ────────────────────────────────────────────
+
+    #[test]
+    fn before_regex_inserts_before_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "first\nsecond\nthird\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "inserted"),
+            ("position", "before:^second"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.changed);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines, vec!["first", "inserted", "second", "third"]);
+    }
+
+    #[test]
+    fn before_no_match_appends() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "first\nsecond\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "appended"),
+            ("position", "before:^MISSING"),
+            ("state", "present"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.changed);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.last().unwrap(), &"appended");
+    }
+
+    // ── region tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn region_present_match_only_scans_region() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(
+            &path,
+            "port=80\n# START\nport=80\n# END\nport=80\n",
+        ).unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "port=443"),
+            ("match", "^port="),
+            ("state", "present"),
+            ("region_start", "^# START"),
+            ("region_end", "^# END"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.changed);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        // Before region: unchanged
+        assert_eq!(lines[0], "port=80");
+        // Inside region: changed
+        assert_eq!(lines[2], "port=443");
+        // After region: unchanged
+        assert_eq!(lines[4], "port=80");
+    }
+
+    #[test]
+    fn region_present_exact_only_checks_region() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        // Line exists outside region but not inside — should still insert.
+        std::fs::write(
+            &path,
+            "target-line\n# START\nother\n# END\n",
+        ).unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line", "target-line"),
+            ("state", "present"),
+            ("region_start", "^# START"),
+            ("region_end", "^# END"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        // Line exists outside region, but not within — should add it.
+        assert!(result.changed);
+    }
+
+    #[test]
+    fn region_absent_only_removes_in_region() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(
+            &path,
+            "port=80\n# START\nport=80\n# END\nport=80\n",
+        ).unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("match", "^port="),
+            ("state", "absent"),
+            ("region_start", "^# START"),
+            ("region_end", "^# END"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Deleted);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        // port=80 outside region should survive.
+        assert_eq!(lines[0], "port=80");
+        assert_eq!(lines[1], "# START");
+        assert_eq!(lines[2], "# END");
+        assert_eq!(lines[3], "port=80");
+    }
+
+    #[test]
+    fn region_start_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "before\n# START\nport=80\nport=8080\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("match", "^port="),
+            ("state", "absent"),
+            ("region_start", "^# START"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.changed);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines, vec!["before", "# START"]);
+    }
+
+    #[test]
+    fn region_end_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.conf");
+        std::fs::write(&path, "port=80\nport=8080\n# END\nport=9090\n").unwrap();
+
+        let exec = FileLineExecutor;
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("match", "^port="),
+            ("state", "absent"),
+            ("region_end", "^# END"),
+        ]);
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.changed);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines, vec!["# END", "port=9090"]);
     }
 }

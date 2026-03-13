@@ -41,6 +41,8 @@ type AgentService struct {
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
 	reassignStore    *ReassignStore     // pending thrall reassignments (spoke side)
+	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
+	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 }
 
 // AdminService implements the HobnobAdmin gRPC service.

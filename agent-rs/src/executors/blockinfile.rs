@@ -3,6 +3,7 @@
 
 //! BlockInFile executor — manages marked blocks of content in files.
 
+use super::atomic;
 use super::{Action, Executor, ResourceResult};
 use std::collections::HashMap;
 use std::time::Instant;
@@ -108,8 +109,8 @@ impl Executor for BlockInFileExecutor {
                             if content.ends_with('\n') {
                                 output.push('\n');
                             }
-                            if let Err(e) = std::fs::write(&path, output) {
-                                result.error = Some(format!("write {}: {}", path, e));
+                            if let Err(e) = atomic::atomic_write(&path, &output) {
+                                result.error = Some(e);
                             }
                         }
                     } else {
@@ -129,13 +130,12 @@ impl Executor for BlockInFileExecutor {
                         new_content.push_str(&desired_block);
                         new_content.push('\n');
 
+                        if let Err(e) = atomic::atomic_write(&path, &new_content) {
+                            result.error = Some(e);
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
                         if !file_exists {
-                            // Set permissions if creating new file.
-                            if let Err(e) = std::fs::write(&path, &new_content) {
-                                result.error = Some(format!("write {}: {}", path, e));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
-                            }
                             #[cfg(unix)]
                             {
                                 use std::os::unix::fs::PermissionsExt;
@@ -144,8 +144,6 @@ impl Executor for BlockInFileExecutor {
                                     let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode));
                                 }
                             }
-                        } else if let Err(e) = std::fs::write(&path, &new_content) {
-                            result.error = Some(format!("write {}: {}", path, e));
                         }
                     }
                 }
@@ -166,8 +164,8 @@ impl Executor for BlockInFileExecutor {
                             if content.ends_with('\n') && !output.is_empty() {
                                 output.push('\n');
                             }
-                            if let Err(e) = std::fs::write(&path, output) {
-                                result.error = Some(format!("write {}: {}", path, e));
+                            if let Err(e) = atomic::atomic_write(&path, &output) {
+                                result.error = Some(e);
                             }
                         }
                     } else {

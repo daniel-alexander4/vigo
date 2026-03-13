@@ -9,12 +9,15 @@
 
 pub mod alternatives;
 pub mod archive;
+pub mod atomic;
 pub mod blockinfile;
 pub mod cron;
 pub mod custom;
+pub mod directory;
 pub mod docker_container;
 pub mod docker_image;
 pub mod exec;
+pub mod field_edit;
 pub mod file;
 pub mod file_line;
 pub mod firewall;
@@ -31,6 +34,8 @@ pub mod mount;
 pub mod npm;
 pub mod pip;
 pub mod pkgmgr;
+pub mod region;
+pub mod replace;
 pub mod process;
 pub mod reboot;
 pub mod repository;

@@ -14,6 +14,7 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/tasks"
+	"github.com/hobnob/hobnob/server/validate"
 )
 
 // taskRouter tracks in-flight task dispatches and routes incoming
@@ -269,6 +270,11 @@ func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) 
 		if params.TargetSpec == "" && def.Target != "" {
 			params.TargetSpec = def.Target
 		}
+	}
+
+	// Self-protection guardrails — reject commands that target hobnob infrastructure.
+	if err := validate.ValidateTaskCommand(params.Command); err != nil {
+		return nil, fmt.Errorf("guardrail violation: %s", err)
 	}
 
 	// Build env vars for named tasks.

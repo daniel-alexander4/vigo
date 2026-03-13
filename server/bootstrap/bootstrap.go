@@ -17,6 +17,8 @@ import (
 
 	"github.com/hobnob/hobnob/server/ca"
 	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/webhook"
 )
@@ -46,6 +48,7 @@ type Handler struct {
 	trustedPatterns []config.TrustedEnrollment
 	certValidity    time.Duration
 	dispatcher      *webhook.Dispatcher
+	fleetIndex      *fleet.FleetIndex
 }
 
 // NewHandler creates a Handler for serving bootstrap and agent distribution endpoints.
@@ -76,6 +79,9 @@ func (h *Handler) SetCertValidity(d time.Duration) { h.certValidity = d }
 
 // SetDispatcher configures the webhook dispatcher for enrollment events.
 func (h *Handler) SetDispatcher(d *webhook.Dispatcher) { h.dispatcher = d }
+
+// SetFleetIndex configures the in-memory fleet index for immediate thrall availability after bootstrap.
+func (h *Handler) SetFleetIndex(fi *fleet.FleetIndex) { h.fleetIndex = fi }
 
 // RegisterRoutes registers the bootstrap and agent distribution routes on the mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -289,6 +295,20 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		"hostname", req.Hostname,
 		"thrall_id", thrallID,
 	)
+
+	// Insert into FleetIndex for immediate in-memory availability.
+	// Without this, the agent's first gRPC check-in would fail with "thrall not found".
+	if h.fleetIndex != nil {
+		pubKey, _ := db.ParsePubKey(req.PubkeyPEM)
+		h.fleetIndex.AddThrall(fleet.ThrallState{
+			ID:               thrallID,
+			Hostname:         req.Hostname,
+			IP:               req.IPAddress,
+			PubkeyPEM:        req.PubkeyPEM,
+			EnrolledAt:       time.Now(),
+			ComplianceStatus: "unknown",
+		}, pubKey)
+	}
 
 	// Dispatch webhook event.
 	if h.dispatcher != nil {

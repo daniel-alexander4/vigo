@@ -127,10 +127,19 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		Thrall: &hobnobsmtp.ThrallInfo{ID: thrallID, Hostname: req.GetHostname(), IP: req.GetIpAddress()},
 	})
 
-	return &pb.RegisterResponse{
+	resp := &pb.RegisterResponse{
 		Success:   true,
 		ThrallId:    thrallID,
 		Message:   "registered successfully",
 		SpokeAddr: spokeAddr,
-	}, nil
+	}
+
+	// Include server's bundle-signing public key for agent-side verification.
+	if s.bundleSigner != nil {
+		if pem, err := s.bundleSigner.PublicKeyPEM(); err == nil {
+			resp.ServerPubkeyPem = pem
+		}
+	}
+
+	return resp, nil
 }

@@ -92,13 +92,14 @@ func (x *RegisterRequest) GetToken() string {
 }
 
 type RegisterResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	ThrallId      string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // UUID assigned by the server
-	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
-	SpokeAddr     string                 `protobuf:"bytes,4,opt,name=spoke_addr,json=spokeAddr,proto3" json:"spoke_addr,omitempty"` // if set, agent should connect to this spoke for check-ins
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Success         bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ThrallId        string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // UUID assigned by the server
+	Message         string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	SpokeAddr       string                 `protobuf:"bytes,4,opt,name=spoke_addr,json=spokeAddr,proto3" json:"spoke_addr,omitempty"`                     // if set, agent should connect to this spoke for check-ins
+	ServerPubkeyPem string                 `protobuf:"bytes,5,opt,name=server_pubkey_pem,json=serverPubkeyPem,proto3" json:"server_pubkey_pem,omitempty"` // server's ED25519 public key for bundle signature verification
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RegisterResponse) Reset() {
@@ -155,6 +156,13 @@ func (x *RegisterResponse) GetMessage() string {
 func (x *RegisterResponse) GetSpokeAddr() string {
 	if x != nil {
 		return x.SpokeAddr
+	}
+	return ""
+}
+
+func (x *RegisterResponse) GetServerPubkeyPem() string {
+	if x != nil {
+		return x.ServerPubkeyPem
 	}
 	return ""
 }
@@ -693,6 +701,10 @@ type PolicyBundle struct {
 	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // thrall entry match pattern from thralls.hnb
 	Environment    string   `protobuf:"bytes,8,opt,name=environment,proto3" json:"environment,omitempty"`                             // resolved environment
 	Roles          []string `protobuf:"bytes,9,rep,name=roles,proto3" json:"roles,omitempty"`                                         // role names that were expanded
+	// Bundle signing (compiled promises).
+	Signature      []byte `protobuf:"bytes,10,opt,name=signature,proto3" json:"signature,omitempty"`                                   // ED25519 signature over fields 1-9
+	ServerPubkeyId string `protobuf:"bytes,11,opt,name=server_pubkey_id,json=serverPubkeyId,proto3" json:"server_pubkey_id,omitempty"` // fingerprint of signing key (for key rotation)
+	MaxAgeSeconds  uint32 `protobuf:"varint,12,opt,name=max_age_seconds,json=maxAgeSeconds,proto3" json:"max_age_seconds,omitempty"`   // how long this bundle remains valid (0 = forever)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -788,6 +800,27 @@ func (x *PolicyBundle) GetRoles() []string {
 		return x.Roles
 	}
 	return nil
+}
+
+func (x *PolicyBundle) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+func (x *PolicyBundle) GetServerPubkeyId() string {
+	if x != nil {
+		return x.ServerPubkeyId
+	}
+	return ""
+}
+
+func (x *PolicyBundle) GetMaxAgeSeconds() uint32 {
+	if x != nil {
+		return x.MaxAgeSeconds
+	}
+	return 0
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.
@@ -1914,7 +1947,8 @@ type RunCompleted struct {
 	ChangedCount  int32                  `protobuf:"varint,4,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
 	FailedCount   int32                  `protobuf:"varint,5,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
 	SkippedCount  int32                  `protobuf:"varint,6,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
-	Results       []*ModuleResult        `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"` // only changed/failed (no-ops omitted)
+	Results       []*ModuleResult        `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // only changed/failed (no-ops omitted)
+	BundleVersion uint64                 `protobuf:"varint,8,opt,name=bundle_version,json=bundleVersion,proto3" json:"bundle_version,omitempty"` // policy bundle version used for this run
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1996,6 +2030,13 @@ func (x *RunCompleted) GetResults() []*ModuleResult {
 		return x.Results
 	}
 	return nil
+}
+
+func (x *RunCompleted) GetBundleVersion() uint64 {
+	if x != nil {
+		return x.BundleVersion
+	}
+	return 0
 }
 
 // TraitsDelta reports changed/removed traits (reserved for future use).
@@ -5582,13 +5623,14 @@ const file_hobnob_proto_rawDesc = "" +
 	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1d\n" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
-	"\x05token\x18\x04 \x01(\tR\x05token\"\x82\x01\n" +
+	"\x05token\x18\x04 \x01(\tR\x05token\"\xae\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1b\n" +
 	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1d\n" +
 	"\n" +
-	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\"\x8a\x04\n" +
+	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\x12*\n" +
+	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\"\x8a\x04\n" +
 	"\x0eCheckInRequest\x12\x1b\n" +
 	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -5641,7 +5683,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8e\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfe\x03\n" +
 	"\fPolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x121\n" +
 	"\amodules\x18\x02 \x03(\v2\x17.hobnob.v1.PolicyModuleR\amodules\x12\x1b\n" +
@@ -5651,7 +5693,11 @@ const file_hobnob_proto_rawDesc = "" +
 	"\rcustom_traits\x18\x06 \x03(\v2\x1b.hobnob.v1.CustomTraitEntryR\fcustomTraits\x12'\n" +
 	"\x0fmatched_pattern\x18\a \x01(\tR\x0ematchedPattern\x12 \n" +
 	"\venvironment\x18\b \x01(\tR\venvironment\x12\x14\n" +
-	"\x05roles\x18\t \x03(\tR\x05roles\"\xc5\x01\n" +
+	"\x05roles\x18\t \x03(\tR\x05roles\x12\x1c\n" +
+	"\tsignature\x18\n" +
+	" \x01(\fR\tsignature\x12(\n" +
+	"\x10server_pubkey_id\x18\v \x01(\tR\x0eserverPubkeyId\x12&\n" +
+	"\x0fmax_age_seconds\x18\f \x01(\rR\rmaxAgeSeconds\"\xc5\x01\n" +
 	"\fPolicyModule\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x127\n" +
 	"\tresources\x18\x02 \x03(\v2\x19.hobnob.v1.PolicyResourceR\tresources\x12\x1d\n" +
@@ -5738,7 +5784,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x03run\x18\x02 \x01(\v2\x17.hobnob.v1.RunCompletedH\x00R\x03run\x120\n" +
 	"\x06traits\x18\x03 \x01(\v2\x16.hobnob.v1.TraitsDeltaH\x00R\x06traits\x129\n" +
 	"\theartbeat\x18\x04 \x01(\v2\x19.hobnob.v1.HeartbeatDeltaH\x00R\theartbeatB\a\n" +
-	"\x05event\"\xfe\x01\n" +
+	"\x05event\"\xa5\x02\n" +
 	"\fRunCompleted\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
@@ -5747,7 +5793,8 @@ const file_hobnob_proto_rawDesc = "" +
 	"\rchanged_count\x18\x04 \x01(\x05R\fchangedCount\x12!\n" +
 	"\ffailed_count\x18\x05 \x01(\x05R\vfailedCount\x12#\n" +
 	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x121\n" +
-	"\aresults\x18\a \x03(\v2\x17.hobnob.v1.ModuleResultR\aresults\"\xa2\x01\n" +
+	"\aresults\x18\a \x03(\v2\x17.hobnob.v1.ModuleResultR\aresults\x12%\n" +
+	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\"\xa2\x01\n" +
 	"\vTraitsDelta\x12=\n" +
 	"\achanged\x18\x01 \x03(\v2#.hobnob.v1.TraitsDelta.ChangedEntryR\achanged\x12\x18\n" +
 	"\aremoved\x18\x02 \x03(\tR\aremoved\x1a:\n" +

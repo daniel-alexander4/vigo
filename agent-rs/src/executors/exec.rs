@@ -78,8 +78,12 @@ fn execute_exec(
         .get("_subscribes")
         .map(|s| s == "true")
         .unwrap_or(false);
+    let is_secret_subscriber = params
+        .get("_subscribes_secret")
+        .map(|s| s == "true")
+        .unwrap_or(false);
 
-    if is_subscriber && !triggered && !has_guards {
+    if (is_subscriber || is_secret_subscriber) && !triggered && !has_guards {
         result.action = Action::Skipped;
         result.changed = false;
         return Ok(());
@@ -257,6 +261,37 @@ mod tests {
             &make_params(&[
                 ("command", "echo hello"),
                 ("_subscribes", "true"),
+                ("_triggered", "true"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+    }
+
+    #[test]
+    fn secret_subscriber_without_guards_skips() {
+        let exec = ExecExecutor::new();
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo hello"),
+                ("_subscribes_secret", "true"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Skipped);
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn secret_subscriber_triggered_runs() {
+        let exec = ExecExecutor::new();
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo hello"),
+                ("_subscribes_secret", "true"),
                 ("_triggered", "true"),
             ]),
             false,

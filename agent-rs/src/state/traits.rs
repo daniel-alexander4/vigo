@@ -76,6 +76,56 @@ impl TraitsCache {
             None => Ok(None),
         }
     }
+
+    /// Store custom trait script entries (name → sha256).
+    /// Replaces all previously stored scripts.
+    pub fn store_scripts(
+        &self,
+        wtxn: &mut RwTxn<'_>,
+        entries: &[crate::proto::CustomTraitEntry],
+    ) -> Result<()> {
+        // Remove old script entries.
+        let mut old_keys = Vec::new();
+        {
+            let iter = self.db.iter(wtxn)?;
+            for item in iter {
+                let (k, _) = item?;
+                if k.starts_with("ts:") {
+                    old_keys.push(k.to_string());
+                }
+            }
+        }
+        for k in old_keys {
+            self.db.delete(wtxn, &k)?;
+        }
+
+        // Store new entries as "ts:{name}" → sha256 bytes.
+        for entry in entries {
+            let key = format!("ts:{}", entry.name);
+            self.db.put(wtxn, &key, entry.sha256.as_bytes())?;
+        }
+        Ok(())
+    }
+
+    /// Load all cached custom trait script entries.
+    /// Returns an empty vec if no scripts are cached.
+    pub fn load_scripts(
+        &self,
+        rtxn: &RoTxn<'_>,
+    ) -> Result<Vec<crate::proto::CustomTraitEntry>> {
+        let mut entries = Vec::new();
+        let iter = self.db.iter(rtxn)?;
+        for item in iter {
+            let (k, v) = item?;
+            if let Some(name) = k.strip_prefix("ts:") {
+                entries.push(crate::proto::CustomTraitEntry {
+                    name: name.to_string(),
+                    sha256: String::from_utf8_lossy(v).into_owned(),
+                });
+            }
+        }
+        Ok(entries)
+    }
 }
 
 #[cfg(test)]
@@ -148,5 +198,72 @@ mod tests {
             .load(&rtxn, Duration::from_secs(3600))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn store_and_load_trait_scripts() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let entries = vec![
+            crate::proto::CustomTraitEntry {
+                name: "disk_usage".into(),
+                sha256: "abc123".into(),
+            },
+            crate::proto::CustomTraitEntry {
+                name: "network_info".into(),
+                sha256: "def456".into(),
+            },
+        ];
+
+        let mut wtxn = store.write_txn().unwrap();
+        store.traits.store_scripts(&mut wtxn, &entries).unwrap();
+        wtxn.commit().unwrap();
+
+        let rtxn = store.read_txn().unwrap();
+        let loaded = store.traits.load_scripts(&rtxn).unwrap();
+        assert_eq!(loaded.len(), 2);
+
+        let names: Vec<&str> = loaded.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"disk_usage"));
+        assert!(names.contains(&"network_info"));
+    }
+
+    #[test]
+    fn script_update_replaces_old() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let v1 = vec![crate::proto::CustomTraitEntry {
+            name: "old_trait".into(),
+            sha256: "v1".into(),
+        }];
+        let v2 = vec![crate::proto::CustomTraitEntry {
+            name: "new_trait".into(),
+            sha256: "v2".into(),
+        }];
+
+        let mut wtxn = store.write_txn().unwrap();
+        store.traits.store_scripts(&mut wtxn, &v1).unwrap();
+        wtxn.commit().unwrap();
+
+        let mut wtxn = store.write_txn().unwrap();
+        store.traits.store_scripts(&mut wtxn, &v2).unwrap();
+        wtxn.commit().unwrap();
+
+        let rtxn = store.read_txn().unwrap();
+        let loaded = store.traits.load_scripts(&rtxn).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "new_trait");
+    }
+
+    #[test]
+    fn empty_scripts_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let rtxn = store.read_txn().unwrap();
+        let loaded = store.traits.load_scripts(&rtxn).unwrap();
+        assert!(loaded.is_empty());
     }
 }

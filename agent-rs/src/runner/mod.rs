@@ -14,6 +14,60 @@ use dag::{build_dag, needs_topo_sort, topo_sort, ResourceNode};
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, info, warn};
 
+/// Resource types that edit files and should participate in file transactions.
+const FILE_EDITING_TYPES: &[&str] = &[
+    "file", "file_line", "blockinfile", "ini", "json_file", "replace", "field_edit",
+];
+
+/// Tracks file snapshots for rollback on resource execution failure.
+///
+/// Before a file-editing resource executes, capture the file's original content.
+/// If the resource errors, restore the file from the snapshot.
+struct FileTransactionTracker {
+    snapshots: HashMap<String, Option<String>>,
+}
+
+impl FileTransactionTracker {
+    fn new() -> Self {
+        Self {
+            snapshots: HashMap::new(),
+        }
+    }
+
+    /// Capture original content for `path` if not already captured.
+    fn ensure_snapshot(&mut self, path: &str) {
+        if self.snapshots.contains_key(path) {
+            return;
+        }
+        let content = std::fs::read_to_string(path).ok();
+        self.snapshots.insert(path.to_string(), content);
+    }
+
+    /// Restore `path` to its original content (or delete if it didn't exist).
+    fn rollback(&self, path: &str) {
+        if let Some(original) = self.snapshots.get(path) {
+            match original {
+                Some(content) => {
+                    let _ = std::fs::write(path, content);
+                }
+                None => {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+    }
+}
+
+/// Extract the target file path from a resource node's params.
+fn extract_target_path(node: &ResourceNode) -> Option<String> {
+    if node.resource_type == "file" {
+        node.params.get("targetpath").cloned()
+    } else {
+        node.params.get("path").cloned()
+    }
+    .filter(|s| !s.is_empty())
+}
+
 /// Options for a convergence run.
 pub struct RunOptions {
     pub dry_run: bool,
@@ -99,11 +153,30 @@ pub fn converge(
     // Track resources that need to be re-run due to notify.
     let mut notified: HashSet<String> = HashSet::new();
     let mut results: Vec<ResourceResult> = Vec::new();
+    // File transaction tracking for rollback on error.
+    let mut tracker = FileTransactionTracker::new();
 
     // First pass: execute all resources.
     for node in &ordered {
+        // Snapshot file before editing (for rollback).
+        if !opts.dry_run && FILE_EDITING_TYPES.contains(&node.resource_type.as_str()) {
+            if let Some(path) = extract_target_path(node) {
+                tracker.ensure_snapshot(&path);
+            }
+        }
+
         let mut result = execute_resource(node, executors, cache, opts.dry_run, &opts.run_id);
         result.module_name = node.module_name.clone();
+
+        // Rollback file on error.
+        if result.error.is_some() && !opts.dry_run {
+            if FILE_EDITING_TYPES.contains(&node.resource_type.as_str()) {
+                if let Some(path) = extract_target_path(node) {
+                    warn!(resource = %node.name, path = %path, "rolling back file after error");
+                    tracker.rollback(&path);
+                }
+            }
+        }
 
         if result.changed {
             changed_resources.insert(node.name.clone());
@@ -203,6 +276,29 @@ fn execute_resource(
         }
     }
 
+    // Self-protection guardrails — non-configurable, enforced regardless of server policy.
+    if let Some(violation) = crate::guardrails::check_resource(
+        &node.name,
+        &node.resource_type,
+        &node.params,
+    ) {
+        warn!(
+            resource = %node.name,
+            resource_type = %node.resource_type,
+            reason = %violation.reason,
+            "GUARDRAIL BLOCKED resource execution"
+        );
+        return ResourceResult {
+            module_name: String::new(),
+            resource_type: node.resource_type.clone(),
+            resource_name: node.name.clone(),
+            action: Action::None,
+            changed: false,
+            error: Some(format!("guardrail violation: {}", violation.reason)),
+            duration_ms: 0,
+        };
+    }
+
     // Check result cache.
     if !dry_run {
         if let Some(cached) = cache.lookup(&node.name, &node.resource_type, &node.params) {
@@ -285,6 +381,7 @@ pub fn build_executors_with_snapshots(
 
     // Core executors (Phase 3).
     executors.insert("file".to_string(), Box::new(file::FileExecutor::new(snapshot_mgr)));
+    executors.insert("directory".to_string(), Box::new(directory::DirectoryExecutor::new()));
     executors.insert("exec".to_string(), Box::new(exec::ExecExecutor::new()));
     executors.insert("service".to_string(), Box::new(service::ServiceExecutor::new()));
 
@@ -331,6 +428,8 @@ pub fn build_executors_with_snapshots(
     executors.insert("npm".to_string(), Box::new(npm::NpmExecutor::new()));
     executors.insert("docker_container".to_string(), Box::new(docker_container::DockerContainerExecutor::new()));
     executors.insert("docker_image".to_string(), Box::new(docker_image::DockerImageExecutor::new()));
+    executors.insert("replace".to_string(), Box::new(replace::ReplaceExecutor));
+    executors.insert("field_edit".to_string(), Box::new(field_edit::FieldEditExecutor));
 
     executors
 }
@@ -1053,5 +1152,68 @@ mod tests {
             count_after_second, 1,
             "second converge should hit cache, not call executor again"
         );
+    }
+
+    // ── FileTransactionTracker tests ──────────────────────────────────
+
+    #[test]
+    fn file_transaction_rollback_on_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rollback.conf");
+        let original = "original content\n";
+        std::fs::write(&path, original).unwrap();
+
+        let mut tracker = FileTransactionTracker::new();
+        tracker.ensure_snapshot(path.to_str().unwrap());
+
+        // Simulate a failed write that corrupts the file.
+        std::fs::write(&path, "corrupted\n").unwrap();
+
+        // Rollback should restore original.
+        tracker.rollback(path.to_str().unwrap());
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, original);
+    }
+
+    #[test]
+    fn file_transaction_no_rollback_on_success() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("success.conf");
+        std::fs::write(&path, "original\n").unwrap();
+
+        let mut tracker = FileTransactionTracker::new();
+        tracker.ensure_snapshot(path.to_str().unwrap());
+
+        // Simulate successful write.
+        let new_content = "updated\n";
+        std::fs::write(&path, new_content).unwrap();
+
+        // No rollback — file stays updated.
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, new_content);
+    }
+
+    #[test]
+    fn file_transaction_different_files_independent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path_a = dir.path().join("a.conf");
+        let path_b = dir.path().join("b.conf");
+        std::fs::write(&path_a, "a-original\n").unwrap();
+        std::fs::write(&path_b, "b-original\n").unwrap();
+
+        let mut tracker = FileTransactionTracker::new();
+        tracker.ensure_snapshot(path_a.to_str().unwrap());
+        tracker.ensure_snapshot(path_b.to_str().unwrap());
+
+        // Modify both files.
+        std::fs::write(&path_a, "a-updated\n").unwrap();
+        std::fs::write(&path_b, "b-corrupted\n").unwrap();
+
+        // Only rollback file B.
+        tracker.rollback(path_b.to_str().unwrap());
+
+        // A stays updated, B is restored.
+        assert_eq!(std::fs::read_to_string(&path_a).unwrap(), "a-updated\n");
+        assert_eq!(std::fs::read_to_string(&path_b).unwrap(), "b-original\n");
     }
 }

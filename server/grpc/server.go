@@ -65,13 +65,15 @@ type ServerConfig struct {
 	TraitsDir            string
 	SignatureWindow      time.Duration // 0 → default 5m
 	TraitsScannerTTL     time.Duration // 0 → default 30s
-	MaxConcurrentStreams uint32        // 0 → default 1000
+	MaxConcurrentStreams uint32        // 0 → default 5000
 	Hub              *federation.Hub // non-nil when role=hub
 	SMTPNotifier     *hobnobsmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
 	TaskStore        *tasks.Store
 	FleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	RunBatcher       *fleet.RunBatcher  // async run persistence from delta events
+	BundleSigner     *BundleSigner     // signs policy bundles (nil = no signing)
+	BundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -96,7 +98,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 
 	maxStreams := cfg.MaxConcurrentStreams
 	if maxStreams == 0 {
-		maxStreams = 1000
+		maxStreams = 5000
 	}
 
 	srv := grpc.NewServer(
@@ -136,6 +138,8 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		fleetIndex:       cfg.FleetIndex,
 		runBatcher:       cfg.RunBatcher,
 		reassignStore:    reassignStore,
+		bundleSigner:     cfg.BundleSigner,
+		bundleMaxAge:     cfg.BundleMaxAge,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 

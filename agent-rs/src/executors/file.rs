@@ -247,7 +247,7 @@ fn apply_base_indent(content: &str, n: usize) -> String {
 }
 
 /// Look up UID by username.
-fn lookup_uid(owner: &str) -> Option<u32> {
+pub(crate) fn lookup_uid(owner: &str) -> Option<u32> {
     nix::unistd::User::from_name(owner)
         .ok()
         .flatten()
@@ -255,7 +255,7 @@ fn lookup_uid(owner: &str) -> Option<u32> {
 }
 
 /// Look up GID by group name.
-fn lookup_gid(group: &str) -> Option<u32> {
+pub(crate) fn lookup_gid(group: &str) -> Option<u32> {
     nix::unistd::Group::from_name(group)
         .ok()
         .flatten()
@@ -263,7 +263,7 @@ fn lookup_gid(group: &str) -> Option<u32> {
 }
 
 /// Check if file ownership matches desired.
-fn check_ownership(path: &str, desired_uid: Option<u32>, desired_gid: Option<u32>) -> bool {
+pub(crate) fn check_ownership(path: &str, desired_uid: Option<u32>, desired_gid: Option<u32>) -> bool {
     use std::os::unix::fs::MetadataExt;
     let meta = match fs::metadata(path) {
         Ok(m) => m,
@@ -283,7 +283,7 @@ fn check_ownership(path: &str, desired_uid: Option<u32>, desired_gid: Option<u32
 }
 
 /// Apply ownership via chown.
-fn apply_ownership(
+pub(crate) fn apply_ownership(
     path: &str,
     uid: Option<u32>,
     gid: Option<u32>,

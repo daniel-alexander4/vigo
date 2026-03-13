@@ -76,6 +76,7 @@ database:
 checkin:
   base_interval: "5m"           # agent check-in frequency (stale threshold = 2x this)
   jitter_percent: 20            # randomize check-in timing by 0-N% (avoids thundering herd)
+  bundle_max_age: "24h"         # how long signed policy bundles remain valid on agents (0 = forever)
 
 # ---------------------------------------------------------------------------
 # Secret Rotation Watcher
@@ -133,7 +134,7 @@ bootstrap:
 #   traits_scanner_ttl: "30s"       # custom trait collector cache TTL (default: "30s")
 #   run_store: "database"           # run history backend: "database" or "memory" (default: "database")
 #   run_store_capacity: 20          # per-thrall run depth in memory mode (default: 20)
-#   max_concurrent_streams: 1000    # gRPC bidirectional stream limit (default: 1000)
+#   max_concurrent_streams: 5000    # gRPC bidirectional stream limit (default: 5000)
 #   webhook:
 #     timeout: "10s"                # HTTP request timeout (default: "10s")
 #     max_retries: 3                # retry attempts on transient failures (default: 3)

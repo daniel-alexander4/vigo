@@ -220,6 +220,7 @@ message RegisterResponse {
   string thrall_id = 2;       // UUID assigned by the server
   string message = 3;
   string spoke_addr = 4;    // if set, agent should connect to this spoke for check-ins
+  string server_pubkey_pem = 5; // server's ED25519 public key for bundle signature verification
 }
 
 message CheckInRequest {
@@ -295,6 +296,11 @@ message PolicyBundle {
   string matched_pattern = 7;          // thrall entry match pattern from thralls.hnb
   string environment = 8;             // resolved environment
   repeated string roles = 9;          // role names that were expanded
+
+  // Bundle signing (compiled promises).
+  bytes signature = 10;               // ED25519 signature over fields 1-9
+  string server_pubkey_id = 11;       // fingerprint of signing key (for key rotation)
+  uint32 max_age_seconds = 12;        // how long this bundle remains valid (0 = forever)
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.
@@ -427,6 +433,7 @@ message RunCompleted {
   int32 failed_count = 5;
   int32 skipped_count = 6;
   repeated ModuleResult results = 7;  // only changed/failed (no-ops omitted)
+  uint64 bundle_version = 8;         // policy bundle version used for this run
 }
 
 // TraitsDelta reports changed/removed traits (reserved for future use).

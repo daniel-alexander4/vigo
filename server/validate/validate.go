@@ -69,6 +69,7 @@ type Module struct {
 // knownTypes are the resource types with built-in idempotent executors.
 var knownTypes = map[string]bool{
 	"file":             true,
+	"directory":        true,
 	"package":          true,
 	"service":          true,
 	"user":             true,
@@ -101,6 +102,8 @@ var knownTypes = map[string]bool{
 	"blockinfile":      true,
 	"docker_container": true,
 	"docker_image":     true,
+	"replace":          true,
+	"field_edit":       true,
 }
 
 // ValidateModule checks all resources in a module for idempotency.
@@ -171,6 +174,8 @@ func validateResource(moduleName string, res Resource) []Finding {
 	switch res.Type {
 	case "file":
 		findings = append(findings, validateFile(base, res)...)
+	case "directory":
+		findings = append(findings, validateDirectory(base, res)...)
 	case "exec":
 		findings = append(findings, validateExec(base, res)...)
 	case "service":
@@ -179,6 +184,10 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateCron(base, res)...)
 	case "reboot":
 		findings = append(findings, validateReboot(base, res)...)
+	case "replace":
+		findings = append(findings, validateReplace(base, res)...)
+	case "field_edit":
+		findings = append(findings, validateFieldEdit(base, res)...)
 	}
 
 	return findings
@@ -208,6 +217,21 @@ func validateFile(base Finding, res Resource) []Finding {
 			f.Message = "file resource missing content — add content or source"
 			findings = append(findings, f)
 		}
+	}
+
+	return findings
+}
+
+// validateDirectory checks that directory resources have targetpath.
+// owner, group, mode are optional (defaults: root/root/0755).
+func validateDirectory(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	if attrString(res.Attributes, "targetpath") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "directory resource missing required attribute \"targetpath\""
+		findings = append(findings, f)
 	}
 
 	return findings
@@ -299,6 +323,42 @@ func validateCron(base Finding, res Resource) []Finding {
 		findings = append(findings, f)
 	}
 
+	return findings
+}
+
+// validateReplace checks that replace resources declare required attributes.
+func validateReplace(base Finding, res Resource) []Finding {
+	var findings []Finding
+	for _, field := range []string{"path", "match", "replace"} {
+		if attrString(res.Attributes, field) == "" {
+			f := base
+			f.Severity = SeverityError
+			f.Message = fmt.Sprintf("replace resource missing required attribute %q", field)
+			findings = append(findings, f)
+		}
+	}
+	return findings
+}
+
+// validateFieldEdit checks that field_edit resources declare required attributes.
+func validateFieldEdit(base Finding, res Resource) []Finding {
+	var findings []Finding
+	for _, field := range []string{"path", "line_match", "select_field"} {
+		if attrString(res.Attributes, field) == "" {
+			f := base
+			f.Severity = SeverityError
+			f.Message = fmt.Sprintf("field_edit resource missing required attribute %q", field)
+			findings = append(findings, f)
+		}
+	}
+
+	state := attrString(res.Attributes, "state")
+	if state != "absent" && attrString(res.Attributes, "field_value") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "field_edit resource missing field_value (required when state is not absent)"
+		findings = append(findings, f)
+	}
 	return findings
 }
 

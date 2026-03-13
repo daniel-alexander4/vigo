@@ -842,6 +842,19 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			})
 		}
 
+		// Self-protection guardrails — always enforced, even in dangerous mode.
+		spFindings := validate.ValidateSelfProtection(moduleToValidate(def))
+		for _, f := range spFindings {
+			slog.Error("self-protection violation", "module", def.Name, "finding", f.String())
+		}
+		if validate.HasErrors(spFindings) {
+			idempErrs = append(idempErrs, idempotencyModuleError{
+				Module:   def.Name,
+				Path:     path,
+				Findings: spFindings,
+			})
+		}
+
 		defs[def.Name] = def
 	}
 	if len(idempErrs) > 0 {
