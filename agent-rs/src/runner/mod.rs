@@ -151,6 +151,8 @@ pub fn converge(
 
     // Track which resources changed (for notify triggers).
     let mut changed_resources: HashSet<String> = HashSet::new();
+    // Track which resources failed (for depends_on failure propagation).
+    let mut failed_resources: HashSet<String> = HashSet::new();
     // Track resources that need to be re-run due to notify.
     let mut notified: HashSet<String> = HashSet::new();
     let mut results: Vec<ResourceResult> = Vec::new();
@@ -159,6 +161,26 @@ pub fn converge(
 
     // First pass: execute all resources.
     for node in &ordered {
+        // Skip if any dependency failed — cascading errors are noise.
+        if let Some(failed_dep) = node.depends_on.iter().find(|d| failed_resources.contains(d.as_str())) {
+            warn!(
+                resource = %node.name,
+                failed_dependency = %failed_dep,
+                "skipping resource — dependency failed"
+            );
+            failed_resources.insert(node.name.clone());
+            results.push(ResourceResult {
+                module_name: node.module_name.clone(),
+                resource_type: node.resource_type.clone(),
+                resource_name: node.name.clone(),
+                action: Action::Skipped,
+                changed: false,
+                error: Some(format!("dependency {:?} failed", failed_dep)),
+                duration_ms: 0,
+            });
+            continue;
+        }
+
         // Snapshot file before editing (for rollback).
         if !opts.dry_run && FILE_EDITING_TYPES.contains(&node.resource_type.as_str()) {
             if let Some(path) = extract_target_path(node) {
@@ -177,6 +199,11 @@ pub fn converge(
                     tracker.rollback(&path);
                 }
             }
+        }
+
+        // Track failures for dependency propagation.
+        if result.error.is_some() {
+            failed_resources.insert(node.name.clone());
         }
 
         if result.changed {
@@ -1243,5 +1270,303 @@ mod tests {
         // A stays updated, B is restored.
         assert_eq!(std::fs::read_to_string(&path_a).unwrap(), "a-updated\n");
         assert_eq!(std::fs::read_to_string(&path_b).unwrap(), "b-original\n");
+    }
+
+    // ── depends_on failure propagation tests ─────────────────────────
+
+    /// Executor that fails for specific resource names and succeeds for others.
+    struct FailableExecutor {
+        /// Resource names that should return an error.
+        fail_names: HashSet<String>,
+        calls: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl FailableExecutor {
+        fn new(fail_names: Vec<&str>) -> Self {
+            Self {
+                fail_names: fail_names.into_iter().map(|s| s.to_string()).collect(),
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    impl Executor for FailableExecutor {
+        fn execute(
+            &self,
+            params: &HashMap<String, String>,
+            _dry_run: bool,
+        ) -> ResourceResult {
+            let name = params.get("name").map(|s| s.as_str()).unwrap_or("unknown");
+            self.calls.lock().unwrap().push(name.to_string());
+
+            if self.fail_names.contains(name) {
+                ResourceResult {
+                    module_name: String::new(),
+                    resource_type: "mock".to_string(),
+                    resource_name: name.to_string(),
+                    action: Action::None,
+                    changed: false,
+                    error: Some(format!("{} failed", name)),
+                    duration_ms: 1,
+                }
+            } else {
+                ResourceResult {
+                    module_name: String::new(),
+                    resource_type: "mock".to_string(),
+                    resource_name: name.to_string(),
+                    action: Action::Created,
+                    changed: true,
+                    error: None,
+                    duration_ms: 1,
+                }
+            }
+        }
+    }
+
+    /// A → B → C chain. A fails → B and C should be skipped.
+    #[test]
+    fn depends_on_failure_skips_dependents() {
+        let exec = FailableExecutor::new(vec!["install-nginx"]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        let modules = vec![
+            Module {
+                name: "pkg".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "install-nginx".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "install-nginx".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec![],
+                notify: vec![],
+                subscribes: vec![],
+            },
+            Module {
+                name: "config".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "nginx-conf".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "nginx-conf".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec!["pkg".to_string()],
+                notify: vec![],
+                subscribes: vec![],
+            },
+            Module {
+                name: "svc".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "nginx-svc".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "nginx-svc".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec!["config".to_string()],
+                notify: vec![],
+                subscribes: vec![],
+            },
+        ];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+
+        // Only install-nginx should have been executed.
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1, "only failed resource should execute, got: {:?}", *recorded);
+        assert_eq!(recorded[0], "install-nginx");
+
+        // All 3 results should be present.
+        assert_eq!(results.len(), 3);
+
+        // install-nginx: error.
+        let r0 = results.iter().find(|r| r.resource_name == "install-nginx").unwrap();
+        assert!(r0.error.is_some());
+
+        // nginx-conf: skipped due to dependency failure.
+        let r1 = results.iter().find(|r| r.resource_name == "nginx-conf").unwrap();
+        assert_eq!(r1.action, Action::Skipped);
+        assert!(r1.error.as_ref().unwrap().contains("dependency"));
+
+        // nginx-svc: skipped (transitive — nginx-conf was skipped/failed).
+        let r2 = results.iter().find(|r| r.resource_name == "nginx-svc").unwrap();
+        assert_eq!(r2.action, Action::Skipped);
+        assert!(r2.error.as_ref().unwrap().contains("dependency"));
+    }
+
+    /// A fails, B depends on A, C has no deps. C should still execute.
+    #[test]
+    fn depends_on_failure_does_not_affect_independent_resources() {
+        let exec = FailableExecutor::new(vec!["broken-res"]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        let modules = vec![
+            Module {
+                name: "broken".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "broken-res".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "broken-res".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec![],
+                notify: vec![],
+                subscribes: vec![],
+            },
+            Module {
+                name: "dependent".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "dep-res".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "dep-res".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec!["broken".to_string()],
+                notify: vec![],
+                subscribes: vec![],
+            },
+            Module {
+                name: "independent".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "ok-res".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "ok-res".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec![],
+                notify: vec![],
+                subscribes: vec![],
+            },
+        ];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+
+        // broken-res and ok-res executed; dep-res skipped.
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2, "got: {:?}", *recorded);
+        assert!(recorded.contains(&"broken-res".to_string()));
+        assert!(recorded.contains(&"ok-res".to_string()));
+
+        // dep-res skipped.
+        let dep = results.iter().find(|r| r.resource_name == "dep-res").unwrap();
+        assert_eq!(dep.action, Action::Skipped);
+
+        // ok-res succeeded.
+        let ok = results.iter().find(|r| r.resource_name == "ok-res").unwrap();
+        assert!(ok.error.is_none());
+        assert!(ok.changed);
+    }
+
+    /// No failures → no skipping. Dependencies pass through cleanly.
+    #[test]
+    fn depends_on_no_failure_all_execute() {
+        let exec = FailableExecutor::new(vec![]); // nothing fails
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        let modules = vec![
+            Module {
+                name: "base".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "base-res".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "base-res".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec![],
+                notify: vec![],
+                subscribes: vec![],
+            },
+            Module {
+                name: "app".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "app-res".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "app-res".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec!["base".to_string()],
+                notify: vec![],
+                subscribes: vec![],
+            },
+        ];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+
+        // Both executed.
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+
+        // Both succeeded.
+        assert!(results.iter().all(|r| r.error.is_none()));
+        assert!(results.iter().all(|r| r.changed));
     }
 }
