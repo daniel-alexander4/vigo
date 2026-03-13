@@ -34,6 +34,9 @@ type LocalProvider struct {
 	mu         sync.RWMutex
 }
 
+// Dir returns the secrets directory path.
+func (p *LocalProvider) Dir() string { return p.secretsDir }
+
 // NewLocalProvider creates a provider that reads encrypted secrets from
 // secretsDir using the master key in keyFile. The key file must be exactly
 // 32 bytes (raw) or 64 hex characters, or any length (hashed with SHA-256).

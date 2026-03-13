@@ -180,3 +180,69 @@ func TestExpiresTime(t *testing.T) {
 		t.Errorf("got %v, want %v", exp, expected)
 	}
 }
+
+func TestFreeLicense(t *testing.T) {
+	origKey := PublicKeyHex
+	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+
+	lic, err := FreeLicense()
+	if err != nil {
+		t.Fatalf("FreeLicense: %v", err)
+	}
+
+	if lic.Payload.MaxThralls != 25 {
+		t.Errorf("max_thralls = %d, want 25", lic.Payload.MaxThralls)
+	}
+	if lic.Payload.LicenseID != "free-25" {
+		t.Errorf("license_id = %q, want %q", lic.Payload.LicenseID, "free-25")
+	}
+	if lic.Payload.CustomerName != "Community" {
+		t.Errorf("customer_name = %q, want %q", lic.Payload.CustomerName, "Community")
+	}
+}
+
+func TestLoadDirFallsBackToFree(t *testing.T) {
+	origKey := PublicKeyHex
+	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+
+	dir := t.TempDir() // empty — no .lic files
+
+	lic, path, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	if path != "(built-in free-25)" {
+		t.Errorf("path = %q, want %q", path, "(built-in free-25)")
+	}
+	if lic.Payload.MaxThralls != 25 {
+		t.Errorf("max_thralls = %d, want 25", lic.Payload.MaxThralls)
+	}
+}
+
+func TestLoadDirPrefersOnDisk(t *testing.T) {
+	pub, priv := testKeypair(t)
+	origKey := PublicKeyHex
+	setPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+
+	payload := testPayload()
+	payload.MaxThralls = 500
+	lic := signLicense(t, payload, priv)
+
+	dir := t.TempDir()
+	data, _ := json.MarshalIndent(lic, "", "  ")
+	os.WriteFile(filepath.Join(dir, "paid.lic"), data, 0644)
+
+	loaded, path, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	if loaded.Payload.MaxThralls != 500 {
+		t.Errorf("max_thralls = %d, want 500 (on-disk license should take priority)", loaded.Payload.MaxThralls)
+	}
+	if path == "(built-in free-25)" {
+		t.Error("should have loaded on-disk license, not embedded free")
+	}
+}

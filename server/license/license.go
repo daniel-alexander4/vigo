@@ -46,15 +46,10 @@ func LoadFile(path string) (*License, error) {
 
 // LoadDir scans a directory for .lic files and returns the first one that
 // parses and passes signature verification. Files are tried in lexicographic
-// order. Returns an error if no valid license is found.
+// order. If no valid .lic file is found on disk, falls back to the embedded
+// 25-node community license.
 func LoadDir(dir string) (*License, string, error) {
-	matches, err := filepath.Glob(filepath.Join(dir, "*.lic"))
-	if err != nil {
-		return nil, "", fmt.Errorf("scanning license directory: %w", err)
-	}
-	if len(matches) == 0 {
-		return nil, "", fmt.Errorf("no .lic files found in %s", dir)
-	}
+	matches, _ := filepath.Glob(filepath.Join(dir, "*.lic"))
 	sort.Strings(matches)
 
 	for _, path := range matches {
@@ -67,7 +62,13 @@ func LoadDir(dir string) (*License, string, error) {
 		}
 		return lic, path, nil
 	}
-	return nil, "", fmt.Errorf("no valid license found in %s (%d .lic file(s) checked)", dir, len(matches))
+
+	// No valid .lic on disk — use the built-in free license.
+	lic, err := FreeLicense()
+	if err != nil {
+		return nil, "", fmt.Errorf("no valid license on disk and embedded free license failed: %w", err)
+	}
+	return lic, "(built-in free-25)", nil
 }
 
 // Parse decodes a license from raw JSON bytes.

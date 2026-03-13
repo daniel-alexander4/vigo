@@ -4,7 +4,6 @@
 package secrets
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -15,19 +14,38 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 )
 
-// EnsureTLSCerts checks whether the four TLS secrets exist and generates
-// self-signed certificates if any are missing. This gives every server
-// install unique keys on first start with zero manual steps.
+// TLS cert file names within the secrets directory (hobnob/tls/).
+const (
+	tlsDir     = "hobnob/tls"
+	tlsCA      = "ca"
+	tlsCAKey   = "ca_key"
+	tlsCert    = "cert"
+	tlsKey     = "key"
+)
+
+// TLSCertPaths returns the absolute paths for the four TLS files under dir.
+func TLSCertPaths(secretsDir string) (ca, caKey, cert, key string) {
+	d := filepath.Join(secretsDir, tlsDir)
+	return filepath.Join(d, tlsCA),
+		filepath.Join(d, tlsCAKey),
+		filepath.Join(d, tlsCert),
+		filepath.Join(d, tlsKey)
+}
+
+// EnsureTLSCerts checks whether the four TLS PEM files exist under the
+// secrets directory and generates self-signed certificates if any are missing.
+// Files are written as plain PEM (not encrypted) since they are loaded
+// directly by the TLS stack via file paths in server.yaml.
 //
 // Only called for the local backend — isopass/static manage certs externally.
 func (p *LocalProvider) EnsureTLSCerts() error {
-	keys := []string{"hobnob/tls/ca", "hobnob/tls/ca_key", "hobnob/tls/cert", "hobnob/tls/key"}
-	for _, k := range keys {
-		ver, _ := p.GetVersion(context.Background(), k)
-		if ver == 0 {
+	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(p.secretsDir)
+	for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
+		if _, err := os.Stat(f); os.IsNotExist(err) {
 			return p.generateSelfSignedCerts()
 		}
 	}
@@ -99,16 +117,25 @@ func (p *LocalProvider) generateSelfSignedCerts() error {
 	serverKeyDER, _ := x509.MarshalECPrivateKey(serverKey)
 	serverKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER})
 
-	// Store encrypted.
-	pairs := []struct{ key, val string }{
-		{"hobnob/tls/ca", string(caCertPEM)},
-		{"hobnob/tls/ca_key", string(caKeyPEM)},
-		{"hobnob/tls/cert", string(serverCertPEM)},
-		{"hobnob/tls/key", string(serverKeyPEM)},
+	// Write PEM files to secrets/hobnob/tls/.
+	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(p.secretsDir)
+	if err := os.MkdirAll(filepath.Dir(caPath), 0700); err != nil {
+		return fmt.Errorf("creating TLS directory: %w", err)
 	}
-	for _, kv := range pairs {
-		if err := p.Set(kv.key, kv.val); err != nil {
-			return fmt.Errorf("storing %s: %w", kv.key, err)
+
+	files := []struct {
+		path string
+		data []byte
+		mode os.FileMode
+	}{
+		{caPath, caCertPEM, 0644},
+		{caKeyPath, caKeyPEM, 0600},
+		{certPath, serverCertPEM, 0644},
+		{keyPath, serverKeyPEM, 0600},
+	}
+	for _, f := range files {
+		if err := os.WriteFile(f.path, f.data, f.mode); err != nil {
+			return fmt.Errorf("writing %s: %w", f.path, err)
 		}
 	}
 

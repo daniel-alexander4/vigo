@@ -16,11 +16,7 @@ import (
 // builtinDefaults are sane zero-config defaults for core secrets so the
 // server starts out of the box without a .env file or env vars.
 var builtinDefaults = map[string]string{
-	"HOBNOB_DB_DSN":      "/etc/hobnob-server/db/hobnob.db",
-	"HOBNOB_TLS_CERT":    "certs/server.crt",
-	"HOBNOB_TLS_KEY":     "certs/server.key",
-	"HOBNOB_TLS_CA":      "certs/ca.crt",
-	"HOBNOB_TLS_CA_KEY":  "certs/ca.key",
+	"HOBNOB_DB_DSN": "/etc/hobnob-server/db/hobnob.db",
 }
 
 // StaticProvider resolves secrets from three layers (first match wins):

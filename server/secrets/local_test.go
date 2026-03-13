@@ -401,14 +401,15 @@ func TestEnsureTLSCertsGenerates(t *testing.T) {
 		t.Fatalf("EnsureTLSCerts: %v", err)
 	}
 
-	// All four secrets should exist.
-	for _, key := range []string{"hobnob/tls/ca", "hobnob/tls/ca_key", "hobnob/tls/cert", "hobnob/tls/key"} {
-		val, err := p.Get(context.Background(), key)
+	// All four PEM files should exist on disk.
+	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(p.Dir())
+	for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
+		data, err := os.ReadFile(f)
 		if err != nil {
-			t.Fatalf("Get %q: %v", key, err)
+			t.Fatalf("ReadFile %q: %v", f, err)
 		}
-		if !strings.Contains(val, "-----BEGIN") {
-			t.Errorf("%q does not look like PEM: %q", key, val[:50])
+		if !strings.Contains(string(data), "-----BEGIN") {
+			t.Errorf("%q does not look like PEM", f)
 		}
 	}
 }
@@ -421,16 +422,16 @@ func TestEnsureTLSCertsIdempotent(t *testing.T) {
 		t.Fatalf("first call: %v", err)
 	}
 
-	// Get the CA cert from first generation.
-	first, _ := p.Get(context.Background(), "hobnob/tls/ca")
+	caPath, _, _, _ := TLSCertPaths(p.Dir())
+	first, _ := os.ReadFile(caPath)
 
-	// Second call should be a no-op (certs already exist).
+	// Second call should be a no-op (files already exist).
 	if err := p.EnsureTLSCerts(); err != nil {
 		t.Fatalf("second call: %v", err)
 	}
 
-	second, _ := p.Get(context.Background(), "hobnob/tls/ca")
-	if first != second {
+	second, _ := os.ReadFile(caPath)
+	if string(first) != string(second) {
 		t.Error("EnsureTLSCerts regenerated existing certs — should be idempotent")
 	}
 }

@@ -38,10 +38,10 @@ server:
   grpc_listen: ":1530"          # gRPC agent port (mTLS)
   api_listen: ":8181"           # REST API + web UI + metrics port
   tls:
-    cert_file: "secret:hobnob/tls/cert"       # server TLS certificate (secret:)
-    key_file: "secret:hobnob/tls/key"         # server TLS private key (secret:)
-    ca_file: "secret:hobnob/tls/ca"           # CA cert for mTLS verification (secret:)
-    ca_key_file: "secret:hobnob/tls/ca_key"   # CA private key — enables bootstrap CSR signing (secret:)
+    cert_file: "secrets/hobnob/tls/cert"       # server TLS certificate (auto-generated on first start)
+    key_file: "secrets/hobnob/tls/key"         # server TLS private key
+    ca_file: "secrets/hobnob/tls/ca"           # CA cert for mTLS verification
+    ca_key_file: "secrets/hobnob/tls/ca_key"   # CA private key — enables bootstrap CSR signing
 
 # ---------------------------------------------------------------------------
 # Database

@@ -133,13 +133,45 @@ func TestEnforcerOverLimit(t *testing.T) {
 	}
 }
 
-func TestEnforcerNoLicenseFile(t *testing.T) {
+func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 	dir := t.TempDir()
+
+	// Restore the real public key so the embedded free license verifies.
+	origKey := PublicKeyHex
+	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+
+	counter := func(ctx context.Context) (int, error) { return 5, nil }
+
+	e, err := NewEnforcer(dir, dir, counter, func() {})
+	if err != nil {
+		t.Fatalf("expected free license fallback, got error: %v", err)
+	}
+
+	s := e.GetStatus()
+	if s.Stage != StageCompliant {
+		t.Errorf("stage = %v, want Compliant", s.Stage)
+	}
+	if s.MaxThralls != 25 {
+		t.Errorf("max_thralls = %d, want 25", s.MaxThralls)
+	}
+	if s.License.LicenseID != "free-25" {
+		t.Errorf("license_id = %q, want %q", s.License.LicenseID, "free-25")
+	}
+}
+
+func TestEnforcerNoLicenseAndNoKey(t *testing.T) {
+	dir := t.TempDir()
+
+	origKey := PublicKeyHex
+	setPublicKeyForTest("")
+	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+
 	counter := func(ctx context.Context) (int, error) { return 0, nil }
 
 	_, err := NewEnforcer(dir, dir, counter, func() {})
 	if err == nil {
-		t.Fatal("expected error for empty license directory")
+		t.Fatal("expected error when no key and no license file")
 	}
 }
 

@@ -278,23 +278,22 @@ func runSecretsInit(cmd *cobra.Command, _ []string) error {
 }
 
 func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
-	provider, err := newLocalProvider(cmd)
-	if err != nil {
-		return err
+	secretsDir, _ := cmd.Flags().GetString("secrets-dir")
+	if secretsDir == "" {
+		secretsDir = "/etc/hobnob-server/secrets"
 	}
-	defer provider.Close()
 
 	force, _ := cmd.Flags().GetBool("force")
 	caDays, _ := cmd.Flags().GetInt("ca-days")
 	serverDays, _ := cmd.Flags().GetInt("server-days")
 	extraSANs, _ := cmd.Flags().GetStringSlice("san")
 
-	// Check for existing certs (GetVersion returns 0 for nonexistent, avoids builtin fallbacks).
-	certKeys := []string{"hobnob/tls/ca", "hobnob/tls/ca_key", "hobnob/tls/cert", "hobnob/tls/key"}
+	// Check for existing cert files.
+	caPath, caKeyPath, certPath, keyPath := secrets.TLSCertPaths(secretsDir)
 	if !force {
-		for _, k := range certKeys {
-			if ver, _ := provider.GetVersion(cmd.Context(), k); ver > 0 {
-				return fmt.Errorf("secret %q already exists — use --force to overwrite", k)
+		for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
+			if _, err := os.Stat(f); err == nil {
+				return fmt.Errorf("cert file %q already exists — use --force to overwrite", f)
 			}
 		}
 	}
@@ -373,23 +372,28 @@ func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
 	serverKeyDER, _ := x509.MarshalECPrivateKey(serverKey)
 	serverKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER})
 
-	// Store in encrypted secrets.
-	stores := []struct {
-		key   string
-		value string
-		label string
-	}{
-		{"hobnob/tls/ca", string(caCertPEM), "CA certificate"},
-		{"hobnob/tls/ca_key", string(caKeyPEM), "CA private key"},
-		{"hobnob/tls/cert", string(serverCertPEM), "Server certificate"},
-		{"hobnob/tls/key", string(serverKeyPEM), "Server private key"},
+	// Write PEM files directly to secrets/hobnob/tls/.
+	if err := os.MkdirAll(filepath.Dir(caPath), 0700); err != nil {
+		return fmt.Errorf("creating TLS directory: %w", err)
 	}
 
-	for _, s := range stores {
-		if err := provider.Set(s.key, s.value); err != nil {
-			return fmt.Errorf("storing %s: %w", s.label, err)
+	files := []struct {
+		path  string
+		data  []byte
+		mode  os.FileMode
+		label string
+	}{
+		{caPath, caCertPEM, 0644, "CA certificate"},
+		{caKeyPath, caKeyPEM, 0600, "CA private key"},
+		{certPath, serverCertPEM, 0644, "Server certificate"},
+		{keyPath, serverKeyPEM, 0600, "Server private key"},
+	}
+
+	for _, f := range files {
+		if err := os.WriteFile(f.path, f.data, f.mode); err != nil {
+			return fmt.Errorf("writing %s: %w", f.label, err)
 		}
-		fmt.Printf("  %-20s → %s\n", s.label, s.key)
+		fmt.Printf("  %-20s → %s\n", f.label, f.path)
 	}
 
 	fmt.Printf("\n  CA valid for %d days, server cert valid for %d days.\n", caDays, serverDays)

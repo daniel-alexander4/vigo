@@ -86,10 +86,6 @@ func TestStaticProviderBuiltinDefaults(t *testing.T) {
 		want string
 	}{
 		{"hobnob/db/dsn", "/etc/hobnob-server/db/hobnob.db"},
-		{"hobnob/tls/cert", "certs/server.crt"},
-		{"hobnob/tls/key", "certs/server.key"},
-		{"hobnob/tls/ca", "certs/ca.crt"},
-		{"hobnob/tls/ca_key", "certs/ca.key"},
 	}
 	for _, tc := range cases {
 		val, err := p.Get(context.Background(), tc.key)

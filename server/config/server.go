@@ -63,10 +63,6 @@ func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider, backend 
 	}
 	fields := []field{
 		{&cfg.Database.DSN, "database.dsn"},
-		{&cfg.Server.TLS.CertFile, "server.tls.cert_file"},
-		{&cfg.Server.TLS.KeyFile, "server.tls.key_file"},
-		{&cfg.Server.TLS.CAFile, "server.tls.ca_file"},
-		{&cfg.Server.TLS.CAKeyFile, "server.tls.ca_key_file"},
 	}
 
 	var errs []*SecretError
