@@ -30,8 +30,19 @@ func NewStateFlusher(fleet *FleetIndex, queries *db.Queries) *StateFlusher {
 }
 
 // Start runs the flush loop, writing dirty thrall state to SQLite every interval.
-// Blocks until ctx is cancelled. Performs a final flush on shutdown.
-func (sf *StateFlusher) Start(ctx context.Context, interval time.Duration) {
+// Blocks until ctx is cancelled. Performs a final flush on shutdown. The offset
+// parameter staggers the start relative to other flushers to avoid SQLite write
+// lock contention.
+func (sf *StateFlusher) Start(ctx context.Context, interval, offset time.Duration) {
+	if offset > 0 {
+		select {
+		case <-time.After(offset):
+		case <-ctx.Done():
+			sf.Flush(context.Background())
+			return
+		}
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

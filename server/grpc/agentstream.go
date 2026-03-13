@@ -74,9 +74,16 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 	// Register the stream for push notifications.
 	as, cleanup := s.streamMgr.register(thrallID, thrall.Hostname)
 	defer cleanup()
+	// Persist final last_seen to DB when the stream closes so the timestamp
+	// survives server restart (streaming thralls skip DB writes mid-stream).
+	defer func() {
+		if s.fleetIndex != nil {
+			s.fleetIndex.MarkSeen(thrallID, time.Now())
+		}
+	}()
 
 	// Send initial policy response.
-	resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, checkin)
+	resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, checkin, true)
 	if err != nil {
 		return err
 	}
@@ -131,7 +138,7 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
-				resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, m.CheckIn)
+				resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, m.CheckIn, true)
 				if err != nil {
 					slog.Error("stream check-in error", "thrall_id", thrallID, "error", err)
 					continue
@@ -201,11 +208,18 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 }
 
 // buildCheckInResponse builds a CheckInResponse for both unary and stream contexts.
-// Extracted from CheckIn() to share logic.
-func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string, thrall db.Thrall, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
-	// Update last-seen: in-memory (FleetIndex) and batched DB write.
+// When streaming is true, last_seen is updated in-memory only (no DB write) since
+// the open gRPC stream already proves liveness. Unary RPCs set streaming=false to
+// ensure the timestamp is flushed to SQLite.
+func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string, thrall db.Thrall, req *pb.CheckInRequest, streaming bool) (*pb.CheckInResponse, error) {
+	// Update last-seen: streaming thralls skip the DB dirty flag since the open
+	// stream already proves liveness. A final MarkSeen on disconnect persists it.
 	if s.fleetIndex != nil {
-		s.fleetIndex.MarkSeen(thrallID, time.Now())
+		if streaming {
+			s.fleetIndex.MarkSeenInMemory(thrallID, time.Now())
+		} else {
+			s.fleetIndex.MarkSeen(thrallID, time.Now())
+		}
 	}
 	// Batch inline traits for periodic flush (hash-deduplicated).
 	inlineTraits := req.GetTraitsJson()
@@ -361,6 +375,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 					slog.Warn("failed to clear force_push", "thrall_id", thrallID, "error", err)
 				}
 			}
+		}
+	}
+
+	// Sign the bundle if a signer is configured.
+	if s.bundleSigner != nil {
+		if err := s.bundleSigner.Sign(bundle, s.bundleMaxAge); err != nil {
+			slog.Error("failed to sign policy bundle", "thrall_id", thrallID, "error", err)
 		}
 	}
 

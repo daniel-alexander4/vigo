@@ -64,7 +64,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		}
 	}
 
-	return s.buildCheckInResponse(ctx, thrallID, thrall, req)
+	return s.buildCheckInResponse(ctx, thrallID, thrall, req, false)
 }
 
 // lookupThrall resolves a thrall from FleetIndex, context, cache, or DB.

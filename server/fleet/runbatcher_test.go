@@ -97,7 +97,7 @@ func TestRunBatcherShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	rb.Start(ctx, 10*time.Second)
+	rb.Start(ctx, 10*time.Second, 0)
 
 	// After shutdown, the final flush should have persisted the run.
 	runs, err := store.ListAllRuns(context.Background(), 10)

@@ -60,8 +60,18 @@ func (rb *RunBatcher) Submit(entry RunBatchEntry) {
 }
 
 // Start runs the flush loop. Blocks until ctx is cancelled, then performs
-// a final flush.
-func (rb *RunBatcher) Start(ctx context.Context, interval time.Duration) {
+// a final flush. The offset parameter staggers the start relative to other
+// flushers to avoid SQLite write lock contention.
+func (rb *RunBatcher) Start(ctx context.Context, interval, offset time.Duration) {
+	if offset > 0 {
+		select {
+		case <-time.After(offset):
+		case <-ctx.Done():
+			rb.Flush(context.Background())
+			return
+		}
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

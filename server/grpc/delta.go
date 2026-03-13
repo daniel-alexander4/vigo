@@ -4,6 +4,7 @@
 package grpc
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -20,8 +21,11 @@ func (s *AgentService) handleDelta(thrallID, hostname string, delta *pb.DeltaEve
 	case *pb.DeltaEvent_Run:
 		s.handleRunDelta(thrallID, hostname, ev.Run)
 	case *pb.DeltaEvent_Heartbeat:
+		// Heartbeats only occur within streams — update in-memory only to avoid
+		// redundant last_seen DB writes. The stream disconnect handler persists
+		// the final timestamp.
 		if s.fleetIndex != nil {
-			s.fleetIndex.MarkSeen(thrallID, time.Now())
+			s.fleetIndex.MarkSeenInMemory(thrallID, time.Now())
 		}
 	}
 	return &pb.DeltaAck{AckedSequence: delta.Sequence}
@@ -99,7 +103,7 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 	// Dispatch webhook event.
 	if s.dispatcher != nil {
 		event := webhook.FormatRunEvent(runStatus)
-		s.dispatcher.Dispatch(nil, event, webhook.EventPayload{
+		s.dispatcher.Dispatch(context.Background(), event, webhook.EventPayload{
 			Thrall: &webhook.ThrallInfo{
 				ID:       thrallID,
 				Hostname: hostname,
@@ -113,7 +117,7 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 		})
 
 		if changedCount > 0 {
-			s.dispatcher.Dispatch(nil, "drift.detected", webhook.EventPayload{
+			s.dispatcher.Dispatch(context.Background(), "drift.detected", webhook.EventPayload{
 				Thrall: &webhook.ThrallInfo{
 					ID:       thrallID,
 					Hostname: hostname,

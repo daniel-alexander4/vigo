@@ -377,6 +377,43 @@ func TestSetRevoked(t *testing.T) {
 	}
 }
 
+func TestMarkSeenInMemory(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "unknown"}, nil)
+
+	fi.MarkSeenInMemory("t1", time.Now())
+
+	// LastSeen should be updated.
+	got := fi.GetThrall("t1")
+	if time.Since(got.LastSeen) > time.Second {
+		t.Errorf("expected LastSeen to be recent, got %v", got.LastSeen)
+	}
+
+	// But dirty count should remain 0.
+	if fi.DirtyCount() != 0 {
+		t.Errorf("DirtyCount = %d, want 0 (MarkSeenInMemory should not mark dirty)", fi.DirtyCount())
+	}
+}
+
+func TestMarkSeenInMemory_ThenMarkSeen(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "unknown"}, nil)
+
+	// Simulate many in-memory updates (streaming heartbeats).
+	for i := 0; i < 100; i++ {
+		fi.MarkSeenInMemory("t1", time.Now())
+	}
+	if fi.DirtyCount() != 0 {
+		t.Fatalf("DirtyCount after 100 MarkSeenInMemory = %d, want 0", fi.DirtyCount())
+	}
+
+	// Simulate disconnect: one MarkSeen to persist final timestamp.
+	fi.MarkSeen("t1", time.Now())
+	if fi.DirtyCount() != 1 {
+		t.Errorf("DirtyCount after disconnect MarkSeen = %d, want 1", fi.DirtyCount())
+	}
+}
+
 func TestActiveCount(t *testing.T) {
 	fi := NewFleetIndex()
 

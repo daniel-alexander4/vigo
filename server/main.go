@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -369,6 +370,9 @@ func run() error {
 	// Create async run batcher for delta events.
 	runBatcher := fleet.NewRunBatcher(runStore)
 
+	// Initialize bundle signer for compiled promises.
+	bundleSigner, bundleMaxAge := initBundleSigner(cfg)
+
 	// Create and start gRPC server.
 	grpcSrv, _, traitsBatch, traitsPruner, agentSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:             cfg.Server.TLS.CertFile,
@@ -391,20 +395,19 @@ func run() error {
 		TaskStore:            taskStore,
 		FleetIndex:           fleetIndex,
 		RunBatcher:           runBatcher,
+		BundleSigner:        bundleSigner,
+		BundleMaxAge:        bundleMaxAge,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
 	}
 
-	// Start async state flusher (FleetIndex → SQLite).
+	// Start async flushers with staggered offsets to avoid SQLite write lock
+	// contention. For default 10s interval → offsets of 0s, ~3.3s, ~6.6s.
 	stateFlusher := fleet.NewStateFlusher(fleetIndex, queries)
-	go stateFlusher.Start(ctx, lastSeenFlush)
-
-	// Start async run batcher (delta events → SQLite).
-	go runBatcher.Start(ctx, lastSeenFlush)
-
-	// Start async traits batcher (hash-deduplicated, flush every 10s).
-	go traitsBatch.Start(ctx, lastSeenFlush)
+	go stateFlusher.Start(ctx, lastSeenFlush, 0)
+	go runBatcher.Start(ctx, lastSeenFlush, lastSeenFlush/3)
+	go traitsBatch.Start(ctx, lastSeenFlush, 2*lastSeenFlush/3)
 
 	// Start async traits pruner.
 	go traitsPruner.Start(ctx, traitsPruneInterval)
@@ -671,6 +674,26 @@ func hasFlag(flag string) bool {
 }
 
 // envOrDefault returns the environment variable value or a default.
+// initBundleSigner creates a BundleSigner by generating an ED25519 signing key.
+// The key is ephemeral (generated per server start). Returns nil if key generation
+// fails (signing is optional — bundles will be unsigned).
+func initBundleSigner(cfg *config.ServerConfig) (*isgrpc.BundleSigner, uint32) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		slog.Error("failed to generate bundle signing key", "error", err)
+		return nil, 0
+	}
+
+	signer := isgrpc.NewBundleSigner(priv)
+	slog.Info("bundle signer initialized", "key_id", signer.KeyID())
+
+	// Parse bundle_max_age from config (default 24h = 86400 seconds).
+	maxAge := parseDuration(cfg.CheckIn.BundleMaxAge, 24*time.Hour)
+	maxAgeSeconds := uint32(maxAge.Seconds())
+
+	return signer, maxAgeSeconds
+}
+
 func envOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

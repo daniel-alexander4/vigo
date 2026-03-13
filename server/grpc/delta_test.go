@@ -98,9 +98,10 @@ func TestHandleRunDelta(t *testing.T) {
 func TestHandleHeartbeat(t *testing.T) {
 	svc, idx, _ := newTestDeltaService()
 
-	// Set an old LastSeen.
+	// Set an old LastSeen via MarkSeen (which marks dirty), then drain to clear.
 	old := time.Now().Add(-10 * time.Minute)
 	idx.MarkSeen("thrall-1", old)
+	idx.DrainDirty() // clear dirty set
 
 	delta := &pb.DeltaEvent{
 		Sequence: 5,
@@ -113,13 +114,18 @@ func TestHandleHeartbeat(t *testing.T) {
 		t.Errorf("expected acked_sequence=5, got %d", ack.AckedSequence)
 	}
 
-	// Verify LastSeen was updated.
+	// Verify LastSeen was updated in-memory.
 	ts := idx.GetThrall("thrall-1")
 	if ts == nil {
 		t.Fatal("thrall not found")
 	}
 	if time.Since(ts.LastSeen) > time.Second {
 		t.Errorf("expected LastSeen to be recent, got %v", ts.LastSeen)
+	}
+
+	// Heartbeats use MarkSeenInMemory — should NOT mark dirty.
+	if idx.DirtyCount() != 0 {
+		t.Errorf("heartbeat should not mark dirty, got DirtyCount=%d", idx.DirtyCount())
 	}
 }
 

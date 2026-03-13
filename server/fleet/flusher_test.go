@@ -4,6 +4,7 @@
 package fleet
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -126,6 +127,56 @@ func TestStateFlusher_ConcurrentMarkAndFlush(t *testing.T) {
 
 	wg.Wait()
 	// No panics or races = pass.
+}
+
+// TestStateFlusher_StaggerOffset verifies that when context is cancelled during
+// the stagger offset wait, Start() still exits promptly (runs final flush and
+// returns). We use an empty dirty set so Flush returns immediately.
+func TestStateFlusher_StaggerOffset(t *testing.T) {
+	fi := NewFleetIndex()
+	sf := &StateFlusher{fleet: fi}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+
+	go func() {
+		// Start with a very long offset (1 hour) — we'll cancel before it elapses.
+		sf.Start(ctx, 10*time.Second, 1*time.Hour)
+		close(done)
+	}()
+
+	// Cancel immediately — the flusher should exit the offset wait promptly.
+	cancel()
+
+	select {
+	case <-done:
+		// Success — Start returned after context cancel during offset.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start did not return after context cancel during offset wait")
+	}
+}
+
+// TestStateFlusher_ZeroOffset verifies that Start with offset=0 skips the
+// offset wait entirely and proceeds directly to the ticker loop.
+func TestStateFlusher_ZeroOffset(t *testing.T) {
+	fi := NewFleetIndex()
+	sf := &StateFlusher{fleet: fi}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately.
+
+	done := make(chan struct{})
+	go func() {
+		sf.Start(ctx, 10*time.Second, 0)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start with offset=0 did not return after context cancel")
+	}
 }
 
 // TestStateFlusher_DrainReturnsSnapshot verifies that DrainDirty returns a

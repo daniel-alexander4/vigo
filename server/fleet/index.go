@@ -342,7 +342,8 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 	}
 }
 
-// MarkSeen updates the LastSeen timestamp for a thrall.
+// MarkSeen updates the LastSeen timestamp for a thrall and marks it dirty
+// for async flush to SQLite.
 func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -353,6 +354,20 @@ func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 	}
 	ts.LastSeen = t
 	f.dirty[id] = true
+}
+
+// MarkSeenInMemory updates the LastSeen timestamp in-memory without marking
+// the thrall dirty. Used for streaming thralls where the open gRPC stream
+// already proves liveness — avoids redundant last_seen DB writes.
+func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.thralls[id]
+	if !ok {
+		return
+	}
+	ts.LastSeen = t
 }
 
 // SetForcePush sets the ForcePush flag.

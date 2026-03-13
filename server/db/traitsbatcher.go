@@ -51,8 +51,18 @@ func (b *TraitsBatcher) Mark(thrallID, traitsJSON string) {
 }
 
 // Start runs the flush loop, writing accumulated traits to the DB every
-// interval. Blocks until ctx is cancelled.
-func (b *TraitsBatcher) Start(ctx context.Context, interval time.Duration) {
+// interval. Blocks until ctx is cancelled. The offset parameter staggers
+// the start relative to other flushers to avoid SQLite write lock contention.
+func (b *TraitsBatcher) Start(ctx context.Context, interval, offset time.Duration) {
+	if offset > 0 {
+		select {
+		case <-time.After(offset):
+		case <-ctx.Done():
+			b.Flush(context.Background())
+			return
+		}
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

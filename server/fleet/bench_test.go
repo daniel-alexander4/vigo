@@ -84,6 +84,15 @@ func BenchmarkFleetIndexMarkSeen(b *testing.B) {
 	}
 }
 
+func BenchmarkFleetIndexMarkSeenInMemory(b *testing.B) {
+	fi := populateIndex(10000)
+	now := time.Now()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fi.MarkSeenInMemory(fmt.Sprintf("t-%d", i%10000), now)
+	}
+}
+
 func BenchmarkFleetIndexComplianceSummary(b *testing.B) {
 	fi := populateIndex(10000)
 	b.ResetTimer()
