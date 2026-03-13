@@ -1,560 +1,796 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** Pull-based configuration management system (Puppet-style)
-**Researched:** 2026-03-05
+**Domain:** Orchestration integration with pull-based config management (Hobnob v1.3)
+**Researched:** 2026-03-11
+**Confidence:** HIGH — based on direct codebase analysis, not inference
 
-## Recommended Architecture
+## Context
 
-Isogov follows the classic pull-based configuration management model pioneered by Puppet and Chef: a central server holds desired-state declarations, agents on managed nodes poll for their catalog, idempotently converge, and report results back. The system has four deployable artifacts (server, agent, CLI, web UI) communicating over two transport layers (gRPC for agent-server, REST for human-facing tools).
+This is a **subsequent milestone** architecture document. The existing system is fully understood from source code. All decisions are constrained by what already exists:
 
-### High-Level System Diagram
+- `AgentStream` bidirectional RPC in `proto/hobnob.proto` (lines 34, 361-389)
+- `streamManager` in `server/grpc/streams.go`: `register()`, `pushPolicy()`, `forcePush()`
+- `agentStream.send chan *pb.ServerStreamMessage` — buffer size 8
+- `StreamHandle` in `agent-rs/src/checkin/stream.rs`: `request_tx`, `policy_push_rx`, `force_push_rx`, `check_in_resp_rx`, `done`
+- `read_loop()` in agent dispatches on `server_stream_message::Msg` variants
+- `RunStore` interface in `server/db/runstore.go`: `CreateRun`, `CreateRunResult`, `FinishRun`, `ListRuns`
+- `SQLite` schema in `migrations/000001_initial_schema.up.sql`
 
-```
-                      +--------------------+
-                      |   Admin Workstation |
-                      |                    |
-                      |  gvctl CLI         |
-                      +--------+-----------+
-                               | REST/HTTPS
-                               v
-+----------------+    +--------+-----------+    +------------------+
-| YAML Config    |    |                    |    |                  |
-| (filesystem)   +--->+   Isogov Server    +--->+   PostgreSQL 16  |
-|                |    |                    |    |                  |
-| - server.yaml  |    | - gRPC server      |    +------------------+
-| - clients/*.yaml|   | - REST API server  |
-| - classification|   | - Config loader    |    +------------------+
-| - modules/*.yaml|   | - Registry         |    |                  |
-+----------------+    | - Runner/DAG       +--->+   isopass         |
-                      | - Webhook dispatch |    |   (secrets)       |
-                      | - Compliance track |    |                  |
-                      | - Secret watcher   |    +------------------+
-                      | - Classifier       |
-                      | - Web UI (embedded)|    +------------------+
-                      |                    |    |   Prometheus      |
-                      +-----+---------+----+--->+   (metrics)       |
-                            |         |         +------------------+
-                      gRPC/mTLS  gRPC/mTLS
-                            |         |
-                   +--------+--+  +---+--------+
-                   |  Agent 1  |  |  Agent N   |
-                   |           |  |            |
-                   | - Pull    |  | - Pull     |
-                   | - Facts   |  | - Facts    |
-                   | - Modules |  | - Modules  |
-                   | - Report  |  | - Report   |
-                   +-----------+  +------------+
-```
+---
 
-### Component Boundaries
+## Standard Architecture
 
-| Component | Responsibility | Communicates With | Transport |
-|-----------|---------------|-------------------|-----------|
-| **Server: gRPC service** | Agent registration, check-in dispatch, result collection, rollback/dry-run coordination | Agents | gRPC over mTLS |
-| **Server: REST API** | Operations interface for CLI and Web UI (clients, runs, tokens, webhooks, compliance, packages, bootstrap) | gvctl CLI, Web UI, Prometheus | HTTPS |
-| **Server: Config Loader** | Reads and watches YAML files from filesystem, resolves `secret:` prefixes, merges env vars | isopass (secrets), filesystem | Local filesystem + isopass API |
-| **Server: Registry** | Enrollment: pattern matching, token validation, pubkey storage, revocation | PostgreSQL | SQL |
-| **Server: Runner/DAG** | Builds dependency graph from module declarations, topological sort, dispatches ordered module list to agents | Config Loader, PostgreSQL | Internal |
-| **Server: Classifier** | Auto-assigns modules to nodes without explicit config via pattern rules in `classification.yaml` | Config Loader | Internal |
-| **Server: Compliance Tracker** | Computes per-client compliance status from run results, tracks history | PostgreSQL | Internal |
-| **Server: Webhook Dispatcher** | Fires HMAC-signed HTTP POST to configured URLs on events | External webhook receivers | HTTPS |
-| **Server: Secret Watcher** | Polls isopass for version changes on watched paths, queues force-runs on rotation | isopass, PostgreSQL | isopass API |
-| **Server: Metrics** | Exposes Prometheus gauges/counters/histograms at `/metrics` | Prometheus | HTTP |
-| **Server: Web UI** | SPA embedded via `go:embed`, served by REST API server | REST API | HTTP (same-origin) |
-| **Agent: Auth** | ED25519 keypair generation, registration flow, payload signing | Server gRPC | gRPC over mTLS |
-| **Agent: Pull Loop** | Jittered check-in timer, exponential backoff on failure | Server gRPC | gRPC over mTLS |
-| **Agent: Fact Collectors** | Pluggable system data gathering (OS, hardware, network, packages) | Local system | OS APIs, /proc, package managers |
-| **Agent: Module Executors** | Idempotent resource convergence (file, package, service, user) with check-before-act | Local system | OS commands, filesystem |
-| **Agent: Snapshot Manager** | Pre-change file backup, rollback restoration | Local filesystem | Filesystem |
-| **Agent: Package Manager Backends** | Abstracted install/remove/upgrade across apt/dnf/yum/apk/pacman/brew/zypper | Local package managers | OS commands |
-| **gvctl CLI** | Admin operations: tokens, approvals, push, runs, rollback, preview, packages, env, webhooks | Server REST API | HTTPS |
-| **PostgreSQL** | Persistent state: clients, runs, results, facts, plans, snapshots, webhooks, compliance, audit | Server | SQL (libpq) |
-| **isopass** | Secret storage and retrieval, rotation signaling | Server, Agent (indirectly via server-resolved secrets in configs) | isopass API (to be determined from source) |
+### System Overview
 
-### Data Flow
-
-#### 1. Agent Registration (First Run)
+Current streaming topology (what exists today):
 
 ```
-Agent                          Server                        PostgreSQL
-  |                              |                              |
-  |-- Generate ED25519 keypair   |                              |
-  |                              |                              |
-  |-- Register(hostname, IP,     |                              |
-  |   pubkey, token) ----------->|                              |
-  |                              |-- Match hostname/IP against  |
-  |                              |   approved_patterns -------->|
-  |                              |<-- Pattern match result -----|
-  |                              |                              |
-  |                              |-- Verify token (bcrypt) ---->|
-  |                              |<-- Token valid, mark used ---|
-  |                              |                              |
-  |                              |-- Store client record ------>|
-  |                              |<-- Client UUID --------------|
-  |                              |                              |
-  |<-- RegisterResponse(UUID) ---|                              |
-  |                              |                              |
-  |-- Store UUID locally         |                              |
+hobnobcli / Web UI
+      |
+      | REST POST /api/v1/push
+      v
+ AdminService.ForcePush()
+      |
+      v
+ AgentService.streamMgr.forcePush(thrallID)
+      |
+      | ServerStreamMessage.force_push
+      v
+ agentStream.send chan (buffer=8)
+      |
+      | gRPC bidi stream (AgentStream RPC)
+      v
+ agent read_loop() → force_push_rx
+      |
+      v
+ stream_loop: check_in request → convergence → ReportResult
 ```
 
-#### 2. Check-In / Convergence Loop (Steady State)
+Proposed orchestration topology (what this milestone adds):
 
 ```
-Agent                          Server                        PostgreSQL    isopass     Filesystem
-  |                              |                              |            |            |
-  |-- Collect facts (OS,         |                              |            |            |
-  |   hardware, network, pkgs)   |                              |            |            |
-  |                              |                              |            |            |
-  |-- CheckIn(UUID, facts,       |                              |            |            |
-  |   state fingerprint) ------->|                              |            |            |
-  |                              |-- Verify ED25519 signature ->|            |            |
-  |                              |-- Store facts (JSONB) ------>|            |            |
-  |                              |                              |            |            |
-  |                              |-- Load client config --------|------------|----------->|
-  |                              |   (or classify if no         |            |            |
-  |                              |    explicit config)          |            |            |
-  |                              |                              |            |            |
-  |                              |-- Resolve secret: prefixes --|----------->|            |
-  |                              |-- Merge env_vars overrides   |            |            |
-  |                              |-- Evaluate when: conditions  |            |            |
-  |                              |   against facts              |            |            |
-  |                              |-- Build resource DAG,        |            |            |
-  |                              |   topological sort           |            |            |
-  |                              |                              |            |            |
-  |<-- CheckInResponse           |                              |            |            |
-  |    (ordered module list) ----|                              |            |            |
-  |                              |                              |            |            |
-  |-- For each module/resource:  |                              |            |            |
-  |   1. Check current state     |                              |            |            |
-  |   2. Snapshot if file change |                              |            |            |
-  |   3. Apply if drift detected |                              |            |            |
-  |   4. Fire notify triggers    |                              |            |            |
-  |   5. Record result           |                              |            |            |
-  |                              |                              |            |            |
-  |-- ReportResult(run_id,       |                              |            |            |
-  |   per-module results) ------>|                              |            |            |
-  |                              |-- Store run + results ------>|            |            |
-  |                              |-- Update compliance status ->|            |            |
-  |                              |-- Fire webhooks if needed    |            |            |
-  |                              |                              |            |            |
-  |<-- ReportAck ----------------|                              |            |            |
+hobnobcli / Web UI
+      |
+      | REST POST /api/v1/tasks
+      |       POST /api/v1/workflows
+      |       POST /api/v1/query
+      v
+ TaskService (new server/orchestration/ package)
+      |
+      | ServerStreamMessage.task_dispatch (new variant)
+      v
+ agentStream.send chan (existing, buffered)
+      |
+      | gRPC bidi stream (existing AgentStream RPC)
+      v
+ agent read_loop() → task_rx (new channel in StreamHandle)
+      |
+      v
+ task executor → stdout/stderr capture
+      |
+      | AgentStreamMessage.task_result (new variant)
+      v
+ server TaskResultCollector → SQLite task_runs table
+      |
+      v
+ hobnobcli / Web UI (poll or long-poll for results)
 ```
 
-#### 3. Secret Rotation Flow
+### Component Responsibilities
 
-```
-isopass                        Server                        PostgreSQL     Agents
-  |                              |                              |              |
-  | (secret value changes)       |                              |              |
-  |                              |                              |              |
-  |                              |-- Poll watched paths ------->|              |
-  |<-- Get version/hash ---------|                              |              |
-  |-- Return new version ------->|                              |              |
-  |                              |                              |              |
-  |                              |-- Detect version change      |              |
-  |                              |-- Record rotation event ---->|              |
-  |                              |-- Find affected clients ---->|              |
-  |                              |-- Queue force-run flags ---->|              |
-  |                              |                              |              |
-  |                              |  (on next check-in, or       |              |
-  |                              |   force-push triggers        |              |
-  |                              |   immediate convergence)     |              |
-  |                              |                              |              |
-  |                              |-- If TLS cert rotated:       |              |
-  |                              |   hot-reload via             |              |
-  |                              |   GetCertificate callback    |              |
-```
+**Existing components (unchanged):**
 
-#### 4. Admin Operations Flow (gvctl / Web UI)
+| Component | Responsibility | Notes |
+|-----------|---------------|-------|
+| `streamManager` | Registry of connected agent streams | Lives in `server/grpc/streams.go` |
+| `agentStream.send` | Channel for server→agent push messages | Buffer 8; non-blocking send |
+| `StreamHandle` | Agent-side channel demuxer for bidi stream | `checkin/stream.rs` |
+| `read_loop()` | Agent: dispatches server messages to channels | Extends naturally |
+| `RunStore` | Config-run storage (CreateRun/FinishRun/ListRuns) | Reuse pattern for task runs |
 
-```
-gvctl / Web UI                 Server REST API               PostgreSQL
-  |                              |                              |
-  |-- GET/POST /api/v1/... ----->|                              |
-  |                              |-- Query/mutate state ------->|
-  |                              |<-- Results ------------------|
-  |<-- JSON response ------------|                              |
-  |                              |                              |
-  | (gvctl push triggers         |                              |
-  |  ForcePush flag in DB,       |                              |
-  |  agent picks up on           |                              |
-  |  next check-in)              |                              |
-```
+**New components needed:**
 
-## Patterns to Follow
+| Component | Responsibility | Lives In |
+|-----------|---------------|----------|
+| `TaskService` | Accept task dispatch requests, fan to streamMgr | `server/orchestration/tasks.go` |
+| `WorkflowEngine` | Multi-step workflow state machine | `server/orchestration/workflow.go` |
+| `RollingCoordinator` | Batch execution with failure thresholds | `server/orchestration/rolling.go` |
+| `TaskStore` | Persist task and workflow state | `server/db/tasks.sql` + sqlc |
+| Task executor (Rust) | Execute ad-hoc commands, capture stdout/stderr | `agent-rs/src/executors/task.rs` |
+| Task dispatch channel | Agent-side: receive `StreamTaskDispatch` messages | `agent-rs/src/checkin/stream.rs` |
+| Query executor (Rust) | Return current state snapshot without convergence | `agent-rs/src/executors/query.rs` |
 
-### Pattern 1: Provider Interface for External Dependencies
+---
 
-**What:** Wrap all external services (isopass, package managers, fact collectors) behind Go interfaces. Inject concrete implementations at startup.
+## Key Architectural Decisions
 
-**When:** Any interaction with an external system or OS-level command.
+### Decision 1: Extend `ServerStreamMessage` vs New RPC
 
-**Why:** Enables testing with mock implementations. Decouples business logic from infrastructure. Allows the `StaticProvider` for dev mode without isopass running.
+**The question:** Should orchestration use the existing `AgentStream` bidi RPC with new message variants, or add new RPCs (`TaskStream`, `QueryStream`)?
 
-**Example:**
-```go
-// secrets/provider.go
-type Provider interface {
-    Get(ctx context.Context, key string) (string, error)
-    GetBytes(ctx context.Context, key string) ([]byte, error)
-    Close() error
+**Option A: Extend `ServerStreamMessage` with new `oneof` variants**
+
+Add to proto:
+```protobuf
+message ServerStreamMessage {
+  oneof msg {
+    // ... existing variants ...
+    StreamTaskDispatch task_dispatch = 6;   // NEW
+    StreamQueryRequest query_request = 7;   // NEW
+  }
 }
 
-// Concrete implementations: IsopassProvider, StaticProvider
-// Injected at main() startup based on config
-```
-
-**Confidence:** HIGH -- this is the pattern specified in the handoff document and matches standard Go practice.
-
-### Pattern 2: Check-Before-Act Idempotency
-
-**What:** Every module executor follows the same pattern: read current state, compare to desired state, act only if different, report action taken.
-
-**When:** All resource types (file, package, service, user).
-
-**Why:** This is the core contract of configuration management. Violating it causes unnecessary restarts, file churn, and audit noise.
-
-**Example:**
-```go
-type Executor interface {
-    // Check returns the current state and whether drift exists
-    Check(ctx context.Context, desired Resource) (DriftResult, error)
-    // Apply converges to desired state. Only called if Check found drift.
-    Apply(ctx context.Context, desired Resource) (ActionResult, error)
+message AgentStreamMessage {
+  oneof msg {
+    // ... existing variants ...
+    TaskResult task_result = 4;             // NEW
+    QueryResponse query_response = 5;       // NEW
+  }
 }
-
-// The runner calls Check first, only calls Apply if drift detected
 ```
 
-**Confidence:** HIGH -- this is a well-established pattern in Puppet (ensure/property model), Chef (why-run mode), and the handoff spec.
+Pros:
+- Zero new TLS handshakes — reuses the existing persistent connection
+- Agent already has the connection open; new message types are handled in the existing `read_loop()`
+- streamManager already fans to all connected agents — orchestration piggybacks directly
+- No new authentication surface, no new interceptor code
+- Buffer is already in place (size 8 per agentStream)
 
-### Pattern 3: DAG-Based Execution Ordering
+Cons:
+- `oneof` proto field numbers must be globally unique and stable — every new variant is a permanent commitment
+- The `send` buffer (size 8) can be overwhelmed during large rolling deployments that fan to hundreds of agents simultaneously
+- Message ordering: task_dispatch and force_push share the same channel; a queued force_push could delay time-sensitive task dispatch
 
-**What:** Build a directed acyclic graph from `depends_on` declarations at both module and resource level. Topologically sort before execution. Detect cycles at config load time, not at run time.
+**Option B: Separate TaskStream RPC**
 
-**When:** Whenever the server compiles a catalog for a client check-in.
+Add separate `rpc TaskStream(stream TaskAgentMessage) returns (stream TaskServerMessage)` to `HobnobAgent`.
 
-**Why:** Implicit ordering (list order) breaks when modules are composed from multiple sources. Explicit DAG makes dependencies visible and debuggable. Cycle detection at load time prevents runtime hangs.
+Pros:
+- Clean separation of concerns — orchestration has its own independent backpressure
+- Can have larger buffers tuned for orchestration traffic without affecting policy delivery
+- Proto surface is explicit about task semantics vs config delivery semantics
 
-**Implementation note:** Use Kahn's algorithm (BFS with in-degree tracking). It naturally produces a deterministic order for nodes at the same depth level and makes cycle detection trivial (remaining nodes after algorithm completes = cycle members). The `gammazero/toposort` Go package implements this, but the algorithm is simple enough to write in ~50 lines. Recommend implementing it in-house to avoid a dependency for such a small piece of logic.
+Cons:
+- Second TLS-layer connection per agent (even though the transport reuses the same TCP via HTTP/2 multiplexing over mTLS, it requires agent to open a second `grpc.Dial` or second stream)
+- Agent must manage two stream lifecycles with independent backoff/reconnect logic
+- Doubles the complexity in agent's `stream_loop` — must select over two streams
+- Requires new interceptor wiring for authentication
+- Most agents are never given tasks — the second stream sits idle for the majority of the fleet
 
-**Confidence:** HIGH -- topological sort for resource ordering is proven across Puppet, Chef, Terraform, and the handoff spec explicitly requires it.
+**Recommendation: Option A — extend `ServerStreamMessage`.**
 
-### Pattern 4: Filesystem as Source of Truth with Watch
+The buffer concern is manageable: increase buffer from 8 to 64 for the `send` channel, or add a per-task send with blocking semantics for task dispatch (vs fire-and-forget for policy push). The existing infrastructure already handles the fundamental problem and adding new `oneof` variants is the standard protobuf extension point. A separate stream RPC would require every agent to establish and maintain a second connection that goes unused 99% of the time.
 
-**What:** YAML config files on disk are the single source of truth. The server watches the `config/` directory tree with `fsnotify` and reloads on changes. No API, DB, or UI writes to config.
+**Trade-off to watch:** If orchestration evolves to high-frequency streaming (e.g., live stdout streaming at 100ms intervals), the shared channel becomes a bottleneck. At that point, a dedicated stream is the right call. For the v1.3 scope (ad-hoc commands, tasks, live query), Option A is appropriate.
 
-**When:** All configuration changes -- client configs, module definitions, classification rules, server config.
+---
 
-**Why:** GitOps-friendly (commit, push, server picks up changes). Single path eliminates config drift between DB and files. Auditability via git log.
+### Decision 2: Task Result Collection — Streaming vs Polling
 
-**Implementation note:** Use `fsnotify/fsnotify` for filesystem watching. Debounce rapid changes (e.g., git operations touch many files quickly). Validate YAML and DAG integrity on reload before swapping the active config. Log validation errors but keep serving the last-known-good config if the new config is invalid.
+**The question:** Should task stdout/stderr stream back incrementally, or be collected in full and reported at completion?
 
-**Confidence:** HIGH -- specified in handoff. Standard GitOps pattern.
+**Option A: Collect-and-report (batch result)**
 
-### Pattern 5: Notify/Subscribe Trigger Chain
+Agent runs the command to completion, captures all stdout/stderr, sends one `AgentStreamMessage.task_result` with the full output.
 
-**What:** Resources declare `notify` lists. If a resource makes a change (action_taken != none), all notified resources are forced to re-apply regardless of their own drift check. This is how "restart service when config file changes" works.
+Pros:
+- Trivially simple — one new `AgentStreamMessage` variant, identical to `ReportResult` pattern
+- No ordering concerns, no partial-state handling
+- Result can be stored in a single SQLite row
+- Works cleanly with existing `AgentStream` channel semantics
 
-**When:** Service restarts/reloads triggered by file changes, user creation triggering subsequent config.
+Cons:
+- No live visibility for long-running commands (e.g., `apt upgrade`)
+- CLI blocks waiting for the final result with no progress indicator
+- Commands that produce large output (>10MB) need size limits
 
-**Why:** Without notify/subscribe, services would not pick up config changes until the next full convergence cycle or manual restart.
+**Option B: Streaming stdout/stderr**
 
-**Implementation note:** Process notify triggers within the same DAG walk. After applying a resource, if it changed, mark all notified resources as "force-apply" before their Check phase. This must respect the topological order -- the notified resource must come after the notifier in the DAG.
+Agent sends incremental `TaskOutputChunk` messages as the command runs, followed by a `TaskComplete` with exit code.
 
-**Confidence:** HIGH -- this is Puppet's notify/subscribe model verbatim. Proven at massive scale.
+Pros:
+- Real-time feedback for long-running operations
+- CLI can stream output to the terminal as it arrives
 
-### Pattern 6: Signed Request Authentication
+Cons:
+- Requires ordered delivery guarantees (chunks must arrive in sequence)
+- Server must buffer in-progress chunks until `TaskComplete` and either stream them to waiting CLI connections or persist them incrementally
+- CLI must maintain a streaming HTTP connection (SSE or chunked transfer) to receive live output
+- Significantly increases server complexity: in-progress task state management, client disconnect handling, chunk reassembly
+- SQLite is not ideal for streaming writes — each chunk would be a separate INSERT
 
-**What:** Every gRPC request from an agent includes a signature over the serialized protobuf body + UTC timestamp, signed with the agent's ED25519 private key. The server verifies using the stored public key for that client UUID.
+**Recommendation: Option A for v1.3, with Option B as a follow-on.**
 
-**When:** Every agent-to-server RPC after registration.
+The collect-and-report model handles the stated v1.3 requirements (ad-hoc commands, tasks, live query). A reasonable output size limit (e.g., 1MB stdout, 256KB stderr, truncated with notice) prevents abuse. Streaming output is a visible UX improvement but is a separate project-level feature with substantial complexity.
 
-**Why:** mTLS authenticates the transport layer, but ED25519 signatures authenticate the application layer. This prevents a compromised client cert from impersonating a different agent. The timestamp prevents replay attacks.
+---
 
-**Implementation note:** Use a gRPC interceptor (UnaryInterceptor) on the server side to verify signatures before the handler runs. Use gRPC metadata to carry the signature and timestamp. Reject requests with timestamps older than 5 minutes.
+### Decision 3: Workflow State Machine Location
 
-**Confidence:** HIGH -- specified in handoff. Standard defense-in-depth pattern.
+**The question:** Where does multi-step workflow execution state live?
 
-## Anti-Patterns to Avoid
+**Option A: Server-side state machine (server/orchestration/workflow.go)**
 
-### Anti-Pattern 1: Mixing Config Storage Paths
+The server orchestrates workflow execution: tracks current step, evaluates conditions, fans out to next batch of targets, waits for results, advances state.
 
-**What:** Allowing configs to be created/modified via API, CLI, or UI in addition to filesystem YAML.
+Pros:
+- Central visibility — one place to query workflow status
+- Survives agent disconnects — server waits and retries
+- Rolling execution coordinator naturally lives here (batch size, failure thresholds, inter-batch health checks)
+- Consistent with Hobnob's design: server is the decision-maker, agents are executors
 
-**Why bad:** Creates two sources of truth. Configs in the database drift from configs on disk. Impossible to know which is authoritative. Git audit trail breaks.
+Cons:
+- Server process must maintain in-memory workflow state — a crash loses in-progress workflows
+- For long-running workflows (hours), server memory grows with concurrent workflows
 
-**Instead:** Filesystem YAML is the sole source of truth. CLI/API/UI are read-only for config. Operations (tokens, revocations, force-push) go through the API. Config changes go through file edits (and ideally git commits).
+**Option B: CLI-driven workflow execution**
 
-### Anti-Pattern 2: Global State or Singletons for Providers
+The CLI (`hobnobcli workflow run`) implements the multi-step loop: dispatch step, poll results, evaluate condition, dispatch next step.
 
-**What:** Using package-level variables or `init()` functions to wire up the secrets provider, database connection, or config loader.
+Pros:
+- Zero new server complexity
+- State lives in the CLI process — no crash recovery needed at server level
+- Simple to implement: CLI just calls existing REST endpoints in a loop
 
-**Why bad:** Untestable. Hidden dependencies. Initialization order bugs. Impossible to run multiple instances in tests.
+Cons:
+- CLI process death aborts the workflow — not suitable for long operations
+- Cannot be triggered by the web UI (UI can't execute multi-step processes server-side)
+- No audit trail of workflow execution
+- Inter-step health checks require the CLI to remain running
 
-**Instead:** Wire everything in `main()`. Pass dependencies via constructor injection. Use interfaces for all external boundaries.
+**Recommendation: Option A — server-side state machine.**
 
-### Anti-Pattern 3: Applying Changes Without Checking First
+The server already has the orchestration primitives. CLI-driven workflows are fragile (process death, network interruption). The server-side approach allows workflows to be initiated via REST API (from CLI or Web UI) and continue running after the initiator disconnects. State should be persisted in SQLite with a status field to survive server restarts.
 
-**What:** Module executors that always write the file, always install the package, always restart the service, and then report "changed."
+---
 
-**Why bad:** Generates noise in audit logs. Causes unnecessary service restarts. Makes compliance tracking meaningless (every run shows "changed"). Wastes resources.
+### Decision 4: Rolling Execution Design
 
-**Instead:** Every executor must implement the check phase. Only apply when the check shows drift. Record `action_taken: none` when no change was needed.
+**The question:** How does rolling execution (batch N nodes, check success, proceed to next batch) coordinate?
 
-### Anti-Pattern 4: Blocking the Agent Pull Loop on Failures
+The coordinator lives at `server/orchestration/rolling.go` and implements this state machine:
 
-**What:** Agent crashes or enters an infinite retry loop when the server is unreachable or returns an error.
+```
+RollingJob
+  id: uuid
+  target_selector: string (glob or label)
+  task: TaskSpec
+  batch_size: int
+  failure_threshold: float (0.0-1.0, abort if exceeded)
+  inter_batch_check: optional HealthCheckSpec
+  status: pending → running → success | aborted | partial
 
-**Why bad:** A server restart would take down all managed nodes' convergence loops. Network blips would require manual agent restarts.
+Execution:
+  1. Resolve target_selector against enrolled thralls
+  2. Partition into batches of batch_size
+  3. For each batch:
+     a. Dispatch task to batch via streamMgr
+     b. Wait for all results (with timeout)
+     c. Compute failure rate
+     d. If failure_rate > threshold → abort remaining batches
+     e. If inter_batch_check defined → run health check query
+     f. If health check fails → abort remaining batches
+     g. Advance to next batch
+  4. Record final status
+```
 
-**Instead:** Exponential backoff with jitter on server unavailability. Never crash the daemon on transient errors. Log and continue. Only hard-fail on startup if critical prerequisites are missing (keypair, isopass).
+The coordinator uses a channel-based approach: dispatch and wait for `task_result` messages that match the current batch's task IDs. This requires correlating results back to the originating batch by `task_id` (a UUID embedded in the `StreamTaskDispatch` message).
 
-### Anti-Pattern 5: Resolving Secrets at Config Parse Time and Caching Indefinitely
+**Integration with streamManager:** The rolling coordinator calls `streamMgr.sendTask(thrallID, taskMsg)` for each target in the batch. The streamManager returns immediately (fire-and-forget into the buffered channel). The coordinator then blocks waiting on a result channel until all results arrive or the timeout fires.
 
-**What:** Resolving all `secret:` references once at startup and never refreshing.
+---
 
-**Why bad:** Secret rotation becomes invisible. TLS certs expire. Database password rotations lock out the server.
+### Decision 5: Live Query Architecture
 
-**Instead:** Use `GetCertificate` callback for TLS hot-reload. Re-resolve secrets on the rotation watcher's signal. For the DB DSN, reconnect with the new credential when the watcher detects a change.
+**The question:** How does "ask thralls for current state without waiting for check-in" work?
 
-## Server Internal Architecture
+Live query bypasses the convergence loop entirely. It sends a `StreamQueryRequest` to connected agents, which immediately collects and returns current facts (traits) or resource state.
 
-The server process hosts multiple subsystems that should be structured as distinct packages with clear boundaries:
+**Two query types:**
+
+1. **Trait query:** Return current value of a specific trait (e.g., `os.kernel`, `network.ip`). The agent already has traits in memory from the last collection cycle. This is a read from the `CachedCollectors` cache — no OS invocation needed. Response time: <10ms.
+
+2. **Resource state query:** Ask "what is the current state of resource X?" This runs a single executor's check phase without the apply phase. Response time: depends on resource type (file stat = 1ms; package query = 100ms).
+
+The agent's `stream_loop` adds a new `tokio::select!` arm:
+
+```rust
+query_rx = query_rx.recv() => {
+    let response = handle_query(&query, &collectors, &executors).await;
+    send_query_response(&request_tx, response).await;
+}
+```
+
+The server's `TaskService.LiveQuery()` handler:
+1. Sends `StreamQueryRequest` to target agents via streamMgr
+2. Blocks on a result channel with a configurable timeout (default 10s)
+3. Returns results as they arrive (partial results ok — not all agents may be connected)
+
+---
+
+## System Overview (Post-Orchestration)
+
+```
++------------------+    +------------------+    +------------------+
+|   hobnobcli      |    |   Web UI         |    |   Webhooks       |
+|                  |    |                  |    |  (task.complete, |
+| task run         |    | Task history     |    |   workflow.done) |
+| workflow run     |    | Workflow status  |    |                  |
+| query get        |    | Live query       |    +------------------+
++--------+---------+    +--------+---------+
+         |                       |
+         | REST API (port 8181)  |
+         v                       v
++--------+-----------------------------------------------+
+|                    AdminService (REST)                  |
+|  POST /api/v1/tasks      GET /api/v1/tasks/{id}        |
+|  POST /api/v1/workflows  GET /api/v1/workflows/{id}     |
+|  POST /api/v1/query      GET /api/v1/query/{id}        |
++--------+-----------------------------------------------+
+         |
+         v
++--------+---------------------------+
+|        TaskService (new)           |
+|  TaskStore (SQLite)                |
+|  WorkflowEngine (state machine)    |
+|  RollingCoordinator                |
+|  QueryCollector                    |
++--------+---------------------------+
+         |
+         | streamMgr.sendTask(thrallID, msg)
+         v
++--------+---------------------------+
+|        streamManager (existing)    |
+|  agentStream.send chan (extended)  |
++--------+---------------------------+
+         |
+         | ServerStreamMessage.task_dispatch (new variant)
+         | gRPC AgentStream bidi (existing)
+         v
++--------+---------------------------+
+|        Rust Agent (existing)       |
+|  read_loop() + new task_rx channel |
+|  task executor (new)               |
+|  query executor (new)              |
+|  task_result → AgentStreamMessage  |
++------------------------------------+
+```
+
+---
+
+## Recommended Project Structure
+
+New server-side files:
 
 ```
 server/
-  main.go                    # Wiring: construct all components, start listeners
-  grpc/
-    server.go                # gRPC server setup, mTLS config
-    interceptor.go           # Signature verification interceptor
-    handlers.go              # Register, CheckIn, ReportResult, ForcePush, DryRun, Rollback, ReportFacts
-  api/
-    router.go                # REST API routes (chi or stdlib mux)
-    middleware.go            # Auth, logging, recovery
-    handlers_clients.go      # /api/v1/clients/*
-    handlers_runs.go         # /api/v1/runs/*
-    handlers_compliance.go   # /api/v1/compliance/*
-    handlers_tokens.go       # /api/v1/approved/*, /api/v1/tokens/*
-    handlers_webhooks.go     # /api/v1/webhooks/*
-    handlers_packages.go     # /api/v1/packages/*
-    handlers_env.go          # /api/v1/env/*
-    handlers_agent.go        # /api/v1/agent/*, /bootstrap
-  config/
-    loader.go                # YAML loading, secret: resolution, env_var merging
-    watcher.go               # fsnotify-based config reload
-    types.go                 # Config structs
-  registry/
-    registry.go              # Client enrollment, pattern matching, token validation
-  runner/
-    dag.go                   # DAG construction, topological sort, cycle detection
-    compiler.go              # Catalog compilation: config + facts + classification -> ordered modules
-    notify.go                # Notify/subscribe trigger processing
-  classifier/
-    classifier.go            # Auto-classification from classification.yaml
-  compliance/
-    tracker.go               # Compliance status computation from run results
-    history.go               # Historical compliance data
-  planner/
-    planner.go               # Dry-run plan computation
-  webhook/
-    dispatcher.go            # HMAC-signed webhook delivery with retries
-  watcher/
-    rotation.go              # isopass secret rotation polling
-  secrets/
-    provider.go              # Provider interface
-    isopass.go               # IsopassProvider
-    static.go                # StaticProvider (dev/test)
+  orchestration/
+    tasks.go           # TaskService: create task, dispatch via streamMgr, wait for results
+    workflow.go        # WorkflowEngine: multi-step state machine
+    rolling.go         # RollingCoordinator: batch execution with failure thresholds
+    query.go           # LiveQuery: dispatch query, collect responses with timeout
   db/
-    queries.go               # Database access (or use sqlc-generated code)
-    migrations/              # golang-migrate migration files
-  metrics/
-    prometheus.go            # Metric registration and update
+    tasks.sql          # sqlc query source for task_runs, workflow_runs tables
+    tasks.sql.go       # sqlc-generated (DO NOT EDIT)
+    workflows.sql      # sqlc query source for workflow state
+    workflows.sql.go   # sqlc-generated
+  api/
+    tasks.go           # REST handlers: POST /api/v1/tasks, GET /api/v1/tasks/{id}
+    workflows.go       # REST handlers for workflows
+    query.go           # REST handlers for live query
 ```
 
-### Key Internal Boundaries
-
-1. **Config Loader** produces a typed `ServerConfig` struct and per-client `ClientConfig` structs. It owns all YAML parsing and `secret:` resolution. No other package reads YAML directly.
-
-2. **Runner/Compiler** takes a `ClientConfig` + facts and produces an ordered `[]Module` (the catalog). It owns DAG construction, topological sort, `when:` evaluation, and env_var merging. The gRPC handler simply calls `compiler.Compile(clientID, facts)` and returns the result.
-
-3. **Registry** owns all enrollment logic. The gRPC `Register` handler delegates entirely to `registry.Register()`. Pattern matching, token validation, and pubkey storage are encapsulated here.
-
-4. **Compliance Tracker** is updated after every `ReportResult` call. It reads run results and computes the new status. The REST API queries it for dashboard data.
-
-5. **Webhook Dispatcher** is event-driven: other components call `dispatcher.Fire(event)` and it handles delivery asynchronously with retries. It never blocks the caller.
-
-## Agent Internal Architecture
+New agent-side files:
 
 ```
-agent/
-  main.go                    # Wiring, daemon vs one-shot mode
-  auth/
-    keypair.go               # ED25519 key generation/loading
-    signer.go                # Request signing for gRPC calls
-    registration.go          # Registration flow
+agent-rs/src/
+  executors/
+    task.rs            # TaskExecutor: run command, capture stdout/stderr, return TaskResult
+    query.rs           # QueryExecutor: read current state without applying changes
   checkin/
-    loop.go                  # Jittered pull loop with backoff
-    client.go                # gRPC client wrapper
-  facts/
-    collector.go             # Collector interface
-    os.go                    # OS facts (family, distro, version, kernel, arch)
-    hardware.go              # CPU count, memory, disk
-    network.go               # Hostname, FQDN, IPs, MACs
-    packages.go              # Installed packages from package manager
-  modules/
-    executor.go              # Executor interface (Check + Apply)
-    file.go                  # File executor (SHA256 check, snapshot, write)
-    package.go               # Package executor (delegates to pkgmgr)
-    service.go               # Service executor (systemctl)
-    user.go                  # User executor (/etc/passwd)
-    pkgmgr/
-      interface.go           # PackageManager interface
-      apt.go                 # apt-get backend
-      dnf.go                 # dnf backend
-      yum.go                 # yum backend
-      apk.go                 # apk backend
-      pacman.go              # pacman backend
-      brew.go                # brew backend
-      zypper.go              # zypper backend
-      detect.go              # Auto-detection from OS facts
-  snapshots/
-    manager.go               # File snapshot creation, retention (last 5), rollback restoration
-  config/
-    agent.go                 # Agent config loading (/etc/isogov/agent.yaml)
+    stream.rs          # MODIFIED: add task_rx channel, handle StreamTaskDispatch
+    loop_impl.rs       # MODIFIED: add task_dispatch arm to stream_loop select!
 ```
 
-### Agent Execution Flow (Per Check-In)
+Proto additions (`proto/hobnob.proto`):
 
-```
-1. Collect all facts via Collector implementations
-2. Sign CheckIn request with ED25519 key
-3. Send CheckIn(UUID, facts, state_fingerprint) to server
-4. Receive ordered module list
-5. For each module (in server-provided order):
-   a. For each resource (in DAG order within module):
-      i.   Evaluate when: condition against facts -> skip if false
-      ii.  Check current state (idempotency guard)
-      iii. If no drift -> record action_taken: none, continue
-      iv.  If file type -> snapshot current file
-      v.   Apply change
-      vi.  If change succeeded and resource has notify list ->
-           mark notified resources as force-apply
-      vii. Record result (action, drift, error)
-6. Sign RunReport with ED25519 key
-7. Send ReportResult(run_id, per-module results) to server
-8. Check for self-update (version check against server)
-9. Calculate next check-in time with jitter
-```
+```protobuf
+// ServerStreamMessage — add variants 6 and 7
+message StreamTaskDispatch {
+  string task_id = 1;          // UUID for result correlation
+  string command = 2;          // shell command to execute
+  string stdin = 3;            // optional stdin
+  int32 timeout_seconds = 4;   // 0 = no timeout
+  string working_dir = 5;      // optional cwd override
+  map<string,string> env = 6;  // additional env vars
+}
 
-## Scalability Considerations
+message StreamQueryRequest {
+  string query_id = 1;         // UUID for result correlation
+  string trait_path = 2;       // dot-path for trait query, e.g. "os.kernel"
+  string resource_type = 3;    // for resource state query
+  map<string,string> params = 4;
+}
 
-| Concern | At 10 nodes | At 1,000 nodes | At 10,000+ nodes |
-|---------|-------------|----------------|-------------------|
-| **Check-in load** | Negligible | ~33 check-ins/min at 30min interval; single server handles easily | ~333 check-ins/min; may need connection pooling, consider read replicas for queries |
-| **Config compilation** | Trivial | Cache compiled catalogs, invalidate on config file change | Pre-compile catalogs on config change, serve from cache |
-| **Fact storage** | Store all | JSONB with last-10 retention policy keeps it bounded | Consider partitioning client_facts by client_id or time |
-| **Database connections** | Default pool (10-25) | Tune pool size, connection lifetime | PgBouncer for connection pooling; read replicas for REST API reads |
-| **Webhook delivery** | Inline is fine | Async with bounded worker pool (already required) | Dedicated webhook worker, message queue if delivery latency matters |
-| **gRPC concurrency** | Default Go gRPC settings | Tune `MaxConcurrentStreams`, keep-alive settings | Multiple server instances behind load balancer, sticky sessions by client UUID |
+// AgentStreamMessage — add variants 4 and 5
+message TaskResult {
+  string task_id = 1;
+  string thrall_id = 2;
+  int32 exit_code = 3;
+  bytes stdout = 4;            // truncated at 1MB
+  bytes stderr = 5;            // truncated at 256KB
+  int32 duration_ms = 6;
+  string error = 7;            // executor-level error (distinct from command exit code)
+}
 
-**Note:** The handoff spec describes a single-server architecture. At the 10,000+ node scale, a multi-server setup with shared PostgreSQL would be needed. This is out of scope for the initial build but the architecture (stateless server, shared DB) naturally supports horizontal scaling.
-
-## Suggested Build Order
-
-The build order is driven by dependency chains. Each layer depends on the layers above it.
-
-```
-Layer 0 (Foundation - no dependencies):
-  proto/isogov.proto           # Define all messages/services first
-  secrets/provider.go          # Interface + StaticProvider for dev
-  db/migrations/               # Schema locked in early
-
-Layer 1 (Server skeleton - depends on Layer 0):
-  server/main.go               # gRPC + REST listeners, TLS, DB pool
-  server/db/                   # Database access layer
-
-Layer 2 (Core server logic - depends on Layer 1):
-  server/registry/             # Enrollment, pattern matching, tokens
-  server/config/loader.go      # YAML parsing, secret: resolution
-
-Layer 3 (Agent skeleton - depends on Layer 0 + Layer 2 running):
-  agent/auth/                  # Keypair, registration flow
-  agent/config/                # Agent config loading
-  agent/facts/                 # All fact collectors
-
-Layer 4 (Catalog compilation - depends on Layer 2 + Layer 3):
-  server/classifier/           # Auto-classification
-  server/runner/               # DAG, compiler, notify
-  server/config/watcher.go     # fsnotify reload
-
-Layer 5 (Agent execution - depends on Layer 3 + Layer 4):
-  agent/modules/               # All executors (file, package, service, user)
-  agent/modules/pkgmgr/        # Package manager backends
-  agent/snapshots/             # File snapshot manager
-  agent/checkin/               # Pull loop, reporting
-
-Layer 6 (Operations - depends on Layers 1-5 working):
-  server/compliance/           # Status tracking
-  server/planner/              # Dry-run
-  server/api/                  # REST API handlers
-  cli/ (gvctl)                 # CLI tool
-
-Layer 7 (Observability & Integrations - depends on Layer 6):
-  server/metrics/              # Prometheus
-  server/webhook/              # Webhook dispatcher
-  server/watcher/              # Secret rotation watcher
-  secrets/isopass.go           # IsopassProvider (real integration)
-
-Layer 8 (User Interface - depends on Layer 6):
-  ui/                          # Web UI SPA
-  server/api/handlers_agent.go # Bootstrap script, self-update endpoints
-
-Layer 9 (Packaging - depends on everything):
-  Dockerfile.server
-  Dockerfile.agent
-  docker-compose.yml
-  Makefile
+message QueryResponse {
+  string query_id = 1;
+  string thrall_id = 2;
+  string value_json = 3;       // JSON-encoded result
+  string error = 4;
+}
 ```
 
-### Build Order Rationale
+---
 
-1. **Proto first** because every component depends on the message definitions. Changing proto later causes cascading regeneration.
+## Data Flow
 
-2. **Secrets provider interface early** because the config loader, server startup, and eventually every component that touches credentials depends on it. The `StaticProvider` unblocks development without requiring isopass to be running.
+### Task Dispatch Flow
 
-3. **Database migrations early** because the schema constrains the data model. Getting the schema right early prevents migration headaches later.
+```
+hobnobcli task run --target "web*.example.com" -- apt-get install -y nginx
+        |
+        | POST /api/v1/tasks
+        | body: {target: "web*.example.com", command: "apt-get install -y nginx", timeout: 60}
+        v
+TaskService.CreateTask()
+  → INSERT INTO task_runs (id, target, command, status='pending')
+  → Resolve target glob against thralls table → [thrall-1, thrall-2, thrall-3]
+  → For each thrall:
+      streamMgr.sendTask(thrallID, StreamTaskDispatch{task_id: ..., command: ...})
+  → INSERT INTO task_run_targets (task_id, thrall_id, status='dispatched')
+  → Return {task_id: "uuid", status: "running"}
 
-4. **Registration before check-in** because you cannot test the pull loop without enrolled clients.
+        | (response to CLI)
+        | {task_id: "abc123"}
 
-5. **Facts before catalog compilation** because the compiler needs facts for `when:` evaluation and env_var merging. Facts also feed auto-classification.
+CLI polls: GET /api/v1/tasks/abc123
+        v
+TaskService.GetTask()
+  → SELECT * FROM task_runs WHERE id = ?
+  → SELECT * FROM task_run_targets WHERE task_id = ?
+  → Return task + per-thrall results (pending/complete/failed)
 
-6. **Module executors are Layer 5** (not earlier) because they need the full pipeline working: server delivers ordered modules, agent executes them. Testing executors in isolation is possible but integration testing requires Layers 0-4.
+        | Meanwhile, on each agent:
+        v
+read_loop() receives StreamTaskDispatch
+  → task_rx.send(dispatch)
+stream_loop select! arm for task_rx:
+  → spawn tokio::task: run command, capture output
+  → send AgentStreamMessage.task_result
+        |
+        v
+Server grpc/streams.go AgentStream handler receives TaskResult
+  → UPDATE task_run_targets SET status='complete', exit_code=..., stdout=..., stderr=...
+  → Check if all targets complete → UPDATE task_runs SET status='success'/'partial'/'failure'
+```
 
-7. **Compliance, dry-run, and REST API are Layer 6** because they are consumer-facing features that depend on the core loop working correctly first.
+### Workflow State Machine Flow
 
-8. **isopass real integration is Layer 7** (not Layer 0) because the `StaticProvider` allows full development without isopass. The real integration requires reading the isopass source code, understanding its API, and may involve debugging. Deferring it avoids blocking early development. Wire it in once the core system is proven.
+```
+POST /api/v1/workflows
+body: {
+  name: "deploy nginx",
+  steps: [
+    {target: "*.staging.example.com", command: "apt-get install -y nginx"},
+    {condition: "all_success", target: "*.prod.example.com", command: "apt-get install -y nginx"}
+  ]
+}
+        v
+WorkflowEngine.Start(workflow)
+  → INSERT INTO workflow_runs (id, status='running', step=0)
+  → Execute step[0] as a task (via TaskService.CreateTask)
+  → Wait for task completion (poll task_run_targets via goroutine + timer)
+  → Evaluate step[1].condition against step[0] results
+    → "all_success": all targets returned exit_code=0
+  → If condition passes: execute step[1]
+  → If condition fails: UPDATE workflow_runs SET status='aborted', abort_reason=...
+  → On final step completion: UPDATE workflow_runs SET status='success'/'failed'
+```
 
-9. **Web UI last** because it is purely a consumer of the REST API. It adds no new server-side logic. Building it last ensures the API is stable before the UI depends on it.
+### Live Query Flow
 
-## Technology Decisions Informing Architecture
+```
+GET /api/v1/query?target=web1.example.com&trait=os.kernel
+        v
+QueryCollector.Query(target, traitPath)
+  → Resolve target → thrall-id
+  → streamMgr.sendQuery(thrallID, StreamQueryRequest{query_id: ..., trait_path: "os.kernel"})
+  → Block on result channel (timeout: 10s)
+        |
+        | On agent:
+        v
+read_loop() receives StreamQueryRequest
+  → query_rx.send(request)
+stream_loop select! arm:
+  → collectors.get_cached_trait("os.kernel")  // no OS call, uses in-memory cache
+  → send AgentStreamMessage.query_response{value_json: "\"5.15.0-91-generic\""}
+        |
+        v
+QueryCollector receives response, sends to result channel
+        |
+        v
+REST handler returns: {thrall: "web1.example.com", trait: "os.kernel", value: "5.15.0-91-generic"}
+```
 
-| Decision | Impact on Architecture |
-|----------|----------------------|
-| **gRPC for agent communication** | Binary protocol, code-generated clients/servers, natural for streaming if needed later. Server needs both gRPC (`:9090`) and HTTP (`:8080`) listeners. |
-| **REST for human-facing tools** | CLI and Web UI use standard HTTP. No proto dependency in the CLI. Server multiplexes both protocols. |
-| **PostgreSQL as sole persistent store** | All state (clients, runs, facts, plans, compliance) in one database. Simplifies ops. JSONB for semi-structured data (facts). |
-| **Filesystem YAML as config source** | Server must implement a file watcher. Config is never in the database. Server is stateless with respect to desired-state config (can be reconstructed from files). |
-| **`go:embed` for Web UI** | Single server binary includes the SPA. No separate static file server. Simplifies deployment. |
-| **ED25519 + mTLS (defense in depth)** | Two auth layers. mTLS at transport, ED25519 at application. gRPC interceptor handles signature verification. |
+---
+
+## SQLite Schema Additions
+
+```sql
+CREATE TABLE IF NOT EXISTS task_runs (
+    id             TEXT PRIMARY KEY DEFAULT (uuid_v4()),
+    created_at     DATETIME NOT NULL DEFAULT (datetime('now')),
+    finished_at    DATETIME,
+    command        TEXT NOT NULL,
+    target_expr    TEXT NOT NULL,      -- original target glob/expression
+    status         TEXT NOT NULL CHECK (status IN ('pending','running','success','partial','failed','timeout')),
+    timeout_sec    INTEGER NOT NULL DEFAULT 60,
+    initiator      TEXT               -- CLI user or "workflow:<workflow_id>"
+);
+
+CREATE TABLE IF NOT EXISTS task_run_targets (
+    id             TEXT PRIMARY KEY DEFAULT (uuid_v4()),
+    task_id        TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+    thrall_id      TEXT NOT NULL REFERENCES thralls(id) ON DELETE CASCADE,
+    status         TEXT NOT NULL CHECK (status IN ('pending','dispatched','complete','failed','timeout','offline')),
+    exit_code      INTEGER,
+    stdout         BLOB,              -- truncated at 1MB
+    stderr         BLOB,              -- truncated at 256KB
+    duration_ms    INTEGER,
+    error          TEXT,
+    completed_at   DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_task_id ON task_run_targets(task_id);
+
+CREATE TABLE IF NOT EXISTS workflow_runs (
+    id             TEXT PRIMARY KEY DEFAULT (uuid_v4()),
+    created_at     DATETIME NOT NULL DEFAULT (datetime('now')),
+    finished_at    DATETIME,
+    name           TEXT NOT NULL,
+    definition     TEXT NOT NULL,     -- JSON-encoded workflow steps
+    current_step   INTEGER NOT NULL DEFAULT 0,
+    status         TEXT NOT NULL CHECK (status IN ('pending','running','success','failed','aborted')),
+    abort_reason   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS workflow_step_results (
+    id             TEXT PRIMARY KEY DEFAULT (uuid_v4()),
+    workflow_id    TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+    step_index     INTEGER NOT NULL,
+    task_id        TEXT REFERENCES task_runs(id),
+    started_at     DATETIME NOT NULL DEFAULT (datetime('now')),
+    finished_at    DATETIME,
+    status         TEXT NOT NULL CHECK (status IN ('pending','running','success','failed','skipped'))
+);
+```
+
+---
+
+## Integration Points
+
+### How `streamManager` Is Extended
+
+`server/grpc/streams.go` adds two new methods:
+
+```go
+// sendTask delivers a task dispatch to a specific agent.
+// Returns false if the agent is not connected or the buffer is full.
+func (sm *streamManager) sendTask(thrallID string, task *pb.StreamTaskDispatch) bool
+
+// sendQuery delivers a live query to a specific agent.
+func (sm *streamManager) sendQuery(thrallID string, query *pb.StreamQueryRequest) bool
+```
+
+The `AgentStream` gRPC handler in `server/grpc/streams.go` is extended to handle incoming `TaskResult` and `QueryResponse` message variants. It routes them to result channels registered by the `TaskService` (via a pending-results map keyed by task_id/query_id).
+
+### How `AgentStream` Handler Routes Task Results
+
+The gRPC handler for `AgentStream` currently calls `buildCheckInResponse()` and fans results. It needs to additionally handle new incoming message types:
+
+```go
+case *pb.AgentStreamMessage_TaskResult:
+    s.taskService.ReceiveResult(msg.TaskResult)
+case *pb.AgentStreamMessage_QueryResponse:
+    s.taskService.ReceiveQueryResponse(msg.QueryResponse)
+```
+
+`TaskService` maintains a `sync.Map[taskID, chan *pb.TaskResult]` — channels registered by the waiting goroutine in `CreateTask()`.
+
+### How Agent `read_loop()` Is Extended
+
+In `agent-rs/src/checkin/stream.rs`, the `read_loop` function adds dispatch for new server message types:
+
+```rust
+server_stream_message::Msg::TaskDispatch(dispatch) => {
+    if task_tx.try_send(dispatch).is_err() {
+        warn!("task dispatch dropped (buffer full)");
+    }
+}
+server_stream_message::Msg::QueryRequest(req) => {
+    if query_tx.try_send(req).is_err() {
+        warn!("query request dropped");
+    }
+}
+```
+
+`StreamHandle` gains two new fields:
+```rust
+pub task_rx: mpsc::Receiver<StreamTaskDispatch>,
+pub query_rx: mpsc::Receiver<StreamQueryRequest>,
+```
+
+### How `stream_loop` in Agent Is Extended
+
+The `stream_loop` `tokio::select!` macro gains two new arms:
+
+```rust
+dispatch = task_rx.recv() => {
+    // Spawn a tokio task to run the command non-blocking
+    let tx = request_tx.clone();
+    let thrall_id = config.thrall_id.clone();
+    tokio::spawn(async move {
+        let result = task::execute(dispatch).await;
+        let msg = AgentStreamMessage { msg: Some(task_result(result)) };
+        let _ = tx.send(msg).await;
+    });
+}
+
+req = query_rx.recv() => {
+    let response = query::handle(&req, &collectors, &executors).await;
+    let msg = AgentStreamMessage { msg: Some(query_response(response)) };
+    let _ = request_tx.send(msg).await;
+}
+```
+
+The critical design choice here: task execution must be **spawned in a separate tokio task** so it does not block the `stream_loop`. A long-running command should not prevent policy pushes or force_pushes from being processed. This is analogous to how a web server handles concurrent requests.
+
+---
+
+## Scaling Considerations
+
+| Concern | At 100 thralls | At 1,000 thralls | At 10,000 thralls |
+|---------|---------------|-----------------|-------------------|
+| Task fan-out | Single goroutine loops over connected streams, drops to buffered channels | Same; buffer overflows are logged, offline agents recorded as 'offline' status | Fan-out loop must be parallelized; consider goroutine pool |
+| Rolling execution | Simple sequential batch loop is fine | Increase inter-batch timeout for health checks | Same pattern, but health check parallelism matters |
+| Task result collection | sync.Map of result channels is fine | Same | High concurrency of concurrent tasks could stress the pending-results map; use sharded maps |
+| SQLite under task load | Single writer; task result INSERTs are small and fast | May need WAL mode (already on SQLite, this is standard) | Consider archiving completed tasks to keep working set small |
+| Live query concurrency | Single query blocks for 10s; easily parallelized | Concurrent queries multiply the pending channels | Limit concurrent live queries; queue excess |
+
+**First bottleneck:** The `agentStream.send` channel buffer (currently size 8). Under rolling deployment to 100 agents, if the coordinator dispatches all 100 simultaneously, 92 task dispatches are dropped. **Fix:** Increase buffer to 64-128, or use blocking send in the coordinator (with per-agent goroutine so one slow agent doesn't block others).
+
+**Second bottleneck:** SQLite write lock contention when many task results arrive simultaneously. **Fix:** Batch writes via a result collector goroutine (mirrors the existing `TraitsBatcher` pattern in `server/db/traitsbatcher.go`).
+
+---
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Treating Task Execution Like Policy Convergence
+
+**What:** Reusing the convergence path (CheckIn → PolicyBundle → converge()) for task execution.
+
+**Why it's wrong:** Policy convergence is idempotent by design — it checks state before acting. Task execution is explicitly not idempotent — "run this command once, right now." Routing tasks through the convergence path would add unnecessary overhead (trait collection, policy evaluation, DAG sort) and could trigger notify/subscribe side effects from the config management layer.
+
+**Do this instead:** A dedicated `StreamTaskDispatch` message type and a task executor that is outside the convergence loop. The agent handles task execution as an independent concern in `stream_loop`, spawned as a separate tokio task.
+
+### Anti-Pattern 2: Blocking `stream_loop` on Task Execution
+
+**What:** Running the task command synchronously inside the `stream_loop` `tokio::select!` branch.
+
+**Why it's wrong:** A 5-minute `apt upgrade` command would block the entire agent event loop. No policy pushes, no force pushes, no periodic check-ins would be processed during that time. The agent would appear stalled.
+
+**Do this instead:** `tokio::spawn()` the task execution. The result sender is passed into the spawned task. The `stream_loop` returns immediately and continues processing other events.
+
+### Anti-Pattern 3: Correlating Results by Thrall ID Alone
+
+**What:** Using only `thrall_id` to match incoming `TaskResult` messages to pending task requests.
+
+**Why it's wrong:** A thrall may have multiple concurrent tasks in flight (different workflows, concurrent CLI operators). Results would be routed to the wrong waiter.
+
+**Do this instead:** Every `StreamTaskDispatch` includes a `task_id` UUID. The agent echoes this `task_id` in the `TaskResult`. The server routes results by `task_id`, not `thrall_id`.
+
+### Anti-Pattern 4: Storing Large Stdout in SQLite BLOB Unconditionally
+
+**What:** Storing full command output in the `task_run_targets.stdout` BLOB without a size limit.
+
+**Why it's wrong:** `find / -name "*.log"` produces megabytes. Large BLOBs degrade SQLite performance, balloon the database file, and make backup/restore slow.
+
+**Do this instead:** Truncate stdout at 1MB and stderr at 256KB. Include a `truncated: bool` field in `TaskResult`. Log a warning when truncation occurs. For use cases requiring full output, consider writing to a file on the agent and returning the file path.
+
+---
+
+## Build Order
+
+Dependencies within v1.3:
+
+```
+Phase 1: Proto extension (required by everything)
+  - Add StreamTaskDispatch, TaskResult, StreamQueryRequest, QueryResponse to hobnob.proto
+  - Regenerate with `make proto`
+  - No behavior changes; existing tests pass
+
+Phase 2: SQLite schema + db layer
+  - Add task_runs, task_run_targets, workflow_runs, workflow_step_results tables
+  - Write sqlc queries, generate Go code
+  - Depends on: Phase 1
+
+Phase 3: Agent task executor + stream plumbing
+  - agent-rs: task.rs executor (run command, capture output)
+  - agent-rs: extend StreamHandle with task_rx
+  - agent-rs: extend read_loop() to dispatch TaskDispatch messages
+  - agent-rs: extend stream_loop with spawned task execution arm
+  - Depends on: Phase 1
+
+Phase 4: Agent query executor + stream plumbing
+  - agent-rs: query.rs executor (trait read + resource check-phase-only)
+  - agent-rs: extend StreamHandle with query_rx
+  - agent-rs: extend stream_loop with query response arm
+  - Depends on: Phase 1, Phase 3 (reuses task stream plumbing)
+
+Phase 5: Server streamManager extension + result routing
+  - server/grpc/streams.go: sendTask(), sendQuery() methods
+  - server/grpc/checkin.go or new streams handler: route TaskResult and QueryResponse to pending channels
+  - server/orchestration/tasks.go: TaskService with pending-results sync.Map
+  - Depends on: Phase 1, Phase 2
+
+Phase 6: REST API + CLI for ad-hoc tasks and live query
+  - server/api/tasks.go: POST /api/v1/tasks, GET /api/v1/tasks/{id}
+  - server/api/query.go: POST /api/v1/query
+  - cli/tasks.go: `hobnobcli task run`, `hobnobcli task status`, `hobnobcli task list`
+  - cli/query.go: `hobnobcli query`
+  - Depends on: Phase 5
+
+Phase 7: Workflow engine + rolling coordinator
+  - server/orchestration/workflow.go: WorkflowEngine state machine
+  - server/orchestration/rolling.go: RollingCoordinator
+  - server/api/workflows.go: REST handlers
+  - cli/workflows.go: `hobnobcli workflow run`, `hobnobcli workflow status`
+  - Depends on: Phase 5, Phase 6 (workflows call TaskService internally)
+
+Phase 8: Web UI integration
+  - Task history page, live task output display
+  - Workflow status visualization
+  - Live query interface
+  - Depends on: Phase 6, Phase 7
+```
+
+**Rationale for this order:**
+
+1. Proto first because Go and Rust generated code must match before any integration tests can run.
+2. Schema second because the result storage model constrains the API contract — changing it after API handlers are written forces API changes.
+3. Agent work before server work because the fundamental question (can a task dispatch reach the agent and produce a result?) must be answered first. Early integration tests can verify the message round-trip before building the full orchestration stack.
+4. Simple tasks and live query before workflows because workflows depend on the task primitive working correctly. Testing a task in isolation is easier than debugging a multi-step workflow where the task layer might also have bugs.
+5. CLI before Web UI so there's a usable interface for QA during development.
+
+---
 
 ## Sources
 
-- [Puppet Architecture Overview](https://www.puppet.com/docs/puppet/5.5/architecture.html) -- pull-based catalog compilation model (HIGH confidence)
-- [The Architecture of Open Source Applications: Puppet](https://aosabook.org/en/v2/puppet.html) -- comprehensive internal architecture (HIGH confidence)
-- [Puppet Internals: the compiler](https://www.masterzen.fr/2012/03/17/puppet-internals-the-compiler/) -- catalog compilation details (MEDIUM confidence)
-- [Dependency graph resolution in Go](https://dnaeon.github.io/dependency-graph-resolution-algorithm-in-go/) -- DAG implementation patterns (MEDIUM confidence)
-- [gammazero/toposort Go package](https://pkg.go.dev/github.com/gammazero/toposort) -- Kahn's algorithm implementation (HIGH confidence)
-- [Go Project Structure: Clean Architecture Patterns](https://dasroot.net/posts/2026/01/go-project-structure-clean-architecture/) -- Go project layout patterns (MEDIUM confidence)
-- [Building Production Grade Microservices with Go and gRPC](https://dev.to/nikl/building-production-grade-microservices-with-go-and-grpc-a-step-by-step-developer-guide-with-example-2839) -- gRPC service patterns (MEDIUM confidence)
-- Isogov handoff document (`isogov-handoff.md`) -- authoritative project specification (HIGH confidence)
+All findings are HIGH confidence — derived from direct reading of:
+- `/home/dan/repos/hobnob/proto/hobnob.proto`
+- `/home/dan/repos/hobnob/server/grpc/streams.go`
+- `/home/dan/repos/hobnob/server/grpc/server.go`
+- `/home/dan/repos/hobnob/server/grpc/services.go`
+- `/home/dan/repos/hobnob/agent-rs/src/checkin/stream.rs`
+- `/home/dan/repos/hobnob/agent-rs/src/checkin/loop_impl.rs`
+- `/home/dan/repos/hobnob/agent-rs/src/runner/mod.rs`
+- `/home/dan/repos/hobnob/agent-rs/src/executors/exec.rs`
+- `/home/dan/repos/hobnob/server/db/runstore.go`
+- `/home/dan/repos/hobnob/migrations/000001_initial_schema.up.sql`
+- `/home/dan/repos/hobnob/server/config/types.go`
+- `/home/dan/repos/hobnob/server/federation/hub.go`
+
+---
+*Architecture research for: Hobnob v1.3 Orchestration*
+*Researched: 2026-03-11*

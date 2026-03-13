@@ -1,284 +1,272 @@
 # Pitfalls Research
 
-**Domain:** Pull-based configuration management system (Puppet/Chef-style)
-**Researched:** 2026-03-05
+**Domain:** Adding orchestration to an existing pull-based configuration management system
+**Researched:** 2026-03-11
 **Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: Non-Atomic File Writes Corrupt Managed Files
+### Pitfall 1: Orchestration Tasks Collide With Convergence Runs
 
 **What goes wrong:**
-The file module executor writes content directly to the target path. If the agent process is killed mid-write (OOM, SIGKILL, power loss), the managed file is left in a partially-written, corrupt state. The next convergence run sees the SHA256 mismatch and overwrites again, but the service reading that file may have already crashed or loaded garbage. This is especially dangerous for files like `/etc/nginx/nginx.conf` or database configs where a partial write means a service outage.
+An operator runs `hobnobcli exec --target web01 "systemctl restart nginx"` at the same moment the agent's pull loop fires its convergence run. Both execute concurrently on the same node: the convergence run restarts nginx (via the service resource), then the ad-hoc task restarts it again a second later. More dangerously, a convergence run writes `/etc/nginx/nginx.conf` while an ad-hoc task is executing `nginx -t` against it. The ad-hoc task may see the file mid-write and report a false negative. In the worst case, both paths hold their own opinion of the node's state and their actions interfere, producing an unpredictable result.
 
 **Why it happens:**
-Developers implement `os.WriteFile(path, content, mode)` as the obvious approach. It works in testing but is not crash-safe. The write and the metadata update (owner, group, mode) are separate syscalls, creating a window where the file has wrong permissions.
+Convergence runs are triggered by the server's pull loop or force-push. Orchestration tasks arrive via the stream channel. There is no coordination between these two sources of agent work in the current architecture. The agent has one goroutine model for convergence and the stream-handling code simply fires commands into it.
 
 **How to avoid:**
-Write to a temporary file in the same directory (same filesystem), set owner/group/mode on the temp file, then `os.Rename()` to the target path. `rename(2)` is atomic on POSIX systems when source and destination are on the same filesystem. The sequence is: write temp -> fsync temp -> chmod/chown temp -> rename temp to target -> fsync parent directory.
+Implement a single-worker queue inside the agent. The agent has one execution goroutine. Both convergence triggers and orchestration tasks enter this queue. Use a priority scheme: in-flight convergence runs must complete before a task starts; tasks that arrive during a convergence run are buffered (with a bounded queue, not an unbounded one). Expose a `busy` signal from the agent that the server can query before dispatching a task via the stream. Never allow concurrent local execution of convergence + orchestration.
 
 **Warning signs:**
-- File module uses `os.WriteFile` or `ioutil.WriteFile` directly to the target path
-- No temporary file pattern in the file executor code
-- Owner/mode set after content write (two-step non-atomic update)
-- Integration tests that never test interrupted writes
+- Agent receives and begins executing a task message while a convergence run is still in progress
+- No mutual exclusion between convergence and task execution on the agent side
+- Task results arrive interleaved with convergence run results in the RunStore
+- Integration tests that always test convergence and orchestration in isolation from each other
 
 **Phase to address:**
-Agent module executors phase -- this must be correct from the first implementation of the file resource type. Retrofitting atomic writes after building on top of direct writes is straightforward but easy to forget.
+Phase 1 (ad-hoc command execution foundation). The execution queue model must be designed before any orchestration commands can be dispatched. This is architectural and cannot be retrofitted.
 
 ---
 
-### Pitfall 2: Thundering Herd on Server After Restart or Force-Push-All
+### Pitfall 2: Orphaned Processes When Streams Disconnect Mid-Task
 
 **What goes wrong:**
-When the server restarts or an admin runs `gvctl push --all`, all agents check in simultaneously. With hundreds of nodes, the server gets hammered with concurrent gRPC CheckIn calls, each requiring config file reads, YAML parsing, secret resolution via isopass, template rendering, DAG computation, and a database write. The server either OOMs, exhausts its database connection pool, or overwhelms isopass with concurrent secret fetches. The irony: the tool meant to ensure uptime causes an outage.
+An operator runs a long-running task (`apt-get dist-upgrade`, a custom migration script, a database backup). The agent's gRPC stream disconnects mid-execution (network hiccup, server restart, keepalive timeout). The agent's stream handler exits but the subprocess is still running under a detached goroutine or has been `os.Process.Release()`d. The task now runs with no owner: its stdout/stderr goes nowhere, its exit code is never collected, and the server marks the task as "lost" or times out waiting for results. On reconnect, the agent has no memory of the task. The operator reissues the command, and now two instances of the database backup are running simultaneously, corrupting the backup target.
 
 **Why it happens:**
-The jitter mechanism only helps during steady-state polling. Force-push sets a DB flag that every agent picks up on its next check-in, but if the server was down for a while, all agents have been backing off and will retry around the same time when it comes back. Even with jitter on the base interval, a server restart creates a synchronization point.
+The existing stream model (`streamManager`) uses a `done` channel that is closed on disconnect. Process management (starting, waiting on, and killing child processes) is a separate concern that developers naturally implement in isolation. Connecting "stream closed = cancel subprocess" requires explicit effort that is easy to forget.
 
 **How to avoid:**
-1. Server-side admission control: limit concurrent CheckIn processing with a semaphore (e.g., `make(chan struct{}, maxConcurrent)`). Agents that exceed the limit get a gRPC `RESOURCE_EXHAUSTED` status and retry with their own backoff.
-2. Staggered force-push: `gvctl push --all` should set force-run flags with randomized `not_before` timestamps spread over a configurable window (e.g., 5 minutes), not all at once.
-3. Agent startup jitter: on boot or after reconnecting to a previously-unavailable server, the agent should sleep for a random duration (0 to base_interval) before its first check-in.
-4. Connection pooling for isopass: ensure the secrets provider uses a connection pool or caches resolved secrets with a short TTL, so N concurrent check-ins don't create N separate isopass connections.
+Bind task lifetime to a Go `context.Context` derived from the stream's lifecycle. When the stream's `done` channel closes, cancel the context. All subprocess executions must use `exec.CommandContext(ctx, ...)` so the OS kills the child process on context cancellation. Implement a graceful shutdown window: on stream close, send SIGTERM to the running task, wait up to N seconds, then SIGKILL. Log "task aborted due to stream disconnect" with the task ID. On reconnect, the server must detect the task's pending state and either re-dispatch or mark it as failed with reason "stream_interrupted".
 
 **Warning signs:**
-- `gvctl push --all` sets all force flags with the same timestamp
-- No concurrency limit on the gRPC server's CheckIn handler
-- Server CPU/memory spikes correlate with agent fleet size
-- isopass becomes a bottleneck under concurrent secret resolution
+- Task execution uses `exec.Command` instead of `exec.CommandContext`
+- No handler on the stream's `done` channel that terminates running subprocesses
+- Task status in DB can be "running" indefinitely with no timeout escalation
+- No re-dispatch or failure-marking logic for tasks whose stream disconnected
 
 **Phase to address:**
-Server skeleton and agent run loop phases. The server needs admission control from the start. The agent needs startup jitter from its first daemon implementation. Force-push staggering can be added when implementing `gvctl push`.
+Phase 1 (ad-hoc command execution foundation). The context-bound subprocess model must be built into the first implementation. Retrofitting this later means existing code that uses `exec.Command` must be audited and changed.
 
 ---
 
-### Pitfall 3: Secrets Leaking into Logs, Error Messages, Run Results, and gRPC Payloads
+### Pitfall 3: Ad-Hoc Command Execution Bypasses All Authorization Controls
 
 **What goes wrong:**
-A `secret:isogov/db/dsn` value is resolved to `postgres://user:P@ssw0rd@host/db` and that resolved string ends up in a log line, a database `run_results.error` column, a gRPC error detail, a webhook payload, a Prometheus label, or a panic stack trace. Once a secret is in a log file or database row, it is effectively compromised -- log aggregators, backups, and monitoring systems all become secret stores.
+Any admin with a hobnobcli token can run arbitrary shell commands as root on any managed thrall. There is no differentiation between "read-only query" and "destructive command." An operator meant to run `df -h` typos and runs `dd if=/dev/zero of=/dev/sda`. An intern with read access to the CLI can execute `rm -rf /`. A compromised operator credential gives an attacker root execution on the entire fleet. The existing gRPC auth (mTLS + ED25519 signatures) authenticates who is talking to the server, but does not restrict what commands they can run.
 
 **Why it happens:**
-This is death by a thousand cuts. Every code path that touches resolved config must be audited. Common leak vectors:
-- `fmt.Errorf("failed to connect: %v", dsn)` where dsn contains the resolved secret
-- Structured logging that logs the entire config struct
-- gRPC interceptors that log request/response payloads at debug level
-- Webhook payloads that include full run context
-- Template rendering errors that include the template data context in the error message
-- Panic recovery that dumps the stack with local variables
+Configuration management systems are designed around declared desired state — the "what to run" is already encoded in the YAML config, which is version-controlled and reviewed. Ad-hoc orchestration breaks this model: the "what" is now an arbitrary string passed at runtime. Developers naturally build the transport and execution path first, and treat authorization as a "we'll add RBAC later" problem. Later never comes.
 
 **How to avoid:**
-1. Create a `SecretString` type that implements `fmt.Stringer` and `encoding.TextMarshaler` to return `[REDACTED]`. Store resolved secrets in this type, not raw strings. Any accidental logging produces `[REDACTED]`.
-2. Never pass resolved secret values through gRPC messages. The server resolves secrets and sends the resolved content to the agent, but the content should be opaque bytes in the protobuf, and the agent should never include file content in its `RunReport` -- only the SHA256 hash.
-3. Wrap the config struct so `%+v` formatting redacts secret fields.
-4. Add a log scrubbing layer that detects and redacts patterns matching known secret paths.
-5. Run results in the database should store "drift detected on /etc/myapp/db.conf" not "content changed from X to Y".
+1. Define an allowlist model from day one. Orchestration commands must be validated against a server-side allowlist (a list of approved command patterns, or a list of approved named tasks). Raw shell strings are never passed directly to `/bin/sh -c` on the agent. Instead, the server defines named operations (`task: nginx-reload`, `task: check-disk-space`) and the agent executes the pre-defined command bound to that name.
+2. Alternatively (if raw shell is required), implement a command sandbox: restrict the shell to a read-only chroot, or run the command as a restricted non-root user. Never run arbitrary operator commands as root.
+3. Add audit logging to every task dispatch: who requested it, what command, at what time, on which thralls. This is non-negotiable for compliance.
+4. For v1.3 with no RBAC: accept that all admins are trusted, but still implement audit logging and restrict the protocol to named tasks (not raw shell) as the transport.
 
 **Warning signs:**
-- Resolved secrets stored as plain `string` type
-- `%v` or `%+v` formatting of config structs in log statements
-- Debug-level logging that includes gRPC message contents
-- Error messages that embed connection strings or file contents
-- No grep for secret values in test log output
+- Task dispatch protocol accepts arbitrary shell strings rather than named operations
+- No server-side log entry recording who triggered what on which node
+- Commands executed as the agent's user (root) without any sandboxing or restriction
+- No allowlist or named-task model in the design
 
 **Phase to address:**
-Secrets provider phase (first implementation). The `SecretString` type must exist before any code resolves secrets. This is nearly impossible to retrofit once secret values flow through the codebase as plain strings.
+Phase 1 (ad-hoc command execution foundation). The named-task model (vs. raw shell) must be a design decision before writing any execution code. This determines the entire protocol shape.
 
 ---
 
-### Pitfall 4: Notify/Subscribe Creates Hidden Ordering Dependencies and Infinite Loops
+### Pitfall 4: SQLite Write Contention Spikes During Orchestration Fan-Out
 
 **What goes wrong:**
-A resource with `notify: [reload-nginx]` triggers `reload-nginx` to re-apply. But if `reload-nginx` itself causes a state change that triggers another resource via its own `notify`, you get a cascade. In the worst case, two resources notify each other, creating an infinite convergence loop. Even without loops, the notify chain creates implicit ordering dependencies that the DAG doesn't model, causing resources to execute in unexpected order.
-
-The other failure mode: a notify is declared but the target resource name is misspelled. The notification silently does nothing. The sysadmin changes a config file, expects nginx to reload, and it doesn't -- with no error anywhere.
+An operator runs a workflow targeting 50 thralls simultaneously. Each thrall completes its task and calls back to the server to report results. The server writes task results to SQLite via the RunStore. SQLite has a single-writer lock: all 50 concurrent result-writers queue behind each other. Each write takes ~1ms but with 50 serialized writes the last thrall waits 50ms just for its result to commit. Worse, SQLite WAL mode helps readers but writers still serialize. If workflows fan out to hundreds of thralls, task result reporting becomes the bottleneck. SQLite returns `SQLITE_BUSY` under high write pressure; the Go mattn/go-sqlite3 driver surfaces this as a lock error. Result writes fail, task states become inconsistent, and the operator sees phantom failures.
 
 **Why it happens:**
-Notify/subscribe is syntactic sugar for "run this again if that changed." It creates a second dependency graph (the notification graph) layered on top of the explicit DAG. These two graphs can conflict. Puppet's history is littered with bugs in this area, particularly around the interaction between `require`, `notify`, and `subscribe` creating dependency cycles (you can't require something and notify it simultaneously without creating a cycle).
+The existing system was designed for pull-based convergence where thralls check in at staggered intervals (jitter ensures they do not all write simultaneously). Orchestration deliberately synchronizes work across many thralls at once. This is the opposite of the pull model's design intent and breaks the assumption that SQLite write pressure is naturally spread out.
 
 **How to avoid:**
-1. Validate notification targets at config load time: if a resource declares `notify: [foo]` and no resource named `foo` exists, reject the config with a clear error.
-2. Build a combined graph that merges explicit `depends_on` edges and implicit `notify/subscribe` edges, then run cycle detection on the combined graph. Reject configs with cycles.
-3. Cap notification depth: if a notify triggers a resource that itself notifies, allow at most one level of cascading (configurable). Log a warning if the cap is hit.
-4. Record notification chains in run results so the admin can see "reload-nginx ran because write-config changed."
-5. Never allow a resource to notify itself.
+1. Use WAL mode with `PRAGMA busy_timeout=5000` and `PRAGMA journal_mode=WAL` — already reduces contention significantly.
+2. Batch task result writes: instead of writing each result immediately on arrival, buffer them for 100ms and batch-insert. The existing `BatchCreateRunResults` pattern is the right model.
+3. For the orchestration-specific task tracking tables, consider using the in-memory `MemRunStore` backend for in-flight task state, with periodic checkpoints to SQLite. This keeps write pressure off SQLite during active workflows.
+4. Limit orchestration fan-out batch sizes (rolling execution batches of 10-20 thralls, not all at once) to naturally stagger write pressure.
+5. Set `_txlock=immediate` on the SQLite connection to avoid deferred-to-immediate lock escalation deadlocks.
 
 **Warning signs:**
-- Notify targets not validated against resource names at load time
-- Notification graph separate from dependency DAG with no cross-validation
-- No depth limit on notification cascading
-- Run results don't explain why a resource re-applied
-- No test for misspelled notify targets
+- `SQLITE_BUSY` errors appearing in server logs during orchestration runs
+- Task result writes done one-at-a-time in separate transactions rather than batched
+- SQLite write latency spikes when more than 20 thralls complete simultaneously
+- No `busy_timeout` set on the SQLite connection (errors instead of retrying)
 
 **Phase to address:**
-Module dispatch and DAG ordering phase. The combined graph validation must be built when the notify/subscribe feature is implemented. Adding it later means existing configs may have latent bugs.
+Phase 1 (task result storage schema) and Phase 2 (rolling execution). The batch-write pattern must be established before building rolling execution, which deliberately creates concurrent result arrivals.
 
 ---
 
-### Pitfall 5: Partial Convergence Leaves System in Worse State Than Before
+### Pitfall 5: Workflow State Corruption on Server Restart
 
 **What goes wrong:**
-A run applies resources in DAG order. Resource 3 of 8 fails (e.g., package install fails because a repo is unreachable). Resources 1-2 succeeded and made changes. Resources 4-8 never run, but some of them depend on resources 1-2 having run. The system is now in a hybrid state: partially converged, not matching the old state, not matching the desired state. Example: base users were created (resource 1-2), nginx config was written referencing those users (resource 3), but nginx service wasn't started (resource 4) -- and the old nginx config that referenced different users is now gone.
+A multi-step workflow is executing: step 1 (run on group A) has completed, step 2 (run on group B, conditional on step 1 success) is in progress. The server restarts (deploy, crash). The workflow state was held in memory (the orchestration engine's state machine). On restart, the server has no record of the workflow. The thralls in group B that received their tasks are still running them. When they complete and try to report back, the server has no context for their results. The operator sees group B's tasks as "orphaned results" with no parent workflow. The workflow is neither completed nor retryable — it is simply lost.
 
 **Why it happens:**
-Configuration management is inherently non-transactional. Unlike a database transaction, you can't roll back "user was created" or "package was installed" atomically. Each resource is an independent side effect on the system.
+Orchestration state is inherently transient: developers store it in memory because it is simpler and because they plan to "persist it later." The existing RunStore persists run results but not workflow state (the step DAG, which steps have passed, which groups are targeted at each step). Stateless in-memory orchestration feels fine in development where servers never restart.
 
 **How to avoid:**
-1. Fail-fast vs. continue: make the behavior configurable per module. Default to fail-fast (stop on first error) for modules with tight dependencies. Support `on_failure: continue` for independent resources.
-2. File snapshots (already spec'd) are the partial mitigation for files. But packages and users have no automatic rollback -- document this clearly.
-3. Dry-run before apply: encourage the pattern of `gvctl preview` before `gvctl push`. The dry-run catches most failures before they happen.
-4. Record exactly which resources succeeded and which were skipped due to upstream failure. The run report should distinguish "skipped (dependency failed)" from "skipped (already converged)" from "skipped (when condition false)."
-5. For critical modules, implement a "pre-check" phase that validates all preconditions (repo reachable, disk space available, dependencies installed) before applying any changes.
+Persist workflow state to SQLite from the beginning. Define a `workflows` table and a `workflow_steps` table. Each state transition (step started, step completed, step failed, workflow aborted) is a DB write that happens before the transition takes effect (write-ahead logging for state machines). On server restart, scan for in-progress workflows and resume them. For tasks that were dispatched to thralls and are now orphaned (thrall completed but server has no context), provide a reconciliation path: on reconnect, the thrall reports its pending task results, the server matches them against the pending workflow step.
 
 **Warning signs:**
-- All resources treated as independent with no failure propagation
-- Run report doesn't distinguish failure causes for skipped resources
-- No pre-check or dry-run mechanism
-- File snapshots not taken before writes
-- No documentation about non-transactional nature of convergence
+- Workflow state held only in a Go struct in memory with no persistence
+- Server restart during an active workflow leaves DB rows with status "running" indefinitely
+- No reconciliation logic for task results that arrive after a server restart
+- No workflow resume capability documented or implemented
 
 **Phase to address:**
-Module executors and run loop phases. Failure semantics must be defined before building individual executors, because each executor needs to know whether to continue or stop on failure.
+Phase 3 (multi-step workflows). The persistence model must be designed before workflows are built. A workflow without durable state is a feature that will cause production incidents on the first unplanned server restart.
 
 ---
 
-### Pitfall 6: File Watcher Misses Config Changes Due to Atomic Editor Saves
+### Pitfall 6: Stream Buffer Overflow Silently Drops Orchestration Messages
 
 **What goes wrong:**
-The server watches `config/clients/` for changes to auto-reload client configs. Most text editors (vim, emacs, VS Code) save files by writing to a temp file then renaming it to the target. This generates a RENAME event on the old file, not a WRITE event on the new file. If the watcher is watching individual files (not the directory), it loses the watch entirely because the inode it was watching was unlinked. Even watching the directory, the event sequence (CREATE temp, WRITE temp, RENAME temp to target) can be confusing, and naive event handlers may process the CREATE of the temp file instead of waiting for the RENAME.
-
-On Linux, inotify has a per-user watch limit (default 8192). On NFS or network filesystems, inotify doesn't work at all.
+The current `agentStream.send` channel has a buffer of 8. During normal operation (policy pushes, force-push signals) this is sufficient — messages are small and infrequent. Orchestration introduces a new message type: task dispatch. If an operator triggers a workflow that dispatches tasks to multiple thralls faster than the stream goroutines can drain the send buffers (e.g., all 50 thralls are busy processing a previous task), the send buffer fills and `pushPolicy` silently drops the message with a log warning. The task is lost. The thrall never receives it. The workflow hangs waiting for a result that will never come — until a timeout fires, if one was implemented.
 
 **Why it happens:**
-Developers test with `echo "content" > file` which generates a simple WRITE event. Real-world editing tools don't work this way. The fsnotify library documentation explicitly warns against watching individual files for this reason.
+The existing drop-on-full behavior was a deliberate choice for policy pushes: if the agent is slow to process, it will get the policy on its next check-in anyway. This fallback does not exist for orchestration tasks. A dropped task has no recovery path unless the server explicitly detects the drop and retries.
 
 **How to avoid:**
-1. Watch the directory, not individual files. Filter events by filename.
-2. Debounce events: after any event in the config directory, wait 500ms-1s for more events, then reload all configs. This handles the multi-event sequences from atomic saves.
-3. On reload, diff the loaded config against the in-memory config to determine what actually changed. Don't rely on which file triggered the event.
-4. Fall back to periodic polling (e.g., every 30s stat the directory for mtime changes) as a safety net if fsnotify events are missed.
-5. Provide a `gvctl reload` command as a manual trigger for environments where file watching is unreliable (NFS, containers with mounted volumes).
+1. Increase the send buffer for streams during orchestration, or use a separate dedicated channel for task messages with higher priority than policy pushes.
+2. Change the task dispatch path to detect buffer-full conditions and implement retries with backoff (do not silently drop).
+3. Add a task-acknowledgement protocol: the server sends a task, the agent acknowledges receipt within a timeout. If no acknowledgement arrives, the server retries or marks the task as undeliverable.
+4. Alternatively, separate task dispatch from the policy push stream entirely: use a new RPC method for task dispatch that blocks until the agent acknowledges receipt, rather than fire-and-forget over a buffered channel.
 
 **Warning signs:**
-- Config watcher watches individual files instead of directories
-- No debouncing of file events
-- Testing only with direct file writes, not with editors that use atomic saves
-- No fallback mechanism if fsnotify fails
-- No manual reload command
+- Task dispatch reuses `pushPolicy`'s drop-on-full semantics without modification
+- No task receipt acknowledgement in the protocol
+- Log line "stream send buffer full, dropping policy push" appears during orchestration runs
+- Workflows can hang indefinitely with no timeout or failure escalation
 
 **Phase to address:**
-Server config loading phase. The file watcher is a core server capability that must be reliable from day one.
+Phase 1 (protocol design). The acknowledgement model must be part of the gRPC message design before any task dispatch code is written.
 
 ---
 
-### Pitfall 7: Go Template Injection via Untrusted YAML Values
+### Pitfall 7: Rolling Execution Failure Threshold Logic Is Wrong
 
 **What goes wrong:**
-Module YAML files use Go templates with `.Vars` and `.Facts` for variable substitution. If a fact value or variable contains Go template syntax (e.g., a hostname like `{{ .Env.HOME }}`), and the template engine processes it, an attacker who controls a fact value (via a compromised agent) can inject template directives that execute arbitrary template functions. Depending on the template function map, this could read files, call functions, or cause panics.
-
-Even without malicious intent, a user variable containing `{{` will cause template parse errors that are confusing to debug.
+An operator configures a rolling deployment: batch size 5, stop threshold 50% failures. The workflow runs 5 thralls in the first batch. 3 fail, 2 succeed. That is 60% failure — above the 50% threshold. But the check happens after the batch completes, not during it. Two more thralls received and started the task before the threshold was checked. Those two thralls are now running a task that should have been aborted. Alternatively: the operator intended "stop if any single batch exceeds 50% failures" but the implementation accumulated failure rate across all batches. After batch 1 (0/5 failures = 0%) and batch 2 (0/5 = 0%), batch 3 has 2/5 = 40% — still under 50%. But the operator expected each batch to be evaluated independently.
 
 **Why it happens:**
-Go's `text/template` package processes all `{{` delimiters. If user-supplied data flows into a template as a raw string and the template is re-parsed (a common anti-pattern: building the template string by concatenation then parsing), the user data becomes part of the template.
+Rolling execution thresholds sound simple ("stop after X% fail") but have multiple interpretation dimensions: per-batch vs. cumulative, pre-dispatch vs. post-completion, absolute count vs. percentage. Developers implement one interpretation, operators assume another.
 
 **How to avoid:**
-1. Parse templates from the YAML `content` field first, then execute them with the data context. Never concatenate user data into the template string before parsing.
-2. Use a restricted template function map: only expose safe functions (string manipulation, conditionals, loops). Do not expose `call`, OS-level functions, or file reading.
-3. Validate that `.Vars` and `.Facts` values don't contain `{{` sequences. If they do, treat them as literal text (which Go templates do correctly when data is passed via the context, not concatenated into the template source).
-4. Consider using `html/template` for escaping if template output goes into security-sensitive contexts, though for config files `text/template` with proper data separation is sufficient.
-5. Treat agent-reported facts as untrusted input. Validate fact values on the server before using them in template rendering.
+1. Define threshold semantics explicitly in the YAML syntax and document them. Recommend: per-batch evaluation (not cumulative), checked after all tasks in the batch report back (not mid-batch), with a configurable timeout per batch.
+2. Support both `failure_count` and `failure_percent` to avoid ambiguity.
+3. Implement a "pre-flight" health check: before dispatching a batch, check that all target thralls are reachable (have active streams). Batch size should count reachable thralls only; offline thralls do not count toward the failure threshold unless `count_offline_as_failure: true` is set.
+4. Provide simulation/dry-run mode for rolling execution that shows which batches would be created and the threshold logic without executing anything.
 
 **Warning signs:**
-- Template strings built by string concatenation with user data
-- Unrestricted template function map (includes `call` or OS functions)
-- No validation of fact values from agents
-- Template parse errors when usernames or hostnames contain special characters
+- Threshold semantics not written down (ambiguity will produce bugs)
+- Tasks dispatched to next batch while current batch is still running
+- Offline thralls counted in success/failure ratios (creates phantom failures)
+- No dry-run mode for rolling execution plans
 
 **Phase to address:**
-CheckIn and module dispatch phase, when template rendering is first implemented. The template execution model (parse template, then execute with data context) must be correct from the start.
+Phase 2 (rolling execution). The threshold model must be specified and reviewed before implementation. A wrong threshold model will cause either false stops (operations blocked unnecessarily) or false continues (bad changes propagated past the intended stop point).
 
 ---
 
-### Pitfall 8: mTLS Certificate Rotation Breaks All Agent Connections Simultaneously
+### Pitfall 8: Live Query Results Are Partial With No Signal to the Caller
 
 **What goes wrong:**
-The server's TLS certificate is rotated (via isopass). The server picks up the new cert via `GetCertificate`. But if the CA certificate also changes (e.g., CA rotation or re-signing), every agent still has the old CA cert in `/etc/isogov/ca.crt`. On their next check-in, TLS handshake fails with "certificate signed by unknown authority." Every agent in the fleet simultaneously stops converging. There is no out-of-band mechanism to push the new CA cert to agents because the only communication channel (gRPC over mTLS) is broken.
+An operator issues a live query: "show me current disk usage on all 200 web nodes." The server fans out the query to all connected thralls via their streams. 180 thralls respond within 2 seconds. 20 are slow (running heavy processes) or temporarily disconnected. The operator waits. The UI shows "waiting for results..." After 10 seconds the operator refreshes and sees 180 results. The remaining 20 are never surfaced as "did not respond" — they simply do not appear. The operator assumes 20 nodes do not have web roles (wrong) or that the query failed (also wrong). In reality the results are complete-but-partial with no indication of how many responses were expected vs. received.
 
 **Why it happens:**
-CA rotation is rare but catastrophic when it happens. The bootstrap process bakes the CA cert into the agent config. Nobody tests CA rotation because it "never happens" -- until it does.
+Fan-out queries require knowing the denominator (how many thralls were targeted) and tracking which responded vs. timed out. Developers implement the "collect responses" path but forget the "report non-responders" path because it requires tracking pending expectations rather than just accumulating arrivals.
 
 **How to avoid:**
-1. Separate server cert rotation from CA rotation. Server certs should be rotated frequently (via isopass hot-reload). CA certs should be long-lived and rotation should be a planned migration.
-2. Support CA cert bundles: the agent's `ca_file` should accept multiple PEM certificates. During CA rotation, both old and new CA certs are valid simultaneously. The timeline is: add new CA to bundle -> rotate server cert to be signed by new CA -> remove old CA from bundle after all agents have the new bundle.
-3. The agent self-update mechanism can distribute a new CA cert alongside a new binary. Build CA cert distribution into the agent update flow.
-4. Implement a health check endpoint that works without mTLS (e.g., plain HTTPS on a separate port) so agents can at least report "I'm alive but can't authenticate."
-5. Document the CA rotation procedure explicitly. This is an operational runbook item, not just code.
+1. Before dispatching a live query, compute the expected response set: all thralls with active streams that match the target selector. Store this set as the query's "expected respondents."
+2. Use a response timeout (e.g., configurable, default 30 seconds). After timeout, finalize the query results with explicit fields: `responded: 180`, `timed_out: 15`, `offline: 5`.
+3. Return partial results immediately as they arrive (streaming response to the CLI/UI), with a final "query complete" event that includes the response summary.
+4. Never silently omit non-responding thralls. Always report them as `status: timeout` or `status: offline`.
 
 **Warning signs:**
-- CA cert is a single file, not a bundle
-- No tested procedure for CA rotation
-- Agent has no way to update its CA cert without manual intervention
-- No health check that works independently of mTLS
-- Server cert and CA cert stored/rotated through the same mechanism with no distinction
+- Query result API returns an array of responses with no "expected count" field
+- No timeout on query response collection (waits indefinitely for all thralls to respond)
+- CLI shows results as they arrive but never reports how many did not respond
+- Thralls with no active stream are silently excluded from the query fan-out with no explanation to the operator
 
 **Phase to address:**
-TLS setup and secrets integration phases. The CA bundle support must be designed into the agent's TLS config from the start. The rotation procedure should be documented when the bootstrap mechanism is built.
+Phase 4 (live query). The response-tracking model must be part of the query design. Building this correctly from the start prevents confusing operators with incomplete-but-indistinguishable-from-complete result sets.
 
 ---
 
-### Pitfall 9: Package Module Hits dpkg/apt Locks or Concurrent Package Operations
+### Pitfall 9: Federation Hub Does Not Propagate Orchestration Commands to Spokes
 
 **What goes wrong:**
-The package module executor runs `apt-get install nginx` but another process (unattended-upgrades, another Isogov run, a sysadmin running apt manually) holds the dpkg lock. The executor gets "Could not get lock /var/lib/dpkg/lock" and the entire module fails. On the next convergence, it tries again and may hit the same lock. Meanwhile, the agent reports persistent failures that trigger webhooks and compliance degradation for what is essentially a transient lock contention issue.
-
-On some systems, `apt-get` prompts for confirmation (e.g., "Configuration file '/etc/foo' has been modified. What would you like to do?"). If the executor doesn't handle this, the process hangs indefinitely.
+In a federated deployment, the hub aggregates admin queries but thralls connect to spokes, not the hub. Orchestration commands dispatched from the hub (via `hobnobcli exec`) must be forwarded to the correct spoke. The existing `ForwardForcePush` pattern calls `sc.admin.ForcePush` on each spoke — this works because force-push is a simple signal. Orchestration tasks require a richer protocol: task definition, target selector, result streaming back to the operator. If hub federation is not updated to handle the orchestration RPC, commands dispatched from the hub silently fail to reach thralls (the hub has no active agent streams — only spokes do), or partial forwarding leaves operators confused about which spoke received the command.
 
 **Why it happens:**
-Package managers use system-wide locks. Configuration management is not the only thing that touches packages. Developers test on clean VMs where nothing else runs apt, so they never encounter lock contention.
+The hub's `fanOut` model was built for read aggregation (list thralls, compliance summary) and simple signals (force-push). Orchestration introduces a new pattern: bidirectional streaming forwarded through the hub to a spoke and then to an agent. Developers build orchestration against the local (non-hub) code path first, and federation forwarding is treated as a follow-up task. It then never gets done.
 
 **How to avoid:**
-1. Retry with backoff: if the lock is held, wait and retry (3 attempts, 10s/30s/60s delays). This handles transient locks from unattended-upgrades.
-2. Always use non-interactive flags: `DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confold" install nginx`. Equivalent flags for other package managers.
-3. Set a command timeout: if `apt-get install` doesn't complete within 5 minutes, kill it and report failure rather than hanging forever.
-4. Detect stale locks: if the lock file exists but no process holds it (the PID in the lock file is dead), clean up the lock before proceeding.
-5. For all package managers, verify the command exits cleanly (check both exit code and stderr for known error patterns).
+1. When designing orchestration RPCs, explicitly specify federation behavior in the proto comments: "hub must forward to spoke based on target thrall ID."
+2. Add orchestration forwarding to the Hub's methods alongside `ForwardForcePush`. The pattern is established — it just needs to be applied to the new RPC.
+3. Test with a federated setup as part of the orchestration test suite. If only tested against a single server, federation bugs are discovered by operators in production.
+4. For stream-based result collection, design the hub as a transparent proxy, not a re-aggregator: the spoke streams task results directly to the caller (or through the hub with forwarding), rather than buffering everything on the spoke and returning a batch.
 
 **Warning signs:**
-- Package commands run without non-interactive flags
-- No timeout on package manager commands
-- No retry logic for lock contention
-- Lock errors treated as permanent failures rather than transient
-- Testing only on clean systems with no competing package operations
+- Orchestration RPC handlers exist on spoke but not on hub
+- Hub has no forwarding methods for the new orchestration RPCs
+- Integration tests for orchestration only run against single-server setups
+- The hub's `HobnobAdmin` client (which spokes implement) lacks the orchestration endpoints
 
 **Phase to address:**
-Agent module executors phase, specifically the package executor implementation. The non-interactive flags and retry logic must be part of the initial package manager backend implementations.
+Phase 1 and Phase 2. Design federation forwarding into the RPC shape from the start. The hub forwarding pattern is established; wiring it up for orchestration RPCs during initial implementation costs less than retrofitting.
 
 ---
 
-### Pitfall 10: Agent Self-Update Bricks the Agent
+### Pitfall 10: Task Output Buffering Causes Memory Pressure on Large Outputs
 
 **What goes wrong:**
-The agent downloads a new binary, replaces itself, and restarts via systemd. But: the new binary has a bug and crashes on startup. Systemd's restart limit kicks in after 5 rapid restarts and the service enters "failed" state. The node is now unmanaged with no way to recover remotely. Alternatively: the binary download was corrupted (network issue between checksum verification and write), or the new binary doesn't work on this OS/architecture, or the replacement race-conditions with the running process.
+An ad-hoc command produces large output: `find / -name "*.log" -mtime -1` on a system with many logs returns megabytes of output. The server collects stdout/stderr from the agent via the stream and buffers it in memory in a `strings.Builder` or a byte slice, waiting for the task to complete before writing to the DB. With 20 concurrent tasks each producing 10 MB of output, the server holds 200 MB of buffered output in memory. With 100 concurrent tasks the server OOMs. Alternatively, the gRPC message size limit (default 4 MB) is hit and the stream errors out with "message too large."
 
 **Why it happens:**
-Self-update is a unique operation: the agent is replacing itself while running. A bug in the new version can't be fixed by the old version because it no longer exists. Most update mechanisms are tested on the happy path (new version works) and not the sad path (new version crashes, new version is wrong architecture, download is interrupted).
+The simplest implementation of "collect task output" is to accumulate all output in a buffer and write it when done. This works fine for typical command output (a few KB) and fails silently at scale. The gRPC default message limit of 4 MB (`MaxRecvMsgSize` / `MaxSendMsgSize`) is rarely considered during development.
 
 **How to avoid:**
-1. Keep the previous binary: rename the old binary to `isogov-agent.previous` before replacing. If the new binary fails to start (detected by a watchdog or health check), automatically roll back to the previous binary.
-2. Two-phase update: download new binary -> verify checksum -> run `./isogov-agent-new --self-test` (a flag that performs a basic sanity check and exits) -> only then replace the running binary.
-3. Systemd watchdog: configure `WatchdogSec=` in the unit file. The agent must send watchdog notifications periodically. If the new version crashes before sending the first notification, systemd can trigger a rollback script.
-4. Version pinning: allow the server to specify minimum and maximum agent versions per client. Don't auto-update to a version that hasn't been tested.
-5. Staged rollout: update a small percentage of agents first, monitor for failures, then proceed. The server should support update policies (canary, rolling percentage).
+1. Stream output in chunks: the agent sends stdout/stderr as a series of `TaskOutputChunk` messages (e.g., 64 KB each) over the stream. The server writes each chunk to the DB (or truncates after a configurable max). Never buffer the full output in memory.
+2. Set a per-task output size limit (e.g., 1 MB by default, configurable up to 10 MB). Truncate with a "[output truncated at 1MB]" marker rather than failing the task.
+3. For the proto definition: use a `bytes` field for output chunks, not a single `string` field for the entire output. This forces the streaming model at the protocol level.
+4. Configure `grpc.MaxRecvMsgSize` and `grpc.MaxSendMsgSize` explicitly on both server and agent rather than relying on the default 4 MB limit.
 
 **Warning signs:**
-- Old binary deleted before new binary verified
-- No `--self-test` or health check for the new binary
-- No rollback mechanism if the new binary crashes
-- All agents update simultaneously
-- No version pinning or staged rollout support
+- Task result proto has a single `stdout_output string` field rather than a streaming `oneof` with chunk messages
+- No output size limit defined in the task execution config
+- Agent buffers the full subprocess output before sending anything back to the server
+- No tests that verify behavior with outputs larger than 1 MB
 
 **Phase to address:**
-Agent self-update phase. This is a late-phase feature and should not be rushed. Get basic agent functionality solid first, then add self-update with all safety mechanisms.
+Phase 1 (protocol design and ad-hoc execution). The streaming output model must be in the proto definition before implementation begins. Changing from buffered-to-chunked after the fact requires proto changes and agent changes simultaneously.
+
+---
+
+### Pitfall 11: Convergence-Oriented Executors Are Not Appropriate for Ad-Hoc Tasks
+
+**What goes wrong:**
+The existing 33 resource executors (file, package, service, etc.) are designed around check-before-act idempotency. They check current state, compare to desired state, and act only if drift exists. Ad-hoc orchestration is the opposite: "run this command now, regardless of current state." If orchestration reuses the existing executor infrastructure (tempting because it avoids new code), the check phase produces unexpected results: `apt-get install nginx` checks whether nginx is installed, finds it is, and reports "no action taken." The operator expected a fresh install to be forced. Alternatively, resource executors may refuse to run without a full desired-state declaration, which ad-hoc tasks do not have.
+
+**Why it happens:**
+The convergence executor interface is well-defined and tested. Developers look at it and think "I can reuse this for task execution." The convergence model and the ad-hoc model are semantically incompatible but share surface-level similarities (both run commands on managed systems).
+
+**How to avoid:**
+Keep orchestration execution entirely separate from convergence execution. Ad-hoc tasks are raw command executions with no idempotency check. Implement a `TaskExecutor` interface that has only `Execute(ctx, command, args, timeout, stdin) (stdout, stderr, exitCode, error)` — no Check phase, no desired state, no drift detection. Do not let the convergence executor interface bleed into the orchestration path. The separation enforces the correct mental model: convergence is declarative and idempotent; orchestration is imperative and one-shot.
+
+**Warning signs:**
+- Orchestration task execution calls the same executor interface as convergence modules
+- Ad-hoc task descriptions use the same YAML syntax as module resources (both have `type:`, `name:`, etc.)
+- Task execution produces "no action taken" results (copied from convergence reporting)
+- No dedicated `TaskExecutor` type in the agent codebase
+
+**Phase to address:**
+Phase 1 (task executor design). The separation must be enforced at the interface level before any code is written.
 
 ---
 
@@ -288,27 +276,27 @@ Shortcuts that seem reasonable but create long-term problems.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Storing resolved secrets as plain `string` | Simpler code, no wrapper types | Secret leaks become inevitable as codebase grows; every log statement is a potential leak | Never -- use `SecretString` type from day one |
-| Single goroutine for all CheckIn processing | Simple sequential logic, easy to reason about | Server throughput bottleneck; 100 agents checking in simultaneously wait in a queue | Only for initial prototype; add concurrency control before any real fleet testing |
-| Hardcoding `apt-get` in the package module | Works on Ubuntu dev machines immediately | Unusable on RHEL, Alpine, Arch, macOS; must rewrite entire package module | Only if all managed nodes are guaranteed Ubuntu (document the assumption explicitly) |
-| Skipping dry-run infrastructure | Faster to ship the "apply" path first | Operators won't trust the tool without preview capability; changes go live untested | MVP only -- dry-run should be implemented immediately after basic apply works |
-| Loading all client configs into memory on startup | Simple, fast access, no disk I/O during check-ins | Memory grows linearly with fleet size; 10,000 clients with complex configs = significant memory | Acceptable for fleets under 500 nodes. Above that, load on-demand with an LRU cache |
-| No config validation beyond YAML parsing | Ship faster, let runtime errors surface problems | Typos in resource types, invalid modes, non-existent notify targets discovered only when the agent runs | Never -- validate at config load time, not at apply time |
-| Polling isopass for every secret on every check-in | Simplest implementation, always fresh | N agents x M secrets = N*M isopass calls per interval; isopass becomes the bottleneck | Never at scale -- cache secrets with TTL, invalidate on rotation event |
+| Using the existing `send` channel for task dispatch (fire-and-forget) | No new protocol machinery needed | Silent task drops with no operator feedback; impossible to guarantee delivery | Never for task dispatch — use acknowledged delivery |
+| Storing workflow state in memory only | Simple to implement; no schema changes | Lost on server restart; operators discover this during a production deploy | Never — persist from day one |
+| Running ad-hoc commands as root (agent user) without restriction | Simplest execution model; no sandboxing complexity | Any operator with CLI access can destroy any managed node | Acceptable only in closed, fully-trusted admin environments with audit logging |
+| Reusing convergence RunStore for task results | No new DB tables needed | Convergence semantics (module/resource/changed) do not map to task semantics (stdout/exit_code/elapsed); forces square peg into round hole | Never — tasks need their own schema |
+| Building orchestration without federation forwarding | Faster to ship single-server path | Hub deployments silently fail to dispatch tasks; discovered by operators in production | Only if federation is explicitly out of scope for the milestone |
+| Streaming task output as a single message | Simpler proto definition | 4 MB gRPC message limit; server OOMs on large outputs; no progressive display in CLI | Only for guaranteed-small outputs (live query results, not exec output) |
+| Not implementing task cancellation | Simpler execution model | No way to stop a runaway command; operator must SSH in to kill the process | Never — always implement cancellation from the start |
 
 ## Integration Gotchas
 
-Common mistakes when connecting to external services.
+Common mistakes when wiring orchestration into the existing system.
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| isopass | Treating isopass as always-available; no timeout on secret fetch | Set aggressive timeouts (5s). Cache resolved secrets with TTL. If isopass is slow, use last-known-good cached values for non-startup secrets. Startup secrets (DB DSN, TLS certs) must fail-fast. |
-| PostgreSQL | Using a single database connection for all operations | Use a connection pool (`pgxpool`) with bounded max connections. Set `max_conns` based on expected concurrent check-ins, not fleet size. Monitor pool exhaustion. |
-| PostgreSQL migrations | Running migrations automatically on server startup in multi-replica deployments | Use golang-migrate's advisory lock (`x-lock-table` option) to prevent concurrent migration runs. Better: run migrations as a separate step before starting the server (e.g., init container or Makefile target). |
-| systemctl | Assuming systemctl is always available and the service name matches | Check that systemd is the init system (not all Linux systems use it). Verify the service unit file exists before trying to manage it. Handle the case where a service was installed by a package in the same run but systemd hasn't reloaded its units yet (`systemctl daemon-reload`). |
-| Package managers (apt/dnf/etc.) | Running package commands without holding the appropriate lock or without non-interactive mode | Always use `DEBIAN_FRONTEND=noninteractive` for apt. Always pass `-y` for confirmation. Set `--no-install-recommends` to avoid surprise dependencies. For dnf/yum, use `-y --setopt=install_weak_deps=False`. |
-| fsnotify (file watcher) | Watching individual files instead of directories; not debouncing events | Watch the `config/clients/` directory. Debounce events (500ms). On any event, re-read and diff the entire directory contents. Fall back to periodic polling as safety net. |
-| gRPC client connections | Agent creates a new gRPC connection for every check-in | Create the connection once at agent startup, reuse it across check-ins. Use gRPC keepalive to detect dead connections. Reconnect with exponential backoff on connection loss. |
+| `streamManager` + task dispatch | Calling `pushPolicy` (drop-on-full) for task messages | Add a separate `dispatchTask` method with blocking send + timeout + acknowledgement; task messages must not be dropped silently |
+| SQLite + concurrent task results | Inserting task results one-at-a-time from multiple goroutines | Batch inserts; use `PRAGMA busy_timeout`; consider in-memory buffering for in-flight tasks |
+| Rust agent + async tokio | Spawning subprocesses and forgetting to track them in the task registry | Use tokio's `JoinHandle` per task; store handles in a `HashMap<TaskID, JoinHandle>`; cancel on stream close |
+| Federation hub + task dispatch | Hub dispatching tasks to all spokes and all spokes attempting to execute on all thralls | Route by thrall ID — determine which spoke owns the thrall before dispatching; the hub routes, only one spoke executes |
+| RunStore + task results | Using `run_results` table (designed for module/resource/changed tuples) for task stdout/stderr | Add new tables: `tasks` and `task_outputs`; keep convergence and orchestration data separate |
+| gRPC keepalive + long-running tasks | Keepalive kills streams idle during a long task (no messages flowing) | Send periodic heartbeat/progress messages during long-running tasks to keep the stream alive; configure `MaxConnectionIdle` longer than the maximum expected task duration |
+| Rolling execution + federation | Computing batch membership from local thrall registry (missing federation thralls) | For federated deployments, query all spokes to build the target list before partitioning into batches |
 
 ## Performance Traps
 
@@ -316,13 +304,12 @@ Patterns that work at small scale but fail as usage grows.
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Re-resolving all secrets on every check-in | Check-in latency grows linearly with number of secrets in client config | Cache resolved secrets with TTL (e.g., 5 min). Invalidate cache on rotation event from isopass watcher. | >50 secrets per client or >100 clients |
-| Reading and parsing all YAML config files on every check-in | Server CPU spikes during check-in bursts; high disk I/O | Parse configs on load/change (via file watcher). Serve from in-memory cache. Only re-parse when file mtime changes. | >200 client config files or frequent check-ins (<5 min interval) |
-| Storing full facts JSONB on every check-in | Database grows rapidly; facts table becomes the largest table | Store facts diff (only changed facts). Keep only last N snapshots per client (spec says 10, consider 5). Add a retention policy. | >500 clients checking in every 30 min = ~24K fact rows/day |
-| Unbounded `run_results` table growth | Query performance degrades; backup size grows indefinitely | Partition by month. Add retention policy (e.g., keep 90 days). Archive to cold storage if needed. | >1000 clients after 6 months of operation |
-| DAG computation on every check-in | CPU overhead for topological sort per client per interval | Cache the computed DAG per client config. Invalidate only when the config file changes. DAG computation is deterministic given the same config. | >50 resources per client with complex dependency chains |
-| Template rendering without caching | Same template parsed and compiled on every check-in | Cache compiled `template.Template` objects keyed by template content hash. Invalidate when source file changes. | >20 templates per client config |
-| Compliance status computed by scanning all runs | Compliance API latency grows with fleet size | Maintain a `client_compliance` materialized view or summary table updated on each run completion. Don't re-scan history on every API call. | >200 clients |
+| Collecting live query results synchronously (blocking on all responses) | CLI hangs waiting for slow/offline thralls; operator experience degrades with fleet size | Stream results as they arrive; finalize with timeout and non-responder report | >50 thralls in query target, any with latency >2s |
+| Fan-out task dispatch without backpressure | Server overwhelms itself sending to hundreds of stream channels simultaneously | Dispatch in batches with configurable concurrency limit; use a worker pool for stream writes | >100 concurrent task dispatches |
+| Task audit log as append-only rows per event | Audit table grows unboundedly; compliance queries scan millions of rows | Partition audit table by month; add retention policy; index by (thrall_id, timestamp) | >500 task executions/day after 3 months |
+| Workflow step evaluation in a single transaction | Long-running workflow holds a write transaction open while waiting for thrall responses | Never hold a DB transaction open across network I/O; transition states atomically but release locks immediately | Any workflow with step duration >100ms |
+| In-memory task state for concurrent workflows | Memory grows with number of concurrent workflows; GC pressure increases | Set max concurrent workflow limit; use DB as the source of truth for task state, not in-memory structs | >20 concurrent workflows |
+| gRPC message size limit for task output | Task fails with "received message larger than max" when output exceeds 4 MB | Configure `MaxRecvMsgSize` and stream output in chunks from the start | Any command producing >4 MB output |
 
 ## Security Mistakes
 
@@ -330,12 +317,13 @@ Domain-specific security issues beyond general web security.
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Agent-reported facts used directly in template rendering without validation | Template injection: a compromised agent sends a hostname containing `{{ .Env.HOME }}` and the server renders it as a template directive, potentially leaking server-side data into client configs | Validate fact values: reject or escape values containing `{{`. Treat all agent-reported data as untrusted. Parse templates before injecting data (don't concatenate). |
-| One-time registration tokens with insufficient entropy | Brute-force token guessing: if tokens are short or predictable, an attacker can enroll a rogue agent | Use `crypto/rand` to generate tokens with at least 256 bits of entropy (e.g., 32 bytes hex-encoded). Rate-limit registration attempts. Log and alert on failed registration attempts. |
-| Replay attacks on signed gRPC payloads | An attacker captures a signed CheckIn request and replays it to get the client's config (which may contain resolved secrets) | Include a UTC timestamp in every signed payload. Server rejects requests with timestamps older than 5 minutes (already spec'd). Also include a nonce and track recent nonces to prevent replay within the 5-minute window. |
-| Bootstrap script served over unauthenticated endpoint | Man-in-the-middle modifies the bootstrap script to install a backdoored agent binary | The `/bootstrap` endpoint should serve over HTTPS with a valid cert. The script should verify the agent binary checksum against a value embedded in the script itself (signed by the server's key). Consider TOFU (Trust On First Use) model with cert pinning. |
-| Webhook HMAC secrets stored in the webhooks DB table | Database breach exposes all webhook signing secrets, allowing an attacker to forge webhook payloads | Store webhook HMAC secrets in isopass, not in the database. The `webhooks` table stores the isopass path, not the secret value. Resolve at dispatch time. |
-| Agent private key readable by non-root users | Any process on the managed node can impersonate the agent | Set `/etc/isogov/agent.key` to mode `0600` owned by root. The agent runs as root (required for package/user management anyway). Verify permissions on startup. |
+| Accepting raw shell command strings in the task dispatch proto | Any operator can execute arbitrary shell as root on any managed node; a compromised CLI token owns the fleet | Use named operations or a command allowlist; never pass raw shell strings through the dispatch protocol |
+| No audit log for task dispatches | Impossible to investigate post-incident; "who ran what on which node and when" is unanswerable | Every task dispatch must write an immutable audit record with: operator identity, command/task name, target thralls, timestamp, outcome |
+| Task results containing secret values | An operator runs `cat /etc/myapp/db.conf` and the output (containing resolved secrets) is stored in the `task_outputs` table in plaintext | Warn operators that task stdout/stderr is stored in plaintext; never use tasks to extract config file contents that were templated from secrets; consider output masking for known secret patterns |
+| Re-using agent's ED25519 key for task result signing without replay protection | Task result replay: a captured result message can be re-submitted to the server, making a failed task appear successful | Include task ID and sequence number in the signed payload; server rejects results for already-completed task IDs |
+| No timeout on task execution | A task that hangs (network call to unreachable host, interactive prompt) ties up the agent execution goroutine indefinitely | Enforce a hard timeout on every task (configurable, default 5 minutes); SIGKILL after timeout; report failure with "task timed out" |
+| Federation: hub authenticates task dispatches but spokes do not re-validate | A compromised spoke could forward task dispatches to agents without hub authorization | Spokes must re-verify that a task dispatch was authorized by a legitimate hub, not just any caller on the admin port |
+| Task names used as keys in DB without sanitization | SQL injection via task name if task names flow into dynamic queries | Use parameterized queries everywhere; validate task names against a strict alphanumeric+hyphen pattern at ingestion |
 
 ## UX Pitfalls
 
@@ -343,27 +331,27 @@ Common user experience mistakes in this domain.
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Opaque error messages from module executors ("exit status 1") | Sysadmin can't tell why a package install failed without SSHing into the node and checking logs | Capture both stdout and stderr from executed commands. Include the full error output in the run result. Show it in `gvctl runs show` and the web UI. |
-| No way to see what a client's effective config is after variable merging and env overrides | Sysadmin writes config but can't verify what the agent actually receives after all the merging and template rendering | Add `gvctl preview <hostname>` that shows the fully-rendered config (with secrets redacted) as the agent would receive it. |
-| Compliance status "drifted" without explaining what drifted | Dashboard shows 3 nodes drifted but doesn't say whether it's a file, package, or service. Sysadmin must dig through run history. | Compliance summary should include the specific resources that are drifted, not just the status. Show "web01: /etc/nginx/nginx.conf drifted" not just "web01: drifted." |
-| YAML syntax errors in client configs discovered only when the agent checks in | Minutes to hours of delay between config edit and error discovery, depending on check-in interval | Validate YAML on file watcher reload. Log validation errors immediately. Expose invalid configs via API/CLI. Never serve an invalid config to an agent -- serve the last-known-good config and alert. |
-| No diff in dry-run output | Dry-run says "would update /etc/nginx/nginx.conf" but doesn't show what would change | Include a unified diff in the plan results for file resources. Show current content vs. desired content. Redact secrets in the diff output. |
-| Auto-classification rule matches are invisible | Sysadmin can't tell which classification rule matched a node, or why a node isn't getting the expected modules | `gvctl clients show` should display whether the client is explicitly configured or auto-classified, and which classification rule matched (or "no match" if unconfigured). |
+| Rolling execution shows no progress until batch completes | Operator sees "running..." for minutes with no visibility into which thralls succeeded | Stream per-thrall status updates as they complete; show running count, success count, failure count in real time |
+| Live query results returned as a flat list with no non-responder report | Operator cannot tell if results are complete; assumes complete when they are not | Always show: responded/expected/timed_out counts alongside results; use a progress indicator while query is open |
+| Workflow step failures show "step failed" without task-level detail | Operator cannot diagnose which thrall's task failed or why | Show per-thrall task results within each workflow step; clicking a failed step reveals which thralls failed and their stderr |
+| Task cancellation silently succeeds or silently fails | Operator runs `hobnobcli task cancel <id>` and gets no feedback; the task may or may not have been killed | Report per-thrall cancellation status: "cancelled on 8/10 thralls; 2 already completed; task output saved for completed thralls" |
+| Ad-hoc command output truncated with no indication | Output is truncated at 1 MB but the last visible line makes it appear complete | Always append a visible "[output truncated at N bytes — use --output-limit to increase]" marker at the truncation point |
+| No way to replay a failed workflow from the failed step | Operator must re-run the entire workflow from step 1 even if steps 1-3 completed successfully | Support `hobnobcli workflow resume <id>` that re-runs from the first failed or incomplete step |
 
 ## "Looks Done But Isn't" Checklist
 
 Things that appear complete but are missing critical pieces.
 
-- [ ] **File module:** Often missing atomic write (write-to-temp + rename). Verify the file executor uses `os.Rename` on same-filesystem temp file, not `os.WriteFile` to the target path directly.
-- [ ] **Package module:** Often missing non-interactive flags. Verify every package manager backend passes `-y`, `DEBIAN_FRONTEND=noninteractive`, and equivalent flags. Test with a package that prompts for configuration.
-- [ ] **Service module:** Often missing `daemon-reload` after a package installs a new unit file in the same run. Verify that if a package resource installs a systemd unit and a service resource manages it, `systemctl daemon-reload` runs between them.
-- [ ] **DAG ordering:** Often missing cycle detection for combined dependency + notification graphs. Verify that `depends_on` + `notify` edges are checked together, not separately.
-- [ ] **Secret resolution:** Often missing the case where isopass returns an empty string (secret exists but has empty value). Verify the system distinguishes "secret not found" from "secret is empty string" and handles both.
-- [ ] **Registration:** Often missing rate limiting on the Register RPC. Verify that brute-force token guessing is rate-limited (e.g., 5 attempts per IP per minute).
-- [ ] **Config reload:** Often missing validation before applying reloaded config. Verify that a syntax error in one client YAML file doesn't blow away the in-memory config for all clients.
-- [ ] **Rollback:** Often missing the case where the snapshot directory doesn't exist or is full (disk space). Verify the agent handles missing/corrupt snapshots gracefully and reports the issue.
-- [ ] **Webhook dispatch:** Often missing timeout and retry circuit-breaking. Verify that a slow/dead webhook endpoint doesn't block run reporting or cause goroutine leaks.
-- [ ] **Agent backoff:** Often missing backoff cap (maximum interval). Verify that exponential backoff has a maximum (e.g., 30 minutes) so agents don't drift into hour-long intervals after extended server outages.
+- [ ] **Ad-hoc task dispatch:** Often missing task receipt acknowledgement — verify the protocol has a `TaskAck` message from agent to server before the caller's request returns success.
+- [ ] **Task execution:** Often missing the convergence/orchestration mutual exclusion — verify there is a mutex or queue that prevents a convergence run and a task from executing simultaneously on the agent.
+- [ ] **Stream disconnect handling:** Often missing subprocess cancellation on stream close — verify that `exec.CommandContext` is used and the context is derived from the stream's `done` channel.
+- [ ] **Workflow persistence:** Often missing the initial state write — verify that a workflow record is written to SQLite before the first task is dispatched (not after).
+- [ ] **Rolling execution:** Often missing the offline-thrall handling — verify that thralls with no active stream are not silently excluded; they should be reported as "offline" in the batch result.
+- [ ] **Live query:** Often missing the timeout and non-responder report — verify that queries have a configurable deadline and that the final result includes `timed_out: N` for non-responding thralls.
+- [ ] **Audit logging:** Often missing the "before execution" log entry — verify there is an audit record written when a task is dispatched (not just when it completes), so dispatches are recorded even if the server crashes mid-execution.
+- [ ] **Federation:** Often missing the hub forwarding for the new orchestration RPCs — verify that the `Hub` type has corresponding forwarding methods for every new orchestration RPC.
+- [ ] **Output limits:** Often missing the truncation marker — verify that truncated output includes a human-readable "[truncated]" marker, not a silent cut-off.
+- [ ] **Task cancellation:** Often missing the SIGKILL fallback — verify that cancellation sends SIGTERM, waits a grace period, then sends SIGKILL if the process has not exited.
 
 ## Recovery Strategies
 
@@ -371,14 +359,13 @@ When pitfalls occur despite prevention, how to recover.
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Secrets leaked in logs | HIGH | Rotate all potentially-leaked secrets immediately via isopass. Purge log files and database rows containing secrets. Audit log aggregator/backup systems. Add `SecretString` type to prevent recurrence. |
-| Partial convergence left system in bad state | MEDIUM | Use `gvctl rollback` for file resources. For packages/users, manually revert on the node or write a "rollback module" that declares the previous desired state. Run with `--dry-run` first to verify. |
-| Thundering herd overwhelmed server | LOW | Server recovers automatically once the burst passes. Add admission control (semaphore) to prevent recurrence. Stagger force-push timestamps. Review agent startup jitter. |
-| Agent self-update bricked nodes | HIGH | SSH into affected nodes. Replace binary with `isogov-agent.previous`. Restart systemd service. Pin agent version on server to prevent re-update. Fix the bug in the new version before re-deploying. |
-| CA cert rotation broke all agents | HIGH | Distribute new CA cert via out-of-band mechanism (Ansible, SSH, manual copy). Update agent configs. Plan future CA rotations with bundle approach (old + new CA simultaneously). |
-| YAML config error served to agents | MEDIUM | Fix the YAML file. Agents will pick up the corrected config on next check-in. For critical errors, use `gvctl push` to force immediate re-convergence. Add config validation on reload to prevent recurrence. |
-| Notification loop caused repeated service restarts | MEDIUM | Fix the notify cycle in the YAML config. Service may need manual restart if it's in a failed state from too many restarts. Add cascade depth limits to prevent recurrence. |
-| Database migration failed and left dirty state | MEDIUM | Fix the migration SQL. Use `golang-migrate force <version>` to clear the dirty flag. Apply the fixed migration. Never edit applied migrations -- create a new one. |
+| Convergence/orchestration collision corrupted node state | MEDIUM | Run `hobnobcli preview` to see what the server thinks the node's desired state is. Run a forced convergence (`hobnobcli push <thrall>`) to re-apply declared state. For package/service collisions, manual SSH verification may be needed. |
+| Orphaned processes from stream disconnect | LOW | SSH to the thrall and kill the orphaned process by task ID (visible in process name if the agent sets it). Mark the task as failed in the DB via CLI or direct SQL update. Add stream-bound subprocess tracking to prevent recurrence. |
+| Workflow lost on server restart | MEDIUM | Identify the last completed workflow step from the DB (`task_outputs` table). Manually re-run the remaining workflow steps as individual ad-hoc tasks. Implement workflow persistence before re-enabling multi-step workflows. |
+| SQLite SQLITE_BUSY during orchestration fan-out | LOW | Set `PRAGMA busy_timeout=5000` immediately. Reduce concurrent task fan-out batch size. Switch to MemRunStore for in-flight task state. |
+| Task output exceeded size limit and was truncated | LOW | Re-run the task with `--output-limit` increased, or SSH to the thrall and redirect output to a file for manual inspection. |
+| Rolling execution proceeded past failure threshold | HIGH | Immediately issue `hobnobcli workflow abort <id>` to stop further batches. Manually revert the already-executed batches using rollback module or manual SSH. Fix the threshold logic before re-running. |
+| Raw shell command caused unintended destruction | HIGH | Assess damage. Use file snapshots to roll back changed files. For package/service/user changes, manual remediation is needed. Implement command allowlist before re-enabling raw shell execution. |
 
 ## Pitfall-to-Phase Mapping
 
@@ -386,33 +373,48 @@ How roadmap phases should address these pitfalls.
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Non-atomic file writes | Module executors | Code review: file executor uses write-temp-rename pattern. Integration test: kill agent mid-write, verify file integrity. |
-| Thundering herd | Server skeleton + Agent run loop | Load test: simulate 500 agents checking in simultaneously. Verify server stays responsive. Measure p99 latency. |
-| Secret leakage | Secrets provider (earliest phase) | Grep codebase for `fmt.Sprintf` or `log.` calls that reference resolved secret variables. Verify `SecretString` type exists and is used everywhere. |
-| Notify/subscribe loops | Module dispatch / DAG ordering | Unit test: config with circular notify chain rejected at load time. Integration test: notify triggers exactly one cascade level. |
-| Partial convergence | Module executors + Run loop | Integration test: simulate package repo failure mid-run. Verify run report accurately reflects which resources succeeded, failed, and were skipped. |
-| File watcher misses | Server config loading | Test: edit config with vim (atomic save). Verify server picks up the change within 2 seconds. Test: NFS-mounted config dir with fsnotify disabled, verify polling fallback works. |
-| Template injection | CheckIn / Module dispatch | Unit test: fact value containing `{{ }}` rendered as literal text, not executed. Verify template function map has no dangerous functions. |
-| mTLS cert rotation breakage | TLS setup + Secrets integration | Integration test: rotate server cert while agents are connected. Verify zero dropped connections. Document CA rotation procedure. |
-| Package manager lock contention | Module executors (package) | Integration test: hold dpkg lock, run package module, verify retry and eventual success after lock release. |
-| Agent self-update bricking | Agent self-update (late phase) | Integration test: deploy a deliberately-crashing binary. Verify rollback to previous version occurs automatically. |
+| Convergence/orchestration collision | Phase 1: Ad-hoc execution foundation | Unit test: trigger convergence run + task simultaneously; verify only one executes at a time |
+| Orphaned processes on stream disconnect | Phase 1: Ad-hoc execution foundation | Integration test: disconnect agent mid-task; verify subprocess is killed; verify server marks task as stream_interrupted |
+| Authorization bypass via raw shell | Phase 1: Protocol design | Code review: task dispatch proto uses named operations, not raw shell strings; audit log writes verified in every dispatch path |
+| SQLite write contention | Phase 1 + Phase 2 | Load test: 50 thralls report task results simultaneously; verify no SQLITE_BUSY errors; measure p99 write latency |
+| Workflow state corruption on restart | Phase 3: Multi-step workflows | Integration test: kill server during active workflow; restart; verify workflow resumes from correct step |
+| Stream buffer overflow drops tasks | Phase 1: Protocol design | Integration test: fill agent's send buffer; attempt task dispatch; verify task is not silently dropped (blocked or rejected with error) |
+| Rolling threshold logic errors | Phase 2: Rolling execution | Unit tests covering all threshold semantics: per-batch vs. cumulative, percent vs. count, offline thrall handling |
+| Live query partial results unreported | Phase 4: Live query | Integration test: 10 thralls targeted, 3 offline; verify result includes `offline: 3`, not just 7 results |
+| Federation does not propagate orchestration | Phase 1 + Phase 2 | Integration test with hub+spoke setup; verify task dispatched from hub reaches thrall on spoke |
+| Output buffering memory pressure | Phase 1: Protocol design | Integration test: task producing 5 MB output; verify no OOM; verify output is chunked and truncated with marker |
+| Executor model mismatch | Phase 1: Task executor design | Code review: task execution path does not call convergence executor interface; `TaskExecutor` is a separate type |
+
+## Trade-Offs: Safety vs. Operational Flexibility
+
+The core tension in adding orchestration to a pull-based CM system is that orchestration is inherently imperative (do this now, on this node, once) while the existing system is declarative (this is the desired state, converge to it). Every design decision involves a trade-off between these two models.
+
+| Decision | Safe Choice | Flexible Choice | Recommendation |
+|----------|-------------|-----------------|----------------|
+| Command model | Named operations only (allowlist) | Raw shell strings | Named operations for v1.3; document that raw shell is a future option if RBAC is implemented |
+| Task/convergence isolation | Hard mutual exclusion (queue, no concurrency) | Allow concurrent execution (faster, more responsive) | Hard mutual exclusion; the failure modes of concurrent execution are too unpredictable |
+| Output size | Hard cap at 1 MB, truncate | No cap, stream unlimited | Hard cap with configurable limit up to 10 MB; unlimited output causes OOM without benefit |
+| Workflow state | Durable from day one | In-memory until "stable enough" | Durable from day one; in-memory workflows create production incidents |
+| Task cancellation | Implemented from day one | Added later | Day one; a task you cannot cancel is a liability |
+| Audit logging | Every dispatch logged immutably | Optional/configurable | Always on, not configurable; audit logs are for compliance, not performance |
+| Live query completeness | Always report non-responders | Return whatever arrives | Always report non-responders; operators cannot make decisions on implicitly incomplete data |
 
 ## Sources
 
-- [Puppet documentation on relationships and ordering](https://www.puppet.com/docs/puppet/7/lang_relationships.html)
-- [Detecting Missing Dependencies and Notifiers in Puppet Programs (academic paper)](https://arxiv.org/pdf/1905.11070)
-- [Red Hat: How to Avoid Puppet Dependency Nightmares](https://www.redhat.com/en/blog/how-to-avoid-puppet-dependency-nightmares-with-defines)
-- [fsnotify documentation and known issues](https://pkg.go.dev/github.com/fsnotify/fsnotify)
-- [Hitless TLS Certificate Rotation in Go](https://blog.diogomonica.com/2017/01/11/hitless-tls-certificate-rotation-in-go/)
-- [PayPal Thundering Herd Problem resolution](https://medium.com/paypal-tech/thundering-herd-jitter-63a57b38919d)
-- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
-- [golang-migrate PostgreSQL tutorial and known issues](https://github.com/golang-migrate/migrate/blob/master/database/postgres/TUTORIAL.md)
-- [Go SSTI / template injection risks](https://www.oligo.security/blog/safe-by-default-or-vulnerable-by-design-golang-server-side-template-injection)
-- [DevOps.com: 6 Big Bad Mistakes in Configuration Management](https://devops.com/6-big-bad-mistakes-configuration-management-part-1/)
-- [CMCrossroads: Lessons Learned in Configuration Management](https://www.cmcrossroads.com/article/lessons-learned-configuration-management-consulting)
-- [Puppet: Configuration Drift causes and solutions](https://www.puppet.com/blog/configuration-drift)
-- [gRPC Security OWASP Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/gRPC_Security_Cheat_Sheet.html)
+- [SaltStack orchestration architecture and common mistakes](https://www.simplethread.com/server-orchestration-using-saltstack/) — MEDIUM confidence (community article, 2024)
+- [SaltStack CVE history: command injection via task dispatch](https://www.cvedetails.com/vulnerability-list/vendor_id-12943/product_id-26420/Saltstack-Salt.html) — HIGH confidence (CVE database)
+- [SQLite single-writer constraint and WAL mode](https://oldmoe.blog/2024/07/08/the-write-stuff-concurrent-write-transactions-in-sqlite/) — HIGH confidence (official SQLite docs corroborated)
+- [SQLite connection pool pitfalls in server deployments](https://www.jtti.cc/supports/3154.html) — MEDIUM confidence
+- [gRPC streaming reliability and reconnection patterns](https://oneuptime.com/blog/post/2026-01-24-grpc-bidirectional-streaming/view) — HIGH confidence (official gRPC patterns)
+- [gRPC flow control and buffer limits](https://grpc.io/docs/guides/flow-control/) — HIGH confidence (official gRPC documentation)
+- [Temporal: workflow state persistence and at-least-once execution](https://temporal.io/blog/error-handling-in-distributed-systems) — HIGH confidence (Temporal official blog)
+- [Database-backed workflow orchestration (QCon SF 2025)](https://www.infoq.com/news/2025/11/database-backed-workflow/) — HIGH confidence (conference talk, 2025)
+- [Cascading failure prevention in distributed systems](https://blog.mi.hdm-stuttgart.de/index.php/2022/03/03/cascading-failures-in-large-scale-distributed-systems/) — MEDIUM confidence
+- [Remote access audit logging for compliance](https://logz.io/blog/audit-logs-security-compliance/) — MEDIUM confidence
+- [crewAI orphaned threads and resource leaks in timeout handling](https://github.com/crewAIInc/crewAI/issues/4135) — MEDIUM confidence (real-world issue, 2025)
+- [Configuration management vs. orchestration: separation of concerns](https://www.pass4sure.com/blog/a-deep-dive-into-configuration-management-and-orchestration/) — MEDIUM confidence
+- Hobnob codebase review: `server/grpc/streams.go`, `server/db/runstore.go`, `server/federation/hub.go`, `server/grpc/server.go` — HIGH confidence (direct code inspection)
 
 ---
-*Pitfalls research for: Pull-based configuration management system (Isogov)*
-*Researched: 2026-03-05*
+*Pitfalls research for: Adding orchestration to pull-based configuration management (Hobnob v1.3)*
+*Researched: 2026-03-11*

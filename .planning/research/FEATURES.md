@@ -1,328 +1,449 @@
 # Feature Research
 
-**Domain:** Configuration Management Systems (Puppet, Chef, Ansible, Salt class)
-**Researched:** 2026-03-05
+**Domain:** Orchestration capabilities for pull-based configuration management systems
+**Researched:** 2026-03-11
 **Confidence:** HIGH
+
+## Context
+
+This document replaces the v1.0 FEATURES.md (config management domain) with orchestration-specific feature research for milestone v1.3. It focuses on the five target capabilities: ad-hoc command execution, task/script management, workflow/plan definitions, rolling execution strategies, and live query. For each capability, different implementation approaches are analyzed with explicit trade-offs, as required by the downstream roadmap consumer.
+
+The existing infrastructure available to build on:
+- Bidirectional gRPC streaming (AgentStream) with `send chan *pb.ServerStreamMessage`
+- Force-push delivery already works through this channel (proves the push path)
+- Run result tracking: per-resource action, changed flag, error, duration stored in SQLite
+- Trait collection: 25 collectors, traits stored as JSON blobs, accessible for targeting
+- CLI (hobnobcli): Cobra-based with push, runs, preview subcommands
+- Stream manager: `pushPolicy(thrallID)` and `pushPolicyAll()` — non-blocking, buffered
+
+---
 
 ## Feature Landscape
 
-This analysis is grounded in what Puppet, Chef, Ansible, and SaltStack provide, mapped against isogov's project scope (pull-based, Go, YAML configs, isopass secrets, Linux/macOS only). Features are categorized by what sysadmins and DevOps teams expect from a configuration management tool in 2026.
-
 ### Table Stakes (Users Expect These)
 
-Features users assume exist. Missing any of these and the tool is not taken seriously.
-
-#### Resource Management (Core Primitives)
+Features users assume exist in any tool marketing itself as having "orchestration." Missing these = the feature isn't orchestration, it's just scripting.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| File resource (content, permissions, ownership, symlinks) | Every CM tool manages files -- it is the most fundamental operation. Puppet, Chef, Ansible, Salt all have file resources as tier-1. | MEDIUM | isogov plans this with SHA256 content checking. Must handle directories, symlinks, templates, and recursive ownership. Puppet's `file` type handles all of these. |
-| Package resource (install, remove, version pin) | Package management is the second most common CM operation. All four major tools support multi-platform package managers. | MEDIUM | isogov plans apt/dnf/yum/apk/pacman/brew/zypper. Version pinning with drift detection is critical -- Puppet and Chef both enforce version compliance. |
-| Service resource (start, stop, enable, restart) | Services are the third leg of the classic "package/file/service" triad that Puppet documentation calls "one of the most useful idioms." | LOW | isogov plans systemctl integration. Must handle enable/disable (boot persistence) and running/stopped state independently. |
-| User resource (create, modify, remove) | User management is a core resource type in every CM tool. Puppet has `user` and `group` as built-in types. | MEDIUM | isogov plans /etc/passwd-based management. Consider whether group management is needed separately (Puppet treats `group` as a distinct resource type). |
-| Exec/command resource (run arbitrary commands) | Puppet's `exec`, Chef's `execute`, Ansible's `command`/`shell`, Salt's `cmd.run` all provide escape-hatch command execution. Essential for tasks that don't fit declarative models. | LOW | Not currently in isogov's spec. This is a gap. Every CM tool has this. Must be idempotent via `onlyif`/`unless`/`creates` guards (Puppet's approach). |
+| Ad-hoc command execution on targeted thralls | Ansible `ansible -m shell`, Salt `salt '*' cmd.run`, Puppet Bolt `bolt command run`. Every ops team's first question is "can I run a command on these boxes right now?" | MEDIUM | Uses existing bidirectional stream. Server sends command via stream; agent runs it and streams back stdout/stderr. Targeting by hostname glob or trait expression reuses existing trait data. |
+| Multi-thrall targeting (glob, label, trait filter) | Ansible's inventory patterns, Salt's compound matching, Puppet Bolt's `--targets`. Running a command on "all web servers" is the primary use case. | LOW | Trait data already in DB (`thrall_traits` table). Targeting is a query against stored traits plus hostname glob matching. No new infrastructure required, just a query layer. |
+| Result collection per thrall (stdout, stderr, exit code) | Ansible shows per-host results inline. Salt returns a dict of minion → result. Bolt shows per-target results. Operators need to see what happened on each thrall. | LOW | Run result infrastructure already exists. Need a new result type for command/task outputs (stdout/stderr/exit_code vs the current resource-oriented result schema). |
+| Execution status visibility (running, succeeded, failed, timed out) | Tower's job detail page. Salt's job cache. Puppet Enterprise's task log. Seeing which thralls are still running vs done is table stakes. | MEDIUM | Run store with per-thrall status tracking. Server receives results asynchronously as thralls report back; needs per-thrall status within a job. |
+| CLI subcommand for ad-hoc execution | `hobnobcli run command --target '*.web' -- nginx -t`. Ansible users expect `ansible -m command -a`. Salt users expect `salt`. | LOW | New Cobra subcommand. Calls POST /api/v1/jobs, polls for completion. Pattern established by existing `push`, `runs` subcommands. |
+| Timeout enforcement | Ansible has `--timeout`. Salt has timeout in master config. Commands that hang block operators. | LOW | Server sets deadline in command payload; agent enforces it via `context.WithTimeout`. Server marks timed-out thralls when deadline passes without result. |
 
-#### Convergence Engine
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Idempotent execution (check-before-act) | The defining characteristic of CM tools. Puppet, Chef, Ansible, Salt all guarantee this. Without idempotency, the tool is just a script runner. | HIGH | isogov's core constraint. Every module executor must verify current state before acting. SHA256 for files, version checks for packages, status checks for services. |
-| Resource dependency ordering (DAG) | Puppet's dependency graph, Chef's compile-then-converge model, Salt's requisite system all enforce ordering. Without explicit ordering, convergence is unpredictable. | HIGH | isogov plans topological sort with circular dependency detection. This is correct -- Puppet's approach. |
-| Notify/subscribe triggers | Puppet's notify/subscribe, Chef's notifies/subscribes, Salt's watch requisite. The classic pattern: "restart nginx when nginx.conf changes." | MEDIUM | isogov plans this. Critical for the package/file/service triad to work correctly. |
-| Desired-state declaration (declarative syntax) | All CM tools use declarative configuration (what, not how). Users declare the end state, tool figures out how to get there. | MEDIUM | isogov uses YAML. This is table stakes -- Puppet uses its DSL, Chef uses Ruby DSL, Ansible/Salt use YAML. YAML is the modern standard. |
-| Convergence reporting (what changed, what failed) | Every CM tool reports back what actions it took. Puppet has reports, Chef has run lists with status, Ansible has recap output. | MEDIUM | isogov plans run results reporting via gRPC. Must include: resource name, action taken (created/modified/skipped/failed), before/after values. |
-
-#### Agent and Communication
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Pull-based agent with configurable interval | Puppet agent runs every 30 minutes by default. Chef client runs every 30 minutes. Salt minion maintains persistent connection. Pull is the standard model for CM. | MEDIUM | isogov plans jittered pull loop with exponential backoff. Standard pattern. |
-| Secure transport (TLS/mTLS) | Puppet uses SSL with its own CA. Chef uses HTTPS. Salt uses AES encryption over ZeroMQ. Secure transport is non-negotiable. | HIGH | isogov plans gRPC over mTLS with ED25519 keys. Stronger than most competitors. |
-| Node enrollment/registration | Puppet has `puppet cert sign`, Chef has knife bootstrap, Salt has key acceptance. New nodes must be approved before receiving config. | MEDIUM | isogov plans hostname/IP pattern matching + one-time tokens. Solid approach. |
-| Fact/inventory collection | Puppet has Facter, Chef has Ohai, Salt has Grains, Ansible gathers facts via setup module. Knowing what the node IS enables conditional configuration. | MEDIUM | isogov plans pluggable Collector interface for OS, hardware, network, packages. Must include: OS family, OS version, architecture, hostname, IP addresses, memory, disk. |
-
-#### Configuration Language
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Template rendering (variable substitution in files) | Puppet uses ERB, Chef uses ERB, Ansible uses Jinja2, Salt uses Jinja2. Templated config files are a core workflow. | MEDIUM | isogov plans Go templates. Good choice for a Go project -- no external dependency. Must support accessing facts and node variables within templates. |
-| Conditional resources (apply only when condition met) | Puppet has `if`/`unless`/`case`, Chef has `only_if`/`not_if`, Ansible has `when`, Salt has Jinja conditionals. Applying resources conditionally based on node facts is fundamental. | MEDIUM | isogov plans `when:` with Go template expressions evaluated against node facts. Correct approach. |
-| Variable/parameter hierarchy (defaults + overrides) | Puppet has Hiera, Chef has data bags + attributes, Ansible has variable precedence, Salt has Pillar. Layered variable resolution enables reuse. | HIGH | isogov plans environment tiers with per-environment variable overrides merged at render time. This is the right pattern but simpler than Hiera's 5+ layers. |
-
-#### Operational Visibility
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| CLI for administration | Puppet has `puppet` CLI, Chef has `knife`, Salt has `salt` CLI, Ansible has `ansible`/`ansible-playbook`. A CLI is the primary admin interface. | MEDIUM | isogov plans `gvctl` with subcommands for clients, push, runs, tokens, webhooks, packages, env, preview, rollback. Comprehensive. |
-| Compliance/drift status per node | Puppet Enterprise dashboard shows compliant/non-compliant nodes. Chef Automate has compliance views. Knowing which nodes are drifted is critical for ops. | MEDIUM | isogov plans compliant/drifted/failing/stale/unknown status with history. Good design -- covers the key states. |
-| Dry-run/preview mode | Puppet has `--noop`, Chef has `--why-run`, Ansible has `--check`, Salt has `test=True`. Preview before apply is a safety requirement. | LOW | isogov plans dry-run via agent + gvctl + DryRun RPC. Correct approach. |
-| Run history and audit trail | All enterprise CM tools track what ran, when, on which nodes, with what results. Required for change management and compliance. | MEDIUM | isogov plans this via PostgreSQL backend. Must be queryable -- "what changed on node X in the last 24 hours?" |
+---
 
 ### Differentiators (Competitive Advantage)
 
-Features where isogov can distinguish itself from the established players. These are not required for a CM tool to function, but they add significant value.
+Features that distinguish Hobnob's orchestration from bolted-on execution tools.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Single Go binary (agent) | Puppet requires Ruby runtime + gems. Chef requires Ruby + omnibus. Salt requires Python + dependencies. A single static Go binary is dramatically easier to deploy, has no dependency conflicts, and starts in milliseconds. This is isogov's biggest DX advantage. | LOW | Already planned. This is a genuine differentiator -- no other major CM tool ships as a single binary. |
-| YAML-only config (filesystem as source of truth) | Puppet has its own DSL. Chef uses Ruby. Salt uses SLS/YAML+Jinja. Pure YAML is the simplest possible config format. No DSL to learn, no programming language required. GitOps-native by default. | LOW | Already planned. Aligns with the design philosophy of "sysadmins can read YAML and immediately understand." No equivalent in Puppet/Chef. |
-| Integrated secrets management (isopass) | Puppet requires hiera-eyaml or external Vault integration. Chef requires encrypted data bags or Vault. Ansible requires ansible-vault. Salt requires GPG or Vault pillar. isogov's built-in isopass integration with `secret:` prefix is zero-config secrets. | MEDIUM | Already planned. The `secret:` prefix resolution and automatic rotation watching is cleaner than any competitor's approach. |
-| Secret rotation awareness (auto force-run) | No major CM tool automatically detects when secrets rotate and triggers convergence. This is novel. Puppet/Chef/Ansible all require external tooling or manual intervention for secret rotation. | MEDIUM | Already planned. Server polls isopass for rotation, triggers force-run on affected nodes. Genuine innovation. |
-| Agent self-update from server | Puppet has `puppet-agent` module for upgrades but it is complex. Chef has `chef-client` cookbook. Having the agent update itself from server-hosted binaries with checksum verification is much simpler for a single-binary agent. | MEDIUM | Already planned. Much simpler than Puppet/Chef's approach because there is only one file to replace. |
-| Bootstrap via curl one-liner | Ansible doesn't need this (agentless). Puppet has `curl | bash` but it pulls from Puppet's repos, not your server. Chef has `curl -L https://omnitruck.chef.io/install.sh`. Having your own server host the bootstrap script means no external dependency. | LOW | Already planned. Standard modern pattern. |
-| Webhook dispatcher with HMAC signing | Puppet has webhooks in PE. Chef has webhook notifications in Automate. But built-in HMAC-signed webhooks for run/drift/enrollment/rotation events in the open-source core is unusual. Most competitors gate this behind enterprise editions. | MEDIUM | Already planned. Enables integration with Slack, PagerDuty, CI/CD without requiring the enterprise tier. |
-| Prometheus metrics built-in | Puppet requires exporters. Chef requires custom reporting handlers. Salt has limited metrics. Built-in Prometheus metrics endpoint is modern and expected by teams running Kubernetes/Grafana stacks. | LOW | Already planned. Expose client count, check-in rates, drift percentages, run durations, compliance ratios. |
-| Auto node classification from pattern rules | Puppet has node classification via ENC (External Node Classifier) or console groups. Chef has roles and environments. Salt has targeting by grains/pillars. isogov's `classification.yaml` with pattern rules is a simpler, file-based approach. | LOW | Already planned. Simpler than Puppet's ENC but less flexible. Good tradeoff for the target audience. |
-| File snapshots with rollback | Puppet has filebucket for backup/restore. Chef has backup attributes on file resources. But explicit rollback via CLI (`gvctl rollback`) with snapshot history is a better UX. | MEDIUM | Already planned. Store pre-change file contents, allow reverting specific files or entire runs. |
-| Server TLS hot reload | Most CM servers require restart for cert rotation. Hot reload via `GetCertificate` callback means zero-downtime cert rotation. Minor but appreciated. | LOW | Already planned. Small but meaningful operational improvement. |
+| Trait-based targeting with live trait data | Ansible targets inventory groups (static). Salt uses grains (cached at startup — static by default). Hobnob has 25 real-time trait collectors and can target based on any trait value at query time. Example: `--target 'traits.kernel.version >= 5.15'`. | MEDIUM | Trait data is already in DB, queried per check-in. Ad-hoc targeting queries the same store. Real trait freshness is bounded by last check-in interval. |
+| Tasks with typed parameter schemas | Puppet Bolt's task model: scripts + JSON metadata describing parameters and types. Inputs validated before execution. Results are structured JSON, not raw stdout. Bolt plans can consume structured task outputs. Salt execution modules with structured return values are similar. | HIGH | New concept for Hobnob. Tasks are named, versioned scripts stored server-side with parameter schemas. Agent receives task payload with validated params; returns structured JSON. Enables workflow chaining (task A's output feeds task B's input). |
+| Workflows with inter-step conditionals | Puppet Bolt plans: sequential steps with Puppet DSL conditionals. Ansible Tower workflows: a DAG of job templates with on-success/on-failure edges. Salt orchestration: `orch.sls` with requisites between states across minions. Hobnob can use its existing conditional infrastructure (structured conditionals, trait-based conditions). | HIGH | New server-side workflow engine. Workflows are YAML files (consistent with Hobnob's config philosophy). Steps reference tasks or commands, with `on_success:`, `on_failure:`, `when:` conditions using the same syntax as module conditionals. |
+| Rolling execution with health-gate abort | Salt's orchestrate runner supports sequential minion batches. Ansible Tower workflows support batch sizes. Puppet Bolt implements rolling via plan logic (manual loop). Hobnob can make this a first-class parameter: `batch_size: 10%`, `max_failures: 2`, `health_check_command: 'systemctl is-active nginx'`. | HIGH | Built on rolling job scheduling in server. After each batch, server waits for health check results before proceeding. Failure threshold triggers workflow abort. No equivalent first-class UX in open-source Ansible or Puppet Bolt. |
+| Live query over gRPC stream | Salt's `grains.item` returns current values. Ansible's `setup` module gathers fresh facts. Hobnob's bidirectional stream can deliver query requests to connected agents without waiting for check-in. For connected agents, response latency can be sub-second vs waiting up to 5 minutes for check-in. | MEDIUM | New stream message type: `QueryRequest`. Agent handles it inline, responds immediately with requested trait paths or command output. Only works for agents currently connected via AgentStream. Disconnected agents fall back to cached trait data. |
+| Job history with full result archive | Ansible has stdout logs. Salt's job cache expires by default. Bolt doesn't persist results. Storing full stdout/stderr of every command execution in SQLite gives operators an audit trail for compliance. | LOW | Extends existing run_results table or adds a parallel job_results table. Minor schema change; all infrastructure exists. |
+
+---
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
-Features that seem good but create problems. isogov's PROJECT.md already identifies several of these correctly.
-
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Push-based execution | "I want to apply changes NOW across all nodes." Ansible's popularity proves push is appealing. | Requires server to reach all nodes (firewall/NAT issues). Creates thundering herd on large fleets. Makes server a single point of failure during runs. Pull model is more resilient. | isogov's approach: pull-based with `gvctl push` setting a DB flag that agents pick up on next check-in. Achieves urgency without push architecture. |
-| GUI-based config editing | "Let me edit configs in the web UI." Puppet Enterprise console allows some config via UI. Chef Manage had this. | Creates config drift between UI and files. Breaks GitOps workflows. Makes audit trail ambiguous (who changed what, via which interface?). Two sources of truth is always worse than one. | isogov's approach: YAML files on disk are sole source of truth. Web UI is read-only for visibility. Edit files in your editor, commit to git, server watches for changes. |
-| Windows support | "We need to manage Windows too." Puppet, Chef, Ansible, Salt all support Windows to varying degrees. | Windows CM is a completely different world -- WinRM vs SSH, PowerShell vs bash, MSI vs apt, Windows services vs systemd, registry vs config files. Supporting it doubles complexity for a fraction of the user base. | isogov correctly scopes to Linux and macOS only. If Windows is needed, use a purpose-built tool (DSC, Ansible for Windows). |
-| Domain-specific language (DSL) | "Puppet's DSL is powerful, we should have one." Chef's Ruby DSL allows arbitrary code in recipes. | DSLs create learning curves, limit tooling (no generic YAML linters), and make the tool feel like a programming language rather than a config format. Puppet's DSL is regularly cited as its steepest learning curve. | isogov uses YAML with Go template expressions for conditionals. Zero DSL. Sysadmins already know YAML. |
-| Agent-to-agent communication | "Nodes should coordinate with each other." Salt has peer communication via mine. Puppet has exported resources. | Dramatically increases security surface. Creates distributed systems complexity. Makes debugging convergence nearly impossible. If node A depends on node B's state, failures cascade unpredictably. | isogov correctly prohibits agent-to-agent communication. Agents only talk to the server. Cross-node coordination happens at the config level (server knows all node states). |
-| Multi-language agent implementations | "Write agents in Python/Rust/Node for different platforms." | Maintaining multiple codebases for the same agent is an enormous maintenance burden. Feature parity across implementations is nearly impossible. Bug fixes must be applied N times. | isogov correctly ships a single Go binary for all platforms. Go cross-compiles trivially. |
-| Real-time streaming / persistent connections | "I want to see live output from all agents." Salt uses ZeroMQ persistent connections. | Persistent connections consume server resources per-node, create state management complexity, and don't scale well beyond a few thousand nodes. Pull with jitter is simpler and scales better. | isogov uses pull with jittered intervals. Webhooks provide near-real-time notifications for events that matter. |
-| Arbitrary code execution in configs | "Let me write Go/Python/shell in my config files." Chef allows arbitrary Ruby in recipes. | Turns configuration into programming. Makes configs harder to review, audit, and reason about. Security risk -- arbitrary code execution on every convergence run. | isogov uses declarative YAML with constrained Go template expressions for conditionals. No arbitrary code execution in configs. Exec resource (if added) handles one-off commands with explicit guards. |
-| Cloud provisioning / infrastructure as code | "CM tool should also provision VMs and cloud resources." Ansible can provision AWS/GCP/Azure resources. Salt Cloud does this. | Configuration management and infrastructure provisioning are different concerns. Terraform/Pulumi/OpenTofu handle provisioning. Mixing them creates scope creep and a tool that does both poorly. | isogov manages what is ON nodes, not the nodes themselves. Use Terraform to provision, isogov to configure. Clear separation of concerns. |
+| Push-based agent connections (server initiates TCP) | "I want to push commands without waiting for the agent to connect." Ansible's SSH model does this. | Requires server to reach all agents (breaks firewall/NAT model that justified pull). Creates outbound connection management complexity. The existing AgentStream already keeps agents connected — use it. | Use AgentStream: agents maintain persistent bidirectional connection. Server sends commands over the existing stream. Any connected agent is reachable within milliseconds. |
+| Arbitrary Python/shell/Ruby in workflow definitions | "Let me write loops and conditionals in a real language." Chef's orchestration lets you write Ruby. | Turns YAML configs into programs. Makes workflows unreadable to sysadmins who aren't developers. Creates security concerns (arbitrary code execution in server context for workflow evaluation). Puppet Bolt's Puppet-language plans have this problem — they require learning a DSL. | Structured YAML with `when:` conditions using the same trait-based conditional syntax as module configs. Loops via `targets:` expansion. Complex logic lives in tasks (scripts), not workflow definitions. |
+| Global fan-out commands to all thralls simultaneously | "I want to run this on everything right now." Salt's `salt '*' cmd.run` does this. | Thundering herd: all thralls execute simultaneously, saturate network/server, results flood back. At 500+ thralls, this causes result processing backlog and server memory spikes. Already documented as a pitfall for force-push. | Rolling execution with configurable batch size is the right default. `--concurrency all` is an opt-in escape hatch for small fleets, not the default. |
+| Blocking CLI output streaming all results live | "I want to watch all 200 thralls' stdout in my terminal." Ansible does this — prints as results arrive. | Unreadable at any meaningful scale. 200 thralls printing stdout simultaneously produces noise, not signal. Terminal output is not auditable. | CLI shows per-thrall status (running/done/failed) in a progress view. Full stdout/stderr accessible via `hobnobcli runs get <job-id> --thrall web01` after completion. SSE stream for real-time status from web UI. |
+| Workflow GUI builder (drag-and-drop DAG editor) | "I want to build workflows visually." Ansible Tower has this. | Significant frontend complexity. DAGs built in a GUI still need to be serialized somewhere. Creates a second source of truth (GUI definition vs YAML file). The target audience (sysadmins) prefers YAML files. | Workflow definitions are YAML files in a `workflows/` directory alongside other Hobnob configs. Filesystem is the single source of truth. GitOps-native. |
+| Stateful long-running jobs (hours/days) | "Run this weekly maintenance script and let it run overnight." | Long-running gRPC streams are fragile — network interruptions, agent restarts, OS-level timeouts. Server-side job state becomes complex (resume? restart? checkpoint?). | Tasks execute as background processes on the agent. The agent reports progress and final result when done, decoupled from the stream lifetime. The agent can reconnect and report pending results after reconnect. |
+| Agent-side workflow evaluation | "Let the agent decide which steps to run." | Distributes workflow logic to agents, making it impossible to trace or audit from the server. Changes on one agent affect what another agent does. All workflow control belongs in the server. | Server-side workflow engine with full visibility. Agents receive individual task/command payloads; server orchestrates the sequence. |
+
+---
+
+## Approaches and Trade-offs by Capability
+
+This section analyzes the design space for each of the five target capabilities, presenting alternative approaches with explicit trade-offs.
+
+### Capability 1: Ad-hoc Command Execution
+
+**The question:** How does the server deliver a command to an agent and collect the result?
+
+**Approach A: Via AgentStream (push over existing bidirectional stream)**
+
+Server sends a new `ServerStreamMessage` variant (e.g., `ExecuteCommand`) to the connected agent's stream. Agent executes, streams back a `ClientStreamMessage` with stdout/stderr/exit_code chunks or a final result message.
+
+Trade-offs:
+- Requires agent to be connected (AgentStream must be live). Disconnected agents cannot receive commands.
+- Latency: sub-second for connected agents (stream already open).
+- Result delivery: agent must send result back over the same stream while the stream is open.
+- **This is the right approach for Hobnob.** Force-push already uses this channel. The infrastructure exists. Most production agents are connected continuously.
+
+**Approach B: Via DB flag (poll-based, like force_push)**
+
+Server writes a command record to DB with `pending` status. Agent picks it up on next check-in. Agent executes and reports result via a new RPC.
+
+Trade-offs:
+- Works for disconnected agents (checks DB on every check-in).
+- Latency: up to one check-in interval (30s–5min). Not useful for interactive ad-hoc use.
+- Simpler server-side (no real-time coordination).
+- **Reject:** Too slow for ad-hoc interactive use. The whole point of ad-hoc execution is immediacy.
+
+**Approach C: Hybrid (stream with DB fallback)**
+
+Try stream first; if agent not connected, write to DB for pick-up on next check-in.
+
+Trade-offs:
+- Covers both connected and disconnected agents.
+- More complex: two code paths for result delivery.
+- For the v1.3 milestone, the fallback path may not be worth the complexity.
+- **Recommendation:** Start with stream-only (Approach A). Add DB fallback in v1.4 if operators report disconnected-agent issues.
+
+**Verdict:** Approach A. The AgentStream infrastructure makes this low-risk. Disconnected-agent fallback is a v1.4 concern.
+
+---
+
+### Capability 2: Task/Script Management
+
+**The question:** What is a "task" vs a "command," and where do task scripts live?
+
+**Approach A: Puppet Bolt model — scripts as files in a known directory**
+
+Tasks are scripts (bash, python, etc.) stored in a `tasks/` directory on the server. Each task has an optional JSON metadata file describing parameters and types. Server pushes the script binary + params to the agent for execution. Agent executes and returns structured JSON output.
+
+Trade-offs:
+- Familiar to Puppet Bolt users.
+- Scripts are version-controlled alongside other configs. GitOps-native.
+- Parameters validated against schema before execution (type safety).
+- Agent needs to execute arbitrary scripts from server (security surface).
+- Task scripts live on the server and are pushed per-execution (bandwidth for large scripts).
+- **Recommended approach.** Consistent with Hobnob's filesystem-as-source-of-truth philosophy.
+
+**Approach B: Salt execution module model — tasks defined in code**
+
+Tasks are Go functions registered on the agent, called remotely with arguments.
+
+Trade-offs:
+- Strongly typed; no code execution of arbitrary scripts.
+- Requires agent recompile to add new tasks.
+- Not configurable by operators without recompilation.
+- **Reject for Hobnob.** Agents should be updatable independently of task definitions. Operators need to add tasks without releasing new agent binaries.
+
+**Approach C: Inline scripts in workflow YAML**
+
+Scripts are embedded directly in workflow YAML as multi-line strings.
+
+Trade-offs:
+- Simple for small scripts.
+- No reuse — same script must be duplicated in every workflow that uses it.
+- YAML escaping of shell scripts is painful.
+- **Reject.** Encourages copy-paste, makes reuse impossible.
+
+**Verdict:** Approach A. Scripts in `tasks/` directory with JSON metadata. Task execution = server reads script + params → validates params → pushes to agent via stream → agent executes → returns JSON result. The script is hashed for integrity, cached on the agent between executions if unchanged.
+
+---
+
+### Capability 3: Workflow/Plan Definitions
+
+**The question:** How are multi-step workflows defined and evaluated?
+
+**Approach A: YAML workflow files (Ansible Tower workflow model)**
+
+Workflows are YAML files in a `workflows/` directory. Each workflow declares:
+- A list of steps
+- Each step: `name`, `command` or `task`, `targets`, `on_success`, `on_failure`, `when` condition
+- Optional: `max_failures` (abort threshold)
+
+Evaluation is server-side: the workflow engine reads the YAML, processes steps in order (or parallel for independent steps), waits for per-step results, evaluates `on_success`/`on_failure` edges, and aborts if failure threshold exceeded.
+
+Trade-offs:
+- Consistent with Hobnob's YAML-only philosophy.
+- GitOps-native — workflows live in version control alongside node configs.
+- Limited expressiveness — no loops, no dynamic target computation in the workflow definition itself.
+- Targets must be specified statically in the workflow file or via CLI override at run time.
+- **Recommended for the majority of use cases.**
+
+**Approach B: Puppet Bolt plans (Puppet DSL or YAML sub-language)**
+
+A mini-language (Puppet's DSL, or a subset for YAML plans) with variables, conditionals, loops, and function calls.
+
+Trade-offs:
+- Highly expressive — can compute targets dynamically, loop over results, etc.
+- Significant complexity to implement a language evaluator server-side.
+- Requires sysadmins to learn a new mini-language, defeating Hobnob's "sysadmins read YAML immediately" principle.
+- **Reject.** The design principle is "every concept explainable in one sentence." A workflow language is not.
+
+**Approach C: Declarative DAG workflow (step dependencies declared explicitly)**
+
+Like Ansible Tower's workflow DAGs: each step declares its predecessors. Server builds a DAG, executes parallel branches concurrently, waits for dependencies to complete.
+
+Trade-offs:
+- Enables parallel step execution (valuable for large, independent setup steps).
+- More complex to specify in YAML (user must think about DAG topology explicitly).
+- Harder to reason about than sequential YAML.
+- **Partial recommendation:** For v1.3, support sequential steps with `on_success`/`on_failure` branches. Add parallel DAG execution in v1.4 when the use cases are clearer.
+
+**Verdict:** Approach A (sequential YAML) for v1.3. The workflow engine is a server-side state machine: process step → wait for all targets to report → evaluate edges → proceed or abort. No language evaluator. No loop constructs. Workflow files live in `workflows/` alongside other configs and hot-reload via fsnotify.
+
+---
+
+### Capability 4: Rolling Execution Strategies
+
+**The question:** How does the server control execution batching and failure thresholds?
+
+**Approach A: Server-side batch scheduler with health-gate**
+
+Server divides the target set into batches (by count or percentage). After each batch completes, server optionally runs a health-check command against the just-completed thralls. If the health check fails on too many thralls, the job aborts.
+
+Parameters:
+- `batch_size`: integer (N thralls) or percentage (N%)
+- `max_failures`: integer or percentage — abort threshold within a batch
+- `health_check`: optional command to run after each batch (must return exit 0)
+- `batch_delay`: optional pause between batches (default 0)
+
+Trade-offs:
+- Predictable, simple for operators to reason about.
+- Does not reduce risk at the first thrall — still possible to break the entire fleet if batch_size is 100% and all fail simultaneously.
+- Health check as a command is flexible but requires the operator to write a meaningful check.
+- **Recommended approach.** Consistent with how Ansible Tower, Kubernetes rolling updates, and AWS Elastic Beanstalk all implement rolling.
+
+**Approach B: Canary-first rolling (1 → N% → all)**
+
+First batch is always exactly 1 thrall (the canary). If it succeeds, proceed with larger batches.
+
+Trade-offs:
+- Better risk profile — catches failures before they hit the full fleet.
+- The 1-thrall canary is only valid if thralls are homogeneous. Heterogeneous fleets may have the canary succeed on a benign thrall while failing elsewhere.
+- Can be achieved with Approach A by setting `batch_size: 1` then running again with a larger batch.
+- **Do not implement as a distinct mode.** Operators can achieve this with Approach A parameters.
+
+**Approach C: Circuit-breaker abort (abort job, not just batch)**
+
+If `max_failures` is exceeded in any single batch, the entire job is aborted and no further batches proceed.
+
+Trade-offs:
+- Prevents cascading failure across the fleet.
+- Reverted changes on completed batches are not automatically rolled back — operator must take manual remediation steps (or a new workflow).
+- **This is a component of Approach A, not a separate approach.** The `max_failures` threshold and job abort are always part of rolling execution.
+
+**Verdict:** Approach A with circuit-breaker abort built in. Parameters: `batch_size` (default 10% of targets), `max_failures` (default 0 — any failure aborts), `health_check` (optional), `batch_delay` (default 0s). Server tracks batch progress in DB; job record shows current batch, completed, failed counts.
+
+---
+
+### Capability 5: Live Query
+
+**The question:** How does an operator get current state from thralls without waiting for their next check-in?
+
+**Approach A: Query request via AgentStream + cached fallback**
+
+Server sends a `QueryRequest` message over the AgentStream to connected agents. Agent handles it immediately (outside the check-in loop), queries the requested trait paths, and sends back a `QueryResponse`. Server aggregates responses with a deadline. For disconnected agents, fall back to last-known cached trait data from `thrall_traits` table.
+
+Trade-offs:
+- Connected agents respond in milliseconds.
+- Disconnected agents get stale cached data (labeled as such in response).
+- Adds a new agent-side handler branch to the stream loop.
+- Query scope is limited to traits the agent knows how to collect (25 collectors). Cannot query arbitrary system state beyond trait paths without an ad-hoc command.
+- **Recommended for trait queries.** The stream is the right channel; the fallback makes it graceful for offline thralls.
+
+**Approach B: Trigger an out-of-cycle trait re-collection**
+
+Server sends a `RefreshTraits` command over the stream. Agent immediately runs all (or specified) collectors and reports via the existing `ReportTraits` RPC.
+
+Trade-offs:
+- Reuses existing ReportTraits infrastructure — no new message types.
+- Runs ALL collectors, which may be expensive (some collectors scan all packages — can take seconds).
+- Less targeted than querying specific trait paths.
+- Result arrives via existing ReportTraits path (stored in DB, not directly returned to the caller).
+- **Useful for selective refresh.** Complementary to Approach A: use Approach A for cheap targeted queries, this approach for "refresh all traits now."
+
+**Approach C: Dedicated query RPC (new unary gRPC call)**
+
+Add a `LiveQuery` RPC to HobnobAdmin. Server uses the AgentStream to forward the query and await response, bridging the gRPC unary call with the stream mechanism.
+
+Trade-offs:
+- Cleaner interface for callers (standard unary RPC with timeout).
+- Hides the stream complexity from API consumers.
+- Implementation complexity: server must correlate the outbound stream message with the incoming response, matching by job/correlation ID.
+- **Good longer-term design.** For v1.3, implement the stream messages first, wrap in a unary RPC in a subsequent iteration.
+
+**Verdict:** Approach A for trait queries (new QueryRequest/QueryResponse stream messages). Approach B (RefreshTraits) as a complementary "force full refresh" operation. Approach C as the future API shape. For v1.3, expose live query via REST endpoint that uses Approach A internally with a configurable timeout (default 10s) and returns per-thrall results with a `fresh: true/false` indicator.
+
+---
 
 ## Feature Dependencies
 
 ```
-[Secure Transport (mTLS/gRPC)]
+[AgentStream (existing bidirectional stream)]
     |
-    +--requires--> [Node Enrollment/Registration]
+    +--enables--> [Ad-hoc Command Execution]
     |                  |
-    |                  +--requires--> [One-time Tokens]
+    |                  +--requires--> [Job Record (new DB table)]
+    |                  +--requires--> [Command Result type (stdout/stderr/exit_code)]
+    |                  +--enables--> [Task Execution]
+    |                                     |
+    |                                     +--requires--> [Task Registry (tasks/ directory)]
+    |                                     +--requires--> [Parameter Schema Validation]
+    |                                     +--enables--> [Workflow Steps]
     |
-    +--enables--> [Agent Pull Loop]
-                      |
-                      +--requires--> [Fact Collection]
-                      |                  |
-                      |                  +--enables--> [Conditional Resources (when:)]
-                      |                  +--enables--> [Auto Node Classification]
-                      |
-                      +--requires--> [Config Parsing/Rendering]
-                      |                  |
-                      |                  +--requires--> [Template Engine (Go templates)]
-                      |                  +--requires--> [Variable/Environment Hierarchy]
-                      |                  +--requires--> [Secret Resolution (isopass)]
-                      |
-                      +--enables--> [Resource Execution]
-                                        |
-                                        +--requires--> [DAG Ordering]
-                                        +--requires--> [Idempotent Module Executors]
-                                        |                  |
-                                        |                  +--includes--> [File Resource]
-                                        |                  +--includes--> [Package Resource]
-                                        |                  +--includes--> [Service Resource]
-                                        |                  +--includes--> [User Resource]
-                                        |
-                                        +--enables--> [Notify/Subscribe Triggers]
-                                        +--enables--> [Convergence Reporting]
-                                        |                  |
-                                        |                  +--enables--> [Compliance Status]
-                                        |                  +--enables--> [Run History]
-                                        |                  +--enables--> [Webhook Dispatch]
-                                        |
-                                        +--enables--> [Dry-Run Mode]
-                                        +--enables--> [File Snapshots]
-                                                          |
-                                                          +--enables--> [Rollback]
+    +--enables--> [Live Query]
+    |                  |
+    |                  +--requires--> [QueryRequest/QueryResponse stream messages]
+    |                  +--requires--> [Per-query correlation ID]
+    |
+    +--enables--> [Rolling Execution]
+                       |
+                       +--requires--> [Job Record + Batch tracking]
+                       +--requires--> [Trait-based targeting]
+                       +--requires--> [Ad-hoc Command Execution (for health checks)]
 
-[CLI (gvctl)] --consumes--> [REST API]
-[Web UI]      --consumes--> [REST API]
+[Trait-based Targeting]
+    |
+    +--requires--> [Trait data in DB (existing thrall_traits table)]
+    +--requires--> [Trait query filter (new query layer)]
 
-[Prometheus Metrics] --independent-- (can be added at any phase)
-[Agent Self-Update]  --independent-- (only needs basic transport)
-[Bootstrap Script]   --independent-- (only needs server HTTP endpoint)
+[Workflow Engine]
+    |
+    +--requires--> [Task Execution]
+    +--requires--> [Ad-hoc Command Execution]
+    +--requires--> [Rolling Execution]
+    +--requires--> [Workflow YAML files (workflows/ directory)]
+    +--requires--> [Server-side workflow state machine]
+
+[CLI subcommands (hobnobcli run/query/workflow)]
+    |
+    +--requires--> [Job REST endpoints]
+    +--requires--> [Result retrieval endpoints]
 ```
 
 ### Dependency Notes
 
-- **Fact Collection requires Agent Pull Loop:** Facts are gathered at check-in time, before config is rendered. The agent must be able to connect to the server first.
-- **Conditional Resources require Fact Collection:** `when:` expressions evaluate against node facts. Without facts, conditions cannot be resolved.
-- **Notify/Subscribe requires DAG + Module Executors:** Triggers fire based on resource state changes, which requires resources to have executed and reported their state.
-- **Compliance Status requires Convergence Reporting:** Drift/compliance status is derived from run results. No reporting = no compliance tracking.
-- **Rollback requires File Snapshots:** Cannot roll back without snapshots of pre-change state.
-- **Secret Resolution requires isopass integration:** Configs with `secret:` prefixes cannot render without the secrets provider.
-- **Web UI and CLI both consume REST API:** REST API must exist before either UI surface can function.
+- **Ad-hoc command requires AgentStream:** Commands are delivered over the existing bidirectional stream. This is already proven by force-push. No new transport needed.
+- **Tasks require ad-hoc command infrastructure:** A task is a command with a script payload and parameter validation. The execution path is the same; tasks add a script delivery step before the command.
+- **Workflows require tasks and commands:** A workflow step is either a task or a command. The workflow engine orchestrates them; it does not execute directly.
+- **Rolling execution requires job record and targeting:** Rolling needs to know the full target set upfront to compute batches. Targeting produces the initial set; the job record tracks batch progress.
+- **Live query is independent of command/task execution:** Query uses the stream but does not create a "run" in the traditional sense. It is a read operation, not a write/execute operation. No run record needed for pure trait queries.
+- **Workflow conflicts with config management runs:** A workflow run and a config management convergence run can occur simultaneously on the same thrall. The agent must handle both — the stream carries both types of messages. The agent should process them independently (workflow commands do not affect config management state).
+
+---
 
 ## MVP Definition
 
-### Launch With (v1)
+### Launch With (v1.3)
 
-The minimum set of features needed to manage a small fleet of Linux nodes.
+Minimum set of orchestration features to validate the concept and address the primary operator use cases.
 
-- [ ] gRPC transport with mTLS -- the secure communication foundation
-- [ ] Node enrollment with one-time tokens -- nodes must be able to register
-- [ ] Agent pull loop with jitter -- nodes must be able to check in
-- [ ] Fact collection (OS, hostname, IP, architecture) -- minimum facts for conditional config
-- [ ] YAML config parsing with Go template rendering -- the configuration language
-- [ ] Environment variable hierarchy (base + per-environment overrides) -- enables multi-environment use
-- [ ] File resource (content, permissions, ownership, SHA256 check) -- most used resource type
-- [ ] Package resource (install/remove/version pin, apt + dnf minimum) -- second most used
-- [ ] Service resource (start/stop/enable/disable via systemctl) -- third most used
-- [ ] Resource DAG ordering with circular dependency detection -- correct execution order
-- [ ] Notify/subscribe triggers -- the package/file/service triad requires this
-- [ ] Convergence reporting (what changed, what failed) -- operators must know what happened
-- [ ] isopass secret resolution (`secret:` prefix) -- secrets must resolve or configs are incomplete
-- [ ] gvctl CLI (basic: list clients, view runs, trigger push) -- operators need a control plane
-- [ ] Dry-run mode -- safety net before applying to production
+- [ ] Ad-hoc command execution via AgentStream — the simplest orchestration primitive; proves the execution path
+- [ ] Multi-thrall targeting by hostname glob and single trait filter — covers 90% of targeting needs
+- [ ] Result collection per thrall (stdout, stderr, exit code) — operators need to see what happened
+- [ ] Job record with per-thrall status tracking — visibility into running vs completed vs failed
+- [ ] Timeout enforcement (agent-side deadline + server-side marking) — prevents hung jobs
+- [ ] Live query for trait paths via AgentStream with cached fallback — "what kernel is running on these boxes right now?"
+- [ ] Rolling execution with batch_size and max_failures parameters — core safety control
+- [ ] `hobnobcli run command` subcommand — CLI is the primary interface
+- [ ] `hobnobcli run query` subcommand — for live fact queries
+- [ ] Job history queryable via CLI and REST — `hobnobcli runs list`, `hobnobcli runs get <id>`
 
-### Add After Validation (v1.x)
+### Add After Validation (v1.4)
 
-Features to add once core convergence is working reliably on a small fleet.
+Features to add once core execution and targeting are working reliably.
 
-- [ ] User resource -- add once file/package/service are proven stable
-- [ ] Exec resource (with onlyif/unless/creates guards) -- escape hatch for non-declarative tasks
-- [ ] Auto node classification from pattern rules -- reduces manual per-node config
-- [ ] Conditional resources (`when:` expressions) -- enables smarter, fact-driven configs
-- [ ] Compliance status tracking (compliant/drifted/failing/stale/unknown) -- operational visibility
-- [ ] File snapshots and rollback -- safety net for bad changes
-- [ ] Webhook dispatcher with HMAC signing -- integration with external systems
-- [ ] Prometheus metrics endpoint -- observability for monitoring stacks
-- [ ] Secret rotation watcher with force-run -- operational excellence for secret lifecycle
-- [ ] REST API for web UI -- foundation for the dashboard
-- [ ] Web UI (dashboard, clients, runs) -- visual operational visibility
-- [ ] Multi-platform package managers beyond apt/dnf (apk, pacman, brew, zypper) -- broader OS support
-- [ ] Agent self-update with checksum verification -- operational convenience
-- [ ] Bootstrap curl one-liner -- streamlined onboarding
+- [ ] Task definitions (scripts in `tasks/` with JSON metadata + parameter validation) — validated by demand: if operators ask "can I run the same script repeatedly with different params?", add tasks
+- [ ] Sequential workflows with on_success/on_failure branching — validated by demand: if operators ask "can I run A then B if A succeeded?"
+- [ ] Health-check commands in rolling execution — extends basic rolling with automated gate
+- [ ] Compound trait targeting (AND/OR of multiple trait conditions) — for fleets where single-trait targeting is insufficient
+- [ ] Disconnected-agent DB fallback for ad-hoc commands (poll-on-check-in) — if disconnected-agent complaints are common
 
 ### Future Consideration (v2+)
 
-Features to defer until product-market fit is established.
+Features to defer until the orchestration capability is established and adoption is measured.
 
-- [ ] Cron/scheduled task resource -- useful but not critical for v1
-- [ ] Group resource (separate from user) -- Puppet treats this as distinct; may be needed for precise group management
-- [ ] Mount/filesystem resource -- specialized, not universally needed
-- [ ] Host resource (/etc/hosts management) -- niche
-- [ ] SSH authorized keys resource -- useful but can be handled via file resource initially
-- [ ] Advanced template functions (custom Go template funcs) -- power user feature
-- [ ] Multi-server high availability -- needed at scale, not for initial adoption
-- [ ] RBAC for API/CLI/UI access -- needed for teams, not solo operators
-- [ ] Plugin/module system for custom resource types -- extensibility for power users
-- [ ] Orchestration across nodes (rolling updates, canary) -- crosses into orchestration territory
-- [ ] AI-assisted config generation (a la Puppet Code Assist) -- trendy but not core
-- [ ] Event-driven automation (react to external events) -- Ansible's EDA is in this space
+- [ ] Parallel DAG workflow steps (concurrent independent branches) — adds complexity; sequential is sufficient for most cases
+- [ ] Webhook events for job completion/failure — consistent with existing webhook infrastructure, adds value for CI/CD integration
+- [ ] Scheduled job execution (cron-like) — "run this task every Sunday at 2am against all web servers"
+- [ ] Workflow approval gates (require human approval before proceeding to next step) — enterprise governance requirement
+- [ ] Task result chaining (pass output of task A as input to task B) — requires structured task output; deferred until task adoption is proven
+- [ ] SSE streaming of job progress to web UI — nice UX; deferred until web UI is updated for orchestration
+
+---
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| File resource | HIGH | MEDIUM | P1 |
-| Package resource | HIGH | MEDIUM | P1 |
-| Service resource | HIGH | LOW | P1 |
-| mTLS gRPC transport | HIGH | HIGH | P1 |
-| Agent pull loop | HIGH | MEDIUM | P1 |
-| DAG ordering | HIGH | HIGH | P1 |
-| Notify/subscribe | HIGH | MEDIUM | P1 |
-| YAML config + Go templates | HIGH | MEDIUM | P1 |
-| isopass secret resolution | HIGH | MEDIUM | P1 |
-| Fact collection | HIGH | MEDIUM | P1 |
-| Node enrollment | HIGH | MEDIUM | P1 |
-| Dry-run mode | HIGH | LOW | P1 |
-| Convergence reporting | HIGH | MEDIUM | P1 |
-| gvctl CLI (basic) | HIGH | MEDIUM | P1 |
-| Environment variable hierarchy | MEDIUM | MEDIUM | P1 |
-| User resource | MEDIUM | MEDIUM | P2 |
-| Exec resource | MEDIUM | LOW | P2 |
-| Conditional resources (when:) | MEDIUM | MEDIUM | P2 |
-| Auto node classification | MEDIUM | LOW | P2 |
-| Compliance status tracking | MEDIUM | MEDIUM | P2 |
-| File snapshots + rollback | MEDIUM | MEDIUM | P2 |
-| Webhook dispatcher | MEDIUM | MEDIUM | P2 |
-| Prometheus metrics | MEDIUM | LOW | P2 |
-| Secret rotation watcher | MEDIUM | MEDIUM | P2 |
-| REST API | MEDIUM | MEDIUM | P2 |
-| Web UI | MEDIUM | HIGH | P2 |
-| Agent self-update | MEDIUM | MEDIUM | P2 |
-| Bootstrap script | LOW | LOW | P2 |
-| Multi-platform packages | LOW | MEDIUM | P2 |
-| Cron resource | LOW | LOW | P3 |
-| Group resource | LOW | LOW | P3 |
-| Mount resource | LOW | LOW | P3 |
-| Host resource | LOW | LOW | P3 |
-| SSH keys resource | LOW | LOW | P3 |
-| HA / multi-server | LOW | HIGH | P3 |
-| RBAC | LOW | HIGH | P3 |
-| Plugin/module system | LOW | HIGH | P3 |
-| Orchestration | LOW | HIGH | P3 |
+| Ad-hoc command via stream | HIGH | MEDIUM | P1 |
+| Multi-thrall glob targeting | HIGH | LOW | P1 |
+| Result collection per thrall | HIGH | LOW | P1 |
+| Job record + per-thrall status | HIGH | MEDIUM | P1 |
+| Timeout enforcement | HIGH | LOW | P1 |
+| Rolling execution (batch + threshold) | HIGH | MEDIUM | P1 |
+| `hobnobcli run command` subcommand | HIGH | LOW | P1 |
+| Live query via stream | MEDIUM | MEDIUM | P1 |
+| `hobnobcli run query` subcommand | MEDIUM | LOW | P1 |
+| Job history (list + get) | MEDIUM | LOW | P1 |
+| Task definitions with parameter schema | HIGH | HIGH | P2 |
+| Sequential workflow engine | HIGH | HIGH | P2 |
+| Health-check commands in rolling | MEDIUM | LOW | P2 |
+| Compound trait targeting | MEDIUM | MEDIUM | P2 |
+| Disconnected-agent DB fallback | MEDIUM | MEDIUM | P2 |
+| Parallel DAG workflow steps | LOW | HIGH | P3 |
+| Webhook events for job completion | MEDIUM | LOW | P3 |
+| Scheduled job execution | MEDIUM | HIGH | P3 |
+| Workflow approval gates | LOW | HIGH | P3 |
+| Task result chaining | MEDIUM | HIGH | P3 |
 
 **Priority key:**
-- P1: Must have for launch -- the tool is not usable without these
-- P2: Should have, add after core works -- these make the tool competitive
-- P3: Nice to have, future consideration -- these make the tool enterprise-ready
+- P1: Must have for v1.3 launch — the orchestration milestone is incomplete without these
+- P2: Should have, add in v1.4 — validates and extends the core
+- P3: Future consideration — deferred until adoption warrants the complexity
+
+---
 
 ## Competitor Feature Analysis
 
-| Feature | Puppet | Chef | Ansible | Salt | isogov Approach |
-|---------|--------|------|---------|------|-----------------|
-| Architecture | Pull (agent) | Pull (agent) | Push (SSH) | Both (agent or SSH) | Pull (agent), gRPC over mTLS |
-| Config language | Puppet DSL (custom) | Ruby DSL | YAML + Jinja2 | YAML + Jinja2 (SLS) | YAML + Go templates |
-| Agent runtime | Ruby | Ruby (omnibus) | None (agentless) | Python | Go (single binary) |
-| Secrets | hiera-eyaml, external Vault | Encrypted data bags, Vault | ansible-vault | GPG pillar, Vault | Built-in isopass with `secret:` prefix |
-| Secret rotation | Manual/external | Manual/external | Manual/external | Manual/external | Auto-detect + force-run |
-| Facts system | Facter | Ohai | setup module | Grains | Pluggable Collector interface |
-| Dry run | --noop | --why-run | --check | test=True | DryRun RPC + gvctl preview |
-| Node classification | ENC / console groups | Roles + environments | Inventory groups | Targeting (grains/pillars) | Pattern rules in classification.yaml |
-| Resource types | 40+ built-in + Forge | 80+ built-in resources | 1300+ modules | 200+ execution modules | 4 core (file, package, service, user) + exec |
-| Templating | ERB (Ruby) | ERB (Ruby) | Jinja2 (Python) | Jinja2 (Python) | Go templates (stdlib) |
-| Dependency model | DAG (explicit) | Compile-then-converge | Sequential (playbook order) | Requisite system | DAG with topological sort |
-| Web UI | PE Console (paid) | Automate (paid) | AWX/Tower | SaltStack Enterprise (paid) | Built-in SPA (included) |
-| CLI | puppet CLI | knife CLI | ansible/ansible-playbook | salt CLI | gvctl |
-| Webhooks | PE only (paid) | Automate only (paid) | Callback plugins | Reactor system | Built-in with HMAC signing |
-| Metrics | Via exporters | Via handlers | Via callback plugins | Limited | Built-in Prometheus endpoint |
-| Bootstrap | curl from puppet repos | curl from chef repos | N/A (agentless) | salt-bootstrap | curl from your server |
-| Learning curve | HIGH (DSL + Ruby ecosystem) | HIGH (Ruby + cookbook patterns) | LOW (YAML + SSH) | MEDIUM (YAML + Python ecosystem) | LOW (YAML + single binary) |
+| Feature | Ansible | Salt (SaltStack) | Puppet Bolt | Hobnob v1.3 Approach |
+|---------|---------|------------------|-------------|----------------------|
+| Ad-hoc execution | `ansible -m shell -a "cmd" hosts` (SSH, agentless) | `salt 'target' cmd.run "cmd"` (ZeroMQ, persistent) | `bolt command run "cmd" --targets` (SSH/WinRM) | Command over AgentStream (gRPC mTLS, persistent) |
+| Transport for ad-hoc | SSH (per-execution connection) | ZeroMQ persistent bus | SSH (per-execution connection) | Existing AgentStream (already open) |
+| Targeting model | Inventory groups + patterns | Compound targeting with grains (facts), regex, CIDR | Inventory files + target groups | Hostname glob + trait query against live DB data |
+| Result format | Per-host dict with stdout/stderr/rc | Per-minion dict with return value | Per-target result object with JSON | Per-thrall record: stdout, stderr, exit_code, duration |
+| Task model | Ansible modules (Python, Go, etc.) | Execution modules (Python) | Bolt tasks (any script + JSON metadata) | Task scripts in `tasks/` with JSON parameter schema |
+| Workflow model | Playbooks (YAML, sequential with conditionals) | Orchestrate runner (SLS + requisites) | Bolt plans (Puppet DSL or YAML) | Sequential YAML workflows in `workflows/` directory |
+| Rolling execution | `serial:` keyword in playbooks (% or count) | Not first-class; manual via orchestration SLS | Manual loop in Bolt plan | First-class `batch_size` + `max_failures` params |
+| Live fact query | `ansible -m setup` (re-runs fact gathering via SSH) | `salt 'target' grains.item key` (returns from cache or live) | `bolt facts --targets` (SSH connection per-run) | QueryRequest over AgentStream (sub-second for connected) |
+| Result persistence | Not persisted by default; callback plugins required | Job cache (expires by default) | Not persisted | Job records in SQLite; queryable indefinitely |
+| Connected agent required? | No (SSH on-demand) | Yes (ZeroMQ must be running) | No (SSH on-demand) | Yes for live delivery; DB fallback for disconnected |
 
 ### Key Competitive Observations
 
-1. **Simplicity gap:** Ansible is popular because of YAML + agentless simplicity. isogov combines Ansible's YAML simplicity with Puppet's pull-based reliability and Go's single-binary deployment. This is an underserved niche.
+1. **Transport advantage:** Ansible and Puppet Bolt establish SSH connections per-run, which adds 100-500ms overhead and requires SSH credentials. Salt and Hobnob both use persistent connections, but Hobnob's mTLS gRPC stream is more secure and already authenticated. Sub-second command delivery is a genuine advantage.
 
-2. **Enterprise feature gap:** Puppet, Chef, and Salt gate features like webhooks, dashboards, and compliance behind paid enterprise editions. isogov includes these in the open-source core. This is a significant differentiator for small-to-medium teams.
+2. **Targeting advantage:** Salt's grains are cached at minion startup by default — they can be stale. Ansible's dynamic inventory requires external scripts or plugins. Hobnob's trait data is updated every check-in interval (typically every few minutes) and is the foundation of the existing conditional system. Targeting based on this data is already proven infrastructure.
 
-3. **Secrets gap:** No major CM tool has built-in secret rotation awareness. All require external tooling. isogov's isopass integration with auto-rotation detection is genuinely novel.
+3. **Rolling execution advantage:** In open-source Ansible, `serial:` controls batch size but there is no built-in health-check gate between batches. Puppet Bolt's rolling is manual (the operator writes a loop with health checks in the plan). Hobnob making this first-class with configurable parameters and automatic health-gate abort is a genuine differentiator among open-source tools.
 
-4. **Resource type gap:** isogov starts with 4 resource types vs Puppet's 40+ and Ansible's 1300+ modules. This is acceptable for v1 if the core types (file, package, service, user) are excellent. Most real-world configs use only 5-10 resource types.
+4. **Persistence advantage:** Ansible's output goes to stdout (requires external logging). Salt's job cache is temporary. Bolt doesn't persist. Storing all execution results in SQLite (already Hobnob's pattern for config management runs) means full history is available without external log infrastructure.
 
-5. **Ecosystem gap:** Puppet Forge has thousands of community modules. Chef Supermarket has thousands of cookbooks. Ansible Galaxy has thousands of roles/collections. isogov has none. This is the biggest long-term challenge, mitigated by the plugin/module system in v2+.
+5. **Complexity gap:** Ansible playbooks and Salt orchestration SLS files are full YAML-with-Jinja2 programs. Bolt plans require Puppet DSL knowledge. Hobnob's sequential YAML workflows with `when:` conditions from the existing conditional infrastructure keep the "sysadmin reads it immediately" principle intact for orchestration.
 
-## Notable Gap: Exec Resource
-
-The PROJECT.md spec lists file, package, service, and user as module executors but does not include an exec/command resource. **Every major CM tool has this** (Puppet `exec`, Chef `execute`, Ansible `command`/`shell`, Salt `cmd.run`). It serves as the escape hatch for tasks that don't fit declarative models:
-
-- Running database migrations
-- Reloading firewall rules
-- Compiling a binary
-- Running a custom script
-
-Recommendation: Add an `exec` resource type with idempotency guards (`onlyif`, `unless`, `creates`) to v1.x. Without it, users will hit a wall quickly when they need to do something the four core resource types cannot express.
+---
 
 ## Sources
 
-- [Chef vs Puppet vs Ansible: DevOps Tool Comparison (2026)](https://www.veritis.com/blog/chef-vs-puppet-vs-ansible-comparison-of-devops-management-tools/)
-- [Ansible vs Puppet vs Chef vs SaltStack: Configuration Management Tool Comparison](https://dasroot.net/posts/2026/02/ansible-vs-puppet-vs-chef-vs-saltstack-configuration-management/)
-- [Ansible vs Puppet vs Chef vs SaltStack: 2025 Comparison](https://teachmeansible.com/blog/configuration-management-comparison)
-- [Puppet Enterprise 2025.7 Release Notes](https://jasonstcyr.com/2026/01/09/puppet-enterprise-2025-7-delivers-code-assist-and-rhel-10-primary-support-and-new-scm/)
-- [Puppet Resource Type Reference](https://www.puppet.com/docs/puppet/7/type.html)
-- [Chef Infra Overview](https://docs.chef.io/chef_overview/)
-- [Ohai System Configuration Data](https://docs.chef.io/ohai/)
-- [Ansible in 2025: Best Practices](https://www.gocodeo.com/post/ansible-in-2025-best-practices-for-configuration-and-provisioning)
-- [Salt Project Overview](https://docs.saltproject.io/salt/user-guide/en/latest/topics/overview.html)
-- [SaltStack Review 2026](https://www.siit.io/tools/trending/saltstack-review)
-- [Configuration Management Push vs Pull](https://ianbicking.org/blog/2010/03/configuration-management-push-vs-pull.html)
-- [Idempotent Configuration Management (TechTarget)](https://www.techtarget.com/searchitoperations/tip/Idempotent-configuration-management-sets-things-right-no-matter-what)
-- [Config Drift Detection: Top Open Source Tools 2025](https://www.ai-infra-link.com/mastering-config-drift-detection-top-open-source-tools-for-2025/)
-- [GitOps Definition (GitLab)](https://about.gitlab.com/topics/gitops/)
-- [Ansible Modules Types Explained](https://blog.cloudmylab.com/ansible-modules-types-explained)
+- [Ansible ad hoc commands documentation](https://docs.ansible.com/projects/ansible/latest/command_guide/intro_adhoc.html) — table stakes reference (HIGH confidence)
+- [Ansible return values documentation](https://docs.ansible.com/ansible/latest/reference_appendices/common_return_values.html) — result format reference (HIGH confidence)
+- [SaltStack Orchestrate Runner](https://docs.saltproject.io/en/latest/topics/orchestrate/orchestrate_runner.html) — workflow model comparison (HIGH confidence)
+- [SaltStack Grains targeting](https://docs.saltproject.io/en/latest/topics/targeting/grains.html) — targeting model comparison (HIGH confidence)
+- [Puppet Bolt tasks documentation](https://www.puppet.com/docs/bolt/latest/writing_tasks.html) — task model reference (HIGH confidence)
+- [Puppet Bolt plans documentation](https://www.puppet.com/docs/bolt/latest/writing_yaml_plans.html) — workflow/plan model (HIGH confidence)
+- [Puppet Bolt orchestrating workflows](https://www.puppet.com/docs/bolt/latest/plans.html) — multi-step workflow patterns (HIGH confidence)
+- [AWS Elastic Beanstalk rolling deployment strategies](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.rolling-version-deploy.html) — rolling execution patterns (HIGH confidence)
+- [Rolling deployments strategies and patterns (systemdr)](https://systemdr.substack.com/p/issue-125-rolling-deployments-strategies) — rolling strategies analysis (MEDIUM confidence)
+- Hobnob codebase — existing AgentStream, run record, trait storage infrastructure (HIGH confidence)
 
 ---
-*Feature research for: Configuration Management Systems*
-*Researched: 2026-03-05*
+
+*Feature research for: Orchestration capabilities (ad-hoc commands, tasks, workflows, rolling execution, live query)*
+*Researched: 2026-03-11*

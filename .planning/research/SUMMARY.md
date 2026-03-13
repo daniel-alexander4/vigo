@@ -1,218 +1,216 @@
 # Project Research Summary
 
-**Project:** Isogov -- Puppet-style Configuration Management System
-**Domain:** Pull-based configuration management (CM) for Linux/macOS fleets
-**Researched:** 2026-03-05
+**Project:** Hobnob v1.3 — Orchestration
+**Domain:** Adding imperative orchestration to a pull-based configuration management system
+**Researched:** 2026-03-11
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Isogov is a pull-based configuration management system in the lineage of Puppet and Chef, built in Go with a YAML-only configuration language, gRPC/mTLS agent-server communication, integrated secrets management via isopass, and a single-binary deployment model. The research confirms this is a well-understood domain with established architectural patterns (catalog compilation, check-before-act idempotency, DAG-ordered resource convergence, fact-driven conditional configuration). The recommended technology stack is mature, high-confidence Go ecosystem tooling: gRPC + grpc-gateway for dual transport, pgx for PostgreSQL, Cobra for the CLI, slog + Prometheus for observability, and buf for proto compilation. No exotic or unproven technologies are required.
+Hobnob v1.3 adds five orchestration capabilities to an already-working Go+Rust+gRPC configuration management system: ad-hoc command execution, task/script management, multi-step workflows with conditionals, rolling execution with failure thresholds, and live query. The recommended approach is fully in-process — no external queue, no external workflow engine. The existing bidirectional `AgentStream` gRPC connection is the delivery mechanism, extended via new `oneof` message variants rather than new RPCs. The only new library dependency is `golang.org/x/sync` (already a transitive dependency) for `errgroup` and `semaphore` primitives. All other orchestration logic uses stdlib goroutines, channels, and the existing `streamManager` infrastructure.
 
-The recommended approach is to build from the foundation outward: proto definitions and database schema first, then the server skeleton with mTLS and enrollment, then the agent with fact collection and the pull loop, then the convergence engine (DAG, module executors, notify/subscribe), then operational features (compliance, dry-run, REST API, CLI), and finally observability integrations and the web UI. This order follows strict dependency chains identified in both the architecture and feature research. The isopass integration should use a StaticProvider initially to avoid blocking early development on an external dependency.
+The critical design insight is that orchestration and configuration management are semantically opposite: config management is declarative and idempotent; orchestration is imperative and one-shot. This distinction must be enforced at the interface level — a dedicated `TaskExecutor` separate from convergence executors, a dedicated result schema separate from run results, and hard mutual exclusion on the agent so convergence runs and orchestration tasks never execute simultaneously. These separations cannot be retrofitted; they must be designed in before any execution code is written.
 
-The primary risks are: (1) secret leakage through logs, errors, and gRPC payloads -- mitigated by implementing a `SecretString` type from day one, (2) thundering herd on server restart or force-push -- mitigated by server-side admission control and staggered force-push timestamps, (3) non-atomic file writes corrupting managed files -- mitigated by the write-temp-rename pattern, and (4) notify/subscribe creating hidden dependency loops -- mitigated by combined graph validation at config load time. All four are solvable with upfront design decisions rather than reactive fixes.
+The primary risks are all architectural and front-loaded to Phase 1: stream buffer overflow silently dropping task dispatches (the existing fire-and-forget `send` channel semantics are insufficient for tasks), orphaned subprocesses when streams disconnect (requires context-bound process management from the start), convergence/orchestration collision on the agent (requires a single-worker execution queue), and authorization bypass via raw shell dispatch (the named-operation vs. raw-shell decision in the proto determines the security model permanently). Workflow state corruption on server restart is a Phase 3 risk requiring durable SQLite persistence before the first multi-step workflow executes. All other pitfalls are manageable with patterns already present in the codebase.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is almost entirely Go stdlib plus established community libraries. No framework lock-in, no ORM, no external runtime dependencies in production. The agent and server are each single Go binaries. See `.planning/research/STACK.md` for full details.
+The base stack (Go + gRPC over mTLS + SQLite + sqlc + Cobra) is unchanged. Orchestration requires zero new external infrastructure. The sole `go get` addition is `golang.org/x/sync@v0.20.0` for `errgroup.WithContext` (concurrent per-thrall dispatch with automatic cancellation propagation) and `semaphore.NewWeighted` (rolling execution batch control). Both are already transitive dependencies — just needs a direct `require` entry.
 
 **Core technologies:**
-- **Go 1.24+**: Language runtime -- tool directive in go.mod for build tooling, post-quantum TLS support, mature ecosystem
-- **gRPC + grpc-gateway**: Dual transport -- gRPC for agent communication (binary protocol, mTLS), REST auto-generated from proto annotations for CLI/UI
-- **pgx v5**: PostgreSQL driver -- 10-20x faster than lib/pq via native interface, LISTEN/NOTIFY for real-time events, pgxpool for connection management
-- **Cobra**: CLI framework -- 10+ subcommand model for gvctl, proven by kubectl/helm/docker
-- **buf**: Proto toolchain -- replaces error-prone protoc CLI flags with config-driven compilation, linting, and managed mode
-- **slog + Prometheus**: Observability -- zero-dependency structured logging (stdlib), official Prometheus client for metrics
-- **fsnotify**: Config file watching -- only option in Go ecosystem, cross-platform, stable
-- **Custom DAG (~100 LOC)**: Kahn's algorithm for topological sort -- too simple to justify an external dependency
+- `golang.org/x/sync/errgroup` — bounded concurrent dispatch with error propagation — `WithContext` provides exactly the "cancel remaining thralls if N fail" semantics rolling execution needs
+- `golang.org/x/sync/semaphore` — rolling batch gate — `NewWeighted(batchSize)` controls how many thralls execute simultaneously; cleaner and more extensible than channel counting
+- `net/http` stdlib SSE (`http.Flusher`) — live result streaming to CLI and web UI — unidirectional push is sufficient; no WebSocket library needed
+- `sync.Map` (stdlib) — in-process pub/sub result broker — maps `task_id` to result channel; approximately 60 lines, no library warranted
+- `context.Context` + cancellation (stdlib) — task timeout and subprocess lifetime binding — must be derived from stream `done` channel
 
-**Key version pins:** Go >= 1.24.13, grpc-go >= 1.70, pgx >= 5.8, cobra >= 1.8, grpc-gateway >= 2.27.
+Result streaming to CLI uses SSE over the existing port 8181 REST API (`GET /api/v1/tasks/{id}/stream`). SSE is the correct choice over WebSocket (overkill for unidirectional) and long-poll (latency and overhead). The `AgentStream` oneof extension is correct over a new RPC (avoids a second TLS handshake per agent, reuses existing auth, buffer already in place).
 
-**Notable decisions:** grpc-gateway over Connect-Go (annotation-based REST generation from single proto source of truth), pgx native over database/sql (binary protocol performance, PostgreSQL-specific features), custom DAG over gonum (100 lines vs massive dependency), React SPA embedded via go:embed (last priority, can be revisited).
+**Schema additions:** Three new migration tables — `task_runs`, `task_run_targets`, `workflow_runs` — plus `workflow_step_results`. These are distinct from the existing convergence `runs`/`run_results` tables; reusing those tables is explicitly an anti-pattern (convergence semantics do not map to task semantics).
 
 ### Expected Features
 
-The feature landscape is well-mapped from Puppet, Chef, Ansible, and Salt. See `.planning/research/FEATURES.md` for full analysis including competitor matrix and dependency graph.
+Research consulted Ansible, SaltStack, Puppet Bolt, and AWS Elastic Beanstalk rolling deployments. The five capabilities map clearly to P1/P2/P3 priorities.
 
-**Must have (table stakes):**
-- File, package, service resource types with check-before-act idempotency
-- DAG-ordered execution with circular dependency detection
-- Notify/subscribe triggers (the package/file/service triad)
-- gRPC/mTLS transport with node enrollment and one-time tokens
-- Agent pull loop with jitter and exponential backoff
-- Fact collection (OS, hostname, IP, architecture minimum)
-- YAML config with Go template rendering and environment variable hierarchy
-- isopass secret resolution (`secret:` prefix)
-- Convergence reporting (what changed, what failed, what was skipped)
-- gvctl CLI for basic operations (clients, runs, push)
-- Dry-run/preview mode
+**Must have for v1.3 (table stakes):**
+- Ad-hoc command execution via AgentStream — proves the execution path end-to-end; every operator's first question
+- Multi-thrall targeting by hostname glob and single trait filter — covers 90% of targeting needs
+- Result collection per thrall (stdout, stderr, exit code, duration) — operators need per-node visibility
+- Job record with per-thrall status (pending/dispatched/complete/failed/timeout/offline) — execution visibility
+- Timeout enforcement: agent-side `context.WithTimeout` plus server-side deadline marking for non-responsive thralls
+- Rolling execution with `batch_size` and `max_failures` parameters — primary safety control for fleet operations
+- `hobnobcli task run`, `task status`, `task list` subcommands — CLI is the primary interface
+- Live query for trait paths with cached fallback for disconnected thralls
+- `hobnobcli query` subcommand for live fact retrieval
+- Job history queryable via CLI and REST (`hobnobcli runs list`, `hobnobcli runs get <id>`)
 
-**Should have (differentiators):**
-- Single Go binary deployment (biggest DX advantage vs Puppet/Chef/Salt)
-- Integrated secrets with auto-rotation awareness (novel -- no competitor does this)
-- Built-in webhooks with HMAC signing (competitors gate behind enterprise editions)
-- Built-in Prometheus metrics (competitors require exporters)
-- File snapshots with CLI rollback
-- Auto node classification from pattern rules
-- Agent self-update from server
+**Should have for v1.4 (competitive differentiators):**
+- Task definitions: scripts in `tasks/` directory with JSON parameter schema and pre-execution validation (Puppet Bolt model)
+- Sequential workflow engine with `on_success`/`on_failure` branching — YAML files in `workflows/` directory, server-side state machine
+- Health-check commands in rolling execution (per-batch automated gate before proceeding)
+- Compound trait targeting with AND/OR of multiple conditions
+- Disconnected-agent DB fallback for ad-hoc commands (poll on next check-in)
 
-**Defer (v2+):**
-- Cron/mount/host/SSH keys resources
-- Multi-server HA
-- RBAC
-- Plugin/module system for custom resource types
-- Cross-node orchestration
+**Defer to v2+:**
+- Parallel DAG workflow steps (sequential YAML is sufficient for most cases; DAG adds operator cognitive load)
+- Webhook events for job completion/failure
+- Scheduled job execution (cron-like recurring tasks)
+- Workflow approval gates for human-in-the-loop governance
+- Task result chaining (output of task A feeds task B as input)
+- SSE streaming of live stdout to web UI during execution
 
-**Critical gap identified:** The spec lacks an exec/command resource. Every major CM tool has this as an escape hatch. Recommend adding to v1.x with `onlyif`/`unless`/`creates` guards for idempotency. Also: user resource should follow core file/package/service, not ship simultaneously.
+The key competitive advantage: Ansible and Puppet Bolt establish per-execution SSH connections (100–500ms overhead, credential management required). Hobnob's AgentStream is already open — task delivery is sub-second. Rolling execution with health-gate abort is also a genuine open-source differentiator; Ansible's `serial:` has no built-in health check gate, and Puppet Bolt's rolling requires manual plan logic.
 
 ### Architecture Approach
 
-Classic hub-spoke: stateless server compiling catalogs from filesystem YAML, agents polling via gRPC/mTLS, PostgreSQL for all persistent state. Four deployable artifacts (server binary, agent binary, gvctl CLI, embedded web UI). Server exposes two listeners: gRPC (:9090) for agents, HTTP (:8080) for REST API + web UI + metrics. See `.planning/research/ARCHITECTURE.md` for full component diagram and data flow sequences.
+The architecture is an additive layer on top of the existing system. The `streamManager` in `server/grpc/streams.go` gains two new methods: `sendTask()` and `sendQuery()`. The `AgentStream` oneof is extended with `StreamTaskDispatch`/`StreamQueryRequest` (server-to-agent) and `TaskResult`/`QueryResponse` (agent-to-server). A new server package `server/orchestration/` contains `TaskService`, `WorkflowEngine`, `RollingCoordinator`, and `QueryCollector`. New agent files add a `TaskExecutor` (run command, capture output, report result) and a `QueryExecutor` (read trait cache, no OS invocation for cached traits). Architecture research is based on direct codebase inspection and carries HIGH confidence.
 
 **Major components:**
-1. **Server Config Loader** -- reads/watches YAML files, resolves secrets, merges env vars; sole owner of config parsing
-2. **Server Runner/Compiler** -- builds DAG from module declarations, topological sort, evaluates `when:` conditions against facts, produces ordered catalog
-3. **Server Registry** -- enrollment, pattern matching, token validation, pubkey storage
-4. **Agent Pull Loop** -- jittered check-in timer with exponential backoff, gRPC client reuse
-5. **Agent Module Executors** -- check-before-act idempotent convergence for file/package/service/user with pluggable package manager backends
-6. **Agent Fact Collectors** -- pluggable interface for OS, hardware, network, package inventory
+1. `TaskService` (`server/orchestration/tasks.go`) — accepts REST task dispatch, fans out via `streamMgr.sendTask()`, maintains `sync.Map[taskID, chan *pb.TaskResult]` for result routing, persists to `task_runs`/`task_run_targets`
+2. `WorkflowEngine` (`server/orchestration/workflow.go`) — server-side state machine; processes steps sequentially, calls `TaskService` per step, evaluates `on_success`/`on_failure` conditions, persists step state to `workflow_runs` before each transition (write-ahead state)
+3. `RollingCoordinator` (`server/orchestration/rolling.go`) — divides target set into batches, dispatches via `errgroup` + `semaphore`, evaluates per-batch failure threshold post-completion, runs health-check commands between batches, aborts on threshold breach
+4. `QueryCollector` (`server/orchestration/query.go`) — sends `StreamQueryRequest` to connected agents via `streamMgr`, blocks on result channels with configurable timeout (default 10s), returns partial results with explicit `responded`/`timed_out`/`offline` counts
+5. `TaskExecutor` (Rust, `agent-rs/src/executors/task.rs`) — raw command execution, no idempotency check, `tokio::spawn` to avoid blocking `stream_loop`, context-bound subprocess lifetime (SIGTERM then SIGKILL on cancellation)
+6. REST API handlers (`server/api/tasks.go`, `server/api/workflows.go`, `server/api/query.go`) — accept POST to create, GET for status, SSE endpoint for streaming progress
 
-**Key patterns to follow:** Provider interfaces for all external dependencies, check-before-act idempotency on every executor, filesystem as sole source of truth with watch + debounce, signed request authentication (ED25519 over payload + timestamp in gRPC interceptor), combined DAG + notify graph validation at load time.
+**Build order constraint:** Proto changes must come first (Go and Rust generated code must match before any integration tests can run), then SQLite schema, then agent executor, then server service layer, then REST and CLI, then workflow engine. This order is non-negotiable — it follows hard dependency chains.
 
 ### Critical Pitfalls
 
-See `.planning/research/PITFALLS.md` for full analysis of 10 pitfalls plus integration gotchas, performance traps, and security mistakes.
+1. **Convergence/orchestration collision on agent** — a convergence run and an ad-hoc task must never execute simultaneously on the same thrall. The agent needs a single-worker execution queue before any task dispatch code exists. This is architectural and cannot be retrofitted. Prevention: integration test triggering both simultaneously; verify only one executes at a time.
 
-1. **Non-atomic file writes** -- Use write-to-temp + fsync + chmod/chown + rename pattern. Never `os.WriteFile` directly to target path. Must be correct from first file executor implementation.
-2. **Thundering herd on restart/force-push** -- Server-side semaphore for concurrent CheckIn processing, staggered force-push timestamps, agent startup jitter. Design into server skeleton from the start.
-3. **Secret leakage** -- Implement `SecretString` type (returns `[REDACTED]` from Stringer/TextMarshaler) before any code resolves secrets. Nearly impossible to retrofit.
-4. **Notify/subscribe loops** -- Merge dependency edges and notification edges into one graph, run cycle detection on the combined graph, cap cascade depth. Validate at config load time, not runtime.
-5. **mTLS CA rotation breaks all agents** -- Support CA cert bundles (multiple PEMs), separate server cert rotation from CA rotation, document the rotation procedure. Design into agent TLS config from the start.
+2. **Stream buffer overflow silently drops task dispatches** — the current `agentStream.send` channel buffer is 8. Task dispatch cannot reuse the fire-and-forget `pushPolicy` semantics. The `sendTask()` method must use blocking send with timeout plus a `TaskAck` receipt message from agent to server. A dropped task must be an explicit error.
+
+3. **Orphaned subprocesses on stream disconnect** — every task subprocess must be bound to a `context.Context` derived from the stream's `done` channel. Use `exec.CommandContext` not `exec.Command`. Implement SIGTERM then grace period then SIGKILL on stream close. On agent reconnect, server marks orphaned tasks as `stream_interrupted`. Must be in the first implementation.
+
+4. **Authorization bypass via raw shell dispatch** — the task dispatch proto must use named operations or an allowlist, not arbitrary shell strings. Every dispatch must write an immutable audit record before execution. The protocol shape determines the security model permanently — changing it later is a breaking proto change.
+
+5. **Workflow state corruption on server restart** — workflow state must be persisted to SQLite before the first task in each step is dispatched. In-memory workflow state causes silent workflow loss on any server restart. Incomplete workflows on restart should be marked `failed` with `restart_interrupted` reason.
+
+Additional high-priority pitfalls to address: SQLite write contention under fan-out (use batch writes and `PRAGMA busy_timeout=5000`, mirroring the existing `TraitsBatcher` pattern); live query partial results unreported to caller (always include `responded`/`timed_out`/`offline` counts, never silently omit non-responders); federation hub not propagating orchestration commands to spokes (design hub forwarding into the RPC shape from day one).
 
 ## Implications for Roadmap
 
-Based on the dependency chains from FEATURES.md, the build order from ARCHITECTURE.md, the stack decisions from STACK.md, and the phase-to-pitfall mapping from PITFALLS.md, the following phase structure is recommended.
+Based on combined research, the 8-phase build order from ARCHITECTURE.md provides the clearest dependency chain. The phases below follow that order with explicit rationale drawn from all four research files.
 
-### Phase 1: Foundation (Proto, Schema, Secrets Interface, Server Skeleton)
-**Rationale:** Everything depends on proto definitions, database schema, and the secrets provider interface. The architecture research identifies these as Layer 0 with zero dependencies. Getting proto and schema right early prevents cascading regeneration and migration headaches.
-**Delivers:** Compilable proto with all messages/services, initial database migrations, `SecretString` type + `Provider` interface + `StaticProvider`, server binary that starts gRPC + HTTP listeners with mTLS, database connection pool via pgxpool.
-**Addresses:** Secure transport foundation (table stakes), secret handling infrastructure.
-**Avoids:** Secret leakage (Pitfall 3 -- `SecretString` type exists before any secret resolution code), database migration conflicts (Pitfall from technical debt patterns).
+### Phase 1: Proto and Schema Foundation
+**Rationale:** Generated code (Go and Rust) must match before any integration tests can run. SQLite schema constrains the API contract — changing it after API handlers are written forces API rewrites. Both are zero-behavior-change phases; existing tests pass unchanged. This phase also requires the critical protocol design decision: named operations vs. raw shell in `StreamTaskDispatch`, and the `TaskAck` acknowledgement message shape. These cannot be deferred.
+**Delivers:** New proto message types (`StreamTaskDispatch`, `TaskResult`, `StreamQueryRequest`, `QueryResponse`, `TaskAck`) regenerated into both Go and Rust; migration adding `task_runs`, `task_run_targets`, `workflow_runs`, `workflow_step_results` tables with sqlc-generated query code.
+**Addresses:** Infrastructure for all five orchestration capabilities; authorization model decision; acknowledgement protocol.
+**Avoids:** Proto/schema incompatibility between Go server and Rust agent discovered mid-implementation; post-hoc security model changes.
 
-### Phase 2: Enrollment and Agent Skeleton
-**Rationale:** The feature dependency graph shows enrollment is the gateway to all agent functionality. You cannot test the pull loop without enrolled clients. Registration before check-in is a hard dependency.
-**Delivers:** Agent ED25519 keypair generation, Register RPC, server-side pattern matching + token validation + pubkey storage, agent config loading, basic gRPC client with connection reuse.
-**Addresses:** Node enrollment/registration (table stakes), one-time tokens.
-**Avoids:** Replay attacks (timestamp + nonce in signed payloads), insufficient token entropy (256-bit `crypto/rand` tokens), registration brute-force (rate limiting).
+### Phase 2: Agent Task Executor and Stream Plumbing
+**Rationale:** The fundamental question — can a task dispatch reach the agent and produce a result? — must be answered before building the full server orchestration stack. Early integration tests of the message round-trip are possible as soon as this phase completes. This phase also establishes the mandatory mutual exclusion between convergence and task execution (Pitfall 1) and context-bound subprocess management (Pitfall 2). Neither can be retrofitted.
+**Delivers:** `agent-rs/src/executors/task.rs` (run command, capture stdout/stderr, return `TaskResult`); `StreamHandle` extended with `task_rx` channel; `read_loop()` dispatching `StreamTaskDispatch` messages; `stream_loop` spawning task execution as independent tokio tasks; `JoinHandle` registry per task; SIGTERM then SIGKILL on stream close; single-worker execution queue preventing convergence/task concurrency.
+**Addresses:** Ad-hoc command execution (P1), timeout enforcement (P1).
+**Avoids:** Convergence/orchestration collision (Pitfall 1), orphaned subprocesses (Pitfall 2), executor model mismatch (Pitfall 11).
 
-### Phase 3: Fact Collection and Config Loading
-**Rationale:** Facts are required before catalog compilation (conditional resources evaluate against facts). Config loading is required before the runner can compile catalogs. These are the two inputs to the compiler.
-**Delivers:** Pluggable Collector interface with OS/hardware/network/package fact collectors, YAML config loader with Go template rendering, environment variable hierarchy merging, `secret:` prefix resolution (via StaticProvider initially), fsnotify-based config watcher with debounce.
-**Addresses:** Fact/inventory collection, template rendering, variable hierarchy, secret resolution (all table stakes).
-**Avoids:** File watcher misses from atomic editor saves (Pitfall 6 -- watch directories + debounce), template injection via untrusted facts (Pitfall 7 -- parse-then-execute, restricted function map), config errors served to agents (validate on reload, serve last-known-good).
+### Phase 3: Server StreamManager Extension and Result Routing
+**Rationale:** With the agent able to receive and execute tasks, the server needs to dispatch them and collect results. This phase wires the server side: `sendTask()`/`sendQuery()` methods on `streamManager` with backpressure semantics (not fire-and-forget), result routing via `sync.Map[taskID, chan *pb.TaskResult]`, and `TaskService` with SQLite persistence using the batch-write pattern.
+**Delivers:** `streamManager.sendTask()` and `streamManager.sendQuery()` (blocking send with timeout, not drop-on-full); `TaskService` with `sync.Map` result broker; `AgentStream` handler extended to route `TaskResult` and `QueryResponse` to pending channels; batch write pattern for concurrent result inserts (mirrors `TraitsBatcher` in `server/db/traitsbatcher.go`); `PRAGMA busy_timeout=5000` on the SQLite connection.
+**Addresses:** All server-side task infrastructure.
+**Avoids:** Silent task drops (Pitfall 6), SQLite write contention under fan-out (Pitfall 4).
 
-### Phase 4: Convergence Engine (DAG, Module Executors, Notify/Subscribe)
-**Rationale:** This is the core value of the system. The architecture research places this at Layers 4-5 (depends on config loading + facts). The feature research identifies idempotent execution, DAG ordering, and notify/subscribe as the top three table-stakes convergence features. File, package, and service form the classic "triad" that must work together.
-**Delivers:** DAG construction with topological sort and cycle detection, file executor (atomic writes, SHA256 check, snapshots), package executor (apt + dnf with non-interactive flags, retry on lock contention), service executor (systemctl start/stop/enable/disable + daemon-reload), notify/subscribe trigger chain, agent pull loop with jitter + backoff, CheckIn RPC with catalog delivery, ReportResult RPC with per-resource results.
-**Addresses:** All convergence engine table stakes (idempotency, DAG, notify, file/package/service resources, convergence reporting).
-**Avoids:** Non-atomic file writes (Pitfall 1), thundering herd (Pitfall 2 -- server semaphore, agent jitter), notify loops (Pitfall 4 -- combined graph validation), partial convergence damage (Pitfall 5 -- configurable fail-fast/continue, detailed skip reasons), package lock contention (Pitfall 9 -- retry + non-interactive flags).
+### Phase 4: REST API and CLI for Ad-Hoc Tasks
+**Rationale:** Simple tasks before workflows — the workflow engine calls `TaskService` internally, so the task primitive must be working and validated before building workflows on top of it. This phase delivers a usable operator interface for QA and validates the end-to-end execution path from CLI to agent and back.
+**Delivers:** `server/api/tasks.go` (POST `/api/v1/tasks`, GET `/api/v1/tasks/{id}`, SSE `/api/v1/tasks/{id}/stream`); `hobnobcli task run`, `hobnobcli task status`, `hobnobcli task list`; per-thrall result display with explicit `offline`/`timeout`/`complete` status; immutable audit log entry on every dispatch; output truncation at 1MB with visible `[output truncated at N bytes]` marker.
+**Addresses:** CLI subcommands (P1), execution status visibility (P1), job history (P1), audit logging (Pitfall 3), output size limits (Pitfall 10).
+**Avoids:** Operator confusion from implicit partial results; silent truncation; unlogged dispatches.
 
-### Phase 5: Operations (Compliance, Dry-Run, REST API, CLI)
-**Rationale:** These are consumer-facing features that depend on the core convergence loop working. The architecture research places these at Layer 6. The feature research identifies dry-run and compliance as table stakes, and the CLI as the primary admin interface.
-**Delivers:** Compliance status tracking (compliant/drifted/failing/stale/unknown), dry-run mode via DryRun RPC + plan computation, REST API via grpc-gateway (auto-generated from proto annotations), gvctl CLI with Cobra (clients, runs, push, preview, tokens, env, rollback subcommands), file rollback from snapshots.
-**Addresses:** Compliance/drift status, dry-run/preview, CLI, run history, rollback (table stakes + differentiators).
-**Avoids:** Opaque compliance status without resource details (UX pitfall -- include specific drifted resources), dry-run without diffs (UX pitfall -- include unified diff for file resources).
+### Phase 5: Live Query
+**Rationale:** Live query is independent of task execution — it is a read operation with no run record, using the stream but producing no side effects. Implementing it after the task infrastructure is in place reuses stream plumbing but keeps the query path cleanly separate from the execution path.
+**Delivers:** `server/orchestration/query.go` (`QueryCollector` with configurable timeout, partial result handling, explicit `responded`/`timed_out`/`offline` counts in every response); `agent-rs/src/executors/query.rs` (trait cache read plus resource check-phase-only execution, no apply); `server/api/query.go`; `hobnobcli query` subcommand.
+**Addresses:** Live query (P1), partial result visibility.
+**Avoids:** Operator confusion from implicitly incomplete query results (Pitfall 8) — the `timed_out` and `offline` counts are non-negotiable fields in the response schema.
 
-### Phase 6: Classification, User Resource, Conditional Resources
-**Rationale:** These are v1.x features that add power after the core is proven. Auto-classification depends on facts being reliable. Conditional resources (`when:`) depend on template rendering being solid. User resource is the fourth core type but less critical than file/package/service.
-**Delivers:** Auto node classification from `classification.yaml` pattern rules, `when:` expression evaluation on resources, user resource (create/modify/remove via /etc/passwd), exec resource with idempotency guards (onlyif/unless/creates).
-**Addresses:** Auto classification, conditional resources, user management, exec escape hatch (v1.x features).
-**Avoids:** Classification rule opacity (UX pitfall -- show matched rule in client detail).
+### Phase 6: Rolling Execution
+**Rationale:** Rolling execution is a constrained form of task dispatch, not a fundamentally different mechanism. It builds directly on the task infrastructure from Phases 2–4. Implementing it after basic task execution is validated reduces debugging surface area. The failure threshold semantics must be specified and reviewed before implementation begins.
+**Delivers:** `server/orchestration/rolling.go` (`RollingCoordinator` using `errgroup` plus `semaphore`; `batch_size` as count or percentage; `max_failures` as count or percentage; per-batch failure threshold evaluation post-completion, not mid-batch; optional `health_check` command between batches; offline thrall reporting as `offline` status, not counted as `failure`); REST and CLI integration; dry-run mode showing batch plan without executing.
+**Addresses:** Rolling execution (P1), fleet safety.
+**Avoids:** Rolling threshold logic errors (Pitfall 7) — threshold semantics (per-batch vs. cumulative, count vs. percentage, offline thrall handling) must be written into the YAML syntax documentation and verified with unit tests before any code is written.
 
-### Phase 7: Integrations and Observability
-**Rationale:** Webhooks, Prometheus, isopass real integration, and secret rotation awareness are differentiators but not launch blockers. The architecture research places these at Layer 7 specifically because the StaticProvider allows full development without isopass. Wiring in the real isopass integration requires reading its source and may involve debugging.
-**Delivers:** Webhook dispatcher with HMAC signing + retries + circuit breaking, Prometheus metrics endpoint (client count, check-ins, drift, run duration, compliance ratios), real IsopassProvider replacing StaticProvider, secret rotation watcher with force-run triggers.
-**Addresses:** Webhooks, metrics, secrets rotation awareness (differentiators).
-**Avoids:** Webhook goroutine leaks (set timeout, circuit-break), isopass as bottleneck (cache secrets with TTL, invalidate on rotation).
+### Phase 7: Multi-Step Workflow Engine
+**Rationale:** Workflows require tasks (Phases 2–4) and rolling execution (Phase 6) working correctly. The workflow engine is the most complex component; building it last minimizes the blast radius of any design changes in earlier phases. Workflow state persistence must be designed before the first line of engine code.
+**Delivers:** `server/orchestration/workflow.go` (`WorkflowEngine` state machine: sequential steps, `on_success`/`on_failure` edges, `when:` conditions reusing existing conditional syntax); `workflow_runs` and `workflow_step_results` SQLite persistence before every state transition (write-ahead state, not post-hoc); server-restart recovery (in-progress workflows marked `failed` with `restart_interrupted`); `server/api/workflows.go`; `hobnobcli workflow run`, `hobnobcli workflow status`, `hobnobcli workflow abort`; workflow YAML files in `workflows/` directory alongside other configs, hot-reloaded via fsnotify.
+**Addresses:** Multi-step workflows with conditionals (v1.4 differentiator), sequential YAML philosophy.
+**Avoids:** Workflow state corruption on server restart (Pitfall 5) — state must be persisted before dispatch, not after.
 
-### Phase 8: Web UI, Bootstrap, Agent Self-Update
-**Rationale:** The web UI is purely a consumer of the REST API and adds no new server logic. Building it last ensures the API is stable. Bootstrap and self-update are operational conveniences. The architecture research explicitly places these at Layers 8-9.
-**Delivers:** React SPA dashboard (clients, runs, compliance, config viewer) embedded via go:embed, curl bootstrap one-liner, agent self-update with checksum verification + rollback to previous binary.
-**Addresses:** Web UI, bootstrap script, agent self-update (differentiators).
-**Avoids:** Agent self-update bricking (Pitfall 10 -- two-phase update with self-test, keep previous binary, staged rollout).
-
-### Phase 9: Packaging and Hardening
-**Rationale:** Final phase before release. Dockerfiles, docker-compose for dev/test, Makefile for builds, additional package manager backends, load testing.
-**Delivers:** Dockerfile.server, Dockerfile.agent, docker-compose.yml, Makefile, multi-platform package managers (apk, pacman, brew, zypper), load testing at 500+ simulated agents.
-**Addresses:** Deployment packaging, broader OS support.
+### Phase 8: Web UI Integration
+**Rationale:** CLI is the primary interface for QA during development. Web UI after CLI means the REST API is validated before building UI on top of it. Web UI is a consumer of the same endpoints; no new server logic is required.
+**Delivers:** Task history page with per-thrall result drilldown, workflow status visualization with step-level detail, live query interface, rolling execution progress view with real-time counts.
+**Addresses:** UX pitfalls — rolling execution progress visibility, query completeness indicators, workflow failure drilldown showing per-thrall stderr.
 
 ### Phase Ordering Rationale
 
-- **Phases 1-4 form the critical path.** Every subsequent phase depends on the convergence engine working end-to-end. The dependency chain is: proto -> schema -> secrets interface -> server skeleton -> enrollment -> facts + config -> DAG + executors -> reporting. Cutting this chain anywhere blocks all downstream work.
-- **Phase 5 (operations) before Phase 6 (classification/when) because** operators need visibility into what the system is doing before adding more complexity. Dry-run and compliance tracking are safety nets that make subsequent feature development safer.
-- **Phase 7 (integrations) is intentionally late because** the StaticProvider pattern decouples all development from isopass availability. Wiring in real isopass is integration work that should happen once the core system is proven.
-- **Phase 8 (web UI) is last because** it is the lowest-value feature for initial adoption (sysadmins prefer CLI) and the highest-cost (React SPA development). If the project needs to ship early, this phase can be deferred entirely.
-- **This ordering avoids the top pitfalls by design:** SecretString exists before any resolution code (Phase 1), server admission control exists before agents connect (Phase 1-2), atomic file writes are built into the first file executor (Phase 4), combined graph validation is built into the first notify implementation (Phase 4).
+- **Proto before everything** because Go and Rust generated code must agree before any cross-language integration test is possible. A mismatch discovered mid-implementation requires regenerating code in both languages simultaneously.
+- **Schema before API** because the result storage model constrains the API contract — fields not in the schema cannot appear in the API without a new migration, and migrations during active API development cause instability.
+- **Agent before server** because the critical unknown (message round-trip through the existing `AgentStream`) must be proven before building the orchestration service layer on top of it. An early integration test verifying the end-to-end round-trip is worth more than any amount of unit testing.
+- **Simple tasks before workflows** because the workflow engine calls `TaskService` internally. A bug in `TaskService` is far harder to diagnose inside a multi-step workflow than in isolation.
+- **Rolling before workflows** because `WorkflowEngine` delegates to `RollingCoordinator` for step execution. Rolling must be stable before workflows are built on it.
+- **CLI before Web UI** because the REST API is the stable interface; CLI validates it while the web UI is merely another consumer of the same endpoints.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 4 (Convergence Engine):** The most complex phase. DAG construction, notify/subscribe interaction with the dependency graph, and failure propagation semantics all need careful design. The Puppet documentation on resource relationships is extensive because this is where most CM tools have bugs.
-- **Phase 7 (isopass Integration):** The isopass API is not publicly documented. Real integration requires reading the isopass source code. This phase should include a spike to understand the isopass API before building the provider.
-- **Phase 8 (Agent Self-Update):** Self-update is uniquely dangerous (replacing the running binary). The two-phase update, self-test, and rollback mechanisms need careful design.
+- **Phase 2 (Agent task executor):** Rust async tokio subprocess management — specifically the `JoinHandle` registry, cancellation on stream close, and the interaction between the new task execution arm and the existing `stream_loop` `tokio::select!` architecture. The codebase patterns are understood but subprocess lifecycle has known edge cases in async Rust.
+- **Phase 6 (Rolling execution):** Failure threshold semantics need explicit written specification before implementation. The ambiguity between per-batch vs. cumulative evaluation, count vs. percentage, and offline-thrall counting is documented in PITFALLS.md and will produce the wrong behavior if not pinned down first.
+- **Phase 7 (Workflow engine):** The YAML workflow definition format needs design work — specifically the `when:` condition syntax, `on_success`/`on_failure` edge semantics, and how target selectors interact with rolling execution parameters within a workflow step.
 
-Phases with standard patterns (skip additional research):
-- **Phase 1 (Foundation):** gRPC server setup, mTLS, pgx connection pools, proto compilation with buf -- all have extensive documentation and examples.
-- **Phase 2 (Enrollment):** ED25519 key generation, bcrypt token hashing, gRPC client/server -- standard Go crypto and gRPC patterns.
-- **Phase 3 (Facts/Config):** YAML parsing, Go template rendering, fsnotify -- all well-documented with clear best practices.
-- **Phase 5 (Operations):** grpc-gateway REST generation, Cobra CLI, compliance state machines -- established patterns.
+Phases with standard patterns (skip `/gsd:research-phase`):
+- **Phase 1 (Proto + Schema):** Proto oneof extension and sqlc migration are standard, well-documented patterns already used in this codebase. No new patterns required.
+- **Phase 3 (Server result routing):** Go `sync.Map` result broker and batch write patterns mirror the existing `TraitsBatcher` — established in-codebase patterns.
+- **Phase 4 (REST API + CLI):** Standard Cobra subcommand and REST handler patterns already used throughout the codebase. SSE is a straightforward `http.Flusher` implementation.
+- **Phase 5 (Live query):** Well-understood read path. The main requirement (explicit non-responder reporting) is fully specified in research.
+- **Phase 8 (Web UI):** Go template infrastructure is already in place; adding orchestration pages follows existing handler patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All technologies are mature, actively maintained, and well-documented. Version requirements verified against current releases. Only MEDIUM item is go.yaml.in/yaml/v3 (new import path, fallback available). |
-| Features | HIGH | Domain is 15+ years old (Puppet 2005, Chef 2009). Table stakes are unambiguous. Competitor analysis covers all major players. Feature dependency graph is validated against Puppet/Chef/Salt architectures. |
-| Architecture | HIGH | Pull-based CM architecture is Puppet's model, documented extensively in academic and practitioner literature. Component boundaries follow the handoff spec. Build order derived from dependency analysis. |
-| Pitfalls | HIGH | Pitfalls sourced from Puppet community bug reports, CM operational experience, Go-specific gotchas (fsnotify, template injection), and security cheat sheets (OWASP). All pitfalls have concrete prevention strategies. |
+| Stack | HIGH | Only one new library (`golang.org/x/sync`), already transitive; all other decisions use stdlib or existing dependencies. API verified from pkg.go.dev docs at v0.20.0. |
+| Features | HIGH | Grounded in direct comparison to Ansible, SaltStack, and Puppet Bolt with official documentation. Feature prioritization is opinionated and clear. Dependency graph fully mapped. |
+| Architecture | HIGH | Based on direct codebase inspection of `proto/hobnob.proto`, `server/grpc/streams.go`, `agent-rs/src/checkin/stream.rs`, `agent-rs/src/checkin/loop_impl.rs`, `server/db/runstore.go`, `migrations/000001_initial_schema.up.sql`. No inference — all structural decisions verified against actual code. |
+| Pitfalls | HIGH | 11 critical and moderate pitfalls with specific prevention strategies, phase assignments, and a "looks done but isn't" checklist. Sources include CVE history (SaltStack command injection), official gRPC flow control docs, and direct codebase inspection. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **isopass API:** No public documentation found. The interface between isogov and isopass must be discovered by reading isopass source. Use the `StaticProvider` to defer this until Phase 7, but plan a research spike before that phase.
-- **Exec resource design:** Not in the original spec but identified as a critical gap by feature research. The idempotency guard model (`onlyif`/`unless`/`creates`) needs design work during Phase 6 planning.
-- **Multi-platform testing:** The agent runs on Linux and macOS with different package managers, init systems, and filesystem behaviors. Integration testing strategy for cross-platform support needs definition during Phase 4 planning.
-- **YAML library import path:** `go.yaml.in/yaml/v3` is the recommended active fork but the import path is new. If module resolution issues arise, fall back to `gopkg.in/yaml.v3` (archived but functional). Test the import during Phase 1.
-- **Scalability ceiling:** Architecture is single-server. Research identifies ~10,000 nodes as the point where multi-server becomes necessary. If the target fleet exceeds this, HA planning should start in Phase 5 (not Phase 9).
+- **Task acknowledgement protocol shape:** PITFALLS.md and STACK.md both recommend a `TaskAck` message from agent to server, but neither specifies whether it is a distinct proto message or a field on `TaskResult`. This must be decided during Phase 1 proto design. Once the proto field is defined, changing it is a breaking protocol change affecting both Go and Rust.
+
+- **Federation forwarding for orchestration:** PITFALLS.md (Pitfall 9) flags that hub federation must forward orchestration RPCs to spokes. ARCHITECTURE.md establishes the pattern (`ForwardForcePush`) but does not detail the richer orchestration forwarding (bidirectional result streaming through hub to spoke to agent). This design gap should be addressed in Phase 1 or Phase 3 before any federation deployments attempt orchestration.
+
+- **Command model decision for v1.3:** PITFALLS.md recommends named operations over raw shell strings. FEATURES.md acknowledges that v1.3 accepts "all admins are trusted" with audit logging. The concrete protocol decision — whether `StreamTaskDispatch.command` is a raw shell string or a named task reference — must be made during Phase 1 proto design and cannot be changed without a breaking proto update.
+
+- **Workflow resume semantics:** Research agrees that failing incomplete workflows on server restart is the safe v1.3 default (re-executing completed steps after a crash risks double-apply of non-idempotent commands). This is a known limitation. Operators should be warned in documentation and CLI error messages. `hobnobcli workflow resume <id>` is explicitly a v1.4+ feature.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Puppet Architecture Overview](https://www.puppet.com/docs/puppet/5.5/architecture.html) -- pull-based catalog compilation model
-- [The Architecture of Open Source Applications: Puppet](https://aosabook.org/en/v2/puppet.html) -- internal architecture reference
-- [gRPC-Go releases and documentation](https://pkg.go.dev/google.golang.org/grpc) -- transport layer
-- [jackc/pgx](https://github.com/jackc/pgx) -- database driver
-- [grpc-gateway](https://github.com/grpc-ecosystem/grpc-gateway) -- REST API generation
-- [Puppet Resource Type Reference](https://www.puppet.com/docs/puppet/7/type.html) -- feature baseline
-- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html) -- security patterns
-- [gRPC Security OWASP Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/gRPC_Security_Cheat_Sheet.html) -- transport security
-- Isogov handoff document -- authoritative project specification
+- Hobnob codebase (direct inspection): `proto/hobnob.proto`, `server/grpc/streams.go`, `agent-rs/src/checkin/stream.rs`, `agent-rs/src/checkin/loop_impl.rs`, `server/db/runstore.go`, `migrations/000001_initial_schema.up.sql`, `server/federation/hub.go`
+- [pkg.go.dev/golang.org/x/sync](https://pkg.go.dev/golang.org/x/sync) — `errgroup` and `semaphore` API verified at v0.20.0
+- [Ansible ad-hoc commands documentation](https://docs.ansible.com/projects/ansible/latest/command_guide/intro_adhoc.html) — table stakes reference
+- [Puppet Bolt tasks documentation](https://www.puppet.com/docs/bolt/latest/writing_tasks.html) — task model reference
+- [Puppet Bolt YAML plans](https://www.puppet.com/docs/bolt/latest/writing_yaml_plans.html) — workflow/plan model
+- [SaltStack Orchestrate Runner](https://docs.saltproject.io/en/latest/topics/orchestrate/orchestrate_runner.html) — workflow model comparison
+- [SaltStack Grains targeting](https://docs.saltproject.io/en/latest/topics/targeting/grains.html) — targeting model comparison
+- [AWS Elastic Beanstalk rolling deployment strategies](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.rolling-version-deploy.html) — rolling execution patterns
+- [gRPC flow control](https://grpc.io/docs/guides/flow-control/) — stream buffer and backpressure design
+- [SQLite WAL mode](https://sqlite.org/wal.html) — write contention mitigation
+- [SaltStack CVE history](https://www.cvedetails.com/vulnerability-list/vendor_id-12943/product_id-26420/Saltstack-Salt.html) — command injection patterns informing authorization design
 
 ### Secondary (MEDIUM confidence)
-- [Go 1.24 release notes](https://go.dev/doc/go1.24) -- language version features
-- [CM tool comparisons (Veritis, DasRoot, TeachMeAnsible)](https://www.veritis.com/blog/chef-vs-puppet-vs-ansible-comparison-of-devops-management-tools/) -- feature landscape
-- [Puppet dependency and relationship docs](https://www.puppet.com/docs/puppet/7/lang_relationships.html) -- notify/subscribe patterns
-- [fsnotify documentation and known issues](https://pkg.go.dev/github.com/fsnotify/fsnotify) -- file watcher behavior
-- [Hitless TLS Certificate Rotation in Go](https://blog.diogomonica.com/2017/01/11/hitless-tls-certificate-rotation-in-go/) -- mTLS patterns
-- [Go SSTI / template injection risks](https://www.oligo.security/blog/safe-by-default-or-vulnerable-by-design-golang-server-side-template-injection) -- template security
+- [SSE vs WebSocket vs polling (2025)](https://dev.to/haraf/server-sent-events-sse-vs-websockets-vs-long-polling-whats-best-in-2025-5ep8) — SSE recommendation for unidirectional result streaming
+- [gRPC fan-out patterns](https://elsyarifx.medium.com/the-grpc-streaming-implementation-that-handles-1m-concurrent-connections-0f7916088681) — fan-out via existing stream channels
+- [Database-backed workflow orchestration (QCon SF 2025)](https://www.infoq.com/news/2025/11/database-backed-workflow/) — workflow state persistence patterns
+- [SQLite concurrent writes gotchas](https://tenthousandmeters.com/blog/sqlite-concurrent-writes-and-database-is-locked-errors/) — task queue via WAL viability
+- [gRPC bidirectional streaming reliability and reconnection](https://oneuptime.com/blog/post/2026-01-24-grpc-bidirectional-streaming/view) — stream disconnect handling patterns
 
 ### Tertiary (LOW confidence)
-- [go.yaml.in/yaml/v3 migration discussions](https://github.com/go-task/task/issues/2171) -- YAML library status (active but young import path)
+- [Temporal in Go (2026)](https://www.glukhov.org/post/2026/03/workflow-applications-temporal-in-go/) — consulted to confirm Temporal requires external infrastructure; serves as the "what not to use" reference
 
 ---
-*Research completed: 2026-03-05*
+*Research completed: 2026-03-11*
 *Ready for roadmap: yes*

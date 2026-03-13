@@ -1,243 +1,327 @@
-# Technology Stack
+# Stack Research
 
-**Project:** Isogov -- Puppet-style Configuration Management System
-**Researched:** 2026-03-05
+**Domain:** Orchestration additions to a Go configuration management system (v1.3)
+**Researched:** 2026-03-11
+**Confidence:** HIGH
 
-## Recommended Stack
+This document covers only NEW stack additions for v1.3 orchestration features. The base stack
+(Go + gRPC over mTLS + SQLite + grpc-gateway + cobra) is already built and validated through v1.2.
 
-### Language Runtime
+---
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Go | 1.24.13+ | Language runtime | Latest stable with security patches (Feb 2026). Generic type aliases, range over integers, tool directive in go.mod, post-quantum TLS support. Go 1.25 is also available but 1.24 is the conservative choice with full library ecosystem compatibility. | HIGH |
+## What v1.3 Needs
 
-**Go version rationale:** Go 1.24 introduced the `tool` directive in `go.mod` for managing executable dependencies (buf, protoc-gen-go, migrate CLI), which directly benefits this project's build tooling. Post-quantum TLS support and Encrypted Client Hello are relevant for a security-focused config management system.
+Five orchestration capabilities drive stack decisions:
 
-### Transport & API
+1. **Ad-hoc command execution** — dispatch a shell command to N thralls, collect stdout/stderr
+2. **One-off task/script push** — push a script, execute it, collect structured results
+3. **Multi-step workflows** — conditional multi-stage: "if step A succeeds on group1, do step B on group2"
+4. **Rolling execution** — batch size, failure thresholds, inter-batch health checks
+5. **Live query** — ask thralls for current state without waiting for next check-in
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| google.golang.org/grpc | v1.70+ | gRPC server/client | Official Go gRPC implementation. Active development with Feb 2026 releases. Built-in mTLS via `credentials.NewTLS()`. Required for the project's gRPC transport layer. | HIGH |
-| google.golang.org/protobuf | v1.36+ | Protobuf runtime | Official Go protobuf runtime. Required by grpc-go. | HIGH |
-| grpc-ecosystem/grpc-gateway | v2.27+ | REST API from proto definitions | Generates REST reverse-proxy from gRPC proto definitions with google.api.http annotations. The project needs REST for gvctl and web UI. This approach means one proto definition serves both gRPC (agent) and REST (CLI/UI) consumers. | HIGH |
-| grpc-ecosystem/go-grpc-middleware/v2 | v2.x | gRPC interceptors | Pre-built interceptors for auth, logging, recovery, rate limiting. Provides interceptor chaining, slog integration, panic recovery. Avoids writing boilerplate interceptor code. | HIGH |
+---
 
-**Why grpc-gateway over Connect-Go:** The project requires both gRPC transport (agents) and REST (gvctl CLI, web UI). grpc-gateway generates REST from proto annotations, keeping a single source of truth. Connect-Go is a better gRPC overall (built on net/http, simpler API), but grpc-gateway is the right choice here because: (1) the proto definitions are already specified in the handoff doc with standard gRPC service definitions, (2) grpc-gateway's annotation-based REST generation means zero additional REST handler code, and (3) the gRPC ecosystem middleware (auth interceptors, recovery) integrates directly.
+## Key Architecture Decision: In-Process vs External
 
-**Why NOT Connect-Go:** Connect-Go builds on net/http (advantage) and supports gRPC + gRPC-Web + Connect protocols, but it would require writing separate REST handlers or using Connect's HTTP-based protocol for the CLI/UI. grpc-gateway gives true REST (with OpenAPI spec generation) from the same proto files.
+**Verdict: In-process. No external queue, no external workflow engine.**
 
-### Database
+Rationale:
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| jackc/pgx | v5.8+ | PostgreSQL driver | 10-20% faster than lib/pq via database/sql, 2x faster via native interface. Binary protocol, LISTEN/NOTIFY support (useful for real-time client status), COPY for bulk operations, connection pooling via pgxpool. lib/pq is in maintenance mode -- its own maintainers recommend pgx. | HIGH |
-| golang-migrate/migrate | v4.19+ | Database migrations | Project constraint specifies golang-migrate. CLI + library modes. Supports pgx via pgx5 driver tag. Actively maintained (Nov 2025 release). | HIGH |
-| PostgreSQL | 16 | Database | Project constraint. Use pgx's native interface (not database/sql) for PostgreSQL-specific features like LISTEN/NOTIFY and COPY. | HIGH |
+- Hobnob already has bidirectional gRPC streaming (`AgentStream` RPC) that handles server-to-agent push. The force-push mechanism already proves the end-to-end path: server signals agent via `streamManager`, agent acts, agent reports back. Orchestration is the same path with richer message types.
+- External queues (Redis, NATS, Kafka) add operational overhead for what is effectively in-memory fan-out across a map of open gRPC streams. The `streamManager` already IS a task queue for connected agents.
+- External workflow engines (Temporal, Cadence, Durable Task) solve distributed workflow state across multiple services. Hobnob is a single server process. The added complexity exceeds the benefit.
+- SQLite + in-memory state handles the required durability: task records persisted to DB (audit trail), in-flight coordination in memory (fast, simple).
 
-**pgx usage pattern:** Use `pgxpool.Pool` for connection pooling, not raw `pgx.Conn`. Use pgx's native query interface (not `database/sql`) to get binary protocol performance and PostgreSQL-specific features. Reserve `database/sql` compatibility only for golang-migrate integration.
+The right model: **task record in SQLite + dispatch via existing streamManager + result aggregation via in-process pub/sub.**
 
-**Why NOT lib/pq:** Maintenance mode, no active development, text-based protocol (slower), missing PostgreSQL-specific features. pgx is the community consensus replacement.
+---
 
-**Why NOT GORM/sqlx:** This project manages a well-defined schema (nodes, configs, runs, compliance). Raw SQL with pgx is faster, more transparent, and avoids ORM magic. Sysadmins reading the code should see exactly what queries run. sqlx adds convenience but masks query structure. For a system where audit and transparency matter, direct SQL is better.
+## Recommended Stack Additions
 
-### Security & Cryptography
+### Core Orchestration: No New Libraries Required
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| crypto/tls (stdlib) | - | mTLS for gRPC | Built into Go stdlib. Supports TLS 1.3, certificate hot-reload via `GetCertificate` callback (project requirement). No external dependency needed. | HIGH |
-| crypto/ed25519 (stdlib) | - | ED25519 key operations | Built into Go stdlib since Go 1.13. Used for key generation and signature verification. | HIGH |
-| golang.org/x/crypto/ssh | latest | SSH key parsing/serialization | Parses ED25519 keys in OpenSSH format. `ParseRawPrivateKey` supports PKCS#1, PKCS#8, OpenSSH formats. Required for client enrollment with SSH keypairs. | HIGH |
-| golang.org/x/crypto/bcrypt | latest | Token hashing | Hashes one-time enrollment tokens at rest. Project requirement: bcrypt-hashed tokens. Standard, battle-tested implementation. | HIGH |
+The existing stack already contains everything needed for dispatch and execution:
 
-**mTLS implementation:** Use Go's `crypto/tls` directly with `tls.Config{ClientAuth: tls.RequireAndVerifyClientCert}`. No external mTLS library needed -- grpc-go's `credentials.NewTLS()` accepts a standard `*tls.Config`. For certificate hot-reload, use the `GetCertificate`/`GetConfigForClient` callbacks to watch cert files and reload without server restart.
+| Existing Capability | How It Serves Orchestration |
+|--------------------|-----------------------------|
+| `streamManager` (server/grpc/streams.go) | Delivers messages to connected agents. Already handles fan-out. |
+| Bidirectional `AgentStream` RPC | Carries task dispatch (server→agent) and result reporting (agent→server). |
+| `RunStore` interface (server/db/runstore.go) | Extend to store task/workflow records. Two backends already exist. |
+| SQLite + sqlc | Persist tasks, workflow state, rolling execution progress. |
+| `google/uuid` | Task and workflow ID generation. Already imported. |
+| `context.Context` + cancellation | Task timeout and cancellation. Already the Go standard. |
 
-**Why NOT go-spiffe:** SPIFFE/SPIRE is enterprise PKI automation. Isogov manages its own certs (project spec shows cert generation in Makefile). Adding SPIFFE would introduce unnecessary infrastructure dependency for a self-contained config management tool.
+**No new core libraries are needed.** All orchestration wiring uses stdlib goroutines, channels, and the existing gRPC stream infrastructure.
 
-### Configuration & Serialization
+### New: golang.org/x/sync
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| go.yaml.in/yaml/v3 | v3.x | YAML parsing | Drop-in replacement for gopkg.in/yaml.v3 (which is now archived/unmaintained). Same API, actively maintained under yaml.org umbrella, receives security updates. | MEDIUM |
-| text/template (stdlib) | - | Go template rendering | Project uses Go template syntax for config rendering with node facts. Stdlib -- no dependency needed. | HIGH |
-| fsnotify/fsnotify | v1.8+ | Filesystem watching | Watches config YAML directory for changes (project requirement: "server watches for changes"). Cross-platform, stable at v1. Only option in Go ecosystem. | HIGH |
+| Library | Version | Purpose | Why |
+|---------|---------|---------|-----|
+| golang.org/x/sync/errgroup | v0.20.0 | Concurrent per-thrall dispatch with error propagation | `errgroup.WithContext` + `g.SetLimit(N)` provides bounded concurrency for rolling execution batch dispatch. One goroutine per thrall, auto-cancel on first fatal error, configurable batch cap. Already a transitive dependency — just needs an explicit import. |
+| golang.org/x/sync/semaphore | v0.20.0 | Weighted concurrency gate for rolling execution | `semaphore.NewWeighted(batchSize)` gates how many thralls execute simultaneously in a rolling run. Acquire before dispatch, release on result receipt. |
 
-**YAML library note:** If `go.yaml.in/yaml/v3` causes import friction (it is relatively new as a path), `gopkg.in/yaml.v3` is still perfectly functional and stable despite being archived. The API is identical. Start with `go.yaml.in/yaml/v3` but fall back to `gopkg.in/yaml.v3` if there are module resolution issues. Confidence is MEDIUM because the new import path is recent and less battle-tested in module tooling.
+`golang.org/x/sync` is already in `go.sum` as a transitive dependency. Bump to v0.20.0 (Feb 2026) and add a direct `require` entry.
 
-**Why NOT viper for config:** Viper is for application configuration (reading env vars, config files, flags). Isogov's config is user-defined desired-state YAML for managed nodes -- it's application data, not application config. Parsing it directly with yaml.v3 is simpler and more transparent.
+**Why errgroup over manual WaitGroup + errCh:** errgroup's `WithContext` returns a derived context that is cancelled when any goroutine returns an error. For workflow steps ("if step A fails, cancel step B"), this is exactly the semantics needed. Manual WaitGroup requires implementing this yourself.
 
-### CLI
+**Why semaphore over channel-based counting:** `semaphore.Weighted` allows future weight-based control (e.g., dispatch to large thralls costs more than small ones). Channel counting works too but semaphore is idiomatic for this pattern.
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| spf13/cobra | v1.8+ | CLI framework for gvctl | gvctl has 10+ subcommands (approved, clients, push, runs, tokens, webhooks, packages, env, preview, rollback). Cobra's subcommand model, auto-generated help, and flag parsing are purpose-built for this. Used by kubectl, helm, docker -- proven for admin tooling. | HIGH |
+### New: Result Fan-Out Broker (In-Process, No Library)
 
-**Why NOT urfave/cli:** urfave/cli is better for simple single-purpose CLIs. gvctl has nested subcommands, per-command flags, and will grow. Cobra handles this natively.
+For "wait for results from N thralls while streaming progress to the CLI/UI," the pattern is a task result broker: a `sync.Map` (or `sync.RWMutex`-protected map) of `task_id → []subscriber_channel`.
 
-**Why NOT stdlib flag:** Too primitive for 10+ subcommands with distinct flag sets. Would require building subcommand dispatch from scratch.
+This is approximately 60 lines of Go. No library is appropriate here because:
+- The broker lifecycle is tied to the task lifecycle (create on dispatch, close on all-results-received or timeout)
+- It must integrate with the existing `streamManager` cleanup path
+- Any external pub/sub library (NATS embedded, etc.) adds more complexity than the problem warrants
 
-### Observability
+### New: SSE for Live Result Streaming to UI/CLI
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| log/slog (stdlib) | - | Structured logging | Go stdlib since 1.21. Zero dependencies, structured key-value logging, JSON output handler, integrates with go-grpc-middleware/v2 logging interceptor. | HIGH |
-| prometheus/client_golang | v1.21+ | Prometheus metrics | Official Prometheus client. Project specifies Prometheus metrics for clients, check-ins, drift, run duration, compliance. No alternative -- this is the standard. | HIGH |
+| Library | Version | Purpose | Why |
+|---------|---------|---------|-----|
+| net/http stdlib | - | Server-Sent Events for task result streaming | The REST API (port 8181) already exists. SSE is HTTP streaming with `text/event-stream` content type. No library needed — write the event loop with `http.Flusher`. |
 
-**Why slog over zerolog/zap:** Zerolog is faster (zero-allocation), but slog is "fast enough" and has zero external dependencies. For a config management server, logging is not the performance bottleneck -- idempotent resource application is. slog also integrates natively with go-grpc-middleware/v2's logging interceptor without adapter code. The 10-20% speed difference in logging is irrelevant here.
+**Trade-off: SSE vs WebSocket vs Long-poll for result streaming to CLI/UI:**
 
-**Why NOT OpenTelemetry for now:** OTel is the right long-term choice for distributed tracing, but isogov is a hub-spoke architecture (server + agents), not a microservice mesh. Prometheus metrics cover the stated requirements. Add OTel later if tracing across server-agent interactions becomes needed.
+| Approach | Pros | Cons | Verdict |
+|----------|------|------|---------|
+| SSE (HTTP `text/event-stream`) | Works through proxies/firewalls, HTTP/1.1 compatible, auto-reconnect built into browser spec, stdlib-only | Server-to-client only (fine for result streaming) | **Use this** |
+| WebSocket | Bidirectional | More complex, less proxy-friendly, needs library or careful stdlib impl | Overkill for unidirectional result streaming |
+| Long-poll | Universally compatible | High overhead, 1 request per poll cycle, stale data between polls | Inferior latency for live output |
+| gRPC streaming | Already exists for agent↔server | hobnobcli is a CLI, not a gRPC client — would need generated client stubs and proper mTLS cert provisioning | Wrong transport for admin tooling |
 
-### Web UI
+SSE is the right choice for "stream task progress to hobnobcli or the web UI." The CLI opens `GET /api/v1/tasks/{id}/stream`, reads the event stream, prints output as it arrives. The web UI does the same via EventSource API.
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| embed (stdlib) | - | Embed SPA in binary | `//go:embed` directive bakes the built frontend into the Go binary. Single binary deployment -- critical for a tool that manages infrastructure. | HIGH |
-| React + Vite | React 19, Vite 6 | SPA framework | Dashboard, clients, runs, config, plans, compliance views. React has the largest ecosystem for admin dashboards. Vite for fast builds. Embed dist/ output into Go binary. | MEDIUM |
-| net/http (stdlib) | - | Serve embedded SPA | Serve the embedded SPA static files via `http.FileServer`. grpc-gateway already runs an HTTP server -- serve the SPA alongside REST endpoints. | HIGH |
+### Supporting Libraries Summary
 
-**Why React over templ+htmx:** The project spec calls for an "SPA" with dashboard, client list, run history, config viewer, compliance views. This is a data-heavy admin UI with client-side routing, filtering, and real-time updates. React handles this well. templ+htmx is excellent for server-rendered pages but becomes awkward for complex client-side state (filtering run history, live compliance dashboards). The SPA compiles to static files embedded in the Go binary -- no Node.js runtime in production.
+| Library | Version | Already Present? | Action |
+|---------|---------|-----------------|--------|
+| golang.org/x/sync | v0.20.0 | Transitive | Add as direct dependency |
+| net/http stdlib | - | Yes | No action |
+| context stdlib | - | Yes | No action |
+| sync stdlib (Mutex, Map) | - | Yes | No action |
+| encoding/json stdlib | - | Yes | No action |
 
-**Why NOT a separate frontend deployment:** Single binary deployment is a core value for infrastructure tools. Embedding eliminates deployment complexity and CORS issues.
+---
 
-**Web UI is last priority:** The spec lists CLI and REST API as primary interfaces. Build the web UI after the core system works. This means the React choice can be revisited later without affecting architecture.
+## Proto Changes Required
 
-### Build & Proto Tooling
+New message types needed in `proto/hobnob.proto`. These extend the existing `AgentStreamMessage` / `ServerStreamMessage` oneofs:
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| buf | v1.50+ | Protobuf compilation & linting | 2x faster than protoc, recursive .proto discovery, managed mode for Go package paths, remote plugins (no local protoc-gen-go install), lint rules catch proto design issues early. Single `buf.gen.yaml` replaces complex protoc command lines. | HIGH |
-| protoc-gen-go | latest | Go code from protos | Official protobuf Go code generator. Managed as tool dependency via buf or go.mod tool directive. | HIGH |
-| protoc-gen-go-grpc | latest | gRPC Go code from protos | Official gRPC Go code generator. Same management as above. | HIGH |
-| protoc-gen-grpc-gateway | latest | REST gateway code from protos | Generates REST reverse-proxy handlers from google.api.http annotations. Part of grpc-gateway ecosystem. | HIGH |
-| protoc-gen-openapiv2 | latest | OpenAPI spec from protos | Generates OpenAPI v2 spec from proto definitions. Useful for documenting the REST API for gvctl and web UI consumers. | MEDIUM |
+### Server → Agent (dispatch)
 
-**Why buf over raw protoc:** buf provides linting (catches breaking changes), managed mode (eliminates `option go_package` boilerplate in .proto files), and remote plugins (no local plugin installation). For a project with 7+ RPC methods and REST gateway annotations, buf's configuration-driven approach is significantly less error-prone than protoc CLI flags.
+```protobuf
+message StreamTaskDispatch {
+  string task_id    = 1;
+  string kind       = 2;  // "exec" | "script" | "query"
+  bytes  payload    = 3;  // JSON: {command, env, timeout_seconds}
+  int32  timeout_s  = 4;
+}
+```
 
-### Testing
+Add to `ServerStreamMessage.msg` oneof.
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| testing (stdlib) | - | Test framework | Go's built-in test runner. Table-driven tests, subtests, parallel execution. Foundation for all tests. | HIGH |
-| stretchr/testify | v1.9+ | Assertions & mocks | `assert` package for readable assertions, `require` for fatal assertions, `mock` for interface mocking. Reduces boilerplate vs raw `if got != want { t.Errorf(...) }`. Used by the vast majority of Go projects. | HIGH |
-| testcontainers-go | v0.35+ | Integration testing with PostgreSQL | Spins up real PostgreSQL containers for migration and query tests. Better than mocking database interactions -- tests run against real PostgreSQL. | MEDIUM |
+### Agent → Server (result)
 
-**Why testify:** The project has many interfaces (Collector, SecretsProvider, module executors) that benefit from mock generation. testify/mock provides this without a separate tool. testify/assert makes test failures readable.
+```protobuf
+message StreamTaskResult {
+  string task_id    = 1;
+  string thrall_id  = 2;
+  int32  exit_code  = 3;
+  bytes  stdout     = 4;
+  bytes  stderr     = 5;
+  string error      = 6;  // transport/execution error, not command stderr
+  int64  duration_ms = 7;
+}
+```
 
-**Why NOT gomock:** gomock requires a separate code generation step and is more ceremony. testify/mock is simpler for the interface count in this project.
+Add to `AgentStreamMessage.msg` oneof.
 
-### Supporting Libraries
+**Why extend the existing stream rather than a new RPC:** A new bidirectional RPC would mean a second persistent connection per agent (second mTLS handshake, second auth, duplicate keepalive overhead). The existing `AgentStream` is multiplexed via the oneof pattern — this is exactly what oneof is for. etcd's watch protocol uses this same pattern (WatchCreateRequest/WatchCancelRequest/WatchProgressRequest in a single stream).
 
-| Library | Version | Purpose | When to Use | Confidence |
-|---------|---------|---------|-------------|------------|
-| golang.org/x/sync/errgroup | latest | Concurrent operations | Agent fact collectors running in parallel, concurrent module checks. Provides structured goroutine management with error propagation. | HIGH |
-| golang.org/x/sync/semaphore | latest | Concurrency limiting | Rate-limit concurrent agent check-ins on server side. | HIGH |
-| crypto/sha256 (stdlib) | - | File checksums | File module SHA256 check-before-act. Agent self-update checksum verification. | HIGH |
-| encoding/json (stdlib) | - | JSON serialization | REST API responses, webhook HMAC payloads. | HIGH |
-| crypto/hmac (stdlib) | - | Webhook signing | HMAC-SHA256 webhook signatures. Project requirement. | HIGH |
-| net/http (stdlib) | - | Webhook dispatch, REST server | HTTP client for webhook delivery. HTTP server for REST API (via grpc-gateway). | HIGH |
-| os/exec (stdlib) | - | System commands | Package manager invocation (apt, dnf, etc.), service management (systemctl). | HIGH |
+### Database Schema Additions
 
-### DAG / Dependency Resolution
+New tables needed (add as migration):
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Custom implementation | - | Module dependency DAG | Topological sort with cycle detection is ~100 lines of Go. Kahn's algorithm. External DAG libraries (souleb/dag, gammazero/toposort, gonum/graph/topo) add a dependency for trivial code. The project's DAG is simple: modules declare dependencies, sort them, detect cycles. No graph analysis, shortest path, or weighted edges needed. | HIGH |
+```sql
+CREATE TABLE tasks (
+    id          TEXT PRIMARY KEY DEFAULT (uuid_v4()),
+    kind        TEXT NOT NULL CHECK (kind IN ('exec', 'script', 'query', 'workflow')),
+    status      TEXT NOT NULL CHECK (status IN ('pending', 'running', 'success', 'partial', 'failed', 'cancelled')),
+    target      TEXT NOT NULL,  -- JSON: thrall IDs or selector
+    payload     TEXT NOT NULL,  -- JSON: command/script/query spec
+    created_at  DATETIME NOT NULL DEFAULT (datetime('now')),
+    started_at  DATETIME,
+    finished_at DATETIME,
+    created_by  TEXT            -- operator identity (future RBAC)
+);
 
-**Why NOT an external DAG library:** gonum is a massive scientific computing library -- importing it for topological sort is overkill. Smaller libraries like gammazero/toposort work but add a dependency for ~80 lines of code. Puppet/Chef/Ansible all implement their own DAG resolution. This is core domain logic that should be owned, not imported.
+CREATE TABLE task_results (
+    id          TEXT PRIMARY KEY DEFAULT (uuid_v4()),
+    task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    thrall_id   TEXT NOT NULL REFERENCES thralls(id),
+    exit_code   INTEGER,
+    stdout      TEXT,
+    stderr      TEXT,
+    error       TEXT,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE workflows (
+    id          TEXT PRIMARY KEY DEFAULT (uuid_v4()),
+    status      TEXT NOT NULL CHECK (status IN ('pending', 'running', 'success', 'failed', 'cancelled')),
+    definition  TEXT NOT NULL,  -- JSON: steps array
+    state       TEXT NOT NULL DEFAULT '{}',  -- JSON: step outcomes
+    created_at  DATETIME NOT NULL DEFAULT (datetime('now')),
+    finished_at DATETIME
+);
+```
+
+---
+
+## What NOT to Add
+
+| Avoid | Why | What to Use Instead |
+|-------|-----|---------------------|
+| Temporal / Cadence / Durable Task | External server required; adds operational complexity for a self-contained tool; total overkill for N-step linear workflows with conditionals | In-process workflow runner using `errgroup` + SQLite state |
+| Redis / NATS / RabbitMQ as task queue | External infrastructure dependency; the streamManager already IS a push queue for connected agents | `streamManager.dispatch()` method + SQLite for durability |
+| Gorilla WebSocket / nhooyr/websocket | Not needed when SSE suffices for unidirectional streaming; adds dependency for no functional gain | `net/http` with `http.Flusher` for SSE |
+| go.temporal.io/sdk | Same as Temporal above | In-process state machine |
+| machinery / asynq / river | Job queue libraries designed for background workers polling a shared queue. Wrong model — Hobnob needs push-to-connected-agent, not pull-by-worker | Direct stream dispatch |
+| cel-go / expr (CEL expression language) | Workflow conditionals ("if step A succeeded") are simple boolean checks on step outcome maps. Full expression language is overkill. | Simple Go switch/if on step status fields |
+
+---
+
+## Workflow State Machine: In-Process Design
+
+For multi-step workflows, the right pattern is a simple in-process state machine — NOT an external workflow engine.
+
+**Design:**
+
+```
+WorkflowRunner:
+  - Load workflow definition (steps: [{target, task_kind, condition, on_failure}])
+  - For each step:
+    1. Evaluate entry condition (check prior step outcomes in state map)
+    2. Dispatch task to target thralls (via streamManager, bounded by errgroup)
+    3. Wait for all results or timeout
+    4. Record outcomes in workflow.state (JSON in SQLite)
+    5. Decide: continue / skip / abort based on on_failure policy
+  - Update workflow.status on completion
+```
+
+**State persistence:** After each step completes, write step outcomes to `workflows.state` JSON column. On server restart, incomplete workflows are marked failed (no resume logic needed for v1.3). Resume semantics add significant complexity without clear operator demand — add in v1.4 if needed.
+
+**Why not resume:** Workflows involve executing commands on thralls. Re-executing a completed step after a server crash is likely dangerous (idempotency of ad-hoc exec is not guaranteed). Failing fast and requiring operator retry is safer.
+
+---
+
+## Rolling Execution Design
+
+Rolling execution is a constrained form of task dispatch — not a fundamentally different mechanism.
+
+**Pattern:**
+
+```go
+sem := semaphore.NewWeighted(int64(batchSize))
+g, ctx := errgroup.WithContext(ctx)
+
+for _, thrallID := range targets {
+    if err := sem.Acquire(ctx, 1); err != nil {
+        break // cancelled
+    }
+    g.Go(func() error {
+        defer sem.Release(1)
+        return dispatchAndWait(ctx, thrallID, task)
+    })
+
+    // Optional: inter-batch health check gate
+    if completedSoFar % batchSize == 0 {
+        if !healthCheck(ctx, lastBatch) {
+            cancel()
+        }
+    }
+}
+g.Wait()
+```
+
+**Failure threshold:** Track `failCount` atomically. If `failCount > maxFailures`, cancel the context. `errgroup.WithContext` propagates cancellation to all in-flight dispatches.
+
+**No new library needed.** `golang.org/x/sync/semaphore` + `errgroup` + a `sync/atomic` counter covers rolling execution completely.
+
+---
+
+## Live Query Design
+
+Live query ("ask for current state without waiting for next check-in") is the simplest feature:
+
+1. Server sends `StreamTaskDispatch{kind: "query", payload: {trait_path}}` to target thrall(s)
+2. Agent handler reads the requested trait path from its in-memory trait cache
+3. Agent sends `StreamTaskResult{stdout: json_encoded_value}` back
+4. Server aggregates responses into a task record
+
+No new protocol or library needed. The existing stream handles it.
+
+**Trait path syntax** (e.g., `os.name`, `packages.installed`) matches the existing trait dot-path convention already used in conditional vars. Reuse the same accessor logic.
+
+---
+
+## Trade-off Summary
+
+| Decision | Option A | Option B | Choice | Reason |
+|----------|----------|----------|--------|--------|
+| Task queue | In-process (streamManager) | External (Redis/NATS) | **In-process** | No new infrastructure; streamManager already handles agent fan-out |
+| Workflow engine | In-process state machine | Temporal/Cadence | **In-process** | Single server process; Temporal requires an external server |
+| Result streaming (CLI/UI) | SSE over HTTP | WebSocket | **SSE** | Unidirectional is sufficient; simpler impl; works through proxies |
+| Workflow protocol | Extend AgentStream oneof | New gRPC RPC | **Extend oneof** | Avoids second connection per agent; etcd/Kubernetes use this pattern |
+| Workflow conditionality | cel-go expressions | Go code (switch on status) | **Go code** | Conditions are simple (pass/fail); full expression language is overengineering |
+| Rolling execution coordination | x/sync semaphore | Channel-based counting | **semaphore** | Cleaner API, weight-extensible, idiomatic for this problem |
+| Workflow durability on restart | Resume from SQLite state | Fail incomplete workflows | **Fail and require retry** | Ad-hoc exec is not idempotent; re-execution after crash risks double-apply |
+
+---
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| DB driver | pgx v5 | lib/pq | Maintenance mode, slower (text protocol), maintainers recommend pgx |
-| DB driver | pgx v5 | GORM | ORM hides queries, adds magic. This project values transparency. |
-| DB driver | pgx v5 | sqlx | Adds convenience but masks query structure. pgx native is faster. |
-| Logging | slog (stdlib) | zerolog | Faster but adds dependency for negligible benefit in this workload |
-| Logging | slog (stdlib) | zap | Same -- external dependency for marginal gain |
-| CLI | cobra | urfave/cli | urfave is better for simple CLIs, cobra handles 10+ subcommands |
-| CLI | cobra | stdlib flag | Too primitive for nested subcommands |
-| REST | grpc-gateway | Connect-Go | Connect is better gRPC but grpc-gateway gives annotation-based REST for free |
-| REST | grpc-gateway | chi + hand-written handlers | Duplicates logic already in proto definitions |
-| YAML | go.yaml.in/yaml/v3 | gopkg.in/yaml.v3 | Archived/unmaintained (functional fallback if import issues) |
-| Config | yaml.v3 direct | viper | Viper is for app config, not user-defined desired-state data |
-| mTLS | crypto/tls stdlib | go-spiffe | Unnecessary infrastructure dependency for self-managed certs |
-| DAG | Custom ~100 LOC | gonum/graph | Massive dependency for trivial algorithm |
-| DAG | Custom ~100 LOC | gammazero/toposort | Dependency for ~80 lines of owned code |
-| Proto tooling | buf | raw protoc | Error-prone CLI flags, no linting, no managed mode |
-| Web UI | React SPA (embedded) | templ + htmx | Complex admin dashboards need client-side state management |
-| Testing | testify | gomock | Extra code generation step, more ceremony |
+| Category | Recommended | Alternative | When Alternative Makes Sense |
+|----------|-------------|-------------|------------------------------|
+| Workflow state | In-process + SQLite | Temporal Go SDK | If workflows need to survive server crashes, span multiple servers, or involve long waits (days) |
+| Task queue | streamManager direct | asynq (Redis-backed job queue) | If tasks need to execute even when the agent is offline (queue for later delivery) |
+| Result streaming | SSE | gRPC streaming from admin service | If hobnobcli becomes a long-lived gRPC client (currently it makes short HTTP calls) |
+| Concurrency control | x/sync/semaphore | Custom channel semaphore | Functionally equivalent; channel version is fine for simple cases |
+| Workflow DSL | None (Go structs) | YAML workflow definition files | If operators need to define reusable, shareable workflows (add in v1.4) |
+
+---
 
 ## Installation
 
 ```bash
-# Core dependencies
-go get google.golang.org/grpc@latest
-go get google.golang.org/protobuf@latest
-go get github.com/grpc-ecosystem/grpc-gateway/v2@latest
-go get github.com/grpc-ecosystem/go-grpc-middleware/v2@latest
-go get github.com/jackc/pgx/v5@latest
-go get github.com/golang-migrate/migrate/v4@latest
-go get github.com/spf13/cobra@latest
-go get github.com/prometheus/client_golang@latest
-go get github.com/fsnotify/fsnotify@latest
-go get go.yaml.in/yaml/v3@latest
-
-# x/ packages
-go get golang.org/x/crypto@latest
-go get golang.org/x/sync@latest
-
-# Dev / test dependencies
-go get github.com/stretchr/testify@latest
-go get github.com/testcontainers/testcontainers-go@latest
-
-# Build tools (Go 1.24+ tool directive or go install)
-go install github.com/bufbuild/buf/cmd/buf@latest
-go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+# Add golang.org/x/sync as a direct dependency (currently transitive)
+go get golang.org/x/sync@v0.20.0
 ```
 
-## Version Pinning Summary
+That is the only new `go get` needed. All other orchestration components are:
+- Proto changes (regenerate with `make proto`)
+- New SQLite migration (`make proto` + `migrations/000002_tasks.up.sql`)
+- New Go packages inside the existing server module (`server/orchestration/`, `server/tasks/`)
 
-| Package | Minimum Version | Notes |
-|---------|----------------|-------|
-| Go | 1.24.13 | Latest patch with security fixes |
-| google.golang.org/grpc | 1.70.0 | Feb 2026 releases available |
-| jackc/pgx/v5 | 5.8.0 | Latest stable |
-| golang-migrate/migrate/v4 | 4.19.1 | Nov 2025 release |
-| spf13/cobra | 1.8.1 | Latest stable, v2 not released |
-| prometheus/client_golang | 1.21.0 | Requires Go 1.23+ |
-| fsnotify/fsnotify | 1.8.0 | Latest stable |
-| grpc-gateway/v2 | 2.27.3 | Oct 2025 release |
-| stretchr/testify | 1.9.0 | Aug 2025 release |
-| go.yaml.in/yaml/v3 | 3.0.0 | Active fork of archived gopkg.in/yaml.v3 |
+---
 
 ## Sources
 
-- [grpc-go releases](https://github.com/grpc/grpc-go/releases) - gRPC version info
-- [grpc-go package](https://pkg.go.dev/google.golang.org/grpc) - Official documentation
-- [gRPC Services in Go: Basics to Production](https://dasroot.net/posts/2026/02/grpc-services-go-basics-production/) - 2026 best practices
-- [gRPC mTLS examples](https://pkg.go.dev/google.golang.org/grpc/examples/features/encryption/mTLS) - Official mTLS example
-- [jackc/pgx GitHub](https://github.com/jackc/pgx) - pgx driver
-- [pgx vs lib/pq](https://preslav.me/2022/05/13/pq-or-pgx-choosing-the-right-postgresql-golang-driver/) - Driver comparison
-- [GitLab: Recommend pgx over lib/pq](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/49135) - Industry consensus
-- [golang-migrate releases](https://github.com/golang-migrate/migrate/releases) - Migration tool versions
-- [grpc-gateway GitHub](https://github.com/grpc-ecosystem/grpc-gateway) - REST gateway
-- [grpc-gateway REST transcoding](https://oneuptime.com/blog/post/2026-01-08-grpc-gateway-rest-transcoding/view) - 2026 guide
-- [go-grpc-middleware](https://github.com/grpc-ecosystem/go-grpc-middleware) - Interceptor library
-- [Go 1.24 release notes](https://go.dev/doc/go1.24) - Go version features
-- [Go release history](https://go.dev/doc/devel/release) - Go patch versions
-- [spf13/cobra](https://github.com/spf13/cobra) - CLI framework
-- [Go CLI comparison](https://github.com/gschauer/go-cli-comparison) - Cobra vs alternatives
-- [fsnotify](https://github.com/fsnotify/fsnotify) - File watcher
-- [slog package](https://pkg.go.dev/log/slog) - Standard library logging
-- [Go logging in 2025](https://uptrace.dev/blog/golang-logging) - Logging comparison
-- [prometheus/client_golang](https://github.com/prometheus/client_golang) - Metrics client
-- [go.yaml.in/yaml/v3 migration](https://github.com/go-task/task/issues/2171) - YAML library status
-- [gopkg.in/yaml.v3 unmaintained](https://github.com/goharbor/terraform-provider-harbor/issues/562) - Migration discussion
-- [golang.org/x/crypto/ssh](https://pkg.go.dev/golang.org/x/crypto/ssh) - SSH library
-- [golang.org/x/crypto/bcrypt](https://pkg.go.dev/golang.org/x/crypto/bcrypt) - Bcrypt package
-- [buf build tool](https://github.com/bufbuild/buf) - Proto tooling
-- [buf code generation](https://buf.build/docs/generate/) - buf generate docs
-- [Go embed SPA pattern](https://bindplane.com/blog/embed-react-in-golang) - Embedding frontend
-- [Go ServeMux vs chi](https://www.calhoun.io/go-servemux-vs-chi/) - Router comparison
-- [testify GitHub](https://github.com/stretchr/testify) - Testing library
-- [Testing in Go 2026](https://dasroot.net/posts/2026/02/testing-in-go-frameworks-tools-standards/) - Testing best practices
-- [Go ecosystem 2025](https://blog.jetbrains.com/go/2025/11/10/go-language-trends-ecosystem-2025/) - JetBrains ecosystem survey
+- [golang.org/x/sync pkg.go.dev](https://pkg.go.dev/golang.org/x/sync) — v0.20.0 confirmed Feb 23 2026
+- [errgroup.SetLimit documentation](https://pkg.go.dev/golang.org/x/sync/errgroup) — SetLimit + TryGo API verified
+- [semaphore package](https://pkg.go.dev/golang.org/x/sync/semaphore) — Weighted semaphore API verified
+- [SQLite WAL concurrent writes](https://sqlite.org/wal.html) — single-writer model confirmed; task queue via WAL is viable for this write volume
+- [SQLite concurrent writes gotchas](https://tenthousandmeters.com/blog/sqlite-concurrent-writes-and-database-is-locked-errors/) — MEDIUM confidence (WebSearch): task state updates are infrequent relative to check-ins, not a bottleneck
+- [gRPC fan-out patterns](https://elsyarifx.medium.com/the-grpc-streaming-implementation-that-handles-1m-concurrent-connections-0f7916088681) — MEDIUM confidence: fan-out via existing stream channels is the right approach
+- [SSE vs WebSocket vs polling](https://dev.to/haraf/server-sent-events-sse-vs-websockets-vs-long-polling-whats-best-in-2025-5ep8) — SSE recommendation for unidirectional streaming confirmed
+- [7 gRPC fan-out patterns](https://medium.com/@bhagyarana80/7-grpc-fan-out-patterns-no-fan-fires-23144b78b6f1) — MEDIUM confidence: topic-mux pattern on existing stream aligns with AgentStream oneof design
+- [Go state machine patterns](https://medium.com/@johnsiilver/go-state-machine-patterns-3b667f345b5e) — MEDIUM confidence: confirms in-process state machine viability
+- [Temporal in Go guide](https://www.glukhov.org/post/2026/03/workflow-applications-temporal-in-go/) — LOW confidence (WebSearch only): consulted to confirm Temporal requires external infrastructure
+- etcd watch protocol (known pattern) — oneof-in-stream for multi-command-type dispatch is battle-tested in production
+
+---
+
+*Stack research for: Hobnob v1.3 Orchestration additions*
+*Researched: 2026-03-11*
