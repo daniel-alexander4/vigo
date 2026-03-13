@@ -402,6 +402,194 @@ pub fn expr_string(expr: &WhenExpr) -> String {
     }
 }
 
+// -- Agent-side builtin function evaluator --
+
+use serde_json::Value;
+use std::path::Path;
+use std::process::Command;
+
+/// Evaluate a builtin function call on the agent.
+///
+/// Returns Ok(bool) for known builtins, Err for unknown names or wrong arity.
+/// The caller should treat errors as "skip" (fail-safe).
+pub fn evaluate_builtin(name: &str, args: &[String], traits: &Value) -> Result<bool> {
+    match name {
+        "file_exists" => {
+            check_arity(name, args, 1)?;
+            Ok(Path::new(&args[0]).is_file())
+        }
+        "dir_exists" => {
+            check_arity(name, args, 1)?;
+            Ok(Path::new(&args[0]).is_dir())
+        }
+        "command_succeeds" => {
+            check_arity(name, args, 1)?;
+            Ok(command_succeeds(&args[0]))
+        }
+        "process_running" => {
+            check_arity(name, args, 1)?;
+            Ok(process_running(&args[0]))
+        }
+        "hour_range" => {
+            check_arity(name, args, 2)?;
+            let start: u32 = args[0].parse().map_err(|_| anyhow::anyhow!("hour_range: invalid start hour {:?}", args[0]))?;
+            let end: u32 = args[1].parse().map_err(|_| anyhow::anyhow!("hour_range: invalid end hour {:?}", args[1]))?;
+            Ok(hour_in_range(local_hour(), start, end))
+        }
+        "day_of_week" => {
+            check_arity(name, args, 1)?;
+            Ok(day_of_week_matches(&args[0]))
+        }
+        "day_of_month" => {
+            check_arity(name, args, 1)?;
+            let target: u32 = args[0].parse().map_err(|_| anyhow::anyhow!("day_of_month: invalid day {:?}", args[0]))?;
+            Ok(local_day_of_month() == target)
+        }
+        "flag_set" => {
+            check_arity(name, args, 1)?;
+            let path = format!("/var/lib/hobnob/flags/{}", args[0]);
+            Ok(Path::new(&path).exists())
+        }
+        "os_family" => {
+            check_arity(name, args, 1)?;
+            Ok(trait_eq_ci(traits, "/os/family", &args[0]))
+        }
+        "distro" => {
+            check_arity(name, args, 1)?;
+            Ok(trait_eq_ci(traits, "/os/distro", &args[0]))
+        }
+        "arch" => {
+            check_arity(name, args, 1)?;
+            Ok(trait_str(traits, "/os/arch").map(|a| a == args[0]).unwrap_or(false))
+        }
+        "version_ge" => {
+            check_arity(name, args, 1)?;
+            let actual = trait_str(traits, "/os/version").unwrap_or("");
+            Ok(version_ge(actual, &args[0]))
+        }
+        "in_group" => {
+            check_arity(name, args, 1)?;
+            Ok(in_group(&args[0]))
+        }
+        _ => bail!("unknown builtin function {:?}", name),
+    }
+}
+
+fn check_arity(name: &str, args: &[String], expected: usize) -> Result<()> {
+    if args.len() != expected {
+        bail!("{}: expected {} argument(s), got {}", name, expected, args.len());
+    }
+    Ok(())
+}
+
+fn command_succeeds(cmd: &str) -> bool {
+    Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn process_running(name: &str) -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else { return false };
+    for entry in entries.flatten() {
+        let fname = entry.file_name();
+        if fname.to_str().map(|s| s.chars().all(|c| c.is_ascii_digit())) != Some(true) {
+            continue;
+        }
+        let comm = entry.path().join("comm");
+        if let Ok(content) = std::fs::read_to_string(&comm) {
+            if content.trim() == name {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Get local hour (0-23) using libc localtime.
+fn local_hour() -> u32 {
+    local_time().0
+}
+
+/// Get local day of month (1-31) using libc localtime.
+fn local_day_of_month() -> u32 {
+    local_time().2
+}
+
+/// Returns (hour, weekday 0=Sun..6=Sat, day_of_month).
+fn local_time() -> (u32, u32, u32) {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as libc::time_t;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    unsafe { libc::localtime_r(&secs, &mut tm) };
+    (tm.tm_hour as u32, tm.tm_wday as u32, tm.tm_mday as u32)
+}
+
+fn hour_in_range(hour: u32, start: u32, end: u32) -> bool {
+    if start <= end {
+        hour >= start && hour < end // e.g., 9..17
+    } else {
+        hour >= start || hour < end // e.g., 22..4 (wraps midnight)
+    }
+}
+
+fn day_of_week_matches(target: &str) -> bool {
+    let (_, wday, _) = local_time();
+    let target_lower = target.to_lowercase();
+    let current = match wday {
+        0 => "sunday",
+        1 => "monday",
+        2 => "tuesday",
+        3 => "wednesday",
+        4 => "thursday",
+        5 => "friday",
+        6 => "saturday",
+        _ => return false,
+    };
+    // Match full name or standard 3-letter abbreviation.
+    current == target_lower || current[..3] == target_lower
+}
+
+fn trait_str<'a>(traits: &'a Value, pointer: &str) -> Option<&'a str> {
+    traits.pointer(pointer).and_then(|v| v.as_str())
+}
+
+fn trait_eq_ci(traits: &Value, pointer: &str, expected: &str) -> bool {
+    trait_str(traits, pointer)
+        .map(|v| v.eq_ignore_ascii_case(expected))
+        .unwrap_or(false)
+}
+
+/// Segment-wise numeric version comparison. "22.04" >= "22.04" → true.
+fn version_ge(actual: &str, required: &str) -> bool {
+    let a: Vec<u64> = actual.split('.').filter_map(|s| s.parse().ok()).collect();
+    let r: Vec<u64> = required.split('.').filter_map(|s| s.parse().ok()).collect();
+    for i in 0..r.len().max(a.len()) {
+        let av = a.get(i).copied().unwrap_or(0);
+        let rv = r.get(i).copied().unwrap_or(0);
+        if av > rv { return true; }
+        if av < rv { return false; }
+    }
+    true // equal
+}
+
+fn in_group(group: &str) -> bool {
+    Command::new("getent")
+        .args(["group", group])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -613,5 +801,181 @@ mod tests {
         assert!(!when_var_is_true("disabled", &vars));
         assert!(!when_var_is_true("num", &vars));
         assert!(!when_var_is_true("missing", &vars));
+    }
+
+    // ── Builtin function tests ──────────────────────────────────────
+
+    fn empty_traits() -> Value {
+        serde_json::json!({})
+    }
+
+    #[test]
+    fn test_builtin_file_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("exists.txt");
+        std::fs::write(&path, "hi").unwrap();
+
+        let t = empty_traits();
+        assert!(evaluate_builtin("file_exists", &[path.to_str().unwrap().to_string()], &t).unwrap());
+        assert!(!evaluate_builtin("file_exists", &["/tmp/nonexistent_builtin_test_1234".to_string()], &t).unwrap());
+        // A directory should return false for file_exists.
+        assert!(!evaluate_builtin("file_exists", &[dir.path().to_str().unwrap().to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_dir_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let t = empty_traits();
+        assert!(evaluate_builtin("dir_exists", &[dir.path().to_str().unwrap().to_string()], &t).unwrap());
+        assert!(!evaluate_builtin("dir_exists", &["/tmp/nonexistent_builtin_test_dir_1234".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_command_succeeds() {
+        let t = empty_traits();
+        assert!(evaluate_builtin("command_succeeds", &["true".to_string()], &t).unwrap());
+        assert!(!evaluate_builtin("command_succeeds", &["false".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_process_running() {
+        let t = empty_traits();
+        // PID 1 always has a comm file on Linux.
+        let comm = std::fs::read_to_string("/proc/1/comm")
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if !comm.is_empty() {
+            assert!(evaluate_builtin("process_running", &[comm], &t).unwrap());
+        }
+        assert!(!evaluate_builtin("process_running", &["zzz_nonexistent_process_12345".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_hour_range() {
+        // Test the helper directly for deterministic results.
+        assert!(hour_in_range(10, 9, 17));
+        assert!(!hour_in_range(8, 9, 17));
+        assert!(!hour_in_range(17, 9, 17)); // end is exclusive
+        // Midnight wrapping.
+        assert!(hour_in_range(23, 22, 4));
+        assert!(hour_in_range(0, 22, 4));
+        assert!(hour_in_range(3, 22, 4));
+        assert!(!hour_in_range(4, 22, 4));
+        assert!(!hour_in_range(12, 22, 4));
+
+        // Integration: current hour should be in a range that spans 0..24.
+        let t = empty_traits();
+        assert!(evaluate_builtin("hour_range", &["0".to_string(), "24".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_day_of_week() {
+        let t = empty_traits();
+        // We can't predict the current day, but we can verify it doesn't error.
+        let result = evaluate_builtin("day_of_week", &["monday".to_string()], &t);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_builtin_day_of_month() {
+        let t = empty_traits();
+        // Current day should match itself.
+        let today = local_day_of_month();
+        assert!(evaluate_builtin("day_of_month", &[today.to_string()], &t).unwrap());
+        // Day 0 never valid.
+        assert!(!evaluate_builtin("day_of_month", &["0".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_flag_set() {
+        let t = empty_traits();
+        // Non-existent flag should be false.
+        assert!(!evaluate_builtin("flag_set", &["nonexistent_test_flag_xyz".to_string()], &t).unwrap());
+        // We can't easily test true without creating /var/lib/hobnob/flags/... which requires root.
+    }
+
+    #[test]
+    fn test_builtin_os_family() {
+        let traits = serde_json::json!({"os": {"family": "debian", "distro": "ubuntu", "arch": "amd64", "version": "22.04"}});
+        assert!(evaluate_builtin("os_family", &["debian".to_string()], &traits).unwrap());
+        assert!(evaluate_builtin("os_family", &["Debian".to_string()], &traits).unwrap()); // case-insensitive
+        assert!(!evaluate_builtin("os_family", &["redhat".to_string()], &traits).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_distro() {
+        let traits = serde_json::json!({"os": {"family": "debian", "distro": "ubuntu"}});
+        assert!(evaluate_builtin("distro", &["ubuntu".to_string()], &traits).unwrap());
+        assert!(evaluate_builtin("distro", &["Ubuntu".to_string()], &traits).unwrap());
+        assert!(!evaluate_builtin("distro", &["centos".to_string()], &traits).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_arch() {
+        let traits = serde_json::json!({"os": {"arch": "amd64"}});
+        assert!(evaluate_builtin("arch", &["amd64".to_string()], &traits).unwrap());
+        assert!(!evaluate_builtin("arch", &["arm64".to_string()], &traits).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_version_ge() {
+        let traits = serde_json::json!({"os": {"version": "22.04"}});
+        assert!(evaluate_builtin("version_ge", &["22.04".to_string()], &traits).unwrap()); // equal
+        assert!(evaluate_builtin("version_ge", &["20.04".to_string()], &traits).unwrap()); // greater
+        assert!(!evaluate_builtin("version_ge", &["24.04".to_string()], &traits).unwrap()); // less
+    }
+
+    #[test]
+    fn test_builtin_in_group() {
+        let t = empty_traits();
+        // "root" group always exists on Linux.
+        assert!(evaluate_builtin("in_group", &["root".to_string()], &t).unwrap());
+        assert!(!evaluate_builtin("in_group", &["nonexistent_group_xyz_12345".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_unknown_function() {
+        let t = empty_traits();
+        assert!(evaluate_builtin("bogus_func", &[], &t).is_err());
+    }
+
+    #[test]
+    fn test_eval_with_builtin_and_vars() {
+        // Combined: var already resolved to true + file_exists on a real temp file.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test_file");
+        std::fs::write(&path, "content").unwrap();
+
+        let expr_str = format!("true and file_exists('{}')", path.display());
+        let expr = parse(&expr_str).unwrap();
+        let traits = empty_traits();
+        let result = eval_with_funcs(
+            &expr,
+            &|_| false,
+            Some(&|name, args| evaluate_builtin(name, args, &traits)),
+        )
+        .unwrap();
+        assert!(result);
+
+        // false and file_exists -> short-circuit false.
+        let expr2 = parse(&format!("false and file_exists('{}')", path.display())).unwrap();
+        assert!(!eval_with_funcs(
+            &expr2,
+            &|_| false,
+            Some(&|name, args| evaluate_builtin(name, args, &traits)),
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn test_version_ge_segments() {
+        assert!(version_ge("1", "1.0"));    // 1 == 1.0
+        assert!(version_ge("1.0", "1"));    // 1.0 == 1
+        assert!(version_ge("2", "1.9.9"));  // 2 > 1.9.9
+        assert!(!version_ge("1.9.9", "2")); // 1.9.9 < 2
+        assert!(version_ge("22.10", "22.04"));
+        assert!(!version_ge("22.04", "22.10"));
+        assert!(version_ge("1.0.0", "1.0.0")); // exactly equal
     }
 }

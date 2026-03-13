@@ -85,6 +85,7 @@ pub fn converge(
     executors: &HashMap<String, Box<dyn Executor>>,
     cache: &mut ResultCache,
     opts: &RunOptions,
+    traits: &serde_json::Value,
 ) -> Vec<ResourceResult> {
     if modules.is_empty() {
         warn!("no modules to apply — check thralls.hnb");
@@ -165,7 +166,7 @@ pub fn converge(
             }
         }
 
-        let mut result = execute_resource(node, executors, cache, opts.dry_run, &opts.run_id);
+        let mut result = execute_resource(node, executors, cache, opts.dry_run, &opts.run_id, traits);
         result.module_name = node.module_name.clone();
 
         // Rollback file on error.
@@ -213,7 +214,7 @@ pub fn converge(
                 ..node.clone()
             };
 
-            let mut result = execute_resource(&triggered_node, executors, cache, opts.dry_run, &opts.run_id);
+            let mut result = execute_resource(&triggered_node, executors, cache, opts.dry_run, &opts.run_id, traits);
             result.module_name = node.module_name.clone();
 
             // Update the result for this resource in the results vec.
@@ -237,14 +238,19 @@ fn execute_resource(
     cache: &mut ResultCache,
     dry_run: bool,
     run_id: &str,
+    traits: &serde_json::Value,
 ) -> ResourceResult {
     // Check when expression (agent-side builtins).
     if !node.when.is_empty() {
         match crate::policy::when::parse(&node.when) {
             Ok(expr) => {
-                // Evaluate with no var substitution (already done by eval_bundle).
+                // Evaluate with builtin function resolver and no var substitution
+                // (vars already resolved by eval_bundle).
                 let var_fn = |_name: &str| false;
-                match crate::policy::when::eval(&expr, &var_fn) {
+                let func_fn = |name: &str, args: &[String]| {
+                    crate::policy::when::evaluate_builtin(name, args, traits)
+                };
+                match crate::policy::when::eval_with_funcs(&expr, &var_fn, Some(&func_fn)) {
                     Ok(false) => {
                         return ResourceResult {
                             module_name: String::new(),
@@ -257,21 +263,42 @@ fn execute_resource(
                         };
                     }
                     Err(e) => {
+                        // Fail-safe: skip the resource on eval error (unknown
+                        // builtins or wrong arity) rather than executing it.
                         warn!(
                             resource = %node.name,
                             error = %e,
-                            "when expression eval error, executing anyway"
+                            "when expression eval error, skipping resource (fail-safe)"
                         );
+                        return ResourceResult {
+                            module_name: String::new(),
+                            resource_type: node.resource_type.clone(),
+                            resource_name: node.name.clone(),
+                            action: Action::Skipped,
+                            changed: false,
+                            error: None,
+                            duration_ms: 0,
+                        };
                     }
                     Ok(true) => {} // proceed
                 }
             }
             Err(e) => {
+                // Fail-safe: skip on parse error too.
                 warn!(
                     resource = %node.name,
                     error = %e,
-                    "when expression parse error, executing anyway"
+                    "when expression parse error, skipping resource (fail-safe)"
                 );
+                return ResourceResult {
+                    module_name: String::new(),
+                    resource_type: node.resource_type.clone(),
+                    resource_name: node.name.clone(),
+                    action: Action::Skipped,
+                    changed: false,
+                    error: None,
+                    duration_ms: 0,
+                };
             }
         }
     }
@@ -680,7 +707,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        let results = converge(&[], &executors, &mut cache, &opts);
+        let results = converge(&[], &executors, &mut cache, &opts, &serde_json::json!({}));
         assert!(results.is_empty());
     }
 
@@ -704,7 +731,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts);
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| r.error.is_none()));
     }
@@ -722,7 +749,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts);
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results.len(), 1);
         assert!(results[0].error.is_some());
         assert!(results[0].error.as_ref().unwrap().contains("no executor"));
@@ -751,7 +778,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts);
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].module_name, "keep");
     }
@@ -937,7 +964,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts);
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();
         // First pass: config-file (not triggered), app-service (not triggered).
@@ -979,7 +1006,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        converge(&modules, &executors, &mut cache, &opts);
+        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();
         // Only first pass: each resource called once.
@@ -1014,7 +1041,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts);
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();
         // First pass: config-file, app-service. Second pass: app-service (triggered).
@@ -1051,7 +1078,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        converge(&modules, &executors, &mut cache, &opts);
+        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();
         // B already changed, so second pass skips it. Only 2 calls total.
@@ -1081,7 +1108,7 @@ mod tests {
             run_id: "test".into(),
         };
 
-        converge(&modules, &executors, &mut cache, &opts);
+        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 3);
@@ -1136,7 +1163,7 @@ mod tests {
         };
 
         // First converge: executor called, result cached.
-        let results1 = converge(&modules, &executors, &mut cache, &opts);
+        let results1 = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results1.len(), 1);
         assert!(results1[0].error.is_none());
 
@@ -1144,7 +1171,7 @@ mod tests {
         assert_eq!(count_after_first, 1, "first converge should call executor once");
 
         // Second converge: cache hit, executor NOT called again.
-        let results2 = converge(&modules, &executors, &mut cache, &opts);
+        let results2 = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results2.len(), 1);
         assert!(results2[0].error.is_none());
 

@@ -399,7 +399,7 @@ async fn run_once(
         run_id: run_id.clone(),
     };
 
-    let results = runner::converge(&modules, &executors, &mut cache, &opts);
+    let results = runner::converge(&modules, &executors, &mut cache, &opts, &collected_traits);
 
     // Print color-coded trace output to stderr.
     print_trace(&bundle_for_trace, &results, dry_run);

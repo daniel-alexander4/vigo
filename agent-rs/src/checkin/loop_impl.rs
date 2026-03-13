@@ -282,7 +282,7 @@ fn converge(
         run_id,
     };
 
-    let results = runner::converge(&modules, executors, cache, &opts);
+    let results = runner::converge(&modules, executors, cache, &opts, traits_val);
 
     Ok(RunResult {
         results,
