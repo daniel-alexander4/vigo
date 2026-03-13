@@ -26,7 +26,7 @@ RUN CGO_ENABLED=1 go build -o hobnob-license-manager ./license-manager
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates openssl sqlite-libs libpq
+RUN apk add --no-cache ca-certificates sqlite-libs libpq
 
 # Install litestream for SQLite WAL replication (optional backup feature).
 ARG LITESTREAM_VERSION=v0.3.13
