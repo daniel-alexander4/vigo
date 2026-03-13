@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Orchestration
-status: requirements
-stopped_at: Defining requirements
+status: roadmap_complete
+stopped_at: Roadmap created, ready to plan Phase 11
 last_updated: "2026-03-11T00:00:00.000Z"
-last_activity: 2026-03-11 -- Milestone v1.3 started
+last_activity: 2026-03-11 -- v1.3 roadmap written (8 phases, 36 requirements mapped)
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,21 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** Managed nodes converge to their declared desired state reliably, idempotently, and securely -- with full audit visibility into what changed, when, and why.
-**Current focus:** v1.3 Orchestration -- ad-hoc commands, tasks, workflows, rolling execution, live query
+**Current focus:** v1.3 Orchestration -- Phase 11: Proto and Schema Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: --
-Status: Defining requirements
-Last activity: 2026-03-11 -- Milestone v1.3 started
+Phase: 11 of 18 (Proto and Schema Foundation)
+Plan: -- of -- in current phase
+Status: Ready to plan
+Last activity: 2026-03-11 -- Roadmap created for v1.3 Orchestration
 
 Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 29
+- Total plans completed: 29 (across v1.0-v1.2)
 - Average duration: 5min
 - Total execution time: ~2.1 hours
 
@@ -63,10 +63,11 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [v1.2]: Four conditional fields replace `when:` -- `go_if_all_pass`, `go_if_any_pass`, `skip_if_all_pass`, `skip_if_any_pass`
-- [v1.2]: Conditional vars use operator syntax: only, not, gt, lt, gte, lte, match
-- [v1.2]: `conditional_block:` for inline resource grouping with shared conditionals
-- [v1.2]: Module-level conditionals on references in roles and clients.yaml
+- [v1.3 research]: Use AgentStream oneof extension (not new RPC) -- reuses auth and avoids second TLS handshake
+- [v1.3 research]: TaskAck message required -- blocking send with ack, not fire-and-forget; dropped tasks are explicit errors
+- [v1.3 research]: Hard mutual exclusion on agent -- convergence and task execution never simultaneous
+- [v1.3 research]: Raw shell dispatch accepted for v1.3 with immutable audit record before every dispatch
+- [v1.3 research]: Workflow state written to SQLite before each step dispatch -- restart marks incomplete as failed
 
 ### Pending Todos
 
@@ -74,10 +75,13 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- [Phase 11]: TaskAck shape must be decided (distinct proto message vs. field on TaskResult) -- changing it later is a breaking proto change
+- [Phase 11]: Federation hub orchestration forwarding design gap -- decide whether to address in Phase 11 or Phase 13
+- [Phase 12]: Rust async tokio subprocess management has known edge cases -- JoinHandle registry and cancellation on stream close need careful design
+- [Phase 16]: Rolling execution failure threshold semantics (per-batch vs. cumulative, count vs. percentage, offline counting) must be written down before implementation
 
 ## Session Continuity
 
 Last session: 2026-03-11T00:00:00Z
-Stopped at: Defining requirements for v1.3 Orchestration
-Resume file: .planning/PROJECT.md
+Stopped at: Roadmap written for v1.3 -- 8 phases (11-18), 36 requirements mapped, ready to plan Phase 11
+Resume file: None
