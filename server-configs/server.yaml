@@ -17,6 +17,8 @@ server:
 
 
 # ── Database ──────────────────────────────────────────────────────────────
+# To use Postgres: set driver: postgres, and in .env set
+#   HOBNOB_SERVICES=postgres
 
 database:
   dsn: "secret:hobnob/db/dsn"
@@ -38,6 +40,7 @@ checkin:
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────
+# Tighten trusted_enrollment patterns and CIDRs for production.
 
 bootstrap:
   cert_validity: "8760h"
@@ -65,6 +68,9 @@ watcher:
 #   method: none                               # none | oidc | isowebauth
 
 # ── SMTP Notifications ───────────────────────────────────────────────────
+# Requires an SMTP relay. Store password with:
+#   hobnobcli secrets set hobnob/smtp/password "your-password"
+#
 # smtp:
 #   host: "smtp.example.com"
 #   port: 587
@@ -76,17 +82,28 @@ watcher:
 #     - "admin@example.com"
 
 # ── Federation ────────────────────────────────────────────────────────────
+# Requires a paid license. See server.yaml.example for hub/spoke setup.
+#
 # federation:
 #   role: standalone                           # standalone | hub | spoke
 
 # ── AI Assistant ──────────────────────────────────────────────────────────
+# Also set HOBNOB_SERVICES=ollama in .env to start the Ollama container.
+# For Claude or OpenAI, store the API key with:
+#   hobnobcli secrets set hobnob/ai/api_key "sk-..."
+#
 # ai:
 #   enabled: true
 #   provider: "ollama"                         # ollama | claude | openai | openai-compat
 #   model: "qwen2.5:7b"
 #   max_tokens: 4096
+#   # api_key: "secret:hobnob/ai/api_key"     # for paid providers
 
 # ── Backup (Litestream — SQLite only) ────────────────────────────────────
+# Requires S3-compatible storage. Store credentials with:
+#   hobnobcli secrets set hobnob/backup/aws_access_key "AKIA..."
+#   hobnobcli secrets set hobnob/backup/aws_secret_key "..."
+#
 # backup:
 #   url: "s3://my-bucket/hobnob"
 #   access_key_id: "secret:hobnob/backup/aws_access_key"
