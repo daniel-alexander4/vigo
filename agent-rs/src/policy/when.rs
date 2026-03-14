@@ -516,6 +516,17 @@ fn process_running(name: &str) -> bool {
     false
 }
 
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+fn process_running(name: &str) -> bool {
+    Command::new("pgrep")
+        .args(["-x", name])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 #[cfg(windows)]
 fn process_running(name: &str) -> bool {
     // Use tasklist to check if process is running.
@@ -534,7 +545,7 @@ fn process_running(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", windows)))]
 fn process_running(_name: &str) -> bool {
     false
 }
@@ -654,8 +665,18 @@ fn version_ge(actual: &str, required: &str) -> bool {
 
 #[cfg(unix)]
 fn in_group(group: &str) -> bool {
-    Command::new("getent")
+    // Try getent first (Linux, FreeBSD, OpenBSD, NetBSD).
+    if let Ok(status) = Command::new("getent")
         .args(["group", group])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+    {
+        return status.success();
+    }
+    // Fallback for macOS: use dscl.
+    Command::new("dscl")
+        .args([".", "-read", &format!("/Groups/{}", group)])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()

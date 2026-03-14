@@ -28,6 +28,9 @@ import (
 var validOS = map[string]bool{
 	"linux":   true,
 	"darwin":  true,
+	"freebsd": true,
+	"openbsd": true,
+	"netbsd":  true,
 	"windows": true,
 }
 
@@ -145,8 +148,9 @@ fi
 # Extract gRPC server address (strip protocol and port, add :1530).
 GRPC_HOST="$(echo "${SERVER_ADDR}" | sed 's|^https\?://||' | sed 's|:[0-9]*$||')"
 
-# Install systemd service (if systemd is available).
+# Install service based on detected init system.
 if command -v systemctl > /dev/null 2>&1; then
+    # Linux (systemd)
     cat > /etc/systemd/system/hobnob-thrall.service << SYSTEMD
 [Unit]
 Description=Hobnob Configuration Management Agent
@@ -164,9 +168,77 @@ SYSTEMD
     systemctl daemon-reload
     systemctl enable hobnob-thrall
     systemctl start hobnob-thrall
-    echo "Hobnob agent service installed and started."
+    echo "Hobnob agent service installed and started (systemd)."
+elif command -v launchctl > /dev/null 2>&1; then
+    # macOS (launchd)
+    DATA_DIR="/usr/local/etc/hobnob-thrall"
+    mkdir -p "$DATA_DIR"
+    cat > /Library/LaunchDaemons/com.hobnob.thrall.plist << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.hobnob.thrall</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/hobnob</string>
+        <string>--server</string><string>${GRPC_HOST}:1530</string>
+        <string>--data-dir</string><string>/usr/local/etc/hobnob-thrall</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+</dict>
+</plist>
+PLIST
+    launchctl load -w /Library/LaunchDaemons/com.hobnob.thrall.plist
+    echo "Hobnob agent service installed and started (launchd)."
+elif command -v rcctl > /dev/null 2>&1; then
+    # OpenBSD (rcctl)
+    cat > /etc/rc.d/hobnob_thrall << 'RCSCRIPT'
+#!/bin/ksh
+daemon="/usr/local/bin/hobnob"
+RCSCRIPT
+    echo "daemon_flags=\"--server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall\"" >> /etc/rc.d/hobnob_thrall
+    cat >> /etc/rc.d/hobnob_thrall << 'RCSCRIPT'
+. /etc/rc.d/rc.subr
+rc_cmd $1
+RCSCRIPT
+    chmod 755 /etc/rc.d/hobnob_thrall
+    rcctl enable hobnob_thrall
+    rcctl start hobnob_thrall
+    echo "Hobnob agent service installed and started (rcctl)."
+elif [ -d /etc/rc.d ] && [ -f /etc/rc.subr ]; then
+    # FreeBSD / NetBSD (rc.d)
+    RCDIR="/usr/local/etc/rc.d"
+    if [ "$(uname -s)" = "NetBSD" ]; then
+        RCDIR="/etc/rc.d"
+    fi
+    mkdir -p "$RCDIR"
+    cat > "${RCDIR}/hobnob_thrall" << RCSCRIPT
+#!/bin/sh
+# PROVIDE: hobnob_thrall
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+. /etc/rc.subr
+name="hobnob_thrall"
+rcvar="\${name}_enable"
+command="/usr/local/bin/hobnob"
+command_args="--server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall &"
+pidfile="/var/run/\${name}.pid"
+load_rc_config \$name
+: \${hobnob_thrall_enable:=NO}
+run_rc_command "\$1"
+RCSCRIPT
+    chmod 755 "${RCDIR}/hobnob_thrall"
+    if command -v sysrc > /dev/null 2>&1; then
+        sysrc hobnob_thrall_enable=YES
+    else
+        grep -q 'hobnob_thrall=YES' /etc/rc.conf 2>/dev/null || echo 'hobnob_thrall=YES' >> /etc/rc.conf
+    fi
+    service hobnob_thrall start 2>/dev/null || "${RCDIR}/hobnob_thrall" start
+    echo "Hobnob agent service installed and started (rc.d)."
 else
-    echo "systemd not found. Start the agent manually:"
+    echo "No supported init system found. Start the agent manually:"
     echo "  hobnob --server ${GRPC_HOST}:1530 --data-dir $DATA_DIR"
 fi
 
@@ -395,7 +467,7 @@ func (h *Handler) AgentDownload(w http.ResponseWriter, r *http.Request) {
 
 	// Validate OS and arch.
 	if !validOS[goos] || !validArch[goarch] {
-		http.Error(w, fmt.Sprintf("unsupported platform: %s/%s (supported: linux|darwin|windows / amd64|arm64)", goos, goarch), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unsupported platform: %s/%s (supported: linux|darwin|freebsd|openbsd|netbsd|windows / amd64|arm64)", goos, goarch), http.StatusBadRequest)
 		return
 	}
 

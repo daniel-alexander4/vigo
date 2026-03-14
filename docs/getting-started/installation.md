@@ -45,9 +45,11 @@ make build-agent    # Rust agent only (release mode)
 ### Cross-Compile for Distribution
 
 ```bash
-make dist           # Static server/CLI binaries (linux amd64+arm64)
-make dist-agent     # Static agent binaries (musl, linux amd64+arm64)
-make dist-agent-windows  # Windows agent via cross
+make dist                # Static server/CLI binaries (linux amd64+arm64)
+make dist-agent          # Static agent binaries (musl, linux amd64+arm64)
+make dist-agent-macos    # macOS agent (amd64+arm64, native or via osxcross)
+make dist-agent-freebsd  # FreeBSD agent (amd64, via cross)
+make dist-agent-windows  # Windows agent (amd64, via cross)
 ```
 
 ## Server Setup
@@ -106,13 +108,47 @@ hobnobcli doctor
 
 ## Agent Installation
 
-On each managed machine (thrall), the agent can be installed via the bootstrap script:
+The agent runs on Linux, macOS, FreeBSD, OpenBSD, NetBSD, and Windows. On each managed machine (thrall), the agent can be installed via the bootstrap script.
+
+### Linux
 
 ```bash
 curl -sSf http://<server>:8181/bootstrap | sudo sh
 ```
 
-This downloads the agent binary, generates a keypair, registers with the server, and starts the `hobnob-thrall` systemd service.
+This downloads the agent binary, generates a keypair, registers with the server, and installs a systemd service (`hobnob-thrall`).
+
+### macOS
+
+```bash
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
+The same bootstrap script detects macOS and installs a launchd plist (`com.hobnob.thrall`) instead of a systemd unit.
+
+### FreeBSD / NetBSD
+
+```bash
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
+On FreeBSD and NetBSD, the bootstrap script installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
+
+### OpenBSD
+
+```bash
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
+On OpenBSD, the bootstrap script registers the service via `rcctl` and enables it at boot.
+
+### Windows
+
+```powershell
+irm http://<server>:8181/bootstrap?os=windows | iex
+```
+
+The PowerShell bootstrap script downloads the agent, registers with the server, and installs a Windows service.
 
 See [Bootstrap](bootstrap.md) for details on the enrollment flow.
 

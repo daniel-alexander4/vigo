@@ -12,20 +12,8 @@ const SERVICE_NAME: &str = "hobnob-thrall";
 const UNIT_PATH: &str = "/etc/systemd/system/hobnob-thrall.service";
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
-///
-/// "http://hobd.example.com:8181" + "1530" → "hobd.example.com:1530"
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
-    let mut host = bootstrap_server;
-    host = host.strip_prefix("http://").unwrap_or(host);
-    host = host.strip_prefix("https://").unwrap_or(host);
-    // Strip port if present.
-    if let Some(colon_pos) = host.rfind(':') {
-        // Only strip if it looks like a port (all digits after colon).
-        if host[colon_pos + 1..].chars().all(|c| c.is_ascii_digit()) {
-            host = &host[..colon_pos];
-        }
-    }
-    format!("{}:{}", host, grpc_port)
+    super::derive_grpc_addr(bootstrap_server, grpc_port)
 }
 
 /// Generate the systemd unit file content.

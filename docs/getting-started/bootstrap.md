@@ -45,13 +45,17 @@ curl -sSf http://<server>:8181/bootstrap | sudo sh
 ```
 
 The script:
-1. Detects OS and architecture
+1. Detects OS (Linux, macOS, FreeBSD, OpenBSD, NetBSD) and architecture
 2. Downloads the correct agent binary from the server
 3. Generates an ED25519 keypair
 4. Calls the server's Register gRPC endpoint
 5. Receives a client UUID and signed TLS certificate
 6. Writes agent config to `/etc/hobnob-thrall/agent.yaml`
-7. Installs and enables the `hobnob-thrall` systemd service
+7. Installs the appropriate service for the platform:
+   - **Linux:** systemd unit (`hobnob-thrall.service`)
+   - **macOS:** launchd plist (`com.hobnob.thrall`)
+   - **FreeBSD / NetBSD:** rc.d script (`/usr/local/etc/rc.d/hobnob_thrall`)
+   - **OpenBSD:** registered via `rcctl`
 8. Starts the service
 
 ## Enrollment Methods
@@ -134,8 +138,8 @@ bootstrap:
 - Check certificate hasn't expired (`cert_validity` setting)
 
 **Agent binary download fails:**
-- Ensure `dist/agent/linux/{amd64,arm64}/hobnob` exists on the server
-- Run `make dist-agent` to build agent binaries
+- Ensure the binary for the target platform exists on the server (e.g., `dist/agent/linux/{amd64,arm64}/hobnob`, `dist/agent/darwin/{amd64,arm64}/hobnob`, `dist/agent/freebsd/amd64/hobnob`)
+- Run the appropriate build target: `make dist-agent` (Linux), `make dist-agent-macos`, `make dist-agent-freebsd`
 
 ## Related
 

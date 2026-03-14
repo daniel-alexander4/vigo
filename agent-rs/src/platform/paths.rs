@@ -6,9 +6,14 @@
 use std::path::PathBuf;
 
 /// Default agent data directory.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_data_dir() -> PathBuf {
     PathBuf::from("/etc/hobnob-thrall")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_data_dir() -> PathBuf {
+    PathBuf::from("/usr/local/etc/hobnob-thrall")
 }
 
 #[cfg(windows)]
@@ -18,9 +23,14 @@ pub fn default_data_dir() -> PathBuf {
 }
 
 /// Default persistent state directory (LMDB).
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_state_dir() -> PathBuf {
     PathBuf::from("/var/lib/hobnob/state")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_state_dir() -> PathBuf {
+    PathBuf::from("/Library/Hobnob/state")
 }
 
 #[cfg(windows)]
@@ -29,9 +39,14 @@ pub fn default_state_dir() -> PathBuf {
 }
 
 /// Default file snapshot directory.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_snapshot_dir() -> PathBuf {
     PathBuf::from("/var/lib/hobnob/snapshots")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_snapshot_dir() -> PathBuf {
+    PathBuf::from("/Library/Hobnob/snapshots")
 }
 
 #[cfg(windows)]
@@ -40,9 +55,14 @@ pub fn default_snapshot_dir() -> PathBuf {
 }
 
 /// Default flags directory (for `flag_set()` builtin).
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_flags_dir() -> PathBuf {
     PathBuf::from("/var/lib/hobnob/flags")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_flags_dir() -> PathBuf {
+    PathBuf::from("/Library/Hobnob/flags")
 }
 
 #[cfg(windows)]
@@ -51,9 +71,14 @@ pub fn default_flags_dir() -> PathBuf {
 }
 
 /// Default custom executors directory.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {
     PathBuf::from("/etc/hobnob-thrall/executors")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_executors_dir() -> PathBuf {
+    PathBuf::from("/usr/local/etc/hobnob-thrall/executors")
 }
 
 #[cfg(windows)]

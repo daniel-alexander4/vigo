@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 45 built-in executors that manage system resources idempotently. Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 45 built-in executors that manage system resources idempotently across six supported platforms: Linux, macOS, FreeBSD, OpenBSD, NetBSD, and Windows. Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -16,7 +16,7 @@ Every resource in a `.hnb` config declares a `type:` field that maps to an execu
 
 ## Cross-Platform Executors (23)
 
-These executors compile and run on Linux, macOS, and Windows.
+These executors compile and run on all six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows).
 
 | Type | Description | Doc |
 |------|-------------|-----|
@@ -44,31 +44,40 @@ These executors compile and run on Linux, macOS, and Windows.
 | `reboot` | Trigger or cancel system reboots | [reboot](reboot.md) |
 | `custom` | Run external scripts via JSON protocol | [custom](custom.md) |
 
-## Linux-Only Executors (15)
+## Unix Executors (12)
 
-These executors use Linux-specific tools and only compile on `target_os = "linux"`.
+These executors manage OS-level resources across Unix platforms. Each type uses a platform-native backend so that `.hnb` configs are portable -- you write `type: service` and the agent dispatches to the correct implementation for the host OS.
+
+| Type | Description | Linux | macOS | FreeBSD | OpenBSD | NetBSD | Doc |
+|------|-------------|:-----:|:-----:|:-------:|:-------:|:------:|-----|
+| `service` | Manage system services | systemd | launchctl | rc.d | rcctl | -- | [service](service.md) |
+| `package` | Install, upgrade, and remove OS packages | apt/dnf/yum | brew | pkg | pkg_add | pkgin | [package](package.md) |
+| `user` | Manage local user accounts | useradd | dscl | pw | useradd | useradd | [user](user.md) |
+| `group` | Manage local groups | groupadd | dscl | pw | groupadd | groupadd | [group](group.md) |
+| `cron` | Manage cron jobs | /etc/cron.d | crontab | crontab | crontab | crontab | [cron](cron.md) |
+| `hostname` | Set the system hostname | hostnamectl | scutil | hostname | hostname | hostname | [hostname](hostname.md) |
+| `timezone` | Set the system timezone | timedatectl | systemsetup | shared | shared | shared | [timezone](timezone.md) |
+| `firewall` | Manage firewall rules | UFW | pf | pf | pf | pf | [firewall](firewall.md) |
+| `sysctl` | Manage kernel parameters | sysctl | sysctl | sysctl | sysctl | sysctl | [sysctl](sysctl.md) |
+| `mount` | Manage mount points and fstab | mount/fstab | mount/fstab | mount/fstab | mount/fstab | mount/fstab | [mount](mount.md) |
+| `swap` | Manage swap files/devices | swapon | shared | shared | shared | shared | [swap](swap.md) |
+| `kernel_module` | Load and unload kernel modules | modprobe | -- | kld | -- | -- | [kernel_module](kernel_module.md) |
+
+A "--" means the executor is not available on that platform.
+
+## Linux-Only Executors (3)
+
+These executors use Linux-specific tools with no equivalent on other platforms.
 
 | Type | Description | Doc |
 |------|-------------|-----|
-| `package` | Install, upgrade, and remove OS packages | [package](package.md) |
-| `service` | Manage systemd services | [service](service.md) |
-| `user` | Manage local user accounts | [user](user.md) |
-| `group` | Manage local groups | [group](group.md) |
-| `cron` | Manage cron jobs in /etc/cron.d | [cron](cron.md) |
-| `hostname` | Set the system hostname | [hostname](hostname.md) |
-| `timezone` | Set the system timezone | [timezone](timezone.md) |
-| `sysctl` | Manage kernel parameters | [sysctl](sysctl.md) |
-| `firewall` | Manage UFW firewall rules | [firewall](firewall.md) |
-| `kernel_module` | Load and unload kernel modules | [kernel_module](kernel_module.md) |
-| `mount` | Manage mount points and /etc/fstab | [mount](mount.md) |
-| `swap` | Manage swap files | [swap](swap.md) |
 | `tmpfile` | Manage systemd-tmpfiles configs | [tmpfile](tmpfile.md) |
 | `logrotate` | Manage logrotate configs | [logrotate](logrotate.md) |
 | `alternatives` | Manage update-alternatives entries | [alternatives](alternatives.md) |
 
 ## Windows-Only Executors (7)
 
-These executors replace their Linux counterparts on Windows. They are registered under the same `type:` name (e.g., `service`, `package`) so configs are portable across platforms.
+These executors replace their Unix counterparts on Windows. They are registered under the same `type:` name (e.g., `service`, `package`) so configs are portable across platforms.
 
 | Type | Description | Doc |
 |------|-------------|-----|

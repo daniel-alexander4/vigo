@@ -14,12 +14,18 @@ use std::collections::HashMap;
 /// to or is a child of any entry here.
 #[cfg(unix)]
 const PROTECTED_PATHS: &[&str] = &[
-    // Agent
+    // Agent (Linux)
     "/usr/local/bin/hobnob",
     "/etc/hobnob-thrall/",
     "/etc/hobnob/",
     "/var/lib/hobnob/",
     "/etc/systemd/system/hobnob-thrall.service",
+    // Agent (macOS)
+    "/usr/local/etc/hobnob-thrall/",
+    "/Library/Hobnob/",
+    "/Library/LaunchDaemons/com.hobnob.thrall.plist",
+    // Agent (FreeBSD)
+    "/usr/local/etc/rc.d/hobnob_thrall",
     // Server
     "/usr/local/bin/hobd",
     "/usr/local/bin/hobnobcli",
@@ -45,20 +51,32 @@ const PROTECTED_PACKAGES: &[&str] = &["hobnob", "hobd", "hobnobcli"];
 /// Used for heuristic scanning of exec commands and ad-hoc tasks.
 #[cfg(unix)]
 const DANGEROUS_PATTERNS: &[&str] = &[
+    // systemd (Linux)
     "systemctl stop hobnob",
     "systemctl disable hobnob",
     "systemctl mask hobnob",
     "systemctl stop hobd",
     "systemctl disable hobd",
     "systemctl mask hobd",
+    // rc.d / service (BSD)
     "service hobnob-thrall stop",
+    "service hobnob_thrall stop",
     "service hobd stop",
+    // rcctl (OpenBSD)
+    "rcctl stop hobnob",
+    "rcctl disable hobnob",
+    // launchctl (macOS)
+    "launchctl unload com.hobnob",
+    "launchctl remove com.hobnob",
+    "launchctl bootout com.hobnob",
+    // process kill
     "pkill hobnob",
     "pkill hobd",
     "killall hobnob",
     "killall hobd",
     "kill -9 hobnob",
     "kill -9 hobd",
+    // file removal
     "rm /usr/local/bin/hobnob",
     "rm /usr/local/bin/hobd",
     "rm /usr/local/bin/hobnobcli",
@@ -67,6 +85,7 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     "rm -rf /var/lib/hobnob",
     "rm -rf /etc/hobnob-server",
     "rm -rf /etc/hobnob-thrall",
+    "rm -rf /library/hobnob",
 ];
 
 #[cfg(windows)]

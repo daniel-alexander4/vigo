@@ -1,17 +1,19 @@
 # Trait Collectors
 
-Traits are auto-discovered facts about a managed machine (thrall). The Hobnob agent runs 25 built-in trait collectors on Linux and 13 on Windows, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. Traits are reported to the server on each check-in and are available in `.hnb` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
+Traits are auto-discovered facts about a managed machine (thrall). The Hobnob agent runs 25 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 25 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.hnb` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
 
 Each collector runs in parallel with a 5-second timeout. Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap) or **stable** (cached across cycles: everything else).
 
-## Linux Trait Collectors (25)
+## Trait Collectors (25)
+
+All 25 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD, OpenBSD, NetBSD). Each uses a platform-native implementation -- for example, the `os` collector reads `/etc/os-release` on Linux, `sw_vers` on macOS, and `sysctl kern.ostype` on the BSDs. The trait paths and structure are identical across platforms so `when:` expressions and templates work without modification.
 
 | Name | Trait Path | Description | Doc |
 |------|------------|-------------|-----|
 | OS | `os` | Distribution, version, kernel, architecture, packaging family | [os.md](os.md) |
 | Hardware | `hardware` | CPU count, memory MB, disk GB per mount | [hardware.md](hardware.md) |
 | Network | `network` | Hostname, FQDN, IP addresses, MAC addresses | [network.md](network.md) |
-| Packages | `packages` | Installed packages and versions (dpkg/rpm/brew) | [packages.md](packages.md) |
+| Packages | `packages` | Installed packages and versions (dpkg/rpm/brew/pkg/pkgin) | [packages.md](packages.md) |
 | Time | `time` | Current local/UTC time, date, clock, weekday | [time.md](time.md) |
 | Identity | `identity` | UID, GID, username, group, privilege status | [identity.md](identity.md) |
 | Virtual | `virtual` | Virtualization detection (VM/container type and role) | [virtual.md](virtual.md) |
@@ -52,13 +54,15 @@ Each collector runs in parallel with a 5-second timeout. Failed collectors are l
 | Users | `users` | Local user account names | [users_windows.md](users_windows.md) |
 | Filesystem | `filesystem` | Per-drive disk usage (total, used, free, percent) | [filesystem_windows.md](filesystem_windows.md) |
 
-## Cross-Platform Collectors
+## Platform Implementation Details
 
-The following collectors share the same trait path on both Linux and Windows but use platform-specific implementations: `os`, `hardware`, `identity`, `memory`, `mountpoints`, `network`, `packages`, `processors`, `swap`, `timezone`, `uptime`, `users`, `filesystem`.
+The following collectors share the same trait path across all platforms but use platform-specific implementations: `os`, `hardware`, `identity`, `memory`, `mountpoints`, `network`, `packages`, `processors`, `swap`, `timezone`, `uptime`, `users`, `filesystem`.
 
-The `time` collector uses a single cross-platform implementation (libc on Linux, Windows API on Windows). The `dmi`, `cloud`, and `docker` collectors are cross-platform but may return limited data on Windows.
+The `time` collector uses a single cross-platform implementation. The `dmi`, `cloud`, and `docker` collectors are cross-platform but may return limited data on some platforms.
 
-The following collectors are Linux-only and return `null` on Windows: `virtual`, `loadavg`, `kernel`, `blockdevices`, `systemd`, `selinux`, `locale`, `gpu`.
+On macOS, platform-specific collectors use `sysctl`, `sw_vers`, `system_profiler`, and `ifconfig`. On FreeBSD, OpenBSD, and NetBSD, shared BSD collectors use `sysctl`, `ifconfig`, and `/proc` (where available). macOS has dedicated implementations for `os`, `hardware`, `network`, `memory`, and `swap`; FreeBSD, OpenBSD, and NetBSD each have a dedicated `os` collector and share BSD implementations for the rest.
+
+The `systemd` and `selinux` collectors are Linux-specific and return `null` on macOS, BSD, and Windows. The following collectors are unavailable on Windows and return `null`: `virtual`, `loadavg`, `kernel`, `blockdevices`, `systemd`, `selinux`, `locale`, `gpu`.
 
 ## Using Traits
 

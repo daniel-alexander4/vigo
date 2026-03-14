@@ -489,6 +489,114 @@ pub fn build_executors_with_snapshots(
         }
     }
 
+    // macOS-native executors.
+    #[cfg(target_os = "macos")]
+    {
+        executors.insert("service".to_string(), Box::new(service_macos::ServiceMacosExecutor::new()));
+        executors.insert("user".to_string(), Box::new(user_macos::UserMacosExecutor::new()));
+        executors.insert("group".to_string(), Box::new(group_macos::GroupMacosExecutor::new()));
+        executors.insert("hostname".to_string(), Box::new(hostname_macos::HostnameMacosExecutor::new()));
+        executors.insert("timezone".to_string(), Box::new(timezone_macos::TimezoneMacosExecutor::new()));
+        executors.insert("sysctl".to_string(), Box::new(sysctl_bsd::SysctlBsdExecutor::new()));
+        executors.insert("firewall".to_string(), Box::new(firewall_pf::FirewallPfExecutor::new()));
+        executors.insert("mount".to_string(), Box::new(mount_bsd::MountBsdExecutor::new()));
+        executors.insert("swap".to_string(), Box::new(swap_bsd::SwapBsdExecutor::new()));
+        executors.insert("cron".to_string(), Box::new(cron::CronExecutor));
+
+        match pkgmgr::detect(os_family, os_distro) {
+            Ok(pm) => {
+                executors.insert(
+                    "package".to_string(),
+                    Box::new(PackageExecutorWrapper { pkg_mgr: pm }),
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "no package manager detected, package resources will fail");
+            }
+        }
+    }
+
+    // FreeBSD-native executors.
+    #[cfg(target_os = "freebsd")]
+    {
+        executors.insert("service".to_string(), Box::new(service_freebsd::ServiceFreebsdExecutor::new()));
+        executors.insert("user".to_string(), Box::new(user_freebsd::UserFreebsdExecutor::new()));
+        executors.insert("group".to_string(), Box::new(group_freebsd::GroupFreebsdExecutor::new()));
+        executors.insert("hostname".to_string(), Box::new(hostname_bsd::HostnameBsdExecutor::new()));
+        executors.insert("timezone".to_string(), Box::new(timezone_bsd::TimezoneBsdExecutor::new()));
+        executors.insert("sysctl".to_string(), Box::new(sysctl_bsd::SysctlBsdExecutor::new()));
+        executors.insert("firewall".to_string(), Box::new(firewall_pf::FirewallPfExecutor::new()));
+        executors.insert("kernel_module".to_string(), Box::new(kernel_module_freebsd::KernelModuleFreebsdExecutor::new()));
+        executors.insert("mount".to_string(), Box::new(mount_bsd::MountBsdExecutor::new()));
+        executors.insert("swap".to_string(), Box::new(swap_bsd::SwapBsdExecutor::new()));
+        executors.insert("cron".to_string(), Box::new(cron::CronExecutor));
+
+        match pkgmgr::detect(os_family, os_distro) {
+            Ok(pm) => {
+                executors.insert(
+                    "package".to_string(),
+                    Box::new(PackageExecutorWrapper { pkg_mgr: pm }),
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "no package manager detected, package resources will fail");
+            }
+        }
+    }
+
+    // OpenBSD-native executors.
+    #[cfg(target_os = "openbsd")]
+    {
+        executors.insert("service".to_string(), Box::new(service_openbsd::ServiceOpenbsdExecutor::new()));
+        executors.insert("user".to_string(), Box::new(user::UserExecutor::new()));
+        executors.insert("group".to_string(), Box::new(group::GroupExecutor::new()));
+        executors.insert("hostname".to_string(), Box::new(hostname_bsd::HostnameBsdExecutor::new()));
+        executors.insert("timezone".to_string(), Box::new(timezone_bsd::TimezoneBsdExecutor::new()));
+        executors.insert("sysctl".to_string(), Box::new(sysctl_bsd::SysctlBsdExecutor::new()));
+        executors.insert("firewall".to_string(), Box::new(firewall_pf::FirewallPfExecutor::new()));
+        executors.insert("mount".to_string(), Box::new(mount_bsd::MountBsdExecutor::new()));
+        executors.insert("swap".to_string(), Box::new(swap_bsd::SwapBsdExecutor::new()));
+        executors.insert("cron".to_string(), Box::new(cron::CronExecutor));
+
+        match pkgmgr::detect(os_family, os_distro) {
+            Ok(pm) => {
+                executors.insert(
+                    "package".to_string(),
+                    Box::new(PackageExecutorWrapper { pkg_mgr: pm }),
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "no package manager detected, package resources will fail");
+            }
+        }
+    }
+
+    // NetBSD-native executors.
+    #[cfg(target_os = "netbsd")]
+    {
+        executors.insert("user".to_string(), Box::new(user::UserExecutor::new()));
+        executors.insert("group".to_string(), Box::new(group::GroupExecutor::new()));
+        executors.insert("hostname".to_string(), Box::new(hostname_bsd::HostnameBsdExecutor::new()));
+        executors.insert("timezone".to_string(), Box::new(timezone_bsd::TimezoneBsdExecutor::new()));
+        executors.insert("sysctl".to_string(), Box::new(sysctl_bsd::SysctlBsdExecutor::new()));
+        executors.insert("firewall".to_string(), Box::new(firewall_pf::FirewallPfExecutor::new()));
+        executors.insert("mount".to_string(), Box::new(mount_bsd::MountBsdExecutor::new()));
+        executors.insert("swap".to_string(), Box::new(swap_bsd::SwapBsdExecutor::new()));
+        executors.insert("cron".to_string(), Box::new(cron::CronExecutor));
+
+        match pkgmgr::detect(os_family, os_distro) {
+            Ok(pm) => {
+                executors.insert(
+                    "package".to_string(),
+                    Box::new(PackageExecutorWrapper { pkg_mgr: pm }),
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "no package manager detected, package resources will fail");
+            }
+        }
+    }
+
     // Windows-native executors.
     #[cfg(windows)]
     {

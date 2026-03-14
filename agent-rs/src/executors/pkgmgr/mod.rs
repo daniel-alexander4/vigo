@@ -4,7 +4,8 @@
 //! Package manager abstraction layer.
 //!
 //! Provides a [`PackageManager`] trait and auto-detection via [`detect`].
-//! Backends: apt, dnf, yum, apk, pacman, zypper.
+//! Backends: apt, dnf, yum, apk, pacman, zypper, pkg (FreeBSD), pkg_add
+//! (OpenBSD), pkgin (NetBSD), brew (macOS).
 
 pub mod apt;
 
@@ -39,6 +40,15 @@ pub fn detect(os_family: &str, os_distro: &str) -> Result<Box<dyn PackageManager
         "alpine" => Ok(Box::new(GenericPkgMgr::apk())),
         "arch" | "archlinux" => Ok(Box::new(GenericPkgMgr::pacman())),
         _ => {
+            // Check by OS name for non-Linux platforms.
+            match std::env::consts::OS {
+                "freebsd" => return Ok(Box::new(GenericPkgMgr::pkg())),
+                "openbsd" => return Ok(Box::new(GenericPkgMgr::pkg_add())),
+                "netbsd" => return Ok(Box::new(GenericPkgMgr::pkgin())),
+                "macos" => return Ok(Box::new(GenericPkgMgr::brew())),
+                _ => {}
+            }
+
             // Fall back to distro name (gopsutil may report distro as family).
             match distro.as_str() {
                 "ubuntu" | "debian" | "linuxmint" | "pop" => {
@@ -74,12 +84,14 @@ fn command_exists(name: &str) -> bool {
 }
 
 /// Generic package manager that wraps common install/remove/query patterns.
-/// Covers dnf, yum, apk, pacman, zypper.
+/// Covers dnf, yum, apk, pacman, zypper, pkg, pkg_add, pkgin, brew.
 pub struct GenericPkgMgr {
-    /// Command name (dnf, yum, apk, pacman, zypper).
+    /// Command name for install (dnf, yum, apk, pacman, zypper, pkg, pkg_add, pkgin, brew).
     cmd: &'static str,
     /// Install args: [cmd] [install_args...] <package>
     install_args: &'static [&'static str],
+    /// Command name for remove (usually same as cmd, except pkg_add→pkg_delete).
+    remove_cmd: &'static str,
     /// Remove args.
     remove_args: &'static [&'static str],
     /// Query installed command + args. Exit 0 means installed.
@@ -94,6 +106,7 @@ impl GenericPkgMgr {
         Self {
             cmd: "dnf",
             install_args: &["install", "-y"],
+            remove_cmd: "dnf",
             remove_args: &["remove", "-y"],
             query_cmd: "rpm",
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
@@ -105,6 +118,7 @@ impl GenericPkgMgr {
         Self {
             cmd: "yum",
             install_args: &["install", "-y"],
+            remove_cmd: "yum",
             remove_args: &["remove", "-y"],
             query_cmd: "rpm",
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
@@ -116,6 +130,7 @@ impl GenericPkgMgr {
         Self {
             cmd: "apk",
             install_args: &["add", "--no-cache"],
+            remove_cmd: "apk",
             remove_args: &["del"],
             query_cmd: "apk",
             query_args: &["info", "-e"],
@@ -127,6 +142,7 @@ impl GenericPkgMgr {
         Self {
             cmd: "pacman",
             install_args: &["-S", "--noconfirm"],
+            remove_cmd: "pacman",
             remove_args: &["-R", "--noconfirm"],
             query_cmd: "pacman",
             query_args: &["-Q"],
@@ -141,10 +157,79 @@ impl GenericPkgMgr {
         Self {
             cmd: "zypper",
             install_args: &["install", "-y"],
+            remove_cmd: "zypper",
             remove_args: &["remove", "-y"],
             query_cmd: "rpm",
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
             version_parser: |s| s.trim().to_string(),
+        }
+    }
+
+    fn pkg() -> Self {
+        Self {
+            cmd: "pkg",
+            install_args: &["install", "-y"],
+            remove_cmd: "pkg",
+            remove_args: &["delete", "-y"],
+            query_cmd: "pkg",
+            query_args: &["info"],
+            version_parser: |s| {
+                // pkg info output: "name-version\n..."
+                // The version is after the last hyphen in the first line.
+                s.lines()
+                    .next()
+                    .and_then(|line| line.rsplit_once('-'))
+                    .map(|(_, v)| v.to_string())
+                    .unwrap_or_default()
+            },
+        }
+    }
+
+    fn pkg_add() -> Self {
+        Self {
+            cmd: "pkg_add",
+            install_args: &[],
+            remove_cmd: "pkg_delete",
+            remove_args: &[],
+            query_cmd: "pkg_info",
+            query_args: &[],
+            version_parser: |s| {
+                // pkg_info <name> output: "name-version ..."
+                s.lines()
+                    .next()
+                    .and_then(|line| {
+                        let word = line.split_whitespace().next()?;
+                        word.rsplit_once('-').map(|(_, v)| v.to_string())
+                    })
+                    .unwrap_or_default()
+            },
+        }
+    }
+
+    fn pkgin() -> Self {
+        Self {
+            cmd: "pkgin",
+            install_args: &["-y", "install"],
+            remove_cmd: "pkgin",
+            remove_args: &["-y", "remove"],
+            query_cmd: "pkg_info",
+            query_args: &["-e"],
+            version_parser: |_| String::new(), // -e just exits 0/1
+        }
+    }
+
+    fn brew() -> Self {
+        Self {
+            cmd: "brew",
+            install_args: &["install"],
+            remove_cmd: "brew",
+            remove_args: &["uninstall"],
+            query_cmd: "brew",
+            query_args: &["list", "--versions"],
+            version_parser: |s| {
+                // "name version1 version2" — take first version
+                s.split_whitespace().nth(1).unwrap_or("").to_string()
+            },
         }
     }
 }
@@ -174,8 +259,10 @@ impl PackageManager for GenericPkgMgr {
             // Most package managers accept name-version or name=version.
             match self.cmd {
                 "dnf" | "yum" | "zypper" => format!("{}-{}", name, version),
-                "pacman" => format!("{}={}", name, version),
-                "apk" => format!("{}={}", name, version),
+                "pacman" | "apk" | "pkgin" => format!("{}={}", name, version),
+                "brew" => format!("{}@{}", name, version),
+                "pkg" => format!("{}-{}", name, version),
+                "pkg_add" => format!("{}-{}", name, version),
                 _ => name.to_string(),
             }
         };
@@ -197,14 +284,14 @@ impl PackageManager for GenericPkgMgr {
     fn remove(&self, name: &str) -> Result<(), String> {
         let mut args: Vec<&str> = self.remove_args.to_vec();
         args.push(name);
-        let output = std::process::Command::new(self.cmd)
+        let output = std::process::Command::new(self.remove_cmd)
             .args(&args)
             .output()
-            .map_err(|e| format!("{} remove {}: {}", self.cmd, name, e))?;
+            .map_err(|e| format!("{} remove {}: {}", self.remove_cmd, name, e))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("{} remove {} failed: {}", self.cmd, name, stderr));
+            return Err(format!("{} remove {} failed: {}", self.remove_cmd, name, stderr));
         }
         Ok(())
     }

@@ -621,6 +621,33 @@ async fn install_platform_service(
     bootstrap::systemd::install_service(bootstrap_server, grpc_port, data_dir).await
 }
 
+#[cfg(target_os = "macos")]
+async fn install_platform_service(
+    bootstrap_server: &str,
+    grpc_port: &str,
+    data_dir: &std::path::Path,
+) -> Result<String> {
+    bootstrap::launchd::install_service(bootstrap_server, grpc_port, data_dir).await
+}
+
+#[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
+async fn install_platform_service(
+    bootstrap_server: &str,
+    grpc_port: &str,
+    data_dir: &std::path::Path,
+) -> Result<String> {
+    bootstrap::rc_d::install_service(bootstrap_server, grpc_port, data_dir).await
+}
+
+#[cfg(target_os = "openbsd")]
+async fn install_platform_service(
+    bootstrap_server: &str,
+    grpc_port: &str,
+    data_dir: &std::path::Path,
+) -> Result<String> {
+    bootstrap::rcctl::install_service(bootstrap_server, grpc_port, data_dir).await
+}
+
 #[cfg(windows)]
 async fn install_platform_service(
     bootstrap_server: &str,
@@ -630,7 +657,7 @@ async fn install_platform_service(
     bootstrap::windows_service::install_service(bootstrap_server, grpc_port, data_dir).await
 }
 
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", windows)))]
 async fn install_platform_service(
     _bootstrap_server: &str,
     _grpc_port: &str,

@@ -12,6 +12,10 @@ mod dmi;
 mod docker;
 mod time_collector;
 
+// Shared sysctl utility for macOS/BSD collectors.
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub(crate) mod sysctl_util;
+
 // Linux-specific collectors.
 #[cfg(target_os = "linux")]
 mod blockdevices;
@@ -55,6 +59,70 @@ mod uptime;
 mod users;
 #[cfg(target_os = "linux")]
 mod virt;
+
+// macOS-specific collectors.
+#[cfg(target_os = "macos")]
+mod hardware_macos;
+#[cfg(target_os = "macos")]
+mod memory_macos;
+#[cfg(target_os = "macos")]
+mod network_macos;
+#[cfg(target_os = "macos")]
+mod os_macos;
+#[cfg(target_os = "macos")]
+mod swap_macos;
+
+// FreeBSD-specific collectors.
+#[cfg(target_os = "freebsd")]
+mod os_freebsd;
+
+// OpenBSD-specific collectors.
+#[cfg(target_os = "openbsd")]
+mod os_openbsd;
+
+// NetBSD-specific collectors.
+#[cfg(target_os = "netbsd")]
+mod os_netbsd;
+
+// Shared BSD/macOS collectors.
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod blockdevices_bsd;
+#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod hardware_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod identity_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod kernel_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod loadavg_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod locale_bsd;
+#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod memory_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub(crate) mod mountpoints_bsd;
+#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod network_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod filesystem_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod packages_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod processors_bsd;
+#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod swap_freebsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod timezone_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod uptime_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod users_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod virt_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod dmi_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+mod gpu_bsd;
 
 // Windows-specific collectors.
 #[cfg(windows)]
@@ -158,7 +226,6 @@ impl CollectorKind {
     pub fn collect(&self) -> Result<Value> {
         match self {
             Self::Time => time_collector::collect(),
-            Self::Dmi => dmi::collect(),
             Self::Cloud => cloud::collect(),
             Self::Docker => docker::collect(),
 
@@ -194,6 +261,8 @@ impl CollectorKind {
             #[cfg(target_os = "linux")]
             Self::BlockDevices => blockdevices::collect(),
             #[cfg(target_os = "linux")]
+            Self::Dmi => dmi::collect(),
+            #[cfg(target_os = "linux")]
             Self::Systemd => systemd::collect(),
             #[cfg(target_os = "linux")]
             Self::SELinux => selinux::collect(),
@@ -205,6 +274,90 @@ impl CollectorKind {
             Self::Swap => swap::collect(),
             #[cfg(target_os = "linux")]
             Self::Gpu => gpu::collect(),
+
+            // macOS implementations.
+            #[cfg(target_os = "macos")]
+            Self::Os => os_macos::collect(),
+            #[cfg(target_os = "macos")]
+            Self::Hardware => hardware_macos::collect(),
+            #[cfg(target_os = "macos")]
+            Self::Network => network_macos::collect(),
+            #[cfg(target_os = "macos")]
+            Self::Memory => memory_macos::collect(),
+            #[cfg(target_os = "macos")]
+            Self::Swap => swap_macos::collect(),
+
+            // FreeBSD implementations.
+            #[cfg(target_os = "freebsd")]
+            Self::Os => os_freebsd::collect(),
+            #[cfg(target_os = "freebsd")]
+            Self::Hardware => hardware_bsd::collect(),
+            #[cfg(target_os = "freebsd")]
+            Self::Network => network_bsd::collect(),
+            #[cfg(target_os = "freebsd")]
+            Self::Memory => memory_bsd::collect(),
+            #[cfg(target_os = "freebsd")]
+            Self::Swap => swap_freebsd::collect(),
+
+            // OpenBSD implementations.
+            #[cfg(target_os = "openbsd")]
+            Self::Os => os_openbsd::collect(),
+            #[cfg(target_os = "openbsd")]
+            Self::Hardware => hardware_bsd::collect(),
+            #[cfg(target_os = "openbsd")]
+            Self::Network => network_bsd::collect(),
+            #[cfg(target_os = "openbsd")]
+            Self::Memory => memory_bsd::collect(),
+            #[cfg(target_os = "openbsd")]
+            Self::Swap => swap_freebsd::collect(),
+
+            // NetBSD implementations.
+            #[cfg(target_os = "netbsd")]
+            Self::Os => os_netbsd::collect(),
+            #[cfg(target_os = "netbsd")]
+            Self::Hardware => hardware_bsd::collect(),
+            #[cfg(target_os = "netbsd")]
+            Self::Network => network_bsd::collect(),
+            #[cfg(target_os = "netbsd")]
+            Self::Memory => memory_bsd::collect(),
+            #[cfg(target_os = "netbsd")]
+            Self::Swap => swap_freebsd::collect(),
+
+            // Shared BSD/macOS collectors.
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Packages => packages_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Identity => identity_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Virtual => virt_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Uptime => uptime_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::LoadAvg => loadavg_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Mountpoints => mountpoints_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Processors => processors_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Filesystem => filesystem_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Kernel => kernel_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Users => users_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::BlockDevices => blockdevices_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Dmi => dmi_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Timezone => timezone_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Locale => locale_bsd::collect(),
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Gpu => gpu_bsd::collect(),
+
+            // Linux-only concepts — return null on BSD/macOS.
+            #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+            Self::Systemd | Self::SELinux => Ok(Value::Null),
 
             // Windows implementations.
             #[cfg(windows)]
@@ -233,6 +386,8 @@ impl CollectorKind {
             Self::Swap => swap_windows::collect(),
             #[cfg(windows)]
             Self::Timezone => timezone_windows::collect(),
+            #[cfg(windows)]
+            Self::Dmi => dmi::collect(),
 
             // Collectors that skip on unsupported platforms.
             #[cfg(windows)]

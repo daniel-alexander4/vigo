@@ -1,4 +1,5 @@
-.PHONY: build build-agent test test-agent lint lint-agent dist dist-agent dist-agent-windows \
+.PHONY: build build-agent test test-agent lint lint-agent dist dist-agent \
+       dist-agent-windows dist-agent-macos dist-agent-freebsd \
        proto certs seed migrate sqlc up down logs clean
 
 VERSION ?= dev
@@ -58,6 +59,26 @@ dist-agent-windows:
 	mkdir -p dist/agent/windows/amd64
 	cd agent-rs && cross build --release --target x86_64-pc-windows-msvc
 	cp agent-rs/target/x86_64-pc-windows-msvc/release/hobnob.exe dist/agent/windows/amd64/hobnob.exe
+
+# Cross-compile Rust agent for macOS.
+# Prerequisites (from Linux):
+#   Install osxcross or build natively on macOS.
+#   rustup target add x86_64-apple-darwin aarch64-apple-darwin
+dist-agent-macos:
+	mkdir -p dist/agent/darwin/amd64 dist/agent/darwin/arm64
+	cd agent-rs && cargo build --release --target x86_64-apple-darwin
+	cp agent-rs/target/x86_64-apple-darwin/release/hobnob dist/agent/darwin/amd64/hobnob
+	cd agent-rs && cargo build --release --target aarch64-apple-darwin
+	cp agent-rs/target/aarch64-apple-darwin/release/hobnob dist/agent/darwin/arm64/hobnob
+
+# Cross-compile Rust agent for FreeBSD (Rust Tier 2).
+# Prerequisites:
+#   rustup target add x86_64-unknown-freebsd
+#   Install cross: cargo install cross
+dist-agent-freebsd:
+	mkdir -p dist/agent/freebsd/amd64
+	cd agent-rs && cross build --release --target x86_64-unknown-freebsd
+	cp agent-rs/target/x86_64-unknown-freebsd/release/hobnob dist/agent/freebsd/amd64/hobnob
 
 # --- Codegen ---
 

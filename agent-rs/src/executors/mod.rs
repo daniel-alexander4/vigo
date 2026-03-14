@@ -38,11 +38,11 @@ pub mod symlink;
 // Linux-only executors.
 #[cfg(target_os = "linux")]
 pub mod alternatives;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
 pub mod cron;
 #[cfg(target_os = "linux")]
 pub mod firewall;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "openbsd", target_os = "netbsd"))]
 pub mod group;
 #[cfg(target_os = "linux")]
 pub mod hostname;
@@ -62,8 +62,48 @@ pub mod sysctl;
 pub mod timezone;
 #[cfg(target_os = "linux")]
 pub mod tmpfile;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "openbsd", target_os = "netbsd"))]
 pub mod user;
+
+// macOS-native executors.
+#[cfg(target_os = "macos")]
+pub mod group_macos;
+#[cfg(target_os = "macos")]
+pub mod hostname_macos;
+#[cfg(target_os = "macos")]
+pub mod service_macos;
+#[cfg(target_os = "macos")]
+pub mod timezone_macos;
+#[cfg(target_os = "macos")]
+pub mod user_macos;
+
+// FreeBSD-native executors.
+#[cfg(target_os = "freebsd")]
+pub mod group_freebsd;
+#[cfg(target_os = "freebsd")]
+pub mod kernel_module_freebsd;
+#[cfg(target_os = "freebsd")]
+pub mod service_freebsd;
+#[cfg(target_os = "freebsd")]
+pub mod user_freebsd;
+
+// OpenBSD-native executors.
+#[cfg(target_os = "openbsd")]
+pub mod service_openbsd;
+
+// Shared BSD/macOS executors.
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub mod firewall_pf;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub mod hostname_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub mod mount_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub mod swap_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub mod sysctl_bsd;
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+pub mod timezone_bsd;
 
 // Windows-native executors.
 #[cfg(windows)]
