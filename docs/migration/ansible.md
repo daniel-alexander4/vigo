@@ -205,7 +205,7 @@ thralls:
 
 ### Key Differences
 
-- **No separate template files.** Ansible keeps templates in `templates/`. Hobnob inlines the template in the `content:` attribute — no extra files to manage.
+- **Templates inline or in `templates/`.** Small templates go inline in `content:`. Larger files use `source: templates/nginx.conf.tmpl` — the server reads and renders the file from the `templates/` directory. Same concept as Ansible's `templates/`, but no Jinja2.
 - **No handlers directory.** Ansible's handler/notify pattern maps directly to Hobnob's `notify:` list on the resource. No separate `handlers/main.yml` file.
 - **No defaults directory.** Module-level `vars:` replaces `defaults/main.yml`. Same concept, inline in the module file.
 - **One file per module.** An Ansible role is 4+ files across multiple directories. A Hobnob module is a single `.hnb` file.

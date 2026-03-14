@@ -202,7 +202,7 @@ thralls:
 - **No Ruby.** Chef's entire stack runs on Ruby — cookbooks, recipes, attributes, templates. Hobnob is pure YAML with Go templates in `content:` only.
 - **One file per module.** A Chef cookbook is a directory tree (`recipes/`, `templates/`, `attributes/`, `metadata.rb`, etc.). A Hobnob module is a single `.hnb` file.
 - **No attribute levels.** Chef's `default`/`normal`/`override`/`force_override`/`automatic` at cookbook/role/environment/node levels gives 15 precedence tiers. Hobnob has three: module defaults → role vars → node vars.
-- **Inline templates.** No separate `templates/default/` directory. The template goes directly in `content:`.
+- **Templates inline or in `templates/`.** Small templates go directly in `content:`. For larger files, use `source: templates/nginx.conf.tmpl` — the server reads the file from the `templates/` directory and renders it with the same Go template engine. No `templates/default/` subdirectory convention.
 
 ## Variable and Data Hierarchy
 

@@ -195,7 +195,7 @@ thralls:
 
 - **No class-based restart.** CFEngine uses `classes => if_repaired("nginx_config_changed")` to set a class, then conditionally restarts in a separate `services:` promise guarded by `nginx_config_changed::`. Hobnob uses `notify: [nginx-service]` directly — when the file changes, the service restarts.
 - **YAML instead of DSL.** CFEngine's promise syntax requires learning its DSL, bodies, and promise types. Hobnob is plain YAML with a small set of known keys.
-- **Inline templates.** No separate `.mustache` file. The template goes in `content:` using Go template syntax.
+- **Templates inline or in `templates/`.** Small templates go in `content:` using Go template syntax. Larger files use `source: templates/app.conf.tmpl` — the server reads and renders the file from the `templates/` directory.
 - **Simpler variable access.** CFEngine's `{{vars.bundle.varname}}` becomes `{{ .Vars.varname }}` in Hobnob.
 
 ## Variable and Data Hierarchy

@@ -203,7 +203,7 @@ thralls:
 ### Key Differences
 
 - **No Jinja2 in YAML structure.** Salt's biggest power and biggest footgun is Jinja2 rendering the YAML itself. Hobnob keeps YAML structure static — templates only work inside `content:` values.
-- **No `salt://` file server.** Salt serves templates and files via `salt://` URIs. Hobnob inlines templates in `content:` — no separate file to manage.
+- **No `salt://` file server.** Salt serves templates and files via `salt://` URIs. Hobnob uses `content:` for inline templates or `source: templates/app.conf.tmpl` for external template files — no file server needed.
 - **Requisites map directly.** Salt's `require`/`watch`/`listen`/`require_in` map cleanly to Hobnob's `depends_on`/`subscribes`/`notify`/`before`. The semantics are nearly identical.
 - **No pillar.get() lookups.** Variables are accessed directly via `{{ .Vars.name }}` in templates or defined as module defaults — no lookup function needed.
 

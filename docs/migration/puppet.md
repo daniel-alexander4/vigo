@@ -191,7 +191,7 @@ thralls:
 
 ### Key Differences
 
-- **No separate template files.** The template lives inline in `content:`. No ERB, no template directory — just Go template syntax in the YAML.
+- **Templates inline or in `templates/`.** Small templates go inline in `content:`. Larger files use `source: templates/nginx.conf.tmpl` — the server reads and renders the file from the `templates/` directory. No ERB — Go template syntax only.
 - **No `require =>`** needed for the package → config ordering. Hobnob uses `notify:` from config to service, and the resource DAG handles the rest. You can add explicit `depends_on: [nginx-package]` if you prefer.
 - **Variables are flat.** Puppet class parameters become `vars:` entries. No scope hierarchy — module defaults, then node-level overrides. That's it.
 - **No catalog compilation.** The YAML is interpreted directly. No parser, no AST, no compilation errors to debug.
