@@ -1,4 +1,4 @@
-# Secrets backend. Options: "local" (default), "isopass", or "static" (legacy).
+# Secrets backend. Options: "local" (default) or "isopass".
 # Local stores secrets as files in secrets_dir. With key_file, files are AES-256-GCM
 # encrypted; without key_file, files are plaintext (suitable for dev/single-server).
 # Secret path "hobnob/db/dsn" maps to file <secrets_dir>/hobnob/db/dsn.

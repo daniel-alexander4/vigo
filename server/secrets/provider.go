@@ -3,7 +3,7 @@
 
 // Package secrets provides a pluggable interface for secret retrieval.
 // The default backend is LocalProvider (AES-256-GCM encrypted files, always encrypted at rest).
-// IsopassProvider wraps isopass for production. StaticProvider reads from .env (legacy).
+// IsopassProvider wraps isopass for production.
 package secrets
 
 import "context"

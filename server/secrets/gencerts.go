@@ -40,7 +40,7 @@ func TLSCertPaths(tlsDir string) (ca, caKey, cert, key string) {
 // when running inside Docker). Files are written as plain PEM (not encrypted)
 // since they are loaded directly by the TLS stack.
 //
-// Only called for the local backend — isopass/static manage certs externally.
+// Only called for the local backend — isopass manages certs externally.
 func EnsureTLSCerts(tlsDir string, extraSANs ...string) error {
 	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(tlsDir)
 	for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {

@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 59 built-in executors that manage system resources idempotently across six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 59 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -16,7 +16,7 @@ Every resource in a `.hnb` config declares a `type:` field that maps to an execu
 
 ## Cross-Platform Executors (24)
 
-These executors compile and run on all six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows).
+These executors compile and run on all seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows).
 
 | Type | Description | Doc |
 |------|-------------|-----|
@@ -49,20 +49,20 @@ These executors compile and run on all six supported platforms (Linux, macOS, Fr
 
 These executors manage OS-level resources across Unix platforms. Each type uses a platform-native backend so that `.hnb` configs are portable -- you write `type: service` and the agent dispatches to the correct implementation for the host OS.
 
-| Type | Description | Linux | macOS | FreeBSD | OpenBSD | NetBSD | Doc |
-|------|-------------|:-----:|:-----:|:-------:|:-------:|:------:|-----|
-| `service` | Manage system services | systemd | launchctl | rc.d | rcctl | -- | [service](service.md) |
-| `package` | Install, upgrade, and remove OS packages | apt/dnf/yum | brew | pkg | pkg_add | pkgin | [package](package.md) |
-| `user` | Manage local user accounts | useradd | dscl | pw | useradd | useradd | [user](user.md) |
-| `group` | Manage local groups | groupadd | dscl | pw | groupadd | groupadd | [group](group.md) |
-| `cron` | Manage cron jobs | /etc/cron.d | crontab | crontab | crontab | crontab | [cron](cron.md) |
-| `hostname` | Set the system hostname | hostnamectl | scutil | hostname | hostname | hostname | [hostname](hostname.md) |
-| `timezone` | Set the system timezone | timedatectl | systemsetup | shared | shared | shared | [timezone](timezone.md) |
-| `firewall` | Manage firewall rules | UFW | pf | pf | pf | pf | [firewall](firewall.md) |
-| `sysctl` | Manage kernel parameters | sysctl | sysctl | sysctl | sysctl | sysctl | [sysctl](sysctl.md) |
-| `mount` | Manage mount points and fstab | mount/fstab | mount/fstab | mount/fstab | mount/fstab | mount/fstab | [mount](mount.md) |
-| `swap` | Manage swap files/devices | swapon | shared | shared | shared | shared | [swap](swap.md) |
-| `kernel_module` | Load and unload kernel modules | modprobe | -- | kld | -- | -- | [kernel_module](kernel_module.md) |
+| Type | Description | Linux | macOS | FreeBSD | OpenBSD | NetBSD | illumos | Doc |
+|------|-------------|:-----:|:-----:|:-------:|:-------:|:------:|:-------:|-----|
+| `service` | Manage system services | systemd | launchctl | rc.d | rcctl | -- | SMF | [service](service.md) |
+| `package` | Install, upgrade, and remove OS packages | apt/dnf/yum | brew | pkg | pkg_add | pkgin | IPS | [package](package.md) |
+| `user` | Manage local user accounts | useradd | dscl | pw | useradd | useradd | useradd | [user](user.md) |
+| `group` | Manage local groups | groupadd | dscl | pw | groupadd | groupadd | groupadd | [group](group.md) |
+| `cron` | Manage cron jobs | /etc/cron.d | crontab | crontab | crontab | crontab | crontab | [cron](cron.md) |
+| `hostname` | Set the system hostname | hostnamectl | scutil | hostname | hostname | hostname | /etc/nodename | [hostname](hostname.md) |
+| `timezone` | Set the system timezone | timedatectl | systemsetup | shared | shared | shared | /etc/default/init | [timezone](timezone.md) |
+| `firewall` | Manage firewall rules | UFW | pf | pf | pf | pf | -- | [firewall](firewall.md) |
+| `sysctl` | Manage kernel parameters | sysctl | sysctl | sysctl | sysctl | sysctl | -- | [sysctl](sysctl.md) |
+| `mount` | Manage mount points and fstab | mount/fstab | mount/fstab | mount/fstab | mount/fstab | mount/fstab | -- | [mount](mount.md) |
+| `swap` | Manage swap files/devices | swapon | shared | shared | shared | shared | shared | [swap](swap.md) |
+| `kernel_module` | Load and unload kernel modules | modprobe | -- | kld | -- | -- | -- | [kernel_module](kernel_module.md) |
 
 A "--" means the executor is not available on that platform.
 
