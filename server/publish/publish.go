@@ -137,6 +137,10 @@ func Publish(opts Options) (*Result, error) {
 	}
 	res.Files = files
 
+	// Lock down .live so only the publish command (running as root) can write.
+	// The server reads via the hobnob group. Operators cannot write directly.
+	lockdownLiveDir(LiveDir)
+
 	// Snapshot .live for rollback support.
 	_, _ = SnapshotLive(LiveDir, HistoryDir, DefaultMaxVersions)
 
@@ -375,7 +379,7 @@ func atomicSync(proposed, live string) (int, error) {
 	if err := os.MkdirAll(filepath.Dir(live), 0o755); err != nil {
 		return 0, fmt.Errorf("creating live parent: %w", err)
 	}
-	if err := os.MkdirAll(live, 0o755); err != nil {
+	if err := os.MkdirAll(live, 0o750); err != nil {
 		return 0, fmt.Errorf("creating live dir: %w", err)
 	}
 
@@ -464,7 +468,7 @@ func copyDir(src, dst string) (int, error) {
 		target := filepath.Join(dst, rel)
 
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return os.MkdirAll(target, 0o750)
 		}
 
 		data, err := os.ReadFile(path)
@@ -472,9 +476,45 @@ func copyDir(src, dst string) (int, error) {
 			return err
 		}
 		count++
-		return os.WriteFile(target, data, 0o644)
+		return os.WriteFile(target, data, 0o640)
 	})
 	return count, err
+}
+
+// lockdownLiveDir sets restrictive permissions on .live and all contents.
+// Directories get 0750 (owner rwx, group rx), files get 0640 (owner rw, group r).
+// This prevents operators from bypassing config publish by writing directly.
+func lockdownLiveDir(live string) {
+	_ = os.Chmod(live, 0o750)
+	_ = filepath.WalkDir(live, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // best-effort
+		}
+		if d.IsDir() {
+			_ = os.Chmod(path, 0o750)
+		} else {
+			_ = os.Chmod(path, 0o640)
+		}
+		return nil
+	})
+}
+
+// CheckLivePermissions checks that .live is not world-writable. Returns a
+// warning message if permissions are too open, or empty string if OK.
+// Called at server startup for early detection of misconfigured permissions.
+func CheckLivePermissions(live string) string {
+	info, err := os.Stat(live)
+	if err != nil {
+		return "" // doesn't exist yet — will be created by first publish
+	}
+	mode := info.Mode().Perm()
+	if mode&0o002 != 0 {
+		return fmt.Sprintf(".live directory %s is world-writable (mode %04o) — run 'chmod 750 %s' to restrict access", live, mode, live)
+	}
+	if mode&0o020 != 0 && mode&0o007 != 0 {
+		return fmt.Sprintf(".live directory %s is group and world accessible (mode %04o) — run 'chmod 750 %s'", live, mode, live)
+	}
+	return ""
 }
 
 var _ secrets.Provider = (*stubProvider)(nil)

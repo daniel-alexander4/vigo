@@ -41,6 +41,7 @@ hobnobcli config publish --skip-url-check
 | `--dangerous` | `false` | Allow non-idempotent resources (exec without guards) |
 | `--skip-url-check` | `false` | Skip HTTP aliveness checks for URLs |
 | `--url-timeout` | `10s` | Timeout per URL aliveness check |
+| `--no-suggest` | `false` | Skip AI-assisted fix suggestions on validation failure |
 
 ## How It Works
 
@@ -70,6 +71,12 @@ Subdirectories not present in proposed are removed from `.live/` (sync is replac
 - Module and role references (no dangling refs)
 - Circular dependency detection
 - Resource idempotency (exec resources need `creates`, `onlyif`, or `unless` — unless `--dangerous`)
+- Cross-resource references (`depends_on`, `notify`, `subscribes`, `before` must reference existing resource names)
+- Redundant triggers (resource A `notify: [B]` and B `subscribes: [A]` — double trigger)
+- Unknown resource types (blocked unless `custom: true` is set on the resource)
+- `file` with `state: directory` (must use `type: directory` instead)
+- `service` with `state: restarted/reloaded` without `subscribes` (restarts every convergence)
+- `reboot` without `subscribes` or `reboot_required_file` (reboots every convergence)
 - Secret reference format (not secret availability)
 - Template syntax in `content:` attributes
 - `when:` expression parsing
@@ -85,6 +92,48 @@ Subdirectories not present in proposed are removed from `.live/` (sync is replac
 - 4xx/5xx or connection failure = validation error
 - Non-HTTP URLs (ssh://, git://) are skipped
 - Disabled with `--skip-url-check`
+
+## AI-Assisted Fix Suggestions
+
+When validation fails, `config publish` calls the AI assistant (if the server is running with AI enabled) to explain each error and suggest corrected YAML. Suggestions stream to stderr below the error output.
+
+Use `--no-suggest` to skip AI suggestions (e.g., when the server is not running or AI is disabled).
+
+## File Permissions
+
+The `.live/` directory is protected so operators cannot bypass validation by writing directly:
+
+- **`.live/`** — `0750` (root can read/write, group can read)
+- **Files in `.live/`** — `0640` (root can read/write, group can read)
+- **`proposed/`** — `0770` (operators can read/write)
+
+Permissions are enforced automatically after each publish. The server logs a warning at startup if `.live/` is world-writable.
+
+To set up the recommended permission model:
+
+```bash
+# Create hobnob group for server process
+groupadd hobnob
+
+# Lock down .live (only root/publish can write, hobd can read via group)
+chown -R root:hobnob /etc/hobnob-server/hnb/.live
+chmod 750 /etc/hobnob-server/hnb/.live
+
+# Operators can write to proposed
+chmod 770 /etc/hobnob-server/hnb/proposed
+```
+
+## Custom Executor Resources
+
+Unknown resource types are blocked by default. If a resource uses a custom executor, add `custom: true` to bypass type validation:
+
+```yaml
+- name: deploy-app
+  type: capistrano
+  custom: true
+  command: "cap production deploy"
+  creates: "/var/www/app/current"
+```
 
 ## First-Time Setup
 

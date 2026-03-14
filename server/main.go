@@ -268,6 +268,11 @@ func run() error {
 	// Initialize subsystems.
 	reg := registry.NewRegistry(queries)
 
+	// Warn if .live directory has overly permissive permissions.
+	if warning := publish.CheckLivePermissions(publish.LiveDir); warning != "" {
+		slog.Warn(warning)
+	}
+
 	dangerous := os.Getenv("HOBNOB_DANGEROUS") == "1" || hasFlag("--dangerous")
 	configStore, err := config.NewConfigStore(publish.LiveDir, provider, dangerous)
 	if err != nil {

@@ -21,7 +21,8 @@ SEED_DIR="/seed"
 SECRETS_DIR="${DATA_DIR}/secrets"
 
 mkdir -p "${HNB_PROPOSED}/modules" "${HNB_PROPOSED}/roles" "${HNB_PROPOSED}/thralls" "${HNB_PROPOSED}/templates" "${HNB_PROPOSED}/vars"
-mkdir -p "${HNB_LIVE}" "${DATA_DIR}/db"
+mkdir -p -m 750 "${HNB_LIVE}"
+mkdir -p "${DATA_DIR}/db"
 mkdir -p -m 700 "${DATA_DIR}/license" "$SECRETS_DIR" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------
