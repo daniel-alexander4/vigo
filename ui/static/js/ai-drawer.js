@@ -1,44 +1,15 @@
 (function() {
-    var drawer = document.getElementById('ai-drawer');
-    var messages = document.getElementById('ai-drawer-messages');
-    var input = document.getElementById('ai-drawer-input');
-    var sendBtn = document.getElementById('ai-drawer-send');
-    var fab = document.getElementById('ai-fab');
-    var fabIcon = document.getElementById('ai-fab-icon');
-    var fabClose = document.getElementById('ai-fab-close');
-    if (!drawer || !messages || !input) return;
-
     var STORAGE_KEY = 'hobnob_ai_drawer';
     var busy = false;
     var open = false;
-
-    // Restore state from sessionStorage.
     var history = [];
+
+    // Restore persistent state from sessionStorage.
     try {
         var saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
-        if (saved && saved.history && saved.history.length) {
-            history = saved.history;
-            // Rebuild message bubbles from saved history.
-            var welcome = messages.querySelector('.ai-drawer__welcome');
-            if (welcome) welcome.remove();
-            for (var i = 0; i < history.length; i++) {
-                var msg = history[i];
-                var el = addMsg(msg.role === 'user' ? 'user' : 'assistant', '');
-                var contentEl = el.querySelector('.chat-msg-content');
-                if (msg.role === 'user') {
-                    contentEl.textContent = msg.content;
-                } else {
-                    contentEl.innerHTML = msg.html || msg.content;
-                }
-            }
-            // Restore open state.
-            if (saved.open) {
-                open = true;
-                drawer.classList.add('ai-drawer--open');
-                fab.classList.add('ai-fab--open');
-                fabIcon.style.display = 'none';
-                fabClose.style.display = '';
-            }
+        if (saved) {
+            if (saved.history && saved.history.length) history = saved.history;
+            if (saved.open) open = true;
         }
     } catch(e) {}
 
@@ -51,24 +22,74 @@
         } catch(e) {}
     }
 
-    window.toggleAIChat = function() {
-        open = !open;
+    // Rebuild message bubbles from saved history into the current DOM.
+    function restoreMessages() {
+        var messages = document.getElementById('ai-drawer-messages');
+        if (!messages) return;
+
+        if (history.length === 0) return;
+
+        var welcome = messages.querySelector('.ai-drawer__welcome');
+        if (welcome) welcome.remove();
+        for (var i = 0; i < history.length; i++) {
+            var msg = history[i];
+            var el = addMsg(msg.role === 'user' ? 'user' : 'assistant', '');
+            var contentEl = el.querySelector('.chat-msg-content');
+            if (msg.role === 'user') {
+                contentEl.textContent = msg.content;
+            } else {
+                contentEl.innerHTML = msg.html || msg.content;
+            }
+        }
+    }
+
+    // Apply open/closed state to current DOM elements.
+    function applyOpenState() {
+        var drawer = document.getElementById('ai-drawer');
+        var fab = document.getElementById('ai-fab');
+        var fabIcon = document.getElementById('ai-fab-icon');
+        var fabClose = document.getElementById('ai-fab-close');
+        if (!drawer || !fab) return;
+
         drawer.classList.toggle('ai-drawer--open', open);
         fab.classList.toggle('ai-fab--open', open);
-        fabIcon.style.display = open ? 'none' : '';
-        fabClose.style.display = open ? '' : 'none';
-        if (open) input.focus();
+        if (fabIcon) fabIcon.style.display = open ? 'none' : '';
+        if (fabClose) fabClose.style.display = open ? '' : 'none';
+    }
+
+    // Initialize or re-initialize after HTMX navigation.
+    function init() {
+        var drawer = document.getElementById('ai-drawer');
+        if (!drawer) return;
+
+        restoreMessages();
+        applyOpenState();
+    }
+
+    window.toggleAIChat = function() {
+        open = !open;
+        applyOpenState();
+        if (open) {
+            var input = document.getElementById('ai-drawer-input');
+            if (input) input.focus();
+        }
         saveState();
     };
 
     window.aiDrawerSuggest = function(btn) {
         var q = btn.getAttribute('data-question') || btn.textContent;
-        input.value = q;
+        var input = document.getElementById('ai-drawer-input');
+        if (input) input.value = q;
         aiDrawerSubmit(new Event('submit'));
     };
 
     window.aiDrawerSubmit = function(e) {
         e.preventDefault();
+        var input = document.getElementById('ai-drawer-input');
+        var sendBtn = document.getElementById('ai-drawer-send');
+        var messages = document.getElementById('ai-drawer-messages');
+        if (!input || !messages) return false;
+
         var q = input.value.trim();
         if (!q || busy) return false;
 
@@ -80,7 +101,7 @@
         input.value = '';
         input.style.height = 'auto';
         busy = true;
-        sendBtn.disabled = true;
+        if (sendBtn) sendBtn.disabled = true;
 
         var assistantEl = addMsg('assistant', '');
         var contentEl = assistantEl.querySelector('.chat-msg-content');
@@ -173,13 +194,18 @@
 
     function finish() {
         busy = false;
-        sendBtn.disabled = false;
-        input.focus();
+        var sendBtn = document.getElementById('ai-drawer-send');
+        var input = document.getElementById('ai-drawer-input');
+        if (sendBtn) sendBtn.disabled = false;
+        if (input) input.focus();
         scroll();
         saveState();
     }
 
     function addMsg(role, text) {
+        var messages = document.getElementById('ai-drawer-messages');
+        if (!messages) return document.createElement('div');
+
         var el = document.createElement('div');
         el.className = 'chat-msg chat-msg--' + role;
         var bubble = document.createElement('div');
@@ -201,6 +227,11 @@
     }
 
     function scroll() {
-        messages.scrollTop = messages.scrollHeight;
+        var messages = document.getElementById('ai-drawer-messages');
+        if (messages) messages.scrollTop = messages.scrollHeight;
     }
+
+    // Initialize now and re-initialize after every HTMX navigation.
+    init();
+    document.body.addEventListener('htmx:afterSettle', init);
 })();

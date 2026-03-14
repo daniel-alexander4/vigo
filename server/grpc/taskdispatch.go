@@ -13,6 +13,7 @@ import (
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/tasks"
 	"github.com/hobnob/hobnob/server/validate"
 )
@@ -236,6 +237,8 @@ func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
 		slog.Error("failed to finalize task run", "task_run_id", taskRunID, "error", err)
 		return
 	}
+
+	metrics.TaskRunsTotal.WithLabelValues(status).Inc()
 
 	slog.Info("task run finished",
 		"task_run_id", taskRunID,

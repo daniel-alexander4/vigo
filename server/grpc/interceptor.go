@@ -73,7 +73,12 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 			// Admin RPCs and unknown types pass through without agent signature checks.
 		}
 
-		return handler(ctx, req)
+		start := time.Now()
+		resp, err := handler(ctx, req)
+		code := status.Code(err)
+		metrics.GRPCRequestsTotal.WithLabelValues(info.FullMethod, code.String()).Inc()
+		metrics.GRPCRequestDuration.WithLabelValues(info.FullMethod).Observe(time.Since(start).Seconds())
+		return resp, err
 	}
 }
 

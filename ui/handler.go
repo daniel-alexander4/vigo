@@ -13,7 +13,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -459,12 +461,50 @@ func extractMDTitle(path string) string {
 	return ""
 }
 
+// docsLinkRe matches href attributes in rendered HTML.
+var docsLinkRe = regexp.MustCompile(`href="([^"]*)"`)
+
+// rewriteDocsLinks rewrites relative markdown links in rendered HTML to
+// absolute /docs/ paths. Handles .md extensions and _index references.
+func rewriteDocsLinks(html string, baseDir string) string {
+	return docsLinkRe.ReplaceAllStringFunc(html, func(match string) string {
+		href := match[6 : len(match)-1] // strip href=" and trailing "
+
+		// Skip absolute URLs, anchors, mailto, javascript, etc.
+		if href == "" || href[0] == '/' || href[0] == '#' ||
+			strings.Contains(href, "://") || strings.HasPrefix(href, "mailto:") {
+			return match
+		}
+
+		// Split anchor from path.
+		anchor := ""
+		if i := strings.IndexByte(href, '#'); i >= 0 {
+			anchor = href[i:]
+			href = href[:i]
+		}
+
+		// Only rewrite links that look like internal docs (contain .md or no extension).
+		if !strings.HasSuffix(href, ".md") && strings.Contains(href, ".") {
+			return match // external file reference (e.g., image.png)
+		}
+
+		// Resolve relative path against the current document's directory.
+		resolved := path.Clean(path.Join(baseDir, href))
+
+		// Strip .md and _index suffixes.
+		resolved = strings.TrimSuffix(resolved, ".md")
+		resolved = strings.TrimSuffix(resolved, "/_index")
+
+		return `href="/docs/` + resolved + anchor + `"`
+	})
+}
+
 // DocsIndex renders the docs landing page.
 func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 	content := ""
 	indexPath := filepath.Join(h.docsDir, "_index.md")
 	if raw, err := os.ReadFile(indexPath); err == nil {
-		content = RenderMarkdown(string(raw))
+		content = rewriteDocsLinks(RenderMarkdown(string(raw)), "")
 	} else {
 		content = "<h1>Documentation</h1><p>No docs found. Place markdown files in the docs directory.</p>"
 	}
@@ -482,6 +522,10 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	pagePath := r.PathValue("path")
 
+	// Strip .md extension — markdown files link to each other with .md
+	// but the docs browser uses extensionless URLs.
+	pagePath = strings.TrimSuffix(pagePath, ".md")
+
 	// Sanitize: only allow alphanumeric, hyphens, underscores, slashes.
 	pagePath = filepath.Clean(pagePath)
 	if strings.Contains(pagePath, "..") {
@@ -492,6 +536,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	// Try exact .md file first, then _index.md for directories.
 	var raw []byte
 	var err error
+	var baseDir string // directory for resolving relative links
 	mdPath := filepath.Join(h.docsDir, pagePath+".md")
 	if raw, err = os.ReadFile(mdPath); err != nil {
 		mdPath = filepath.Join(h.docsDir, pagePath, "_index.md")
@@ -499,9 +544,15 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "page not found", http.StatusNotFound)
 			return
 		}
+		baseDir = pagePath // _index.md: relative links resolve from this dir
+	} else {
+		baseDir = path.Dir(pagePath) // regular file: resolve from parent dir
+		if baseDir == "." {
+			baseDir = ""
+		}
 	}
 
-	content := RenderMarkdown(string(raw))
+	content := rewriteDocsLinks(RenderMarkdown(string(raw)), baseDir)
 
 	// Build breadcrumbs from path.
 	parts := strings.Split(pagePath, "/")
