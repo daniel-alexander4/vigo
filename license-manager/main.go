@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const defaultKeyDir = "/srv/hobnob/license-keys"
+const defaultKeyDir = "/etc/hobnob-server/license/keys"
 
 var keyDir string
 
