@@ -109,6 +109,15 @@ if [ ! -f "$SERVER_YAML" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Copy docker-compose.yml if missing
+# ---------------------------------------------------------------------------
+
+if [ ! -f "${DATA_DIR}/docker-compose.yml" ]; then
+    cp "${SEED_DIR}/docker-compose.yml" "${DATA_DIR}/docker-compose.yml"
+    echo "Default docker-compose.yml created."
+fi
+
+# ---------------------------------------------------------------------------
 # Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 

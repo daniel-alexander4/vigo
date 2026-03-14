@@ -54,8 +54,9 @@ COPY --from=go-builder /build/migrations /migrations
 RUN mkdir -p /dist/agent/linux/amd64
 COPY --from=rust-builder /build/agent-rs/target/x86_64-unknown-linux-musl/release/hobnob /dist/agent/linux/amd64/hobnob
 
-# Seed configs — copied to /data on first run by entrypoint.
+# Seed configs — copied to /srv/hobnob on first run by entrypoint.
 COPY server-configs/server.yaml /seed/server.yaml
+COPY docker-compose.prod.yml /seed/docker-compose.yml
 COPY thrall-configs/ /seed/thrall-configs/
 
 # Documentation — seeded into /srv/hobnob/docs/ by entrypoint.

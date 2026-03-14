@@ -6,11 +6,14 @@ Get Hobnob running and manage your first thrall in 10 minutes.
 
 ```bash
 sudo mkdir -p /srv/hobnob
-curl -sSfO https://raw.githubusercontent.com/hobnob/hobnob/main/docker-compose.prod.yml
-docker compose -f docker-compose.prod.yml up -d
+docker run --rm -v /srv/hobnob:/srv/hobnob hobnob/hobnob:latest true
+cd /srv/hobnob
+docker compose up -d
 ```
 
-Or with a single `docker run`:
+The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`, `.env`, and example configs. The second starts the server using the seeded compose file.
+
+Or with a single `docker run` (no compose):
 
 ```bash
 sudo mkdir -p /srv/hobnob

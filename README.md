@@ -8,11 +8,12 @@ Pull-based configuration management for Linux and macOS. Agents on managed nodes
 
 ```bash
 sudo mkdir -p /srv/hobnob
-curl -sSfO https://raw.githubusercontent.com/hobnob/hobnob/main/docker-compose.prod.yml
-docker compose -f docker-compose.prod.yml up -d
+docker run --rm -v /srv/hobnob:/srv/hobnob hobnob/hobnob:latest true
+cd /srv/hobnob
+docker compose up -d
 ```
 
-The first run auto-generates TLS certificates, `server.yaml`, `.env`, and example configs in `/srv/hobnob/`. The dashboard is at `http://localhost:8181/`.
+The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs. The second starts the server. Dashboard at `http://localhost:8181/`.
 
 ### 2. Bootstrap managed nodes
 

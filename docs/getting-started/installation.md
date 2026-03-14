@@ -6,9 +6,12 @@ Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the
 
 ```bash
 sudo mkdir -p /srv/hobnob
-curl -sSfO https://raw.githubusercontent.com/hobnob/hobnob/main/docker-compose.prod.yml
-docker compose -f docker-compose.prod.yml up -d
+docker run --rm -v /srv/hobnob:/srv/hobnob hobnob/hobnob:latest true
+cd /srv/hobnob
+docker compose up -d
 ```
+
+The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`, `.env`, example configs, and documentation. The second starts the server.
 
 This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). On first start, the container seeds `/srv/hobnob/` with:
 
