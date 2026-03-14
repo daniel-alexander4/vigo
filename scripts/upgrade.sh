@@ -17,6 +17,10 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Resolve repo path before cd (needed for --build).
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
 cd "$DATA_DIR"
 
 echo "Stopping containers..."
@@ -24,8 +28,6 @@ docker compose down --remove-orphans 2>/dev/null || true
 
 if [ "${1:-}" = "--build" ]; then
     echo "Building image from source..."
-    SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-    REPO_DIR="$(dirname "$SCRIPT_DIR")"
     docker build -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
 else
     echo "Pulling latest image..."
