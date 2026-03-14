@@ -4,6 +4,7 @@
 pub mod auth;
 pub mod bootstrap;
 pub mod checkin;
+pub mod config;
 pub mod customtraits;
 pub mod executors;
 pub mod guardrails;
@@ -21,6 +22,7 @@ pub mod proto {
 }
 
 use anyhow::{bail, Context, Result};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use tracing::{info, warn};
 
@@ -86,6 +88,7 @@ fn parse_args() -> Result<Cli> {
     let mut i = 0;
     let mut positional = Vec::new();
     let mut in_subcommand = false;
+    let mut explicit = HashSet::new();
 
     while i < args.len() {
         // Once we hit a subcommand, all remaining args belong to it.
@@ -99,18 +102,18 @@ fn parse_args() -> Result<Cli> {
                 print_usage();
                 std::process::exit(0);
             }
-            "--data-dir" => { i += 1; cli.data_dir = PathBuf::from(arg_val(&args, i)?); }
-            "--server" => { i += 1; cli.server = arg_val(&args, i)?; }
-            "--ca-file" => { i += 1; cli.ca_file = Some(arg_val(&args, i)?); }
-            "--cert-file" => { i += 1; cli.cert_file = Some(arg_val(&args, i)?); }
-            "--key-file" => { i += 1; cli.key_file = Some(arg_val(&args, i)?); }
-            "--log-level" => { i += 1; cli.log_level = arg_val(&args, i)?; }
-            "--api-addr" => { i += 1; cli.api_addr = arg_val(&args, i)?; }
-            "--executors-dir" => { i += 1; cli.executors_dir = arg_val(&args, i)?; }
-            "--snapshot-dir" => { i += 1; cli.snapshot_dir = arg_val(&args, i)?; }
-            "--snapshot-retention" => { i += 1; cli.snapshot_retention = arg_val(&args, i)?.parse().context("--snapshot-retention must be a number")?; }
-            "--trait-refresh-cycles" => { i += 1; cli.trait_refresh_cycles = arg_val(&args, i)?.parse().context("--trait-refresh-cycles must be a number")?; }
-            "--result-cache-cycles" => { i += 1; cli.result_cache_cycles = arg_val(&args, i)?.parse().context("--result-cache-cycles must be a number")?; }
+            "--data-dir" => { i += 1; cli.data_dir = PathBuf::from(arg_val(&args, i)?); explicit.insert("data_dir"); }
+            "--server" => { i += 1; cli.server = arg_val(&args, i)?; explicit.insert("server"); }
+            "--ca-file" => { i += 1; cli.ca_file = Some(arg_val(&args, i)?); explicit.insert("ca_file"); }
+            "--cert-file" => { i += 1; cli.cert_file = Some(arg_val(&args, i)?); explicit.insert("cert_file"); }
+            "--key-file" => { i += 1; cli.key_file = Some(arg_val(&args, i)?); explicit.insert("key_file"); }
+            "--log-level" => { i += 1; cli.log_level = arg_val(&args, i)?; explicit.insert("log_level"); }
+            "--api-addr" => { i += 1; cli.api_addr = arg_val(&args, i)?; explicit.insert("api_addr"); }
+            "--executors-dir" => { i += 1; cli.executors_dir = arg_val(&args, i)?; explicit.insert("executors_dir"); }
+            "--snapshot-dir" => { i += 1; cli.snapshot_dir = arg_val(&args, i)?; explicit.insert("snapshot_dir"); }
+            "--snapshot-retention" => { i += 1; cli.snapshot_retention = arg_val(&args, i)?.parse().context("--snapshot-retention must be a number")?; explicit.insert("snapshot_retention"); }
+            "--trait-refresh-cycles" => { i += 1; cli.trait_refresh_cycles = arg_val(&args, i)?.parse().context("--trait-refresh-cycles must be a number")?; explicit.insert("trait_refresh_cycles"); }
+            "--result-cache-cycles" => { i += 1; cli.result_cache_cycles = arg_val(&args, i)?.parse().context("--result-cache-cycles must be a number")?; explicit.insert("result_cache_cycles"); }
             "--dry-run" => { cli.dry_run = true; }
             other if other.starts_with('-') => bail!("unknown flag: {}", other),
             _ => {
@@ -119,6 +122,39 @@ fn parse_args() -> Result<Cli> {
             }
         }
         i += 1;
+    }
+
+    // Load config file from data dir — CLI flags take precedence.
+    let cfg = config::load(&cli.data_dir);
+    if !explicit.contains("server") {
+        if let Some(v) = cfg.get("server") { cli.server = v.clone(); }
+    }
+    if !explicit.contains("api_addr") {
+        if let Some(v) = cfg.get("api_addr") { cli.api_addr = v.clone(); }
+    }
+    if !explicit.contains("log_level") {
+        if let Some(v) = cfg.get("log_level") { cli.log_level = v.clone(); }
+    }
+    if !explicit.contains("executors_dir") {
+        if let Some(v) = cfg.get("executors_dir") { cli.executors_dir = v.clone(); }
+    }
+    if !explicit.contains("snapshot_dir") {
+        if let Some(v) = cfg.get("snapshot_dir") { cli.snapshot_dir = v.clone(); }
+    }
+    if !explicit.contains("snapshot_retention") {
+        if let Some(v) = cfg.get("snapshot_retention") {
+            if let Ok(n) = v.parse() { cli.snapshot_retention = n; }
+        }
+    }
+    if !explicit.contains("trait_refresh_cycles") {
+        if let Some(v) = cfg.get("trait_refresh_cycles") {
+            if let Ok(n) = v.parse() { cli.trait_refresh_cycles = n; }
+        }
+    }
+    if !explicit.contains("result_cache_cycles") {
+        if let Some(v) = cfg.get("result_cache_cycles") {
+            if let Ok(n) = v.parse() { cli.result_cache_cycles = n; }
+        }
     }
 
     if let Some(cmd) = positional.first() {
@@ -218,7 +254,10 @@ COMMANDS:
     version     Print agent version
     traits      Print collected traits as JSON [COLLECTORS...]
 
-With no command, runs as a daemon.", data_dir.display(), exec_dir.display(), snap_dir.display());
+With no command, runs as a daemon.
+
+Settings are resolved in order: CLI flags > <data-dir>/config > defaults.
+The config file is written automatically during register/bootstrap.", data_dir.display(), exec_dir.display(), snap_dir.display());
 }
 
 fn setup_logger(level: &str) {
@@ -720,6 +759,11 @@ async fn main() -> Result<()> {
 
             save_thrall_id(&cli.data_dir, &resp.thrall_id)?;
 
+            // Persist server address so subsequent runs don't need --server.
+            if let Err(e) = config::save(&cli.data_dir, &[("server", &cli.server)]) {
+                warn!(error = %e, "failed to save config");
+            }
+
             // Store server's bundle-signing public key for future verification.
             if !resp.server_pubkey_pem.is_empty() {
                 save_server_pubkey(&cli.data_dir, &resp.server_pubkey_pem)?;
@@ -829,6 +873,12 @@ async fn main() -> Result<()> {
             auth::keypair::save_tls_cert(&cli.data_dir, &resp.signed_cert_pem)?;
             auth::keypair::save_ca_cert(&cli.data_dir, &resp.ca_cert_pem)?;
             save_thrall_id(&cli.data_dir, &resp.thrall_id)?;
+
+            // Persist server address so subsequent runs don't need --server.
+            let grpc_addr = format!("{}:{}", bootstrap_server.trim_start_matches("http://").trim_start_matches("https://").split(':').next().unwrap_or(bootstrap_server), grpc_port);
+            if let Err(e) = config::save(&cli.data_dir, &[("server", &grpc_addr), ("api_addr", bootstrap_server)]) {
+                warn!(error = %e, "failed to save config");
+            }
 
             info!(
                 thrall_id = %resp.thrall_id,

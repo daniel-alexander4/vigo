@@ -9,6 +9,7 @@
 
 use super::PackageManager;
 use std::process::Command;
+use tracing::warn;
 
 /// APT package manager for Debian-family systems.
 pub struct AptManager;
@@ -58,6 +59,49 @@ impl AptManager {
     }
 }
 
+/// Check if apt/dpkg stderr indicates a lock contention error.
+fn is_lock_error(stderr: &str) -> bool {
+    stderr.contains("Could not get lock") || stderr.contains("Unable to acquire")
+}
+
+/// Run an apt-get command with retry on dpkg lock contention.
+/// Retries up to 3 times with exponential backoff (3s, 6s, 12s).
+fn apt_get_with_retry(args: &[&str], desc: &str) -> Result<(), String> {
+    const MAX_RETRIES: u32 = 3;
+    let mut delay = std::time::Duration::from_secs(3);
+
+    for attempt in 0..=MAX_RETRIES {
+        let output = Command::new("apt-get")
+            .args(args)
+            .env("DEBIAN_FRONTEND", "noninteractive")
+            .output()
+            .map_err(|e| format!("apt-get {}: {}", desc, e))?;
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        if attempt < MAX_RETRIES && is_lock_error(&stderr) {
+            warn!(
+                "dpkg lock held, retrying in {}s (attempt {}/{}): {}",
+                delay.as_secs(),
+                attempt + 1,
+                MAX_RETRIES,
+                desc,
+            );
+            std::thread::sleep(delay);
+            delay *= 2;
+            continue;
+        }
+
+        return Err(format!("apt-get {} failed: {}", desc, stderr));
+    }
+
+    unreachable!()
+}
+
 impl PackageManager for AptManager {
     fn is_installed(&self, name: &str) -> Result<(bool, String), String> {
         let (status, version) = Self::dpkg_status(name)?;
@@ -100,34 +144,44 @@ impl PackageManager for AptManager {
             format!("{}={}", name, version)
         };
 
-        let output = Command::new("apt-get")
-            .args(["install", "-y", &pkg])
-            .env("DEBIAN_FRONTEND", "noninteractive")
-            .output()
-            .map_err(|e| format!("apt-get install {}: {}", name, e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("apt-get install {} failed: {}", name, stderr));
-        }
-        Ok(())
+        apt_get_with_retry(
+            &["install", "-y", &pkg],
+            &format!("install {}", name),
+        )
     }
 
     fn remove(&self, name: &str) -> Result<(), String> {
-        let output = Command::new("apt-get")
-            .args(["remove", "-y", name])
-            .env("DEBIAN_FRONTEND", "noninteractive")
-            .output()
-            .map_err(|e| format!("apt-get remove {}: {}", name, e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("apt-get remove {} failed: {}", name, stderr));
-        }
-        Ok(())
+        apt_get_with_retry(
+            &["remove", "-y", name],
+            &format!("remove {}", name),
+        )
     }
 
     fn upgrade(&self, name: &str, version: &str) -> Result<(), String> {
         self.install(name, version)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lock_error_detected() {
+        assert!(is_lock_error(
+            "E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 1234 (apt-get)"
+        ));
+        assert!(is_lock_error(
+            "E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend)"
+        ));
+        assert!(is_lock_error(
+            "E: Could not get lock /var/lib/apt/lists/lock"
+        ));
+    }
+
+    #[test]
+    fn non_lock_error_not_detected() {
+        assert!(!is_lock_error("E: Package 'foo' has no installation candidate"));
+        assert!(!is_lock_error("E: Unable to locate package bar"));
     }
 }
