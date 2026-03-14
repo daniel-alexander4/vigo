@@ -654,6 +654,12 @@ func run() error {
 			assistant = hobnobai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, cfg.AI, docsDir)
 			aiHandler = api.NewAIHandler(assistant)
 			slog.Info("AI assistant enabled", "provider", aiProvider.Name(), "model", cfg.AI.Model)
+
+			// Pre-warm Ollama model in background so first user request doesn't
+			// hit a 60-90 second cold-load delay.
+			if ollamaP, ok := aiProvider.(*hobnobai.OllamaProvider); ok {
+				go ollamaP.WarmModel(cfg.AI.Model)
+			}
 		}
 	}
 

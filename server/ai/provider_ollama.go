@@ -33,6 +33,8 @@ func NewOllamaProvider(baseURL string) *OllamaProvider {
 		ollamaBaseURL:        ollamaBase,
 	}
 	p.OpenAICompatProvider.name = "ollama"
+	// Ollama on CPU can take 3-5 minutes for cold model load + tool-heavy prompts.
+	p.OpenAICompatProvider.httpClient.Timeout = 5 * time.Minute
 	return p
 }
 
@@ -120,6 +122,27 @@ func (p *OllamaProvider) EnsureModel(ctx context.Context, model string) error {
 
 	slog.Info("ollama model pulled successfully", "model", model)
 	return nil
+}
+
+// WarmModel sends a trivial request to force Ollama to load the model into
+// memory. This avoids a 60-90 second cold-load delay on the first real user
+// request. Called in a background goroutine at startup.
+func (p *OllamaProvider) WarmModel(model string) {
+	slog.Info("warming ollama model", "model", model)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	resp, err := p.Chat(ctx, ChatRequest{
+		Model:    model,
+		Messages: []Message{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		slog.Warn("ollama model warm-up failed (will retry on first request)", "error", err)
+		return
+	}
+	_ = resp
+	slog.Info("ollama model warmed", "model", model)
 }
 
 // Chat overrides the base OpenAICompatProvider to omit max_tokens when tools
