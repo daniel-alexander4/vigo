@@ -24,7 +24,8 @@ docker compose down --remove-orphans 2>/dev/null || true
 
 if [ "${1:-}" = "--build" ]; then
     echo "Building image from source..."
-    REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+    REPO_DIR="$(dirname "$SCRIPT_DIR")"
     docker build -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
 else
     echo "Pulling latest image..."
