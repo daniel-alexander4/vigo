@@ -31,44 +31,39 @@ resources:
     depends_on: [plex-repo]
 
   - name: plex-media-dir
-    type: file
+    type: directory
     targetpath: /srv/media
-    state: directory
     owner: plex
     group: plex
     mode: "0755"
 
   - name: plex-movies-dir
-    type: file
+    type: directory
     targetpath: /srv/media/movies
-    state: directory
     owner: plex
     group: plex
     mode: "0755"
     depends_on: [plex-media-dir]
 
   - name: plex-tv-dir
-    type: file
+    type: directory
     targetpath: /srv/media/tv
-    state: directory
     owner: plex
     group: plex
     mode: "0755"
     depends_on: [plex-media-dir]
 
   - name: plex-music-dir
-    type: file
+    type: directory
     targetpath: /srv/media/music
-    state: directory
     owner: plex
     group: plex
     mode: "0755"
     depends_on: [plex-media-dir]
 
   - name: plex-transcode-dir
-    type: file
+    type: directory
     targetpath: /tmp/plex-transcode
-    state: directory
     owner: plex
     group: plex
     mode: "0755"
@@ -94,4 +89,3 @@ resources:
     enabled: true
     state: running
     depends_on: [install-plex, plex-env]
-    subscribes: [plex-env]

@@ -102,6 +102,9 @@ func TestServiceRestarted_WithSubscribes_IsClean(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
+			{Name: "nginx-conf", Type: "file", Attributes: map[string]any{
+				"targetpath": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+			}},
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
 				"name":  "nginx",
 				"state": "restarted",
@@ -638,5 +641,176 @@ func TestFindingString_Format(t *testing.T) {
 	expected := "[ERROR] nginx/run-setup: exec resource has no idempotency guard — add creates, onlyif, or unless"
 	if f.String() != expected {
 		t.Errorf("got: %s\nwant: %s", f.String(), expected)
+	}
+}
+
+// ── Cross-reference validation tests ────────────────────────────
+
+func TestDependsOn_UnknownResource_IsError(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+				DependsOn: []string{"nonexistent-pkg"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for depends_on referencing unknown resource")
+	}
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityError && f.Message == `depends_on references unknown resource "nonexistent-pkg"` {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected depends_on error, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestDependsOn_ValidReference_IsClean(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+				DependsOn: []string{"pkg"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("valid depends_on should pass, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestDependsOn_SelfReference_IsError(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+				DependsOn: []string{"svc"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityError && f.Message == "depends_on references itself" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected self-reference error, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestNotify_UnknownResource_IsError(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "conf", Type: "file", Attributes: map[string]any{
+				"targetpath": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+			}, Notify: []string{"nonexistent-svc"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for notify referencing unknown resource")
+	}
+}
+
+func TestSubscribes_UnknownResource_IsError(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+				Subscribes: []string{"nonexistent-conf"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for subscribes referencing unknown resource")
+	}
+}
+
+func TestBefore_UnknownResource_IsError(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"},
+				Before: []string{"nonexistent-svc"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for before referencing unknown resource")
+	}
+}
+
+func TestRedundantNotifySubscribes_IsWarning(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "conf", Type: "file", Attributes: map[string]any{
+				"targetpath": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+			}, Notify: []string{"svc"}},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+				Subscribes: []string{"conf"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Fatal("redundant trigger should be warning, not error")
+	}
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityWarning && f.ResourceName == "svc" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected redundant trigger warning, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestFileStateDirectory_IsWarning(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "mydir", Type: "file", Attributes: map[string]any{
+				"targetpath": "/srv/data", "owner": "root", "group": "root", "mode": "0755", "state": "directory",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Fatal("file with state: directory should be warning, not error")
+	}
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityWarning && f.Message == "file resource with state: directory — use type: directory instead" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected state:directory warning, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestAllReferencesValid_IsClean(t *testing.T) {
+	mod := Module{
+		Name: "nginx",
+		Resources: []Resource{
+			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
+			{Name: "conf", Type: "file", Attributes: map[string]any{
+				"targetpath": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+			}, DependsOn: []string{"pkg"}, Notify: []string{"svc"}},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+				DependsOn: []string{"pkg"}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("all references valid, expected no errors, got: %s", FormatFindings(findings))
 	}
 }

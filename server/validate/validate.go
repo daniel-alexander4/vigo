@@ -57,6 +57,8 @@ type Resource struct {
 	Name             string
 	Type             string
 	Attributes       map[string]any
+	DependsOn        []string
+	Before           []string
 	Notify           []string
 	Subscribes       []string
 	SubscribesSecret []string
@@ -105,8 +107,11 @@ var knownTypes = map[string]bool{
 	"blockinfile":      true,
 	"docker_container": true,
 	"docker_image":     true,
+	"docker_compose":   true,
 	"replace":          true,
 	"field_edit":       true,
+	"systemd_dropin":   true,
+	"selinux":          true,
 }
 
 // ValidateModule checks all resources in a module for idempotency.
@@ -117,6 +122,104 @@ func ValidateModule(mod Module) []Finding {
 	for _, res := range mod.Resources {
 		findings = append(findings, validateResource(mod.Name, res)...)
 	}
+	findings = append(findings, validateCrossReferences(mod)...)
+	return findings
+}
+
+// validateCrossReferences checks that depends_on, notify, subscribes, and
+// before all reference resource names that exist within the same module.
+// Also detects redundant notify+subscribes pairs.
+func validateCrossReferences(mod Module) []Finding {
+	var findings []Finding
+
+	// Build set of known resource names.
+	names := make(map[string]bool, len(mod.Resources))
+	for _, res := range mod.Resources {
+		if res.Name != "" {
+			names[res.Name] = true
+		}
+	}
+
+	// Check all reference lists.
+	for _, res := range mod.Resources {
+		base := Finding{
+			Module:       mod.Name,
+			ResourceName: res.Name,
+			ResourceType: res.Type,
+		}
+
+		for _, ref := range res.DependsOn {
+			if !names[ref] {
+				f := base
+				f.Severity = SeverityError
+				f.Message = fmt.Sprintf("depends_on references unknown resource %q", ref)
+				findings = append(findings, f)
+			}
+			if ref == res.Name {
+				f := base
+				f.Severity = SeverityError
+				f.Message = "depends_on references itself"
+				findings = append(findings, f)
+			}
+		}
+
+		for _, ref := range res.Before {
+			if !names[ref] {
+				f := base
+				f.Severity = SeverityError
+				f.Message = fmt.Sprintf("before references unknown resource %q", ref)
+				findings = append(findings, f)
+			}
+		}
+
+		for _, ref := range res.Notify {
+			if !names[ref] {
+				f := base
+				f.Severity = SeverityError
+				f.Message = fmt.Sprintf("notify references unknown resource %q", ref)
+				findings = append(findings, f)
+			}
+		}
+
+		for _, ref := range res.Subscribes {
+			if !names[ref] {
+				f := base
+				f.Severity = SeverityError
+				f.Message = fmt.Sprintf("subscribes references unknown resource %q", ref)
+				findings = append(findings, f)
+			}
+		}
+
+		// subscribes_secret references secret paths, not resource names — skip.
+	}
+
+	// Detect redundant notify+subscribes pairs.
+	// If resource A has notify: [B] and B has subscribes: [A], the trigger is redundant.
+	notifyMap := make(map[string]map[string]bool) // notifier → set of targets
+	for _, res := range mod.Resources {
+		if len(res.Notify) > 0 {
+			s := make(map[string]bool, len(res.Notify))
+			for _, n := range res.Notify {
+				s[n] = true
+			}
+			notifyMap[res.Name] = s
+		}
+	}
+	for _, res := range mod.Resources {
+		for _, sub := range res.Subscribes {
+			if targets, ok := notifyMap[sub]; ok && targets[res.Name] {
+				f := Finding{
+					Module:       mod.Name,
+					ResourceName: res.Name,
+					ResourceType: res.Type,
+					Severity:     SeverityWarning,
+					Message:      fmt.Sprintf("redundant trigger: %q already has notify: [%s] — remove subscribes or notify, not both", sub, res.Name),
+				}
+				findings = append(findings, f)
+			}
+		}
+	}
+
 	return findings
 }
 
@@ -226,7 +329,12 @@ func validateFile(base Finding, res Resource) []Finding {
 	findings = append(findings, requireValidMode(base, res, "mode")...)
 
 	state := attrString(res.Attributes, "state")
-	if state != "absent" {
+	if state == "directory" {
+		f := base
+		f.Severity = SeverityWarning
+		f.Message = "file resource with state: directory — use type: directory instead"
+		findings = append(findings, f)
+	} else if state != "absent" {
 		hasContent := attrString(res.Attributes, "content") != ""
 		hasSource := attrString(res.Attributes, "source") != ""
 		if !hasContent && !hasSource {

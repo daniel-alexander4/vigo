@@ -1710,6 +1710,8 @@ func moduleToValidate(def *ModuleDefinition) validate.Module {
 			Name:             r.Name,
 			Type:             r.Type,
 			Attributes:       r.Attributes,
+			DependsOn:        r.DependsOn,
+			Before:           r.Before,
 			Notify:           r.Notify,
 			Subscribes:       r.Subscribes,
 			SubscribesSecret: r.SubscribesSecret,
