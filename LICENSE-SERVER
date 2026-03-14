@@ -1,0 +1,59 @@
+Hobnob Server and CLI — Proprietary License
+
+Copyright (c) 2026 Alexander4, LLC. All rights reserved.
+
+This software and associated documentation files (the "Software") are the
+proprietary and confidential property of Alexander4, LLC. The Software
+includes the Hobnob server (hobd), the Hobnob CLI (hobnobcli), and all
+supporting code, libraries, migrations, protobuf definitions, templates,
+documentation, and configuration files outside of the agent-rs/ directory.
+
+## Grant
+
+Subject to the terms of a valid commercial license agreement or the
+Community tier (up to 25 managed nodes), you are granted a limited,
+non-exclusive, non-transferable, non-sublicensable license to use the
+Software in compiled binary form for your internal business purposes.
+
+## Restrictions
+
+You may not, without prior written consent from the licensor:
+
+1. Copy, modify, or create derivative works of the Software.
+2. Distribute, sublicense, lease, rent, or lend the Software to any
+   third party.
+3. Reverse engineer, decompile, or disassemble the Software, except to
+   the extent expressly permitted by applicable law.
+4. Remove or alter any proprietary notices, labels, or marks on the
+   Software.
+5. Use the Software to provide a hosted, managed, or SaaS offering to
+   third parties.
+6. Move, change, disable, or circumvent the license key functionality
+   in the Software.
+
+## Community Tier
+
+You may use the Software to manage up to 25 nodes at no cost and with no
+time limit. All features are included. Beyond 25 nodes, a paid commercial
+license is required. See COMMERCIAL-TERMS.md for pricing.
+
+## No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ALEXANDER4, LLC BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Termination
+
+This license terminates automatically if you violate any of its terms. Upon
+termination, you must cease all use of the Software and destroy all copies
+in your possession.
+
+## Contact
+
+Alexander4, LLC
+hobnob.licensing@alexander4.org

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package config handles loading, watching, and resolving per-thrall
 // configuration from YAML files on disk. It integrates with the secrets
@@ -271,7 +271,7 @@ type DatabaseSection struct {
 
 // CheckInSection holds check-in interval settings.
 type CheckInSection struct {
-	BaseInterval  string `yaml:"base_interval"`
+	Interval      string `yaml:"interval"`
 	JitterPercent int    `yaml:"jitter_percent"`
 	BundleMaxAge  string `yaml:"bundle_max_age"` // how long signed bundles remain valid on agents (e.g. "24h"); default "24h", "0" = forever
 }
@@ -293,8 +293,8 @@ type ThrallConfig struct {
 	Modules         []ModuleConfig            `yaml:"modules"`
 	Vars            map[string]any            `yaml:"vars"`
 	VarOrder        []string                  `yaml:"-"`
-	EnvVars         map[string]map[string]any `yaml:"env_vars"`
-	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
+	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
+	ConditionalVars      []conditionals.ConditionalVar `yaml:"-"`
 	// Network device fields — populated for virtual thralls managed via gateway proxy.
 	Gateway    string `yaml:"-"` // hostname of managing gateway thrall
 	DeviceType string `yaml:"-"` // cisco_ios, cisco_nxos, juniper_junos
@@ -342,7 +342,7 @@ type ResourceConfig struct {
 	Attributes       map[string]any            `yaml:",inline"`
 	Notify           []string                  `yaml:"notify"`
 	Subscribes       []string                  `yaml:"subscribes"`
-	SubscribesSecret []string                  `yaml:"subscribes_secret"`
+	WatchSecret []string                  `yaml:"watch_secret"`
 	DependsOn        []string                  `yaml:"depends_on"`
 	Before           []string                  `yaml:"before"`
 	ForEach          string                    `yaml:"-"` // var name to iterate (config-load-time expansion)
@@ -474,8 +474,8 @@ type ThrallEntry struct {
 	Modules     []ModuleRef               `yaml:"modules"`
 	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to thrall-configs/)
 	Vars        map[string]any            `yaml:"vars"`
-	EnvVars     map[string]map[string]any `yaml:"env_vars"`
-	Tags        []string `yaml:"tags"`        // static tags for targeting
+	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
+	Tags                 []string `yaml:"tags"` // static tags for targeting
 
 	// Network device fields — set when this entry is a virtual thrall managed
 	// through a gateway. Gateway must be a real compute thrall.
@@ -533,9 +533,9 @@ func (n *ThrallEntry) UnmarshalYAML(value *yaml.Node) error {
 			if err := val.Decode(&n.Vars); err != nil {
 				return fmt.Errorf("decoding vars: %w", err)
 			}
-		case "env_vars":
-			if err := val.Decode(&n.EnvVars); err != nil {
-				return fmt.Errorf("decoding env_vars: %w", err)
+		case "environment_overrides":
+			if err := val.Decode(&n.EnvironmentOverrides); err != nil {
+				return fmt.Errorf("decoding environment_overrides: %w", err)
 			}
 		case "gateway":
 			if err := val.Decode(&n.Gateway); err != nil {

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: Elastic-2.0
 
 //! Persistent bidirectional gRPC stream to the server.
 //!
@@ -260,7 +260,7 @@ mod tests {
             // Send response.
             resp_tx
                 .send(CheckInResponse {
-                    base_interval: "30s".into(),
+                    interval: "30s".into(),
                     no_change: true,
                     ..Default::default()
                 })
@@ -272,7 +272,7 @@ mod tests {
             .await
             .unwrap();
         assert!(resp.no_change);
-        assert_eq!(resp.base_interval, "30s");
+        assert_eq!(resp.interval, "30s");
     }
 
     /// Test that check_in returns an error when the stream disconnects.

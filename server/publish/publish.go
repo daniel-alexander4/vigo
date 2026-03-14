@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package publish implements a staging pipeline for thrall configuration.
 // Operators edit .hnb files in the proposed directory. The publish command
@@ -54,7 +54,6 @@ var HistoryDir = "/etc/hobnob-server/hnb/config-history"
 
 // Options controls publish/validation behavior.
 type Options struct {
-	Dangerous  bool
 	CheckURLs  bool
 	URLTimeout time.Duration // default 10s if zero
 	Operator   string        // who performed this publish (defaults to $USER)
@@ -77,7 +76,7 @@ type Result struct {
 // When opts.CheckURLs is true, http/https URLs in changed/new modules are
 // checked for aliveness via HTTP HEAD.
 func ValidateSource(opts Options) (*Result, error) {
-	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, opts.Dangerous)
+	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}

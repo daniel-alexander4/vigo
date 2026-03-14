@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package secrets provides a pluggable interface for secret retrieval.
 // The default backend is LocalProvider (AES-256-GCM encrypted files, always encrypted at rest).

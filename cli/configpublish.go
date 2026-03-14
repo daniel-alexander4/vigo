@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package main
 
@@ -33,12 +33,11 @@ Use --skip-url-check to disable (e.g., in air-gapped environments).
 Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.LiveDir),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
-		dangerous, _ := cmd.Flags().GetBool("dangerous")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
 		urlTimeout, _ := cmd.Flags().GetDuration("url-timeout")
 		operator, _ := cmd.Flags().GetString("operator")
 		showDiff, _ := cmd.Flags().GetBool("diff")
-		noSuggest, _ := cmd.Flags().GetBool("no-suggest")
+		skipSuggest, _ := cmd.Flags().GetBool("skip-suggest")
 
 		if operator == "" {
 			if u, err := user.Current(); err == nil {
@@ -47,7 +46,6 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		}
 
 		opts := publish.Options{
-			Dangerous:  dangerous,
 			CheckURLs:  !skipURLCheck,
 			URLTimeout: urlTimeout,
 			Operator:   operator,
@@ -57,7 +55,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		if dryRun {
 			res, err := publish.ValidateSource(opts)
 			if err != nil {
-				suggestFixes(err, noSuggest)
+				suggestFixes(err, skipSuggest)
 				return fmt.Errorf("validation failed:\n  %v", err)
 			}
 			fmt.Printf("Validation passed: %d modules, %d roles, %d thrall entries\n",
@@ -68,7 +66,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 
 		res, err := publish.Publish(opts)
 		if err != nil {
-			suggestFixes(err, noSuggest)
+			suggestFixes(err, skipSuggest)
 			return err
 		}
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
@@ -205,12 +203,11 @@ func streamPublishSSE(body io.Reader) error {
 
 func init() {
 	configPublishCmd.Flags().Bool("dry-run", false, "validate only, do not publish")
-	configPublishCmd.Flags().Bool("dangerous", false, "allow non-idempotent resources")
 	configPublishCmd.Flags().Bool("skip-url-check", false, "skip HTTP aliveness checks for URLs")
 	configPublishCmd.Flags().Duration("url-timeout", 10*time.Second, "timeout per URL check")
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
-	configPublishCmd.Flags().Bool("no-suggest", false, "skip AI-assisted fix suggestions on validation failure")
+	configPublishCmd.Flags().Bool("skip-suggest", false, "skip AI-assisted fix suggestions on validation failure")
 
 	configCmd.AddCommand(configPublishCmd)
 }

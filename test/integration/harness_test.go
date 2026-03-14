@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package integration provides cross-binary tests that spawn the Go server
 // and the Rust agent binary together, exercising the full enrollment →

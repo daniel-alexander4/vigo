@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package main
 
@@ -319,7 +319,7 @@ func checkConfigValidation(dir string) preStartCheck {
 				Attributes:       r.Attributes,
 				Notify:           r.Notify,
 				Subscribes:       r.Subscribes,
-				SubscribesSecret: r.SubscribesSecret,
+				WatchSecret: r.WatchSecret,
 			})
 		}
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: Elastic-2.0
 
 //! Daemon loop with polling + streaming modes.
 //!
@@ -75,7 +75,7 @@ impl Default for LoopConfig {
 /// Result of a single convergence run.
 pub struct RunResult {
     pub results: Vec<ResourceResult>,
-    pub base_interval: Duration,
+    pub interval: Duration,
     pub jitter_pct: i32,
     pub no_change: bool,
     pub response_fingerprint: String,
@@ -227,10 +227,10 @@ fn converge(
     }
 
     // Parse server-provided timing.
-    let base_interval = if resp.base_interval.is_empty() {
+    let interval = if resp.interval.is_empty() {
         Duration::from_secs(300) // 5m default
     } else {
-        parse_go_duration(&resp.base_interval).unwrap_or(Duration::from_secs(300))
+        parse_go_duration(&resp.interval).unwrap_or(Duration::from_secs(300))
     };
     let jitter_pct = if resp.jitter_percent == 0 {
         10 // default
@@ -250,7 +250,7 @@ fn converge(
         // First check-in with no cached bundle and server said no_change.
         return Ok(RunResult {
             results: vec![],
-            base_interval,
+            interval,
             jitter_pct,
             no_change: true,
             response_fingerprint: String::new(),
@@ -262,7 +262,7 @@ fn converge(
     } else {
         return Ok(RunResult {
             results: vec![],
-            base_interval,
+            interval,
             jitter_pct,
             no_change: false,
             response_fingerprint: resp.response_fingerprint.clone(),
@@ -286,7 +286,7 @@ fn converge(
             warn!("policy evaluation failed, skipping run: {}", e);
             return Ok(RunResult {
                 results: vec![],
-                base_interval,
+                interval,
                 jitter_pct,
                 no_change: false,
                 response_fingerprint: resp.response_fingerprint.clone(),
@@ -305,7 +305,7 @@ fn converge(
         warn!("server returned zero modules — check server logs for config errors (missing modules/roles) and verify this thrall is matched in thralls/");
         return Ok(RunResult {
             results: vec![],
-            base_interval,
+            interval,
             jitter_pct,
             no_change: false,
             response_fingerprint: resp.response_fingerprint.clone(),
@@ -327,7 +327,7 @@ fn converge(
 
     Ok(RunResult {
         results,
-        base_interval,
+        interval,
         jitter_pct,
         no_change: false,
         response_fingerprint: resp.response_fingerprint.clone(),
@@ -826,7 +826,7 @@ pub async fn daemon_loop(
                     rr.jitter_pct
                 };
 
-                let sleep_dur = jittered_duration(rr.base_interval, effective_jitter);
+                let sleep_dur = jittered_duration(rr.interval, effective_jitter);
                 info!(
                     duration = ?sleep_dur,
                     "sleeping until next check-in"
@@ -1248,8 +1248,8 @@ async fn stream_loop(
                                         }
                                     }
                                     update_state(policy_state, &rr, None);
-                                    if rr.base_interval > Duration::ZERO {
-                                        interval = rr.base_interval;
+                                    if rr.interval > Duration::ZERO {
+                                        interval = rr.interval;
                                     }
                                     if rr.jitter_pct > 0 {
                                         jitter_pct = rr.jitter_pct;
@@ -1556,7 +1556,7 @@ mod tests {
 
         let rr = RunResult {
             results: vec![],
-            base_interval: Duration::from_secs(300),
+            interval: Duration::from_secs(300),
             jitter_pct: 10,
             no_change: false,
             response_fingerprint: "fp-abc".into(),
@@ -1580,7 +1580,7 @@ mod tests {
         let mut ps = PolicyState::new();
         let rr = RunResult {
             results: vec![],
-            base_interval: Duration::from_secs(300),
+            interval: Duration::from_secs(300),
             jitter_pct: 10,
             no_change: false,
             response_fingerprint: "fp".into(),
@@ -1748,7 +1748,7 @@ mod tests {
 
         let rr = RunResult {
             results: vec![],
-            base_interval: Duration::from_secs(300),
+            interval: Duration::from_secs(300),
             jitter_pct: 10,
             no_change: false,
             response_fingerprint: String::new(),

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package publish
 
@@ -191,24 +191,25 @@ thralls:
 	}
 }
 
-func TestPublish_DangerousAllowsNonIdempotent(t *testing.T) {
+func TestPublish_SkipValidationAllowsCustomType(t *testing.T) {
 	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "risky.hnb"), `
-name: risky
+	writeFile(t, filepath.Join(proposed, "modules", "custom.hnb"), `
+name: custom
 resources:
-  - name: run-something
-    type: exec
-    command: "echo hello"
+  - name: deploy-app
+    type: capistrano
+    skip_validation: true
+    command: "cap deploy"
 `)
 	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
-    modules: [risky]
+    modules: [custom]
 `)
 
-	res, err := Publish(Options{Dangerous: true})
+	res, err := Publish(Options{})
 	if err != nil {
-		t.Fatalf("expected dangerous publish to succeed, got: %v", err)
+		t.Fatalf("expected skip_validation publish to succeed, got: %v", err)
 	}
 	if res.Files == 0 {
 		t.Error("expected files to be synced")

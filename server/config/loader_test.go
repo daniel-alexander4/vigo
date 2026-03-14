@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package config
 
@@ -495,7 +495,7 @@ thralls:
     vars:
       app_port: "8080"
       log_level: "info"
-    env_vars:
+    environment_overrides:
       production:
         app_port: "443"
         max_workers: "8"
@@ -1803,8 +1803,8 @@ thralls:
 	if !strings.Contains(formatted, "bad2") {
 		t.Error("formatted output missing bad2")
 	}
-	if !strings.Contains(formatted, "--dangerous") {
-		t.Error("formatted output should mention --dangerous bypass")
+	if !strings.Contains(formatted, "skip_validation") {
+		t.Error("formatted output should mention skip_validation")
 	}
 }
 
@@ -2499,7 +2499,7 @@ func TestEmptyThrallsDir(t *testing.T) {
 	}
 }
 
-func TestEnvVarsMergePrecedence(t *testing.T) {
+func TestEnvironmentOverridesMergePrecedence(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
@@ -2521,7 +2521,7 @@ thralls:
     vars:
       port: "8080"
       log_level: "info"
-    env_vars:
+    environment_overrides:
       production:
         port: "443"
         max_workers: "8"
@@ -2534,13 +2534,13 @@ thralls:
 
 	cfg := store.Get("app01.example.com")
 	if cfg.Vars["port"] != "443" {
-		t.Errorf("port = %v, want 443 (env_vars should override)", cfg.Vars["port"])
+		t.Errorf("port = %v, want 443 (environment_overrides should override)", cfg.Vars["port"])
 	}
 	if cfg.Vars["log_level"] != "info" {
-		t.Errorf("log_level = %v, want info (unchanged by env_vars)", cfg.Vars["log_level"])
+		t.Errorf("log_level = %v, want info (unchanged by environment_overrides)", cfg.Vars["log_level"])
 	}
 	if cfg.Vars["max_workers"] != "8" {
-		t.Errorf("max_workers = %v, want 8 (added by env_vars)", cfg.Vars["max_workers"])
+		t.Errorf("max_workers = %v, want 8 (added by environment_overrides)", cfg.Vars["max_workers"])
 	}
 }
 

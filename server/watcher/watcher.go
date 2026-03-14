@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package watcher polls isopass for secret version changes and triggers
 // force-push re-convergence for thralls whose configs reference rotated secrets.

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package config
 
@@ -96,8 +96,8 @@ func HashModuleContent(mod ModuleConfig) string {
 			io.WriteString(h, s)
 			io.WriteString(h, ",")
 		}
-		io.WriteString(h, "|subscribes_secret:")
-		for _, s := range res.SubscribesSecret {
+		io.WriteString(h, "|watch_secret:")
+		for _, s := range res.WatchSecret {
 			io.WriteString(h, s)
 			io.WriteString(h, ",")
 		}

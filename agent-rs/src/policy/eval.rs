@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: Elastic-2.0
 
 //! Agent-side policy bundle evaluation.
 //! Port of agent/policy/eval.go (212 lines).
@@ -133,12 +133,12 @@ pub fn eval_bundle(
                 continue;
             }
 
-            // Mark resources with subscribes_secret so the runner can skip them
+            // Mark resources with watch_secret so the runner can skip them
             // in the main pass unless _secret_triggered=true.
-            if !pres.subscribes_secret.is_empty()
+            if !pres.watch_secret.is_empty()
                 && params.get("_secret_triggered").map(|s| s.as_str()) != Some("true")
             {
-                params.insert("_subscribes_secret".to_string(), "true".to_string());
+                params.insert("_watch_secret".to_string(), "true".to_string());
             }
 
             let mut pb_res = proto::Resource {

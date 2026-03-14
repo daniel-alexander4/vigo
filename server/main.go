@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package main
 
@@ -273,8 +273,7 @@ func run() error {
 		slog.Warn(warning)
 	}
 
-	dangerous := os.Getenv("HOBNOB_DANGEROUS") == "1" || hasFlag("--dangerous")
-	configStore, err := config.NewConfigStore(publish.LiveDir, provider, dangerous)
+	configStore, err := config.NewConfigStore(publish.LiveDir, provider, false)
 	if err != nil {
 		return fmt.Errorf("initializing config store: %w", err)
 	}
@@ -289,8 +288,8 @@ func run() error {
 
 	// Parse base interval for compliance stale threshold.
 	baseInterval := 5 * time.Minute // default
-	if cfg.CheckIn.BaseInterval != "" {
-		if parsed, err := time.ParseDuration(cfg.CheckIn.BaseInterval); err == nil {
+	if cfg.CheckIn.Interval != "" {
+		if parsed, err := time.ParseDuration(cfg.CheckIn.Interval); err == nil {
 			baseInterval = parsed
 		}
 	}
@@ -421,7 +420,7 @@ func run() error {
 		ConfigStore:          configStore,
 		Queries:              queries,
 		RunStore:             runStore,
-		BaseInterval:         baseInterval,
+		Interval:             baseInterval,
 		Dispatcher:           dispatcher,
 		TraitsDir:            traitsDir,
 		SignatureWindow:      sigWindow,
@@ -592,7 +591,7 @@ func run() error {
 		Enforcer:       enforcer,
 		ConfigStore:    configStore,
 		Queries:        queries,
-		BaseInterval:   baseInterval,
+		Interval:       baseInterval,
 		Hub:            hub,
 		SMTPHost:       cfg.SMTP.Host,
 		SMTPPort:       cfg.SMTP.Port,

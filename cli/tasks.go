@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package main
 
@@ -33,7 +33,7 @@ var taskRunCmd = &cobra.Command{
 		operator, _ := cmd.Flags().GetString("operator")
 		batchSize, _ := cmd.Flags().GetString("batch-size")
 		maxFailures, _ := cmd.Flags().GetString("max-failures")
-		healthCheck, _ := cmd.Flags().GetString("health-check")
+		healthCheck, _ := cmd.Flags().GetString("health-check-url")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		paramFlags, _ := cmd.Flags().GetStringArray("param")
 
@@ -317,7 +317,7 @@ func init() {
 	taskRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
 	taskRunCmd.Flags().String("batch-size", "", "Batch size: count (5) or percentage (25%)")
 	taskRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")
-	taskRunCmd.Flags().String("health-check", "", "Shell command to run between batches (abort if exit != 0)")
+	taskRunCmd.Flags().String("health-check-url", "", "URL to probe between batches (abort on non-2xx)")
 	taskRunCmd.Flags().Bool("dry-run", false, "Display batch plan without executing")
 	taskRunCmd.Flags().StringArray("param", nil, "Task parameter (key=value), repeatable")
 	taskListCmd.Flags().Int("limit", 20, "Maximum number of tasks to display")

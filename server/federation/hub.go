@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package federation provides hub-spoke coordination for federated deployments.
 // The Hub connects to spoke servers via gRPC and aggregates admin queries

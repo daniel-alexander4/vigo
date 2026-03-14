@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package grpc
 
@@ -46,7 +46,7 @@ type AgentService struct {
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
 }
 
-// isRecentlyActive returns true if the thrall has checked in within 2× base_interval.
+// isRecentlyActive returns true if the thrall has checked in within 2× the check-in interval.
 // Used to distinguish promotable (recently polling) from truly stale agents.
 func (s *AgentService) isRecentlyActive(thrallID string) bool {
 	if s.fleetIndex == nil {

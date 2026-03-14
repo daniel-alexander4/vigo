@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package main
 
@@ -19,22 +19,20 @@ var viCmd = &cobra.Command{
 	Long: `Opens a .hnb file in vim with hobnob-aware syntax highlighting.
 
 On save, the file is checked for YAML correctness and idempotency. If
-validation fails, the write is aborted and errors are shown. Use --dangerous
-to skip validation on save.
+validation fails, the write is aborted and errors are shown. Use :w! to
+force-save past validation.
 
 Can also be invoked as 'hnbvi' for convenience.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		dangerous, _ := cmd.Flags().GetBool("dangerous")
-		return runEditor(args[0], dangerous)
+		return runEditor(args[0])
 	},
 }
 
 func init() {
-	viCmd.Flags().Bool("dangerous", false, "Allow saving non-idempotent resources")
 }
 
-func runEditor(filePath string, dangerous bool) error {
+func runEditor(filePath string) error {
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
 		return fmt.Errorf("resolving path: %w", err)
@@ -72,11 +70,7 @@ func runEditor(filePath string, dangerous bool) error {
 	}
 
 	// Build vimrc.
-	dangerousFlag := ""
-	if dangerous {
-		dangerousFlag = " --dangerous"
-	}
-	vimrc := fmt.Sprintf(hobVimrc, tmpDir, cliPath, dangerousFlag)
+	vimrc := fmt.Sprintf(hobVimrc, tmpDir, cliPath)
 	vimrcPath := filepath.Join(tmpDir, "vimrc")
 	if err := os.WriteFile(vimrcPath, []byte(vimrc), 0600); err != nil {
 		return fmt.Errorf("writing vimrc: %w", err)
@@ -93,17 +87,15 @@ func runEditor(filePath string, dangerous bool) error {
 	}
 
 	// Post-save validation (belt-and-suspenders in case BufWritePost didn't catch it).
-	if !dangerous {
-		findings, err := validateFile(absPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: post-edit validation failed: %v\n", err)
-			return nil
-		}
-		if validate.HasErrors(findings) {
-			fmt.Fprintln(os.Stderr, "warning: file has idempotency errors:")
-			for _, f := range findings {
-				fmt.Fprintln(os.Stderr, " ", f.String())
-			}
+	findings, err := validateFile(absPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: post-edit validation failed: %v\n", err)
+		return nil
+	}
+	if validate.HasErrors(findings) {
+		fmt.Fprintln(os.Stderr, "warning: file has validation errors:")
+		for _, f := range findings {
+			fmt.Fprintln(os.Stderr, " ", f.String())
 		}
 	}
 
@@ -119,7 +111,7 @@ const hobSyntax = `" Vim syntax file for Hobnob .hnb configuration files
 runtime! syntax/yaml.vim
 
 " Hobnob top-level keys
-syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|thralls\|depends_on\|when\|environment\|env_vars\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|thralls\|depends_on\|when\|environment\|environment_overrides\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi hobTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes
@@ -163,7 +155,7 @@ hi! yamlComment ctermfg=34 guifg=#00af00
 const hobFtdetect = `au BufRead,BufNewFile *.hnb set filetype=hnb`
 
 // hobVimrc is the custom vimrc template. %s placeholders:
-// 1: tmpDir (runtimepath), 2: hobnobcli path, 3: --dangerous flag or ""
+// 1: tmpDir (runtimepath), 2: hobnobcli path
 const hobVimrc = `" Hobnob editor vimrc — auto-generated, do not edit
 set nocompatible
 set runtimepath+=%s
@@ -180,7 +172,7 @@ set autoindent
 function! HobValidate()
   let l:tmpfile = tempname() . '.hnb'
   call writefile(getline(1, '$'), l:tmpfile)
-  let l:output = system('%s validate%s ' . shellescape(l:tmpfile))
+  let l:output = system('%s validate ' . shellescape(l:tmpfile))
   let l:exit_code = v:shell_error
   call delete(l:tmpfile)
   if l:exit_code != 0
@@ -189,7 +181,7 @@ function! HobValidate()
       echomsg l:line
     endfor
     echohl None
-    echomsg 'Idempotency check failed — write aborted. Use :w! to force or --dangerous to disable.'
+    echomsg 'Validation failed — write aborted. Use :w! to force.'
     throw 'hobnob:validation_failed'
   endif
 endfunction

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package config
 
@@ -36,7 +36,7 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 		switch key {
 		case "name":
 			def.Name = val.Value
-		case "depends_on", "require":
+		case "depends_on":
 			if err := val.Decode(&def.DependsOn); err != nil {
 				return nil, fmt.Errorf("decoding %s: %w", key, err)
 			}
@@ -146,11 +146,11 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 			if err := val.Decode(&res.Subscribes); err != nil {
 				return res, fmt.Errorf("decoding subscribes: %w", err)
 			}
-		case key == "subscribes_secret":
-			if err := val.Decode(&res.SubscribesSecret); err != nil {
-				return res, fmt.Errorf("decoding subscribes_secret: %w", err)
+		case key == "watch_secret":
+			if err := val.Decode(&res.WatchSecret); err != nil {
+				return res, fmt.Errorf("decoding watch_secret: %w", err)
 			}
-		case key == "depends_on" || key == "require":
+		case key == "depends_on":
 			if err := val.Decode(&res.DependsOn); err != nil {
 				return res, fmt.Errorf("decoding %s: %w", key, err)
 			}
@@ -196,8 +196,8 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 // structuralFields are resource keys that should not be set via defaults.
 var structuralFields = map[string]bool{
 	"name": true, "type": true, "when": true,
-	"notify": true, "subscribes": true, "subscribes_secret": true,
-	"depends_on": true, "require": true, "before": true,
+	"notify": true, "subscribes": true, "watch_secret": true,
+	"depends_on": true, "before": true,
 	"foreach": true, "case": true, "match": true,
 }
 

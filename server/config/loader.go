@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package config
 
@@ -166,8 +166,8 @@ func (ie *IdempotencyErrors) Format() string {
 		b.WriteByte('\n')
 	}
 	b.WriteString("  fix: add idempotency guards (creates, onlyif, unless, subscribes)\n")
-	b.WriteString("       or start the server with --dangerous to bypass validation\n\n")
-	b.WriteString("=== fix the above errors and restart hobd ===\n")
+	b.WriteString("       or add skip_validation: true to individual resources\n\n")
+	b.WriteString("=== fix the above errors and republish ===\n")
 	return b.String()
 }
 
@@ -386,7 +386,7 @@ type RoleTraceEntry struct {
 type VarSourceEntry struct {
 	Key    string `json:"key"`
 	Value  any    `json:"value"`
-	Source string `json:"source"` // "module:<name>", "vars_from:<path>", "inline", "env_vars:<env>"
+	Source string `json:"source"` // "module:<name>", "vars_from:<path>", "inline", "environment_overrides:<env>"
 }
 
 // Trace returns a detailed ConfigTrace for the given hostname, showing
@@ -521,11 +521,11 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		varSource[k] = "inline"
 	}
 
-	// 4. env_vars
+	// 4. environment_overrides
 	if thrallEntry.Environment != "" {
-		if envVars, ok := thrallEntry.EnvVars[thrallEntry.Environment]; ok {
-			for k := range envVars {
-				varSource[k] = "env_vars:" + thrallEntry.Environment
+		if envOverrides, ok := thrallEntry.EnvironmentOverrides[thrallEntry.Environment]; ok {
+			for k := range envOverrides {
+				varSource[k] = "environment_overrides:" + thrallEntry.Environment
 			}
 		}
 	}
@@ -942,8 +942,8 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		Modules:         modules,
 		Vars:            vars,
 		VarOrder:        varOrder,
-		EnvVars:         entry.EnvVars,
-		ConditionalVars: condVars,
+		EnvironmentOverrides: entry.EnvironmentOverrides,
+		ConditionalVars:      condVars,
 		Gateway:         entry.Gateway,
 		DeviceType:      entry.DeviceType,
 		Credential:      entry.Credential,
@@ -953,7 +953,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 	}
 
 	// Merge environment-specific vars.
-	mergeEnvVars(cfg)
+	mergeEnvironmentOverrides(cfg)
 
 	// Expand foreach resources now that vars are fully merged.
 	for i := range cfg.Modules {
@@ -1360,15 +1360,15 @@ func loadThrallsDir(dir string) ([]ThrallEntry, error) {
 	return allEntries, nil
 }
 
-// mergeEnvVars merges base vars with environment-specific overrides.
-func mergeEnvVars(cfg *ThrallConfig) {
+// mergeEnvironmentOverrides merges base vars with environment-specific overrides.
+func mergeEnvironmentOverrides(cfg *ThrallConfig) {
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]any)
 	}
-	if cfg.Environment == "" || cfg.EnvVars == nil {
+	if cfg.Environment == "" || cfg.EnvironmentOverrides == nil {
 		return
 	}
-	envOverrides, ok := cfg.EnvVars[cfg.Environment]
+	envOverrides, ok := cfg.EnvironmentOverrides[cfg.Environment]
 	if !ok {
 		return
 	}
@@ -1536,7 +1536,7 @@ func moduleDefReferencesSecret(def *ModuleDefinition, needle string) bool {
 }
 
 // entryReferencesSecret checks if a thrall entry uses any affected module
-// or has the secret in its env_vars (non-active environment overrides retain
+// or has the secret in its environment_overrides (non-active environment overrides retain
 // raw secret: prefixes since only the active environment is resolved).
 func entryReferencesSecret(cfg *ThrallConfig, affectedModules map[string]bool, needle string) bool {
 	// Check if any module is affected.
@@ -1545,10 +1545,10 @@ func entryReferencesSecret(cfg *ThrallConfig, affectedModules map[string]bool, n
 			return true
 		}
 	}
-	// Check env_vars — non-active environments retain raw secret: references.
+	// Check environment_overrides — non-active environments retain raw secret: references.
 	// (cfg.Vars is already resolved, so checking it would never match.)
-	if cfg.EnvVars != nil {
-		for _, envMap := range cfg.EnvVars {
+	if cfg.EnvironmentOverrides != nil {
+		for _, envMap := range cfg.EnvironmentOverrides {
 			for _, v := range envMap {
 				if s, ok := v.(string); ok && s == needle {
 					return true
@@ -1559,7 +1559,7 @@ func entryReferencesSecret(cfg *ThrallConfig, affectedModules map[string]bool, n
 	return false
 }
 
-// ComputeEnvDiff compares env_vars between two environments across all thrall
+// ComputeEnvDiff compares environment_overrides between two environments across all thrall
 // entries that include the given module. Returns a map of var_name -> "old → new".
 func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[string]string {
 	cs.mu.RLock()
@@ -1578,8 +1578,8 @@ func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[str
 			continue
 		}
 
-		fromVars := entry.config.EnvVars[fromEnv]
-		toVars := entry.config.EnvVars[toEnv]
+		fromVars := entry.config.EnvironmentOverrides[fromEnv]
+		toVars := entry.config.EnvironmentOverrides[toEnv]
 
 		for k, fromVal := range fromVars {
 			fromStr := fmt.Sprintf("%v", fromVal)
@@ -1714,7 +1714,7 @@ func moduleToValidate(def *ModuleDefinition) validate.Module {
 			Before:           r.Before,
 			Notify:           r.Notify,
 			Subscribes:       r.Subscribes,
-			SubscribesSecret: r.SubscribesSecret,
+			WatchSecret: r.WatchSecret,
 		})
 	}
 	return mod

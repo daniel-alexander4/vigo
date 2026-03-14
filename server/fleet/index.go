@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package fleet provides an in-memory FleetIndex that holds the current state
 // of every thrall. All real-time queries (pubkey lookups, check-in state reads,

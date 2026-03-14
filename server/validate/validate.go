@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package validate provides static idempotency analysis for Hobnob resource
 // definitions. It checks that every resource in a module definition is provably
@@ -61,7 +61,7 @@ type Resource struct {
 	Before           []string
 	Notify           []string
 	Subscribes       []string
-	SubscribesSecret []string
+	WatchSecret []string
 }
 
 // Module mirrors config.ModuleDefinition for validation purposes.
@@ -190,7 +190,7 @@ func validateCrossReferences(mod Module) []Finding {
 			}
 		}
 
-		// subscribes_secret references secret paths, not resource names — skip.
+		// watch_secret references secret paths, not resource names — skip.
 	}
 
 	// Detect redundant notify+subscribes pairs.
@@ -399,9 +399,9 @@ func validateExec(base Finding, res Resource) []Finding {
 	hasOnlyIf := attrString(res.Attributes, "onlyif") != ""
 	hasUnless := attrString(res.Attributes, "unless") != ""
 	hasSubscribes := len(res.Subscribes) > 0
-	hasSubscribesSecret := len(res.SubscribesSecret) > 0
+	hasWatchSecret := len(res.WatchSecret) > 0
 
-	if !hasCreates && !hasOnlyIf && !hasUnless && !hasSubscribes && !hasSubscribesSecret {
+	if !hasCreates && !hasOnlyIf && !hasUnless && !hasSubscribes && !hasWatchSecret {
 		f := base
 		f.Severity = SeverityError
 		f.Message = "exec resource has no idempotency guard — add creates, onlyif, or unless"

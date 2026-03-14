@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package api provides the grpc-gateway REST proxy for the HobnobAdmin service
 // and mounts the web UI routes.

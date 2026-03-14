@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package grpc provides the mTLS gRPC server for Hobnob, implementing
 // both HobnobAgent and HobnobAdmin service handlers.
@@ -60,7 +60,7 @@ type ServerConfig struct {
 	ConfigStore     *config.ConfigStore
 	Queries         *db.Queries
 	RunStore        db.RunStore
-	BaseInterval    time.Duration
+	Interval        time.Duration
 	Dispatcher      *webhook.Dispatcher
 	TraitsDir            string
 	SignatureWindow      time.Duration // 0 → default 5m
@@ -184,7 +184,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		reassignStore:    reassignStore,
 		bundleSigner:     cfg.BundleSigner,
 		bundleMaxAge:     cfg.BundleMaxAge,
-		baseInterval:     cfg.BaseInterval,
+		baseInterval:     cfg.Interval,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
@@ -193,7 +193,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		queries:       cfg.Queries,
 		runStore:      cfg.RunStore,
 		configStore:   cfg.ConfigStore,
-		baseInterval:  cfg.BaseInterval,
+		baseInterval:  cfg.Interval,
 		hub:           cfg.Hub,
 		fleetIndex:    cfg.FleetIndex,
 		reassignStore: reassignStore,

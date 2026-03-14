@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package config
 
@@ -159,28 +159,6 @@ resources:
 	}
 }
 
-func TestParseModuleFile_RequireAlias(t *testing.T) {
-	data := []byte(`
-name: app
-require: [base]
-resources:
-  - name: app-config
-    type: file
-    path: /etc/app.conf
-    content: "config"
-    state: present
-`)
-
-	def, err := ParseModuleFile(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(def.DependsOn) != 1 || def.DependsOn[0] != "base" {
-		t.Errorf("depends_on = %v, want [base]", def.DependsOn)
-	}
-}
-
 func TestParseModuleFile_EmptyDocument(t *testing.T) {
 	_, err := ParseModuleFile([]byte(""))
 	if err == nil {
@@ -188,14 +166,14 @@ func TestParseModuleFile_EmptyDocument(t *testing.T) {
 	}
 }
 
-func TestParseModuleFile_SubscribesSecret(t *testing.T) {
+func TestParseModuleFile_WatchSecret(t *testing.T) {
 	data := []byte(`
 name: grafana
 resources:
   - name: grafana-set-password
     type: exec
     command: "grafana-cli admin reset-admin-password 'secret'"
-    subscribes_secret: ["hobnob/grafana/admin-password"]
+    watch_secret: ["hobnob/grafana/admin-password"]
 `)
 
 	def, err := ParseModuleFile(data)
@@ -207,11 +185,11 @@ resources:
 		t.Fatalf("resources count = %d, want 1", len(def.Resources))
 	}
 	res := def.Resources[0]
-	if len(res.SubscribesSecret) != 1 {
-		t.Fatalf("subscribes_secret count = %d, want 1", len(res.SubscribesSecret))
+	if len(res.WatchSecret) != 1 {
+		t.Fatalf("watch_secret count = %d, want 1", len(res.WatchSecret))
 	}
-	if res.SubscribesSecret[0] != "hobnob/grafana/admin-password" {
-		t.Errorf("subscribes_secret[0] = %q, want %q", res.SubscribesSecret[0], "hobnob/grafana/admin-password")
+	if res.WatchSecret[0] != "hobnob/grafana/admin-password" {
+		t.Errorf("watch_secret[0] = %q, want %q", res.WatchSecret[0], "hobnob/grafana/admin-password")
 	}
 }
 

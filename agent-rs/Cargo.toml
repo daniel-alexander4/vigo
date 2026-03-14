@@ -3,6 +3,7 @@ name = "hobnob"
 version = "0.1.0"
 edition = "2021"
 description = "Hobnob configuration management agent"
+license = "Elastic-2.0"
 
 [dependencies]
 # gRPC + Proto

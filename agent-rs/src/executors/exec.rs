@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: Elastic-2.0
 
 //! Exec executor — runs commands with idempotency guards.
 //!
@@ -248,7 +248,7 @@ fn execute_exec(
         .map(|s| s == "true")
         .unwrap_or(false);
     let is_secret_subscriber = params
-        .get("_subscribes_secret")
+        .get("_watch_secret")
         .map(|s| s == "true")
         .unwrap_or(false);
 
@@ -471,7 +471,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("command", "echo hello"),
-                ("_subscribes_secret", "true"),
+                ("_watch_secret", "true"),
             ]),
             false,
         );
@@ -486,7 +486,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("command", "echo hello"),
-                ("_subscribes_secret", "true"),
+                ("_watch_secret", "true"),
                 ("_triggered", "true"),
             ]),
             false,

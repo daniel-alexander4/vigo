@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package grpc
 
@@ -209,13 +209,13 @@ func TestInjectSecretTriggers(t *testing.T) {
 						Name:             "grafana-set-password",
 						Type:             "exec",
 						Attributes:       map[string]string{"command": "grafana-cli reset"},
-						SubscribesSecret: []string{"hobnob/grafana/admin-password"},
+						WatchSecret: []string{"hobnob/grafana/admin-password"},
 					},
 					{
 						Name:             "grafana-tls",
 						Type:             "exec",
 						Attributes:       map[string]string{"command": "update-tls"},
-						SubscribesSecret: []string{"hobnob/grafana/tls-cert"},
+						WatchSecret: []string{"hobnob/grafana/tls-cert"},
 					},
 				},
 			},
@@ -252,7 +252,7 @@ func TestInjectSecretTriggers_StubModuleSkipped(t *testing.T) {
 					{
 						Name:             "res",
 						Type:             "exec",
-						SubscribesSecret: []string{"hobnob/secret"},
+						WatchSecret: []string{"hobnob/secret"},
 					},
 				},
 			},
@@ -267,7 +267,7 @@ func TestInjectSecretTriggers_StubModuleSkipped(t *testing.T) {
 	}
 }
 
-func TestBuildPolicyBundle_SubscribesSecretSerialized(t *testing.T) {
+func TestBuildPolicyBundle_WatchSecretSerialized(t *testing.T) {
 	mod := config.ModuleConfig{
 		Name: "grafana",
 		Resources: []config.ResourceConfig{
@@ -275,7 +275,7 @@ func TestBuildPolicyBundle_SubscribesSecretSerialized(t *testing.T) {
 				Name:             "set-pw",
 				Type:             "exec",
 				Attributes:       map[string]any{"command": "reset-pw"},
-				SubscribesSecret: []string{"hobnob/grafana/admin-password"},
+				WatchSecret: []string{"hobnob/grafana/admin-password"},
 			},
 		},
 	}
@@ -289,8 +289,8 @@ func TestBuildPolicyBundle_SubscribesSecretSerialized(t *testing.T) {
 	}
 
 	res := bundle.Modules[0].Resources[0]
-	if len(res.SubscribesSecret) != 1 || res.SubscribesSecret[0] != "hobnob/grafana/admin-password" {
-		t.Errorf("subscribes_secret = %v, want [hobnob/grafana/admin-password]", res.SubscribesSecret)
+	if len(res.WatchSecret) != 1 || res.WatchSecret[0] != "hobnob/grafana/admin-password" {
+		t.Errorf("watch_secret = %v, want [hobnob/grafana/admin-password]", res.WatchSecret)
 	}
 }
 

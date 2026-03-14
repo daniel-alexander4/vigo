@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package api
 
@@ -51,7 +51,7 @@ type DoctorConfig struct {
 	Enforcer       *license.Enforcer
 	ConfigStore    *config.ConfigStore
 	Queries        *db.Queries
-	BaseInterval   time.Duration
+	Interval       time.Duration
 	Hub            *federation.Hub
 	SMTPHost       string
 	SMTPPort       int
@@ -84,7 +84,7 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		enforcer:       cfg.Enforcer,
 		configStore:    cfg.ConfigStore,
 		queries:        cfg.Queries,
-		baseInterval:   cfg.BaseInterval,
+		baseInterval:   cfg.Interval,
 		hub:            cfg.Hub,
 		smtpHost:       cfg.SMTPHost,
 		smtpPort:       cfg.SMTPPort,

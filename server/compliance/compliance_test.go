@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package compliance
 
@@ -140,7 +140,7 @@ func TestComputeStatusBoundary(t *testing.T) {
 	}
 }
 
-func TestComputeStatusZeroBaseInterval(t *testing.T) {
+func TestComputeStatusZeroInterval(t *testing.T) {
 	// With zero base interval, 2*0 = 0, so any non-zero time.Since will exceed it.
 	got := ComputeStatus(&RunInfo{Status: "success"}, time.Now().Add(-time.Millisecond), 0)
 	if got != "stale" {

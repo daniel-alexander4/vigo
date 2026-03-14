@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: Elastic-2.0
 
 //! Region computation — constrains file operations to a section between two
 //! regex anchors. Used by replace, field_edit, and file_line executors.

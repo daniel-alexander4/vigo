@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package validate
 
@@ -310,22 +310,22 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 	}
 }
 
-func TestExecWithSubscribesSecret_IsClean(t *testing.T) {
+func TestExecWithWatchSecret_IsClean(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
 			{
-				Name:             "set-password",
-				Type:             "exec",
-				Attributes:       map[string]any{"command": "grafana-cli admin reset-admin-password 'secret'"},
-				SubscribesSecret: []string{"hobnob/grafana/admin-password"},
+				Name:        "set-password",
+				Type:        "exec",
+				Attributes:  map[string]any{"command": "grafana-cli admin reset-admin-password 'secret'"},
+				WatchSecret: []string{"hobnob/grafana/admin-password"},
 			},
 		},
 	}
 
 	findings := ValidateModule(mod)
 	if HasErrors(findings) {
-		t.Errorf("exec with subscribes_secret should pass validation, got: %s", FormatFindings(findings))
+		t.Errorf("exec with watch_secret should pass validation, got: %s", FormatFindings(findings))
 	}
 }
 

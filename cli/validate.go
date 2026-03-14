@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package main
 
@@ -27,7 +27,6 @@ Checks performed:
 Exit code 0 = all checks pass, 1 = errors found.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		dangerous, _ := cmd.Flags().GetBool("dangerous")
 		hasErrors := false
 
 		for _, path := range args {
@@ -47,7 +46,7 @@ Exit code 0 = all checks pass, 1 = errors found.`,
 				fmt.Println(f.String())
 			}
 
-			if !dangerous && validate.HasErrors(findings) {
+			if validate.HasErrors(findings) {
 				hasErrors = true
 			}
 		}
@@ -157,7 +156,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 			Attributes:       r.Attributes,
 			Notify:           r.Notify,
 			Subscribes:       r.Subscribes,
-			SubscribesSecret: r.SubscribesSecret,
+			WatchSecret: r.WatchSecret,
 		})
 	}
 	findings = append(findings, validate.ValidateModule(mod)...)
@@ -180,5 +179,4 @@ func dedup(findings []validate.Finding) []validate.Finding {
 }
 
 func init() {
-	validateCmd.Flags().Bool("dangerous", false, "Show errors but exit 0 (allow non-idempotent resources)")
 }

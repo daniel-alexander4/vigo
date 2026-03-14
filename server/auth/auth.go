@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package auth provides pluggable authentication for the Hobnob web UI and
 // REST API. Three methods are supported: "none" (default, fully open),

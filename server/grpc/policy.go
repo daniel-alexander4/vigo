@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 package grpc
 
@@ -99,7 +99,7 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 			When:             res.When,
 			Notify:           res.Notify,
 			Subscribes:       res.Subscribes,
-			SubscribesSecret: res.SubscribesSecret,
+			WatchSecret: res.WatchSecret,
 		}
 		pbMod.Resources = append(pbMod.Resources, pbRes)
 	}
@@ -108,7 +108,7 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 }
 
 // injectSecretTriggers sets _secret_triggered=true on resources whose
-// subscribes_secret list intersects the rotated paths. Since modules may be
+// watch_secret list intersects the rotated paths. Since modules may be
 // shared from the policy cache, affected resources are cloned before mutation.
 func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 	rotatedSet := make(map[string]bool, len(rotatedPaths))
@@ -125,7 +125,7 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 			continue
 		}
 		for ri, res := range mod.Resources {
-			for _, sp := range res.SubscribesSecret {
+			for _, sp := range res.WatchSecret {
 				if rotatedSet[sp] {
 					// Clone module + resource so the cache entry stays clean.
 					clonedMod := *mod
@@ -169,7 +169,7 @@ func hashPolicyModule(mod *pb.PolicyModule) string {
 			Attributes:       attrs,
 			Notify:           res.Notify,
 			Subscribes:       res.Subscribes,
-			SubscribesSecret: res.SubscribesSecret,
+			WatchSecret: res.WatchSecret,
 		})
 	}
 	return config.HashModuleContent(cfg)
