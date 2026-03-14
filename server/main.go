@@ -114,15 +114,14 @@ func run() error {
 	}
 
 	// Resolve directory paths from server.yaml paths: section.
-	// Falls back to env var (deprecated, warns) then default.
-	migrationsDir := pathFromConfig(cfg.Paths.Migrations, "HOBNOB_MIGRATIONS_DIR", "migrations")
-	traitsDir := pathFromConfig(cfg.Paths.CustomTraits, "HOBNOB_CUSTOM_TRAITS_DIR", "custom-traits")
-	docsDir := pathFromConfig(cfg.Paths.Docs, "HOBNOB_DOCS_DIR", "docs")
-	tasksDir := pathFromConfig(cfg.Paths.Tasks, "HOBNOB_TASKS_DIR", "tasks")
-	workflowsDir := pathFromConfig(cfg.Paths.Workflows, "HOBNOB_WORKFLOWS_DIR", "workflows")
-	agentDir := pathFromConfig(cfg.Paths.AgentDist, "HOBNOB_AGENT_DIR", "dist/agent")
-	licenseDir := pathFromConfig(cfg.Paths.LicenseDir, "HOBNOB_LICENSE_DIR", license.DefaultLicenseDir)
-	licenseGraceDir := envOrDefault("HOBNOB_LICENSE_GRACE_DIR", licenseDir)
+	migrationsDir := stringOrDefault(cfg.Paths.Migrations, "migrations")
+	traitsDir := stringOrDefault(cfg.Paths.CustomTraits, "custom-traits")
+	docsDir := stringOrDefault(cfg.Paths.Docs, "docs")
+	tasksDir := stringOrDefault(cfg.Paths.Tasks, "tasks")
+	workflowsDir := stringOrDefault(cfg.Paths.Workflows, "workflows")
+	agentDir := stringOrDefault(cfg.Paths.AgentDist, "dist/agent")
+	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
+	licenseGraceDir := licenseDir
 
 	// Determine federation role.
 	role := cfg.Federation.Role
@@ -805,16 +804,10 @@ func envOrDefault(key, def string) string {
 	return def
 }
 
-// pathFromConfig returns the path from server.yaml, falling back to the env
-// var (with a deprecation warning), then the default value.
-func pathFromConfig(configVal, envKey, def string) string {
-	if configVal != "" {
-		return configVal
-	}
-	if v := os.Getenv(envKey); v != "" {
-		slog.Warn("path configured via environment variable — migrate to paths: section in server.yaml",
-			"env", envKey, "value", v)
-		return v
+// stringOrDefault returns s if non-empty, otherwise def.
+func stringOrDefault(s, def string) string {
+	if s != "" {
+		return s
 	}
 	return def
 }

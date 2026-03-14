@@ -198,7 +198,7 @@ The secrets provider is configured in `server.yaml`. For isopass, set `tls_skip_
 secrets:
   backend: isopass
   url: https://localhost:8443
-  token_env: HOBNOB_SECRETS_TOKEN
+  token_file: /etc/hobnob-server/isopass-token
   tls_skip_verify: true
 ```
 

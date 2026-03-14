@@ -29,8 +29,7 @@ secrets:
 | `key_file` | auto-generated | Path to 32-byte hex master key file (local backend, mode 0600) |
 | `secrets_dir` | `/etc/hobnob-server/secrets` | Directory for encrypted secret files (local backend) |
 | `url` | — | Isopass API base URL (isopass backend only) |
-| `token_file` | — | File containing bearer token (isopass backend, recommended, mode 0600) |
-| `token_env` | `HOBNOB_SECRETS_TOKEN` | **Deprecated.** Env var containing bearer token — migrate to `token_file` |
+| `token_file` | — | File containing bearer token (isopass backend, required, mode 0600) |
 | `tls_skip_verify` | `false` | Skip TLS verification for isopass (not recommended) |
 
 The `local` backend auto-generates the master key on first start if `key_file` doesn't exist.
@@ -291,13 +290,9 @@ Only two environment variables are supported. All other configuration belongs in
 | `HOBNOB_CONFIG_FILE` | `server.yaml` | Path to server config file (bootstraps everything else) |
 | `HOBNOB_VERSION` | `dev` | Server version string |
 
-**Deprecated path overrides.** The following env vars still work but log a deprecation warning. Migrate to the `paths:` section in `server.yaml`:
-
-`HOBNOB_MIGRATIONS_DIR`, `HOBNOB_CUSTOM_TRAITS_DIR`, `HOBNOB_TASKS_DIR`, `HOBNOB_WORKFLOWS_DIR`, `HOBNOB_DOCS_DIR`, `HOBNOB_AGENT_DIR`, `HOBNOB_LICENSE_DIR`.
-
 ### paths
 
-Directory paths for server subsystems. Replaces environment variable overrides.
+Directory paths for server subsystems.
 
 ```yaml
 paths:

@@ -9,7 +9,7 @@ secrets:
 # secrets:
 #   backend: isopass
 #   url: https://localhost:8443
-#   token_env: HOBNOB_SECRETS_TOKEN   # env var containing bearer token
+#   token_file: /etc/hobnob-server/isopass-token  # file containing bearer token (0600)
 #   tls_skip_verify: true             # skip TLS cert verification (e.g. self-signed)
 
 server:
