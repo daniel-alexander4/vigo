@@ -88,7 +88,7 @@ hobnobcli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration
 | `--url-timeout` | `10s` | Timeout per URL aliveness check |
 | `--operator` | `$USER` | Operator name for audit trail |
 | `--diff` | `false` | Show line-level diff for each changed file |
-| `--skip-suggest` | `false` | Skip AI-assisted fix suggestions on failure |
+| `--ai-help` | `false` | Ask AI to suggest fixes for validation errors |
 
 ### Examples
 
