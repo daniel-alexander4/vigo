@@ -8,7 +8,7 @@ Pull-based configuration management for Linux and macOS. Agents on managed nodes
 
 ```bash
 sudo mkdir -p /srv/hobnob
-docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest true
+docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
 cd /srv/hobnob
 docker compose up -d
 ```

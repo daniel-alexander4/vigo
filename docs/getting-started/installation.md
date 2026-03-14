@@ -8,7 +8,7 @@ Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the
 
 ```bash
 sudo mkdir -p /srv/hobnob
-docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest true
+docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
 ```
 
 This populates `/srv/hobnob/` with everything needed to run the server:

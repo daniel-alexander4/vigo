@@ -198,6 +198,13 @@ AIEOF
     echo "AI configured: provider=${HOBNOB_AI_PROVIDER} model=${AI_MODEL}"
 fi
 
+# Seed-only mode: populate /srv/hobnob and exit without starting the server.
+# Usage: docker run --rm -v /srv/hobnob:/srv/hobnob hobnob --seed-only
+if [ "${1:-}" = "--seed-only" ]; then
+    echo "Seeding complete. Run 'cd /srv/hobnob && docker compose up -d' to start."
+    exit 0
+fi
+
 # Run from /srv/hobnob so relative paths in .env and server.yaml resolve correctly.
 cd "$DATA_DIR"
 
