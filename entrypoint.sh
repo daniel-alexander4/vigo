@@ -43,12 +43,11 @@ if [ ! -f "$ENV_FILE" ]; then
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 
 # Uncomment to start additional containers alongside hobnob.
-# HOBNOB_SERVICES=ollama              # local AI assistant (free, CPU-only)
-# HOBNOB_SERVICES=postgres            # Postgres instead of SQLite
-# HOBNOB_SERVICES=ollama,postgres     # both
-
-# Maps to Docker Compose internals (do not edit).
-COMPOSE_PROFILES=${HOBNOB_SERVICES:-}
+# Only needed for locally-hosted services. External AI providers (Claude,
+# OpenAI) are configured in server.yaml and do not require a container here.
+# COMPOSE_PROFILES=ollama              # local Ollama AI (free, CPU-only, ~4GB RAM)
+# COMPOSE_PROFILES=postgres            # Postgres instead of SQLite
+# COMPOSE_PROFILES=ollama,postgres     # both
 ENVEOF
     echo "Default .env created."
 fi
