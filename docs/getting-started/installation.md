@@ -1,50 +1,21 @@
 # Installation
 
-Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the agent (`hobnob`).
+Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the agent (`hobnob`). The server and CLI ship as a container image. The agent is installed on each managed machine via a bootstrap script.
 
-## Docker Compose (recommended)
+## Server
+
+### 1. Seed the data directory
 
 ```bash
 sudo mkdir -p /srv/hobnob
 docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest true
-cd /srv/hobnob
-docker compose up -d
 ```
 
-The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`, `.env`, example configs, and documentation. The second starts the server.
-
-This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). On first start, the container seeds `/srv/hobnob/` with:
-
-- `server.yaml` — server configuration
-- `.env` — environment variables (non-secret)
-- `tls/` — auto-generated mTLS certificates
-- `hnb/proposed/` — directory for your `.hnb` config files
-- `examples/` — example modules, roles, and node configs
-- `docs/` — browsable documentation (also at `http://localhost:8181/docs`)
-
-All persistent state lives in `/srv/hobnob` on the host.
-
-### Optional services
-
-Enable AI assistant (local Ollama) or Postgres by setting `COMPOSE_PROFILES`:
-
-```bash
-# With AI assistant
-COMPOSE_PROFILES=ollama docker compose -f docker-compose.prod.yml up -d
-
-# With Postgres instead of SQLite
-COMPOSE_PROFILES=postgres docker compose -f docker-compose.prod.yml up -d
-
-# Both
-COMPOSE_PROFILES=ollama,postgres docker compose -f docker-compose.prod.yml up -d
-```
-
-### Directory layout
-
-After first start, `/srv/hobnob/` contains:
+This populates `/srv/hobnob/` with everything needed to run the server:
 
 ```
 /srv/hobnob/
+├── docker-compose.yml       # production compose file
 ├── server.yaml              # server config
 ├── .env                     # non-secret env vars
 ├── tls/                     # mTLS certificates (auto-generated)
@@ -52,85 +23,82 @@ After first start, `/srv/hobnob/` contains:
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
 ├── hnb/
-│   ├── proposed/            # edit .hnb files here
+│   ├── proposed/            # edit .hnb config files here
 │   │   ├── modules/
 │   │   ├── roles/
-│   │   └── thralls/
+│   │   ├── thralls/
+│   │   ├── templates/
+│   │   └── vars/
 │   └── .live/               # published config (do not edit directly)
 ├── config-history/          # rollback snapshots
-├── examples/                # example .hnb files
-└── docs/                    # documentation
+├── examples/                # example .hnb modules, roles, and nodes
+└── docs/                    # browsable documentation
 ```
 
-### Single-container alternative
-
-If you prefer `docker run` without compose:
-
-```bash
-sudo mkdir -p /srv/hobnob
-docker run -d --name hobnob \
-  -p 8181:8181 -p 1530:1530 \
-  -v /srv/hobnob:/srv/hobnob \
-  ghcr.io/daniel-alexander4/hobnob:latest
-```
-
-## Server Setup
-
-1. Create the server directory:
-
-```bash
-sudo mkdir -p /srv/hobnob
-```
-
-2. Copy the example config:
-
-```bash
-cp server-configs/server.yaml.example /srv/hobnob/server.yaml
-```
-
-3. Edit `server.yaml` — at minimum set the database DSN:
-
-```yaml
-database:
-  dsn: "/srv/hobnob/db/hobnob.db"
-```
-
-4. Create the thrall configs directory:
-
-```bash
-mkdir -p /srv/hobnob/thrall-configs/modules
-mkdir -p /srv/hobnob/thrall-configs/roles
-```
-
-5. Start the server:
+### 2. Start the server
 
 ```bash
 cd /srv/hobnob
-hobd
+docker compose up -d
 ```
 
-The server auto-generates TLS certificates on first start when using the `local` secrets backend.
+The server starts on ports **1530** (gRPC, agent check-in) and **8181** (REST API, web UI, metrics, bootstrap). Open `http://localhost:8181` to see the dashboard.
 
-## CLI Setup
-
-The CLI connects to the server's REST API. Point it at your server:
+### 3. Verify
 
 ```bash
-export HOBNOB_SERVER="https://localhost:8181"
-export HOBNOB_CERT="/srv/hobnob/tls/cert"
-export HOBNOB_KEY="/srv/hobnob/tls/key"
-export HOBNOB_CA="/srv/hobnob/tls/ca"
+docker compose ps                    # container running
+curl -s http://localhost:8181/healthz # health check
+hobnobcli doctor                     # full diagnostic
 ```
 
-Verify connectivity:
+### Optional services
+
+Edit `.env` or pass `COMPOSE_PROFILES` to enable optional services:
 
 ```bash
-hobnobcli doctor
+# AI assistant (local Ollama, free, CPU-only)
+COMPOSE_PROFILES=ollama docker compose up -d
+
+# Postgres instead of SQLite
+COMPOSE_PROFILES=postgres docker compose up -d
+
+# Both
+COMPOSE_PROFILES=ollama,postgres docker compose up -d
 ```
 
-## Agent Installation
+### Configuration
 
-The agent runs on Linux, macOS, FreeBSD, OpenBSD, NetBSD, and Windows. On each managed machine (thrall), the agent can be installed via the bootstrap script.
+Edit `server.yaml` for server settings (check-in interval, TLS paths, federation, SMTP, webhooks). Edit `.env` for environment variables (AI provider, database driver, compose profiles). See [Server Configuration](server-config.md) for the full reference.
+
+### Upgrading
+
+```bash
+cd /srv/hobnob
+docker compose pull
+docker compose up -d
+```
+
+Your config, database, secrets, and TLS certs persist in `/srv/hobnob/` across upgrades.
+
+## CLI
+
+The container automatically installs `hobnobcli` and `hnbvi` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
+
+```bash
+docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
+ln -sf hobnobcli /usr/local/bin/hnbvi
+```
+
+The CLI auto-detects the server at `http://localhost:8181`. For remote servers:
+
+```bash
+export HOBNOB_SERVER="http://hobnob-server:8181"
+```
+
+## Agent
+
+The agent runs on managed machines (thralls). It supports Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows.
 
 ### Linux
 
@@ -138,7 +106,7 @@ The agent runs on Linux, macOS, FreeBSD, OpenBSD, NetBSD, and Windows. On each m
 curl -sSf http://<server>:8181/bootstrap | sudo sh
 ```
 
-This downloads the agent binary, generates a keypair, registers with the server, and installs a systemd service (`hobnob-thrall`).
+Downloads the agent binary, generates a keypair, registers with the server, and installs a systemd service (`hobnob-thrall`).
 
 ### macOS
 
@@ -146,7 +114,7 @@ This downloads the agent binary, generates a keypair, registers with the server,
 curl -sSf http://<server>:8181/bootstrap | sudo sh
 ```
 
-The same bootstrap script detects macOS and installs a launchd plist (`com.hobnob.thrall`) instead of a systemd unit.
+Detects macOS and installs a launchd plist (`com.hobnob.thrall`).
 
 ### FreeBSD / NetBSD
 
@@ -154,7 +122,7 @@ The same bootstrap script detects macOS and installs a launchd plist (`com.hobno
 curl -sSf http://<server>:8181/bootstrap | sudo sh
 ```
 
-On FreeBSD and NetBSD, the bootstrap script installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
+Installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
 
 ### OpenBSD
 
@@ -162,7 +130,15 @@ On FreeBSD and NetBSD, the bootstrap script installs an rc.d service script at `
 curl -sSf http://<server>:8181/bootstrap | sudo sh
 ```
 
-On OpenBSD, the bootstrap script registers the service via `rcctl` and enables it at boot.
+Registers the service via `rcctl` and enables it at boot.
+
+### illumos
+
+```bash
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
+Imports an SMF service manifest and enables it via `svcadm`.
 
 ### Windows
 
@@ -170,9 +146,9 @@ On OpenBSD, the bootstrap script registers the service via `rcctl` and enables i
 irm http://<server>:8181/bootstrap?os=windows | iex
 ```
 
-The PowerShell bootstrap script downloads the agent, registers with the server, and installs a Windows service.
+Downloads the agent, registers with the server, and installs a Windows service.
 
-See [Bootstrap](bootstrap.md) for details on the enrollment flow.
+See [Bootstrap](bootstrap.md) for details on the enrollment flow, token-based authentication, and trusted enrollment patterns.
 
 ## Ports
 
@@ -181,41 +157,19 @@ See [Bootstrap](bootstrap.md) for details on the enrollment flow.
 | 1530 | gRPC (mTLS) | Agent check-in, result reporting, streaming |
 | 8181 | HTTP | REST API, web UI, metrics, bootstrap |
 
-## Directory Layout
-
-### Server (`/srv/hobnob/`)
+## Agent directory layout
 
 ```
-/srv/hobnob/
-├── server.yaml              # Server configuration
-├── db/
-│   └── hobnob.db            # SQLite database
-├── secrets/                 # Local secrets backend (AES-256-GCM encrypted)
-│   └── hobnob/
-│       ├── tls/             # Auto-generated TLS certs
-│       └── db/dsn           # Database DSN
-├── thrall-configs/          # Config source of truth
-│   ├── modules/             # Module definitions (.hnb)
-│   ├── roles/               # Role definitions (.hnb)
-│   └── nodes.hnb            # Node-to-role mappings
-├── tasks/                   # Reusable task definitions
-├── workflows/               # Workflow definitions
-├── custom-traits/           # Custom trait collector scripts
-└── docs/                    # Documentation (this site)
-```
+/etc/hobnob-thrall/            # config + identity
+├── thrall.uuid                # registration ID
+├── certs/                     # TLS keypair
+│   ├── ca.crt
+│   ├── tls.crt
+│   └── tls.key
+└── executors/                 # custom executor scripts
 
-### Agent (`/etc/hobnob-thrall/`)
-
-```
-/etc/hobnob-thrall/
-├── agent.yaml               # Agent configuration
-├── client.crt               # Client TLS certificate
-├── client.key               # Client private key
-└── ca.crt                   # CA certificate
-/var/lib/hobnob/
-└── state/                   # LMDB state store
-    ├── policy/              # Cached policy bundles
-    ├── checksums/           # File checksum cache
-    ├── traits/              # Cached traits (with TTL)
-    └── pending/             # Queued results for offline mode
+/var/lib/hobnob/               # persistent state
+├── state/                     # LMDB (policy cache, checksums, traits, pending results)
+├── snapshots/                 # file snapshots for rollback
+└── flags/                     # flag markers for when: expressions
 ```
