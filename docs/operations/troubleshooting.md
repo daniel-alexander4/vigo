@@ -199,6 +199,36 @@ See [Metrics](metrics.md) for the full list.
 - File permissions prevent the server process from reading the secret
 - Secrets backend is misconfigured
 
+### Agent Certificate Error: "not valid for name"
+
+**Symptoms:** Agent connects but gets `certificate not valid for name "192.168.x.x"`.
+
+**Cause:** The auto-generated server TLS certificate doesn't include your host's LAN IP. Docker containers get their own hostname and IP, which are the defaults in the cert.
+
+**Fix:** Add your server's IP or DNS name to `tls_sans` in `server.yaml`:
+
+```yaml
+server:
+  tls_sans:
+    - "192.168.1.2"              # your server's LAN IP
+    - "hobnob.example.com"       # or DNS name agents use
+```
+
+Then regenerate certs and restart:
+
+```bash
+cd /srv/hobnob
+rm -f tls/cert tls/key
+docker compose restart
+```
+
+Re-bootstrap thralls so they pick up the new CA:
+
+```bash
+sudo systemctl stop hobnob-thrall
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
 ### Bootstrap Fails with "Failure writing output"
 
 **Symptoms:** `curl: (23) Failure writing output to destination` during bootstrap.
