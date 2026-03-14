@@ -149,7 +149,7 @@ certs:
 	rm -f certs/server.csr certs/ca.srl
 	@echo "Certificates generated in certs/"
 
-# --- Docker Compose (reads COMPOSE_PROFILES from server .env) ---
+# --- Docker Compose (reads HOBNOB_SERVICES from server .env) ---
 
 ENVFILE ?= /srv/hobnob/.env
 

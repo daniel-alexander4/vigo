@@ -10,10 +10,6 @@ services:
     ports:
       - "1530:1530"
       - "8181:8181"
-    environment:
-      - HOBNOB_AI_PROVIDER=ollama
-      - HOBNOB_AI_BASE_URL=http://hobnob-ollama:11434
-      - HOBNOB_AI_MODEL=qwen2.5:7b
     volumes:
       - /srv/hobnob:/srv/hobnob
       - /usr/local/bin:/host-bin
