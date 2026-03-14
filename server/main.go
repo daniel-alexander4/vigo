@@ -38,6 +38,7 @@ import (
 	"github.com/hobnob/hobnob/server/publish"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/hardening"
 	"github.com/hobnob/hobnob/server/fleet"
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
 	"github.com/hobnob/hobnob/server/license"
@@ -68,6 +69,13 @@ func main() {
 }
 
 func run() error {
+	// --- Binary integrity and anti-tamper checks ---
+	hardening.DetectDebugger()
+	hardening.DetectInjection()
+	if err := hardening.VerifyBinarySignature(); err != nil {
+		return fmt.Errorf("integrity check failed: %w", err)
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 

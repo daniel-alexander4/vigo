@@ -6,6 +6,13 @@ VERSION ?= dev
 
 # --- Primary build: server + CLI (Go), agent (Rust) ---
 
+# GOFLAGS for hardened builds:
+#   -trimpath     removes source file paths from binary
+#   -s -w         strips symbol table and DWARF debug info
+#   -buildid=     removes build ID
+GO_LDFLAGS := -ldflags="-s -w -buildid="
+GO_HARDENED := -trimpath $(GO_LDFLAGS)
+
 build: build-agent
 	go build -o bin/hobd ./server
 	go build -o bin/hobnobcli ./cli
@@ -36,9 +43,33 @@ lint-agent:
 
 # --- Distribution: cross-compiled static binaries ---
 
+# Distribution builds apply hardening flags to strip debug info and source paths.
+# For additional anti-reverse-engineering, use `make dist-obfuscated` which uses
+# garble to randomize identifiers and encrypt string literals.
+# Install garble: go install mvdan.cc/garble@latest
+#
+# To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
 dist: dist-agent
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -o dist/server/linux/amd64/hobd ./server
-	GOOS=linux GOARCH=amd64 go build -o dist/cli/linux/amd64/hobnobcli ./cli
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/hobd ./server
+	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/hobnobcli ./cli
+
+# Obfuscated distribution build using garble.
+# Requires: go install mvdan.cc/garble@latest
+dist-obfuscated: dist-agent
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 garble -literals -tiny build $(GO_HARDENED) -o dist/server/linux/amd64/hobd ./server
+	GOOS=linux GOARCH=amd64 garble -literals -tiny build $(GO_HARDENED) -o dist/cli/linux/amd64/hobnobcli ./cli
+
+# Sign distribution binaries with ED25519 key for tamper detection.
+# Usage: make dist-sign SIGN_KEY=/path/to/signing.key
+SIGN_KEY ?= signing.key
+dist-sign:
+	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
+	@for bin in dist/server/linux/amd64/hobd dist/cli/linux/amd64/hobnobcli; do \
+		if [ -f "$$bin" ]; then \
+			go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
+			echo "signed $$bin"; \
+		fi; \
+	done
 
 # Cross-compile Rust agent to static musl binaries.
 # Prerequisites:
