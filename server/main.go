@@ -52,6 +52,9 @@ import (
 	"github.com/hobnob/hobnob/server/workflows"
 )
 
+// version is set at build time via -ldflags="-X main.version=1.2.3".
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		var se *config.SecretErrors
@@ -538,7 +541,7 @@ func run() error {
 	}()
 
 	// Set build info metric and start uptime tracker.
-	version := envOrDefault("HOBNOB_VERSION", "dev")
+	// version is set at package level via -ldflags at build time.
 	metrics.BuildInfo.WithLabelValues(version).Set(1)
 	serverStartTime := time.Now()
 	go func() {

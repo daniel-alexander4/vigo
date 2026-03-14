@@ -71,10 +71,7 @@ Examples:
 
 		serverRoot, _ := cmd.Flags().GetString("server-root")
 
-		version := os.Getenv("HOBNOB_VERSION")
-		if version == "" {
-			version = "dev"
-		}
+		// version is set at package level via -ldflags at build time.
 
 		fmt.Printf("Creating backup archive: %s\n", archivePath)
 		fmt.Printf("  Database: %s (%s)\n", dbDSN, dbDriver)

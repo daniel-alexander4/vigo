@@ -13,6 +13,9 @@ import (
 
 var serverURL string
 
+// version is set at build time via -ldflags="-X main.version=1.2.3".
+var version = "dev"
+
 func main() {
 	// When invoked as "hnbvi", behave as "hobnobcli vi <args>".
 	if base := filepath.Base(os.Args[0]); base == "hnbvi" {

@@ -63,13 +63,6 @@ if [ ! -f "$ENV_FILE" ]; then
 # Secrets are stored in /etc/hobnob-server/secrets/ (local secrets backend).
 # =============================================================================
 
-# Server version string reported to agents for self-update (default: dev)
-# HOBNOB_VERSION=1.0.0
-
-# Directory containing cross-compiled agent binaries for distribution
-# Used by GET /api/v1/agent/download/{os}/{arch} (default: dist/agent)
-# HOBNOB_AGENT_DIR=dist/agent
-
 # Webhook secret for HMAC-SHA256 payload signing — store in secrets dir instead:
 # echo 'my-webhook-secret' > /etc/hobnob-server/secrets/hobnob/webhook/secret
 # HOBNOB_WEBHOOK_SECRET=change-me-to-a-random-string

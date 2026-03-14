@@ -10,12 +10,13 @@ VERSION ?= dev
 #   -trimpath     removes source file paths from binary
 #   -s -w         strips symbol table and DWARF debug info
 #   -buildid=     removes build ID
-GO_LDFLAGS := -ldflags="-s -w -buildid="
+GO_VERSION_FLAG := -X main.version=$(VERSION)
+GO_LDFLAGS := -ldflags="-s -w -buildid= $(GO_VERSION_FLAG)"
 GO_HARDENED := -trimpath $(GO_LDFLAGS)
 
 build: build-agent
-	go build -o bin/hobd ./server
-	go build -o bin/hobnobcli ./cli
+	go build -ldflags="-X main.version=$(VERSION)" -o bin/hobd ./server
+	go build -ldflags="-X main.version=$(VERSION)" -o bin/hobnobcli ./cli
 	go build -o bin/hobnob-license-manager ./license-manager
 	ln -sf hobnobcli bin/hnbvi
 

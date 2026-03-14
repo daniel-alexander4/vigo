@@ -283,12 +283,13 @@ See [Maintenance Windows](../operations/maintenance-windows.md) for details.
 
 ## Environment Variables
 
-Only two environment variables are supported. All other configuration belongs in `server.yaml`.
+Only one environment variable is supported. All other configuration belongs in `server.yaml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HOBNOB_CONFIG_FILE` | `server.yaml` | Path to server config file (bootstraps everything else) |
-| `HOBNOB_VERSION` | `dev` | Server version string |
+
+The server version is injected at build time via `-ldflags="-X main.version=1.2.3"` and defaults to `dev`.
 
 ### paths
 
