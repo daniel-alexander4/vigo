@@ -12,6 +12,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 - [Security Hardening](security-hardening.md) -- Firewall, fail2ban, SSH, and sudo with `depends_on`
 - [Monitoring Stack](monitoring-stack.md) -- Prometheus, node_exporter, and Grafana
 - [Database Cluster](database-cluster.md) -- PostgreSQL with `secret:` references
+- [Kubernetes Nodes](kubernetes-nodes.md) -- OS-level k8s node config with rolling drain-and-reboot workflow
 
 ## Conventions
 

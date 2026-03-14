@@ -71,3 +71,4 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Security Hardening](examples/security-hardening.md) — Firewall, fail2ban, SSH, sudo
 - [Monitoring Stack](examples/monitoring-stack.md) — Prometheus, node_exporter, Grafana
 - [Database Cluster](examples/database-cluster.md) — PostgreSQL with vars_from
+- [Kubernetes Nodes](examples/kubernetes-nodes.md) — OS-level k8s node config and rolling reboot workflow
