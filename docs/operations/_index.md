@@ -5,6 +5,7 @@ This section covers the operational aspects of running a Hobnob server in produc
 ## Topics
 
 - [Backup & Recovery](backup.md) -- Continuous SQLite WAL replication via Litestream
+- [Disaster Recovery](disaster-recovery.md) -- Full DR playbook for server failure scenarios
 - [Email Notifications](smtp.md) -- SMTP-based alerting for server events
 - [Prometheus Metrics](metrics.md) -- Monitoring and observability
 - [Database](database.md) -- SQLite and Postgres configuration, schema, and retention

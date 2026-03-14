@@ -172,7 +172,7 @@ hobnob-backup-2026-03-13T14:30:00Z.tar.gz
 
 ### Scheduled Snapshots
 
-Use cron for periodic snapshots. Litestream handles continuous replication; manual snapshots are for explicit recovery points.
+Use cron for periodic snapshots. Litestream handles continuous replication; manual snapshots are for explicit recovery points. See [Disaster Recovery](disaster-recovery.md) for full server failure recovery procedures.
 
 ```bash
 # Daily backup at 2 AM, retain 7 days
