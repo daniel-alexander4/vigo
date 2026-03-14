@@ -85,7 +85,7 @@ These are not under `tuning:` but affect operational behavior:
 
 ```yaml
 checkin:
-  base_interval: "5m"     # how often agents check in
+  interval: "5m"           # how often agents check in
   jitter_percent: 20       # randomization to avoid thundering herd
   bundle_max_age: "24h"    # how long signed bundles remain valid on agents
 ```

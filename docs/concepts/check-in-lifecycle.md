@@ -7,7 +7,7 @@ The agent check-in is the core data flow in Hobnob. Every 5 minutes (configurabl
 ```
 Agent                                     Server
   │                                         │
-  │  ┌─── Loop every base_interval ───┐    │
+  │  ┌─── Loop every interval ────────┐    │
   │  │                                 │    │
   │  │  1. Collect traits              │    │
   │  │  2. Compute state fingerprint   │    │
@@ -65,7 +65,7 @@ Expand roles → module list
     ↓
 Load module definitions
     ↓
-Merge vars: module defaults → node vars → env_vars → conditional vars
+Merge vars: module defaults → node vars → environment_overrides → conditional vars
     ↓
 Resolve secret: references through secrets provider
     ↓
@@ -109,11 +109,11 @@ Results are stored in the database and used to compute compliance status.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `checkin.base_interval` | `5m` | Check-in frequency |
+| `checkin.interval` | `5m` | Check-in frequency |
 | `checkin.jitter_percent` | `20` | Random jitter to avoid thundering herd |
 | `checkin.bundle_max_age` | `24h` | Compiled promise validity period |
 
-With default settings, an agent checks in every 5m ± 20% jitter (4m–6m). A thrall is considered **stale** if it hasn't checked in within 2× the base interval (10m).
+With default settings, an agent checks in every 5m ± 20% jitter (4m–6m). A thrall is considered **stale** if it hasn't checked in within 2× the interval (10m).
 
 ## Adaptive Stream Promotion
 
@@ -147,7 +147,7 @@ This eliminates the ~230 KiB/connection memory overhead of persistent streams. A
 
 **Target classification:** When dispatching tasks or queries, the server categorizes targets into three groups:
 - **Online** — already has an active stream. Work dispatched immediately.
-- **Promotable** — recently active (checked in within 2× base_interval). `stream_requested` is set; work queued for delivery when the stream opens. A 12-minute timeout marks the target offline if no stream arrives.
+- **Promotable** — recently active (checked in within 2× the check-in interval). `stream_requested` is set; work queued for delivery when the stream opens. A 12-minute timeout marks the target offline if no stream arrives.
 - **Offline** — stale agent. Marked offline immediately.
 
 ## Delta Streaming

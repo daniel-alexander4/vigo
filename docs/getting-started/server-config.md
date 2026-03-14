@@ -83,14 +83,14 @@ database:
 
 ```yaml
 checkin:
-  base_interval: "5m"
+  interval: "5m"
   jitter_percent: 20
   bundle_max_age: "24h"
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `base_interval` | `5m` | Agent check-in frequency. Stale threshold = 2x this value |
+| `interval` | `5m` | Agent check-in frequency. Stale threshold = 2x this value |
 | `jitter_percent` | `20` | Randomize check-in timing by 0–N% to avoid thundering herd |
 | `bundle_max_age` | `24h` | How long signed policy bundles remain valid on agents. `0` = forever |
 
@@ -296,4 +296,3 @@ These override config paths at startup:
 | `HOBNOB_AGENT_DIR` | `dist/agent` | Path to agent binaries for bootstrap |
 | `HOBNOB_LICENSE_DIR` | `/etc/hobnob-server/license` | Path to license files |
 | `HOBNOB_VERSION` | `dev` | Server version string |
-| `HOBNOB_DANGEROUS` | — | Set to `1` to disable config safety checks |

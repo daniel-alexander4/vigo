@@ -33,7 +33,7 @@ hobnobcli task run <command-or-task-name> [flags]
 | `--operator` | | current user | Operator name for audit |
 | `--batch-size` | | | Batch size: count (`5`) or percentage (`25%`) |
 | `--max-failures` | | | Max failures before abort: count (`2`) or percentage (`10%`) |
-| `--health-check` | | | Shell command to run between batches (abort if exit != 0) |
+| `--health-check-url` | | | URL to probe between batches (abort on non-2xx) |
 | `--dry-run` | | `false` | Display batch plan without executing |
 | `--param` | | | Task parameter (`key=value`), repeatable |
 
@@ -64,7 +64,7 @@ hobnobcli task run restart-app --target "*.web.*" --param env=staging
 ```bash
 hobnobcli task run "systemctl restart nginx" --target "*.web.*" \
   --batch-size 25% --max-failures 2 \
-  --health-check "curl -sf http://lb.example.com/health"
+  --health-check-url "http://lb.example.com/health"
 ```
 
 #### Dry-run to preview batch plan

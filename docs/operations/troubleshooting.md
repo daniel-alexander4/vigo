@@ -128,10 +128,10 @@ See [Metrics](metrics.md) for the full list.
 
 **Diagnosis:**
 
-1. Check the stale threshold. A thrall is stale if it has not checked in within `2 * checkin.base_interval`:
+1. Check the stale threshold. A thrall is stale if it has not checked in within `2 * checkin.interval`:
    ```yaml
    checkin:
-     base_interval: "5m"   # stale after 10 minutes
+     interval: "5m"   # stale after 10 minutes
    ```
 
 2. On the thrall, verify the agent is running:

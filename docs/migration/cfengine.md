@@ -30,7 +30,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | `cf-monitord` | Traits | Agent-side monitoring replaced by trait collection |
 | `cf-hub` | FleetIndex + SQLite | Central data aggregation |
 | Masterfiles | `thrall-configs/` | Policy repository |
-| Augments (`def.json`) | `vars` / `env_vars` | External variable data |
+| Augments (`def.json`) | `vars` / `environment_overrides` | External variable data |
 | Module protocol | Custom executors | JSON stdin/stdout protocol for extensions |
 | `cf-secret` | `secret:` prefix | Secrets resolved at bundle compile time |
 | Mustache template | Go template in `content:` | Templates only in `content:` attribute |
@@ -217,7 +217,7 @@ thralls:
     roles: [webserver]
     vars:
       nginx_server_name: "example.com"
-    env_vars:
+    environment_overrides:
       staging:
         nginx_server_name: "staging.example.com"
 ```

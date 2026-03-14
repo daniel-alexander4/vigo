@@ -47,7 +47,7 @@ Modules (4):
   logrotate
 
 Vars:
-  nginx_port      = 443                             ← env_vars[production]
+  nginx_port      = 443                             ← environment_overrides[production]
   worker_procs    = 4                               ← vars_from[vars/web01.hnb]
   log_level       = info                            ← node vars
   ssl_protocols   = TLSv1.2 TLSv1.3                ← vars_from[vars/web-common.hnb]
@@ -67,7 +67,7 @@ No config entry matches hostname "unknown.example.com"
 
 - Secret values (prefixed with `secret:`) are masked in output
 - Variable values longer than 60 characters are truncated
-- The source column shows where each variable was set (module defaults, node vars, env_vars, or vars_from file)
+- The source column shows where each variable was set (module defaults, node vars, environment_overrides, or vars_from file)
 
 ## config publish
 
@@ -76,7 +76,7 @@ Validates `.hnb` files in `/etc/hobnob-server/hnb/proposed/` then atomically syn
 ### Usage
 
 ```bash
-hobnobcli config publish [--dry-run] [--dangerous] [--skip-url-check] [--url-timeout <duration>]
+hobnobcli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 ```
 
 ### Flags
@@ -84,11 +84,11 @@ hobnobcli config publish [--dry-run] [--dangerous] [--skip-url-check] [--url-tim
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--dry-run` | `false` | Validate only |
-| `--dangerous` | `false` | Allow non-idempotent resources |
 | `--skip-url-check` | `false` | Skip HTTP aliveness checks for URLs |
 | `--url-timeout` | `10s` | Timeout per URL aliveness check |
 | `--operator` | `$USER` | Operator name for audit trail |
 | `--diff` | `false` | Show line-level diff for each changed file |
+| `--skip-suggest` | `false` | Skip AI-assisted fix suggestions on failure |
 
 ### Examples
 

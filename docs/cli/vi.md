@@ -7,20 +7,14 @@ Can also be invoked directly as `hnbvi` for convenience.
 ## Usage
 
 ```bash
-hobnobcli vi <file.hnb> [flags]
+hobnobcli vi <file.hnb>
 ```
 
 or
 
 ```bash
-hnbvi <file.hnb> [flags]
+hnbvi <file.hnb>
 ```
-
-## Flags
-
-| Flag | Short | Default | Description |
-|------|-------|---------|-------------|
-| `--dangerous` | | `false` | Allow saving non-idempotent resources |
 
 ## Features
 
@@ -28,7 +22,7 @@ hnbvi <file.hnb> [flags]
 
 The editor provides YAML-based syntax highlighting with Hobnob-specific enhancements:
 
-- **Top-level keys** (`name`, `vars`, `resources`, `modules`, `roles`, `thralls`, `depends_on`, `when`, `environment`, `env_vars`, `match`, `conditional_vars`) -- bold blue
+- **Top-level keys** (`name`, `vars`, `resources`, `modules`, `roles`, `thralls`, `depends_on`, `when`, `environment`, `environment_overrides`, `match`, `conditional_vars`) -- bold blue
 - **Resource attributes** (`type`, `state`, `targetpath`, `content`, `package`, `service`, `command`, etc.) -- blue
 - **Resource type values** (`file`, `package`, `service`, `user`, `exec`, `repository`, `archive`, `cron`) -- bold orange
 - **State values** (`present`, `absent`, `running`, `stopped`, `restarted`, `reloaded`, `directory`) -- green
@@ -44,7 +38,7 @@ When saving a file, the editor automatically runs `hobnobcli validate` against t
 
 - Error messages are displayed in the editor
 - The write is aborted
-- Use `:w!` to force-save, or use `--dangerous` to disable validation
+- Use `:w!` to force-save past validation
 
 After exiting vim, a post-save validation check runs as well.
 
@@ -63,12 +57,6 @@ The editor is pre-configured with:
 
 ```bash
 hobnobcli vi thrall-configs/modules/nginx.hnb
-```
-
-### Edit without validation
-
-```bash
-hobnobcli vi --dangerous thrall-configs/modules/experimental.hnb
 ```
 
 ### Using the hnbvi shortcut

@@ -191,6 +191,6 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 
 ## Related
 
-- [Config Format](config-format.md) — Vars and env_vars
+- [Config Format](config-format.md) — Vars and environment_overrides
 - [Trait Collectors](../traits/_index.md) — Available .Traits data
 - [Executors](../executors/_index.md) — Which attributes each executor uses

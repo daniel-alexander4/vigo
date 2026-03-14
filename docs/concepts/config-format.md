@@ -120,11 +120,11 @@ thralls:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `match` | yes | Hostname glob pattern (e.g., `web*.example.com`, `*`) |
-| `environment` | no | Environment name for env_vars resolution |
+| `environment` | no | Environment name for environment_overrides resolution |
 | `roles` | no | List of role names to assign |
 | `modules` | no | Additional modules (beyond those from roles) |
 | `vars` | no | Variable overrides (override module defaults) |
-| `env_vars` | no | Per-environment variable overrides |
+| `environment_overrides` | no | Per-environment variable overrides |
 | `vars_from` | no | External var files to load (relative to thrall-configs/) |
 
 ## Variable Resolution
@@ -136,12 +136,12 @@ Module vars (defaults)
     ↓ overridden by
 Node-level vars
     ↓ overridden by
-env_vars[environment]
+environment_overrides[environment]
     ↓ overridden by
 Conditional vars (trait-based)
 ```
 
-### env_vars
+### environment_overrides
 
 Override variables per environment:
 
@@ -153,7 +153,7 @@ thralls:
     vars:
       nginx_port: 80
       log_level: info
-    env_vars:
+    environment_overrides:
       staging:
         nginx_port: 8080
         log_level: debug
@@ -226,7 +226,7 @@ Every resource has these common fields:
 | `before` | no | Resources that must run after this one |
 | `notify` | no | Resources to re-apply when this one changes |
 | `subscribes` | no | Resources to watch — re-apply self when they change |
-| `subscribes_secret` | no | Secret paths to watch — re-apply when rotated |
+| `watch_secret` | no | Secret paths to watch — re-apply when rotated |
 
 Plus type-specific attributes (see [Executors](../executors/_index.md)).
 

@@ -40,7 +40,7 @@ resources:
     type: exec
     command: "grafana-cli admin reset-admin-password 'secret:hobnob/grafana/admin-password'"
     depends_on: [grafana-service]
-    subscribes_secret: ["hobnob/grafana/admin-password"]
+    watch_secret: ["hobnob/grafana/admin-password"]
 
   - name: grafana-logrotate
     type: logrotate

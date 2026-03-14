@@ -237,7 +237,7 @@ message CheckInRequest {
 
 message CheckInResponse {
   repeated Module modules = 1;
-  string base_interval = 2;   // e.g. "5m"
+  string interval = 2;   // e.g. "5m"
   int32 jitter_percent = 3;
   repeated CustomTraitEntry custom_traits = 4;
   bool no_change = 5;                    // true = fingerprint matched, skip execution
@@ -339,7 +339,7 @@ message PolicyResource {
   string when = 4;                     // when expression (unevaluated)
   repeated string notify = 5;
   repeated string subscribes = 6;
-  repeated string subscribes_secret = 7; // secret paths that trigger this resource on rotation
+  repeated string watch_secret = 7; // secret paths that trigger this resource on rotation
 }
 
 // ConditionalVarDef defines a trait-based conditional variable.

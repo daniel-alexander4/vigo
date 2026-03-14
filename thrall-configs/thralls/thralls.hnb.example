@@ -18,18 +18,18 @@ thralls:
     vars_from:
       - "vars/web-common.hnb"
       - "vars/web01.hnb"
-    env_vars:
+    environment_overrides:
       staging:
         worker_processes: "2"
         keepalive_timeout: "30"
 
   # vars_from with inline override: db-common.hnb provides defaults,
-  # env_vars overrides per-environment tuning.
+  # environment_overrides overrides per-environment tuning.
   - match: "db01.example.com"
     environment: production
     roles: [database]
     vars_from: "vars/db-common.hnb"
-    env_vars:
+    environment_overrides:
       production:
         pg_max_connections: "200"
         pg_shared_buffers: "4GB"
@@ -46,7 +46,7 @@ thralls:
   #   modules: [redis]
   #   vars:
   #     redis_password: "secret:hobnob/redis/password"  # add HOBNOB_REDIS_PASSWORD to .env
-  #   env_vars:
+  #   environment_overrides:
   #     production:
   #       redis_maxmemory: "4gb"
 
@@ -80,7 +80,7 @@ thralls:
     vars:
       plex_media_dir: "/mnt/storage/media"
       plex_transcode_dir: "/mnt/nvme/plex-transcode"
-    env_vars:
+    environment_overrides:
       production:
         plex_max_transcode_sessions: "5"
       staging:

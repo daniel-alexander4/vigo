@@ -227,7 +227,7 @@ thralls:
     roles: [webserver]
     vars:
       nginx_server_name: "example.com"
-    env_vars:
+    environment_overrides:
       staging:
         nginx_server_name: "staging.example.com"
 ```

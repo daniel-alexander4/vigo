@@ -19,7 +19,7 @@ Salt requires Python on both master and minion. Hobnob's server is Go (hobd) and
 | State file (`.sls`) | Module (`.hnb` file) | Both YAML, different rendering rules |
 | `top.sls` | `nodes.hnb` | Glob matching → role/module assignment |
 | Formula | Module | Reusable state set — same concept |
-| Pillar | `vars` / `env_vars` | Server-side data for nodes |
+| Pillar | `vars` / `environment_overrides` | Server-side data for nodes |
 | Grains | Traits | System facts discovered by the agent |
 | Mine | No equivalent | No agent-to-agent data sharing |
 | Requisite (`require`) | `depends_on` | DAG ordering |
@@ -34,7 +34,7 @@ Salt requires Python on both master and minion. Hobnob's server is Go (hobd) and
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |
 | Beacons | No equivalent | Agent does not emit events |
 | Reactor | Webhooks | Event-driven automation via webhook dispatch |
-| Environments | `env_vars:` in `nodes.hnb` | Environment-specific overrides |
+| Environments | `environment_overrides:` in `nodes.hnb` | Environment-specific overrides |
 | `salt` CLI | `hobnobcli` | Server management CLI |
 | `salt-minion` | `hobnob` agent | Rust binary, LMDB state store |
 | `salt-master` | `hobd` | Go binary, gRPC + REST + Web UI |
@@ -214,7 +214,7 @@ Salt's pillar data is hierarchical and can be merged across multiple sources. Ho
 | Salt Level | Hobnob Equivalent |
 |---|---|
 | Pillar (formula defaults) | Module `vars:` |
-| Pillar (per-environment) | `env_vars:` in `nodes.hnb` |
+| Pillar (per-environment) | `environment_overrides:` in `nodes.hnb` |
 | Pillar (per-minion) | Node `vars:` in `nodes.hnb` |
 | Grains | Traits (`.Traits` in templates, builtins in `when:`) |
 | Mine | No equivalent — use `vars_from:` for shared data |
@@ -227,7 +227,7 @@ thralls:
     roles: [webserver]
     vars:
       nginx_server_name: "example.com"
-    env_vars:
+    environment_overrides:
       staging:
         nginx_server_name: "staging.example.com"
 ```

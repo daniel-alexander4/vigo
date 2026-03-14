@@ -86,7 +86,7 @@ watcher:
 When a secret is rotated:
 1. Watcher detects the version change
 2. Server re-resolves the secret value
-3. Resources with `subscribes_secret: ["path"]` are force-pushed to affected thralls
+3. Resources with `watch_secret: ["path"]` are force-pushed to affected thralls
 4. Webhook event fired + SMTP notification sent
 
 ## Secrets in Modules
@@ -112,7 +112,7 @@ resources:
     targetpath: /etc/postgresql/conf.d/auth.conf
     content: |
       password = {{ .Vars.db_password }}
-    subscribes_secret: ["hobnob/db/password"]
+    watch_secret: ["hobnob/db/password"]
     notify: [pg-service]
 ```
 
@@ -142,4 +142,4 @@ Never embed secrets in command strings (they appear in process listings). Use `s
 ## Related
 
 - [Server Configuration](../getting-started/server-config.md) — secrets: section
-- [Resource DAG](resource-dag.md) — subscribes_secret
+- [Resource DAG](resource-dag.md) — watch_secret

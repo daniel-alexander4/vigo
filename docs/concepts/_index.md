@@ -3,7 +3,7 @@
 Core concepts that explain how Hobnob works.
 
 - [Architecture](architecture.md) — Three binaries, ports, data flows
-- [Config Format](config-format.md) — Modules, roles, nodes.hnb, vars, env_vars
+- [Config Format](config-format.md) — Modules, roles, nodes.hnb, vars, environment_overrides
 - [Resource DAG](resource-dag.md) — depends_on, notify, subscribes
 - [Resource Language](resource-language.md) — defaults, foreach, case/match, conditional_block
 - [When Expressions](when-expressions.md) — Boolean logic and 15 builtin functions

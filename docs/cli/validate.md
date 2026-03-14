@@ -8,17 +8,14 @@ Check `.hnb` files for YAML correctness, structural validity, and idempotency.
 hobnobcli validate <file.hnb> [file2.hnb ...] [flags]
 ```
 
-## Flags
-
-| Flag | Short | Default | Description |
-|------|-------|---------|-------------|
-| `--dangerous` | | `false` | Show errors but exit 0 (allow non-idempotent resources) |
-
 ## Checks Performed
 
 1. **YAML syntax** -- valid YAML, proper indentation, no tabs
 2. **Structure** -- required fields present (`name`, resources with `name` + `type`)
 3. **Idempotency** -- `exec` resources must have `creates`, `onlyif`, or `unless` guard
+4. **Cross-references** -- `depends_on`, `notify`, `subscribes`, `before` must reference existing resource names
+5. **Known types** -- unknown resource types blocked unless `skip_validation: true` is set
+6. **Redundant triggers** -- both `notify` and `subscribes` on the same pair is an error
 
 For thrall files (those with a top-level `thralls:` key), validates that each entry has a `match` field.
 
@@ -48,17 +45,9 @@ thrall-configs/modules/postgres.hnb: OK
 thrall-configs/modules/app.hnb: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
 ```
 
-### Validate with dangerous mode
-
-```bash
-hobnobcli validate --dangerous thrall-configs/modules/app.hnb
-```
-
-Shows errors but exits with code 0, allowing non-idempotent resources.
-
 ### Exit codes
 
-- `0` -- all checks pass (or `--dangerous` mode)
+- `0` -- all checks pass
 - `1` -- validation errors found
 
 ## Related

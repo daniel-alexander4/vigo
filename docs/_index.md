@@ -71,7 +71,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 ## Examples
 
 - [Nginx Module](examples/nginx-module.md) — Full nginx walkthrough
-- [Multi-Environment](examples/multi-env.md) — Production/staging with env_vars
+- [Multi-Environment](examples/multi-env.md) — Production/staging with environment_overrides
 - [Docker Stack](examples/docker-stack.md) — Container management
 - [Security Hardening](examples/security-hardening.md) — Firewall, fail2ban, SSH, sudo
 - [Monitoring Stack](examples/monitoring-stack.md) — Prometheus, node_exporter, Grafana

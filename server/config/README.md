@@ -93,8 +93,6 @@ Modules can declare ordering relative to other modules:
 ```yaml
 name: app-deploy
 depends_on: [nginx]     # this module runs after nginx
-# or equivalently:
-require: [nginx]        # alias for depends_on
 
 name: base-packages
 before: [nginx]         # nginx runs after this module (reverse depends_on)
@@ -124,7 +122,7 @@ nodes:
     roles: [webserver]
     vars:
       port: "443"
-    env_vars:
+    environment_overrides:
       production:
         worker_count: "auto"
       staging:
@@ -142,7 +140,7 @@ Variables are merged in this order (last wins):
 
 1. Module default vars (lowest priority)
 2. Node-level vars
-3. `env_vars` for the node's environment (highest priority)
+3. `environment_overrides` for the node's environment (highest priority)
 
 Conditional vars (see [../conditionals/README.md](../conditionals/README.md)) take precedence over node-level vars of the same name.
 

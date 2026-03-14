@@ -98,7 +98,7 @@ Agent                          Server
   │─────────────────────────────>│
   │                              │  2. Match hostname → nodes.hnb
   │                              │  3. Resolve roles → modules
-  │                              │  4. Merge vars + env_vars
+  │                              │  4. Merge vars + environment_overrides
   │                              │  5. Resolve secret: refs
   │                              │  6. Build module DAG
   │                              │  7. Render templates

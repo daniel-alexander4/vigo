@@ -1,6 +1,6 @@
 # Multi-Environment Setup
 
-This example shows how to use `env_vars` to maintain different variable values for production and staging environments while sharing the same modules.
+This example shows how to use `environment_overrides` to maintain different variable values for production and staging environments while sharing the same modules.
 
 ## Module Definition
 
@@ -39,7 +39,7 @@ resources:
     enabled: true
 ```
 
-## Node Assignment with env_vars
+## Node Assignment with environment_overrides
 
 `thrall-configs/nodes.hnb`:
 
@@ -49,7 +49,7 @@ thralls:
     roles: [webserver]
     vars:
       app_db_password: "secret:hobnob/webapp/db_password"
-    env_vars:
+    environment_overrides:
       production:
         app_port: "8080"
         app_workers: "8"
@@ -64,10 +64,10 @@ thralls:
         app_db_host: db-staging.internal
 ```
 
-## How env_vars Works
+## How environment_overrides Works
 
 1. The `vars` block sets base values that apply to all environments.
-2. The `env_vars` block defines per-environment overrides.
+2. The `environment_overrides` block defines per-environment overrides.
 3. A thrall's environment is set in its node entry:
 
 ```yaml
@@ -84,7 +84,7 @@ thralls:
 4. At check-in time, the server resolves the thrall's environment and merges:
    - Module default vars (lowest priority)
    - Node-level `vars` (overrides module defaults)
-   - `env_vars[environment]` (highest priority)
+   - `environment_overrides[environment]` (highest priority)
 
 ## Promoting Between Environments
 

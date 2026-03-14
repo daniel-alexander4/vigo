@@ -38,10 +38,9 @@ hobnobcli config publish --skip-url-check
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--dry-run` | `false` | Validate only, do not sync |
-| `--dangerous` | `false` | Allow non-idempotent resources (exec without guards) |
 | `--skip-url-check` | `false` | Skip HTTP aliveness checks for URLs |
 | `--url-timeout` | `10s` | Timeout per URL aliveness check |
-| `--no-suggest` | `false` | Skip AI-assisted fix suggestions on validation failure |
+| `--skip-suggest` | `false` | Skip AI-assisted fix suggestions on validation failure |
 
 ## How It Works
 
@@ -70,7 +69,7 @@ Subdirectories not present in proposed are removed from `.live/` (sync is replac
 - YAML syntax
 - Module and role references (no dangling refs)
 - Circular dependency detection
-- Resource idempotency (exec resources need `creates`, `onlyif`, or `unless` — unless `--dangerous`)
+- Resource idempotency (exec resources need `creates`, `onlyif`, or `unless`)
 - Cross-resource references (`depends_on`, `notify`, `subscribes`, `before` must reference existing resource names)
 - Redundant triggers (resource A `notify: [B]` and B `subscribes: [A]` — double trigger)
 - Unknown resource types (blocked unless `custom: true` is set on the resource)
@@ -97,7 +96,7 @@ Subdirectories not present in proposed are removed from `.live/` (sync is replac
 
 When validation fails, `config publish` calls the AI assistant (if the server is running with AI enabled) to explain each error and suggest corrected YAML. Suggestions stream to stderr below the error output.
 
-Use `--no-suggest` to skip AI suggestions (e.g., when the server is not running or AI is disabled).
+Use `--skip-suggest` to skip AI suggestions (e.g., when the server is not running or AI is disabled).
 
 ## File Permissions
 

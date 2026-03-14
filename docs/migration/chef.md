@@ -26,7 +26,7 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | Attributes (override) | Node `vars:` in `nodes.hnb` | Node-level overrides |
 | Data bag | `vars_from:` | External YAML data loaded at check-in |
 | Chef Vault | `secret:` prefix | Resolved server-side, never in plaintext |
-| Environment | `env_vars:` in `nodes.hnb` | Environment-specific variable overrides |
+| Environment | `environment_overrides:` in `nodes.hnb` | Environment-specific variable overrides |
 | `notifies` | `notify` | Trigger downstream resource on change |
 | `subscribes` | `subscribes` | Same keyword, same semantics |
 | `only_if` / `not_if` | `when:` | Resource conditionals |
@@ -212,11 +212,11 @@ Chef attributes have 15 precedence levels. In practice, most teams use `default`
 |---|---|
 | `default` (cookbook) | Module `vars:` |
 | `default` (role) | Role `vars:` |
-| `override` (node/environment) | Node `vars:` / `env_vars:` |
+| `override` (node/environment) | Node `vars:` / `environment_overrides:` |
 | `automatic` (Ohai) | Traits (accessed via `.Traits` in templates, or `when:`) |
 | Data bags | `vars_from:` (loads external YAML) |
 
-The `env_vars:` key provides environment-specific overrides without separate environment objects:
+The `environment_overrides:` key provides environment-specific overrides without separate environment objects:
 
 ```yaml
 thralls:
@@ -224,7 +224,7 @@ thralls:
     roles: [webserver]
     vars:
       nginx_server_name: "example.com"
-    env_vars:
+    environment_overrides:
       staging:
         nginx_server_name: "staging.example.com"
 ```

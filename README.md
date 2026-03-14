@@ -348,18 +348,15 @@ Hobnob enforces idempotency at config load time. Every resource must be provably
 
 - **Inherently idempotent** — `file`, `package`, `service`, `user`, `repository`, `archive`, `cron` all check current state before acting
 - **Requires a guard** — `exec` must declare at least one of `creates`, `onlyif`, or `unless`
-- **Warning** — `service` with `state: restarted`/`reloaded` without `subscribes` triggers a warning (runs every convergence)
+- **Error** — `service` with `state: restarted`/`reloaded` without `subscribes` is rejected (runs every convergence)
 
-Non-idempotent resources are rejected unless the server is started with `--dangerous` or `HOBNOB_DANGEROUS=1`.
+Non-idempotent resources are always rejected. Use `skip_validation: true` on individual resources to bypass validation for custom executors.
 
 ### Validation tools
 
 ```bash
-# Validate .hnbfiles for YAML correctness + idempotency
+# Validate .hnb files for YAML correctness + idempotency
 hobnobcli validate thrall-configs/modules/*.hnb
-
-# Allow non-idempotent resources (shows errors but exits 0)
-hobnobcli validate --dangerous modules/risky.hnb
 
 # Edit with vim — syntax highlighting + validation on save
 hobnobcli vi thrall-configs/modules/nginx.hnb

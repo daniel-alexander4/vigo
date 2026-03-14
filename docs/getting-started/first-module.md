@@ -121,7 +121,7 @@ thralls:
 
 ## Step 5: Environment-Specific Config
 
-Use `env_vars` to vary config by environment:
+Use `environment_overrides` to vary config by environment:
 
 ```yaml
 thralls:
@@ -130,7 +130,7 @@ thralls:
     roles: [webserver]
     vars:
       nginx_port: 80
-    env_vars:
+    environment_overrides:
       staging:
         nginx_port: 8080
       production:
@@ -180,7 +180,7 @@ hobnobcli thralls show web1.example.com
 
 ## What's Next
 
-- [Config Format](../concepts/config-format.md) — Full reference for modules, roles, vars, env_vars
+- [Config Format](../concepts/config-format.md) — Full reference for modules, roles, vars, environment_overrides
 - [Resource DAG](../concepts/resource-dag.md) — depends_on, notify, subscribes in depth
 - [When Expressions](../concepts/when-expressions.md) — Conditional logic reference
 - [Templates](../concepts/templates.md) — Go template syntax for content: attributes

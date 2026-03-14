@@ -21,7 +21,7 @@ Puppet's agent runs on a 30-minute interval by default. Hobnob's agent interval 
 | Profile | Module | Same level of abstraction |
 | Role | Role | Named list of modules |
 | `site.pp` / ENC | `nodes.hnb` | First-match-wins glob patterns |
-| Hiera | `vars` / `env_vars` | 3 levels: module defaults → role vars → node vars |
+| Hiera | `vars` / `environment_overrides` | 3 levels: module defaults → role vars → node vars |
 | Facter fact | Trait | Collected automatically, available in `when:` and templates |
 | Catalog | Bundle | Server-compiled desired state sent to agent |
 | Resource | Resource | Same concept — idempotent, declarative |
@@ -33,7 +33,7 @@ Puppet's agent runs on a 30-minute interval by default. Hobnob's agent interval 
 | PuppetDB | FleetIndex + SQLite | In-memory index, no external database |
 | hiera-eyaml | `secret:` prefix | Resolved at bundle compile time |
 | ERB template | Go template in `content:` | Templates only in `content:` — never in `targetpath:`, `package:`, etc. |
-| `environments/` | `env_vars` in `nodes.hnb` | Environment-specific overrides, not directory-based |
+| `environments/` | `environment_overrides` in `nodes.hnb` | Environment-specific overrides, not directory-based |
 | Puppet agent | hobnob agent | Rust binary, LMDB state store |
 | Puppet server | hobd | Go binary, gRPC + REST |
 | `puppet cert` | `hobnobcli tokens` | One-time token enrollment instead of certificate signing |
@@ -204,7 +204,7 @@ Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family �
 2. **Role vars** — `vars:` in the role `.hnb` file (if needed)
 3. **Node vars** — `vars:` in the `nodes.hnb` entry
 
-Node vars override role vars, which override module defaults. That's the entire hierarchy. For environment-specific values, use `env_vars:`:
+Node vars override role vars, which override module defaults. That's the entire hierarchy. For environment-specific values, use `environment_overrides:`:
 
 ```yaml
 thralls:
@@ -212,7 +212,7 @@ thralls:
     roles: [webserver]
     vars:
       nginx_server_name: "example.com"
-    env_vars:
+    environment_overrides:
       staging:
         nginx_server_name: "staging.example.com"
 ```

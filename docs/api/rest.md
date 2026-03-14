@@ -445,7 +445,7 @@ Trace config resolution for a hostname. Shows which node entry matched, how role
   ],
   "modules": ["firewall", "sshd", "nginx", "logrotate"],
   "var_sources": [
-    {"key": "nginx_port", "value": 443, "source": "env_vars[production]"},
+    {"key": "nginx_port", "value": 443, "source": "environment_overrides[production]"},
     {"key": "log_level", "value": "info", "source": "node vars"}
   ],
   "conditional_vars": ["is_debian", "has_enough_ram"],

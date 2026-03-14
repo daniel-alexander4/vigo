@@ -102,7 +102,7 @@ resources:
 
 This is equivalent to `app-config` having `notify: [app-service]`.
 
-## subscribes_secret
+## watch_secret
 
 Watches secret paths for rotation. When the server detects a secret has been rotated, resources subscribing to that secret path are re-applied:
 
@@ -113,7 +113,7 @@ resources:
     targetpath: /etc/app/config.yaml
     content: |
       dsn: {{ .Vars.db_dsn }}
-    subscribes_secret: ["hobnob/db/dsn"]
+    watch_secret: ["hobnob/db/dsn"]
     notify: [app-service]
 ```
 

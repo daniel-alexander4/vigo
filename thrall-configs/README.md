@@ -131,7 +131,7 @@ thralls:
     roles: [webserver]
     vars:
       ssh_port: "2222"
-    env_vars:
+    environment_overrides:
       production:
         worker_count: "auto"
       staging:
@@ -149,7 +149,7 @@ thralls:
 
 1. Module default vars (lowest priority)
 2. Thrall-level vars
-3. env_vars for the thrall's environment (highest priority)
+3. environment_overrides for the thrall's environment (highest priority)
 
 ## Templates
 
@@ -165,7 +165,7 @@ content: |
 
 Available namespaces:
 
-- `.Vars` -- merged variables (module defaults + thrall overrides + env_vars)
+- `.Vars` -- merged variables (module defaults + thrall overrides + environment_overrides)
 - `.Traits` -- thrall's collected traits (os, hardware, network, etc.)
 
 ## Stream Edit

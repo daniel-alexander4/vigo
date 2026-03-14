@@ -49,7 +49,6 @@ make certs
 | `HOBNOB_CUSTOM_TRAITS_DIR` | `custom-traits` | Custom trait executables |
 | `HOBNOB_AGENT_DIR` | `dist/agent` | Agent binary distribution directory |
 | `HOBNOB_VERSION` | `dev` | Version string |
-| `HOBNOB_DANGEROUS` | (unset) | Set to `1` to allow non-idempotent resources |
 
 ## Server Config (server.yaml)
 
@@ -67,7 +66,7 @@ database:
   dsn: "secret:hobnob/db/dsn"
 
 checkin:
-  base_interval: "5m"
+  interval: "5m"
   jitter_percent: 20
 
 secrets:
@@ -164,7 +163,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 | Webhook HTTP timeout | 10 seconds | Per delivery |
 | Traits snapshot retention | 10 | Per thrall, pruned on report |
 | Bcrypt cost | 10 | Token hashing |
-| Compliance stale threshold | 2x base_interval | Thrall hasn't checked in |
+| Compliance stale threshold | 2x interval | Thrall hasn't checked in |
 | Config reload debounce | 500ms | Prevents rapid re-parsing |
 
 ## Examples

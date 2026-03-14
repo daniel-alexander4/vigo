@@ -102,7 +102,7 @@ database:
 # Agent Check-In
 # ---------------------------------------------------------------------------
 checkin:
-  base_interval: "5m"           # agent check-in frequency (stale threshold = 2x this)
+  interval: "5m"                # agent check-in frequency (stale threshold = 2x this)
   jitter_percent: 20            # randomize check-in timing by 0-N% (avoids thundering herd)
   bundle_max_age: "24h"         # how long signed policy bundles remain valid on agents (0 = forever)
 

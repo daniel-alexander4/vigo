@@ -27,7 +27,7 @@ database:
   # retention: "90d"           # auto-prune old runs/tasks/workflows (empty = no pruning)
 
 checkin:
-  base_interval: "5m"
+  interval: "5m"
   jitter_percent: 20
 
 webhooks:

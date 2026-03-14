@@ -149,9 +149,6 @@ hobnobcli env promote <module> --from staging --to production
 ```bash
 # Validate .hnb files
 hobnobcli validate nginx.hnb openssh.hnb
-
-# Allow non-idempotent resources
-hobnobcli validate --dangerous custom.hnb
 ```
 
 ### vi -- Config editing

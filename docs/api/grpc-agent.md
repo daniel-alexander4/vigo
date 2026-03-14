@@ -56,7 +56,7 @@ The agent's pull loop. Returns the modules to apply based on current state.
 | Field | Type | Description |
 |-------|------|-------------|
 | `modules` | repeated Module | Ordered module list with desired state |
-| `base_interval` | string | Check-in interval (e.g., "5m") |
+| `interval` | string | Check-in interval (e.g., "5m") |
 | `jitter_percent` | int32 | Jitter percentage for interval randomization |
 | `custom_traits` | repeated CustomTraitEntry | Custom trait executables to sync |
 | `no_change` | bool | True if fingerprint matched; agent can skip execution |

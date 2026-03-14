@@ -9,7 +9,7 @@ Compliance status reflects whether a thrall is in its desired state. It's comput
 | **compliant** | Last run succeeded with zero changes and zero failures |
 | **drifted** | Last run succeeded but made changes (state had drifted from desired) |
 | **failing** | Last run had one or more resource failures |
-| **stale** | Thrall hasn't checked in within 2× the base interval |
+| **stale** | Thrall hasn't checked in within 2× the check-in interval |
 | **unknown** | No runs recorded yet (newly enrolled thrall) |
 
 ## Computation
@@ -71,7 +71,7 @@ smtp:
       threshold: 90  # fire when compliance drops below 90%
 ```
 
-The checker runs at the base interval frequency and fires once per transition (not repeatedly).
+The checker runs at the check-in interval frequency and fires once per transition (not repeatedly).
 
 ## Per-Resource Compliance
 
@@ -84,11 +84,11 @@ A thrall is compliant only when all resources report "ok" — meaning the system
 
 ## Stale Detection
 
-A thrall is stale when it hasn't checked in within 2× the base interval:
+A thrall is stale when it hasn't checked in within 2× the check-in interval:
 
 ```yaml
 checkin:
-  base_interval: "5m"  # stale threshold = 10 minutes
+  interval: "5m"  # stale threshold = 10 minutes
 ```
 
 Stale thralls trigger `thrall.stale` SMTP notifications on the first transition to stale (not on every check).

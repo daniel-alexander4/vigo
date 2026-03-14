@@ -145,7 +145,7 @@ thralls:
       pg_effective_cache_size: 6GB
       pg_work_mem: 16MB
       pg_listen_addresses: "*"
-    env_vars:
+    environment_overrides:
       production:
         pg_max_connections: "200"
         pg_shared_buffers: 4GB
