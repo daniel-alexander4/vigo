@@ -153,6 +153,12 @@ certs:
 
 ENVFILE ?= /srv/hobnob/.env
 
+IMAGE ?= ghcr.io/daniel-alexander4/hobnob:latest
+
+push-image:
+	docker build -f Dockerfile.server -t $(IMAGE) .
+	docker push $(IMAGE)
+
 up:
 	docker compose --env-file $(ENVFILE) up -d --build
 
