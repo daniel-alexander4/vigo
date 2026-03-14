@@ -259,6 +259,16 @@ func (e *Enforcer) evaluateLocked() error {
 	return nil
 }
 
+// FreeLicenseID is the license_id of the built-in 25-node community license.
+const FreeLicenseID = "free-25"
+
+// IsFreeLicense returns true if the loaded license is the built-in free tier.
+func (e *Enforcer) IsFreeLicense() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.license != nil && e.license.Payload.LicenseID == FreeLicenseID
+}
+
 // CheckInWarning returns a non-empty warning message if the license is in
 // grace period or enrollment block. The check-in handler should log this on
 // every check-in so operators see it in their logs.

@@ -364,6 +364,46 @@ func TestCheckInWarning(t *testing.T) {
 	}
 }
 
+func TestIsFreeLicense(t *testing.T) {
+	// With the built-in free license (no .lic on disk).
+	dir := t.TempDir()
+	origKey := PublicKeyHex
+	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+
+	counter := func(ctx context.Context) (int, error) { return 5, nil }
+	e, err := NewEnforcer(dir, dir, counter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !e.IsFreeLicense() {
+		t.Error("expected IsFreeLicense() = true for built-in free license")
+	}
+
+	// With a paid license.
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	setPublicKeyForTest(hex.EncodeToString(pub))
+
+	dir2 := t.TempDir()
+	writeLic(t, dir2, Payload{
+		CustomerName: "Paid Customer",
+		CustomerID:   "paid-001",
+		LicenseID:    "lic-paid-100",
+		MaxThralls:   100,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}, priv)
+
+	e2, err := NewEnforcer(dir2, dir2, counter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e2.IsFreeLicense() {
+		t.Error("expected IsFreeLicense() = false for paid license")
+	}
+}
+
 // writeLic writes a signed license to dir/hobnob.lic.
 func writeLic(t *testing.T, dir string, payload Payload, priv ed25519.PrivateKey) {
 	t.Helper()

@@ -32,7 +32,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- Hub-spoke federation, AI assistant, all executors, all integrations
+- Hub-spoke federation (requires paid license), AI assistant, all executors, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 ## Support

@@ -90,8 +90,9 @@ func run() error {
 	slog.Info("secrets provider initialized", "backend", secretsCfg.Backend)
 
 	// Auto-generate self-signed TLS certs on first start (local backend only).
-	if lp, ok := provider.(*secrets.LocalProvider); ok {
-		if err := lp.EnsureTLSCerts(); err != nil {
+	if _, ok := provider.(*secrets.LocalProvider); ok {
+		tlsDir := filepath.Join(filepath.Dir(configFile), "tls")
+		if err := secrets.EnsureTLSCerts(tlsDir); err != nil {
 			return fmt.Errorf("auto-generating TLS certificates: %w", err)
 		}
 	}
@@ -226,6 +227,11 @@ func run() error {
 		"license_id", enforcer.GetStatus().License.LicenseID,
 		"stage", enforcer.GetStatus().Stage.String(),
 	)
+
+	// Federation requires a paid license — reject hub/spoke on free tier.
+	if role != config.RoleStandalone && enforcer.IsFreeLicense() {
+		return fmt.Errorf("federation (role %q) requires a paid license — the built-in free license does not support federation", role)
+	}
 
 	// Set up SIGHUP handler for license reload.
 	sighupCh := make(chan os.Signal, 1)
@@ -362,6 +368,7 @@ func run() error {
 	}
 
 	// Load task definitions.
+	docsDir := envOrDefault("HOBNOB_DOCS_DIR", "docs")
 	tasksDir := envOrDefault("HOBNOB_TASKS_DIR", "tasks")
 	taskStore := tasks.NewStore()
 	if err := taskStore.Load(tasksDir); err != nil {
@@ -559,7 +566,7 @@ func run() error {
 		if aiErr != nil {
 			slog.Warn("AI assistant disabled: provider init failed", "error", aiErr)
 		} else {
-			assistant = hobnobai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, cfg.AI)
+			assistant = hobnobai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, cfg.AI, docsDir)
 			aiHandler = api.NewAIHandler(assistant)
 			slog.Info("AI assistant enabled", "provider", aiProvider.Name(), "model", cfg.AI.Model)
 		}
@@ -618,7 +625,7 @@ func run() error {
 
 		version := envOrDefault("HOBNOB_VERSION", "dev")
 		agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
-		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, assistant, hub, runStore, fleetIndex, gwOpts...)
+		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
