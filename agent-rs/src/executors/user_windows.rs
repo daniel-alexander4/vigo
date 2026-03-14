@@ -78,7 +78,6 @@ impl Executor for UserWindowsExecutor {
         let start = Instant::now();
         let name = params
             .get("username")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

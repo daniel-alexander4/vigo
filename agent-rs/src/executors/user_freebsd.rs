@@ -43,7 +43,7 @@ impl UserFreebsdExecutor {
 impl Executor for UserFreebsdExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let username = params.get("username").or_else(|| params.get("name")).cloned().unwrap_or_default();
+        let username = params.get("username").cloned().unwrap_or_default();
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
         let mut result = ResourceResult::new("user", &username);
 

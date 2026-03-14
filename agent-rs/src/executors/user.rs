@@ -176,14 +176,13 @@ impl Executor for UserExecutor {
         let start = Instant::now();
         let name = params
             .get("username")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
         let mut result = ResourceResult::new("user", &name);
 
         if name.is_empty() {
-            result.error = Some("user executor: name param is required".into());
+            result.error = Some("user executor: username param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -615,7 +614,7 @@ mod tests {
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("name param is required"),
+            result.error.as_deref().unwrap().contains("username param is required"),
             "unexpected error: {:?}",
             result.error
         );
@@ -640,7 +639,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("shell", "/bin/bash"),
                 ("home", "/home/deploy"),
                 ("state", "present"),
@@ -691,7 +690,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("shell", "/bin/bash"),
                 ("home", "/home/deploy"),
                 ("comment", "Deploy User"),
@@ -736,7 +735,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("shell", "/bin/bash"),
                 ("state", "present"),
             ]),
@@ -772,7 +771,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "ghost"), ("state", "absent")]),
+            &make_params(&[("username", "ghost"), ("state", "absent")]),
             false,
         );
 
@@ -808,7 +807,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("state", "absent")]),
+            &make_params(&[("username", "deploy"), ("state", "absent")]),
             false,
         );
 
@@ -840,7 +839,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("state", "present")]),
+            &make_params(&[("username", "deploy"), ("state", "present")]),
             true,
         );
 
@@ -871,7 +870,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("state", "present"),
                 ("managehome", "false"),
             ]),
@@ -918,7 +917,7 @@ mod tests {
         // Explicit managehome: "true" (also the default).
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("state", "absent"),
                 ("managehome", "true"),
             ]),
@@ -960,7 +959,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("state", "absent"),
                 ("managehome", "false"),
             ]),
@@ -995,7 +994,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("state", "present"),
                 ("password_max_age", "90"),
             ]),
@@ -1039,7 +1038,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("state", "present"),
                 ("password_max_age", "60"),
             ]),
@@ -1074,7 +1073,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("state", "present"),
                 ("expiredate", "2026-12-31"),
             ]),
@@ -1123,7 +1122,7 @@ mod tests {
         // Desired groups: docker only. wheel should be purged.
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("username", "deploy"),
                 ("state", "present"),
                 ("groups", "docker"),
                 ("purge_groups", "true"),
@@ -1164,7 +1163,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("state", "bogus")]),
+            &make_params(&[("username", "deploy"), ("state", "bogus")]),
             false,
         );
 

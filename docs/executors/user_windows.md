@@ -6,7 +6,7 @@ Manages local Windows user accounts via `net user` and `net localgroup`.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `username` | Yes | -- | Username. Also accepts `name`. |
+| `username` | Yes | -- | Username. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `password` | No | -- | User password (for account creation). |
 | `comment` | No | -- | User description/comment field. |
