@@ -48,7 +48,7 @@ func TestSelfProtect_FileTargetingServerConfigDir(t *testing.T) {
 			Name: "overwrite-config",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/etc/hobnob-server/server.yaml",
+				"targetpath": "/srv/hobnob/server.yaml",
 				"content":    "malicious",
 			},
 		}},
@@ -276,8 +276,8 @@ func TestSelfProtect_FileLineTargetingAgentConfig(t *testing.T) {
 }
 
 func TestSelfProtect_PathPrefixNotChild(t *testing.T) {
-	// /etc/hobnob-serverXYZ should NOT match /etc/hobnob-server/
-	result := matchProtectedPath("/etc/hobnob-serverXYZ/foo")
+	// /srv/hobnobXYZ should NOT match /srv/hobnob/
+	result := matchProtectedPath("/srv/hobnobXYZ/foo")
 	if result != "" {
 		t.Fatalf("should not match similar prefix, got: %s", result)
 	}
@@ -306,7 +306,7 @@ func TestValidateTaskCommand_StopServer(t *testing.T) {
 }
 
 func TestValidateTaskCommand_RmServerConfig(t *testing.T) {
-	err := ValidateTaskCommand("rm -rf /etc/hobnob-server/db")
+	err := ValidateTaskCommand("rm -rf /srv/hobnob/db")
 	if err == nil {
 		t.Fatal("expected error")
 	}

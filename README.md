@@ -4,19 +4,19 @@ Pull-based configuration management for Linux and macOS. Agents on managed nodes
 
 ## Quickstart
 
-### 1. Create `/etc/hobnob-server`
+### 1. Create `/srv/hobnob`
 
-All server config lives in `/etc/hobnob-server` on the host. The container bind-mounts it.
+All server config lives in `/srv/hobnob` on the host. The container bind-mounts it.
 
 ```bash
-sudo mkdir -p /etc/hobnob-server/certs
+sudo mkdir -p /srv/hobnob/certs
 ```
 
 ### 2. Generate TLS certificates
 
 ```bash
 make certs
-sudo cp certs/* /etc/hobnob-server/certs/
+sudo cp certs/* /srv/hobnob/certs/
 ```
 
 For production, replace with your own CA and server cert. Keep the CA private key accessible to the server if you want bootstrap CSR signing (see [Bootstrap enrollment](#bootstrap-enrollment)).
@@ -24,8 +24,8 @@ For production, replace with your own CA and server cert. Keep the CA private ke
 ### 3. Copy config files
 
 ```bash
-sudo cp server-configs/server.yaml /etc/hobnob-server/
-sudo cp -r thrall-configs/modules thrall-configs/roles thrall-configs/templates /etc/hobnob-server/
+sudo cp server-configs/server.yaml /srv/hobnob/
+sudo cp -r thrall-configs/modules thrall-configs/roles thrall-configs/templates /srv/hobnob/
 ```
 
 ### 4. Start the server
@@ -606,7 +606,7 @@ Certain field names (`dsn`, `tls_cert_path`, `tls_key_path`, `webhook_secret`) a
 
 Hobnob supports three secret backends via the `secrets.Provider` interface:
 
-**LocalProvider (default)** — stores secrets as files on disk. Secret path `hobnob/db/dsn` maps to file `/etc/hobnob-server/secrets/hobnob/db/dsn`. Two modes:
+**LocalProvider (default)** — stores secrets as files on disk. Secret path `hobnob/db/dsn` maps to file `/srv/hobnob/secrets/hobnob/db/dsn`. Two modes:
 
 - **Plaintext** (no `key_file`): files are read/written as-is. Suitable for dev, single-server, or when disk encryption provides at-rest protection.
 - **Encrypted** (with `key_file`): files are AES-256-GCM encrypted with a master key.
@@ -614,8 +614,8 @@ Hobnob supports three secret backends via the `secrets.Provider` interface:
 ```yaml
 secrets:
   backend: local                                    # default when omitted
-  # key_file: "/etc/hobnob-server/master.key"       # optional: enables encryption
-  # secrets_dir: "/etc/hobnob-server/secrets"        # default
+  # key_file: "/srv/hobnob/master.key"       # optional: enables encryption
+  # secrets_dir: "/srv/hobnob/secrets"        # default
 ```
 
 Supports secret versioning (file mtime) — the watcher detects changes and queues affected nodes for re-convergence. Manage secrets via CLI: `hobnobcli secrets set/get/list/delete`.
@@ -626,7 +626,7 @@ Supports secret versioning (file mtime) — the watcher detects changes and queu
 secrets:
   backend: isopass
   url: https://localhost:8443
-  token_file: /etc/hobnob-server/isopass-token  # file containing bearer token (0600)
+  token_file: /srv/hobnob/isopass-token  # file containing bearer token (0600)
   tls_skip_verify: true             # skip TLS cert verification (e.g. self-signed)
 ```
 
@@ -640,7 +640,7 @@ The server also polls isopass for secret version changes. When a secret rotates,
 
 ## Server secrets
 
-The server's own config (`server-configs/server.yaml`) uses `secret:` references resolved by the secrets backend. With the default `local` backend, secrets map to files in `/etc/hobnob-server/secrets/`. TLS certificates are stored separately in `/etc/hobnob-server/tls/` as plain PEM files:
+The server's own config (`server-configs/server.yaml`) uses `secret:` references resolved by the secrets backend. With the default `local` backend, secrets map to files in `/srv/hobnob/secrets/`. TLS certificates are stored separately in `/srv/hobnob/tls/` as plain PEM files:
 
 | Path | Description |
 |------|-------------|

@@ -102,7 +102,7 @@ type PathsSection struct {
 	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: "tasks")
 	Workflows    string `yaml:"workflows"`     // workflow definitions (default: "workflows")
 	AgentDist    string `yaml:"agent_dist"`    // agent binary distribution (default: "dist/agent")
-	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/etc/hobnob-server/license")
+	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/srv/hobnob/license")
 }
 
 // AuthSection configures web UI and REST API authentication.

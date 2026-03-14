@@ -21,7 +21,7 @@ var protectedPaths = []string{
 	"/usr/local/bin/hobd",
 	"/usr/local/bin/hobnobcli",
 	"/usr/local/bin/hobnob-license-manager",
-	"/etc/hobnob-server/",
+	"/srv/hobnob/",
 	"/etc/systemd/system/hobd.service",
 }
 

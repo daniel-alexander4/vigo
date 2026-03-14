@@ -95,14 +95,14 @@ with --san. Refuses to overwrite existing certs unless --force is set.`,
 
 func init() {
 	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
-	secretsCmd.PersistentFlags().String("secrets-dir", "/etc/hobnob-server/secrets", "Directory for secret files")
+	secretsCmd.PersistentFlags().String("secrets-dir", "/srv/hobnob/secrets", "Directory for secret files")
 
 	secretsSetCmd.Flags().String("from-file", "", "Read secret value from a file")
 
 	secretsInitCmd.Flags().String("key-file", "", "Path to write the new master key")
 	secretsInitCmd.MarkFlagRequired("key-file")
 
-	secretsGenerateCertsCmd.Flags().String("tls-dir", "/etc/hobnob-server/tls", "Directory for TLS certificate files")
+	secretsGenerateCertsCmd.Flags().String("tls-dir", "/srv/hobnob/tls", "Directory for TLS certificate files")
 	secretsGenerateCertsCmd.Flags().StringSlice("san", nil, "Additional SANs (DNS names or IPs)")
 	secretsGenerateCertsCmd.Flags().Int("ca-days", 3650, "CA certificate validity in days")
 	secretsGenerateCertsCmd.Flags().Int("server-days", 365, "Server certificate validity in days")
@@ -280,7 +280,7 @@ func runSecretsInit(cmd *cobra.Command, _ []string) error {
 func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
 	tlsDir, _ := cmd.Flags().GetString("tls-dir")
 	if tlsDir == "" {
-		tlsDir = "/etc/hobnob-server/tls"
+		tlsDir = "/srv/hobnob/tls"
 	}
 
 	force, _ := cmd.Flags().GetBool("force")

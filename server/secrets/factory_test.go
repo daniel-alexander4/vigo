@@ -24,8 +24,8 @@ func TestNewFromConfigDefaultsToLocal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if val != "/etc/hobnob-server/db/hobnob.db" {
-		t.Errorf("got %q, want %q", val, "/etc/hobnob-server/db/hobnob.db")
+	if val != "/srv/hobnob/db/hobnob.db" {
+		t.Errorf("got %q, want %q", val, "/srv/hobnob/db/hobnob.db")
 	}
 }
 
@@ -49,8 +49,8 @@ func TestNewFromConfigLocal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if val != "/etc/hobnob-server/db/hobnob.db" {
-		t.Errorf("got %q, want %q", val, "/etc/hobnob-server/db/hobnob.db")
+	if val != "/srv/hobnob/db/hobnob.db" {
+		t.Errorf("got %q, want %q", val, "/srv/hobnob/db/hobnob.db")
 	}
 }
 
@@ -78,7 +78,7 @@ func TestNewFromConfigLocalDefaultSecretsDir(t *testing.T) {
 	keyFile := filepath.Join(dir, "master.key")
 	os.WriteFile(keyFile, []byte("0000000000000000000000000000000000000000000000000000000000000000\n"), 0o600)
 
-	// Default secrets_dir is /etc/hobnob-server/secrets. Use explicit dir in test.
+	// Default secrets_dir is /srv/hobnob/secrets. Use explicit dir in test.
 	p, err := NewFromConfig(Config{
 		Backend:    "local",
 		KeyFile:    keyFile,

@@ -5,10 +5,10 @@ Get Hobnob running and manage your first thrall in 10 minutes.
 ## 1. Start the Server
 
 ```bash
-sudo mkdir -p /etc/hobnob-server
+sudo mkdir -p /srv/hobnob
 docker run -d --name hobnob \
   -p 8181:8181 -p 1530:1530 \
-  -v /etc/hobnob-server:/etc/hobnob-server \
+  -v /srv/hobnob:/srv/hobnob \
   hobnob/hobnob:latest
 ```
 
@@ -32,7 +32,7 @@ After enrollment, the thrall appears in the dashboard and begins checking in eve
 
 ## 3. Write a Module
 
-Create a file at `/etc/hobnob-server/thrall-configs/modules/motd.hnb`:
+Create a file at `/srv/hobnob/thrall-configs/modules/motd.hnb`:
 
 ```yaml
 name: motd
@@ -53,7 +53,7 @@ resources:
 
 ## 4. Map the Thrall to the Module
 
-Create or edit `/etc/hobnob-server/thrall-configs/nodes.hnb`:
+Create or edit `/srv/hobnob/thrall-configs/nodes.hnb`:
 
 ```yaml
 thralls:

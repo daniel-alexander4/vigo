@@ -19,15 +19,15 @@ Determines how `secret:` references in config values are resolved.
 ```yaml
 secrets:
   backend: local                          # local (default) | isopass
-  key_file: "/etc/hobnob-server/master.key"   # 32-byte hex master key (local only)
-  secrets_dir: "/etc/hobnob-server/secrets"    # encrypted files directory (local only)
+  key_file: "/srv/hobnob/master.key"   # 32-byte hex master key (local only)
+  secrets_dir: "/srv/hobnob/secrets"    # encrypted files directory (local only)
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `backend` | `local` | Secrets backend: `local` (AES-256-GCM encrypted files) or `isopass` (external API) |
 | `key_file` | auto-generated | Path to 32-byte hex master key file (local backend, mode 0600) |
-| `secrets_dir` | `/etc/hobnob-server/secrets` | Directory for encrypted secret files (local backend) |
+| `secrets_dir` | `/srv/hobnob/secrets` | Directory for encrypted secret files (local backend) |
 | `url` | — | Isopass API base URL (isopass backend only) |
 | `token_file` | — | File containing bearer token (isopass backend, required, mode 0600) |
 | `tls_skip_verify` | `false` | Skip TLS verification for isopass (not recommended) |
@@ -303,5 +303,5 @@ paths:
   tasks: "tasks"
   workflows: "workflows"
   agent_dist: "dist/agent"
-  license_dir: "/etc/hobnob-server/license"
+  license_dir: "/srv/hobnob/license"
 ```

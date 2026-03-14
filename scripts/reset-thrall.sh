@@ -46,9 +46,9 @@ rm -rf /etc/hobnob-thrall
 echo "Removing agent LMDB state (/var/lib/hobnob)..."
 rm -rf /var/lib/hobnob
 
-echo "Removing server data (/etc/hobnob-server), preserving license..."
-find /etc/hobnob-server -mindepth 1 \
-  -path /etc/hobnob-server/license -prune -o \
+echo "Removing server data (/srv/hobnob), preserving license..."
+find /srv/hobnob -mindepth 1 \
+  -path /srv/hobnob/license -prune -o \
   -print0 | xargs -0 rm -rf
 
 echo "Done. Thrall is clean — ready to re-bootstrap."

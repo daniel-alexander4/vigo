@@ -151,7 +151,7 @@ certs:
 
 # --- Docker Compose (reads COMPOSE_PROFILES from server .env) ---
 
-ENVFILE ?= /etc/hobnob-server/.env
+ENVFILE ?= /srv/hobnob/.env
 
 up:
 	docker compose --env-file $(ENVFILE) up -d --build

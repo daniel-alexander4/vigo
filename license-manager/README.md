@@ -54,17 +54,17 @@ hobnob-license-manager license create \
 
 ### 5. Install the License
 
-Place any `.lic` file in `/etc/hobnob-server/license/` on the server host:
+Place any `.lic` file in `/srv/hobnob/license/` on the server host:
 
 ```bash
-sudo mkdir -p -m 700 /etc/hobnob-server/license
-sudo cp acme-corp.lic /etc/hobnob-server/license/
-sudo chmod 600 /etc/hobnob-server/license/acme-corp.lic
+sudo mkdir -p -m 700 /srv/hobnob/license
+sudo cp acme-corp.lic /srv/hobnob/license/
+sudo chmod 600 /srv/hobnob/license/acme-corp.lic
 ```
 
 On startup, `hobd` scans the directory for `.lic` files (lexicographic order) and uses the first one that parses and passes signature verification. The filename does not matter — any valid `.lic` file will work.
 
-The Docker container mounts `/etc/hobnob-server` from the host, so the server finds the license automatically. At least one valid `.lic` file must be present before starting the container.
+The Docker container mounts `/srv/hobnob` from the host, so the server finds the license automatically. At least one valid `.lic` file must be present before starting the container.
 
 The entrypoint enforces `700` on the license directory and `600` on all `.lic` files on every start.
 

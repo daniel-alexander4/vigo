@@ -7,47 +7,47 @@ Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the
 The fastest way to run the server:
 
 ```bash
-sudo mkdir -p /etc/hobnob-server
+sudo mkdir -p /srv/hobnob
 docker run -d --name hobnob \
   -p 8181:8181 -p 1530:1530 \
-  -v /etc/hobnob-server:/etc/hobnob-server \
+  -v /srv/hobnob:/srv/hobnob \
   hobnob/hobnob:latest
 ```
 
-This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). TLS certificates, a default config, and the SQLite database are auto-generated on first start. All persistent state lives in `/etc/hobnob-server`.
+This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). TLS certificates, a default config, and the SQLite database are auto-generated on first start. All persistent state lives in `/srv/hobnob`.
 
 ## Server Setup
 
 1. Create the server directory:
 
 ```bash
-sudo mkdir -p /etc/hobnob-server
+sudo mkdir -p /srv/hobnob
 ```
 
 2. Copy the example config:
 
 ```bash
-cp server-configs/server.yaml.example /etc/hobnob-server/server.yaml
+cp server-configs/server.yaml.example /srv/hobnob/server.yaml
 ```
 
 3. Edit `server.yaml` — at minimum set the database DSN:
 
 ```yaml
 database:
-  dsn: "/etc/hobnob-server/db/hobnob.db"
+  dsn: "/srv/hobnob/db/hobnob.db"
 ```
 
 4. Create the thrall configs directory:
 
 ```bash
-mkdir -p /etc/hobnob-server/thrall-configs/modules
-mkdir -p /etc/hobnob-server/thrall-configs/roles
+mkdir -p /srv/hobnob/thrall-configs/modules
+mkdir -p /srv/hobnob/thrall-configs/roles
 ```
 
 5. Start the server:
 
 ```bash
-cd /etc/hobnob-server
+cd /srv/hobnob
 hobd
 ```
 
@@ -59,9 +59,9 @@ The CLI connects to the server's REST API. Point it at your server:
 
 ```bash
 export HOBNOB_SERVER="https://localhost:8181"
-export HOBNOB_CERT="/etc/hobnob-server/tls/cert"
-export HOBNOB_KEY="/etc/hobnob-server/tls/key"
-export HOBNOB_CA="/etc/hobnob-server/tls/ca"
+export HOBNOB_CERT="/srv/hobnob/tls/cert"
+export HOBNOB_KEY="/srv/hobnob/tls/key"
+export HOBNOB_CA="/srv/hobnob/tls/ca"
 ```
 
 Verify connectivity:
@@ -125,10 +125,10 @@ See [Bootstrap](bootstrap.md) for details on the enrollment flow.
 
 ## Directory Layout
 
-### Server (`/etc/hobnob-server/`)
+### Server (`/srv/hobnob/`)
 
 ```
-/etc/hobnob-server/
+/srv/hobnob/
 ├── server.yaml              # Server configuration
 ├── db/
 │   └── hobnob.db            # SQLite database

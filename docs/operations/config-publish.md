@@ -5,7 +5,7 @@ Operators edit `.hnb` files in a proposed directory. The `config publish` comman
 ## Directory Layout
 
 ```
-/etc/hobnob-server/hnb/
+/srv/hobnob/hnb/
 ├── proposed/                 ← operators edit here
 │   ├── modules/
 │   ├── roles/
@@ -115,11 +115,11 @@ To set up the recommended permission model:
 groupadd hobnob
 
 # Lock down .live (only root/publish can write, hobd can read via group)
-chown -R root:hobnob /etc/hobnob-server/hnb/.live
-chmod 750 /etc/hobnob-server/hnb/.live
+chown -R root:hobnob /srv/hobnob/hnb/.live
+chmod 750 /srv/hobnob/hnb/.live
 
 # Operators can write to proposed
-chmod 770 /etc/hobnob-server/hnb/proposed
+chmod 770 /srv/hobnob/hnb/proposed
 ```
 
 ## Custom Executor Resources

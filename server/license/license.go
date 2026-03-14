@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const DefaultLicenseDir = "/etc/hobnob-server/license"
+const DefaultLicenseDir = "/srv/hobnob/license"
 
 // Payload contains the license terms. Field order does not matter for
 // verification because we canonicalize before signing/verifying.

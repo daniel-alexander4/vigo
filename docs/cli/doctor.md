@@ -59,7 +59,7 @@ Checks performed in pre-start mode:
 ### Example pre-start output
 
 ```bash
-hobnobcli doctor --pre-start --config /etc/hobnob-server/server.yaml
+hobnobcli doctor --pre-start --config /srv/hobnob/server.yaml
 ```
 
 ```

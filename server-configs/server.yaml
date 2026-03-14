@@ -4,12 +4,12 @@
 # Secret path "hobnob/db/dsn" maps to file <secrets_dir>/hobnob/db/dsn.
 secrets:
   backend: local
-  # key_file: "/etc/hobnob-server/master.key"  # optional: 32-byte key (hex or raw) for encryption
-  # secrets_dir: "/etc/hobnob-server/secrets"   # default; override if needed
+  # key_file: "/srv/hobnob/master.key"  # optional: 32-byte key (hex or raw) for encryption
+  # secrets_dir: "/srv/hobnob/secrets"   # default; override if needed
 # secrets:
 #   backend: isopass
 #   url: https://localhost:8443
-#   token_file: /etc/hobnob-server/isopass-token  # file containing bearer token (0600)
+#   token_file: /srv/hobnob/isopass-token  # file containing bearer token (0600)
 #   tls_skip_verify: true             # skip TLS cert verification (e.g. self-signed)
 
 server:

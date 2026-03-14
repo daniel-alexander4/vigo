@@ -15,7 +15,7 @@ import (
 type Config struct {
 	Backend       string `yaml:"backend"`         // "local" (default) or "isopass"
 	KeyFile       string `yaml:"key_file"`        // local: path to master encryption key (empty = auto-generate)
-	SecretsDir    string `yaml:"secrets_dir"`     // local: directory for secret files (default: /etc/hobnob-server/secrets)
+	SecretsDir    string `yaml:"secrets_dir"`     // local: directory for secret files (default: /srv/hobnob/secrets)
 	URL           string `yaml:"url"`             // isopass: API base URL
 	TokenFile     string `yaml:"token_file"`      // isopass: path to file containing bearer token (0600)
 	TLSSkipVerify bool   `yaml:"tls_skip_verify"` // isopass: skip TLS certificate verification
@@ -33,7 +33,7 @@ func NewFromConfig(cfg Config) (Provider, error) {
 	case "local":
 		secretsDir := cfg.SecretsDir
 		if secretsDir == "" {
-			secretsDir = "/etc/hobnob-server/secrets"
+			secretsDir = "/srv/hobnob/secrets"
 		}
 		return NewLocalProvider(cfg.KeyFile, secretsDir)
 	case "isopass":

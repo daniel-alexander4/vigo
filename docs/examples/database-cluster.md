@@ -168,9 +168,9 @@ The `secret:` prefix in the `stdin` parameter of the `set-app-user-password` res
 For the `local` secrets backend, create the secret file:
 
 ```bash
-mkdir -p /etc/hobnob-server/secrets/hobnob/app
-echo -n 'my-secure-password' > /etc/hobnob-server/secrets/hobnob/app/db_password
-chmod 600 /etc/hobnob-server/secrets/hobnob/app/db_password
+mkdir -p /srv/hobnob/secrets/hobnob/app
+echo -n 'my-secure-password' > /srv/hobnob/secrets/hobnob/app/db_password
+chmod 600 /srv/hobnob/secrets/hobnob/app/db_password
 ```
 
 ## vars_from

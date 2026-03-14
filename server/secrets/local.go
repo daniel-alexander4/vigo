@@ -21,7 +21,7 @@ import (
 // builtinDefaults are sane zero-config defaults for core secrets so the
 // server starts out of the box without a secrets directory.
 var builtinDefaults = map[string]string{
-	"HOBNOB_DB_DSN": "/etc/hobnob-server/db/hobnob.db",
+	"HOBNOB_DB_DSN": "/srv/hobnob/db/hobnob.db",
 }
 
 // pathToEnvVar converts a secret path like "hobnob/db/dsn" to an

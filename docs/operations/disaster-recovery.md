@@ -6,7 +6,7 @@ For backup configuration and creation, see [Backup & Recovery](backup.md).
 
 ## What You Need to Recover
 
-A complete Hobnob server consists of five components, all stored under `/etc/hobnob-server/`:
+A complete Hobnob server consists of five components, all stored under `/srv/hobnob/`:
 
 | Component | Path | Purpose | Backup method |
 |-----------|------|---------|---------------|
@@ -60,19 +60,19 @@ Agents will reconnect automatically within their backoff window (at most 5 minut
 
 ### Scenario 2: Restore from Litestream Replica
 
-You have continuous replication configured and the database is lost, but `/etc/hobnob-server/` (configs, secrets, TLS) is intact.
+You have continuous replication configured and the database is lost, but `/srv/hobnob/` (configs, secrets, TLS) is intact.
 
 ```bash
 # 1. Stop the server
 systemctl stop hobd
 
 # 2. Remove the corrupted database
-rm /etc/hobnob-server/db/hobnob.db
-rm -f /etc/hobnob-server/db/hobnob.db-wal
-rm -f /etc/hobnob-server/db/hobnob.db-shm
+rm /srv/hobnob/db/hobnob.db
+rm -f /srv/hobnob/db/hobnob.db-wal
+rm -f /srv/hobnob/db/hobnob.db-shm
 
 # 3. Restore from Litestream replica
-litestream restore -o /etc/hobnob-server/db/hobnob.db \
+litestream restore -o /srv/hobnob/db/hobnob.db \
   s3://my-bucket/hobnob/backup
 
 # 4. Start the server
@@ -161,7 +161,7 @@ In a hub-spoke federation topology:
 The config source of truth (`hnb/proposed/`) is plain YAML on the filesystem. Track it in git for versioned history, diff visibility, and easy restore:
 
 ```bash
-cd /etc/hobnob-server/hnb/proposed
+cd /srv/hobnob/hnb/proposed
 git init && git add -A && git commit -m "initial config"
 
 # After changes:

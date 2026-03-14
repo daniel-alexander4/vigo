@@ -95,7 +95,7 @@ func TestParseReplicaURL_NoScheme(t *testing.T) {
 func TestGenerateConfig_S3(t *testing.T) {
 	cfg := Config{
 		URL:             "s3://my-bucket/hobnob",
-		DBPath:          "/etc/hobnob-server/db/hobnob.db",
+		DBPath:          "/srv/hobnob/db/hobnob.db",
 		AccessKeyID:     "AKID",
 		SecretAccessKey: "SECRET",
 		Region:          "us-west-2",
@@ -107,7 +107,7 @@ func TestGenerateConfig_S3(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"path: /etc/hobnob-server/db/hobnob.db",
+		"path: /srv/hobnob/db/hobnob.db",
 		"type: s3",
 		"bucket: my-bucket",
 		"path: hobnob",

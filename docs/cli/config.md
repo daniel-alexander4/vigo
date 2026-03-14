@@ -71,7 +71,7 @@ No config entry matches hostname "unknown.example.com"
 
 ## config publish
 
-Validates `.hnb` files in `/etc/hobnob-server/hnb/proposed/` then atomically syncs to `/etc/hobnob-server/hnb/.live/` (the hidden directory the server reads from). See [Config Publish Pipeline](../operations/config-publish.md) for full details.
+Validates `.hnb` files in `/srv/hobnob/hnb/proposed/` then atomically syncs to `/srv/hobnob/hnb/.live/` (the hidden directory the server reads from). See [Config Publish Pipeline](../operations/config-publish.md) for full details.
 
 ### Usage
 

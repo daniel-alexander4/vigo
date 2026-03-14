@@ -12,7 +12,7 @@ services:
       - HOBNOB_AI_BASE_URL=http://hobnob-ollama:11434
       - HOBNOB_AI_MODEL=qwen2.5:7b
     volumes:
-      - /etc/hobnob-server:/etc/hobnob-server
+      - /srv/hobnob:/srv/hobnob
       - /usr/local/bin:/host-bin
     depends_on:
       postgres:

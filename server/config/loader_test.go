@@ -199,7 +199,7 @@ thralls:
 `)
 
 	mp := &mockProvider{secrets: map[string]string{
-		"hobnob/db/dsn":   "/etc/hobnob-server/db/hobnob.db",
+		"hobnob/db/dsn":   "/srv/hobnob/db/hobnob.db",
 		"myapp/db/config": "host=db port=5432 user=myapp",
 	}}
 	store, err := NewConfigStore(dir, mp, true)
@@ -208,7 +208,7 @@ thralls:
 	}
 
 	cfg := store.Get("web.example.com")
-	if cfg.Vars["db_dsn"] != "/etc/hobnob-server/db/hobnob.db" {
+	if cfg.Vars["db_dsn"] != "/srv/hobnob/db/hobnob.db" {
 		t.Errorf("db_dsn = %q, want resolved DSN", cfg.Vars["db_dsn"])
 	}
 }
@@ -327,7 +327,7 @@ func TestSecretErrorHintCategories(t *testing.T) {
 		want    string
 	}{
 		// Local backend hints.
-		{"local not found", "local", fmt.Errorf("secret %q not found in /etc/hobnob-server/secrets", "x"), "hobnobcli secrets set"},
+		{"local not found", "local", fmt.Errorf("secret %q not found in /srv/hobnob/secrets", "x"), "hobnobcli secrets set"},
 		{"local wrong key", "local", fmt.Errorf("decrypting: message authentication failed (wrong master key?)"), "re-encrypt"},
 		{"local too short", "local", fmt.Errorf("ciphertext too short"), "plaintext from a previous"},
 		// Isopass backend hints.

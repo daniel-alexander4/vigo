@@ -129,10 +129,10 @@ Configure in `server.yaml`:
 
 ```yaml
 paths:
-  license_dir: "/etc/hobnob-server/license"
+  license_dir: "/srv/hobnob/license"
 ```
 
-Default: `/etc/hobnob-server/license`. Place the license file at `<license_dir>/license.json`.
+Default: `/srv/hobnob/license`. Place the license file at `<license_dir>/license.json`.
 
 ## Related
 

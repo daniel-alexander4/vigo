@@ -43,7 +43,7 @@ var backupCreateCmd = &cobra.Command{
 
 Examples:
   hobnobcli backup create /tmp/hobnob-backup.tar.gz
-  hobnobcli backup create /tmp/backup.tar.gz --server-yaml /etc/hobnob-server/server.yaml`,
+  hobnobcli backup create /tmp/backup.tar.gz --server-yaml /srv/hobnob/server.yaml`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		archivePath := args[0]
@@ -118,7 +118,7 @@ Examples:
   hobnobcli backup restore /tmp/hobnob-backup.tar.gz
   hobnobcli backup restore /tmp/backup.tar.gz --dry-run
   hobnobcli backup restore /tmp/backup.tar.gz --db-only
-  hobnobcli backup restore /tmp/backup.tar.gz --target /opt/hobnob-server`,
+  hobnobcli backup restore /tmp/backup.tar.gz --target /srv/hobnob`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		archivePath := args[0]
@@ -201,12 +201,12 @@ func isDBFile(path string) bool {
 }
 
 func init() {
-	backupCreateCmd.Flags().String("server-yaml", "/etc/hobnob-server/server.yaml",
+	backupCreateCmd.Flags().String("server-yaml", "/srv/hobnob/server.yaml",
 		"Path to server.yaml (used to find DB settings)")
-	backupCreateCmd.Flags().String("server-root", "/etc/hobnob-server",
+	backupCreateCmd.Flags().String("server-root", "/srv/hobnob",
 		"Server root directory containing hnb/, secrets/, tls/")
 
-	backupRestoreCmd.Flags().String("target", "/etc/hobnob-server",
+	backupRestoreCmd.Flags().String("target", "/srv/hobnob",
 		"Root directory to restore into")
 	backupRestoreCmd.Flags().Bool("db-only", false,
 		"Restore only the database, skip config/secrets/tls")

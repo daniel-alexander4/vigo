@@ -26,7 +26,7 @@ These flags apply to all subcommands:
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--key-file` | | | Path to master encryption key (omit to auto-generate) |
-| `--secrets-dir` | | `/etc/hobnob-server/secrets` | Directory for secret files |
+| `--secrets-dir` | | `/srv/hobnob/secrets` | Directory for secret files |
 
 ## set
 
@@ -155,11 +155,11 @@ hobnobcli secrets init --key-file <path>
 ### Example
 
 ```bash
-hobnobcli secrets init --key-file /etc/hobnob-server/master.key
+hobnobcli secrets init --key-file /srv/hobnob/master.key
 ```
 
 ```
-  Master key written to /etc/hobnob-server/master.key (mode 0600).
+  Master key written to /srv/hobnob/master.key (mode 0600).
   Keep this file safe — losing it means losing access to all encrypted secrets.
 ```
 
@@ -177,7 +177,7 @@ hobnobcli secrets generate-certs [flags]
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--tls-dir` | | `/etc/hobnob-server/tls` | Directory for TLS certificate files |
+| `--tls-dir` | | `/srv/hobnob/tls` | Directory for TLS certificate files |
 | `--san` | | | Additional SANs (DNS names or IPs), repeatable |
 | `--ca-days` | | `3650` | CA certificate validity in days |
 | `--server-days` | | `365` | Server certificate validity in days |
@@ -201,10 +201,10 @@ hobnobcli secrets generate-certs --san hobnob.example.com --san 10.0.1.5
 ```
 
 ```
-  CA certificate       -> /etc/hobnob-server/tls/ca
-  CA private key       -> /etc/hobnob-server/tls/ca_key
-  Server certificate   -> /etc/hobnob-server/tls/cert
-  Server private key   -> /etc/hobnob-server/tls/key
+  CA certificate       -> /srv/hobnob/tls/ca
+  CA private key       -> /srv/hobnob/tls/ca_key
+  Server certificate   -> /srv/hobnob/tls/cert
+  Server private key   -> /srv/hobnob/tls/key
 
   CA valid for 3650 days, server cert valid for 365 days.
   SANs: localhost, myhost, hobnob.example.com

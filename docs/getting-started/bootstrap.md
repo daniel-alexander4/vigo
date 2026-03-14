@@ -139,7 +139,7 @@ bootstrap:
 
 **Agent binary download fails:**
 - Ensure the server's container image includes agent binaries for the target platform
-- Check that the `/etc/hobnob-server/` volume is correctly mounted
+- Check that the `/srv/hobnob/` volume is correctly mounted
 
 ## Related
 

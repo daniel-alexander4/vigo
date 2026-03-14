@@ -27,11 +27,11 @@ import (
 
 var (
 	// ProposedDir is where operators edit .hnb files.
-	ProposedDir = "/etc/hobnob-server/hnb/proposed"
+	ProposedDir = "/srv/hobnob/hnb/proposed"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
-	LiveDir = "/etc/hobnob-server/hnb/.live"
+	LiveDir = "/srv/hobnob/hnb/.live"
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.
@@ -51,7 +51,7 @@ func (s *stubProvider) GetBytes(_ context.Context, _ string) ([]byte, error) { r
 func (s *stubProvider) Close() error                                         { return nil }
 
 // HistoryDir is the directory for config snapshots used by rollback.
-var HistoryDir = "/etc/hobnob-server/hnb/config-history"
+var HistoryDir = "/srv/hobnob/config-history"
 
 // Options controls publish/validation behavior.
 type Options struct {

@@ -189,7 +189,7 @@ See [Metrics](metrics.md) for the full list.
 
 2. For the `local` backend, verify secret files exist:
    ```bash
-   ls -la /etc/hobnob-server/secrets/
+   ls -la /srv/hobnob/secrets/
    ```
 
 3. Secrets use the path format `secret:path/to/secret` which maps to a file at the secrets directory.

@@ -2,9 +2,9 @@
 set -e
 
 # Hobnob server entrypoint — seeds config on first run, then starts hobd.
-# All persistent state lives under /etc/hobnob-server (bind-mounted from host).
+# All persistent state lives under /srv/hobnob (bind-mounted from host).
 
-DATA_DIR="/etc/hobnob-server"
+DATA_DIR="/srv/hobnob"
 HNB_PROPOSED="${DATA_DIR}/hnb/proposed"
 HNB_LIVE="${DATA_DIR}/hnb/.live"
 EXAMPLES_DIR="${DATA_DIR}/examples"
@@ -60,11 +60,11 @@ if [ ! -f "$ENV_FILE" ]; then
 # Hobnob Environment Configuration
 # =============================================================================
 # This file contains non-secret server environment variables only.
-# Secrets are stored in /etc/hobnob-server/secrets/ (local secrets backend).
+# Secrets are stored in /srv/hobnob/secrets/ (local secrets backend).
 # =============================================================================
 
 # Webhook secret for HMAC-SHA256 payload signing — store in secrets dir instead:
-# echo 'my-webhook-secret' > /etc/hobnob-server/secrets/hobnob/webhook/secret
+# echo 'my-webhook-secret' > /srv/hobnob/secrets/hobnob/webhook/secret
 # HOBNOB_WEBHOOK_SECRET=change-me-to-a-random-string
 
 # =============================================================================
@@ -113,7 +113,7 @@ fi
 # ---------------------------------------------------------------------------
 
 # Find all .hnb.example files under /seed/thrall-configs/ and copy them
-# to /etc/hobnob-server/examples/ preserving directory structure.
+# to /srv/hobnob/examples/ preserving directory structure.
 find "${SEED_DIR}/thrall-configs" -name '*.hnb.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/thrall-configs/}"
     dest="${EXAMPLES_DIR}/${rel}"
@@ -199,7 +199,7 @@ paths:
 PATHSEOF
 fi
 
-# Run from /etc/hobnob-server so relative paths in .env and server.yaml resolve correctly.
+# Run from /srv/hobnob so relative paths in .env and server.yaml resolve correctly.
 cd "$DATA_DIR"
 
 export HOBNOB_CONFIG_FILE="server.yaml"

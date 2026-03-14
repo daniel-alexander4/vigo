@@ -16,7 +16,7 @@ Resources targeting these paths are blocked:
 | `/usr/local/bin/hobd` | Server binary |
 | `/usr/local/bin/hobnobcli` | CLI binary |
 | `/usr/local/bin/hobnob-license-manager` | License tool binary |
-| `/etc/hobnob-server/` | Server config directory |
+| `/srv/hobnob/` | Server config directory |
 | `/etc/systemd/system/hobd.service` | Server service unit |
 
 A `file` resource targeting `/etc/hobnob-thrall/agent.yaml` will be rejected at config load time.

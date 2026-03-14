@@ -37,7 +37,7 @@ hobnobcli license install --file ./hobnob-enterprise.lic
 ```
 
 ```
-License installed: /etc/hobnob-server/licenses/hobnob-enterprise.lic
+License installed: /srv/hobnob/licenses/hobnob-enterprise.lic
   License ID:  lic-a1b2c3d4
   Customer:    Acme Corp
   Tier:        Enterprise

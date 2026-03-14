@@ -88,8 +88,8 @@ func TestLocalProviderBuiltinFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get builtin: %v", err)
 	}
-	if val != "/etc/hobnob-server/db/hobnob.db" {
-		t.Errorf("builtin fallback = %q, want %q", val, "/etc/hobnob-server/db/hobnob.db")
+	if val != "/srv/hobnob/db/hobnob.db" {
+		t.Errorf("builtin fallback = %q, want %q", val, "/srv/hobnob/db/hobnob.db")
 	}
 }
 
@@ -365,8 +365,8 @@ func TestAutoKeyProviderBuiltinFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get builtin: %v", err)
 	}
-	if val != "/etc/hobnob-server/db/hobnob.db" {
-		t.Errorf("builtin fallback = %q, want %q", val, "/etc/hobnob-server/db/hobnob.db")
+	if val != "/srv/hobnob/db/hobnob.db" {
+		t.Errorf("builtin fallback = %q, want %q", val, "/srv/hobnob/db/hobnob.db")
 	}
 }
 

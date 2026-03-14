@@ -16,7 +16,7 @@ The config system loads module, role, and node definitions from YAML files (`.hn
 ## Config Hierarchy
 
 ```
-/etc/hobnob-server/hnb/proposed/
+/srv/hobnob/hnb/proposed/
 ├── modules/           # Reusable resource sets with default vars
 │   ├── nginx.hnb
 │   ├── openssh.hnb
@@ -198,7 +198,7 @@ The secrets provider is configured in `server.yaml`. For isopass, set `tls_skip_
 secrets:
   backend: isopass
   url: https://localhost:8443
-  token_file: /etc/hobnob-server/isopass-token
+  token_file: /srv/hobnob/isopass-token
   tls_skip_verify: true
 ```
 

@@ -35,7 +35,7 @@ type Manifest struct {
 type CreateOptions struct {
 	// ServerYAMLPath is the path to server.yaml.
 	ServerYAMLPath string
-	// ServerRoot is the base directory (default /etc/hobnob-server).
+	// ServerRoot is the base directory (default /srv/hobnob).
 	ServerRoot string
 	// DBDriver is "sqlite" or "postgres".
 	DBDriver string
@@ -47,7 +47,7 @@ type CreateOptions struct {
 
 // RestoreOptions configures how a backup archive is restored.
 type RestoreOptions struct {
-	// TargetDir is the root directory to restore into (default /etc/hobnob-server).
+	// TargetDir is the root directory to restore into (default /srv/hobnob).
 	TargetDir string
 	// DBOnly skips config/secrets/tls, restoring only the database.
 	DBOnly bool
@@ -136,7 +136,7 @@ func sanitizePgDSN(dsn string) (sanitized, password string) {
 func CreateArchive(archivePath string, opts CreateOptions) error {
 	serverRoot := opts.ServerRoot
 	if serverRoot == "" {
-		serverRoot = "/etc/hobnob-server"
+		serverRoot = "/srv/hobnob"
 	}
 
 	// Create a temp dir for staging.
@@ -232,7 +232,7 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) {
 	targetDir := opts.TargetDir
 	if targetDir == "" {
-		targetDir = "/etc/hobnob-server"
+		targetDir = "/srv/hobnob"
 	}
 
 	// Extract to a temp dir first.

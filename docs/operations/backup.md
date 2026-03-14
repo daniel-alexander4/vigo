@@ -114,8 +114,8 @@ The command reads `server.yaml` to find the database path, then:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--server-yaml` | `/etc/hobnob-server/server.yaml` | Path to server.yaml |
-| `--server-root` | `/etc/hobnob-server` | Root directory containing hnb/, secrets/, tls/ |
+| `--server-yaml` | `/srv/hobnob/server.yaml` | Path to server.yaml |
+| `--server-root` | `/srv/hobnob` | Root directory containing hnb/, secrets/, tls/ |
 
 ### Inspect a Backup
 
@@ -146,7 +146,7 @@ systemctl start hobd
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--target` | `/etc/hobnob-server` | Root directory to restore into |
+| `--target` | `/srv/hobnob` | Root directory to restore into |
 | `--db-only` | `false` | Restore only the database, skip config/secrets/tls |
 | `--dry-run` | `false` | Show what would be restored without writing |
 

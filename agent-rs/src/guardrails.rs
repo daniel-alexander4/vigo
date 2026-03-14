@@ -32,7 +32,7 @@ const PROTECTED_PATHS: &[&str] = &[
     "/usr/local/bin/hobd",
     "/usr/local/bin/hobnobcli",
     "/usr/local/bin/hobnob-license-manager",
-    "/etc/hobnob-server/",
+    "/srv/hobnob/",
     "/etc/systemd/system/hobd.service",
 ];
 
@@ -88,7 +88,7 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     "rm /usr/local/bin/hobnob-license-manager",
     "rm -rf /etc/hobnob",
     "rm -rf /var/lib/hobnob",
-    "rm -rf /etc/hobnob-server",
+    "rm -rf /srv/hobnob",
     "rm -rf /etc/hobnob-thrall",
     "rm -rf /library/hobnob",
 ];
@@ -353,10 +353,10 @@ mod tests {
 
     #[test]
     fn file_targeting_server_config_dir_blocked() {
-        let p = params(&[("targetpath", "/etc/hobnob-server/server.yaml")]);
+        let p = params(&[("targetpath", "/srv/hobnob/server.yaml")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
-        assert!(v.unwrap().reason.contains("/etc/hobnob-server/"));
+        assert!(v.unwrap().reason.contains("/srv/hobnob/"));
     }
 
     #[test]
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn ini_targeting_server_config_blocked() {
-        let p = params(&[("path", "/etc/hobnob-server/settings.ini")]);
+        let p = params(&[("path", "/srv/hobnob/settings.ini")]);
         let v = check_resource("bad-ini", "ini", &p);
         assert!(v.is_some());
     }
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn exec_rm_rf_server_config_blocked() {
-        let p = params(&[("command", "rm -rf /etc/hobnob-server")]);
+        let p = params(&[("command", "rm -rf /srv/hobnob")]);
         let v = check_resource("bad-exec", "exec", &p);
         assert!(v.is_some());
     }
@@ -528,7 +528,7 @@ mod tests {
 
     #[test]
     fn task_rm_server_config_blocked() {
-        let r = check_task_command("rm -rf /etc/hobnob-server/db");
+        let r = check_task_command("rm -rf /srv/hobnob/db");
         assert!(r.is_some());
     }
 
@@ -553,13 +553,13 @@ mod tests {
 
     #[test]
     fn path_child_match() {
-        assert!(is_protected_path("/etc/hobnob-server/certs/ca.pem").is_some());
+        assert!(is_protected_path("/srv/hobnob/certs/ca.pem").is_some());
     }
 
     #[test]
     fn path_prefix_not_child_allowed() {
-        // /etc/hobnob-serverXYZ should NOT match /etc/hobnob-server/
-        assert!(is_protected_path("/etc/hobnob-serverXYZ/foo").is_none());
+        // /srv/hobnobXYZ should NOT match /srv/hobnob/
+        assert!(is_protected_path("/srv/hobnobXYZ/foo").is_none());
     }
 
     #[test]
@@ -578,7 +578,7 @@ mod tests {
         use std::os::unix::fs::symlink;
         let dir = std::env::temp_dir().join("hobnob_guardrail_test_symlink");
         let _ = std::fs::remove_file(&dir);
-        symlink("/etc/hobnob-server", &dir).unwrap();
+        symlink("/srv/hobnob", &dir).unwrap();
         let target = format!("{}/server.yaml", dir.display());
         let result = is_protected_path(&target);
         let _ = std::fs::remove_file(&dir);
@@ -590,7 +590,7 @@ mod tests {
         use std::os::unix::fs::symlink;
         let dir = std::env::temp_dir().join("hobnob_guardrail_test_symlink2");
         let _ = std::fs::remove_file(&dir);
-        symlink("/etc/hobnob-server", &dir).unwrap();
+        symlink("/srv/hobnob", &dir).unwrap();
         // File doesn't exist, but parent dir resolves through symlink.
         let target = format!("{}/nonexistent.yaml", dir.display());
         let result = is_protected_path(&target);

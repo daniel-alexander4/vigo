@@ -25,8 +25,8 @@ Secrets are stored as AES-256-GCM encrypted files on disk. The master key is a 3
 ```yaml
 secrets:
   backend: local
-  key_file: "/etc/hobnob-server/master.key"
-  secrets_dir: "/etc/hobnob-server/secrets"
+  key_file: "/srv/hobnob/master.key"
+  secrets_dir: "/srv/hobnob/secrets"
 ```
 
 Secret path mapping: `secret:hobnob/db/dsn` → file at `secrets_dir/hobnob/db/dsn`.
@@ -44,7 +44,7 @@ Resolves secrets from an external isopass API server. Supports versioning for ro
 secrets:
   backend: isopass
   url: "https://isopass.internal:8443"
-  token_file: "/etc/hobnob-server/isopass-token"   # 0600, contains bearer token
+  token_file: "/srv/hobnob/isopass-token"   # 0600, contains bearer token
 ```
 
 The `token_file` is read at startup. The file should be owned by root with mode `0600`.
