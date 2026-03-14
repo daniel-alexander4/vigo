@@ -90,6 +90,19 @@ type ServerConfig struct {
 	Export     ExportSection    `yaml:"export"`
 	RateLimit  RateLimitSection `yaml:"rate_limit"`
 	Maintenance MaintenanceSection `yaml:"maintenance"`
+	Paths      PathsSection     `yaml:"paths"`
+}
+
+// PathsSection configures directory paths for server subsystems.
+// All paths default to subdirectories of the working directory.
+type PathsSection struct {
+	Migrations   string `yaml:"migrations"`    // database migration files (default: "migrations")
+	CustomTraits string `yaml:"custom_traits"` // custom trait collector scripts (default: "custom-traits")
+	Docs         string `yaml:"docs"`          // documentation directory (default: "docs")
+	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: "tasks")
+	Workflows    string `yaml:"workflows"`     // workflow definitions (default: "workflows")
+	AgentDist    string `yaml:"agent_dist"`    // agent binary distribution (default: "dist/agent")
+	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/etc/hobnob-server/license")
 }
 
 // AuthSection configures web UI and REST API authentication.

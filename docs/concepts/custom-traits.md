@@ -28,11 +28,14 @@ This produces a trait at `custom.app.version` (custom traits are namespaced unde
 
 ## Directory
 
-| Variable | Default |
-|----------|---------|
-| `HOBNOB_CUSTOM_TRAITS_DIR` | `custom-traits` |
+Configure in `server.yaml`:
 
-Place scripts in this directory. The server discovers them automatically.
+```yaml
+paths:
+  custom_traits: "custom-traits"
+```
+
+Default: `custom-traits` (relative to working directory). Place scripts in this directory. The server discovers them automatically.
 
 ## Using Custom Traits
 

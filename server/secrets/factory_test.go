@@ -114,14 +114,63 @@ func TestNewFromConfigIsopassMissingToken(t *testing.T) {
 	}
 }
 
-func TestNewFromConfigIsopassWithToken(t *testing.T) {
+func TestNewFromConfigIsopassWithTokenEnv(t *testing.T) {
 	t.Setenv("HOBNOB_SECRETS_TOKEN", "test-bearer-token")
 	p, err := NewFromConfig(Config{
 		Backend: "isopass",
 		URL:     "https://isopass.internal:8443",
 	})
 	if err != nil {
-		t.Fatalf("NewFromConfig isopass: %v", err)
+		t.Fatalf("NewFromConfig isopass (env): %v", err)
 	}
 	defer p.Close()
+}
+
+func TestNewFromConfigIsopassWithTokenFile(t *testing.T) {
+	dir := t.TempDir()
+	tokenPath := filepath.Join(dir, "token")
+	os.WriteFile(tokenPath, []byte("file-bearer-token\n"), 0o600)
+
+	p, err := NewFromConfig(Config{
+		Backend:   "isopass",
+		URL:       "https://isopass.internal:8443",
+		TokenFile: tokenPath,
+	})
+	if err != nil {
+		t.Fatalf("NewFromConfig isopass (file): %v", err)
+	}
+	defer p.Close()
+}
+
+func TestNewFromConfigIsopassTokenFileTakesPrecedence(t *testing.T) {
+	dir := t.TempDir()
+	tokenPath := filepath.Join(dir, "token")
+	os.WriteFile(tokenPath, []byte("file-token\n"), 0o600)
+
+	// Even with env var set, token_file should be used.
+	t.Setenv("HOBNOB_SECRETS_TOKEN", "env-token")
+	p, err := NewFromConfig(Config{
+		Backend:   "isopass",
+		URL:       "https://isopass.internal:8443",
+		TokenFile: tokenPath,
+	})
+	if err != nil {
+		t.Fatalf("NewFromConfig isopass (file precedence): %v", err)
+	}
+	defer p.Close()
+}
+
+func TestNewFromConfigIsopassEmptyTokenFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	tokenPath := filepath.Join(dir, "token")
+	os.WriteFile(tokenPath, []byte("  \n"), 0o600)
+
+	_, err := NewFromConfig(Config{
+		Backend:   "isopass",
+		URL:       "https://isopass.internal:8443",
+		TokenFile: tokenPath,
+	})
+	if err == nil {
+		t.Fatal("expected error for empty token file")
+	}
 }

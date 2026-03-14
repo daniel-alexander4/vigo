@@ -28,7 +28,7 @@ secrets:
 # secrets:
 #   backend: isopass
 #   url: "https://isopass.internal:8443"         # isopass API base URL (required)
-#   token_env: "HOBNOB_SECRETS_TOKEN"            # env var with bearer token (default)
+#   token_file: "/etc/hobnob-server/isopass-token"  # file containing bearer token (0600, recommended)
 #   tls_skip_verify: false                       # skip TLS verification (default: false)
 
 # ---------------------------------------------------------------------------
@@ -254,6 +254,20 @@ bootstrap:
 #   siem: false                            # SIEM event export (/api/v1/export/siem)
 #   cmdb: false                            # CMDB configuration items (/api/v1/export/cmdb)
 #   oscal: false                           # OSCAL assessment results stub (/api/v1/export/oscal)
+
+# ---------------------------------------------------------------------------
+# Directory Paths
+# ---------------------------------------------------------------------------
+# All paths default to subdirectories of the working directory. Override here
+# instead of using environment variables.
+# paths:
+#   migrations: "migrations"                     # database migration files
+#   custom_traits: "custom-traits"               # custom trait collector scripts
+#   docs: "docs"                                 # documentation directory
+#   tasks: "tasks"                               # reusable task definitions
+#   workflows: "workflows"                       # workflow definitions
+#   agent_dist: "dist/agent"                     # agent binary distribution
+#   license_dir: "/etc/hobnob-server/license"    # license file directory
 
 # --- Rate Limiting ---
 # Token-bucket rate limiting on check-in RPCs to protect the server

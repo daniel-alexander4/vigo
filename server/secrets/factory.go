@@ -5,7 +5,9 @@ package secrets
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
+	"strings"
 )
 
 // Config describes which secrets backend to use and its settings.
@@ -16,7 +18,8 @@ type Config struct {
 	KeyFile       string `yaml:"key_file"`        // local: path to master encryption key (empty = auto-generate)
 	SecretsDir    string `yaml:"secrets_dir"`     // local: directory for secret files (default: /etc/hobnob-server/secrets)
 	URL           string `yaml:"url"`             // isopass: API base URL
-	TokenEnv      string `yaml:"token_env"`       // isopass: env var containing bearer token
+	TokenFile     string `yaml:"token_file"`      // isopass: path to file containing bearer token
+	TokenEnv      string `yaml:"token_env"`       // isopass: DEPRECATED — env var containing bearer token (use token_file instead)
 	TLSSkipVerify bool   `yaml:"tls_skip_verify"` // isopass: skip TLS certificate verification
 }
 
@@ -39,16 +42,43 @@ func NewFromConfig(cfg Config) (Provider, error) {
 		if cfg.URL == "" {
 			return nil, fmt.Errorf("secrets backend %q requires url", backend)
 		}
-		tokenEnv := cfg.TokenEnv
-		if tokenEnv == "" {
-			tokenEnv = "HOBNOB_SECRETS_TOKEN"
-		}
-		token := os.Getenv(tokenEnv)
-		if token == "" {
-			return nil, fmt.Errorf("secrets backend %q: env var %q is empty", backend, tokenEnv)
+		token, err := loadIsopassToken(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("secrets backend %q: %w", backend, err)
 		}
 		return NewIsopassProvider(cfg.URL, token, cfg.TLSSkipVerify)
 	default:
 		return nil, fmt.Errorf("unknown secrets backend %q (expected \"local\" or \"isopass\")", backend)
 	}
+}
+
+// loadIsopassToken resolves the bearer token for the isopass backend.
+// Priority: token_file (recommended) > token_env (deprecated fallback).
+func loadIsopassToken(cfg Config) (string, error) {
+	// Preferred: read from file (no secrets in env vars).
+	if cfg.TokenFile != "" {
+		data, err := os.ReadFile(cfg.TokenFile)
+		if err != nil {
+			return "", fmt.Errorf("reading token_file %q: %w", cfg.TokenFile, err)
+		}
+		token := strings.TrimSpace(string(data))
+		if token == "" {
+			return "", fmt.Errorf("token_file %q is empty", cfg.TokenFile)
+		}
+		return token, nil
+	}
+
+	// Deprecated fallback: read from environment variable.
+	tokenEnv := cfg.TokenEnv
+	if tokenEnv == "" {
+		tokenEnv = "HOBNOB_SECRETS_TOKEN"
+	}
+	token := os.Getenv(tokenEnv)
+	if token != "" {
+		slog.Warn("isopass token loaded from environment variable — migrate to token_file for security",
+			"env", tokenEnv)
+		return token, nil
+	}
+
+	return "", fmt.Errorf("no token configured — set token_file in server.yaml (recommended) or env var %q (deprecated)", tokenEnv)
 }

@@ -29,7 +29,8 @@ secrets:
 | `key_file` | auto-generated | Path to 32-byte hex master key file (local backend, mode 0600) |
 | `secrets_dir` | `/etc/hobnob-server/secrets` | Directory for encrypted secret files (local backend) |
 | `url` | — | Isopass API base URL (isopass backend only) |
-| `token_env` | `HOBNOB_SECRETS_TOKEN` | Env var containing bearer token (isopass backend only) |
+| `token_file` | — | File containing bearer token (isopass backend, recommended, mode 0600) |
+| `token_env` | `HOBNOB_SECRETS_TOKEN` | **Deprecated.** Env var containing bearer token — migrate to `token_file` |
 | `tls_skip_verify` | `false` | Skip TLS verification for isopass (not recommended) |
 
 The `local` backend auto-generates the master key on first start if `key_file` doesn't exist.
@@ -283,16 +284,28 @@ See [Maintenance Windows](../operations/maintenance-windows.md) for details.
 
 ## Environment Variables
 
-These override config paths at startup:
+Only two environment variables are supported. All other configuration belongs in `server.yaml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOBNOB_CONFIG_FILE` | `server.yaml` | Path to server config file |
-| `HOBNOB_MIGRATIONS_DIR` | `migrations` | Path to database migrations |
-| `HOBNOB_CUSTOM_TRAITS_DIR` | `custom-traits` | Path to custom trait collectors |
-| `HOBNOB_TASKS_DIR` | `tasks` | Path to task definitions |
-| `HOBNOB_WORKFLOWS_DIR` | `workflows` | Path to workflow definitions |
-| `HOBNOB_DOCS_DIR` | `docs` | Path to documentation files |
-| `HOBNOB_AGENT_DIR` | `dist/agent` | Path to agent binaries for bootstrap |
-| `HOBNOB_LICENSE_DIR` | `/etc/hobnob-server/license` | Path to license files |
+| `HOBNOB_CONFIG_FILE` | `server.yaml` | Path to server config file (bootstraps everything else) |
 | `HOBNOB_VERSION` | `dev` | Server version string |
+
+**Deprecated path overrides.** The following env vars still work but log a deprecation warning. Migrate to the `paths:` section in `server.yaml`:
+
+`HOBNOB_MIGRATIONS_DIR`, `HOBNOB_CUSTOM_TRAITS_DIR`, `HOBNOB_TASKS_DIR`, `HOBNOB_WORKFLOWS_DIR`, `HOBNOB_DOCS_DIR`, `HOBNOB_AGENT_DIR`, `HOBNOB_LICENSE_DIR`.
+
+### paths
+
+Directory paths for server subsystems. Replaces environment variable overrides.
+
+```yaml
+paths:
+  migrations: "migrations"
+  custom_traits: "custom-traits"
+  docs: "docs"
+  tasks: "tasks"
+  workflows: "workflows"
+  agent_dist: "dist/agent"
+  license_dir: "/etc/hobnob-server/license"
+```

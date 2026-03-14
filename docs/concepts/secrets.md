@@ -44,8 +44,10 @@ Resolves secrets from an external isopass API server. Supports versioning for ro
 secrets:
   backend: isopass
   url: "https://isopass.internal:8443"
-  token_env: "HOBNOB_SECRETS_TOKEN"
+  token_file: "/etc/hobnob-server/isopass-token"   # 0600, contains bearer token
 ```
+
+The `token_file` is read at startup. The file should be owned by root with mode `0600`. The deprecated `token_env` option (reads from an environment variable) still works but logs a warning — migrate to `token_file`.
 
 ## Secret Resolution Flow
 

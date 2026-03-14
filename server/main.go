@@ -79,10 +79,9 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Determine config paths relative to working directory.
+	// Determine config file path (the one env var that must remain — it
+	// bootstraps everything else).
 	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server.yaml")
-	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
-	traitsDir := envOrDefault("HOBNOB_CUSTOM_TRAITS_DIR", "custom-traits")
 
 	// Load secrets backend config (first pass — no secret resolution).
 	secretsCfg, err := config.LoadSecretsConfig(configFile)
@@ -113,6 +112,17 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("loading server config: %w", err)
 	}
+
+	// Resolve directory paths from server.yaml paths: section.
+	// Falls back to env var (deprecated, warns) then default.
+	migrationsDir := pathFromConfig(cfg.Paths.Migrations, "HOBNOB_MIGRATIONS_DIR", "migrations")
+	traitsDir := pathFromConfig(cfg.Paths.CustomTraits, "HOBNOB_CUSTOM_TRAITS_DIR", "custom-traits")
+	docsDir := pathFromConfig(cfg.Paths.Docs, "HOBNOB_DOCS_DIR", "docs")
+	tasksDir := pathFromConfig(cfg.Paths.Tasks, "HOBNOB_TASKS_DIR", "tasks")
+	workflowsDir := pathFromConfig(cfg.Paths.Workflows, "HOBNOB_WORKFLOWS_DIR", "workflows")
+	agentDir := pathFromConfig(cfg.Paths.AgentDist, "HOBNOB_AGENT_DIR", "dist/agent")
+	licenseDir := pathFromConfig(cfg.Paths.LicenseDir, "HOBNOB_LICENSE_DIR", license.DefaultLicenseDir)
+	licenseGraceDir := envOrDefault("HOBNOB_LICENSE_GRACE_DIR", licenseDir)
 
 	// Determine federation role.
 	role := cfg.Federation.Role
@@ -215,9 +225,6 @@ func run() error {
 	queries := db.New(dbtx)
 
 	// Load and validate license.
-	licenseDir := envOrDefault("HOBNOB_LICENSE_DIR", license.DefaultLicenseDir)
-	licenseGraceDir := envOrDefault("HOBNOB_LICENSE_GRACE_DIR", licenseDir)
-
 	thrallCounter := func(ctx context.Context) (int, error) {
 		thralls, err := queries.ListThralls(ctx)
 		if err != nil {
@@ -398,8 +405,6 @@ func run() error {
 	}
 
 	// Load task definitions.
-	docsDir := envOrDefault("HOBNOB_DOCS_DIR", "docs")
-	tasksDir := envOrDefault("HOBNOB_TASKS_DIR", "tasks")
 	taskStore := tasks.NewStore()
 	if err := taskStore.Load(tasksDir); err != nil {
 		return fmt.Errorf("loading tasks: %w", err)
@@ -619,7 +624,6 @@ func run() error {
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 
 	// Load workflow definitions and create engine.
-	workflowsDir := envOrDefault("HOBNOB_WORKFLOWS_DIR", "workflows")
 	workflowEngine := workflows.NewEngine(queries, agentSvc)
 	if err := workflowEngine.Load(workflowsDir); err != nil {
 		return fmt.Errorf("loading workflows: %w", err)
@@ -706,7 +710,6 @@ func run() error {
 			}
 		}
 
-		agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
 		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
@@ -797,6 +800,20 @@ func initBundleSigner(cfg *config.ServerConfig) (*isgrpc.BundleSigner, uint32) {
 
 func envOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// pathFromConfig returns the path from server.yaml, falling back to the env
+// var (with a deprecation warning), then the default value.
+func pathFromConfig(configVal, envKey, def string) string {
+	if configVal != "" {
+		return configVal
+	}
+	if v := os.Getenv(envKey); v != "" {
+		slog.Warn("path configured via environment variable — migrate to paths: section in server.yaml",
+			"env", envKey, "value", v)
 		return v
 	}
 	return def

@@ -81,7 +81,7 @@ if [ ! -f "$ENV_FILE" ]; then
 # HOBNOB_AI_PROVIDER=ollama
 # HOBNOB_AI_MODEL=qwen2.5:7b
 # HOBNOB_AI_BASE_URL=http://hobnob-ollama:11434
-# HOBNOB_AI_API_KEY=
+# AI API keys must use the secret: prefix in server.yaml — never env vars.
 # HOBNOB_AI_MAX_TOKENS=4096
 
 # =============================================================================
@@ -190,7 +190,8 @@ ai:
 AIEOF
 
     [ -n "$HOBNOB_AI_BASE_URL" ] && echo "  base_url: \"${HOBNOB_AI_BASE_URL}\"" >> "$SERVER_YAML"
-    [ -n "$HOBNOB_AI_API_KEY" ] && echo "  api_key: \"${HOBNOB_AI_API_KEY}\"" >> "$SERVER_YAML"
+    # API key: use secret: prefix in server.yaml, NOT an env var.
+    # Example: api_key: "secret:hobnob/ai/api_key"
 
     echo "AI configured: provider=${HOBNOB_AI_PROVIDER} model=${AI_MODEL}"
 fi

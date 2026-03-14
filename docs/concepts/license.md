@@ -125,11 +125,14 @@ The server handles SIGHUP by re-reading the license file from the license direct
 
 ## License File Location
 
-| Variable | Default |
-|----------|---------|
-| `HOBNOB_LICENSE_DIR` | `/etc/hobnob-server/license` |
+Configure in `server.yaml`:
 
-Place the license file at `$HOBNOB_LICENSE_DIR/license.json`.
+```yaml
+paths:
+  license_dir: "/etc/hobnob-server/license"
+```
+
+Default: `/etc/hobnob-server/license`. Place the license file at `<license_dir>/license.json`.
 
 ## Related
 
