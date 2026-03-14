@@ -48,6 +48,19 @@ Support covers configuration guidance, bug triage, and upgrade assistance.
 It does not cover writing your modules, managing your infrastructure, or
 general systems administration.
 
+## Feature Requests
+
+All paid customers may submit feature requests via email. Requests are
+reviewed and prioritized at our discretion — higher tiers receive priority
+consideration, but no tier guarantees delivery of a specific feature or
+timeline.
+
+Free-tier users are welcome to suggest features via GitHub Issues.
+
+For guaranteed delivery of a specific feature, custom development is
+available as a separate engagement, scoped and quoted individually.
+Contact us for details.
+
 ## Right to Refuse
 
 Alexander4, LLC reserves the right to decline or terminate any commercial
