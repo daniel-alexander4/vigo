@@ -60,7 +60,57 @@ watcher:
   poll_interval: "5m"
 
 
-# ── Optional: uncomment to enable ────────────────────────────────────────
+# ── Authentication ────────────────────────────────────────────────────────
+# auth:
+#   method: none                               # none | oidc | isowebauth
+
+# ── SMTP Notifications ───────────────────────────────────────────────────
+# smtp:
+#   host: "smtp.example.com"
+#   port: 587
+#   from: "hobnob@example.com"
+#   username: "hobnob"
+#   password: "secret:hobnob/smtp/password"
+#   tls: true
+#   recipients:
+#     - "admin@example.com"
+
+# ── Federation ────────────────────────────────────────────────────────────
+# federation:
+#   role: standalone                           # standalone | hub | spoke
+
+# ── AI Assistant ──────────────────────────────────────────────────────────
+# ai:
+#   enabled: true
+#   provider: "ollama"                         # ollama | claude | openai | openai-compat
+#   model: "qwen2.5:7b"
+#   max_tokens: 4096
+
+# ── Backup (Litestream — SQLite only) ────────────────────────────────────
+# backup:
+#   url: "s3://my-bucket/hobnob"
+#   access_key_id: "secret:hobnob/backup/aws_access_key"
+#   secret_access_key: "secret:hobnob/backup/aws_secret_key"
+
+# ── Compliance Export ─────────────────────────────────────────────────────
+# export:
+#   siem: false
+#   cmdb: false
+#   oscal: false
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────
+# rate_limit:
+#   enabled: false
+#   checkin_per_thrall: 6
+#   checkin_global: 500
+
+# ── Maintenance ───────────────────────────────────────────────────────────
+# maintenance:
+#   freeze_until: ""                           # RFC3339 timestamp
+
+# ── Tuning ────────────────────────────────────────────────────────────────
+# tuning:
+#   signature_window: "5m"
+#   metrics_interval: "30s"
 #
-# See server.yaml.example for full documentation on each section:
-#   auth, federation, smtp, ai, backup, export, tuning, rate_limit, maintenance
+# See server.yaml.example for all tuning options.
