@@ -224,20 +224,20 @@ func TestUnknownType_IsError(t *testing.T) {
 	}
 }
 
-func TestUnknownType_WithCustomFlag_IsClean(t *testing.T) {
+func TestUnknownType_WithSkipValidation_IsClean(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "deploy", Type: "capistrano", Attributes: map[string]any{
-				"custom":  true,
-				"command": "cap deploy",
+				"skip_validation": true,
+				"command":         "cap deploy",
 			}},
 		},
 	}
 
 	findings := ValidateModule(mod)
 	if HasErrors(findings) {
-		t.Errorf("unknown type with custom: true should pass, got: %s", FormatFindings(findings))
+		t.Errorf("unknown type with skip_validation: true should pass, got: %s", FormatFindings(findings))
 	}
 }
 

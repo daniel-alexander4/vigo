@@ -270,13 +270,12 @@ func validateResource(moduleName string, res Resource) []Finding {
 	}
 
 	if !knownTypes[res.Type] {
-		if attrBool(res.Attributes, "custom") {
-			// Explicitly marked as custom executor — skip type validation.
+		if attrBool(res.Attributes, "skip_validation") {
 			return findings
 		}
 		f := base
 		f.Severity = SeverityError
-		f.Message = fmt.Sprintf("unknown resource type %q — add custom: true if this is a custom executor", res.Type)
+		f.Message = fmt.Sprintf("unknown resource type %q — add skip_validation: true if this is a custom executor", res.Type)
 		findings = append(findings, f)
 		return findings
 	}

@@ -125,12 +125,12 @@ chmod 770 /etc/hobnob-server/hnb/proposed
 
 ## Custom Executor Resources
 
-Unknown resource types are blocked by default. If a resource uses a custom executor, add `custom: true` to bypass type validation:
+Unknown resource types are blocked by default. If a resource uses a custom executor, add `skip_validation: true` to bypass type validation:
 
 ```yaml
 - name: deploy-app
   type: capistrano
-  custom: true
+  skip_validation: true
   command: "cap production deploy"
   creates: "/var/www/app/current"
 ```
