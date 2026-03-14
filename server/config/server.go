@@ -82,6 +82,10 @@ func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider, backend 
 	fields := []field{
 		{&cfg.Database.DSN, "database.dsn"},
 		{&cfg.Auth.OIDC.ClientSecret, "auth.oidc.client_secret"},
+		{&cfg.AI.APIKey, "ai.api_key"},
+		{&cfg.SMTP.Password, "smtp.password"},
+		{&cfg.Backup.AccessKeyID, "backup.access_key_id"},
+		{&cfg.Backup.SecretAccessKey, "backup.secret_access_key"},
 	}
 
 	var errs []*SecretError
