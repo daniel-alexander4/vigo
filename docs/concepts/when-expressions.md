@@ -60,6 +60,7 @@ All builtins are evaluated on the agent using local system state and traits.
 | Function | Args | Description |
 |----------|------|-------------|
 | `hour_range(start, end)` | 2 | True if current local hour is within [start, end) |
+| `minute_range(start, end)` | 2 | True if current local minute is within [start, end) |
 | `day_of_week(day)` | 1 | True if current day matches (e.g., `monday`, `friday`) |
 | `day_of_month(day)` | 1 | True if current day-of-month matches (1-31) |
 
@@ -68,6 +69,11 @@ All builtins are evaluated on the agent using local system state and traits.
   type: exec
   command: "/opt/cleanup.sh"
   when: "hour_range('2', '5') && day_of_week('sunday')"
+
+- name: staggered-task
+  type: exec
+  command: "/opt/rotate-logs.sh"
+  when: "minute_range('0', '15')"
 ```
 
 ### OS / Traits

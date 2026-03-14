@@ -440,6 +440,12 @@ pub fn evaluate_builtin(name: &str, args: &[String], traits: &Value) -> Result<b
             let end: u32 = args[1].parse().map_err(|_| anyhow::anyhow!("hour_range: invalid end hour {:?}", args[1]))?;
             Ok(hour_in_range(local_hour(), start, end))
         }
+        "minute_range" => {
+            check_arity(name, args, 2)?;
+            let start: u32 = args[0].parse().map_err(|_| anyhow::anyhow!("minute_range: invalid start minute {:?}", args[0]))?;
+            let end: u32 = args[1].parse().map_err(|_| anyhow::anyhow!("minute_range: invalid end minute {:?}", args[1]))?;
+            Ok(minute_in_range(local_minute(), start, end))
+        }
         "day_of_week" => {
             check_arity(name, args, 1)?;
             Ok(day_of_week_matches(&args[0]))
@@ -566,13 +572,18 @@ fn local_hour() -> u32 {
     local_time().0
 }
 
+/// Get local minute (0-59).
+fn local_minute() -> u32 {
+    local_time().3
+}
+
 /// Get local day of month (1-31) using libc localtime.
 fn local_day_of_month() -> u32 {
     local_time().2
 }
 
-/// Returns (hour, weekday 0=Sun..6=Sat, day_of_month).
-fn local_time() -> (u32, u32, u32) {
+/// Returns (hour, weekday 0=Sun..6=Sat, day_of_month, minute).
+fn local_time() -> (u32, u32, u32, u32) {
     #[cfg(unix)]
     {
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -582,7 +593,7 @@ fn local_time() -> (u32, u32, u32) {
             .as_secs() as libc::time_t;
         let mut tm: libc::tm = unsafe { std::mem::zeroed() };
         unsafe { libc::localtime_r(&secs, &mut tm) };
-        (tm.tm_hour as u32, tm.tm_wday as u32, tm.tm_mday as u32)
+        (tm.tm_hour as u32, tm.tm_wday as u32, tm.tm_mday as u32, tm.tm_min as u32)
     }
     #[cfg(not(unix))]
     {
@@ -595,9 +606,9 @@ fn local_time() -> (u32, u32, u32) {
         let days = secs / 86400;
         let time_of_day = secs % 86400;
         let hour = (time_of_day / 3600) as u32;
+        let minute = ((time_of_day % 3600) / 60) as u32;
         // Jan 1 1970 was a Thursday (4).
         let wday = ((days + 4) % 7) as u32;
-        // Approximate day of month (sufficient for basic checks).
         // Full Gregorian calculation:
         let mut y = 1970i64;
         let mut remaining = days as i64;
@@ -617,7 +628,7 @@ fn local_time() -> (u32, u32, u32) {
             if mday < *md { break; }
             mday -= md;
         }
-        ((hour), wday, (mday + 1) as u32)
+        (hour, wday, (mday + 1) as u32, minute)
     }
 }
 
@@ -634,8 +645,16 @@ fn hour_in_range(hour: u32, start: u32, end: u32) -> bool {
     }
 }
 
+fn minute_in_range(minute: u32, start: u32, end: u32) -> bool {
+    if start <= end {
+        minute >= start && minute < end // e.g., 0..30
+    } else {
+        minute >= start || minute < end // e.g., 45..15 (wraps hour)
+    }
+}
+
 fn day_of_week_matches(target: &str) -> bool {
-    let (_, wday, _) = local_time();
+    let (_, wday, _, _) = local_time();
     let target_lower = target.to_lowercase();
     let current = match wday {
         0 => "sunday",
@@ -1012,6 +1031,24 @@ mod tests {
         // Integration: current hour should be in a range that spans 0..24.
         let t = empty_traits();
         assert!(evaluate_builtin("hour_range", &["0".to_string(), "24".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_minute_range() {
+        // Test the helper directly for deterministic results.
+        assert!(minute_in_range(15, 0, 30));
+        assert!(!minute_in_range(35, 0, 30));
+        assert!(!minute_in_range(30, 0, 30)); // end is exclusive
+        // Wrapping.
+        assert!(minute_in_range(50, 45, 15));
+        assert!(minute_in_range(0, 45, 15));
+        assert!(minute_in_range(14, 45, 15));
+        assert!(!minute_in_range(15, 45, 15));
+        assert!(!minute_in_range(30, 45, 15));
+
+        // Integration: current minute should be in 0..60.
+        let t = empty_traits();
+        assert!(evaluate_builtin("minute_range", &["0".to_string(), "60".to_string()], &t).unwrap());
     }
 
     #[test]
