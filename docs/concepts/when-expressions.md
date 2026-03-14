@@ -23,7 +23,7 @@ when: "os_family('redhat') && !version_ge('9')"
 | `!` | Logical NOT | `!is_container` |
 | `(` `)` | Grouping | `(os_family('debian') \|\| os_family('redhat')) && arch('amd64')` |
 
-## Builtin Functions (13)
+## Builtin Functions (15)
 
 All builtins are evaluated on the agent using local system state and traits.
 

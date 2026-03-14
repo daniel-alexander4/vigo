@@ -6,7 +6,7 @@ Core concepts that explain how Hobnob works.
 - [Config Format](config-format.md) — Modules, roles, nodes.hnb, vars, env_vars
 - [Resource DAG](resource-dag.md) — depends_on, notify, subscribes
 - [Resource Language](resource-language.md) — defaults, foreach, case/match, conditional_block
-- [When Expressions](when-expressions.md) — Boolean logic and 13 builtin functions
+- [When Expressions](when-expressions.md) — Boolean logic and 15 builtin functions
 - [Templates](templates.md) — Go templates in content: attributes
 - [Check-in Lifecycle](check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
 - [Compiled Promises](compiled-promises.md) — Bundle signing, TTL, offline convergence

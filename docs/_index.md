@@ -16,7 +16,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Config Format](concepts/config-format.md) — Modules, roles, nodes.hnb, vars
 - [Resource DAG](concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Resource Language](concepts/resource-language.md) — defaults, foreach, case/match, conditional_block
-- [When Expressions](concepts/when-expressions.md) — Boolean logic and 13 builtin functions
+- [When Expressions](concepts/when-expressions.md) — Boolean logic and 15 builtin functions
 - [Templates](concepts/templates.md) — Go templates in content: attributes
 - [Check-in Lifecycle](concepts/check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
 - [Compiled Promises](concepts/compiled-promises.md) — Bundle signing, TTL, offline convergence
@@ -30,8 +30,8 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 
 ## Reference
 
-- [Executors](executors/_index.md) — All 42 resource executors
-- [Trait Collectors](traits/_index.md) — All 38 trait collectors
+- [Executors](executors/_index.md) — All 57 resource executors
+- [Trait Collectors](traits/_index.md) — All 27 trait collectors
 - [CLI Reference](cli/_index.md) — hobnobcli commands
 - [API Reference](api/_index.md) — gRPC and REST APIs
 
@@ -44,6 +44,10 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [FleetIndex](operations/fleet-index.md) — In-memory index internals
 - [Tuning](operations/tuning.md) — Tuning parameters reference
 - [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
+- [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting on check-in RPCs
+- [Maintenance Windows](operations/maintenance-windows.md) — Per-thrall and global change freeze
+- [Drift Alerting](operations/drift-alerting.md) — Fleet compliance threshold monitoring
+- [Audit Log](operations/audit.md) — Unified audit trail
 
 ## Web UI
 
