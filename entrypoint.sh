@@ -5,10 +5,8 @@ set -e
 # All persistent state lives under /etc/hobnob-server (bind-mounted from host).
 
 DATA_DIR="/etc/hobnob-server"
-THRALLS_DIR="${DATA_DIR}/thralls"
-MODULES_DIR="${DATA_DIR}/modules"
-ROLES_DIR="${DATA_DIR}/roles"
-TEMPLATES_DIR="${DATA_DIR}/templates"
+HNB_PROPOSED="${DATA_DIR}/hnb/proposed"
+HNB_LIVE="${DATA_DIR}/hnb/.live"
 EXAMPLES_DIR="${DATA_DIR}/examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
@@ -22,7 +20,8 @@ SEED_DIR="/seed"
 
 SECRETS_DIR="${DATA_DIR}/secrets"
 
-mkdir -p "$THRALLS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "${DATA_DIR}/db"
+mkdir -p "${HNB_PROPOSED}/modules" "${HNB_PROPOSED}/roles" "${HNB_PROPOSED}/thralls" "${HNB_PROPOSED}/templates" "${HNB_PROPOSED}/vars"
+mkdir -p "${HNB_LIVE}" "${DATA_DIR}/db"
 mkdir -p -m 700 "${DATA_DIR}/license" "$SECRETS_DIR" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------
@@ -199,7 +198,6 @@ fi
 cd "$DATA_DIR"
 
 export HOBNOB_CONFIG_FILE="server.yaml"
-export HOBNOB_THRALL_CONFIGS_DIR="."
 export HOBNOB_MIGRATIONS_DIR="/migrations"
 export HOBNOB_AGENT_DIR="/dist/agent"
 

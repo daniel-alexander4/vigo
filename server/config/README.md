@@ -16,7 +16,7 @@ The config system loads module, role, and node definitions from YAML files (`.hn
 ## Config Hierarchy
 
 ```
-thrall-configs/
+/etc/hobnob-server/hnb/proposed/
 ├── modules/           # Reusable resource sets with default vars
 │   ├── nginx.hnb
 │   ├── openssh.hnb
@@ -73,7 +73,7 @@ resources:
 
 ### External template files
 
-Instead of inline `content`, use `source` to reference a file relative to the thrall-configs directory:
+Instead of inline `content`, use `source` to reference a file relative to the config directory:
 
 ```yaml
 resources:

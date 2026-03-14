@@ -55,7 +55,6 @@ mkdir -p db && echo 'HOBNOB_DB_DSN=db/hobnob.db' > .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HOBNOB_CONFIG_FILE` | `server.yaml` | Server config path |
-| `HOBNOB_THRALL_CONFIGS_DIR` | `.` | Thrall configs root directory (modules/, roles/, thralls/) |
 | `HOBNOB_MIGRATIONS_DIR` | `migrations` | Migration files path |
 | `HOBNOB_CUSTOM_TRAITS_DIR` | `custom-traits` | Custom trait executables |
 | `HOBNOB_AGENT_DIR` | `dist/agent` | Agent binary distribution directory |

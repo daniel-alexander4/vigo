@@ -259,7 +259,6 @@ These override config paths at startup:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HOBNOB_CONFIG_FILE` | `server.yaml` | Path to server config file |
-| `HOBNOB_THRALL_CONFIGS_DIR` | `.` | Path to thrall-configs directory |
 | `HOBNOB_MIGRATIONS_DIR` | `migrations` | Path to database migrations |
 | `HOBNOB_CUSTOM_TRAITS_DIR` | `custom-traits` | Path to custom trait collectors |
 | `HOBNOB_TASKS_DIR` | `tasks` | Path to task definitions |

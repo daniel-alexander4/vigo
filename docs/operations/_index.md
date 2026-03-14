@@ -10,4 +10,5 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Database](database.md) -- SQLite and Postgres configuration, schema, and retention
 - [FleetIndex](fleet-index.md) -- In-memory index for zero-DB check-in performance
 - [Tuning Parameters](tuning.md) -- All configurable tuning knobs
+- [Config Publish Pipeline](config-publish.md) -- Staging validation before live config sync
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics

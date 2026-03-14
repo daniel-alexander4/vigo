@@ -35,6 +35,7 @@ import (
 	"github.com/hobnob/hobnob/server/ca"
 	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/publish"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
 	"github.com/hobnob/hobnob/server/fleet"
@@ -72,7 +73,6 @@ func run() error {
 
 	// Determine config paths relative to working directory.
 	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server.yaml")
-	nodeConfigsDir := envOrDefault("HOBNOB_THRALL_CONFIGS_DIR", ".")
 	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", "migrations")
 	traitsDir := envOrDefault("HOBNOB_CUSTOM_TRAITS_DIR", "custom-traits")
 
@@ -269,7 +269,7 @@ func run() error {
 	reg := registry.NewRegistry(queries)
 
 	dangerous := os.Getenv("HOBNOB_DANGEROUS") == "1" || hasFlag("--dangerous")
-	configStore, err := config.NewConfigStore(nodeConfigsDir, provider, dangerous)
+	configStore, err := config.NewConfigStore(publish.LiveDir, provider, dangerous)
 	if err != nil {
 		return fmt.Errorf("initializing config store: %w", err)
 	}

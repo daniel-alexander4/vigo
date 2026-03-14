@@ -17,6 +17,8 @@ package validate
 
 import (
 	"fmt"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -191,6 +193,16 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateReplace(base, res)...)
 	case "field_edit":
 		findings = append(findings, validateFieldEdit(base, res)...)
+	case "archive":
+		findings = append(findings, validateArchive(base, res)...)
+	case "git":
+		findings = append(findings, validateGitResource(base, res)...)
+	case "mount":
+		findings = append(findings, validateMount(base, res)...)
+	case "logrotate":
+		findings = append(findings, validateLogrotate(base, res)...)
+	case "tmpfile":
+		findings = append(findings, validateTmpfile(base, res)...)
 	}
 
 	return findings
@@ -209,6 +221,9 @@ func validateFile(base Finding, res Resource) []Finding {
 			findings = append(findings, f)
 		}
 	}
+
+	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
+	findings = append(findings, requireValidMode(base, res, "mode")...)
 
 	state := attrString(res.Attributes, "state")
 	if state != "absent" {
@@ -237,6 +252,9 @@ func validateDirectory(base Finding, res Resource) []Finding {
 		findings = append(findings, f)
 	}
 
+	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
+	findings = append(findings, requireValidMode(base, res, "mode")...)
+
 	return findings
 }
 
@@ -250,6 +268,8 @@ func validateSymlink(base Finding, res Resource) []Finding {
 		f.Message = "symlink resource missing required attribute \"targetpath\""
 		findings = append(findings, f)
 	}
+
+	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
 
 	state := attrString(res.Attributes, "state")
 	if state != "absent" && attrString(res.Attributes, "to") == "" {
@@ -279,21 +299,34 @@ func validateExec(base Finding, res Resource) []Finding {
 	return nil
 }
 
-// validateService checks that restarted/reloaded services are gated by subscribes.
+// validServiceStates are the allowed values for service.state.
+var validServiceStates = map[string]bool{
+	"running":   true,
+	"stopped":   true,
+	"restarted": true,
+	"reloaded":  true,
+}
+
+// validateService checks service state enum and subscribes gating.
 func validateService(base Finding, res Resource) []Finding {
+	var findings []Finding
+
 	state := attrString(res.Attributes, "state")
-	if state != "restarted" && state != "reloaded" {
-		return nil
+	if state != "" && !validServiceStates[state] {
+		f := base
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf("invalid service state %q — must be one of: running, stopped, restarted, reloaded", state)
+		findings = append(findings, f)
 	}
 
-	if len(res.Subscribes) > 0 {
-		return nil
+	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) == 0 {
+		f := base
+		f.Severity = SeverityWarning
+		f.Message = fmt.Sprintf("service with state %q runs every convergence — consider adding subscribes", state)
+		findings = append(findings, f)
 	}
 
-	f := base
-	f.Severity = SeverityWarning
-	f.Message = fmt.Sprintf("service with state %q runs every convergence — consider adding subscribes", state)
-	return []Finding{f}
+	return findings
 }
 
 // validateReboot warns if a reboot resource has no subscribes guard.
@@ -362,6 +395,7 @@ func validateReplace(base Finding, res Resource) []Finding {
 			findings = append(findings, f)
 		}
 	}
+	findings = append(findings, requireAbsolutePath(base, res, "path")...)
 	return findings
 }
 
@@ -376,6 +410,7 @@ func validateFieldEdit(base Finding, res Resource) []Finding {
 			findings = append(findings, f)
 		}
 	}
+	findings = append(findings, requireAbsolutePath(base, res, "path")...)
 
 	state := attrString(res.Attributes, "state")
 	if state != "absent" && attrString(res.Attributes, "field_value") == "" {
@@ -385,6 +420,132 @@ func validateFieldEdit(base Finding, res Resource) []Finding {
 		findings = append(findings, f)
 	}
 	return findings
+}
+
+// validateArchive checks that archive resources have a url and valid targetpath/mode.
+func validateArchive(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	if attrString(res.Attributes, "url") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "archive resource missing required attribute \"url\""
+		findings = append(findings, f)
+	}
+	findings = append(findings, requireHTTPURL(base, res, "url")...)
+	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
+	findings = append(findings, requireValidMode(base, res, "mode")...)
+
+	return findings
+}
+
+// validateGitResource checks that git resources have repo and an absolute path.
+func validateGitResource(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	if attrString(res.Attributes, "repo") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "git resource missing required attribute \"repo\""
+		findings = append(findings, f)
+	}
+
+	if attrString(res.Attributes, "path") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "git resource missing required attribute \"path\""
+		findings = append(findings, f)
+	}
+	findings = append(findings, requireAbsolutePath(base, res, "path")...)
+
+	return findings
+}
+
+// validateMount checks that mount resources have path.
+func validateMount(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	if attrString(res.Attributes, "path") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "mount resource missing required attribute \"path\""
+		findings = append(findings, f)
+	}
+	findings = append(findings, requireAbsolutePath(base, res, "path")...)
+
+	return findings
+}
+
+// validateLogrotate checks that logrotate resources have an absolute path.
+func validateLogrotate(base Finding, res Resource) []Finding {
+	return requireAbsolutePath(base, res, "path")
+}
+
+// validateTmpfile checks that tmpfile resources have an absolute path and valid mode.
+func validateTmpfile(base Finding, res Resource) []Finding {
+	var findings []Finding
+	findings = append(findings, requireAbsolutePath(base, res, "path")...)
+	findings = append(findings, requireValidMode(base, res, "mode")...)
+	return findings
+}
+
+// requireAbsolutePath emits an error if the given attribute is present but not
+// an absolute path. Empty/missing values are skipped (caught by required-field checks).
+func requireAbsolutePath(base Finding, res Resource, field string) []Finding {
+	v := attrString(res.Attributes, field)
+	if v == "" {
+		return nil
+	}
+	if !filepath.IsAbs(v) {
+		f := base
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf("%s %q must be an absolute path", field, v)
+		return []Finding{f}
+	}
+	return nil
+}
+
+// requireValidMode emits an error if the mode attribute is present but not a
+// valid octal string (3-4 digits, 0-7 each).
+func requireValidMode(base Finding, res Resource, field string) []Finding {
+	v := attrString(res.Attributes, field)
+	if v == "" {
+		return nil
+	}
+	if len(v) < 3 || len(v) > 4 {
+		f := base
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf("mode %q must be a 3- or 4-digit octal string (e.g. \"0644\")", v)
+		return []Finding{f}
+	}
+	if _, err := strconv.ParseUint(v, 8, 32); err != nil {
+		f := base
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf("mode %q is not valid octal", v)
+		return []Finding{f}
+	}
+	return nil
+}
+
+// requireHTTPURL emits an error if the given attribute is present but not a
+// valid http:// or https:// URL. Other schemes (git://, ssh://) are allowed
+// through without complaint since they can't be aliveness-checked.
+func requireHTTPURL(base Finding, res Resource, field string) []Finding {
+	v := attrString(res.Attributes, field)
+	if v == "" {
+		return nil
+	}
+	if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+		// Basic format check: must have something after the scheme+authority.
+		after := strings.TrimPrefix(strings.TrimPrefix(v, "https://"), "http://")
+		if after == "" || !strings.Contains(after, ".") && !strings.Contains(after, "localhost") {
+			f := base
+			f.Severity = SeverityError
+			f.Message = fmt.Sprintf("%s %q has no valid hostname", field, v)
+			return []Finding{f}
+		}
+	}
+	return nil
 }
 
 func attrString(attrs map[string]any, key string) string {
