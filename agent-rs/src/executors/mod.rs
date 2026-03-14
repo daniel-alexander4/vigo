@@ -64,6 +64,8 @@ pub mod logrotate;
 #[cfg(target_os = "linux")]
 pub mod mount;
 #[cfg(target_os = "linux")]
+pub mod selinux;
+#[cfg(target_os = "linux")]
 pub mod service;
 #[cfg(target_os = "linux")]
 pub mod swap;

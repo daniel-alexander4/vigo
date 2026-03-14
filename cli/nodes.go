@@ -207,6 +207,94 @@ func formatTraitValue(v any) string {
 	}
 }
 
+var thrallsTagCmd = &cobra.Command{
+	Use:   "tag <id> <tag1,tag2,...>",
+	Short: "Set tags on a thrall",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+		tags := strings.Split(args[1], ",")
+		for i := range tags {
+			tags[i] = strings.TrimSpace(tags[i])
+		}
+		req := map[string]any{"tags": tags}
+		if err := client.put("/api/v1/thralls/"+args[0]+"/tags", req, nil); err != nil {
+			return err
+		}
+		fmt.Printf("Tags set: %s\n", strings.Join(tags, ", "))
+		return nil
+	},
+}
+
+var thrallsUntagCmd = &cobra.Command{
+	Use:   "untag <id> <tag1,tag2,...>",
+	Short: "Remove specific tags from a thrall",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+
+		// Get current tags.
+		var resp struct {
+			Tags []string `json:"tags"`
+		}
+		if err := client.get("/api/v1/thralls/"+args[0]+"/tags", &resp); err != nil {
+			return err
+		}
+
+		// Remove specified tags.
+		toRemove := make(map[string]bool)
+		for _, t := range strings.Split(args[1], ",") {
+			toRemove[strings.TrimSpace(t)] = true
+		}
+		var remaining []string
+		for _, t := range resp.Tags {
+			if !toRemove[t] {
+				remaining = append(remaining, t)
+			}
+		}
+
+		req := map[string]any{"tags": remaining}
+		if err := client.put("/api/v1/thralls/"+args[0]+"/tags", req, nil); err != nil {
+			return err
+		}
+		fmt.Printf("Tags updated: %s\n", strings.Join(remaining, ", "))
+		return nil
+	},
+}
+
+var thrallsMaintenanceCmd = &cobra.Command{
+	Use:   "maintenance <id>",
+	Short: "Set or clear maintenance mode for a thrall",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+		clear, _ := cmd.Flags().GetBool("clear")
+
+		if clear {
+			if err := client.delete("/api/v1/thralls/"+args[0]+"/maintenance", nil); err != nil {
+				return err
+			}
+			fmt.Println("Maintenance mode cleared.")
+			return nil
+		}
+
+		until, _ := cmd.Flags().GetString("until")
+		if until == "" {
+			return fmt.Errorf("--until or --clear is required")
+		}
+
+		req := map[string]string{"until": until}
+		if err := client.put("/api/v1/thralls/"+args[0]+"/maintenance", req, nil); err != nil {
+			return err
+		}
+		fmt.Printf("Maintenance mode set until %s\n", until)
+		return nil
+	},
+}
+
 func init() {
-	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd, thrallsTraitsCmd)
+	thrallsMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
+	thrallsMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
+	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd,
+		thrallsTraitsCmd, thrallsTagCmd, thrallsUntagCmd, thrallsMaintenanceCmd)
 }

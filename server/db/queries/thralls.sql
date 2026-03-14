@@ -1,20 +1,20 @@
 -- name: CreateThrall :one
 INSERT INTO thralls (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
-RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets;
+RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until;
 
 -- name: GetThrallByID :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls
 WHERE id = ?;
 
 -- name: GetThrallByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls
 WHERE hostname = ?;
 
 -- name: ListThralls :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls
 ORDER BY enrolled_at DESC;
 
@@ -40,4 +40,19 @@ WHERE id = ?;
 
 -- name: DeleteThrall :exec
 DELETE FROM thralls
+WHERE id = ?;
+
+-- name: UpdateThrallTags :exec
+UPDATE thralls
+SET tags = ?
+WHERE id = ?;
+
+-- name: UpdateThrallMaintenance :exec
+UPDATE thralls
+SET maintenance_until = ?
+WHERE id = ?;
+
+-- name: ClearThrallMaintenance :exec
+UPDATE thralls
+SET maintenance_until = NULL
 WHERE id = ?;

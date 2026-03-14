@@ -88,6 +88,8 @@ type ServerConfig struct {
 	AI         AISection        `yaml:"ai"`
 	Backup     BackupSection    `yaml:"backup"`
 	Export     ExportSection    `yaml:"export"`
+	RateLimit  RateLimitSection `yaml:"rate_limit"`
+	Maintenance MaintenanceSection `yaml:"maintenance"`
 }
 
 // AuthSection configures web UI and REST API authentication.
@@ -210,6 +212,18 @@ type WebhookTuning struct {
 	MaxRetries    int    `yaml:"max_retries"`     // default 3
 	MaxConcurrent int    `yaml:"max_concurrent"`  // default 20
 	RetryDelay    string `yaml:"retry_delay"`     // default "5s"
+}
+
+// RateLimitSection configures rate limiting for agent RPCs.
+type RateLimitSection struct {
+	Enabled         bool `yaml:"enabled"`           // enable rate limiting (default false)
+	CheckinPerThrall int  `yaml:"checkin_per_thrall"` // per-thrall check-in rate (requests/minute, default 6)
+	CheckinGlobal    int  `yaml:"checkin_global"`     // global check-in rate (requests/second, default 500)
+}
+
+// MaintenanceSection configures global change freeze.
+type MaintenanceSection struct {
+	FreezeUntil string `yaml:"freeze_until"` // RFC3339 timestamp; publish blocked while active
 }
 
 // WatcherSection holds secret rotation watcher configuration.
@@ -461,6 +475,8 @@ type ThrallEntry struct {
 	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to thrall-configs/)
 	Vars        map[string]any            `yaml:"vars"`
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
+	Tags        []string `yaml:"tags"`        // static tags for targeting
+
 	// Network device fields — set when this entry is a virtual thrall managed
 	// through a gateway. Gateway must be a real compute thrall.
 	Gateway    string `yaml:"gateway"`     // hostname of managing gateway thrall

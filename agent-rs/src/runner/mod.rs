@@ -397,7 +397,38 @@ fn execute_resource(
         node.params.clone()
     };
 
-    let result = executor.execute(&params, dry_run);
+    // Determine execution timeout.
+    let default_timeout: u64 = match node.resource_type.as_str() {
+        "exec" | "archive" | "custom" => 300,
+        _ => 60,
+    };
+    let timeout_secs: u64 = node
+        .params
+        .get("timeout")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default_timeout);
+
+    // Execute with timeout using a scoped thread + channel.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let result = std::thread::scope(|s| {
+        s.spawn(|| {
+            let r = executor.execute(&params, dry_run);
+            let _ = tx.send(r);
+        });
+        match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
+            Ok(r) => r,
+            Err(_) => ResourceResult {
+                module_name: String::new(),
+                resource_type: node.resource_type.clone(),
+                resource_name: node.name.clone(),
+                action: Action::None,
+                changed: false,
+                error: Some(format!("execution timed out after {}s", timeout_secs)),
+                duration_ms: timeout_secs as i32 * 1000,
+                ..Default::default()
+            },
+        }
+    });
 
     // Cache the result.
     if !dry_run {
@@ -495,6 +526,7 @@ pub fn build_executors_with_snapshots(
         executors.insert("tmpfile".to_string(), Box::new(tmpfile::TmpfileExecutor::new()));
         executors.insert("logrotate".to_string(), Box::new(logrotate::LogrotateExecutor));
         executors.insert("alternatives".to_string(), Box::new(alternatives::AlternativesExecutor::new()));
+        executors.insert("selinux".to_string(), Box::new(selinux::SelinuxExecutor::new()));
 
         // Linux package manager detection.
         match pkgmgr::detect(os_family, os_distro) {
@@ -1734,5 +1766,116 @@ mod tests {
         // Both succeeded.
         assert!(results.iter().all(|r| r.error.is_none()));
         assert!(results.iter().all(|r| r.changed));
+    }
+
+    // ── Execution timeout tests ──────────────────────────────────────
+
+    /// Executor that sleeps for a configurable duration before returning.
+    struct SlowExecutor {
+        sleep_ms: u64,
+    }
+
+    impl Executor for SlowExecutor {
+        fn execute(
+            &self,
+            params: &HashMap<String, String>,
+            _dry_run: bool,
+        ) -> ResourceResult {
+            std::thread::sleep(std::time::Duration::from_millis(self.sleep_ms));
+            let name = params.get("name").map(|s| s.as_str()).unwrap_or("slow");
+            ResourceResult {
+                module_name: String::new(),
+                resource_type: "mock".to_string(),
+                resource_name: name.to_string(),
+                action: Action::None,
+                changed: false,
+                error: None,
+                duration_ms: self.sleep_ms as i32,
+                ..Default::default()
+            }
+        }
+    }
+
+    #[test]
+    fn execution_timeout_triggers_error() {
+        // Use a slow executor with 5s sleep and a 1s timeout param.
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(SlowExecutor { sleep_ms: 5000 }));
+
+        let modules = vec![{
+            Module {
+                name: "slow-mod".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "slow-res".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "slow-res".to_string());
+                        p.insert("timeout".to_string(), "1".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec![],
+                notify: vec![],
+                subscribes: vec![],
+            }
+        }];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        assert_eq!(results.len(), 1);
+        assert!(results[0].error.is_some());
+        assert!(
+            results[0].error.as_ref().unwrap().contains("timed out"),
+            "expected timeout error, got: {:?}",
+            results[0].error
+        );
+    }
+
+    #[test]
+    fn execution_within_timeout_succeeds() {
+        // Executor finishes quickly, well within the timeout.
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(SlowExecutor { sleep_ms: 10 }));
+
+        let modules = vec![{
+            Module {
+                name: "fast-mod".to_string(),
+                resource_type: String::new(),
+                resources: vec![Resource {
+                    name: "fast-res".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "fast-res".to_string());
+                        p.insert("timeout".to_string(), "10".to_string());
+                        p
+                    },
+                    when: String::new(),
+                }],
+                depends_on: vec![],
+                notify: vec![],
+                subscribes: vec![],
+            }
+        }];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+        };
+
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        assert_eq!(results.len(), 1);
+        assert!(results[0].error.is_none());
     }
 }

@@ -39,6 +39,15 @@ type ComplianceHistory struct {
 	Unknown    int64  `json:"unknown"`
 }
 
+type ConfigPublish struct {
+	ID           string    `json:"id"`
+	Operator     string    `json:"operator"`
+	PublishedAt  time.Time `json:"published_at"`
+	ChangedFiles string    `json:"changed_files"`
+	RemovedFiles string    `json:"removed_files"`
+	DiffSummary  string    `json:"diff_summary"`
+}
+
 type EnvPromotion struct {
 	ID         string    `json:"id"`
 	ModuleName string    `json:"module_name"`
@@ -164,6 +173,8 @@ type Thrall struct {
 	RevokedAt             sql.NullTime `json:"revoked_at"`
 	ForcePush             int64        `json:"force_push"`
 	PendingRotatedSecrets string       `json:"pending_rotated_secrets"`
+	Tags                  string       `json:"tags"`
+	MaintenanceUntil      sql.NullTime `json:"maintenance_until"`
 }
 
 type ThrallTrait struct {

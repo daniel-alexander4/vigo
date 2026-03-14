@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"time"
 
+	"strings"
+
 	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/db"
 )
@@ -90,6 +92,22 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			lastRunAt = lastSeen
 		}
 
+		// Parse tags from comma-separated string.
+		var tags []string
+		if t.Tags != "" {
+			for _, tag := range strings.Split(t.Tags, ",") {
+				tag = strings.TrimSpace(tag)
+				if tag != "" {
+					tags = append(tags, tag)
+				}
+			}
+		}
+
+		var maintenanceUntil time.Time
+		if t.MaintenanceUntil.Valid {
+			maintenanceUntil = t.MaintenanceUntil.Time
+		}
+
 		ts := ThrallState{
 			ID:                    t.ID,
 			Hostname:              t.Hostname,
@@ -105,6 +123,8 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			Traits:                traits,
 			PendingRotatedSecrets: pendingSecrets,
 			ForcePush:             t.ForcePush != 0,
+			Tags:                  tags,
+			MaintenanceUntil:      maintenanceUntil,
 		}
 
 		fi.AddThrall(ts, pubKey)

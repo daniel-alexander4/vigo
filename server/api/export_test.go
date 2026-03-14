@@ -45,7 +45,9 @@ func openExportTestDB(t *testing.T) *sql.DB {
 			revoked                  INTEGER NOT NULL DEFAULT 0,
 			revoked_at               DATETIME,
 			force_push               INTEGER NOT NULL DEFAULT 0,
-			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]'
+			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]',
+			tags                     TEXT NOT NULL DEFAULT '',
+			maintenance_until        DATETIME
 		);
 		CREATE TABLE runs (
 			id            TEXT PRIMARY KEY,

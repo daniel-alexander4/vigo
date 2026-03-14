@@ -81,6 +81,7 @@ type ServerConfig struct {
 	RunBatcher       *fleet.RunBatcher  // async run persistence from delta events
 	BundleSigner     *BundleSigner     // signs policy bundles (nil = no signing)
 	BundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
+	RateLimit        config.RateLimitSection // rate limiting config
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -120,9 +121,17 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		kaTimeout = 10 * time.Second
 	}
 
+	sigInterceptor := SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex)
+
+	var interceptors []grpc.UnaryServerInterceptor
+	if cfg.RateLimit.Enabled {
+		interceptors = append(interceptors, RateLimitInterceptor(cfg.RateLimit))
+	}
+	interceptors = append(interceptors, sigInterceptor)
+
 	opts := []grpc.ServerOption{
 		grpc.Creds(creds),
-		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex)),
+		grpc.ChainUnaryInterceptor(interceptors...),
 		grpc.MaxConcurrentStreams(maxStreams),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle: maxConnIdle,

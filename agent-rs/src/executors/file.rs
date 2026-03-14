@@ -310,6 +310,25 @@ fn handle_present(
         })?;
     }
 
+    // Apply SELinux context if specified (Linux only).
+    #[cfg(target_os = "linux")]
+    if let Some(secontext) = params.get("secontext") {
+        if !secontext.is_empty() {
+            let output = std::process::Command::new("chcon")
+                .args([secontext.as_str(), path])
+                .output()
+                .map_err(|e| format!("chcon {} {}: {}", secontext, path, e))?;
+            if !output.status.success() {
+                return Err(format!(
+                    "chcon {} {}: {}",
+                    secontext,
+                    path,
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ));
+            }
+        }
+    }
+
     Ok(())
 }
 

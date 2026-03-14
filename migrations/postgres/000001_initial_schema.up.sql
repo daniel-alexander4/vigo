@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS thralls (
     revoked     INTEGER NOT NULL DEFAULT 0,
     revoked_at  TIMESTAMP,
     force_push  INTEGER NOT NULL DEFAULT 0,
-    pending_rotated_secrets TEXT NOT NULL DEFAULT '[]'
+    pending_rotated_secrets TEXT NOT NULL DEFAULT '[]',
+    tags        TEXT NOT NULL DEFAULT '',
+    maintenance_until TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_thralls_hostname ON thralls (hostname);
@@ -239,3 +241,15 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens (user_id);
+
+-- Config publish audit trail
+CREATE TABLE IF NOT EXISTS config_publishes (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    operator      TEXT NOT NULL DEFAULT '',
+    published_at  TIMESTAMP NOT NULL DEFAULT now(),
+    changed_files TEXT NOT NULL DEFAULT '[]',
+    removed_files TEXT NOT NULL DEFAULT '[]',
+    diff_summary  TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_config_publishes_published_at ON config_publishes (published_at);

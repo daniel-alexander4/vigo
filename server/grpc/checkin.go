@@ -64,6 +64,13 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		}
 	}
 
+	// Maintenance mode: return empty policy so thrall skips convergence
+	// but still reports traits.
+	if s.fleetIndex != nil && s.fleetIndex.IsInMaintenance(thrallID) {
+		slog.Info("thrall in maintenance mode, returning empty policy", "thrall_id", thrallID)
+		return &pb.CheckInResponse{}, nil
+	}
+
 	return s.buildCheckInResponse(ctx, thrallID, thrall, req, false)
 }
 

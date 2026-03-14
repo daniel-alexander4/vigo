@@ -27,6 +27,7 @@ type targetInfo struct {
 //
 // The spec is disambiguated as follows:
 //   - UUID format → single thrall by ID (TGT-03)
+//   - Starts with "tag:" → tag filter, e.g. "tag:webserver" (TGT-04)
 //   - Contains "=" → trait filter, e.g. "os.distro=ubuntu" (TGT-02)
 //   - Contains "*" or "?" → hostname glob, e.g. "*.web.prod" (TGT-01)
 //   - Otherwise → single thrall by hostname (TGT-03)
@@ -57,6 +58,11 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string, fi *f
 			return nil, fmt.Errorf("thrall %s is revoked", spec)
 		}
 		return []targetInfo{{ThrallID: thrall.ID, Hostname: thrall.Hostname}}, nil
+	}
+
+	// Tag filter → tag:<tagname>.
+	if strings.HasPrefix(spec, "tag:") {
+		return resolveByTag(spec[4:], fi)
 	}
 
 	// Trait filter → key.path=value.
@@ -197,6 +203,26 @@ func resolveByTrait(ctx context.Context, queries *db.Queries, filter string, fi 
 
 	if len(targets) == 0 {
 		return nil, fmt.Errorf("no thralls match trait filter %q", filter)
+	}
+	return targets, nil
+}
+
+// resolveByTag matches thralls with the given tag via FleetIndex.
+func resolveByTag(tag string, fi *fleet.FleetIndex) ([]targetInfo, error) {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return nil, fmt.Errorf("tag filter is empty")
+	}
+	if fi == nil {
+		return nil, fmt.Errorf("tag-based targeting requires FleetIndex")
+	}
+	fleetTargets := fi.ListByTag(tag)
+	if len(fleetTargets) == 0 {
+		return nil, fmt.Errorf("no thralls have tag %q", tag)
+	}
+	targets := make([]targetInfo, len(fleetTargets))
+	for i, ft := range fleetTargets {
+		targets[i] = targetInfo{ThrallID: ft.ThrallID, Hostname: ft.Hostname}
 	}
 	return targets, nil
 }

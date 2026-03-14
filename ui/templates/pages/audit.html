@@ -1,0 +1,38 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Audit Log</h1>
+    <p>{{len .Events}} recent events</p>
+</div>
+
+<div class="filter-bar mb-2">
+    <a href="/audit" class="btn btn--sm{{if eq .TypeFilter ""}} btn--primary{{end}}">All</a>
+    <a href="/audit?type=config_publish" class="btn btn--sm{{if eq .TypeFilter "config_publish"}} btn--primary{{end}}">Config</a>
+    <a href="/audit?type=task_run" class="btn btn--sm{{if eq .TypeFilter "task_run"}} btn--primary{{end}}">Tasks</a>
+    <a href="/audit?type=workflow_run" class="btn btn--sm{{if eq .TypeFilter "workflow_run"}} btn--primary{{end}}">Workflows</a>
+</div>
+
+<div class="table-container" hx-get="/audit?{{.QueryString}}" hx-trigger="every 30s" hx-swap="outerHTML">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Type</th>
+                <th>Operator</th>
+                <th>Summary</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Events}}
+            <tr>
+                <td>{{.Timestamp}}</td>
+                <td><span class="badge badge--info">{{.Type}}</span></td>
+                <td>{{.Operator}}</td>
+                <td>{{.Summary}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="4" class="text-center text-muted">No audit events found.</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

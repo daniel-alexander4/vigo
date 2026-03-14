@@ -1,26 +1,18 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: BUSL-1.1
 
-pub mod auth;
-pub mod bootstrap;
-pub mod checkin;
-pub mod config;
-pub mod customtraits;
-pub mod executors;
-pub mod guardrails;
-pub mod platform;
-pub mod policy;
-pub mod runner;
-pub mod snapshots;
-pub mod state;
-pub mod task;
-pub mod traits;
-pub mod transport;
-pub mod update;
-
-pub mod proto {
-    tonic::include_proto!("hobnob.v1");
-}
+use hobnob::auth;
+use hobnob::bootstrap;
+use hobnob::checkin;
+use hobnob::config;
+use hobnob::executors;
+use hobnob::platform;
+use hobnob::policy;
+use hobnob::proto;
+use hobnob::runner;
+use hobnob::snapshots;
+use hobnob::state;
+use hobnob::traits;
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;

@@ -36,6 +36,7 @@ func (q *Queries) ListThrallsWithLatestRun(ctx context.Context) ([]ThrallWithLat
 	const query = `
 SELECT n.id, n.hostname, n.ip_address, n.pubkey_pem, n.enrolled_at,
        n.last_seen, n.revoked, n.revoked_at, n.force_push, n.pending_rotated_secrets,
+       n.tags, n.maintenance_until,
        lr.status, lr.changed_count
 FROM thralls n
 LEFT JOIN (
@@ -58,7 +59,7 @@ ORDER BY n.enrolled_at DESC`
 		if err := rows.Scan(
 			&i.ID, &i.Hostname, &i.IpAddress, &i.PubkeyPem,
 			&i.EnrolledAt, &i.LastSeen, &i.Revoked, &i.RevokedAt, &i.ForcePush,
-			&i.PendingRotatedSecrets,
+			&i.PendingRotatedSecrets, &i.Tags, &i.MaintenanceUntil,
 			&i.LatestRunStatus, &i.LatestRunChangedCount,
 		); err != nil {
 			return nil, err

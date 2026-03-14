@@ -1,0 +1,33 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Config History</h1>
+    <p>{{len .Publishes}} recent publishes</p>
+</div>
+
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Published</th>
+                <th>Operator</th>
+                <th>Changed</th>
+                <th>Removed</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Publishes}}
+            <tr>
+                <td>{{.PublishedAt}}</td>
+                <td>{{.Operator}}</td>
+                <td>{{len .ChangedFiles}} files</td>
+                <td>{{len .RemovedFiles}} files</td>
+                <td><a href="/config-history/{{.ID}}" class="btn btn--sm">View</a></td>
+            </tr>
+            {{else}}
+            <tr><td colspan="5" class="text-center text-muted">No config publishes recorded.</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

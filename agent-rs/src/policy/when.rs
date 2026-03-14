@@ -475,6 +475,17 @@ pub fn evaluate_builtin(name: &str, args: &[String], traits: &Value) -> Result<b
             check_arity(name, args, 1)?;
             Ok(in_group(&args[0]))
         }
+        "port_listening" => {
+            check_arity(name, args, 1)?;
+            let port: u16 = args[0]
+                .parse()
+                .map_err(|_| anyhow::anyhow!("{}: invalid port number {:?}", name, args[0]))?;
+            if let Some(arr) = traits.pointer("/ports/listening").and_then(|v| v.as_array()) {
+                Ok(arr.iter().any(|v| v.as_u64() == Some(port as u64)))
+            } else {
+                Ok(false)
+            }
+        }
         _ => bail!("unknown builtin function {:?}", name),
     }
 }
@@ -1066,6 +1077,21 @@ mod tests {
         // "root" group always exists on Linux.
         assert!(evaluate_builtin("in_group", &["root".to_string()], &t).unwrap());
         assert!(!evaluate_builtin("in_group", &["nonexistent_group_xyz_12345".to_string()], &t).unwrap());
+    }
+
+    #[test]
+    fn test_builtin_port_listening() {
+        let traits = serde_json::json!({"ports": {"listening": [22, 80, 443]}});
+        assert!(evaluate_builtin("port_listening", &["80".to_string()], &traits).unwrap());
+        assert!(evaluate_builtin("port_listening", &["22".to_string()], &traits).unwrap());
+        assert!(!evaluate_builtin("port_listening", &["8080".to_string()], &traits).unwrap());
+
+        // Missing ports trait → false.
+        let empty = empty_traits();
+        assert!(!evaluate_builtin("port_listening", &["80".to_string()], &empty).unwrap());
+
+        // Invalid port number → error.
+        assert!(evaluate_builtin("port_listening", &["not_a_port".to_string()], &traits).is_err());
     }
 
     #[test]

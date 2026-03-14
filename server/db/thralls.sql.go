@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const clearForcePush = `-- name: ClearForcePush :exec
@@ -20,10 +21,21 @@ func (q *Queries) ClearForcePush(ctx context.Context, id string) error {
 	return err
 }
 
+const clearThrallMaintenance = `-- name: ClearThrallMaintenance :exec
+UPDATE thralls
+SET maintenance_until = NULL
+WHERE id = ?
+`
+
+func (q *Queries) ClearThrallMaintenance(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, clearThrallMaintenance, id)
+	return err
+}
+
 const createThrall = `-- name: CreateThrall :one
 INSERT INTO thralls (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
-RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
+RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 `
 
 type CreateThrallParams struct {
@@ -46,6 +58,8 @@ func (q *Queries) CreateThrall(ctx context.Context, arg CreateThrallParams) (Thr
 		&i.RevokedAt,
 		&i.ForcePush,
 		&i.PendingRotatedSecrets,
+		&i.Tags,
+		&i.MaintenanceUntil,
 	)
 	return i, err
 }
@@ -61,7 +75,7 @@ func (q *Queries) DeleteThrall(ctx context.Context, id string) error {
 }
 
 const getThrallByHostname = `-- name: GetThrallByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls
 WHERE hostname = ?
 `
@@ -80,12 +94,14 @@ func (q *Queries) GetThrallByHostname(ctx context.Context, hostname string) (Thr
 		&i.RevokedAt,
 		&i.ForcePush,
 		&i.PendingRotatedSecrets,
+		&i.Tags,
+		&i.MaintenanceUntil,
 	)
 	return i, err
 }
 
 const getThrallByID = `-- name: GetThrallByID :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls
 WHERE id = ?
 `
@@ -104,12 +120,14 @@ func (q *Queries) GetThrallByID(ctx context.Context, id string) (Thrall, error) 
 		&i.RevokedAt,
 		&i.ForcePush,
 		&i.PendingRotatedSecrets,
+		&i.Tags,
+		&i.MaintenanceUntil,
 	)
 	return i, err
 }
 
 const listThralls = `-- name: ListThralls :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls
 ORDER BY enrolled_at DESC
 `
@@ -134,6 +152,8 @@ func (q *Queries) ListThralls(ctx context.Context) ([]Thrall, error) {
 			&i.RevokedAt,
 			&i.ForcePush,
 			&i.PendingRotatedSecrets,
+			&i.Tags,
+			&i.MaintenanceUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -178,5 +198,37 @@ WHERE id = ?
 
 func (q *Queries) UpdateLastSeen(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, updateLastSeen, id)
+	return err
+}
+
+const updateThrallMaintenance = `-- name: UpdateThrallMaintenance :exec
+UPDATE thralls
+SET maintenance_until = ?
+WHERE id = ?
+`
+
+type UpdateThrallMaintenanceParams struct {
+	MaintenanceUntil sql.NullTime `json:"maintenance_until"`
+	ID               string       `json:"id"`
+}
+
+func (q *Queries) UpdateThrallMaintenance(ctx context.Context, arg UpdateThrallMaintenanceParams) error {
+	_, err := q.db.ExecContext(ctx, updateThrallMaintenance, arg.MaintenanceUntil, arg.ID)
+	return err
+}
+
+const updateThrallTags = `-- name: UpdateThrallTags :exec
+UPDATE thralls
+SET tags = ?
+WHERE id = ?
+`
+
+type UpdateThrallTagsParams struct {
+	Tags string `json:"tags"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) UpdateThrallTags(ctx context.Context, arg UpdateThrallTagsParams) error {
+	_, err := q.db.ExecContext(ctx, updateThrallTags, arg.Tags, arg.ID)
 	return err
 }

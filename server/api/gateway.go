@@ -71,6 +71,22 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	configTraceHandler := NewConfigTraceHandler(configStore)
 	configTraceHandler.RegisterRoutes(mux)
 
+	// Mount config publish history, versioning, and rollback.
+	configHandler := NewConfigHandler(queries)
+	configHandler.RegisterRoutes(mux)
+
+	// Mount thrall management endpoints (tags, maintenance).
+	thrallsHandler := NewThrallsHandler(queries, fleetIndex)
+	thrallsHandler.RegisterRoutes(mux)
+
+	// Mount audit endpoint.
+	auditHandler := NewAuditHandler(queries)
+	auditHandler.RegisterRoutes(mux)
+
+	// Mount preview endpoint.
+	previewHandler := NewPreviewHandler(configStore, fleetIndex)
+	previewHandler.RegisterRoutes(mux)
+
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
 	bh.SetFleetIndex(fleetIndex)

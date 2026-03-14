@@ -49,21 +49,27 @@ func (s *stubProvider) Get(_ context.Context, _ string) (string, error)      { r
 func (s *stubProvider) GetBytes(_ context.Context, _ string) ([]byte, error) { return []byte("stub"), nil }
 func (s *stubProvider) Close() error                                         { return nil }
 
+// HistoryDir is the directory for config snapshots used by rollback.
+var HistoryDir = "/etc/hobnob-server/hnb/config-history"
+
 // Options controls publish/validation behavior.
 type Options struct {
 	Dangerous  bool
 	CheckURLs  bool
 	URLTimeout time.Duration // default 10s if zero
+	Operator   string        // who performed this publish (defaults to $USER)
+	Diff       bool          // compute and print line-level diffs
 }
 
 // Result holds summary info from a successful validation or publish.
 type Result struct {
-	Modules int
-	Roles   int
-	Entries int
-	Files   int      // total files synced (0 for validate-only)
-	Changed []string // files that are new or changed vs .live
-	Removed []string // files in .live not present in proposed
+	Modules     int
+	Roles       int
+	Entries     int
+	Files       int      // total files synced (0 for validate-only)
+	Changed     []string // files that are new or changed vs .live
+	Removed     []string // files in .live not present in proposed
+	DiffSummary string   // unified diff of changed files
 }
 
 // ValidateSource runs full config validation against the proposed directory.
@@ -100,8 +106,17 @@ func ValidateSource(opts Options) (*Result, error) {
 	}, nil
 }
 
+// FreezeUntil is set by the server when a global change freeze is active.
+// If non-nil and in the future, Publish() will reject.
+var FreezeUntil *time.Time
+
 // Publish validates proposed configs then atomically syncs them to .live.
+// After a successful sync, it snapshots .live for rollback support.
 func Publish(opts Options) (*Result, error) {
+	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
+		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
+	}
+
 	res, err := ValidateSource(opts)
 	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
@@ -111,11 +126,20 @@ func Publish(opts Options) (*Result, error) {
 		return res, nil
 	}
 
+	// Compute diff before sync (comparing proposed vs current live).
+	if opts.Diff || true { // always compute for DB attribution
+		res.DiffSummary = ComputeAllDiffs(ProposedDir, LiveDir, res.Changed, res.Removed)
+	}
+
 	files, err := atomicSync(ProposedDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("sync failed: %w", err)
 	}
 	res.Files = files
+
+	// Snapshot .live for rollback support.
+	_, _ = SnapshotLive(LiveDir, HistoryDir, DefaultMaxVersions)
+
 	return res, nil
 }
 

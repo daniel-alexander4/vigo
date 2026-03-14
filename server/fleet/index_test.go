@@ -424,3 +424,110 @@ func TestActiveCount(t *testing.T) {
 		t.Errorf("ActiveCount = %d, want 1", fi.ActiveCount())
 	}
 }
+
+func TestTagOperations(t *testing.T) {
+	fi := NewFleetIndex()
+	pubKey := genKey(t)
+
+	fi.AddThrall(ThrallState{
+		ID:       "t1",
+		Hostname: "web01",
+		Tags:     []string{"webserver", "production"},
+	}, pubKey)
+	fi.AddThrall(ThrallState{
+		ID:       "t2",
+		Hostname: "web02",
+		Tags:     []string{"webserver", "staging"},
+	}, nil)
+	fi.AddThrall(ThrallState{
+		ID:       "t3",
+		Hostname: "db01",
+		Tags:     []string{"database", "production"},
+	}, nil)
+
+	// ListByTag
+	webservers := fi.ListByTag("webserver")
+	if len(webservers) != 2 {
+		t.Errorf("ListByTag(webserver) = %d, want 2", len(webservers))
+	}
+
+	production := fi.ListByTag("production")
+	if len(production) != 2 {
+		t.Errorf("ListByTag(production) = %d, want 2", len(production))
+	}
+
+	staging := fi.ListByTag("staging")
+	if len(staging) != 1 {
+		t.Errorf("ListByTag(staging) = %d, want 1", len(staging))
+	}
+
+	// SetTags replaces tags
+	fi.SetTags("t1", []string{"api", "production"})
+	webservers = fi.ListByTag("webserver")
+	if len(webservers) != 1 {
+		t.Errorf("after SetTags, ListByTag(webserver) = %d, want 1", len(webservers))
+	}
+	apis := fi.ListByTag("api")
+	if len(apis) != 1 {
+		t.Errorf("after SetTags, ListByTag(api) = %d, want 1", len(apis))
+	}
+
+	// Empty tag should return nothing
+	empty := fi.ListByTag("nonexistent")
+	if len(empty) != 0 {
+		t.Errorf("ListByTag(nonexistent) = %d, want 0", len(empty))
+	}
+}
+
+func TestMaintenanceWindow(t *testing.T) {
+	fi := NewFleetIndex()
+
+	fi.AddThrall(ThrallState{
+		ID:       "t1",
+		Hostname: "web01",
+	}, nil)
+
+	// Not in maintenance by default
+	if fi.IsInMaintenance("t1") {
+		t.Error("should not be in maintenance by default")
+	}
+
+	// Set maintenance window in the future
+	fi.SetMaintenanceUntil("t1", time.Now().Add(1*time.Hour))
+	if !fi.IsInMaintenance("t1") {
+		t.Error("should be in maintenance after SetMaintenanceUntil")
+	}
+
+	// Set maintenance window in the past
+	fi.SetMaintenanceUntil("t1", time.Now().Add(-1*time.Hour))
+	if fi.IsInMaintenance("t1") {
+		t.Error("should not be in maintenance after window expires")
+	}
+
+	// Clear maintenance
+	fi.SetMaintenanceUntil("t1", time.Now().Add(1*time.Hour))
+	fi.ClearMaintenance("t1")
+	if fi.IsInMaintenance("t1") {
+		t.Error("should not be in maintenance after ClearMaintenance")
+	}
+}
+
+func TestCompliancePercent(t *testing.T) {
+	fi := NewFleetIndex()
+
+	// Empty fleet = 100%
+	if pct := fi.CompliancePercent(); pct != 100.0 {
+		t.Errorf("CompliancePercent on empty fleet = %f, want 100.0", pct)
+	}
+
+	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
+	fi.AddThrall(ThrallState{ID: "t2", Hostname: "h2", ComplianceStatus: "compliant"}, nil)
+	fi.AddThrall(ThrallState{ID: "t3", Hostname: "h3", ComplianceStatus: "drifted"}, nil)
+	fi.AddThrall(ThrallState{ID: "t4", Hostname: "h4", ComplianceStatus: "failing"}, nil)
+
+	pct := fi.CompliancePercent()
+	// 2 compliant out of 4 = 50%
+	if pct != 50.0 {
+		t.Errorf("CompliancePercent = %f, want 50.0", pct)
+	}
+}

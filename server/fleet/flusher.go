@@ -5,7 +5,9 @@ package fleet
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/hobnob/hobnob/server/db"
@@ -105,6 +107,26 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 			if err := sf.queries.ClearRotatedSecrets(ctx, id); err != nil {
 				slog.Error("state flusher: clear rotated secrets failed", "thrall_id", id, "error", err)
 			}
+		}
+
+		// Persist tags.
+		if err := sf.queries.UpdateThrallTags(ctx, db.UpdateThrallTagsParams{
+			Tags: strings.Join(ts.Tags, ","),
+			ID:   id,
+		}); err != nil {
+			slog.Error("state flusher: update tags failed", "thrall_id", id, "error", err)
+		}
+
+		// Persist maintenance window.
+		var maint sql.NullTime
+		if !ts.MaintenanceUntil.IsZero() {
+			maint = sql.NullTime{Time: ts.MaintenanceUntil, Valid: true}
+		}
+		if err := sf.queries.UpdateThrallMaintenance(ctx, db.UpdateThrallMaintenanceParams{
+			MaintenanceUntil: maint,
+			ID:               id,
+		}); err != nil {
+			slog.Error("state flusher: update maintenance failed", "thrall_id", id, "error", err)
 		}
 	}
 

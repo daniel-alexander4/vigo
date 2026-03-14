@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 	"time"
 
 	"github.com/hobnob/hobnob/server/publish"
@@ -26,11 +27,21 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		dangerous, _ := cmd.Flags().GetBool("dangerous")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
 		urlTimeout, _ := cmd.Flags().GetDuration("url-timeout")
+		operator, _ := cmd.Flags().GetString("operator")
+		showDiff, _ := cmd.Flags().GetBool("diff")
+
+		if operator == "" {
+			if u, err := user.Current(); err == nil {
+				operator = u.Username
+			}
+		}
 
 		opts := publish.Options{
 			Dangerous:  dangerous,
 			CheckURLs:  !skipURLCheck,
 			URLTimeout: urlTimeout,
+			Operator:   operator,
+			Diff:       showDiff,
 		}
 
 		if dryRun {
@@ -55,6 +66,20 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		fmt.Printf("Published: %d modules, %d roles, %d thrall entries (%d files synced)\n",
 			res.Modules, res.Roles, res.Entries, res.Files)
 		printDiff(res)
+
+		if showDiff && res.DiffSummary != "" {
+			fmt.Println("\nDiff:")
+			fmt.Println(res.DiffSummary)
+		}
+
+		// Record publish in server for audit trail (best-effort).
+		client := newAPIClient()
+		_ = client.post("/api/v1/config/publishes", map[string]any{
+			"operator":      operator,
+			"changed_files": res.Changed,
+			"removed_files": res.Removed,
+			"diff_summary":  res.DiffSummary,
+		}, nil)
 		return nil
 	},
 }
@@ -73,6 +98,8 @@ func init() {
 	configPublishCmd.Flags().Bool("dangerous", false, "allow non-idempotent resources")
 	configPublishCmd.Flags().Bool("skip-url-check", false, "skip HTTP aliveness checks for URLs")
 	configPublishCmd.Flags().Duration("url-timeout", 10*time.Second, "timeout per URL check")
+	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
+	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 
 	configCmd.AddCommand(configPublishCmd)
 }

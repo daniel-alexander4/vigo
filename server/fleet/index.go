@@ -36,6 +36,8 @@ type ThrallState struct {
 	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
 	Gateway               string // hostname of gateway thrall (empty for normal thralls)
 	DeviceType            string // network device type (empty for normal thralls)
+	Tags                  []string   // user-assigned tags for targeting
+	MaintenanceUntil      time.Time  // zero = not in maintenance
 }
 
 // ComplianceCounters holds pre-computed compliance totals.
@@ -76,6 +78,7 @@ type FleetIndex struct {
 	pubkeys    map[string]ed25519.PublicKey   // ID → parsed key
 	byStatus   map[string]map[string]bool    // status → set of IDs
 	byTrait    map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
+	byTag      map[string]map[string]bool              // tag → set of IDs
 	compliance ComplianceCounters
 	recentRuns        *ringBuffer
 	complianceHistory *complianceRing // rolling 30-day daily snapshots
@@ -90,6 +93,7 @@ func NewFleetIndex() *FleetIndex {
 		pubkeys:    make(map[string]ed25519.PublicKey),
 		byStatus:   make(map[string]map[string]bool),
 		byTrait:    make(map[string]map[string]map[string]bool),
+		byTag:      make(map[string]map[string]bool),
 		recentRuns:        newRingBuffer(5000),
 		complianceHistory: newComplianceRing(30),
 		dirty:             make(map[string]bool),
@@ -353,6 +357,45 @@ func (f *FleetIndex) ListByStatus(status string) []string {
 	return result
 }
 
+// ListByTag returns all non-revoked thralls with the given tag.
+func (f *FleetIndex) ListByTag(tag string) []TargetInfo {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	ids, ok := f.byTag[tag]
+	if !ok {
+		return nil
+	}
+	var results []TargetInfo
+	for id := range ids {
+		ts := f.thralls[id]
+		if ts != nil && !ts.Revoked {
+			results = append(results, TargetInfo{ThrallID: ts.ID, Hostname: ts.Hostname})
+		}
+	}
+	return results
+}
+
+// IsInMaintenance returns true if the thrall is currently in a maintenance window.
+func (f *FleetIndex) IsInMaintenance(id string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	ts := f.thralls[id]
+	if ts == nil {
+		return false
+	}
+	return !ts.MaintenanceUntil.IsZero() && time.Now().Before(ts.MaintenanceUntil)
+}
+
+// CompliancePercent returns the percentage of non-revoked thralls that are compliant.
+func (f *FleetIndex) CompliancePercent() float64 {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.compliance.Total == 0 {
+		return 100.0
+	}
+	return float64(f.compliance.Compliant) / float64(f.compliance.Total) * 100.0
+}
+
 // --- Write methods (acquire Lock) ---
 
 // AddThrall inserts a new thrall into the index. If a thrall with the same ID
@@ -368,6 +411,7 @@ func (f *FleetIndex) AddThrall(ts ThrallState, pubKey ed25519.PublicKey) {
 		}
 		f.removeFromStatus(ts.ID, old.ComplianceStatus)
 		f.removeFromTraits(ts.ID, old.Traits)
+		f.removeFromTags(ts.ID, old.Tags)
 		if !old.Revoked {
 			f.compliance.Total--
 			f.decrementCounter(old.ComplianceStatus)
@@ -384,6 +428,7 @@ func (f *FleetIndex) AddThrall(ts ThrallState, pubKey ed25519.PublicKey) {
 	if !ts.Revoked {
 		f.addToStatus(ts.ID, ts.ComplianceStatus)
 		f.addToTraits(ts.ID, ts.Traits)
+		f.addToTags(ts.ID, ts.Tags)
 		f.compliance.Total++
 		f.incrementCounter(ts.ComplianceStatus)
 	}
@@ -403,6 +448,7 @@ func (f *FleetIndex) RemoveThrall(id string) {
 	delete(f.pubkeys, id)
 	f.removeFromStatus(id, ts.ComplianceStatus)
 	f.removeFromTraits(id, ts.Traits)
+	f.removeFromTags(id, ts.Tags)
 	if !ts.Revoked {
 		f.compliance.Total--
 		f.decrementCounter(ts.ComplianceStatus)
@@ -539,6 +585,41 @@ func (f *FleetIndex) ClearPendingRotatedSecrets(id string) {
 	f.dirty[id] = true
 }
 
+// SetTags replaces the tags for a thrall and updates the inverted tag index.
+func (f *FleetIndex) SetTags(id string, tags []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.thralls[id]
+	if !ok {
+		return
+	}
+	f.removeFromTags(id, ts.Tags)
+	ts.Tags = tags
+	if !ts.Revoked {
+		f.addToTags(id, tags)
+	}
+	f.dirty[id] = true
+}
+
+// SetMaintenanceUntil sets the maintenance window for a thrall.
+func (f *FleetIndex) SetMaintenanceUntil(id string, until time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.thralls[id]
+	if !ok {
+		return
+	}
+	ts.MaintenanceUntil = until
+	f.dirty[id] = true
+}
+
+// ClearMaintenance clears the maintenance window for a thrall.
+func (f *FleetIndex) ClearMaintenance(id string) {
+	f.SetMaintenanceUntil(id, time.Time{})
+}
+
 // UpdateTraits replaces the traits for a thrall and updates the inverted index.
 func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
 	f.mu.Lock()
@@ -673,6 +754,26 @@ func (f *FleetIndex) removeFromTraits(id string, traits map[string]string) {
 			}
 			if len(f.byTrait[key]) == 0 {
 				delete(f.byTrait, key)
+			}
+		}
+	}
+}
+
+func (f *FleetIndex) addToTags(id string, tags []string) {
+	for _, tag := range tags {
+		if f.byTag[tag] == nil {
+			f.byTag[tag] = make(map[string]bool)
+		}
+		f.byTag[tag][id] = true
+	}
+}
+
+func (f *FleetIndex) removeFromTags(id string, tags []string) {
+	for _, tag := range tags {
+		if f.byTag[tag] != nil {
+			delete(f.byTag[tag], id)
+			if len(f.byTag[tag]) == 0 {
+				delete(f.byTag, tag)
 			}
 		}
 	}

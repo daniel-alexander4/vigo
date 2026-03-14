@@ -17,6 +17,12 @@ mod time_collector;
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
 pub(crate) mod sysctl_util;
 
+// Unix-specific collectors.
+#[cfg(unix)]
+mod cert_expiry;
+#[cfg(unix)]
+mod ports;
+
 // Linux-specific collectors.
 #[cfg(target_os = "linux")]
 mod blockdevices;
@@ -181,7 +187,7 @@ use tracing::warn;
 /// Maximum time a single trait collector may run.
 pub const COLLECTOR_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Enum dispatch for the 25 built-in trait collectors.
+/// Enum dispatch for the 27 built-in trait collectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollectorKind {
     Os,
@@ -209,6 +215,8 @@ pub enum CollectorKind {
     Locale,
     Swap,
     Gpu,
+    CertExpiry,
+    Ports,
 }
 
 impl CollectorKind {
@@ -240,6 +248,8 @@ impl CollectorKind {
             Self::Locale => "locale",
             Self::Swap => "swap",
             Self::Gpu => "gpu",
+            Self::CertExpiry => "cert_expiry",
+            Self::Ports => "ports",
         }
     }
 
@@ -249,6 +259,12 @@ impl CollectorKind {
             Self::Time => time_collector::collect(),
             Self::Cloud => cloud::collect(),
             Self::Docker => docker::collect(),
+
+            // Unix implementations.
+            #[cfg(unix)]
+            Self::CertExpiry => cert_expiry::collect(),
+            #[cfg(unix)]
+            Self::Ports => ports::collect(),
 
             // Linux implementations.
             #[cfg(target_os = "linux")]
@@ -438,7 +454,7 @@ impl CollectorKind {
             #[cfg(windows)]
             Self::Virtual | Self::LoadAvg | Self::Kernel |
             Self::BlockDevices | Self::Systemd | Self::SELinux |
-            Self::Locale | Self::Gpu => Ok(Value::Null),
+            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports => Ok(Value::Null),
         }
     }
 
@@ -470,12 +486,14 @@ impl CollectorKind {
             "locale" => Some(Self::Locale),
             "swap" => Some(Self::Swap),
             "gpu" => Some(Self::Gpu),
+            "cert_expiry" => Some(Self::CertExpiry),
+            "ports" => Some(Self::Ports),
             _ => None,
         }
     }
 }
 
-/// The standard set of all 25 trait collectors, in the same order as Go.
+/// The standard set of all 27 trait collectors, in the same order as Go.
 pub fn default_collectors() -> Vec<CollectorKind> {
     vec![
         CollectorKind::Os,
@@ -503,6 +521,8 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Locale,
         CollectorKind::Swap,
         CollectorKind::Gpu,
+        CollectorKind::CertExpiry,
+        CollectorKind::Ports,
     ]
 }
 
@@ -517,6 +537,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Users,
         CollectorKind::Memory,
         CollectorKind::Swap,
+        CollectorKind::Ports,
     ]
 }
 
@@ -540,6 +561,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Timezone,
         CollectorKind::Locale,
         CollectorKind::Gpu,
+        CollectorKind::CertExpiry,
     ]
 }
 
@@ -609,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 25);
+        assert_eq!(default_collectors().len(), 27);
     }
 
     #[test]
