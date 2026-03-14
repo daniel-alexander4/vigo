@@ -18,7 +18,7 @@ resources:
   - name: containerd-package
     type: package
     package: containerd.io
-    ensure: present
+    state: present
 
   - name: containerd-config-dir
     type: directory
@@ -49,8 +49,8 @@ resources:
   - name: containerd-service
     type: service
     service: containerd
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
     depends_on:
       - containerd-package
 ```
@@ -73,37 +73,37 @@ resources:
   - name: k8s-packages-debian
     type: package
     package: kubelet
-    ensure: present
+    state: present
     when: "os_family('debian')"
 
   - name: k8s-packages-rhel
     type: package
     package: kubelet
-    ensure: present
+    state: present
     when: "!os_family('debian')"
 
   - name: kubeadm-package-debian
     type: package
     package: kubeadm
-    ensure: present
+    state: present
     when: "os_family('debian')"
 
   - name: kubeadm-package-rhel
     type: package
     package: kubeadm
-    ensure: present
+    state: present
     when: "!os_family('debian')"
 
   - name: kubectl-package-debian
     type: package
     package: kubectl
-    ensure: present
+    state: present
     when: "os_family('debian')"
 
   - name: kubectl-package-rhel
     type: package
     package: kubectl
-    ensure: present
+    state: present
     when: "!os_family('debian')"
 
   - name: kubelet-config
@@ -129,8 +129,8 @@ resources:
   - name: kubelet-service
     type: service
     service: kubelet
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Kernel Tuning Module

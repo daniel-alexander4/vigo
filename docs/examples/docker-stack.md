@@ -17,13 +17,13 @@ resources:
     type: docker_image
     image: redis
     tag: "{{ .Vars.redis_version }}"
-    ensure: present
+    state: present
 
   - name: redis-container
     type: docker_container
-    container_name: redis
+    container: redis
     image: "redis:{{ .Vars.redis_version }}"
-    ensure: running
+    state: running
     ports:
       - "{{ .Vars.redis_port }}:6379"
     command: "redis-server --maxmemory {{ .Vars.redis_maxmemory }}"
@@ -47,13 +47,13 @@ resources:
     type: docker_image
     image: "{{ .Vars.app_image }}"
     tag: "{{ .Vars.app_tag }}"
-    ensure: present
+    state: present
 
   - name: app-container
     type: docker_container
-    container_name: webapp
+    container: webapp
     image: "{{ .Vars.app_image }}:{{ .Vars.app_tag }}"
-    ensure: running
+    state: running
     ports:
       - "8080:8080"
     environment:

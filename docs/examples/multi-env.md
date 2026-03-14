@@ -35,8 +35,8 @@ resources:
   - name: webapp-service
     type: service
     service: webapp
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Node Assignment with env_vars

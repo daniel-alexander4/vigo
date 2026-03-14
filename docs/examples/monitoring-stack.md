@@ -16,13 +16,13 @@ resources:
   - name: node-exporter-package
     type: package
     package: prometheus-node-exporter
-    ensure: present
+    state: present
     when: "os_family('debian')"
 
   - name: node-exporter-package-rhel
     type: package
     package: node_exporter
-    ensure: present
+    state: present
     when: "!os_family('debian')"
 
   - name: node-exporter-config
@@ -39,8 +39,8 @@ resources:
   - name: node-exporter-service
     type: service
     service: prometheus-node-exporter
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Prometheus Module
@@ -59,7 +59,7 @@ resources:
   - name: prometheus-package
     type: package
     package: prometheus
-    ensure: present
+    state: present
 
   - name: prometheus-config
     type: file
@@ -99,8 +99,8 @@ resources:
   - name: prometheus-service
     type: service
     service: prometheus
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Grafana Module
@@ -118,7 +118,7 @@ resources:
   - name: grafana-package
     type: package
     package: grafana
-    ensure: present
+    state: present
 
   - name: grafana-config
     type: file
@@ -158,8 +158,8 @@ resources:
   - name: grafana-service
     type: service
     service: grafana-server
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Role Definition

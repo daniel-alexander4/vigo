@@ -15,13 +15,13 @@ resources:
   - name: ufw-package
     type: package
     package: ufw
-    ensure: present
+    state: present
     when: "os_family('debian')"
 
   - name: firewall-package
     type: package
     package: firewalld
-    ensure: present
+    state: present
     when: "!os_family('debian')"
 
   - name: ufw-default-deny
@@ -90,8 +90,8 @@ resources:
   - name: sshd-service
     type: service
     service: sshd
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Fail2ban Module
@@ -109,7 +109,7 @@ resources:
   - name: fail2ban-package
     type: package
     package: fail2ban
-    ensure: present
+    state: present
 
   - name: fail2ban-jail-config
     type: file
@@ -132,8 +132,8 @@ resources:
   - name: fail2ban-service
     type: service
     service: fail2ban
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Sudo Module
@@ -148,7 +148,7 @@ resources:
   - name: sudo-package
     type: package
     package: sudo
-    ensure: present
+    state: present
 
   - name: sudoers-config
     type: file

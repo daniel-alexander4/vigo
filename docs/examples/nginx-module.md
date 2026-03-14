@@ -17,7 +17,7 @@ resources:
   - name: nginx-package
     type: package
     package: nginx
-    ensure: present
+    state: present
 
   - name: nginx-config
     type: file
@@ -52,8 +52,8 @@ resources:
   - name: nginx-service
     type: service
     service: nginx
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## How It Works

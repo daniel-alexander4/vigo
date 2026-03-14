@@ -20,13 +20,13 @@ resources:
   - name: pg-package
     type: package
     package: "postgresql-{{ .Vars.pg_version }}"
-    ensure: present
+    state: present
     when: "os_family('debian')"
 
   - name: pg-package-rhel
     type: package
     package: "postgresql{{ .Vars.pg_version }}-server"
-    ensure: present
+    state: present
     when: "!os_family('debian')"
 
   - name: pg-config
@@ -69,8 +69,8 @@ resources:
   - name: pg-service
     type: service
     service: postgresql
-    ensure: running
-    enable: true
+    state: running
+    enabled: true
 ```
 
 ## Application Database Setup
