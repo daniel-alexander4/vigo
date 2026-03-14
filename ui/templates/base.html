@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hobnob - {{.Title}}</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
-    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
 </head>
 <body hx-boost="true">
     <div class="layout">
@@ -53,7 +53,7 @@
             </div>
         </form>
     </div>
-    <script src="/static/js/ai-drawer.js"></script>
+    <script src="/static/js/ai-drawer.js?v={{.Version}}"></script>
     {{end}}
 </body>
 </html>
