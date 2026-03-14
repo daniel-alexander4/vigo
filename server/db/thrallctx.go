@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/x509"
-	"database/sql"
 	"encoding/pem"
 	"fmt"
 )
@@ -44,9 +43,4 @@ func ContextWithThrall(ctx context.Context, n Thrall) context.Context {
 func ThrallFromContext(ctx context.Context) *Thrall {
 	n, _ := ctx.Value(thrallCtxKey{}).(*Thrall)
 	return n
-}
-
-// IsNotFound returns true if the error is sql.ErrNoRows.
-func IsNotFound(err error) bool {
-	return err == sql.ErrNoRows
 }

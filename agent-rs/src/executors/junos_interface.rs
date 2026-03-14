@@ -14,10 +14,10 @@
 //! - unit (optional): logical unit number, default "0"
 //! - family (optional): address family, default "inet"
 
-use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::{Executor, ResourceResult};
+use crate::executors::network_common::{self, require_param, SshParams, DEFAULT_TIMEOUT};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::debug;
 
 pub struct JunosInterfaceExecutor;
@@ -36,27 +36,12 @@ impl Executor for JunosInterfaceExecutor {
             params.get("name").map_or("", |s| s),
         );
 
-        let host = match params.get("host") {
-            Some(h) => h.clone(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.clone(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.clone(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
-        let interface = match params.get("interface") {
-            Some(i) => i.clone(),
-            None => return result.with_error("missing required param: interface".into()),
-        };
-
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
+        result = ResourceResult::new("junos_interface", params.get("name").map_or("", |s| s));
+        let interface = require_param!(params, "interface", result);
         let unit = params.get("unit").map_or("0", |s| s.as_str()).to_string();
         let family = params
             .get("family")
@@ -64,18 +49,11 @@ impl Executor for JunosInterfaceExecutor {
             .to_string();
         let description = params.get("description").cloned();
         let ip_address = params.get("ip_address").cloned();
-        let timeout = Duration::from_secs(30);
+        let timeout = DEFAULT_TIMEOUT;
 
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
-        };
-
-        let exec_result: Result<bool, anyhow::Error> = tokio::task::block_in_place(|| {
-            rt.block_on(async {
-                let session =
-                    SshSession::connect(&host, port, &username, &credential, None).await?;
-
+        let host_log = ssh.host.clone();
+        network_common::run_ssh_executor(&mut result, start, &ssh, |session| {
+            Box::pin(async move {
                 // Check current interface configuration.
                 let check_cmd = format!("show configuration interfaces {}", interface);
                 let current = session.exec(&check_cmd, timeout).await?;
@@ -133,29 +111,13 @@ impl Executor for JunosInterfaceExecutor {
                     .await?;
 
                 debug!(
-                    host = host.as_str(),
+                    host = host_log.as_str(),
                     interface = interface.as_str(),
                     "junos interface config applied"
                 );
                 Ok(true)
             })
         });
-
-        result.duration_ms = start.elapsed().as_millis() as i32;
-
-        match exec_result {
-            Ok(false) => {
-                result.action = Action::None;
-                result.changed = false;
-            }
-            Ok(true) => {
-                result.action = Action::Updated;
-                result.changed = true;
-            }
-            Err(e) => {
-                result.error = Some(e.to_string());
-            }
-        }
 
         result
     }

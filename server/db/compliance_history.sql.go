@@ -48,32 +48,29 @@ func (q *Queries) ListComplianceHistory(ctx context.Context, limit int64) ([]Com
 	return items, nil
 }
 
-const upsertComplianceSnapshot = `-- name: UpsertComplianceSnapshot :one
+const upsertComplianceSnapshot = `-- name: UpsertComplianceSnapshot :exec
 INSERT INTO compliance_history (recorded_at, total, compliant, drifted, failing, stale, unknown)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (recorded_at) DO UPDATE
-SET total = EXCLUDED.total,
-    compliant = EXCLUDED.compliant,
-    drifted = EXCLUDED.drifted,
-    failing = EXCLUDED.failing,
-    stale = EXCLUDED.stale,
-    unknown = EXCLUDED.unknown
-RETURNING id, recorded_at, total, compliant, drifted, failing, stale, unknown
+VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6)
+ON CONFLICT(recorded_at) DO UPDATE SET
+  total     = excluded.total,
+  compliant = excluded.compliant,
+  drifted   = excluded.drifted,
+  failing   = excluded.failing,
+  stale     = excluded.stale,
+  unknown   = excluded.unknown
 `
 
 type UpsertComplianceSnapshotParams struct {
-	RecordedAt string `json:"recorded_at"`
-	Total      int64  `json:"total"`
-	Compliant  int64  `json:"compliant"`
-	Drifted    int64  `json:"drifted"`
-	Failing    int64  `json:"failing"`
-	Stale      int64  `json:"stale"`
-	Unknown    int64  `json:"unknown"`
+	Total     int64 `json:"total"`
+	Compliant int64 `json:"compliant"`
+	Drifted   int64 `json:"drifted"`
+	Failing   int64 `json:"failing"`
+	Stale     int64 `json:"stale"`
+	Unknown   int64 `json:"unknown"`
 }
 
-func (q *Queries) UpsertComplianceSnapshot(ctx context.Context, arg UpsertComplianceSnapshotParams) (ComplianceHistory, error) {
-	row := q.db.QueryRowContext(ctx, upsertComplianceSnapshot,
-		arg.RecordedAt,
+func (q *Queries) UpsertComplianceSnapshot(ctx context.Context, arg UpsertComplianceSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, upsertComplianceSnapshot,
 		arg.Total,
 		arg.Compliant,
 		arg.Drifted,
@@ -81,16 +78,5 @@ func (q *Queries) UpsertComplianceSnapshot(ctx context.Context, arg UpsertCompli
 		arg.Stale,
 		arg.Unknown,
 	)
-	var i ComplianceHistory
-	err := row.Scan(
-		&i.ID,
-		&i.RecordedAt,
-		&i.Total,
-		&i.Compliant,
-		&i.Drifted,
-		&i.Failing,
-		&i.Stale,
-		&i.Unknown,
-	)
-	return i, err
+	return err
 }

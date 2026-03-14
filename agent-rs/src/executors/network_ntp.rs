@@ -12,10 +12,10 @@
 //! - server (required): NTP server address to configure
 //! - state (optional): present (default) or absent
 
-use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::{Executor, ResourceResult};
+use crate::executors::network_common::{self, require_param, SshParams, DEFAULT_TIMEOUT};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::debug;
 
 pub struct NetworkNtpExecutor;
@@ -102,53 +102,28 @@ impl Executor for NetworkNtpExecutor {
             params.get("name").map_or("", |s| s),
         );
 
-        let host = match params.get("host") {
-            Some(h) => h.clone(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.clone(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.clone(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
-        let device_type = match params.get("device_type") {
-            Some(dt) => dt.clone(),
-            None => return result.with_error("missing required param: device_type".into()),
-        };
-        let server = match params.get("server") {
-            Some(s) => s.clone(),
-            None => return result.with_error("missing required param: server".into()),
-        };
-
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
-        let state = params.get("state").map_or("present", |s| s.as_str());
-        let timeout = Duration::from_secs(30);
+        result = ResourceResult::new("network_ntp", params.get("name").map_or("", |s| s));
+        let device_type = require_param!(params, "device_type", result);
+        let server = require_param!(params, "server", result);
+        let state = network_common::parse_state(params).to_string();
+        let timeout = DEFAULT_TIMEOUT;
 
         let dialect = match ntp_dialect(&device_type) {
             Some(d) => d,
             None => return result.with_error(format!("unsupported device_type: {}", device_type)),
         };
 
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
-        };
-
-        let exec_result = tokio::task::block_in_place(|| {
-            rt.block_on(async {
-                let session = SshSession::connect(&host, port, &username, &credential, None).await?;
-
-                // Check current NTP configuration.
+        let host_log = ssh.host.clone();
+        network_common::run_ssh_executor(&mut result, start, &ssh, |session| {
+            Box::pin(async move {
                 let current = session.exec(dialect.check_command, timeout).await?;
                 let is_present = ntp_server_present(&device_type, &current.stdout, &server);
 
-                let needs_change = match state {
+                let needs_change = match state.as_str() {
                     "present" => !is_present,
                     "absent" => is_present,
                     _ => return Err(anyhow::anyhow!("invalid state: {}", state)),
@@ -157,44 +132,24 @@ impl Executor for NetworkNtpExecutor {
                 if !needs_change {
                     return Ok(false);
                 }
-
                 if dry_run {
                     return Ok(true);
                 }
 
-                // Push NTP configuration.
-                let commands = build_ntp_commands(&device_type, &server, state);
+                let commands = build_ntp_commands(&device_type, &server, &state);
                 let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
-                let _output = session
-                    .exec_interactive(&cmd_refs, dialect.prompt_pattern, timeout)
-                    .await?;
+                session.exec_interactive(&cmd_refs, dialect.prompt_pattern, timeout).await?;
 
                 debug!(
-                    host = host.as_str(),
+                    host = host_log.as_str(),
                     device_type = device_type.as_str(),
                     server = server.as_str(),
-                    state = state,
+                    state = state.as_str(),
                     "ntp configuration applied"
                 );
                 Ok(true)
             })
         });
-
-        result.duration_ms = start.elapsed().as_millis() as i32;
-
-        match exec_result {
-            Ok(false) => {
-                result.action = Action::None;
-                result.changed = false;
-            }
-            Ok(true) => {
-                result.action = Action::Updated;
-                result.changed = true;
-            }
-            Err(e) => {
-                result.error = Some(e.to_string());
-            }
-        }
 
         result
     }

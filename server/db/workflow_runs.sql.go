@@ -107,26 +107,6 @@ func (q *Queries) GetWorkflowRun(ctx context.Context, id string) (WorkflowRun, e
 	return i, err
 }
 
-const getWorkflowStepResult = `-- name: GetWorkflowStepResult :one
-SELECT id, workflow_run_id, step_index, step_name, task_run_id, status, started_at, finished_at FROM workflow_step_results WHERE id = ?
-`
-
-func (q *Queries) GetWorkflowStepResult(ctx context.Context, id string) (WorkflowStepResult, error) {
-	row := q.db.QueryRowContext(ctx, getWorkflowStepResult, id)
-	var i WorkflowStepResult
-	err := row.Scan(
-		&i.ID,
-		&i.WorkflowRunID,
-		&i.StepIndex,
-		&i.StepName,
-		&i.TaskRunID,
-		&i.Status,
-		&i.StartedAt,
-		&i.FinishedAt,
-	)
-	return i, err
-}
-
 const listWorkflowRuns = `-- name: ListWorkflowRuns :many
 SELECT id, workflow_name, status, current_step, total_steps, operator, created_at, started_at, finished_at, failure_reason FROM workflow_runs
 ORDER BY created_at DESC

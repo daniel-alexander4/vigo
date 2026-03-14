@@ -151,30 +151,6 @@ func (q *Queries) GetTaskRun(ctx context.Context, id string) (TaskRun, error) {
 	return i, err
 }
 
-const getTaskRunTarget = `-- name: GetTaskRunTarget :one
-SELECT id, task_run_id, thrall_id, hostname, status, exit_code, stdout, stderr, duration_ms, error_msg, dispatched_at, finished_at FROM task_run_targets WHERE id = ?
-`
-
-func (q *Queries) GetTaskRunTarget(ctx context.Context, id string) (TaskRunTarget, error) {
-	row := q.db.QueryRowContext(ctx, getTaskRunTarget, id)
-	var i TaskRunTarget
-	err := row.Scan(
-		&i.ID,
-		&i.TaskRunID,
-		&i.ThrallID,
-		&i.Hostname,
-		&i.Status,
-		&i.ExitCode,
-		&i.Stdout,
-		&i.Stderr,
-		&i.DurationMs,
-		&i.ErrorMsg,
-		&i.DispatchedAt,
-		&i.FinishedAt,
-	)
-	return i, err
-}
-
 const listTaskRunTargets = `-- name: ListTaskRunTargets :many
 SELECT id, task_run_id, thrall_id, hostname, status, exit_code, stdout, stderr, duration_ms, error_msg, dispatched_at, finished_at FROM task_run_targets
 WHERE task_run_id = ?

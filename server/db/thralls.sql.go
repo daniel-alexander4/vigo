@@ -148,46 +148,6 @@ func (q *Queries) ListThralls(ctx context.Context) ([]Thrall, error) {
 	return items, nil
 }
 
-const listThrallsWithForcePush = `-- name: ListThrallsWithForcePush :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
-FROM thralls
-WHERE force_push = true
-`
-
-func (q *Queries) ListThrallsWithForcePush(ctx context.Context) ([]Thrall, error) {
-	rows, err := q.db.QueryContext(ctx, listThrallsWithForcePush)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Thrall{}
-	for rows.Next() {
-		var i Thrall
-		if err := rows.Scan(
-			&i.ID,
-			&i.Hostname,
-			&i.IpAddress,
-			&i.PubkeyPem,
-			&i.EnrolledAt,
-			&i.LastSeen,
-			&i.Revoked,
-			&i.RevokedAt,
-			&i.ForcePush,
-			&i.PendingRotatedSecrets,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const revokeThrall = `-- name: RevokeThrall :exec
 UPDATE thralls
 SET revoked = true, revoked_at = datetime('now')

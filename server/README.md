@@ -10,7 +10,7 @@ The `hobd` server daemon is the central control plane for Hobnob. It serves gRPC
 - **SQLite** backend (WAL mode) with golang-migrate migrations
 - **Config hot-reload** via fsnotify on modules/, roles/, nodes/, and templates/ directories
 - **Prometheus metrics** at `GET /metrics`
-- **Secrets** resolved through isopass (prod) or static provider (dev/test)
+- **Secrets** resolved through pluggable backend (local or isopass)
 
 ## Quickstart
 
@@ -37,16 +37,6 @@ make certs
 #    Set database DSN, TLS cert paths, secrets backend
 
 # 4. Start server (runs migrations automatically)
-./bin/hobd
-```
-
-### Option C -- Development (static secrets)
-
-```bash
-# Create .env with database DSN
-mkdir -p db && echo 'HOBNOB_DB_DSN=db/hobnob.db' > .env
-
-# Start with static secrets backend (set backend: "static" in server.yaml)
 ./bin/hobd
 ```
 
@@ -81,7 +71,7 @@ checkin:
   jitter_percent: 20
 
 secrets:
-  backend: "isopass"     # or "static"
+  backend: "isopass"     # or "local" (default)
   url: "http://localhost:8080"
 
 watcher:
@@ -132,7 +122,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 | `server/config/` | YAML config loader with secret resolution, fsnotify hot-reload, Go template rendering. See [config/README.md](config/README.md). |
 | `server/db/` | SQLite query layer, ThrallCache (60s TTL), LastSeenBatcher (10s flush) |
 | `server/registry/` | Thrall enrollment: hostname pattern matching, bcrypt token validation, revocation |
-| `server/secrets/` | Provider interface: `LocalProvider` (default, file-based) + `IsopassProvider` (prod) + `StaticProvider` (legacy) |
+| `server/secrets/` | Provider interface: `LocalProvider` (default, file-based) + `IsopassProvider` (prod) |
 | `server/compliance/` | Status computation: compliant / drifted / failing / stale / unknown |
 | `server/webhook/` | HMAC-signed webhook dispatch (max 20 concurrent, 3 retries, 10s HTTP timeout) |
 | `server/smtp/` | SMTP email notifications with Go templates (enrollment, run failure, drift, secret rotation) |
@@ -147,7 +137,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 ### Startup Sequence
 
 1. Load secrets config from `server.yaml` (first pass -- no secret resolution)
-2. Initialize secrets provider (isopass or static)
+2. Initialize secrets provider (local or isopass)
 3. Load full server config with secret resolution (second pass)
 4. Open SQLite database, run migrations
 5. Initialize ConfigStore -- load modules, roles, nodes; start fsnotify watcher

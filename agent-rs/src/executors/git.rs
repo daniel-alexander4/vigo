@@ -180,57 +180,8 @@ impl Executor for GitExecutor {
 #[cfg(unix)]
 mod tests {
     use super::*;
-    use std::os::unix::process::ExitStatusExt;
-    use std::process::Output;
-    use std::sync::{Arc, Mutex};
-
-    struct MockRunner {
-        responses: Mutex<Vec<std::io::Result<Output>>>,
-        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
-    }
-
-    impl MockRunner {
-        fn new(responses: Vec<Output>) -> Self {
-            Self {
-                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
-                calls: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        fn ok_output(stdout: &str) -> Output {
-            Output {
-                status: std::process::ExitStatus::from_raw(0),
-                stdout: stdout.as_bytes().to_vec(),
-                stderr: Vec::new(),
-            }
-        }
-
-        fn fail_output(stderr: &str) -> Output {
-            Output {
-                status: std::process::ExitStatus::from_raw(256),
-                stdout: Vec::new(),
-                stderr: stderr.as_bytes().to_vec(),
-            }
-        }
-    }
-
-    impl CommandRunner for MockRunner {
-        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
-            self.calls.lock().unwrap().push((
-                name.to_string(),
-                args.iter().map(|s| s.to_string()).collect(),
-            ));
-            self.responses.lock().unwrap().remove(0)
-        }
-
-        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
-            self.run(name, args)
-        }
-    }
-
-    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
-    }
+    use crate::executors::test_support::mock::*;
+    use std::sync::Arc;
 
     #[test]
     fn missing_path_errors() {
@@ -250,7 +201,7 @@ mod tests {
     #[test]
     fn clone_new_repo() {
         let mock = MockRunner::new(vec![
-            MockRunner::ok_output(""), // git clone
+            ok_output(""), // git clone
         ]);
         let calls = Arc::clone(&mock.calls);
         let dir = tempfile::tempdir().unwrap();
@@ -280,7 +231,7 @@ mod tests {
     #[test]
     fn clone_with_branch_and_depth() {
         let mock = MockRunner::new(vec![
-            MockRunner::ok_output(""), // git clone
+            ok_output(""), // git clone
         ]);
         let calls = Arc::clone(&mock.calls);
         let dir = tempfile::tempdir().unwrap();
@@ -314,9 +265,9 @@ mod tests {
     #[test]
     fn present_already_up_to_date() {
         let mock = MockRunner::new(vec![
-            MockRunner::ok_output(""),     // git -C <path> fetch
-            MockRunner::ok_output("abc123"), // git -C <path> rev-parse HEAD
-            MockRunner::ok_output("abc123"), // git -C <path> rev-parse @{u}
+            ok_output(""),     // git -C <path> fetch
+            ok_output("abc123"), // git -C <path> rev-parse HEAD
+            ok_output("abc123"), // git -C <path> rev-parse @{u}
         ]);
         let calls = Arc::clone(&mock.calls);
         let dir = tempfile::tempdir().unwrap();
@@ -344,10 +295,10 @@ mod tests {
     #[test]
     fn present_needs_pull() {
         let mock = MockRunner::new(vec![
-            MockRunner::ok_output(""),     // git -C <path> fetch
-            MockRunner::ok_output("abc123"), // git -C <path> rev-parse HEAD (local)
-            MockRunner::ok_output("def456"), // git -C <path> rev-parse @{u} (remote)
-            MockRunner::ok_output(""),     // git -C <path> pull
+            ok_output(""),     // git -C <path> fetch
+            ok_output("abc123"), // git -C <path> rev-parse HEAD (local)
+            ok_output("def456"), // git -C <path> rev-parse @{u} (remote)
+            ok_output(""),     // git -C <path> pull
         ]);
         let calls = Arc::clone(&mock.calls);
         let dir = tempfile::tempdir().unwrap();

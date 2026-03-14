@@ -10,6 +10,7 @@ pub mod checksums;
 pub mod pending;
 pub mod policy;
 pub mod server_key;
+pub mod ssh_keys;
 pub mod traits;
 
 use anyhow::{Context, Result};
@@ -21,7 +22,7 @@ use tracing::info;
 const MAP_SIZE: usize = 256 * 1024 * 1024;
 
 /// Maximum number of named databases within the environment.
-const MAX_DBS: u32 = 8;
+const MAX_DBS: u32 = 9;
 
 /// Persistent state store backed by LMDB.
 ///
@@ -35,6 +36,7 @@ pub struct StateStore {
     pub traits: traits::TraitsCache,
     pub pending: pending::PendingQueue,
     pub server_key: server_key::ServerKeyCache,
+    pub ssh_keys: ssh_keys::SshKeysCache,
 }
 
 impl StateStore {
@@ -61,6 +63,7 @@ impl StateStore {
         let traits = traits::TraitsCache::open(&env, &mut wtxn)?;
         let pending = pending::PendingQueue::open(&env, &mut wtxn)?;
         let server_key = server_key::ServerKeyCache::open(&env, &mut wtxn)?;
+        let ssh_keys = ssh_keys::SshKeysCache::open(&env, &mut wtxn)?;
 
         wtxn.commit()?;
 
@@ -73,6 +76,7 @@ impl StateStore {
             traits,
             pending,
             server_key,
+            ssh_keys,
         })
     }
 

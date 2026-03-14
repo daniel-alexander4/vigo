@@ -497,10 +497,10 @@ func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigSt
 		t.Fatalf("write nodes.hnb: %v", err)
 	}
 
-	// Use a static provider with no secrets (no secret: refs in our test config).
-	provider, err := secrets.NewStaticProvider(filepath.Join(dir, ".env"))
+	// Use a local provider with no secrets (no secret: refs in our test config).
+	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {
-		t.Fatalf("new static provider: %v", err)
+		t.Fatalf("new local provider: %v", err)
 	}
 	t.Cleanup(func() { provider.Close() })
 

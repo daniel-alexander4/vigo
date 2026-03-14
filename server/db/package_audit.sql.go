@@ -11,38 +11,6 @@ import (
 	"time"
 )
 
-const createPackageAudit = `-- name: CreatePackageAudit :one
-INSERT INTO package_audit (thrall_id, package_name, installed_version, desired_version)
-VALUES (?, ?, ?, ?)
-RETURNING id, thrall_id, package_name, installed_version, desired_version, detected_at
-`
-
-type CreatePackageAuditParams struct {
-	ThrallID         string         `json:"thrall_id"`
-	PackageName      string         `json:"package_name"`
-	InstalledVersion sql.NullString `json:"installed_version"`
-	DesiredVersion   sql.NullString `json:"desired_version"`
-}
-
-func (q *Queries) CreatePackageAudit(ctx context.Context, arg CreatePackageAuditParams) (PackageAudit, error) {
-	row := q.db.QueryRowContext(ctx, createPackageAudit,
-		arg.ThrallID,
-		arg.PackageName,
-		arg.InstalledVersion,
-		arg.DesiredVersion,
-	)
-	var i PackageAudit
-	err := row.Scan(
-		&i.ID,
-		&i.ThrallID,
-		&i.PackageName,
-		&i.InstalledVersion,
-		&i.DesiredVersion,
-		&i.DetectedAt,
-	)
-	return i, err
-}
-
 const listAllPackageAudit = `-- name: ListAllPackageAudit :many
 SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname

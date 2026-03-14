@@ -250,60 +250,7 @@ impl Executor for ProcessExecutor {
 #[cfg(unix)]
 mod tests {
     use super::*;
-    use std::os::unix::process::ExitStatusExt;
-    use std::process::Output;
-    use std::sync::{Arc, Mutex};
-
-    struct MockRunner {
-        responses: Mutex<Vec<std::io::Result<Output>>>,
-        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
-    }
-
-    impl MockRunner {
-        fn new(responses: Vec<Output>) -> Self {
-            Self {
-                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
-                calls: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        fn ok_output(stdout: &str) -> Output {
-            Output {
-                status: std::process::ExitStatus::from_raw(0),
-                stdout: stdout.as_bytes().to_vec(),
-                stderr: Vec::new(),
-            }
-        }
-
-        fn fail_output(stderr: &str) -> Output {
-            Output {
-                status: std::process::ExitStatus::from_raw(256), // exit code 1
-                stdout: Vec::new(),
-                stderr: stderr.as_bytes().to_vec(),
-            }
-        }
-    }
-
-    impl CommandRunner for MockRunner {
-        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
-            self.calls
-                .lock()
-                .unwrap()
-                .push((name.to_string(), args.iter().map(|s| s.to_string()).collect()));
-            self.responses.lock().unwrap().remove(0)
-        }
-
-        fn run_with_stdin(&self, _: &[u8], name: &str, args: &[&str]) -> std::io::Result<Output> {
-            self.run(name, args)
-        }
-    }
-
-    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
-    }
+    use crate::executors::test_support::mock::*;
 
     #[test]
     fn missing_name_errors() {
@@ -319,7 +266,7 @@ mod tests {
     #[test]
     fn running_process_exists() {
         // pgrep finds the process (exit 0, one PID)
-        let pgrep = MockRunner::ok_output("1234\n");
+        let pgrep = ok_output("1234\n");
         let mock = MockRunner::new(vec![pgrep]);
         let exec = ProcessExecutor {
             runner: Box::new(mock),
@@ -336,7 +283,7 @@ mod tests {
     #[test]
     fn running_process_missing_no_restart() {
         // pgrep finds no match (exit code 1)
-        let pgrep = MockRunner::fail_output("");
+        let pgrep = fail_output("");
         let mock = MockRunner::new(vec![pgrep]);
         let exec = ProcessExecutor {
             runner: Box::new(mock),
@@ -352,7 +299,7 @@ mod tests {
     #[test]
     fn stopped_already_stopped() {
         // pgrep finds no match
-        let pgrep = MockRunner::fail_output("");
+        let pgrep = fail_output("");
         let mock = MockRunner::new(vec![pgrep]);
         let exec = ProcessExecutor {
             runner: Box::new(mock),
@@ -369,8 +316,8 @@ mod tests {
     #[test]
     fn stopped_kills_process() {
         // pgrep finds match, then pkill succeeds
-        let pgrep = MockRunner::ok_output("1234\n");
-        let pkill = MockRunner::ok_output("");
+        let pgrep = ok_output("1234\n");
+        let pkill = ok_output("");
         let mock = MockRunner::new(vec![pgrep, pkill]);
         let calls = mock.calls.clone();
         let exec = ProcessExecutor {
@@ -394,7 +341,7 @@ mod tests {
     #[test]
     fn count_constraint_satisfied() {
         // pgrep returns 3 PIDs, count=3 -> no change
-        let pgrep = MockRunner::ok_output("100\n200\n300\n");
+        let pgrep = ok_output("100\n200\n300\n");
         let mock = MockRunner::new(vec![pgrep]);
         let exec = ProcessExecutor {
             runner: Box::new(mock),
@@ -411,7 +358,7 @@ mod tests {
     #[test]
     fn dry_run_does_not_kill() {
         // Process running, state=stopped, dry_run -> changed but only pgrep called
-        let pgrep = MockRunner::ok_output("1234\n");
+        let pgrep = ok_output("1234\n");
         let mock = MockRunner::new(vec![pgrep]);
         let calls = mock.calls.clone();
         let exec = ProcessExecutor {

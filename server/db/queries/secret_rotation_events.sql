@@ -2,9 +2,3 @@
 INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_thralls)
 VALUES (?, ?, ?, ?)
 RETURNING id, secret_path, old_version, new_version, rotated_at, affected_thralls;
-
--- name: ListSecretRotationEvents :many
-SELECT id, secret_path, old_version, new_version, rotated_at, affected_thralls
-FROM secret_rotation_events
-ORDER BY rotated_at DESC
-LIMIT ?;

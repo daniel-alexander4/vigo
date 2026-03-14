@@ -45,42 +45,6 @@ func (q *Queries) DeleteApprovedPattern(ctx context.Context, id string) error {
 	return err
 }
 
-const getApprovedPatternsByPattern = `-- name: GetApprovedPatternsByPattern :many
-SELECT id, pattern, token_hash, created_at, used_at, used_by
-FROM approved_patterns
-WHERE pattern = ? AND used_at IS NULL
-`
-
-func (q *Queries) GetApprovedPatternsByPattern(ctx context.Context, pattern string) ([]ApprovedPattern, error) {
-	rows, err := q.db.QueryContext(ctx, getApprovedPatternsByPattern, pattern)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ApprovedPattern{}
-	for rows.Next() {
-		var i ApprovedPattern
-		if err := rows.Scan(
-			&i.ID,
-			&i.Pattern,
-			&i.TokenHash,
-			&i.CreatedAt,
-			&i.UsedAt,
-			&i.UsedBy,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listApprovedPatterns = `-- name: ListApprovedPatterns :many
 SELECT id, pattern, token_hash, created_at, used_at, used_by
 FROM approved_patterns

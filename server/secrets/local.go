@@ -18,6 +18,18 @@ import (
 	"sync"
 )
 
+// builtinDefaults are sane zero-config defaults for core secrets so the
+// server starts out of the box without a secrets directory.
+var builtinDefaults = map[string]string{
+	"HOBNOB_DB_DSN": "/etc/hobnob-server/db/hobnob.db",
+}
+
+// pathToEnvVar converts a secret path like "hobnob/db/dsn" to an
+// environment variable name like "HOBNOB_DB_DSN".
+func pathToEnvVar(key string) string {
+	return strings.ToUpper(strings.ReplaceAll(key, "/", "_"))
+}
+
 // LocalProvider is the default secrets backend. It stores secrets as
 // AES-256-GCM encrypted files under a directory, one file per secret path.
 //

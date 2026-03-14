@@ -334,8 +334,6 @@ func TestSecretErrorHintCategories(t *testing.T) {
 		{"isopass not found", "isopass", fmt.Errorf("secret %q not found in isopass", "x"), "isopass set"},
 		{"isopass unreachable", "isopass", fmt.Errorf("isopass unreachable at https://x"), "HOBNOB_ISOPASS_URL"},
 		{"isopass auth failed", "isopass", fmt.Errorf("isopass authentication failed"), "HOBNOB_ISOPASS_TOKEN"},
-		// Static backend hint.
-		{"static not found", "static", fmt.Errorf("secret %q not found", "hobnob/db/dsn"), "HOBNOB_DB_DSN"},
 		// Backend-agnostic.
 		{"plaintext value", "", fmt.Errorf("must use \"secret:\" prefix"), "secret:<path>"},
 	}

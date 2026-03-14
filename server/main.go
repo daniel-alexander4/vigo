@@ -528,10 +528,11 @@ func run() error {
 	// Start stale thrall checker — fires thrall.stale SMTP events on transition.
 	go runStaleChecker(ctx, queries, fleetIndex, smtpNotifier, baseInterval)
 
-	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer).
+	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer + DB).
 	go func() {
 		// Take an initial snapshot immediately so the sparkline isn't empty on startup.
 		fleetIndex.SnapshotCompliance()
+		persistComplianceSnapshot(ctx, queries, fleetIndex)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -540,6 +541,7 @@ func run() error {
 				return
 			case <-ticker.C:
 				fleetIndex.SnapshotCompliance()
+				persistComplianceSnapshot(ctx, queries, fleetIndex)
 			}
 		}
 	}()
@@ -859,6 +861,25 @@ func parseMemoryLimit(s string) int64 {
 }
 
 // runStaleChecker periodically scans thralls and fires a thrall.stale SMTP
+// persistComplianceSnapshot writes the current compliance counters to the
+// compliance_history table for long-term storage (survives server restarts).
+func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
+	summary := fleetIdx.ComplianceSummary()
+	if summary.Total == 0 {
+		return
+	}
+	if err := queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
+		Total:     int64(summary.Total),
+		Compliant: int64(summary.Compliant),
+		Drifted:   int64(summary.Drifted),
+		Failing:   int64(summary.Failing),
+		Stale:     int64(summary.Stale),
+		Unknown:   int64(summary.Unknown),
+	}); err != nil {
+		slog.Error("failed to persist compliance snapshot", "error", err)
+	}
+}
+
 // notification when a thrall transitions from non-stale to stale. A thrall
 // is stale if it hasn't checked in within 2x the base interval. The checker
 // runs at the base interval frequency.

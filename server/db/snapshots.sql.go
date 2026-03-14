@@ -10,10 +10,9 @@ import (
 	"database/sql"
 )
 
-const insertFileSnapshot = `-- name: InsertFileSnapshot :one
+const insertFileSnapshot = `-- name: InsertFileSnapshot :exec
 INSERT INTO file_snapshots (thrall_id, file_path, content_hash, content, run_id)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, thrall_id, file_path, content_hash, content, created_at, run_id
+VALUES (?1, ?2, ?3, ?4, ?5)
 `
 
 type InsertFileSnapshotParams struct {
@@ -24,25 +23,15 @@ type InsertFileSnapshotParams struct {
 	RunID       sql.NullString `json:"run_id"`
 }
 
-func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshotParams) (FileSnapshot, error) {
-	row := q.db.QueryRowContext(ctx, insertFileSnapshot,
+func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, insertFileSnapshot,
 		arg.ThrallID,
 		arg.FilePath,
 		arg.ContentHash,
 		arg.Content,
 		arg.RunID,
 	)
-	var i FileSnapshot
-	err := row.Scan(
-		&i.ID,
-		&i.ThrallID,
-		&i.FilePath,
-		&i.ContentHash,
-		&i.Content,
-		&i.CreatedAt,
-		&i.RunID,
-	)
-	return i, err
+	return err
 }
 
 const listFileSnapshots = `-- name: ListFileSnapshots :many

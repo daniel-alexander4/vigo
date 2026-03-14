@@ -14,10 +14,10 @@
 //! - facility (optional): syslog facility (Cisco only)
 //! - state (optional): present (default) or absent
 
-use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::{Executor, ResourceResult};
+use crate::executors::network_common::{self, require_param, SshParams, DEFAULT_TIMEOUT};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::debug;
 
 pub struct NetworkSyslogExecutor;
@@ -36,35 +36,17 @@ impl Executor for NetworkSyslogExecutor {
             params.get("name").map_or("", |s| s),
         );
 
-        let host = match params.get("host") {
-            Some(h) => h.clone(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.clone(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.clone(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
-        let device_type = match params.get("device_type") {
-            Some(dt) => dt.clone(),
-            None => return result.with_error("missing required param: device_type".into()),
-        };
-        let syslog_host = match params.get("syslog_host") {
-            Some(sh) => sh.clone(),
-            None => return result.with_error("missing required param: syslog_host".into()),
-        };
-
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
-        let state = params.get("state").map_or("present", |s| s.as_str());
+        result = ResourceResult::new("network_syslog", params.get("name").map_or("", |s| s));
+        let device_type = require_param!(params, "device_type", result);
+        let syslog_host = require_param!(params, "syslog_host", result);
+        let state = network_common::parse_state(params).to_string();
         let syslog_port = params.get("syslog_port").cloned();
         let facility = params.get("facility").cloned();
-        let timeout = Duration::from_secs(30);
+        let timeout = DEFAULT_TIMEOUT;
 
         // Validate device_type early.
         let prompt_pattern = match device_type.as_str() {
@@ -73,15 +55,9 @@ impl Executor for NetworkSyslogExecutor {
             _ => return result.with_error(format!("unsupported device_type: {}", device_type)),
         };
 
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
-        };
-
-        let exec_result = tokio::task::block_in_place(|| {
-            rt.block_on(async {
-                let session = SshSession::connect(&host, port, &username, &credential, None).await?;
-
+        let host_log = ssh.host.clone();
+        network_common::run_ssh_executor(&mut result, start, &ssh, |session| {
+            Box::pin(async move {
                 // Check current syslog configuration.
                 let is_configured = match device_type.as_str() {
                     "cisco_ios" | "cisco_nxos" => {
@@ -99,7 +75,7 @@ impl Executor for NetworkSyslogExecutor {
                     _ => unreachable!(),
                 };
 
-                let needs_change = match state {
+                let needs_change = match state.as_str() {
                     "present" => !is_configured,
                     "absent" => is_configured,
                     _ => return Err(anyhow::anyhow!("invalid state: {}", state)),
@@ -114,7 +90,7 @@ impl Executor for NetworkSyslogExecutor {
                 }
 
                 // Build and execute config commands.
-                let commands: Vec<String> = match (device_type.as_str(), state) {
+                let commands: Vec<String> = match (device_type.as_str(), state.as_str()) {
                     ("cisco_ios" | "cisco_nxos", "present") => {
                         let mut cmds = vec![
                             "configure terminal".to_string(),
@@ -168,31 +144,15 @@ impl Executor for NetworkSyslogExecutor {
                     .await?;
 
                 debug!(
-                    host = host.as_str(),
+                    host = host_log.as_str(),
                     device_type = device_type.as_str(),
                     syslog_host = syslog_host.as_str(),
-                    state,
+                    state = state.as_str(),
                     "syslog configuration applied"
                 );
                 Ok(true)
             })
         });
-
-        result.duration_ms = start.elapsed().as_millis() as i32;
-
-        match exec_result {
-            Ok(false) => {
-                result.action = Action::None;
-                result.changed = false;
-            }
-            Ok(true) => {
-                result.action = Action::Updated;
-                result.changed = true;
-            }
-            Err(e) => {
-                result.error = Some(e.to_string());
-            }
-        }
 
         result
     }

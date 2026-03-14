@@ -21,9 +21,6 @@ INSERT INTO workflow_step_results (workflow_run_id, step_index, step_name, task_
 VALUES (?, ?, ?, ?, 'pending')
 RETURNING *;
 
--- name: GetWorkflowStepResult :one
-SELECT * FROM workflow_step_results WHERE id = ?;
-
 -- name: ListWorkflowStepResults :many
 SELECT * FROM workflow_step_results
 WHERE workflow_run_id = ?

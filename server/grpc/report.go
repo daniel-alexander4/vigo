@@ -140,6 +140,31 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		})
 	}
 
+	// Capture file snapshots (previous content before overwrite) for rollback support.
+	// Skip files larger than 1 MiB to avoid bloating the DB.
+	const maxSnapshotSize = 1 << 20
+	for _, result := range req.GetResults() {
+		if result.GetResourceType() != "file" || len(result.GetPreviousContent()) == 0 {
+			continue
+		}
+		if len(result.GetPreviousContent()) > maxSnapshotSize {
+			continue
+		}
+		if err := s.queries.InsertFileSnapshot(ctx, db.InsertFileSnapshotParams{
+			ThrallID:    thrallID,
+			FilePath:    result.GetFilePath(),
+			ContentHash: result.GetContentHash(),
+			Content:     result.GetPreviousContent(),
+			RunID:       sql.NullString{String: runID, Valid: true},
+		}); err != nil {
+			slog.Error("failed to save file snapshot",
+				"run_id", runID,
+				"file_path", result.GetFilePath(),
+				"error", err,
+			)
+		}
+	}
+
 	slog.Info("run completed",
 		"run_id", runID,
 		"thrall_id", thrallID,

@@ -41,8 +41,3 @@ WHERE id = ?;
 -- name: DeleteThrall :exec
 DELETE FROM thralls
 WHERE id = ?;
-
--- name: ListThrallsWithForcePush :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets
-FROM thralls
-WHERE force_push = true;

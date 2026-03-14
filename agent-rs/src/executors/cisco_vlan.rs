@@ -12,10 +12,10 @@
 //! - name (required): VLAN name
 //! - state (optional): present (default) or absent
 
-use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::{Executor, ResourceResult};
+use crate::executors::network_common::{self, require_param, SshParams, DEFAULT_TIMEOUT};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::debug;
 
 pub struct CiscoVlanExecutor;
@@ -58,57 +58,33 @@ impl Executor for CiscoVlanExecutor {
             params.get("name").map_or("", |s| s),
         );
 
-        let host = match params.get("host") {
-            Some(h) => h.clone(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.clone(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.clone(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
-        let vlan_id = match params.get("vlan_id") {
-            Some(v) => v.clone(),
-            None => return result.with_error("missing required param: vlan_id".into()),
-        };
-        let vlan_name = match params.get("name") {
-            Some(n) => n.clone(),
-            None => return result.with_error("missing required param: name".into()),
-        };
-
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
-        let state = params.get("state").map_or("present", |s| s.as_str());
-        let timeout = Duration::from_secs(30);
+        result = ResourceResult::new("cisco_vlan", params.get("name").map_or("", |s| s));
+        let vlan_id = require_param!(params, "vlan_id", result);
+        let vlan_name = require_param!(params, "name", result);
+        let state = network_common::parse_state(params).to_string();
+        let timeout = DEFAULT_TIMEOUT;
 
         if state != "present" && state != "absent" {
             return result.with_error(format!("invalid state: {} (must be present or absent)", state));
         }
 
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
-        };
-
-        let exec_result = tokio::task::block_in_place(|| {
-            rt.block_on(async {
-                let session = SshSession::connect(&host, port, &username, &credential, None).await?;
-
+        let host_log = ssh.host.clone();
+        network_common::run_ssh_executor(&mut result, start, &ssh, |session| {
+            Box::pin(async move {
                 // Check current VLAN state.
                 let output = session.exec("show vlan brief", timeout).await?;
                 let existing_name = parse_vlan_brief(&output.stdout, &vlan_id);
 
-                match state {
+                match state.as_str() {
                     "present" => {
                         if let Some(ref current_name) = existing_name {
                             if current_name == &vlan_name {
                                 // VLAN exists with correct name — no change needed.
-                                return Ok::<bool, anyhow::Error>(false);
+                                return Ok(false);
                             }
                         }
                         // VLAN missing or name mismatch — need to create/update.
@@ -117,17 +93,17 @@ impl Executor for CiscoVlanExecutor {
                         }
 
                         let commands = [
-                            "configure terminal",
-                            &format!("vlan {}", vlan_id),
-                            &format!("name {}", vlan_name),
-                            "end",
-                            "write memory",
+                            "configure terminal".to_string(),
+                            format!("vlan {}", vlan_id),
+                            format!("name {}", vlan_name),
+                            "end".to_string(),
+                            "write memory".to_string(),
                         ];
-                        let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_ref()).collect();
+                        let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
                         let _output = session.exec_interactive(&cmd_refs, "#", timeout).await?;
 
                         debug!(
-                            host = host.as_str(),
+                            host = host_log.as_str(),
                             vlan_id = vlan_id.as_str(),
                             vlan_name = vlan_name.as_str(),
                             "vlan configured"
@@ -144,41 +120,25 @@ impl Executor for CiscoVlanExecutor {
                         }
 
                         let commands = [
-                            "configure terminal",
-                            &format!("no vlan {}", vlan_id),
-                            "end",
-                            "write memory",
+                            "configure terminal".to_string(),
+                            format!("no vlan {}", vlan_id),
+                            "end".to_string(),
+                            "write memory".to_string(),
                         ];
-                        let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_ref()).collect();
+                        let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
                         let _output = session.exec_interactive(&cmd_refs, "#", timeout).await?;
 
                         debug!(
-                            host = host.as_str(),
+                            host = host_log.as_str(),
                             vlan_id = vlan_id.as_str(),
                             "vlan removed"
                         );
                         Ok(true)
                     }
-                    _ => unreachable!(),
+                    _ => Err(anyhow::anyhow!("invalid state: {}", state)),
                 }
             })
         });
-
-        result.duration_ms = start.elapsed().as_millis() as i32;
-
-        match exec_result {
-            Ok(false) => {
-                result.action = Action::None;
-                result.changed = false;
-            }
-            Ok(true) => {
-                result.action = Action::Updated;
-                result.changed = true;
-            }
-            Err(e) => {
-                result.error = Some(e.to_string());
-            }
-        }
 
         result
     }

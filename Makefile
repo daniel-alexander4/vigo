@@ -1,6 +1,6 @@
 .PHONY: build build-agent test test-agent lint lint-agent dist dist-agent \
-       dist-agent-windows dist-agent-macos dist-agent-freebsd \
-       proto certs seed migrate sqlc up down logs clean
+       dist-agent-windows dist-agent-macos dist-agent-freebsd dist-agent-illumos \
+       proto certs migrate sqlc up down logs clean
 
 VERSION ?= dev
 
@@ -80,13 +80,19 @@ dist-agent-freebsd:
 	cd agent-rs && cross build --release --target x86_64-unknown-freebsd
 	cp agent-rs/target/x86_64-unknown-freebsd/release/hobnob dist/agent/freebsd/amd64/hobnob
 
+# Build Rust agent for illumos (native build only).
+# Prerequisites:
+#   rustup target add x86_64-unknown-illumos
+#   Must be built on an illumos host or via a cross-compilation toolchain.
+dist-agent-illumos:
+	mkdir -p dist/agent/illumos/amd64
+	cd agent-rs && cargo build --release --target x86_64-unknown-illumos
+	cp agent-rs/target/x86_64-unknown-illumos/release/hobnob dist/agent/illumos/amd64/hobnob
+
 # --- Codegen ---
 
 proto:
 	buf generate
-
-seed:
-	go run ./cmd/seed/main.go
 
 migrate:
 	migrate -path migrations -database "$$DATABASE_URL" up

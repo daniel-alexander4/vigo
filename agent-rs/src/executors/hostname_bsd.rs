@@ -76,6 +76,12 @@ impl Executor for HostnameBsdExecutor {
                     result.error = Some(format!("write /etc/myname: {}", e));
                 }
             }
+            "illumos" => {
+                // Write /etc/nodename
+                if let Err(e) = std::fs::write("/etc/nodename", format!("{}\n", desired)) {
+                    result.error = Some(format!("write /etc/nodename: {}", e));
+                }
+            }
             _ => {
                 // Generic: try /etc/hostname
                 if let Err(e) = std::fs::write("/etc/hostname", format!("{}\n", desired)) {

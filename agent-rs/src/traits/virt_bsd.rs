@@ -39,6 +39,15 @@ fn detect_virtualization() -> (String, String) {
                 return (guest, "guest".into());
             }
         }
+        "illumos" => {
+            // Check zonename — "global" means bare metal, anything else is a zone.
+            if let Ok(output) = std::process::Command::new("zonename").output() {
+                let zone = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if output.status.success() && zone != "global" {
+                    return (format!("zone:{}", zone), "guest".into());
+                }
+            }
+        }
         "openbsd" | "netbsd" => {
             // Check hw.product for VM indicators
             let product = super::sysctl_util::sysctl_string("hw.product");

@@ -6,6 +6,7 @@ package grpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -34,6 +35,11 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		return nil, status.Error(codes.InvalidArgument, "traits_json is not valid JSON")
 	}
 
+	// Validate trait count and individual value sizes (SEC-13).
+	if err := validateTraitsSize(traitsJSON); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "traits validation: %v", err)
+	}
+
 	// Store the traits.
 	_, err := s.queries.InsertThrallTraits(ctx, db.InsertThrallTraitsParams{
 		ThrallID: thrallID,
@@ -58,4 +64,25 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	)
 
 	return &pb.ReportTraitsResponse{Acknowledged: true}, nil
+}
+
+const maxTraitCount = 500
+const maxTraitValueBytes = 64 * 1024 // 64 KiB
+
+// validateTraitsSize rejects traits payloads with too many keys or oversized values.
+func validateTraitsSize(traitsJSON []byte) error {
+	var traits map[string]json.RawMessage
+	if err := json.Unmarshal(traitsJSON, &traits); err != nil {
+		// Not a top-level object — allow, the JSON is already validated.
+		return nil
+	}
+	if len(traits) > maxTraitCount {
+		return fmt.Errorf("too many traits: %d (max %d)", len(traits), maxTraitCount)
+	}
+	for key, val := range traits {
+		if len(val) > maxTraitValueBytes {
+			return fmt.Errorf("trait %q value too large: %d bytes (max %d)", key, len(val), maxTraitValueBytes)
+		}
+	}
+	return nil
 }

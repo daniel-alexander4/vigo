@@ -244,8 +244,18 @@ fn handle_present(
         return Ok(());
     }
 
-    // Snapshot before overwrite (if manager is available and file existed).
+    // Capture previous content before overwrite (for server-side snapshots).
+    // Skip files larger than 1 MiB to avoid excessive memory/network usage.
+    const MAX_SNAPSHOT_SIZE: u64 = 1 << 20;
     if file_existed {
+        if let Ok(meta) = fs::metadata(path) {
+            if meta.len() <= MAX_SNAPSHOT_SIZE {
+                if let Ok(prev) = fs::read(path) {
+                    result.previous_content = Some(prev);
+                }
+            }
+        }
+
         if let Some(ref mgr) = snapshot_mgr {
             if !run_id.is_empty() {
                 if let Err(e) = mgr.save(path, run_id) {
@@ -254,6 +264,10 @@ fn handle_present(
             }
         }
     }
+
+    // Set file metadata on result.
+    result.file_path = Some(path.to_string());
+    result.content_hash = Some(desired_hash.clone());
 
     // Ensure parent directory exists.
     if let Some(parent) = Path::new(path).parent() {

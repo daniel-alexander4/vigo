@@ -49,11 +49,11 @@ pub mod symlink;
 // Linux-only executors.
 #[cfg(target_os = "linux")]
 pub mod alternatives;
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
 pub mod cron;
 #[cfg(target_os = "linux")]
 pub mod firewall;
-#[cfg(any(target_os = "linux", target_os = "openbsd", target_os = "netbsd"))]
+#[cfg(any(target_os = "linux", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
 pub mod group;
 #[cfg(target_os = "linux")]
 pub mod hostname;
@@ -73,7 +73,7 @@ pub mod sysctl;
 pub mod timezone;
 #[cfg(target_os = "linux")]
 pub mod tmpfile;
-#[cfg(any(target_os = "linux", target_os = "openbsd", target_os = "netbsd"))]
+#[cfg(any(target_os = "linux", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
 pub mod user;
 
 // macOS-native executors.
@@ -102,10 +102,16 @@ pub mod user_freebsd;
 #[cfg(target_os = "openbsd")]
 pub mod service_openbsd;
 
+// illumos-native executors.
+#[cfg(target_os = "illumos")]
+pub mod service_illumos;
+#[cfg(target_os = "illumos")]
+pub mod timezone_illumos;
+
 // Shared BSD/macOS executors.
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
 pub mod firewall_pf;
-#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
 pub mod hostname_bsd;
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
 pub mod mount_bsd;
@@ -132,13 +138,19 @@ pub mod timezone_windows;
 #[cfg(windows)]
 pub mod user_windows;
 
+#[cfg(test)]
+pub mod test_support;
+
+pub mod network_common;
+
 use std::collections::HashMap;
 use std::fmt;
 use std::process::Output;
 
 /// What action an executor performed on a resource.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Action {
+    #[default]
     None,
     Created,
     Updated,
@@ -173,7 +185,7 @@ impl Action {
 }
 
 /// The outcome of executing a single resource.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ResourceResult {
     pub module_name: String,
     pub resource_type: String,
@@ -182,6 +194,12 @@ pub struct ResourceResult {
     pub changed: bool,
     pub error: Option<String>,
     pub duration_ms: i32,
+    /// File executor: content of the file before overwrite (for server-side snapshots).
+    pub previous_content: Option<Vec<u8>>,
+    /// File executor: SHA-256 hex of the new content written.
+    pub content_hash: Option<String>,
+    /// File executor: absolute path of the managed file.
+    pub file_path: Option<String>,
 }
 
 impl ResourceResult {
@@ -195,6 +213,9 @@ impl ResourceResult {
             changed: false,
             error: None,
             duration_ms: 0,
+            previous_content: None,
+            content_hash: None,
+            file_path: None,
         }
     }
 

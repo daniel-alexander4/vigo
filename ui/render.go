@@ -20,7 +20,6 @@ import (
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/renderer/html"
 )
 
 // Renderer holds parsed templates and renders them to HTTP responses.
@@ -98,6 +97,7 @@ func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'")
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
 		slog.Error("template execution error", "name", name, "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -207,6 +207,8 @@ func pct(numerator, denominator int) float64 {
 }
 
 // markdownRenderer is a singleton goldmark instance with chroma syntax highlighting.
+// html.WithUnsafe() intentionally omitted — raw HTML in markdown is sanitized
+// to prevent XSS (SEC-14), particularly from AI chat responses.
 var markdownRenderer = goldmark.New(
 	goldmark.WithExtensions(
 		extension.GFM,
@@ -214,9 +216,6 @@ var markdownRenderer = goldmark.New(
 			highlighting.WithStyle("monokai"),
 			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 		),
-	),
-	goldmark.WithRendererOptions(
-		html.WithUnsafe(),
 	),
 )
 

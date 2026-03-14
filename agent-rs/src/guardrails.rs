@@ -26,6 +26,8 @@ const PROTECTED_PATHS: &[&str] = &[
     "/Library/LaunchDaemons/com.hobnob.thrall.plist",
     // Agent (FreeBSD)
     "/usr/local/etc/rc.d/hobnob_thrall",
+    // Agent (illumos)
+    "/var/svc/manifest/system/hobnob-thrall.xml",
     // Server
     "/usr/local/bin/hobd",
     "/usr/local/bin/hobnobcli",
@@ -69,6 +71,9 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     "launchctl unload com.hobnob",
     "launchctl remove com.hobnob",
     "launchctl bootout com.hobnob",
+    // SMF (illumos)
+    "svcadm disable hobnob",
+    "svccfg delete hobnob",
     // process kill
     "pkill hobnob",
     "pkill hobd",
@@ -159,8 +164,30 @@ pub fn check_task_command(command: &str) -> Option<String> {
     None
 }
 
+/// Resolve a path to its canonical form for guardrail checking.
+/// If the full path exists, canonicalize it. If not, try canonicalizing
+/// the parent and appending the filename (handles files that don't exist yet).
+/// Falls back to the raw path if nothing resolves.
+fn resolve_path(path: &str) -> String {
+    use std::path::Path;
+    let p = Path::new(path);
+    if let Ok(canon) = p.canonicalize() {
+        return canon.to_string_lossy().to_string();
+    }
+    // File doesn't exist yet — try canonicalizing the parent directory.
+    if let Some(parent) = p.parent() {
+        if let Ok(canon_parent) = parent.canonicalize() {
+            if let Some(file_name) = p.file_name() {
+                return canon_parent.join(file_name).to_string_lossy().to_string();
+            }
+        }
+    }
+    path.to_string()
+}
+
 fn is_protected_path(target: &str) -> Option<&'static str> {
-    let normalized = target.trim_end_matches('/');
+    let resolved = resolve_path(target);
+    let normalized = resolved.trim_end_matches('/');
     for &protected in PROTECTED_PATHS {
         let pnorm = protected.trim_end_matches('/');
         // Exact match or child path.
@@ -544,5 +571,36 @@ mod tests {
     #[test]
     fn path_var_lib_child_blocked() {
         assert!(is_protected_path("/var/lib/hobnob/snapshots/foo.tar").is_some());
+    }
+
+    #[test]
+    fn symlink_to_protected_path_blocked() {
+        use std::os::unix::fs::symlink;
+        let dir = std::env::temp_dir().join("hobnob_guardrail_test_symlink");
+        let _ = std::fs::remove_file(&dir);
+        symlink("/etc/hobnob-server", &dir).unwrap();
+        let target = format!("{}/server.yaml", dir.display());
+        let result = is_protected_path(&target);
+        let _ = std::fs::remove_file(&dir);
+        assert!(result.is_some(), "symlink to protected dir should be blocked");
+    }
+
+    #[test]
+    fn nonexistent_file_under_symlinked_dir_blocked() {
+        use std::os::unix::fs::symlink;
+        let dir = std::env::temp_dir().join("hobnob_guardrail_test_symlink2");
+        let _ = std::fs::remove_file(&dir);
+        symlink("/etc/hobnob-server", &dir).unwrap();
+        // File doesn't exist, but parent dir resolves through symlink.
+        let target = format!("{}/nonexistent.yaml", dir.display());
+        let result = is_protected_path(&target);
+        let _ = std::fs::remove_file(&dir);
+        assert!(result.is_some(), "nonexistent file under symlinked protected dir should be blocked");
+    }
+
+    #[test]
+    fn normal_path_still_works() {
+        // A non-symlink, non-protected path should still be allowed.
+        assert!(is_protected_path("/tmp/safe_file.txt").is_none());
     }
 }

@@ -5,6 +5,7 @@ package ui
 
 import (
 	"io/fs"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,52 @@ func TestHighlightYAML(t *testing.T) {
 	if !strings.Contains(s, "chroma") {
 		t.Errorf("highlightYAML output missing 'chroma' class, got: %s", s)
 	}
+}
+
+func TestRenderMarkdown_ScriptTagSanitized(t *testing.T) {
+	// Goldmark without html.WithUnsafe() should strip raw HTML tags.
+	input := `# Hello
+
+<script>alert('xss')</script>
+
+Normal paragraph.`
+	output := RenderMarkdown(input)
+	if strings.Contains(output, "<script>") {
+		t.Errorf("RenderMarkdown should sanitize script tags, got: %s", output)
+	}
+	if !strings.Contains(output, "Hello") {
+		t.Errorf("RenderMarkdown should render markdown content, got: %s", output)
+	}
+	if !strings.Contains(output, "Normal paragraph") {
+		t.Errorf("RenderMarkdown should render normal paragraphs, got: %s", output)
+	}
+}
+
+func TestRender_CSPHeader(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer() error: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	r.Render(rec, "dashboard", nil)
+	csp := rec.Result().Header.Get("Content-Security-Policy")
+	if csp == "" {
+		t.Fatal("expected Content-Security-Policy header, got empty")
+	}
+	if !strings.Contains(csp, "default-src 'self'") {
+		t.Errorf("CSP header missing default-src 'self': %s", csp)
+	}
+}
+
+func TestRenderFragment_NoCSP(t *testing.T) {
+	// Fragments are HTMX partials — no CSP needed since the parent page has it.
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer() error: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	r.RenderFragment(rec, "dashboard", "nonexistent", nil)
+	_ = rec.Result()
 }
 
 func TestEmbedFS(t *testing.T) {

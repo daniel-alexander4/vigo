@@ -465,6 +465,9 @@ async fn run_once(
                 changed: r.changed,
                 error_message: r.error.clone().unwrap_or_default(),
                 duration_ms: r.duration_ms,
+                previous_content: r.previous_content.clone().unwrap_or_default(),
+                content_hash: r.content_hash.clone().unwrap_or_default(),
+                file_path: r.file_path.clone().unwrap_or_default(),
             })
             .collect();
 
@@ -692,6 +695,15 @@ async fn install_platform_service(
     bootstrap::rcctl::install_service(bootstrap_server, grpc_port, data_dir).await
 }
 
+#[cfg(target_os = "illumos")]
+async fn install_platform_service(
+    bootstrap_server: &str,
+    grpc_port: &str,
+    data_dir: &std::path::Path,
+) -> Result<String> {
+    bootstrap::smf::install_service(bootstrap_server, grpc_port, data_dir).await
+}
+
 #[cfg(windows)]
 async fn install_platform_service(
     bootstrap_server: &str,
@@ -701,7 +713,7 @@ async fn install_platform_service(
     bootstrap::windows_service::install_service(bootstrap_server, grpc_port, data_dir).await
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", target_os = "illumos", windows)))]
 async fn install_platform_service(
     _bootstrap_server: &str,
     _grpc_port: &str,

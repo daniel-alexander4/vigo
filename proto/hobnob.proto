@@ -288,7 +288,6 @@ message Module {
   repeated string depends_on = 4;
   repeated string notify = 5;
   repeated string subscribes = 6;
-  reserved 7;                 // was: string when (now evaluated server-side)
 }
 
 message Resource {
@@ -367,6 +366,9 @@ message ModuleResult {
   bool changed = 5;
   string error_message = 6;
   int32 duration_ms = 7;
+  bytes previous_content = 8;  // file executor: content before overwrite (for snapshots)
+  string content_hash = 9;     // file executor: SHA-256 of the new content
+  string file_path = 10;       // file executor: absolute path of the managed file
 }
 
 message ReportResultResponse {

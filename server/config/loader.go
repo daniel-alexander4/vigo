@@ -33,7 +33,7 @@ type SecretError struct {
 	Attr     string // attribute or var name
 	Secret   string // the secret key that failed
 	Err      error  // underlying error from provider
-	Backend  string // secrets backend name ("local", "isopass", "static")
+	Backend  string // secrets backend name ("local", "isopass")
 }
 
 func (e *SecretError) Error() string {
@@ -78,8 +78,6 @@ func (e *SecretError) Hint() string {
 		default:
 			return "check isopass logs for details"
 		}
-	case "static":
-		return fmt.Sprintf("set %s in your .env file", strings.ReplaceAll(strings.ToUpper(e.Secret), "/", "_"))
 	default:
 		return "check secrets provider configuration"
 	}

@@ -1276,16 +1276,19 @@ func (x *ReportResultRequest) GetTimestamp() *timestamppb.Timestamp {
 }
 
 type ModuleResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ModuleName    string                 `protobuf:"bytes,1,opt,name=module_name,json=moduleName,proto3" json:"module_name,omitempty"`
-	ResourceType  string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
-	ResourceName  string                 `protobuf:"bytes,3,opt,name=resource_name,json=resourceName,proto3" json:"resource_name,omitempty"`
-	ActionTaken   string                 `protobuf:"bytes,4,opt,name=action_taken,json=actionTaken,proto3" json:"action_taken,omitempty"` // none, created, updated, deleted
-	Changed       bool                   `protobuf:"varint,5,opt,name=changed,proto3" json:"changed,omitempty"`
-	ErrorMessage  string                 `protobuf:"bytes,6,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	DurationMs    int32                  `protobuf:"varint,7,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ModuleName      string                 `protobuf:"bytes,1,opt,name=module_name,json=moduleName,proto3" json:"module_name,omitempty"`
+	ResourceType    string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	ResourceName    string                 `protobuf:"bytes,3,opt,name=resource_name,json=resourceName,proto3" json:"resource_name,omitempty"`
+	ActionTaken     string                 `protobuf:"bytes,4,opt,name=action_taken,json=actionTaken,proto3" json:"action_taken,omitempty"` // none, created, updated, deleted
+	Changed         bool                   `protobuf:"varint,5,opt,name=changed,proto3" json:"changed,omitempty"`
+	ErrorMessage    string                 `protobuf:"bytes,6,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	DurationMs      int32                  `protobuf:"varint,7,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	PreviousContent []byte                 `protobuf:"bytes,8,opt,name=previous_content,json=previousContent,proto3" json:"previous_content,omitempty"` // file executor: content before overwrite (for snapshots)
+	ContentHash     string                 `protobuf:"bytes,9,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`             // file executor: SHA-256 of the new content
+	FilePath        string                 `protobuf:"bytes,10,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`                     // file executor: absolute path of the managed file
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ModuleResult) Reset() {
@@ -1365,6 +1368,27 @@ func (x *ModuleResult) GetDurationMs() int32 {
 		return x.DurationMs
 	}
 	return 0
+}
+
+func (x *ModuleResult) GetPreviousContent() []byte {
+	if x != nil {
+		return x.PreviousContent
+	}
+	return nil
+}
+
+func (x *ModuleResult) GetContentHash() string {
+	if x != nil {
+		return x.ContentHash
+	}
+	return ""
+}
+
+func (x *ModuleResult) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
 }
 
 type ReportResultResponse struct {
@@ -5869,7 +5893,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x1aDownloadCustomTraitRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"1\n" +
 	"\x1bDownloadCustomTraitResponse\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"\xd1\x01\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"\xcb\x01\n" +
 	"\x06Module\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x121\n" +
@@ -5879,7 +5903,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x06notify\x18\x05 \x03(\tR\x06notify\x12\x1e\n" +
 	"\n" +
 	"subscribes\x18\x06 \x03(\tR\n" +
-	"subscribesJ\x04\b\a\x10\b\"\xba\x01\n" +
+	"subscribes\"\xba\x01\n" +
 	"\bResource\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x127\n" +
@@ -5935,7 +5959,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x121\n" +
 	"\aresults\x18\x03 \x03(\v2\x17.hobnob.v1.ModuleResultR\aresults\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\fR\tsignature\x128\n" +
-	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\xfc\x01\n" +
+	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\xe7\x02\n" +
 	"\fModuleResult\x12\x1f\n" +
 	"\vmodule_name\x18\x01 \x01(\tR\n" +
 	"moduleName\x12#\n" +
@@ -5945,7 +5969,11 @@ const file_hobnob_proto_rawDesc = "" +
 	"\achanged\x18\x05 \x01(\bR\achanged\x12#\n" +
 	"\rerror_message\x18\x06 \x01(\tR\ferrorMessage\x12\x1f\n" +
 	"\vduration_ms\x18\a \x01(\x05R\n" +
-	"durationMs\":\n" +
+	"durationMs\x12)\n" +
+	"\x10previous_content\x18\b \x01(\fR\x0fpreviousContent\x12!\n" +
+	"\fcontent_hash\x18\t \x01(\tR\vcontentHash\x12\x1b\n" +
+	"\tfile_path\x18\n" +
+	" \x01(\tR\bfilePath\":\n" +
 	"\x14ReportResultResponse\x12\"\n" +
 	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xab\x01\n" +
 	"\x13ReportTraitsRequest\x12\x1b\n" +

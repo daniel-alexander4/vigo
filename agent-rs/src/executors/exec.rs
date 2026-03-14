@@ -101,6 +101,10 @@ fn execute_exec(
         // Guards 2 and 3 require running commands. Skip during dry-run.
         if !dry_run {
             // Guard 2: onlyif — skip if command fails.
+            // Note: split_whitespace() is intentional here — guards run as direct
+            // exec (not shell), matching the main command path. Arguments with
+            // spaces are not supported in guard commands; use shell-wrapped
+            // commands via the main `command:` param if needed.
             if let Some(onlyif) = params.get("onlyif") {
                 if !onlyif.is_empty() {
                     let parts: Vec<&str> = onlyif.split_whitespace().collect();

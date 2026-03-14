@@ -35,17 +35,6 @@ func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (W
 	return i, err
 }
 
-const deactivateWebhook = `-- name: DeactivateWebhook :exec
-UPDATE webhooks
-SET active = false
-WHERE id = ?
-`
-
-func (q *Queries) DeactivateWebhook(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deactivateWebhook, id)
-	return err
-}
-
 const deleteWebhook = `-- name: DeleteWebhook :exec
 DELETE FROM webhooks
 WHERE id = ?
@@ -54,26 +43,6 @@ WHERE id = ?
 func (q *Queries) DeleteWebhook(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteWebhook, id)
 	return err
-}
-
-const getWebhookByID = `-- name: GetWebhookByID :one
-SELECT id, url, secret, events, created_at, active
-FROM webhooks
-WHERE id = ?
-`
-
-func (q *Queries) GetWebhookByID(ctx context.Context, id string) (Webhook, error) {
-	row := q.db.QueryRowContext(ctx, getWebhookByID, id)
-	var i Webhook
-	err := row.Scan(
-		&i.ID,
-		&i.Url,
-		&i.Secret,
-		&i.Events,
-		&i.CreatedAt,
-		&i.Active,
-	)
-	return i, err
 }
 
 const listActiveWebhooks = `-- name: ListActiveWebhooks :many

@@ -295,65 +295,8 @@ impl Executor for MountExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::process::ExitStatusExt;
-    use std::process::Output;
-    use std::sync::{Arc, Mutex};
-
-    struct MockRunner {
-        responses: Mutex<Vec<std::io::Result<Output>>>,
-        calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
-    }
-
-    impl MockRunner {
-        fn new(responses: Vec<Output>) -> Self {
-            Self {
-                responses: Mutex::new(responses.into_iter().map(Ok).collect()),
-                calls: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        fn ok_output(stdout: &str) -> Output {
-            Output {
-                status: std::process::ExitStatus::from_raw(0),
-                stdout: stdout.as_bytes().to_vec(),
-                stderr: Vec::new(),
-            }
-        }
-
-        fn fail_output(stderr: &str) -> Output {
-            Output {
-                status: std::process::ExitStatus::from_raw(256),
-                stdout: Vec::new(),
-                stderr: stderr.as_bytes().to_vec(),
-            }
-        }
-    }
-
-    impl CommandRunner for MockRunner {
-        fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
-            self.calls.lock().unwrap().push((
-                name.to_string(),
-                args.iter().map(|s| s.to_string()).collect(),
-            ));
-            self.responses.lock().unwrap().remove(0)
-        }
-
-        fn run_with_stdin(
-            &self,
-            _: &[u8],
-            name: &str,
-            args: &[&str],
-        ) -> std::io::Result<Output> {
-            self.run(name, args)
-        }
-    }
-
-    fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
-    }
+    use crate::executors::test_support::mock::*;
+    use std::sync::Arc;
 
     #[test]
     fn missing_path_errors() {
@@ -377,8 +320,8 @@ mod tests {
         // Empty fstab, findmnt says not mounted -> adds fstab entry + calls mount
         let fstab = tempfile::NamedTempFile::new().unwrap();
         let mock = MockRunner::new(vec![
-            MockRunner::fail_output(""),  // findmnt -> not mounted
-            MockRunner::ok_output(""),    // mount
+            fail_output(""),  // findmnt -> not mounted
+            ok_output(""),    // mount
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = MountExecutor {
@@ -417,7 +360,7 @@ mod tests {
         )
         .unwrap();
         let mock = MockRunner::new(vec![
-            MockRunner::ok_output("/mnt/data\n"),  // findmnt -> mounted
+            ok_output("/mnt/data\n"),  // findmnt -> mounted
         ]);
         let exec = MountExecutor {
             runner: Box::new(mock),
@@ -442,7 +385,7 @@ mod tests {
         // state=present, not in fstab, not mounted -> adds fstab but doesn't mount
         let fstab = tempfile::NamedTempFile::new().unwrap();
         let mock = MockRunner::new(vec![
-            MockRunner::fail_output(""),  // findmnt -> not mounted
+            fail_output(""),  // findmnt -> not mounted
             // No mount call expected for state=present
         ]);
         let calls = Arc::clone(&mock.calls);
@@ -475,8 +418,8 @@ mod tests {
         // state=unmounted, findmnt says mounted -> umount called
         let fstab = tempfile::NamedTempFile::new().unwrap();
         let mock = MockRunner::new(vec![
-            MockRunner::ok_output("/mnt/data\n"),  // findmnt -> mounted
-            MockRunner::ok_output(""),              // umount
+            ok_output("/mnt/data\n"),  // findmnt -> mounted
+            ok_output(""),              // umount
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = MountExecutor {
@@ -508,8 +451,8 @@ mod tests {
         )
         .unwrap();
         let mock = MockRunner::new(vec![
-            MockRunner::ok_output("/mnt/data\n"),  // findmnt -> mounted
-            MockRunner::ok_output(""),              // umount
+            ok_output("/mnt/data\n"),  // findmnt -> mounted
+            ok_output(""),              // umount
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = MountExecutor {
@@ -542,7 +485,7 @@ mod tests {
         // state=absent, not mounted, not in fstab -> Action::None
         let fstab = tempfile::NamedTempFile::new().unwrap();
         let mock = MockRunner::new(vec![
-            MockRunner::fail_output(""),  // findmnt -> not mounted
+            fail_output(""),  // findmnt -> not mounted
         ]);
         let exec = MountExecutor {
             runner: Box::new(mock),
@@ -565,7 +508,7 @@ mod tests {
         // dry_run=true, needs mount -> Created but fstab unchanged and no mount call
         let fstab = tempfile::NamedTempFile::new().unwrap();
         let mock = MockRunner::new(vec![
-            MockRunner::fail_output(""),  // findmnt -> not mounted
+            fail_output(""),  // findmnt -> not mounted
             // No mount call expected in dry_run
         ]);
         let calls = Arc::clone(&mock.calls);

@@ -9,25 +9,6 @@ import (
 	"testing"
 )
 
-func TestNewFromConfigStatic(t *testing.T) {
-	p, err := NewFromConfig(Config{
-		Backend: "static",
-		EnvFile: "testdata/.env.test",
-	})
-	if err != nil {
-		t.Fatalf("NewFromConfig: %v", err)
-	}
-	defer p.Close()
-
-	val, err := p.Get(t.Context(), "hobnob/db/dsn")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	if val != "hobnob_test.db" {
-		t.Errorf("got %q", val)
-	}
-}
-
 func TestNewFromConfigDefaultsToLocal(t *testing.T) {
 	dir := t.TempDir()
 	p, err := NewFromConfig(Config{

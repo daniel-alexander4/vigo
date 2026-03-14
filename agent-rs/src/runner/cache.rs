@@ -137,6 +137,7 @@ mod tests {
             changed: false,
             error: None,
             duration_ms: 0,
+            ..Default::default()
         }
     }
 

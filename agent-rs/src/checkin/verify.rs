@@ -16,12 +16,10 @@ use spki::DecodePublicKey;
 /// Verify that a PolicyBundle's signature is valid against the server's public key PEM.
 ///
 /// Returns Ok(()) if signature is valid, or Err if verification fails.
-/// Bundles with no signature are rejected (unless server_pubkey_pem is empty,
-/// meaning the server doesn't support signing — accepted for backward compatibility).
+/// Both the server public key and bundle signature are required.
 pub fn verify_bundle(bundle: &PolicyBundle, server_pubkey_pem: &str) -> Result<()> {
     if server_pubkey_pem.is_empty() {
-        // Server doesn't support bundle signing — accept unsigned bundles.
-        return Ok(());
+        bail!("server public key not configured");
     }
 
     if bundle.signature.is_empty() {
@@ -137,13 +135,14 @@ mod tests {
     }
 
     #[test]
-    fn accept_unsigned_when_no_server_key() {
+    fn reject_unsigned_when_no_server_key() {
         let bundle = PolicyBundle {
             policy_version: 1,
             ..Default::default()
         };
 
-        // Empty PEM = server doesn't support signing.
-        verify_bundle(&bundle, "").expect("should accept unsigned bundle when no server key");
+        // Empty PEM = server public key not configured — must reject.
+        let result = verify_bundle(&bundle, "");
+        assert!(result.is_err(), "should reject when server public key is not configured");
     }
 }

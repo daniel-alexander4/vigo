@@ -10,6 +10,7 @@ pub fn collect() -> Result<Value> {
     match std::env::consts::OS {
         "macos" => macos_hardware_info(),
         "freebsd" => freebsd_kenv_info(),
+        "illumos" => illumos_smbios_info(),
         _ => bsd_generic_info(),
     }
 }
@@ -60,6 +61,43 @@ fn kenv(key: &str) -> String {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
+}
+
+fn illumos_smbios_info() -> Result<Value> {
+    // smbios -t SMB_TYPE_SYSTEM: parse Manufacturer, Product, Serial, UUID
+    let output = std::process::Command::new("smbios")
+        .args(["-t", "SMB_TYPE_SYSTEM"])
+        .output()
+        .ok();
+    let stdout = output.as_ref()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    let mut manufacturer = String::new();
+    let mut product = String::new();
+    let mut serial = String::new();
+    let mut uuid = String::new();
+
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if let Some(val) = trimmed.strip_prefix("Manufacturer:") {
+            manufacturer = val.trim().to_string();
+        } else if let Some(val) = trimmed.strip_prefix("Product:") {
+            product = val.trim().to_string();
+        } else if let Some(val) = trimmed.strip_prefix("Serial Number:") {
+            serial = val.trim().to_string();
+        } else if let Some(val) = trimmed.strip_prefix("UUID:") {
+            uuid = val.trim().to_string();
+        }
+    }
+
+    Ok(json!({
+        "manufacturer": manufacturer,
+        "product": product,
+        "serial": serial,
+        "uuid": uuid,
+    }))
 }
 
 fn bsd_generic_info() -> Result<Value> {

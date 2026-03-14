@@ -172,6 +172,9 @@ fn results_to_proto(results: &[ResourceResult]) -> Vec<ModuleResult> {
             changed: r.changed,
             error_message: r.error.clone().unwrap_or_default(),
             duration_ms: r.duration_ms,
+            previous_content: r.previous_content.clone().unwrap_or_default(),
+            content_hash: r.content_hash.clone().unwrap_or_default(),
+            file_path: r.file_path.clone().unwrap_or_default(),
         })
         .collect()
 }
@@ -903,6 +906,9 @@ fn build_run_delta(results: &[ResourceResult], seq: i64, bundle_version: u64) ->
             changed: r.changed,
             error_message: r.error.clone().unwrap_or_default(),
             duration_ms: r.duration_ms,
+            previous_content: r.previous_content.clone().unwrap_or_default(),
+            content_hash: r.content_hash.clone().unwrap_or_default(),
+            file_path: r.file_path.clone().unwrap_or_default(),
         })
         .collect();
 
@@ -1532,6 +1538,7 @@ mod tests {
             changed: true,
             error: None,
             duration_ms: 42,
+            ..Default::default()
         }];
 
         let proto = results_to_proto(&results);
@@ -1718,6 +1725,7 @@ mod tests {
             changed: true,
             error: None,
             duration_ms: 10,
+            ..Default::default()
         }];
 
         let (delta, run_id) = build_run_delta(&results, 1, 42);

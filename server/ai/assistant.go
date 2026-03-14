@@ -5,7 +5,6 @@ package ai
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -460,9 +459,4 @@ func (r *rateLimiter) allow() bool {
 // ProviderName returns the name of the underlying LLM provider.
 func (a *Assistant) ProviderName() string {
 	return a.provider.Name()
-}
-
-// MarshalSSE encodes an SSEEvent for writing to an SSE stream.
-func MarshalSSE(event SSEEvent) ([]byte, error) {
-	return json.Marshal(event)
 }

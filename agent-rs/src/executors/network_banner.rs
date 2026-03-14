@@ -14,9 +14,9 @@
 //! - state (optional): present (default) or absent
 
 use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::network_common::{self, require_param, SshParams, DEFAULT_TIMEOUT};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::debug;
 
 pub struct NetworkBannerExecutor;
@@ -119,37 +119,16 @@ impl Executor for NetworkBannerExecutor {
             params.get("name").map_or("", |s| s),
         );
 
-        let host = match params.get("host") {
-            Some(h) => h.clone(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.clone(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.clone(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
-        let device_type = match params.get("device_type") {
-            Some(dt) => dt.clone(),
-            None => return result.with_error("missing required param: device_type".into()),
-        };
-        let banner_type = match params.get("banner_type") {
-            Some(bt) => bt.clone(),
-            None => return result.with_error("missing required param: banner_type".into()),
-        };
-        let text = match params.get("text") {
-            Some(t) => t.clone(),
-            None => return result.with_error("missing required param: text".into()),
-        };
-
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
-        let state = params.get("state").map_or("present", |s| s.as_str());
-        let timeout = Duration::from_secs(30);
+        result = ResourceResult::new("network_banner", params.get("name").map_or("", |s| s));
+        let device_type = require_param!(params, "device_type", result);
+        let banner_type = require_param!(params, "banner_type", result);
+        let text = require_param!(params, "text", result);
+        let state = network_common::parse_state(params).to_string();
+        let timeout = DEFAULT_TIMEOUT;
 
         let prompt = match prompt_pattern(&device_type) {
             Some(p) => p,
@@ -160,16 +139,15 @@ impl Executor for NetworkBannerExecutor {
             return result.with_error(format!("invalid banner_type: {} (must be login or motd)", banner_type));
         }
 
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
+        let action_on_change = if state == "absent" {
+            Action::Deleted
+        } else {
+            Action::Updated
         };
 
-        let exec_result = tokio::task::block_in_place(|| {
-            rt.block_on(async {
-                let session =
-                    SshSession::connect(&host, port, &username, &credential, None).await?;
-
+        let host_log = ssh.host.clone();
+        network_common::run_ssh_executor_with_action(&mut result, start, &ssh, action_on_change, |session| {
+            Box::pin(async move {
                 // Check current state.
                 let check_cmd = check_command(&device_type, &banner_type);
                 let current = session.exec(&check_cmd, timeout).await?;
@@ -178,7 +156,7 @@ impl Executor for NetworkBannerExecutor {
                 let is_present =
                     banner_present(&device_type, &banner_type, &current_output, &text);
 
-                let needs_change = match state {
+                let needs_change = match state.as_str() {
                     "present" => !is_present,
                     "absent" => {
                         // For absent, any banner text in output means we need to remove it.
@@ -196,42 +174,22 @@ impl Executor for NetworkBannerExecutor {
                 }
 
                 // Push config commands.
-                let commands = build_commands(&device_type, &banner_type, &text, state);
+                let commands = build_commands(&device_type, &banner_type, &text, &state);
                 let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
                 let _output = session
                     .exec_interactive(&cmd_refs, prompt, timeout)
                     .await?;
 
                 debug!(
-                    host = host.as_str(),
+                    host = host_log.as_str(),
                     device_type = device_type.as_str(),
                     banner_type = banner_type.as_str(),
-                    state = state,
+                    state = state.as_str(),
                     "banner applied"
                 );
                 Ok(true)
             })
         });
-
-        result.duration_ms = start.elapsed().as_millis() as i32;
-
-        match exec_result {
-            Ok(false) => {
-                result.action = Action::None;
-                result.changed = false;
-            }
-            Ok(true) => {
-                result.action = if state == "absent" {
-                    Action::Deleted
-                } else {
-                    Action::Updated
-                };
-                result.changed = true;
-            }
-            Err(e) => {
-                result.error = Some(e.to_string());
-            }
-        }
 
         result
     }

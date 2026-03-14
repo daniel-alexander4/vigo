@@ -122,6 +122,7 @@ pub fn converge(
                 changed: false,
                 error: Some(format!("DAG build error: {}", e)),
                 duration_ms: 0,
+                ..Default::default()
             }];
         }
     };
@@ -140,6 +141,7 @@ pub fn converge(
                     changed: false,
                     error: Some(format!("DAG sort error: {}", e)),
                     duration_ms: 0,
+                ..Default::default()
                 }];
             }
         }
@@ -177,6 +179,7 @@ pub fn converge(
                 changed: false,
                 error: Some(format!("dependency {:?} failed", failed_dep)),
                 duration_ms: 0,
+                ..Default::default()
             });
             continue;
         }
@@ -287,6 +290,7 @@ fn execute_resource(
                             changed: false,
                             error: None,
                             duration_ms: 0,
+                ..Default::default()
                         };
                     }
                     Err(e) => {
@@ -305,6 +309,7 @@ fn execute_resource(
                             changed: false,
                             error: None,
                             duration_ms: 0,
+                ..Default::default()
                         };
                     }
                     Ok(true) => {} // proceed
@@ -325,6 +330,7 @@ fn execute_resource(
                     changed: false,
                     error: None,
                     duration_ms: 0,
+                ..Default::default()
                 };
             }
         }
@@ -350,6 +356,7 @@ fn execute_resource(
             changed: false,
             error: Some(format!("guardrail violation: {}", violation.reason)),
             duration_ms: 0,
+                ..Default::default()
         };
     }
 
@@ -376,6 +383,7 @@ fn execute_resource(
                     node.resource_type
                 )),
                 duration_ms: 0,
+                ..Default::default()
             };
         }
     };
@@ -610,6 +618,29 @@ pub fn build_executors_with_snapshots(
         }
     }
 
+    // illumos-native executors.
+    #[cfg(target_os = "illumos")]
+    {
+        executors.insert("service".to_string(), Box::new(service_illumos::ServiceIllumosExecutor::new()));
+        executors.insert("user".to_string(), Box::new(user::UserExecutor::new()));
+        executors.insert("group".to_string(), Box::new(group::GroupExecutor::new()));
+        executors.insert("hostname".to_string(), Box::new(hostname_bsd::HostnameBsdExecutor::new()));
+        executors.insert("timezone".to_string(), Box::new(timezone_illumos::TimezoneIllumosExecutor::new()));
+        executors.insert("cron".to_string(), Box::new(cron::CronExecutor));
+
+        match pkgmgr::detect(os_family, os_distro) {
+            Ok(pm) => {
+                executors.insert(
+                    "package".to_string(),
+                    Box::new(PackageExecutorWrapper { pkg_mgr: pm }),
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "no package manager detected, package resources will fail");
+            }
+        }
+    }
+
     // Windows-native executors.
     #[cfg(windows)]
     {
@@ -827,6 +858,7 @@ mod tests {
                 changed: self.changed,
                 error: None,
                 duration_ms: 1,
+                ..Default::default()
             }
         }
     }
@@ -997,6 +1029,7 @@ mod tests {
                 changed,
                 error: None,
                 duration_ms: 1,
+                ..Default::default()
             }
         }
     }
@@ -1037,6 +1070,7 @@ mod tests {
                 changed: false,
                 error: None,
                 duration_ms: 1,
+                ..Default::default()
             }
         }
     }
@@ -1438,6 +1472,7 @@ mod tests {
                     changed: false,
                     error: Some(format!("{} failed", name)),
                     duration_ms: 1,
+                ..Default::default()
                 }
             } else {
                 ResourceResult {
@@ -1448,6 +1483,7 @@ mod tests {
                     changed: true,
                     error: None,
                     duration_ms: 1,
+                ..Default::default()
                 }
             }
         }

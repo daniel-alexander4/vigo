@@ -14,7 +14,7 @@
 //! - timeout (optional): per-command timeout in seconds (default 30)
 
 use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::network_common::SshParams;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tracing::debug;
@@ -32,56 +32,52 @@ impl Executor for SshExecExecutor {
         let start = Instant::now();
         let mut result = ResourceResult::new("ssh_exec", params.get("name").map_or("", |s| s));
 
-        let host = match params.get("host") {
-            Some(h) => h.as_str(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.as_str(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.as_str(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
+        result = ResourceResult::new("ssh_exec", params.get("name").map_or("", |s| s));
         let command = match params.get("command") {
-            Some(c) => c.as_str(),
+            Some(c) => c.clone(),
             None => return result.with_error("missing required param: command".into()),
         };
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
         let timeout_secs: u64 = params
             .get("timeout")
             .and_then(|t| t.parse().ok())
             .unwrap_or(30);
         let timeout = Duration::from_secs(timeout_secs);
 
+        // Clone guard params for the closure.
+        let unless_cmd = params.get("unless").cloned();
+        let onlyif_cmd = params.get("onlyif").cloned();
+
         // Bridge async SSH operations into the sync Executor trait.
         let rt = match tokio::runtime::Handle::try_current() {
             Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
+            Err(_) => {
+                result.error = Some("no tokio runtime available".into());
+                return result;
+            }
         };
 
         let exec_result = tokio::task::block_in_place(|| {
             rt.block_on(async {
-                let session = SshSession::connect(host, port, username, credential, None).await?;
+                let session = ssh.connect().await?;
 
                 // Check "unless" guard — skip if it succeeds.
-                if let Some(unless_cmd) = params.get("unless") {
+                if let Some(ref unless_cmd) = unless_cmd {
                     let guard = session.exec(unless_cmd, timeout).await?;
                     if guard.exit_code == 0 {
-                        debug!(cmd = unless_cmd, "unless guard succeeded, skipping");
+                        debug!(cmd = unless_cmd.as_str(), "unless guard succeeded, skipping");
                         return Ok(None); // skip
                     }
                 }
 
                 // Check "onlyif" guard — skip if it fails.
-                if let Some(onlyif_cmd) = params.get("onlyif") {
+                if let Some(ref onlyif_cmd) = onlyif_cmd {
                     let guard = session.exec(onlyif_cmd, timeout).await?;
                     if guard.exit_code != 0 {
-                        debug!(cmd = onlyif_cmd, "onlyif guard failed, skipping");
+                        debug!(cmd = onlyif_cmd.as_str(), "onlyif guard failed, skipping");
                         return Ok(None); // skip
                     }
                 }
@@ -90,7 +86,7 @@ impl Executor for SshExecExecutor {
                     return Ok(Some(("would execute".to_string(), true)));
                 }
 
-                let output = session.exec(command, timeout).await?;
+                let output = session.exec(&command, timeout).await?;
                 if output.exit_code != 0 {
                     anyhow::bail!(
                         "command exited with code {}: stderr={}",

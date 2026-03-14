@@ -1,8 +1,3 @@
--- name: CreatePackageAudit :one
-INSERT INTO package_audit (thrall_id, package_name, installed_version, desired_version)
-VALUES (?, ?, ?, ?)
-RETURNING id, thrall_id, package_name, installed_version, desired_version, detected_at;
-
 -- name: ListPackageAuditByThrall :many
 SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname

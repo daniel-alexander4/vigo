@@ -516,7 +516,7 @@ fn process_running(name: &str) -> bool {
     false
 }
 
-#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
 fn process_running(name: &str) -> bool {
     Command::new("pgrep")
         .args(["-x", name])
@@ -545,7 +545,7 @@ fn process_running(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos", windows)))]
 fn process_running(_name: &str) -> bool {
     false
 }

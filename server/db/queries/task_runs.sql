@@ -21,9 +21,6 @@ INSERT INTO task_run_targets (task_run_id, thrall_id, hostname, status)
 VALUES (?, ?, ?, ?)
 RETURNING *;
 
--- name: GetTaskRunTarget :one
-SELECT * FROM task_run_targets WHERE id = ?;
-
 -- name: ListTaskRunTargets :many
 SELECT * FROM task_run_targets
 WHERE task_run_id = ?

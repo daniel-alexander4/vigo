@@ -15,9 +15,9 @@
 //! - state (optional): present (default) or absent
 
 use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::network_common::{self, require_param, SshParams, DEFAULT_TIMEOUT};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::debug;
 
 pub struct NetworkUserExecutor;
@@ -36,35 +36,17 @@ impl Executor for NetworkUserExecutor {
             params.get("name").map_or("", |s| s),
         );
 
-        let host = match params.get("host") {
-            Some(h) => h.clone(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.clone(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.clone(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
-        let device_type = match params.get("device_type") {
-            Some(dt) => dt.clone(),
-            None => return result.with_error("missing required param: device_type".into()),
-        };
-        let device_username = match params.get("device_username") {
-            Some(du) => du.clone(),
-            None => return result.with_error("missing required param: device_username".into()),
-        };
-
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
-        let state = params.get("state").map_or("present", |s| s.as_str());
+        result = ResourceResult::new("network_user", params.get("name").map_or("", |s| s));
+        let device_type = require_param!(params, "device_type", result);
+        let device_username = require_param!(params, "device_username", result);
+        let state = network_common::parse_state(params).to_string();
         let privilege = params.get("privilege").cloned();
         let secret = params.get("secret").cloned();
-        let timeout = Duration::from_secs(30);
+        let timeout = DEFAULT_TIMEOUT;
 
         let (check_command, prompt_pattern) = match device_type.as_str() {
             "cisco_ios" | "cisco_nxos" => (
@@ -80,16 +62,15 @@ impl Executor for NetworkUserExecutor {
             }
         };
 
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
+        let action_on_change = if state == "absent" {
+            Action::Deleted
+        } else {
+            Action::Updated
         };
 
-        let exec_result = tokio::task::block_in_place(|| {
-            rt.block_on(async {
-                let session =
-                    SshSession::connect(&host, port, &username, &credential, None).await?;
-
+        let host_log = ssh.host.clone();
+        network_common::run_ssh_executor_with_action(&mut result, start, &ssh, action_on_change, |session| {
+            Box::pin(async move {
                 // Check current state.
                 let current = session.exec(&check_command, timeout).await?;
                 let current_output = current.stdout;
@@ -104,7 +85,7 @@ impl Executor for NetworkUserExecutor {
                     _ => false,
                 };
 
-                let needs_change = match state {
+                let needs_change = match state.as_str() {
                     "present" => !user_exists,
                     "absent" => user_exists,
                     _ => return Err(anyhow::anyhow!("invalid state: {}", state)),
@@ -119,7 +100,7 @@ impl Executor for NetworkUserExecutor {
                 }
 
                 // Build config commands based on device type and desired state.
-                let commands: Vec<String> = match (device_type.as_str(), state) {
+                let commands: Vec<String> = match (device_type.as_str(), state.as_str()) {
                     ("cisco_ios" | "cisco_nxos", "present") => {
                         let priv_level = privilege.as_deref().unwrap_or("15");
                         let mut cmds = vec![
@@ -183,35 +164,15 @@ impl Executor for NetworkUserExecutor {
                     .await?;
 
                 debug!(
-                    host = host.as_str(),
+                    host = host_log.as_str(),
                     device_type = device_type.as_str(),
                     device_username = device_username.as_str(),
-                    state = state,
+                    state = state.as_str(),
                     "network user config applied"
                 );
                 Ok(true)
             })
         });
-
-        result.duration_ms = start.elapsed().as_millis() as i32;
-
-        match exec_result {
-            Ok(false) => {
-                result.action = Action::None;
-                result.changed = false;
-            }
-            Ok(true) => {
-                result.action = if state == "absent" {
-                    Action::Deleted
-                } else {
-                    Action::Updated
-                };
-                result.changed = true;
-            }
-            Err(e) => {
-                result.error = Some(e.to_string());
-            }
-        }
 
         result
     }

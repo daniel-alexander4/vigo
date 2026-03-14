@@ -21,26 +21,14 @@ sudo cp certs/* /etc/hobnob-server/certs/
 
 For production, replace with your own CA and server cert. Keep the CA private key accessible to the server if you want bootstrap CSR signing (see [Bootstrap enrollment](#bootstrap-enrollment)).
 
-### 3. Create the `.env` file
-
-```bash
-sudo tee /etc/hobnob-server/.env <<'EOF'
-HOBNOB_DB_DSN=db/hobnob.db
-HOBNOB_TLS_CERT=certs/server.crt
-HOBNOB_TLS_KEY=certs/server.key
-HOBNOB_TLS_CA=certs/ca.crt
-HOBNOB_TLS_CA_KEY=certs/ca.key   # enables bootstrap CSR signing
-EOF
-```
-
-### 4. Copy config files
+### 3. Copy config files
 
 ```bash
 sudo cp server-configs/server.yaml /etc/hobnob-server/
 sudo cp -r thrall-configs/modules thrall-configs/roles thrall-configs/templates /etc/hobnob-server/
 ```
 
-### 5. Start the server
+### 4. Start the server
 
 ```bash
 docker compose up -d
@@ -647,8 +635,6 @@ secrets:
 
 The server also polls isopass for secret version changes. When a secret rotates, all nodes referencing it are automatically queued for re-convergence.
 
-**StaticProvider (legacy)** — reads from a `.env` file. Secret paths are converted to environment variable names: `secret:hobnob/db/dsn` -> `HOBNOB_DB_DSN` (uppercase, slashes to underscores). Does not support secret versioning.
-
 ### Security guarantees
 
 - Secrets never appear in plaintext in config files, logs, gRPC payloads, or run results
@@ -667,7 +653,7 @@ The server's own config (`server-configs/server.yaml`) uses `secret:` references
 | `tls/cert` | Server TLS certificate (PEM) |
 | `tls/key` | Server TLS private key (PEM) |
 
-TLS certificates are auto-generated on first start (local backend only). The entrypoint seeds config files on first run.
+TLS certificates are auto-generated on first start (local backend only).
 
 ## Development
 
@@ -678,6 +664,5 @@ make certs          # Generate self-signed TLS certs
 make test           # Run all tests
 make lint           # Run linter
 make dist           # Cross-compile agent binaries
-make seed           # Insert dev seed data
 docker compose up   # Start server
 ```

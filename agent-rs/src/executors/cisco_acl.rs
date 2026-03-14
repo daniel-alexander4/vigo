@@ -12,10 +12,10 @@
 //! - entries (required): newline-separated ACL entries (e.g. "permit ip 10.0.0.0 0.0.0.255 any\ndeny ip any any")
 //! - state (optional): present (default) or absent
 
-use crate::executors::{Action, Executor, ResourceResult};
-use crate::transport::ssh::SshSession;
+use crate::executors::{Executor, ResourceResult};
+use crate::executors::network_common::{self, require_param, SshParams, DEFAULT_TIMEOUT};
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::debug;
 
 pub struct CiscoAclExecutor;
@@ -32,51 +32,26 @@ impl Executor for CiscoAclExecutor {
         let mut result =
             ResourceResult::new("cisco_acl", params.get("name").map_or("", |s| s));
 
-        let host = match params.get("host") {
-            Some(h) => h.clone(),
-            None => return result.with_error("missing required param: host".into()),
+        let ssh = match SshParams::from_params(params, result) {
+            Ok(s) => s,
+            Err(r) => return r,
         };
-        let username = match params.get("username") {
-            Some(u) => u.clone(),
-            None => return result.with_error("missing required param: username".into()),
-        };
-        let credential = match params.get("credential") {
-            Some(c) => c.clone(),
-            None => return result.with_error("missing required param: credential".into()),
-        };
-        let acl_name = match params.get("acl_name") {
-            Some(a) => a.clone(),
-            None => return result.with_error("missing required param: acl_name".into()),
-        };
-        let entries = match params.get("entries") {
-            Some(e) => e.clone(),
-            None => return result.with_error("missing required param: entries".into()),
-        };
-
-        let port: u16 = params
-            .get("port")
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(22);
-        let state = params.get("state").map_or("present", |s| s.as_str());
-        let timeout = Duration::from_secs(30);
+        result = ResourceResult::new("cisco_acl", params.get("name").map_or("", |s| s));
+        let acl_name = require_param!(params, "acl_name", result);
+        let entries = require_param!(params, "entries", result);
+        let state = network_common::parse_state(params).to_string();
+        let timeout = DEFAULT_TIMEOUT;
         let prompt_pattern = "#";
 
-        let entry_lines: Vec<&str> = entries
+        let entry_lines: Vec<String> = entries
             .lines()
-            .map(|l| l.trim())
+            .map(|l| l.trim().to_string())
             .filter(|l| !l.is_empty())
             .collect();
 
-        let rt = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return result.with_error("no tokio runtime available".into()),
-        };
-
-        let exec_result = tokio::task::block_in_place(|| {
-            rt.block_on(async {
-                let session =
-                    SshSession::connect(&host, port, &username, &credential, None).await?;
-
+        let host_log = ssh.host.clone();
+        network_common::run_ssh_executor(&mut result, start, &ssh, |session| {
+            Box::pin(async move {
                 // Check current ACL state.
                 let show_cmd = format!("show access-lists {}", acl_name);
                 let current = session
@@ -84,7 +59,7 @@ impl Executor for CiscoAclExecutor {
                     .await?;
                 let current_output = current;
 
-                let needs_change = match state {
+                let needs_change = match state.as_str() {
                     "present" => {
                         // Check if all entries exist in the current ACL output.
                         entry_lines
@@ -110,7 +85,7 @@ impl Executor for CiscoAclExecutor {
                 // Build config commands.
                 let mut commands: Vec<String> = vec!["configure terminal".to_string()];
 
-                match state {
+                match state.as_str() {
                     "absent" => {
                         commands.push(format!("no ip access-list extended {}", acl_name));
                     }
@@ -131,30 +106,14 @@ impl Executor for CiscoAclExecutor {
                     .await?;
 
                 debug!(
-                    host = host.as_str(),
+                    host = host_log.as_str(),
                     acl_name = acl_name.as_str(),
-                    state = state,
+                    state = state.as_str(),
                     "ACL config applied"
                 );
                 Ok(true)
             })
         });
-
-        result.duration_ms = start.elapsed().as_millis() as i32;
-
-        match exec_result {
-            Ok(false) => {
-                result.action = Action::None;
-                result.changed = false;
-            }
-            Ok(true) => {
-                result.action = Action::Updated;
-                result.changed = true;
-            }
-            Err(e) => {
-                result.error = Some(e.to_string());
-            }
-        }
 
         result
     }

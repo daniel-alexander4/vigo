@@ -31,6 +31,7 @@ var validOS = map[string]bool{
 	"freebsd": true,
 	"openbsd": true,
 	"netbsd":  true,
+	"illumos": true,
 	"windows": true,
 }
 
@@ -117,6 +118,10 @@ TOKEN='{{.Token}}'
 
 # Detect OS and architecture.
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+# illumos reports as "sunos" — map to "illumos".
+if [ "$OS" = "sunos" ]; then
+    OS="illumos"
+fi
 ARCH="$(uname -m)"
 case "$ARCH" in
     x86_64) ARCH="amd64" ;;
@@ -207,6 +212,36 @@ RCSCRIPT
     rcctl enable hobnob_thrall
     rcctl start hobnob_thrall
     echo "Hobnob agent service installed and started (rcctl)."
+elif command -v svccfg > /dev/null 2>&1 && command -v svcadm > /dev/null 2>&1; then
+    # illumos (SMF)
+    cat > /var/svc/manifest/system/hobnob-thrall.xml << SMFMANIFEST
+<?xml version="1.0"?>
+<!DOCTYPE service_bundle SYSTEM "/usr/share/lib/xml/dtd/service_bundle.dtd.1">
+<service_bundle type="manifest" name="hobnob-thrall">
+  <service name="system/hobnob-thrall" type="service" version="1">
+    <create_default_instance enabled="false"/>
+    <single_instance/>
+    <dependency name="network" grouping="require_all" restart_on="error" type="service">
+      <service_fmri value="svc:/milestone/network:default"/>
+    </dependency>
+    <dependency name="filesystem" grouping="require_all" restart_on="error" type="service">
+      <service_fmri value="svc:/system/filesystem/local"/>
+    </dependency>
+    <exec_method type="method" name="start"
+      exec="/usr/local/bin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall &amp;"
+      timeout_seconds="60">
+      <method_context><method_credential user="root" group="root"/></method_context>
+    </exec_method>
+    <exec_method type="method" name="stop" exec=":kill" timeout_seconds="60"/>
+    <template>
+      <common_name><loctext xml:lang="C">Hobnob Configuration Management Agent</loctext></common_name>
+    </template>
+  </service>
+</service_bundle>
+SMFMANIFEST
+    svccfg import /var/svc/manifest/system/hobnob-thrall.xml
+    svcadm enable svc:/system/hobnob-thrall:default
+    echo "Hobnob agent service installed and started (SMF)."
 elif [ -d /etc/rc.d ] && [ -f /etc/rc.subr ]; then
     # FreeBSD / NetBSD (rc.d)
     RCDIR="/usr/local/etc/rc.d"
@@ -467,7 +502,7 @@ func (h *Handler) AgentDownload(w http.ResponseWriter, r *http.Request) {
 
 	// Validate OS and arch.
 	if !validOS[goos] || !validArch[goarch] {
-		http.Error(w, fmt.Sprintf("unsupported platform: %s/%s (supported: linux|darwin|freebsd|openbsd|netbsd|windows / amd64|arm64)", goos, goarch), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unsupported platform: %s/%s (supported: linux|darwin|freebsd|openbsd|netbsd|illumos|windows / amd64|arm64)", goos, goarch), http.StatusBadRequest)
 		return
 	}
 

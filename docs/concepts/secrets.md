@@ -16,7 +16,7 @@ smtp:
 
 At startup, the server resolves `secret:hobnob/db/dsn` by calling `provider.Get("hobnob/db/dsn")`. The actual secret value is never written to disk in plaintext.
 
-## Three Backends
+## Two Backends
 
 ### local (default, recommended)
 
@@ -47,16 +47,6 @@ secrets:
   token_env: "HOBNOB_SECRETS_TOKEN"
 ```
 
-### static (legacy)
-
-Reads secrets from a `.env` file. Plaintext — not recommended for production.
-
-```yaml
-secrets:
-  backend: static
-  env_file: ".env"
-```
-
 ## Secret Resolution Flow
 
 ```
@@ -67,9 +57,6 @@ server.yaml                  Secrets Provider
 └─────────────────┘         │                    │
                             │ isopass: HTTP GET  │
                             │   /v1/secrets/path │
-                            │                    │
-                            │ static: read .env  │
-                            │   key=value lookup │
                             └────────┬───────────┘
                                      │
                                      ▼

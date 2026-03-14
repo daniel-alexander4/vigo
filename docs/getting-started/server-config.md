@@ -18,17 +18,16 @@ Determines how `secret:` references in config values are resolved.
 
 ```yaml
 secrets:
-  backend: local                          # local (default) | static | isopass
+  backend: local                          # local (default) | isopass
   key_file: "/etc/hobnob-server/master.key"   # 32-byte hex master key (local only)
   secrets_dir: "/etc/hobnob-server/secrets"    # encrypted files directory (local only)
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `backend` | `local` | Secrets backend: `local` (AES-256-GCM encrypted files), `static` (.env file), `isopass` (external API) |
+| `backend` | `local` | Secrets backend: `local` (AES-256-GCM encrypted files) or `isopass` (external API) |
 | `key_file` | auto-generated | Path to 32-byte hex master key file (local backend, mode 0600) |
 | `secrets_dir` | `/etc/hobnob-server/secrets` | Directory for encrypted secret files (local backend) |
-| `env_file` | `.env` | Path to .env file (static backend only) |
 | `url` | — | Isopass API base URL (isopass backend only) |
 | `token_env` | `HOBNOB_SECRETS_TOKEN` | Env var containing bearer token (isopass backend only) |
 | `tls_skip_verify` | `false` | Skip TLS verification for isopass (not recommended) |

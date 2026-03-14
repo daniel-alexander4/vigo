@@ -65,7 +65,7 @@ The central server written in Go. It:
 - Serves the REST API, web UI, metrics, and bootstrap endpoint (port 8181)
 - Reads YAML config from disk (`thrall-configs/`) with hot-reload via fsnotify
 - Stores state in SQLite (default) or PostgreSQL
-- Resolves secrets through a pluggable backend (local, isopass, static)
+- Resolves secrets through a pluggable backend (local, isopass)
 
 ### hobnob (agent)
 
@@ -162,7 +162,7 @@ Agent                          Server
 | RunStore | `server/db/` | Run history (DBRunStore or MemRunStore) |
 | BundleSigner | `server/grpc/` | ED25519 signing for compiled promises |
 | Registry | `server/registry/` | Enrollment: pattern match + token validation |
-| Secrets | `server/secrets/` | Pluggable secret backend (local, isopass, static) |
+| Secrets | `server/secrets/` | Pluggable secret backend (local, isopass) |
 | Compliance | `server/compliance/` | Per-thrall status: compliant/drifted/failing/stale/unknown |
 | Federation | `server/federation/` | Hub-spoke scaling with enrollment routing |
 

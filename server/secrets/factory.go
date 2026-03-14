@@ -12,8 +12,7 @@ import (
 // Values in this struct must not use "secret:" prefixes — this config
 // is loaded before the provider exists.
 type Config struct {
-	Backend       string `yaml:"backend"`         // "local" (default), "static", or "isopass"
-	EnvFile       string `yaml:"env_file"`        // static: path to .env file
+	Backend       string `yaml:"backend"`         // "local" (default) or "isopass"
 	KeyFile       string `yaml:"key_file"`        // local: path to master encryption key (empty = auto-generate)
 	SecretsDir    string `yaml:"secrets_dir"`     // local: directory for secret files (default: /etc/hobnob-server/secrets)
 	URL           string `yaml:"url"`             // isopass: API base URL
@@ -30,12 +29,6 @@ func NewFromConfig(cfg Config) (Provider, error) {
 	}
 
 	switch backend {
-	case "static":
-		envFile := cfg.EnvFile
-		if envFile == "" {
-			envFile = ".env"
-		}
-		return NewStaticProvider(envFile)
 	case "local":
 		secretsDir := cfg.SecretsDir
 		if secretsDir == "" {
@@ -56,6 +49,6 @@ func NewFromConfig(cfg Config) (Provider, error) {
 		}
 		return NewIsopassProvider(cfg.URL, token, cfg.TLSSkipVerify)
 	default:
-		return nil, fmt.Errorf("unknown secrets backend %q (expected \"static\", \"local\", or \"isopass\")", backend)
+		return nil, fmt.Errorf("unknown secrets backend %q (expected \"local\" or \"isopass\")", backend)
 	}
 }

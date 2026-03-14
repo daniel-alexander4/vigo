@@ -46,6 +46,7 @@ pub fn detect(os_family: &str, os_distro: &str) -> Result<Box<dyn PackageManager
                 "openbsd" => return Ok(Box::new(GenericPkgMgr::pkg_add())),
                 "netbsd" => return Ok(Box::new(GenericPkgMgr::pkgin())),
                 "macos" => return Ok(Box::new(GenericPkgMgr::brew())),
+                "illumos" => return Ok(Box::new(GenericPkgMgr::ips())),
                 _ => {}
             }
 
@@ -218,6 +219,33 @@ impl GenericPkgMgr {
         }
     }
 
+    fn ips() -> Self {
+        Self {
+            cmd: "pkg",
+            install_args: &["install", "--accept"],
+            remove_cmd: "pkg",
+            remove_args: &["uninstall"],
+            query_cmd: "pkg",
+            query_args: &["list", "-H"],
+            version_parser: |s| {
+                // pkg list -H output: "NAME (PUBLISHER)  VERSION  IFO"
+                // or: "NAME  VERSION  IFO"
+                s.lines()
+                    .next()
+                    .and_then(|line| {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        // Version is typically the second-to-last or second field.
+                        if parts.len() >= 2 {
+                            Some(parts[1].to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_default()
+            },
+        }
+    }
+
     fn brew() -> Self {
         Self {
             cmd: "brew",
@@ -261,6 +289,8 @@ impl PackageManager for GenericPkgMgr {
                 "dnf" | "yum" | "zypper" => format!("{}-{}", name, version),
                 "pacman" | "apk" | "pkgin" => format!("{}={}", name, version),
                 "brew" => format!("{}@{}", name, version),
+                // IPS uses @ for versioning when cmd is "pkg" on illumos.
+                "pkg" if std::env::consts::OS == "illumos" => format!("{}@{}", name, version),
                 "pkg" => format!("{}-{}", name, version),
                 "pkg_add" => format!("{}-{}", name, version),
                 _ => name.to_string(),

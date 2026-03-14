@@ -10,6 +10,8 @@ pub mod launchd;
 pub mod rc_d;
 #[cfg(target_os = "openbsd")]
 pub mod rcctl;
+#[cfg(target_os = "illumos")]
+pub mod smf;
 #[cfg(windows)]
 pub mod windows_service;
 

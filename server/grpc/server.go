@@ -135,6 +135,13 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 			PermitWithoutStream: true,
 		}),
 	}
+	// Explicit message size limits (SEC-13). Default Go gRPC is 4 MiB
+	// which is too small for large policy bundles. Set 8 MiB as an explicit
+	// upper bound to prevent unbounded allocation attacks.
+	opts = append(opts,
+		grpc.MaxRecvMsgSize(8*1024*1024),
+		grpc.MaxSendMsgSize(8*1024*1024),
+	)
 	if cfg.GRPCReadBuffer > 0 {
 		opts = append(opts, grpc.ReadBufferSize(cfg.GRPCReadBuffer))
 	}

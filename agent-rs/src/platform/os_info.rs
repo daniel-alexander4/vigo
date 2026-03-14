@@ -10,6 +10,7 @@ pub enum InitSystem {
     Launchd,
     RcD,
     Rcctl,
+    Smf,
     Unknown,
 }
 
@@ -32,6 +33,13 @@ pub fn detect_init_system() -> InitSystem {
         "freebsd" | "netbsd" => {
             if std::path::Path::new("/etc/rc.d").is_dir() {
                 InitSystem::RcD
+            } else {
+                InitSystem::Unknown
+            }
+        }
+        "illumos" => {
+            if command_exists("svcs") {
+                InitSystem::Smf
             } else {
                 InitSystem::Unknown
             }
@@ -81,6 +89,7 @@ mod tests {
         assert_eq!(format!("{:?}", InitSystem::Launchd), "Launchd");
         assert_eq!(format!("{:?}", InitSystem::RcD), "RcD");
         assert_eq!(format!("{:?}", InitSystem::Rcctl), "Rcctl");
+        assert_eq!(format!("{:?}", InitSystem::Smf), "Smf");
         assert_eq!(format!("{:?}", InitSystem::Unknown), "Unknown");
     }
 }

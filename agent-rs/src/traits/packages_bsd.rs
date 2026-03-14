@@ -12,6 +12,7 @@ pub fn collect() -> Result<Value> {
         "openbsd" => pkg_info_packages(),
         "netbsd" => pkgin_packages(),
         "macos" => brew_packages(),
+        "illumos" => ips_packages(),
         _ => Vec::new(),
     };
 
@@ -59,6 +60,22 @@ fn pkgin_packages() -> Vec<Value> {
 
 fn brew_packages() -> Vec<Value> {
     let output = std::process::Command::new("brew").args(["list", "--versions"]).output().ok();
+    let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+
+    stdout.lines()
+        .filter(|l| !l.is_empty())
+        .map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            let name = parts.first().unwrap_or(&"").to_string();
+            let version = parts.get(1).unwrap_or(&"").to_string();
+            json!({"name": name, "version": version})
+        })
+        .collect()
+}
+
+fn ips_packages() -> Vec<Value> {
+    // pkg list -H: "NAME  VERSION  IFO"
+    let output = std::process::Command::new("pkg").args(["list", "-H"]).output().ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     stdout.lines()
