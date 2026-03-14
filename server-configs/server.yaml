@@ -97,6 +97,7 @@ watcher:
 #   provider: "ollama"                         # ollama | claude | openai | openai-compat
 #   model: "qwen2.5:7b"
 #   max_tokens: 4096
+#   base_url: "http://hobnob-ollama:11434"     # Docker: use container name. Bare-metal: http://localhost:11434
 #   # api_key: "secret:hobnob/ai/api_key"     # for paid providers
 
 # ── Backup (Litestream — SQLite only) ────────────────────────────────────
