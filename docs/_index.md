@@ -76,3 +76,12 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Monitoring Stack](examples/monitoring-stack.md) — Prometheus, node_exporter, Grafana
 - [Database Cluster](examples/database-cluster.md) — PostgreSQL with vars_from
 - [Kubernetes Nodes](examples/kubernetes-nodes.md) — OS-level k8s node config and rolling reboot workflow
+
+## Migration
+
+- [Overview](migration/_index.md) — Comparison table and guide index
+- [From Puppet](migration/puppet.md) — Closest conceptual match (pull-based, catalog, resources, Facter)
+- [From Ansible](migration/ansible.md) — Push-to-pull shift, Jinja2 to Go templates, handlers to notify
+- [From Chef](migration/chef.md) — Ruby DSL to YAML, 15 attribute levels to 3, cookbooks to modules
+- [From Salt](migration/salt.md) — Both YAML, Pillar to vars, Grains to Traits
+- [From CFEngine](migration/cfengine.md) — Promise theory heritage, classes to when:, bundles to modules

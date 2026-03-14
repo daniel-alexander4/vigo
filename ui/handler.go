@@ -419,6 +419,7 @@ var docsSectionOrder = []string{
 	"ui",
 	"ai",
 	"examples",
+	"migration",
 }
 
 // buildDocsNav walks the docs directory and builds a nav tree.
