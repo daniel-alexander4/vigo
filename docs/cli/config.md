@@ -8,6 +8,10 @@ Config inspection commands.
 |---------|-------------|
 | `config trace` | Trace config resolution for a hostname |
 | `config publish` | Validate and publish config from proposed to live |
+| `config history` | View config publish history |
+| `config rollback` | Rollback to a previous config version |
+| `config freeze` | Freeze config publishes until a specified time |
+| `config unfreeze` | Remove the config publish freeze |
 
 ## config trace
 
@@ -83,6 +87,8 @@ hobnobcli config publish [--dry-run] [--dangerous] [--skip-url-check] [--url-tim
 | `--dangerous` | `false` | Allow non-idempotent resources |
 | `--skip-url-check` | `false` | Skip HTTP aliveness checks for URLs |
 | `--url-timeout` | `10s` | Timeout per URL aliveness check |
+| `--operator` | `$USER` | Operator name for audit trail |
+| `--diff` | `false` | Show line-level diff for each changed file |
 
 ### Examples
 
@@ -102,4 +108,79 @@ Published: 12 modules, 3 roles, 8 thrall entries (15 files synced)
 # Nothing changed
 $ hobnobcli config publish
 Nothing to publish — proposed matches live.
+```
+
+## config history
+
+View recent config publishes with operator and change details.
+
+```bash
+hobnobcli config history
+```
+
+### Example
+
+```
+ID          OPERATOR  PUBLISHED AT       CHANGED  REMOVED
+a1b2c3d4    admin     2026-03-13 14:30   3        0
+e5f6g7h8    deploy    2026-03-12 09:15   1        1
+```
+
+### config history show
+
+View details for a specific publish:
+
+```bash
+hobnobcli config history show <id>
+```
+
+## config rollback
+
+Rollback config to a previous snapshot. List available versions if no argument given.
+
+```bash
+# List available versions
+hobnobcli config rollback
+
+# Rollback to a specific version
+hobnobcli config rollback 20260313T143000Z
+```
+
+### Example
+
+```
+$ hobnobcli config rollback
+Available versions:
+  20260313T143000Z
+  20260312T091500Z
+  20260311T160000Z
+
+$ hobnobcli config rollback 20260312T091500Z
+Rolled back to version 20260312T091500Z
+```
+
+## config freeze
+
+Freeze config publishes until a specified time. Accepts either an RFC3339 timestamp or a duration.
+
+```bash
+hobnobcli config freeze --until <RFC3339|duration>
+```
+
+### Examples
+
+```bash
+# Freeze for 24 hours
+hobnobcli config freeze --until 24h
+
+# Freeze until a specific time
+hobnobcli config freeze --until 2026-03-14T06:00:00Z
+```
+
+## config unfreeze
+
+Remove the config publish freeze.
+
+```bash
+hobnobcli config unfreeze
 ```

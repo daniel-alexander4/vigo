@@ -12,4 +12,8 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [FleetIndex](fleet-index.md) -- In-memory index for zero-DB check-in performance
 - [Tuning Parameters](tuning.md) -- All configurable tuning knobs
 - [Config Publish Pipeline](config-publish.md) -- Staging validation before live config sync
+- [Rate Limiting](rate-limiting.md) -- Token-bucket rate limiting on check-in RPCs
+- [Maintenance Windows](maintenance-windows.md) -- Per-thrall and global change freeze
+- [Drift Alerting](drift-alerting.md) -- Fleet compliance threshold monitoring
+- [Audit Log](audit.md) -- Unified audit trail for config, tasks, and workflows
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics

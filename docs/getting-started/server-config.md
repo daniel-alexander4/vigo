@@ -251,6 +251,36 @@ backup:
 
 Only applies when `database.driver` is `sqlite`. See [Backup](../operations/backup.md) for details.
 
+### rate_limit
+
+```yaml
+rate_limit:
+  enabled: true
+  checkin_per_thrall: 6
+  checkin_global: 500
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable rate limiting on check-in RPCs |
+| `checkin_per_thrall` | `6` | Max check-ins per thrall per minute |
+| `checkin_global` | `500` | Max total check-ins per second |
+
+See [Rate Limiting](../operations/rate-limiting.md) for details.
+
+### maintenance
+
+```yaml
+maintenance:
+  freeze_until: "2026-03-14T06:00:00Z"
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `freeze_until` | — | RFC3339 timestamp; config publishes blocked while active |
+
+See [Maintenance Windows](../operations/maintenance-windows.md) for details.
+
 ## Environment Variables
 
 These override config paths at startup:

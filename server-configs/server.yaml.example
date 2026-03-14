@@ -254,3 +254,16 @@ bootstrap:
 #   siem: false                            # SIEM event export (/api/v1/export/siem)
 #   cmdb: false                            # CMDB configuration items (/api/v1/export/cmdb)
 #   oscal: false                           # OSCAL assessment results stub (/api/v1/export/oscal)
+
+# --- Rate Limiting ---
+# Token-bucket rate limiting on check-in RPCs to protect the server
+# from excessive traffic during fleet-wide events.
+#rate_limit:
+#  enabled: false
+#  checkin_per_thrall: 6   # requests/minute per thrall (default: 6)
+#  checkin_global: 500     # requests/second globally (default: 500)
+
+# --- Maintenance ---
+# Global change freeze. While active, config publishes are blocked.
+#maintenance:
+#  freeze_until: ""        # RFC3339 timestamp (empty = no freeze)

@@ -11,6 +11,9 @@ Manage enrolled thralls (managed nodes). Also available as `hobnobcli nodes`.
 | `revoke` | Revoke an enrolled thrall |
 | `delete` | Permanently delete a thrall and all its history |
 | `traits` | View collected traits for a thrall |
+| `tag` | Set tags on a thrall |
+| `untag` | Remove specific tags from a thrall |
+| `maintenance` | Set or clear maintenance mode |
 
 ## Usage
 
@@ -136,6 +139,70 @@ hobnobcli thralls traits web-01.example.com os.distro
 
 ```
 ubuntu
+```
+
+## tag
+
+Set tags on a thrall for targeting.
+
+```bash
+hobnobcli thralls tag <id> <tag1,tag2,...>
+```
+
+### Example
+
+```bash
+hobnobcli thralls tag a1b2c3d4 webserver,production
+```
+
+```
+Tags set: webserver, production
+```
+
+Tags replace all existing tags. To add to existing tags, include the old ones.
+
+## untag
+
+Remove specific tags from a thrall.
+
+```bash
+hobnobcli thralls untag <id> <tag1,tag2,...>
+```
+
+### Example
+
+```bash
+hobnobcli thralls untag a1b2c3d4 staging
+```
+
+```
+Tags updated: webserver, production
+```
+
+## maintenance
+
+Set or clear maintenance mode for a thrall. While in maintenance, the thrall receives an empty policy on check-in (skips convergence) but still reports traits.
+
+```bash
+hobnobcli thralls maintenance <id> --until <RFC3339>
+hobnobcli thralls maintenance <id> --clear
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--until` | Maintenance window end time (RFC3339 format) |
+| `--clear` | Clear maintenance mode |
+
+### Example
+
+```bash
+# Set maintenance until 6 AM tomorrow
+hobnobcli thralls maintenance a1b2c3d4 --until 2026-03-14T06:00:00Z
+
+# Clear maintenance
+hobnobcli thralls maintenance a1b2c3d4 --clear
 ```
 
 ## Related

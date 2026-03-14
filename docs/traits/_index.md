@@ -1,12 +1,12 @@
 # Trait Collectors
 
-Traits are auto-discovered facts about a managed machine (thrall). The Hobnob agent runs 25 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 25 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.hnb` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
+Traits are auto-discovered facts about a managed machine (thrall). The Hobnob agent runs 27 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 27 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.hnb` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
 
-Each collector runs in parallel with a 5-second timeout. Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap) or **stable** (cached across cycles: everything else).
+Each collector runs in parallel with a 5-second timeout. Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports) or **stable** (cached across cycles: everything else).
 
-## Trait Collectors (25)
+## Trait Collectors (27)
 
-All 25 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD, OpenBSD, NetBSD). Each uses a platform-native implementation -- for example, the `os` collector reads `/etc/os-release` on Linux, `sw_vers` on macOS, and `sysctl kern.ostype` on the BSDs. The trait paths and structure are identical across platforms so `when:` expressions and templates work without modification.
+All 27 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD, OpenBSD, NetBSD). Each uses a platform-native implementation -- for example, the `os` collector reads `/etc/os-release` on Linux, `sw_vers` on macOS, and `sysctl kern.ostype` on the BSDs. The trait paths and structure are identical across platforms so `when:` expressions and templates work without modification.
 
 | Name | Trait Path | Description | Doc |
 |------|------------|-------------|-----|
@@ -35,6 +35,8 @@ All 25 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Locale | `locale` | System locale settings (LANG, LC_*) | [locale.md](locale.md) |
 | Swap | `swap` | Active swap devices with type, size, usage, priority | [swap.md](swap.md) |
 | GPU | `gpu` | GPU devices with driver, memory, temperature, utilization | [gpu.md](gpu.md) |
+| Certificates | `certificates` | TLS certificate expiry dates and days remaining | [certificates.md](certificates.md) |
+| Ports | `ports` | Listening TCP ports | [ports.md](ports.md) |
 
 ## Windows Trait Collectors (13)
 

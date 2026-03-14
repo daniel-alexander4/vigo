@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 56 built-in executors that manage system resources idempotently across six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 57 built-in executors that manage system resources idempotently across six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -65,7 +65,7 @@ These executors manage OS-level resources across Unix platforms. Each type uses 
 
 A "--" means the executor is not available on that platform.
 
-## Linux-Only Executors (3)
+## Linux-Only Executors (4)
 
 These executors use Linux-specific tools with no equivalent on other platforms.
 
@@ -74,6 +74,7 @@ These executors use Linux-specific tools with no equivalent on other platforms.
 | `tmpfile` | Manage systemd-tmpfiles configs | [tmpfile](tmpfile.md) |
 | `logrotate` | Manage logrotate configs | [logrotate](logrotate.md) |
 | `alternatives` | Manage update-alternatives entries | [alternatives](alternatives.md) |
+| `selinux` | Manage SELinux file contexts | [selinux](selinux.md) |
 
 ## Windows-Only Executors (7)
 

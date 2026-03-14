@@ -111,6 +111,20 @@ mkdir -p /var/lib/hobnob/flags
 touch /var/lib/hobnob/flags/beta-features
 ```
 
+### Network
+
+| Function | Args | Description |
+|----------|------|-------------|
+| `port_listening(port)` | 1 | True if the given TCP port is in LISTEN state (from `ports` trait) |
+
+```yaml
+- name: haproxy-backend
+  type: file
+  targetpath: /etc/haproxy/haproxy.cfg
+  content: "..."
+  when: "port_listening(8080)"
+```
+
 ## Variables in When
 
 When expressions can reference variables that resolve to boolean names. The server resolves variable names at check-in time:

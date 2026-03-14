@@ -457,6 +457,187 @@ If no entry matches, `matched` is `false` and other fields are omitted.
 
 ---
 
+## Audit
+
+### GET /api/v1/audit
+
+Unified audit log across config publishes, task runs, and workflows.
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `since` | — | Time filter: duration (`24h`) or RFC3339 timestamp |
+| `operator` | — | Filter by operator name |
+| `type` | — | Event type: `config_publish`, `task_run`, `workflow_run` |
+| `limit` | `50` | Maximum events (max 200) |
+
+**Response:**
+
+```json
+{
+  "events": [
+    {
+      "id": "a1b2c3d4",
+      "type": "config_publish",
+      "operator": "admin",
+      "timestamp": "2026-03-13T14:30:00Z",
+      "summary": "3 files changed"
+    }
+  ]
+}
+```
+
+---
+
+## Config Publishes
+
+### GET /api/v1/config/publishes
+
+List recent config publish records.
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `limit` | `20` | Maximum records (max 100) |
+
+### POST /api/v1/config/publishes
+
+Record a config publish for audit trail.
+
+**Request body:**
+
+```json
+{
+  "operator": "admin",
+  "changed_files": ["modules/nginx.hnb"],
+  "removed_files": [],
+  "diff_summary": "--- modules/nginx.hnb\n+++ modules/nginx.hnb\n..."
+}
+```
+
+### GET /api/v1/config/publishes/{id}
+
+Get details for a specific config publish, including the diff summary.
+
+---
+
+## Config Versions and Rollback
+
+### GET /api/v1/config/versions
+
+List available config snapshots for rollback.
+
+**Response:**
+
+```json
+{
+  "versions": ["20260313T143000Z", "20260312T091500Z"]
+}
+```
+
+### POST /api/v1/config/rollback/{version}
+
+Rollback to a previous config snapshot.
+
+---
+
+## Config Freeze
+
+### POST /api/v1/config/freeze
+
+Set a global config publish freeze.
+
+**Request body:**
+
+```json
+{
+  "freeze_until": "2026-03-14T06:00:00Z"
+}
+```
+
+### POST /api/v1/config/unfreeze
+
+Remove the config publish freeze.
+
+---
+
+## Thrall Tags
+
+### PUT /api/v1/thralls/{id}/tags
+
+Set tags on a thrall.
+
+**Request body:**
+
+```json
+{
+  "tags": ["webserver", "production"]
+}
+```
+
+### GET /api/v1/thralls/{id}/tags
+
+Get tags for a thrall.
+
+---
+
+## Thrall Maintenance
+
+### PUT /api/v1/thralls/{id}/maintenance
+
+Set a maintenance window for a thrall.
+
+**Request body:**
+
+```json
+{
+  "until": "2026-03-14T06:00:00Z"
+}
+```
+
+### DELETE /api/v1/thralls/{id}/maintenance
+
+Clear the maintenance window.
+
+---
+
+## Preview
+
+### GET /api/v1/preview
+
+Multi-node impact analysis showing which thralls would be affected by changes to a module.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `module` | Yes | Module name to analyze |
+
+**Response:**
+
+```json
+{
+  "module": "nginx",
+  "affected": [
+    {"hostname": "web-01.example.com", "thrall_id": "a1b2c3d4"},
+    {"hostname": "web-02.example.com", "thrall_id": "e5f6g7h8"}
+  ],
+  "count": 2
+}
+```
+
+---
+
+## OpenAPI
+
+### GET /api/v1/openapi.json
+
+Returns the OpenAPI specification as JSON.
+
+---
+
 ## Other Endpoints
 
 | Method | Path | Description |
