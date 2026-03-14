@@ -19,6 +19,11 @@ pub trait PackageManager: Send + Sync {
     fn remove(&self, name: &str) -> Result<(), String>;
     /// Upgrade a package to a specific version.
     fn upgrade(&self, name: &str, version: &str) -> Result<(), String>;
+    /// Downgrade a package to a specific (older) version.
+    /// Default implementation falls back to install.
+    fn downgrade(&self, name: &str, version: &str) -> Result<(), String> {
+        self.install(name, version)
+    }
 }
 
 /// Detect the appropriate package manager for this system.
@@ -100,6 +105,9 @@ pub struct GenericPkgMgr {
     query_args: &'static [&'static str],
     /// How to extract version from query output.
     version_parser: fn(&str) -> String,
+    /// Optional downgrade args. If set, `downgrade()` runs `[cmd] [downgrade_args...] <pkg>`.
+    /// If None, downgrade falls back to install.
+    downgrade_args: Option<&'static [&'static str]>,
 }
 
 impl GenericPkgMgr {
@@ -112,6 +120,7 @@ impl GenericPkgMgr {
             query_cmd: "rpm",
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
             version_parser: |s| s.trim().to_string(),
+            downgrade_args: Some(&["downgrade", "-y"]),
         }
     }
 
@@ -124,6 +133,7 @@ impl GenericPkgMgr {
             query_cmd: "rpm",
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
             version_parser: |s| s.trim().to_string(),
+            downgrade_args: Some(&["downgrade", "-y"]),
         }
     }
 
@@ -136,6 +146,7 @@ impl GenericPkgMgr {
             query_cmd: "apk",
             query_args: &["info", "-e"],
             version_parser: |_| String::new(), // apk info -e just exits 0/1
+            downgrade_args: None,
         }
     }
 
@@ -151,6 +162,7 @@ impl GenericPkgMgr {
                 // Output: "package version"
                 s.split_whitespace().nth(1).unwrap_or("").to_string()
             },
+            downgrade_args: None,
         }
     }
 
@@ -163,6 +175,7 @@ impl GenericPkgMgr {
             query_cmd: "rpm",
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
             version_parser: |s| s.trim().to_string(),
+            downgrade_args: None,
         }
     }
 
@@ -183,6 +196,7 @@ impl GenericPkgMgr {
                     .map(|(_, v)| v.to_string())
                     .unwrap_or_default()
             },
+            downgrade_args: None,
         }
     }
 
@@ -204,6 +218,7 @@ impl GenericPkgMgr {
                     })
                     .unwrap_or_default()
             },
+            downgrade_args: None,
         }
     }
 
@@ -216,6 +231,7 @@ impl GenericPkgMgr {
             query_cmd: "pkg_info",
             query_args: &["-e"],
             version_parser: |_| String::new(), // -e just exits 0/1
+            downgrade_args: None,
         }
     }
 
@@ -243,6 +259,7 @@ impl GenericPkgMgr {
                     })
                     .unwrap_or_default()
             },
+            downgrade_args: None,
         }
     }
 
@@ -258,6 +275,7 @@ impl GenericPkgMgr {
                 // "name version1 version2" — take first version
                 s.split_whitespace().nth(1).unwrap_or("").to_string()
             },
+            downgrade_args: None,
         }
     }
 }
@@ -328,6 +346,34 @@ impl PackageManager for GenericPkgMgr {
 
     fn upgrade(&self, name: &str, version: &str) -> Result<(), String> {
         self.install(name, version)
+    }
+
+    fn downgrade(&self, name: &str, version: &str) -> Result<(), String> {
+        let Some(dg_args) = self.downgrade_args else {
+            return self.install(name, version);
+        };
+
+        let pkg = if version.is_empty() {
+            name.to_string()
+        } else {
+            match self.cmd {
+                "dnf" | "yum" | "zypper" => format!("{}-{}", name, version),
+                _ => format!("{}={}", name, version),
+            }
+        };
+
+        let mut args: Vec<&str> = dg_args.to_vec();
+        args.push(&pkg);
+        let output = std::process::Command::new(self.cmd)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("{} downgrade {}: {}", self.cmd, name, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} downgrade {} failed: {}", self.cmd, name, stderr));
+        }
+        Ok(())
     }
 }
 

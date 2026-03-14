@@ -122,7 +122,24 @@ fn handle_present(
     run_id: &str,
     stream_edit_cache: &Mutex<HashMap<String, StreamEditCacheEntry>>,
 ) -> Result<(), String> {
-    let mut content = params.get("content").cloned().unwrap_or_default();
+    // Resolve content: either from `source` (local file) or inline `content`.
+    // These are mutually exclusive.
+    let has_source = params.get("source").filter(|s| !s.is_empty()).is_some();
+    let has_content = params.get("content").filter(|s| !s.is_empty()).is_some();
+    if has_source && has_content {
+        return Err("file executor: source and content are mutually exclusive".to_string());
+    }
+
+    let mut content = if let Some(source) = params.get("source").filter(|s| !s.is_empty()) {
+        let source_path = Path::new(source);
+        if !source_path.exists() {
+            return Err(format!("file executor: source file not found: {}", source));
+        }
+        fs::read_to_string(source_path)
+            .map_err(|e| format!("file executor: read source {}: {}", source, e))?
+    } else {
+        params.get("content").cloned().unwrap_or_default()
+    };
 
     // Apply base indentation if specified.
     if let Some(bi_str) = params.get("baseindent") {
@@ -265,6 +282,24 @@ fn handle_present(
         }
     }
 
+    // Backup: copy existing file to a backup path before overwriting.
+    // Only when file exists AND content differs (we already know it differs if we reach here).
+    if file_existed {
+        if let Some(backup_val) = params.get("backup").filter(|s| !s.is_empty()) {
+            let backup_path = if backup_val == "true" {
+                let epoch = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                format!("{}.{}.bak", path, epoch)
+            } else {
+                format!("{}{}", path, backup_val)
+            };
+            fs::copy(path, &backup_path)
+                .map_err(|e| format!("backup {} to {}: {}", path, backup_path, e))?;
+        }
+    }
+
     // Set file metadata on result.
     result.file_path = Some(path.to_string());
     result.content_hash = Some(desired_hash.clone());
@@ -295,6 +330,28 @@ fn handle_present(
             let _ = fs::remove_file(&tmp_path);
             format!("chmod temp file: {}", e)
         })?;
+
+    // Validate: run a command to check the new content before committing.
+    // `%` in the command string is replaced with the temp file path.
+    if let Some(validate_cmd) = params.get("validate").filter(|s| !s.is_empty()) {
+        let cmd_str = validate_cmd.replace('%', &tmp_path_str);
+        let output = std::process::Command::new("sh")
+            .args(["-c", &cmd_str])
+            .output()
+            .map_err(|e| {
+                let _ = fs::remove_file(&tmp_path);
+                format!("validate command failed to execute: {}", e)
+            })?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let _ = fs::remove_file(&tmp_path);
+            return Err(format!(
+                "validate command failed (exit {}): {}",
+                output.status.code().unwrap_or(-1),
+                stderr.trim()
+            ));
+        }
+    }
 
     fs::rename(&tmp_path, path).map_err(|e| {
         let _ = fs::remove_file(&tmp_path);
@@ -1030,5 +1087,215 @@ mod tests {
         assert_eq!(result.action, Action::Deleted);
         assert!(result.error.is_none());
         assert!(!target.exists());
+    }
+
+    // --- backup tests ---
+
+    #[test]
+    fn backup_creates_timestamped_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.conf");
+        let path_str = path.to_str().unwrap();
+
+        // Write initial content.
+        fs::write(&path, "old content\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("targetpath", path_str),
+                ("content", "new content\n"),
+                ("mode", "0644"),
+                ("backup", "true"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+        assert_eq!(result.action, Action::Updated);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new content\n");
+
+        // Find the backup file (should match <path>.<epoch>.bak).
+        let entries: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.starts_with("config.conf.") && name.ends_with(".bak")
+            })
+            .collect();
+        assert_eq!(entries.len(), 1, "expected exactly one backup file");
+        let backup_content = fs::read_to_string(entries[0].path()).unwrap();
+        assert_eq!(backup_content, "old content\n");
+    }
+
+    #[test]
+    fn backup_no_backup_when_content_matches() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.conf");
+        let path_str = path.to_str().unwrap();
+        let content = "same content\n";
+
+        fs::write(&path, content).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("targetpath", path_str),
+                ("content", content),
+                ("mode", "0644"),
+                ("backup", "true"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none());
+        assert_eq!(result.action, Action::None);
+
+        // No backup should exist.
+        let entries: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.contains(".bak") || name.contains(".orig")
+            })
+            .collect();
+        assert!(entries.is_empty(), "no backup should be created when content matches");
+    }
+
+    #[test]
+    fn backup_custom_suffix() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.conf");
+        let path_str = path.to_str().unwrap();
+
+        fs::write(&path, "old content\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("targetpath", path_str),
+                ("content", "new content\n"),
+                ("mode", "0644"),
+                ("backup", ".orig"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+        assert_eq!(result.action, Action::Updated);
+
+        let backup_path = dir.path().join("config.conf.orig");
+        assert!(backup_path.exists(), "backup with .orig suffix should exist");
+        assert_eq!(fs::read_to_string(&backup_path).unwrap(), "old content\n");
+    }
+
+    // --- validate tests ---
+
+    #[test]
+    fn validate_passes_allows_write() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("valid.conf");
+        let path_str = path.to_str().unwrap();
+
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("targetpath", path_str),
+                ("content", "valid content\n"),
+                ("mode", "0644"),
+                ("validate", "test -f %"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+        assert_eq!(result.action, Action::Created);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "valid content\n");
+    }
+
+    #[test]
+    fn validate_fails_blocks_write() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("invalid.conf");
+        let path_str = path.to_str().unwrap();
+
+        // Write initial content to ensure it is not modified.
+        fs::write(&path, "original\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("targetpath", path_str),
+                ("content", "bad content\n"),
+                ("mode", "0644"),
+                ("validate", "echo 'invalid config' >&2; exit 1"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+        assert!(result.error.as_ref().unwrap().contains("validate command failed"));
+        // Original file should be untouched.
+        assert_eq!(fs::read_to_string(&path).unwrap(), "original\n");
+    }
+
+    // --- source tests ---
+
+    #[test]
+    fn source_reads_file() {
+        let dir = TempDir::new().unwrap();
+        let source_file = dir.path().join("source.txt");
+        let target_file = dir.path().join("target.txt");
+        let source_str = source_file.to_str().unwrap();
+        let target_str = target_file.to_str().unwrap();
+
+        fs::write(&source_file, "content from source\n").unwrap();
+
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("targetpath", target_str),
+                ("source", source_str),
+                ("mode", "0644"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+        assert_eq!(result.action, Action::Created);
+        assert_eq!(fs::read_to_string(&target_file).unwrap(), "content from source\n");
+    }
+
+    #[test]
+    fn source_and_content_mutually_exclusive() {
+        let dir = TempDir::new().unwrap();
+        let source_file = dir.path().join("source.txt");
+        let target_file = dir.path().join("target.txt");
+        let source_str = source_file.to_str().unwrap();
+        let target_str = target_file.to_str().unwrap();
+
+        fs::write(&source_file, "source content\n").unwrap();
+
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("targetpath", target_str),
+                ("source", source_str),
+                ("content", "inline content\n"),
+                ("mode", "0644"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+        assert!(result.error.as_ref().unwrap().contains("mutually exclusive"));
+        // Target should not be created.
+        assert!(!target_file.exists());
     }
 }

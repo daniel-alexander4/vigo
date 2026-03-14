@@ -17,6 +17,10 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `password` | No | -- | Hashed password string. |
 | `authorized_keys` | No | -- | SSH authorized keys content (written to `~/.ssh/authorized_keys`). |
 | `system` | No | `false` | If `true`, create a system account (`useradd --system`). |
+| `managehome` | No | `true` | If `false`, skip `-m` flag on `useradd` (no home dir creation). If `true`, `userdel -r` removes home on delete. |
+| `password_max_age` | No | -- | Maximum password age in days. Runs `chage -M <days>` after create/update. |
+| `expiredate` | No | -- | Account expiration date (`YYYY-MM-DD`). Passed to `useradd --expiredate` / `usermod --expiredate`. |
+| `purge_groups` | No | `false` | When `true` with `groups`, removes user from supplementary groups not in the list (`usermod -G` instead of `-aG`). |
 
 ## States
 
@@ -63,6 +67,31 @@ resources:
     authorized_keys: |
       ssh-ed25519 AAAA... admin@example.com
       ssh-ed25519 AAAA... ci@example.com
+```
+
+### Expiring contractor account
+
+```yaml
+resources:
+  - name: contractor
+    type: user
+    username: contractor
+    shell: /bin/bash
+    expiredate: "2026-06-30"
+    password_max_age: "90"
+    groups: "developers"
+    purge_groups: "true"
+```
+
+### Without home directory
+
+```yaml
+resources:
+  - name: service-runner
+    type: user
+    username: svcrun
+    managehome: "false"
+    shell: /usr/sbin/nologin
 ```
 
 ### Remove a user

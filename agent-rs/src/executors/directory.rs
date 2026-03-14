@@ -59,12 +59,20 @@ fn execute_directory(
 
     let p = Path::new(path);
 
+    let recurse = params.get("recurse").map(|s| s.as_str()) == Some("true");
+
     if p.is_dir() {
         let current_mode = crate::platform::permissions::get_mode(p)
             .map_err(|e| format!("stat {}: {}", path, e))?;
         let ownership_match = check_ownership(path, desired_uid, desired_gid);
+        let top_match = current_mode == mode && ownership_match;
+        let children_match = if recurse && top_match {
+            check_recursive(p, mode, desired_uid, desired_gid)
+        } else {
+            true // irrelevant when top doesn't match or recurse is off
+        };
 
-        if current_mode == mode && ownership_match {
+        if top_match && children_match {
             result.action = Action::None;
             result.changed = false;
             return Ok(());
@@ -84,6 +92,9 @@ fn execute_directory(
         if !ownership_match {
             apply_ownership(path, desired_uid, desired_gid)?;
         }
+        if recurse {
+            apply_recursive(p, mode, desired_uid, desired_gid)?;
+        }
         return Ok(());
     }
 
@@ -101,6 +112,54 @@ fn execute_directory(
         apply_ownership(path, desired_uid, desired_gid)?;
     }
 
+    Ok(())
+}
+
+/// Check whether all entries under `dir` already match the desired mode and ownership.
+fn check_recursive(dir: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> bool {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        let entry_mode = match crate::platform::permissions::get_mode(&p) {
+            Ok(m) => m,
+            Err(_) => return false,
+        };
+        if entry_mode != mode {
+            return false;
+        }
+        if !check_ownership(p.to_str().unwrap_or(""), uid, gid) {
+            return false;
+        }
+        if p.is_dir() && !check_recursive(&p, mode, uid, gid) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Apply mode and ownership to all entries under `dir` recursively.
+fn apply_recursive(dir: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("read_dir {}: {}", dir.display(), e))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("read entry in {}: {}", dir.display(), e))?;
+        let p = entry.path();
+        let current_mode = crate::platform::permissions::get_mode(&p)
+            .map_err(|e| format!("stat {}: {}", p.display(), e))?;
+        if current_mode != mode {
+            crate::platform::permissions::set_mode(&p, mode)
+                .map_err(|e| format!("chmod {}: {}", p.display(), e))?;
+        }
+        if !check_ownership(p.to_str().unwrap_or(""), uid, gid) {
+            apply_ownership(p.to_str().unwrap_or(""), uid, gid)?;
+        }
+        if p.is_dir() {
+            apply_recursive(&p, mode, uid, gid)?;
+        }
+    }
     Ok(())
 }
 
@@ -275,5 +334,71 @@ mod tests {
         let result = de.execute(&make_params(&[("state", "present")]), false);
         assert!(result.error.is_some());
         assert!(result.error.as_ref().unwrap().contains("targetpath"));
+    }
+
+    #[test]
+    fn recurse_sets_mode_on_children() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("recurse_root");
+        let sub = root.join("subdir");
+        let file1 = root.join("file1.txt");
+        let file2 = sub.join("file2.txt");
+
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(&file1, "a").unwrap();
+        fs::write(&file2, "b").unwrap();
+
+        // Set everything to 0o700 initially
+        crate::platform::permissions::set_mode(&root, 0o700).unwrap();
+        crate::platform::permissions::set_mode(&sub, 0o700).unwrap();
+        crate::platform::permissions::set_mode(&file1, 0o600).unwrap();
+        crate::platform::permissions::set_mode(&file2, 0o600).unwrap();
+
+        let path_str = root.to_str().unwrap();
+        let de = DirectoryExecutor::new();
+        let result = de.execute(
+            &make_params(&[("targetpath", path_str), ("mode", "0755"), ("recurse", "true")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        // Verify all entries got mode 0755
+        assert_eq!(crate::platform::permissions::get_mode(&root).unwrap(), 0o755);
+        assert_eq!(crate::platform::permissions::get_mode(&sub).unwrap(), 0o755);
+        assert_eq!(crate::platform::permissions::get_mode(&file1).unwrap(), 0o755);
+        assert_eq!(crate::platform::permissions::get_mode(&file2).unwrap(), 0o755);
+    }
+
+    #[test]
+    fn recurse_no_change_when_all_match() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("recurse_ok");
+        let sub = root.join("inner");
+        let file1 = root.join("a.txt");
+        let file2 = sub.join("b.txt");
+
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(&file1, "x").unwrap();
+        fs::write(&file2, "y").unwrap();
+
+        // Set everything to the desired mode 0755
+        crate::platform::permissions::set_mode(&root, 0o755).unwrap();
+        crate::platform::permissions::set_mode(&sub, 0o755).unwrap();
+        crate::platform::permissions::set_mode(&file1, 0o755).unwrap();
+        crate::platform::permissions::set_mode(&file2, 0o755).unwrap();
+
+        let path_str = root.to_str().unwrap();
+        let de = DirectoryExecutor::new();
+        let result = de.execute(
+            &make_params(&[("targetpath", path_str), ("mode", "0755"), ("recurse", "true")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
     }
 }

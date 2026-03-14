@@ -97,7 +97,7 @@ impl UserExecutor {
         if system {
             args.push("--system".into());
         }
-        for (flag, key) in [("-u", "uid"), ("-s", "shell"), ("-d", "home"), ("-c", "comment"), ("-g", "group"), ("-p", "password")] {
+        for (flag, key) in [("-u", "uid"), ("-s", "shell"), ("-d", "home"), ("-c", "comment"), ("-g", "group"), ("-p", "password"), ("--expiredate", "expiredate")] {
             if let Some(v) = params.get(key) {
                 if !v.is_empty() {
                     args.push(flag.into());
@@ -105,7 +105,8 @@ impl UserExecutor {
                 }
             }
         }
-        if !system {
+        let managehome = params.get("managehome").map(|s| s != "false").unwrap_or(true);
+        if !system && managehome {
             args.push("-m".into()); // create home dir
         }
         args.push(name.into());
@@ -228,6 +229,26 @@ impl Executor for UserExecutor {
                         _ => {}
                     }
 
+                    // Password max age.
+                    if let Some(max_age) = params.get("password_max_age") {
+                        if !max_age.is_empty() {
+                            match self.runner.run("chage", &["-M", max_age, &name]) {
+                                Ok(o) if !o.status.success() => {
+                                    let stderr = String::from_utf8_lossy(&o.stderr);
+                                    result.error = Some(format!("chage -M: {}", stderr));
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                                Err(e) => {
+                                    result.error = Some(format!("chage -M: {}", e));
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
                     // Supplementary groups.
                     if let Some(groups) = params.get("groups") {
                         if !groups.is_empty() {
@@ -315,8 +336,17 @@ impl Executor for UserExecutor {
                         }
                     }
 
+                    if let Some(expiredate) = params.get("expiredate") {
+                        if !expiredate.is_empty() {
+                            needs_update = true;
+                            mod_args.extend(["--expiredate".into(), expiredate.clone()]);
+                        }
+                    }
+
                     // Check supplementary groups.
+                    let purge_groups = params.get("purge_groups").map(|s| s == "true").unwrap_or(false);
                     let mut groups_to_add = Vec::new();
+                    let mut groups_to_purge = false;
                     if let Some(groups) = params.get("groups") {
                         if !groups.is_empty() {
                             let desired: Vec<&str> = groups.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
@@ -326,7 +356,17 @@ impl Executor for UserExecutor {
                                     groups_to_add.push(g.to_string());
                                 }
                             }
-                            if !groups_to_add.is_empty() {
+                            if purge_groups {
+                                // Check if user has extra groups not in the desired list.
+                                // Exclude the user's primary group (same as username) from purge check.
+                                for c in &current {
+                                    if c != &name && !desired.iter().any(|d| d == c) {
+                                        groups_to_purge = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if !groups_to_add.is_empty() || groups_to_purge {
                                 needs_update = true;
                             }
                         }
@@ -351,6 +391,13 @@ impl Executor for UserExecutor {
                                     return result;
                                 }
                             }
+                        }
+                    }
+
+                    // Check password_max_age (always apply if set — chage is idempotent).
+                    if let Some(max_age) = params.get("password_max_age") {
+                        if !max_age.is_empty() {
+                            needs_update = true;
                         }
                     }
 
@@ -426,7 +473,24 @@ impl Executor for UserExecutor {
                     }
 
                     // Apply supplementary groups.
-                    if !groups_to_add.is_empty() {
+                    if groups_to_purge {
+                        // Set exact group list (purge mode) — use -G without -a.
+                        let desired_list = params.get("groups").unwrap();
+                        match self.runner.run("usermod", &["-G", desired_list, &name]) {
+                            Ok(o) if !o.status.success() => {
+                                let stderr = String::from_utf8_lossy(&o.stderr);
+                                result.error = Some(format!("usermod -G: {}", stderr));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                            Err(e) => {
+                                result.error = Some(format!("usermod -G: {}", e));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                            _ => {}
+                        }
+                    } else if !groups_to_add.is_empty() {
                         let joined = groups_to_add.join(",");
                         match self.runner.run("usermod", &["-aG", &joined, &name]) {
                             Ok(o) if !o.status.success() => {
@@ -462,6 +526,26 @@ impl Executor for UserExecutor {
                         }
                     }
 
+                    // Apply password max age.
+                    if let Some(max_age) = params.get("password_max_age") {
+                        if !max_age.is_empty() {
+                            match self.runner.run("chage", &["-M", max_age, &name]) {
+                                Ok(o) if !o.status.success() => {
+                                    let stderr = String::from_utf8_lossy(&o.stderr);
+                                    result.error = Some(format!("chage -M: {}", stderr));
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                                Err(e) => {
+                                    result.error = Some(format!("chage -M: {}", e));
+                                    result.duration_ms = start.elapsed().as_millis() as i32;
+                                    return result;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
                     // Apply authorized_keys.
                     if keys_changed {
                         let home = Self::resolve_home(&name, params, Some(entry));
@@ -478,7 +562,13 @@ impl Executor for UserExecutor {
                     result.action = Action::Deleted;
                     result.changed = true;
                     if !dry_run {
-                        match self.runner.run("userdel", &[&name]) {
+                        let managehome = params.get("managehome").map(|s| s != "false").unwrap_or(true);
+                        let userdel_args: Vec<&str> = if managehome {
+                            vec!["-r", &name]
+                        } else {
+                            vec![&name]
+                        };
+                        match self.runner.run("userdel", &userdel_args) {
                             Ok(o) if !o.status.success() => {
                                 let stderr = String::from_utf8_lossy(&o.stderr);
                                 result.error = Some(format!("userdel {}: {}", name, stderr));
@@ -729,7 +819,8 @@ mod tests {
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "userdel");
-        assert_eq!(calls[0].1, vec!["deploy"]);
+        // Default managehome is true, so -r flag is included.
+        assert_eq!(calls[0].1, vec!["-r", "deploy"]);
     }
 
     #[test]
@@ -759,6 +850,301 @@ mod tests {
         assert!(
             calls.lock().unwrap().is_empty(),
             "dry_run should not invoke any commands"
+        );
+    }
+
+    #[test]
+    fn managehome_false_skips_m_flag() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "present"),
+                ("managehome", "false"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls[0].0, "useradd");
+        assert!(
+            !calls[0].1.contains(&"-m".to_string()),
+            "useradd should not contain -m when managehome is false, got: {:?}",
+            calls[0].1
+        );
+    }
+
+    #[test]
+    fn managehome_true_removes_home_on_delete() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001::/home/deploy:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndeploy:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+
+        // userdel succeeds
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        // Explicit managehome: "true" (also the default).
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "absent"),
+                ("managehome", "true"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls[0].0, "userdel");
+        assert_eq!(calls[0].1, vec!["-r", "deploy"]);
+    }
+
+    #[test]
+    fn managehome_false_plain_userdel() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001::/home/deploy:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndeploy:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "absent"),
+                ("managehome", "false"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Deleted);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls[0].0, "userdel");
+        // No -r flag when managehome is false.
+        assert_eq!(calls[0].1, vec!["deploy"]);
+    }
+
+    #[test]
+    fn password_max_age_runs_chage() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        // useradd succeeds, chage succeeds
+        let mock = MockRunner::new(vec![ok_output(""), ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "present"),
+                ("password_max_age", "90"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].0, "useradd");
+        assert_eq!(calls[1].0, "chage");
+        assert_eq!(calls[1].1, vec!["-M", "90", "deploy"]);
+    }
+
+    #[test]
+    fn password_max_age_runs_chage_on_update() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001::/home/deploy:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndeploy:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+
+        // chage succeeds
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "present"),
+                ("password_max_age", "60"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "chage");
+        assert_eq!(calls[0].1, vec!["-M", "60", "deploy"]);
+    }
+
+    #[test]
+    fn expiredate_passed_to_useradd() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "present"),
+                ("expiredate", "2026-12-31"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls[0].0, "useradd");
+        let args = &calls[0].1;
+        let idx = args.iter().position(|a| a == "--expiredate").expect("--expiredate not found");
+        assert_eq!(args[idx + 1], "2026-12-31");
+    }
+
+    #[test]
+    fn purge_groups_uses_set_not_append() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001::/home/deploy:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndeploy:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+
+        // id -nG returns current groups (deploy is primary + docker,wheel as supplementary)
+        // usermod -G succeeds
+        let mock = MockRunner::new(vec![
+            ok_output("deploy docker wheel"),
+            ok_output(""),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+        };
+
+        // Desired groups: docker only. wheel should be purged.
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "present"),
+                ("groups", "docker"),
+                ("purge_groups", "true"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        // First call: id -nG deploy (group check)
+        assert_eq!(calls[0].0, "id");
+        // Second call: usermod -G docker deploy (set, not append)
+        assert_eq!(calls[1].0, "usermod");
+        assert_eq!(calls[1].1, vec!["-G", "docker", "deploy"]);
+        // Verify it's NOT -aG
+        assert!(
+            !calls[1].1.contains(&"-aG".to_string()),
+            "purge_groups should use -G, not -aG"
         );
     }
 

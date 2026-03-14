@@ -9,6 +9,7 @@ Installs, upgrades, and removes OS packages. Auto-detects the system's package m
 | `package` | Yes | -- | Package name. Also accepts `name`. Supports comma-separated lists for multiple packages. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `version` | No | -- | Specific version to install. Format depends on the package manager (e.g., `1.2.3-1` for APT/DNF). |
+| `allow_downgrade` | No | `false` | When `true`, uses downgrade-safe commands when changing to a different version. APT uses `--allow-downgrades`, DNF/YUM use `dnf downgrade`/`yum downgrade`. Other package managers fall back to a regular install. |
 
 ## States
 
@@ -90,6 +91,17 @@ resources:
     type: package
     package: yum-utils
     when: "!os_family('debian')"
+```
+
+### Downgrade a package
+
+```yaml
+resources:
+  - name: Pin nginx to older version
+    type: package
+    package: nginx
+    version: "1.22.0-1"
+    allow_downgrade: "true"
 ```
 
 ### Remove a package

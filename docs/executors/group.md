@@ -9,6 +9,8 @@ Manages local groups -- create, modify, and delete groups.
 | `group` | Yes | -- | Group name. Also accepts `name`. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `gid` | No | -- | Desired GID (group ID). |
+| `system` | No | `false` | If `true`, create as a system group (`groupadd --system`, GID < 1000). |
+| `members` | No | -- | Comma-separated user list. Ensures exact membership: adds missing users, removes extras. |
 
 ## States
 
@@ -53,6 +55,17 @@ resources:
     username: myapp
     group: myapp
     depends_on: app-group
+```
+
+### System group with managed members
+
+```yaml
+resources:
+  - name: app-group
+    type: group
+    group: myapp
+    system: "true"
+    members: "deploy,ci"
 ```
 
 ### Remove a group

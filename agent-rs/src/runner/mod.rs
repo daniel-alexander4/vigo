@@ -763,6 +763,10 @@ impl Executor for PackageExecutorWrapper {
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
         let version = params.get("version").map(|s| s.as_str()).unwrap_or("");
+        let allow_downgrade = params
+            .get("allow_downgrade")
+            .map(|s| s == "true")
+            .unwrap_or(false);
 
         // Support comma-separated package names.
         let names: Vec<&str> = name_param
@@ -772,7 +776,7 @@ impl Executor for PackageExecutorWrapper {
             .collect();
 
         for name in &names {
-            let res = self.execute_one_package(name, state, version, dry_run);
+            let res = self.execute_one_package(name, state, version, dry_run, allow_downgrade);
             if res.error.is_some() {
                 result.error = res.error;
                 result.duration_ms = start.elapsed().as_millis() as i32;
@@ -798,6 +802,7 @@ impl PackageExecutorWrapper {
         state: &str,
         version: &str,
         dry_run: bool,
+        allow_downgrade: bool,
     ) -> ResourceResult {
         let mut result = ResourceResult::new("package", name);
 
@@ -818,9 +823,15 @@ impl PackageExecutorWrapper {
                         if dry_run {
                             return result;
                         }
-                        if let Err(e) = self.pkg_mgr.upgrade(name, version) {
+                        let change_result = if allow_downgrade {
+                            self.pkg_mgr.downgrade(name, version)
+                        } else {
+                            self.pkg_mgr.upgrade(name, version)
+                        };
+                        if let Err(e) = change_result {
+                            let verb = if allow_downgrade { "downgrade" } else { "upgrade" };
                             result.error =
-                                Some(format!("upgrade package {} to {}: {}", name, version, e));
+                                Some(format!("{} package {} to {}: {}", verb, name, version, e));
                         }
                         return result;
                     }

@@ -35,6 +35,30 @@ impl GroupExecutor {
         }
         (false, String::new())
     }
+
+    /// Parse the 4th field of /etc/group for the given group name to get current members.
+    fn group_members(&self, name: &str) -> Vec<String> {
+        let f = match std::fs::File::open(&self.group_file) {
+            Ok(f) => f,
+            Err(_) => return Vec::new(),
+        };
+
+        for line in BufReader::new(f).lines().flatten() {
+            let parts: Vec<&str> = line.splitn(4, ':').collect();
+            if parts.len() >= 4 && parts[0] == name {
+                let members_field = parts[3].trim();
+                if members_field.is_empty() {
+                    return Vec::new();
+                }
+                return members_field
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+            }
+        }
+        Vec::new()
+    }
 }
 
 impl Executor for GroupExecutor {
@@ -81,11 +105,17 @@ impl Executor for GroupExecutor {
                     result.action = Action::Created;
                     result.changed = true;
                     if !dry_run {
-                        let args: Vec<&str> = if gid.is_empty() {
-                            vec![&name]
-                        } else {
-                            vec!["-g", &gid, &name]
-                        };
+                        let system_flag =
+                            params.get("system").map(|s| s == "true").unwrap_or(false);
+                        let mut args: Vec<&str> = Vec::new();
+                        if system_flag {
+                            args.push("--system");
+                        }
+                        if !gid.is_empty() {
+                            args.push("-g");
+                            args.push(&gid);
+                        }
+                        args.push(&name);
                         match self.runner.run("groupadd", &args) {
                             Ok(o) if !o.status.success() => {
                                 let stderr = String::from_utf8_lossy(&o.stderr);
@@ -93,6 +123,78 @@ impl Executor for GroupExecutor {
                             }
                             Err(e) => result.error = Some(format!("groupadd: {}", e)),
                             _ => {}
+                        }
+                    }
+                }
+
+                // Members management — only when members param is explicitly set.
+                if let Some(members_param) = params.get("members") {
+                    let desired: std::collections::HashSet<String> = members_param
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    let current: std::collections::HashSet<String> =
+                        self.group_members(&name).into_iter().collect();
+
+                    let to_add: Vec<&String> = desired.difference(&current).collect();
+                    let to_remove: Vec<&String> = current.difference(&desired).collect();
+
+                    if !to_add.is_empty() || !to_remove.is_empty() {
+                        if !result.changed {
+                            result.action = Action::Updated;
+                            result.changed = true;
+                        }
+
+                        if !dry_run {
+                            for user in &to_add {
+                                match self.runner.run("usermod", &["-aG", &name, user]) {
+                                    Ok(o) if !o.status.success() => {
+                                        let stderr = String::from_utf8_lossy(&o.stderr);
+                                        result.error = Some(format!(
+                                            "usermod -aG {} {}: {}",
+                                            name, user, stderr
+                                        ));
+                                        result.duration_ms =
+                                            start.elapsed().as_millis() as i32;
+                                        return result;
+                                    }
+                                    Err(e) => {
+                                        result.error = Some(format!(
+                                            "usermod -aG {} {}: {}",
+                                            name, user, e
+                                        ));
+                                        result.duration_ms =
+                                            start.elapsed().as_millis() as i32;
+                                        return result;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            for user in &to_remove {
+                                match self.runner.run("gpasswd", &["-d", user, &name]) {
+                                    Ok(o) if !o.status.success() => {
+                                        let stderr = String::from_utf8_lossy(&o.stderr);
+                                        result.error = Some(format!(
+                                            "gpasswd -d {} {}: {}",
+                                            user, name, stderr
+                                        ));
+                                        result.duration_ms =
+                                            start.elapsed().as_millis() as i32;
+                                        return result;
+                                    }
+                                    Err(e) => {
+                                        result.error = Some(format!(
+                                            "gpasswd -d {} {}: {}",
+                                            user, name, e
+                                        ));
+                                        result.duration_ms =
+                                            start.elapsed().as_millis() as i32;
+                                        return result;
+                                    }
+                                    _ => {}
+                                }
+                            }
                         }
                     }
                 }
@@ -288,6 +390,107 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "groupdel");
         assert_eq!(calls[0].1, vec!["deploy"]);
+    }
+
+    #[test]
+    fn system_flag_on_groupadd() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\n").unwrap();
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("name", "sysgroup"), ("state", "present"), ("system", "true")]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "groupadd");
+        assert!(
+            calls[0].1.contains(&"--system".to_string()),
+            "expected --system in args: {:?}",
+            calls[0].1
+        );
+        assert!(
+            calls[0].1.contains(&"sysgroup".to_string()),
+            "expected group name in args: {:?}",
+            calls[0].1
+        );
+    }
+
+    #[test]
+    fn members_adds_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\ndeploy:x:1001:alice\n").unwrap();
+
+        // usermod -aG for bob
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "present"),
+                ("members", "alice,bob"),
+            ]),
+            false,
+        );
+
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "usermod");
+        assert_eq!(calls[0].1, vec!["-aG", "deploy", "bob"]);
+    }
+
+    #[test]
+    fn members_removes_extra() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let group_file = dir.path().join("group");
+        std::fs::write(&group_file, "root:x:0:\ndeploy:x:1001:alice,bob\n").unwrap();
+
+        // gpasswd -d for bob
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = GroupExecutor {
+            runner: Box::new(mock),
+            group_file: group_file.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "deploy"),
+                ("state", "present"),
+                ("members", "alice"),
+            ]),
+            false,
+        );
+
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "gpasswd");
+        assert_eq!(calls[0].1, vec!["-d", "bob", "deploy"]);
     }
 
     #[test]

@@ -50,12 +50,28 @@ impl Executor for CronExecutor {
             return result;
         }
 
-        let schedule = build_schedule(params);
+        let schedule = match build_schedule(params) {
+            Ok(s) => s,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
         let user = params.get("user").map(|s| s.as_str()).unwrap_or("root");
-        let content = format!(
-            "# Managed by hobnob -- do not edit\n{} {} {}\n",
-            schedule, user, job
-        );
+
+        // Build content: header, optional environment lines, then schedule line.
+        let mut content = String::from("# Managed by hobnob -- do not edit\n");
+        if let Some(env_param) = params.get("environment") {
+            for pair in env_param.split(',') {
+                let pair = pair.trim();
+                if !pair.is_empty() && pair.contains('=') {
+                    content.push_str(pair);
+                    content.push('\n');
+                }
+            }
+        }
+        content.push_str(&format!("{} {} {}\n", schedule, user, job));
 
         let desired_hash = sha256_hex(content.as_bytes());
         let existing_matches = std::fs::read(&path)
@@ -86,10 +102,27 @@ impl Executor for CronExecutor {
     }
 }
 
-fn build_schedule(params: &HashMap<String, String>) -> String {
+const VALID_SPECIALS: &[&str] = &[
+    "@reboot", "@yearly", "@annually", "@monthly", "@weekly", "@daily", "@hourly",
+];
+
+fn build_schedule(params: &HashMap<String, String>) -> Result<String, String> {
+    // Special schedule takes precedence over everything.
+    if let Some(s) = params.get("special") {
+        if !s.is_empty() {
+            if !s.starts_with('@') || !VALID_SPECIALS.contains(&s.as_str()) {
+                return Err(format!(
+                    "cron executor: invalid special schedule {:?} (valid: {})",
+                    s,
+                    VALID_SPECIALS.join(", ")
+                ));
+            }
+            return Ok(s.clone());
+        }
+    }
     if let Some(s) = params.get("schedule") {
         if !s.is_empty() {
-            return s.clone();
+            return Ok(s.clone());
         }
     }
     let keys = ["minute", "hour", "day", "month", "weekday"];
@@ -97,7 +130,7 @@ fn build_schedule(params: &HashMap<String, String>) -> String {
         .iter()
         .map(|k| params.get(*k).map(|s| s.as_str()).unwrap_or("*"))
         .collect();
-    fields.join(" ")
+    Ok(fields.join(" "))
 }
 
 fn sanitize_cron_name(name: &str) -> String {
@@ -161,7 +194,7 @@ mod tests {
             ("month", "6"),
             ("weekday", "1"),
         ]);
-        let schedule = build_schedule(&params);
+        let schedule = build_schedule(&params).unwrap();
         assert_eq!(schedule, "30 2 15 6 1");
     }
 
@@ -172,14 +205,14 @@ mod tests {
             ("minute", "30"),
             ("hour", "2"),
         ]);
-        let schedule = build_schedule(&params);
+        let schedule = build_schedule(&params).unwrap();
         assert_eq!(schedule, "*/5 * * * *");
     }
 
     #[test]
     fn build_schedule_defaults_stars() {
         let params = make_params(&[]);
-        let schedule = build_schedule(&params);
+        let schedule = build_schedule(&params).unwrap();
         assert_eq!(schedule, "* * * * *");
     }
 
@@ -189,6 +222,61 @@ mod tests {
         assert_eq!(sanitize_cron_name("backup@daily!"), "backup-daily-");
         assert_eq!(sanitize_cron_name("clean_tmp-2"), "clean_tmp-2");
         assert_eq!(sanitize_cron_name("a/b.c:d"), "a-b-c-d");
+    }
+
+    #[test]
+    fn special_reboot_schedule() {
+        let params = make_params(&[("special", "@reboot")]);
+        let schedule = build_schedule(&params).unwrap();
+        assert_eq!(schedule, "@reboot");
+    }
+
+    #[test]
+    fn special_invalid_errors() {
+        let params = make_params(&[("special", "@bogus")]);
+        let result = build_schedule(&params);
+        assert!(result.is_err());
+        assert!(
+            result.as_ref().unwrap_err().contains("invalid special schedule"),
+            "unexpected error: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn environment_written_to_cron_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cron_dir = dir.path().join("cron.d");
+        std::fs::create_dir_all(&cron_dir).unwrap();
+
+        // We can't easily redirect /etc/cron.d, so test the content construction
+        // by checking build_schedule + content format logic directly.
+        let params = make_params(&[
+            ("name", "backup"),
+            ("job", "/usr/bin/backup.sh"),
+            ("schedule", "0 2 * * *"),
+            ("environment", "MAILTO=root,PATH=/usr/bin:/bin"),
+        ]);
+
+        // Replicate the content-building logic from execute.
+        let schedule = build_schedule(&params).unwrap();
+        let user = params.get("user").map(|s| s.as_str()).unwrap_or("root");
+        let mut content = String::from("# Managed by hobnob -- do not edit\n");
+        if let Some(env_param) = params.get("environment") {
+            for pair in env_param.split(',') {
+                let pair = pair.trim();
+                if !pair.is_empty() && pair.contains('=') {
+                    content.push_str(pair);
+                    content.push('\n');
+                }
+            }
+        }
+        content.push_str(&format!("{} {} {}\n", schedule, user, params["job"]));
+
+        assert_eq!(
+            content,
+            "# Managed by hobnob -- do not edit\nMAILTO=root\nPATH=/usr/bin:/bin\n0 2 * * * root /usr/bin/backup.sh\n"
+        );
     }
 
     #[test]

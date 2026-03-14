@@ -160,6 +160,19 @@ impl PackageManager for AptManager {
     fn upgrade(&self, name: &str, version: &str) -> Result<(), String> {
         self.install(name, version)
     }
+
+    fn downgrade(&self, name: &str, version: &str) -> Result<(), String> {
+        let pkg = if version.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}={}", name, version)
+        };
+
+        apt_get_with_retry(
+            &["install", "-y", "--allow-downgrades", &pkg],
+            &format!("downgrade {}", name),
+        )
+    }
 }
 
 #[cfg(test)]

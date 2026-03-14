@@ -59,6 +59,7 @@ impl ServiceExecutor {
         state: &str,
         enabled_param: &str,
         dry_run: bool,
+        params: &HashMap<String, String>,
     ) -> ResourceResult {
         let mut result = ResourceResult::new("service", name);
 
@@ -117,17 +118,46 @@ impl ServiceExecutor {
         }
 
         if let Some(cmd) = state_cmd {
-            let output = self.runner.run("systemctl", &[cmd, name]);
-            if let Err(e) = output {
-                result.error = Some(format!("systemctl {} {}: {}", cmd, name, e));
-                return result;
-            }
-            let output = output.unwrap();
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                result.error =
-                    Some(format!("systemctl {} {}: {}", cmd, name, stderr));
-                return result;
+            // Check for custom restart_cmd / reload_cmd overrides.
+            let custom_cmd = match cmd {
+                "restart" => params.get("restart_cmd"),
+                "reload" => params.get("reload_cmd"),
+                _ => None,
+            };
+
+            if let Some(custom) = custom_cmd {
+                let parts: Vec<&str> = custom.split_whitespace().collect();
+                if parts.is_empty() {
+                    result.error = Some(format!(
+                        "service executor: empty {}_cmd",
+                        cmd
+                    ));
+                    return result;
+                }
+                let output = self.runner.run(parts[0], &parts[1..]);
+                if let Err(e) = output {
+                    result.error = Some(format!("{}: {}", custom, e));
+                    return result;
+                }
+                let output = output.unwrap();
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    result.error = Some(format!("{}: {}", custom, stderr));
+                    return result;
+                }
+            } else {
+                let output = self.runner.run("systemctl", &[cmd, name]);
+                if let Err(e) = output {
+                    result.error = Some(format!("systemctl {} {}: {}", cmd, name, e));
+                    return result;
+                }
+                let output = output.unwrap();
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    result.error =
+                        Some(format!("systemctl {} {}: {}", cmd, name, stderr));
+                    return result;
+                }
             }
         }
 
@@ -178,7 +208,7 @@ impl Executor for ServiceExecutor {
             .collect();
 
         for name in &names {
-            let res = self.execute_one(name, state, enabled_param, dry_run);
+            let res = self.execute_one(name, state, enabled_param, dry_run, params);
             if res.error.is_some() {
                 result.error = res.error;
                 result.duration_ms = start.elapsed().as_millis() as i32;
@@ -355,6 +385,63 @@ mod tests {
         // Only the status query — no start or enable.
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 1, "dry_run should only query status, got {:?}", *calls);
+    }
+
+    #[test]
+    fn restart_cmd_overrides_systemctl() {
+        let mock = MockRunner::new(vec![
+            ok_output("ActiveState=active\nUnitFileState=enabled\n"),
+            ok_output(""), // custom restart command
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ServiceExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "nginx"),
+                ("state", "restarted"),
+                ("restart_cmd", "nginx -s reload"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        // Second call should be the custom command, not systemctl.
+        assert_eq!(calls[1].0, "nginx");
+        assert_eq!(calls[1].1, vec!["-s", "reload"]);
+    }
+
+    #[test]
+    fn reload_cmd_overrides_systemctl() {
+        let mock = MockRunner::new(vec![
+            ok_output("ActiveState=active\nUnitFileState=enabled\n"),
+            ok_output(""), // custom reload command
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ServiceExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "nginx"),
+                ("state", "reloaded"),
+                ("reload_cmd", "/usr/sbin/nginx -s reload"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, "/usr/sbin/nginx");
+        assert_eq!(calls[1].1, vec!["-s", "reload"]);
     }
 
     #[test]

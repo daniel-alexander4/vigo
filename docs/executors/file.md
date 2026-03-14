@@ -13,6 +13,9 @@ Manages file content, permissions, and ownership idempotently. Uses SHA-256 cont
 | `owner` | No | -- | File owner (username or UID). Linux only. |
 | `group` | No | -- | File group (group name or GID). Linux only. |
 | `baseindent` | No | -- | Number of spaces to prepend to each non-empty line of `content`. Useful for keeping YAML indentation clean. |
+| `source` | No | -- | Local file path on the thrall to copy content from. Mutually exclusive with `content`. |
+| `backup` | No | -- | Create a backup before overwriting. `"true"` creates `<path>.<epoch>.bak`; a custom string (e.g., `".orig"`) creates `<path><suffix>`. Only triggers when content differs. |
+| `validate` | No | -- | Shell command to validate content before writing. `%` is replaced with the temp file path. Non-zero exit blocks the write. |
 | `stream_edit` | No | -- | Path to a script (or list of paths) that transforms `content` before writing. See [Stream Edit](#stream-edit). |
 
 ## States
@@ -272,6 +275,62 @@ resources:
     targetpath: /etc/myapp/old-config.toml
     state: absent
 ```
+
+### Source
+
+Copy content from a local file on the thrall instead of specifying it inline:
+
+```yaml
+resources:
+  - name: hosts-backup
+    type: file
+    targetpath: /etc/hosts.managed
+    source: /etc/hosts
+    mode: "0644"
+```
+
+`source` and `content` are mutually exclusive -- setting both is an error.
+
+### Backup
+
+Create a backup of the existing file before overwriting:
+
+```yaml
+resources:
+  - name: /etc/nginx/nginx.conf
+    type: file
+    targetpath: /etc/nginx/nginx.conf
+    content: |
+      worker_processes auto;
+    backup: "true"
+    mode: "0644"
+```
+
+With `backup: "true"`, the backup is named `<path>.<epoch_seconds>.bak` (e.g., `/etc/nginx/nginx.conf.1710345600.bak`). Use a custom suffix string for a fixed name:
+
+```yaml
+    backup: ".orig"    # creates /etc/nginx/nginx.conf.orig
+```
+
+Backups are only created when the file exists and its content differs from the desired state. No backup is created on first write or when content matches.
+
+### Validate
+
+Run a command to validate content before committing the write. The `%` character in the command is replaced with the path to a temporary file containing the new content:
+
+```yaml
+resources:
+  - name: /etc/nginx/nginx.conf
+    type: file
+    targetpath: /etc/nginx/nginx.conf
+    content: |
+      worker_processes auto;
+      events { worker_connections 1024; }
+    validate: "nginx -t -c %"
+    mode: "0644"
+```
+
+If the validate command exits non-zero, the file is not written and the resource fails. The temp file is cleaned up automatically.
 
 ## Platform
 

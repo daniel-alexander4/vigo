@@ -11,6 +11,7 @@ Creates and removes directories with specified permissions and ownership.
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `owner` | No | -- | Directory owner (username or UID). Linux only. |
 | `group` | No | -- | Directory group (group name or GID). Linux only. |
+| `recurse` | No | `false` | When `true`, recursively apply `mode`, `owner`, and `group` to all files and subdirectories. |
 
 ## States
 
@@ -48,6 +49,19 @@ resources:
     targetpath: /opt/myapp
     owner: deploy
     depends_on: deploy-user
+```
+
+### Recursive permissions
+
+```yaml
+resources:
+  - name: /opt/myapp
+    type: directory
+    targetpath: /opt/myapp
+    mode: "0755"
+    owner: deploy
+    group: deploy
+    recurse: "true"
 ```
 
 ### Absent

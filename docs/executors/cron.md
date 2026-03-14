@@ -16,6 +16,8 @@ Manages cron jobs by writing configuration files to `/etc/cron.d/`.
 | `month` | No | `*` | Month field (1-12). |
 | `weekday` | No | `*` | Day of week field (0-7, where 0 and 7 are Sunday). |
 | `user` | No | `root` | User to run the job as. |
+| `special` | No | -- | Special schedule: `@reboot`, `@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`. Overrides `schedule` and individual fields. |
+| `environment` | No | -- | Comma-separated `KEY=VALUE` pairs written as env lines before the schedule. |
 
 ## States
 
@@ -61,6 +63,29 @@ resources:
     name: health-check
     job: "/opt/check-health.sh"
     schedule: "*/5 * * * *"
+```
+
+### Run at boot
+
+```yaml
+resources:
+  - name: mount-data
+    type: cron
+    name: mount-data
+    job: "/opt/mount-data.sh"
+    special: "@reboot"
+```
+
+### With environment variables
+
+```yaml
+resources:
+  - name: etl-job
+    type: cron
+    name: etl-job
+    job: "/opt/run-etl.sh"
+    schedule: "0 4 * * *"
+    environment: "RAILS_ENV=production,PATH=/usr/local/bin:/usr/bin"
 ```
 
 ### Remove a cron job
