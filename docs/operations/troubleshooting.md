@@ -199,6 +199,71 @@ See [Metrics](metrics.md) for the full list.
 - File permissions prevent the server process from reading the secret
 - Secrets backend is misconfigured
 
+### Bootstrap Fails with "Failure writing output"
+
+**Symptoms:** `curl: (23) Failure writing output to destination` during bootstrap.
+
+**Cause:** The old agent binary at `/usr/local/bin/hobnob` is locked by a running process. Curl can't overwrite a binary that's currently executing.
+
+**Fix:**
+
+```bash
+# Stop the agent first
+sudo systemctl stop hobnob-thrall
+
+# Then re-run bootstrap
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
+### Resetting a Thrall
+
+To completely reset a thrall and re-bootstrap from scratch:
+
+```bash
+# 1. Stop and remove the service
+sudo systemctl stop hobnob-thrall
+sudo systemctl disable hobnob-thrall
+sudo rm -f /etc/systemd/system/hobnob-thrall.service
+sudo systemctl daemon-reload
+
+# 2. Remove agent data and binary
+sudo rm -rf /etc/hobnob-thrall
+sudo rm -rf /var/lib/hobnob
+sudo rm -f /usr/local/bin/hobnob
+
+# 3. Re-bootstrap
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
+Or use the reset script:
+
+```bash
+sudo scripts/reset-thrall.sh
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
+The thrall will re-enroll with a new UUID and keypair. The old thrall entry on the server becomes orphaned — revoke it with:
+
+```bash
+hobnobcli thralls revoke <old-uuid>
+```
+
+### Resetting the Server
+
+To wipe all server state and start fresh (preserves license):
+
+```bash
+cd /srv/hobnob
+docker compose down
+sudo find /srv/hobnob -mindepth 1 -path /srv/hobnob/license -prune -o -print0 | xargs -0 rm -rf
+docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
+docker compose up -d
+```
+
+This re-seeds `server.yaml`, `.env`, `docker-compose.yml`, TLS certs, and examples. Your license file is preserved.
+
+---
+
 ## Log Messages to Watch
 
 | Log Message | Meaning |
