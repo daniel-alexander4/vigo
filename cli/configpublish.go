@@ -38,6 +38,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		operator, _ := cmd.Flags().GetString("operator")
 		showDiff, _ := cmd.Flags().GetBool("diff")
 		skipSuggest, _ := cmd.Flags().GetBool("skip-suggest")
+		filePath, _ := cmd.Flags().GetString("file")
 
 		if operator == "" {
 			if u, err := user.Current(); err == nil {
@@ -50,6 +51,21 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 			URLTimeout: urlTimeout,
 			Operator:   operator,
 			Diff:       showDiff,
+		}
+
+		// Single-file publish mode.
+		if filePath != "" {
+			if dryRun {
+				return fmt.Errorf("--file and --dry-run cannot be combined")
+			}
+			res, err := publish.PublishFile(filePath, opts)
+			if err != nil {
+				suggestFixes(err, skipSuggest)
+				return err
+			}
+			fmt.Printf("Published: %s\n", filePath)
+			recordPublish(operator, res)
+			return nil
 		}
 
 		if dryRun {
@@ -82,14 +98,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 			fmt.Println(res.DiffSummary)
 		}
 
-		// Record publish in server for audit trail (best-effort).
-		client := newAPIClient()
-		_ = client.post("/api/v1/config/publishes", map[string]any{
-			"operator":      operator,
-			"changed_files": res.Changed,
-			"removed_files": res.Removed,
-			"diff_summary":  res.DiffSummary,
-		}, nil)
+		recordPublish(operator, res)
 		return nil
 	},
 }
@@ -221,6 +230,17 @@ func streamPublishSSE(body io.Reader) error {
 	return scanner.Err()
 }
 
+// recordPublish sends publish metadata to the server for audit (best-effort).
+func recordPublish(operator string, res *publish.Result) {
+	client := newAPIClient()
+	_ = client.post("/api/v1/config/publishes", map[string]any{
+		"operator":      operator,
+		"changed_files": res.Changed,
+		"removed_files": res.Removed,
+		"diff_summary":  res.DiffSummary,
+	}, nil)
+}
+
 func init() {
 	configPublishCmd.Flags().Bool("dry-run", false, "validate only, do not publish")
 	configPublishCmd.Flags().Bool("skip-url-check", false, "skip HTTP aliveness checks for URLs")
@@ -228,6 +248,7 @@ func init() {
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("skip-suggest", false, "skip AI-assisted fix suggestions on validation failure")
+	configPublishCmd.Flags().String("file", "", "publish a single .hnb file (path relative to proposed/)")
 
 	configCmd.AddCommand(configPublishCmd)
 }

@@ -506,6 +506,58 @@ func lockdownLiveDir(live string) {
 	})
 }
 
+// PublishFile copies a single .hnb file into proposed/, validates the full
+// config tree, and syncs only that file to .live/. The file path must be
+// relative to the proposed directory (e.g., "modules/nginx.hnb").
+func PublishFile(srcPath string, opts Options) (*Result, error) {
+	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
+		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
+	}
+
+	// Determine the relative path within the config tree.
+	// Accept either an absolute path or a relative path like "modules/nginx.hnb".
+	relPath := srcPath
+	if filepath.IsAbs(srcPath) {
+		// Check if the file is already inside proposed/.
+		if rel, err := filepath.Rel(ProposedDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
+			relPath = rel
+		} else {
+			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, ProposedDir)
+		}
+	}
+
+	// Validate the full config tree (cross-references require all files).
+	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure the target subdirectory exists in .live/.
+	destPath := filepath.Join(LiveDir, relPath)
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
+		return nil, fmt.Errorf("creating target dir: %w", err)
+	}
+
+	// Read source and write to .live/.
+	data, err := os.ReadFile(filepath.Join(ProposedDir, relPath))
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", relPath, err)
+	}
+	if err := os.WriteFile(destPath, data, 0o640); err != nil {
+		return nil, fmt.Errorf("writing %s: %w", relPath, err)
+	}
+
+	stats := store.Stats()
+	return &Result{
+		Modules:  stats.Modules,
+		Roles:    len(store.ListRoleNames()),
+		Entries:  stats.Entries,
+		Files:    1,
+		AllFiles: []string{relPath},
+		Changed:  []string{relPath},
+	}, nil
+}
+
 // CheckLivePermissions checks that .live is not world-writable. Returns a
 // warning message if permissions are too open, or empty string if OK.
 // Called at server startup for early detection of misconfigured permissions.
