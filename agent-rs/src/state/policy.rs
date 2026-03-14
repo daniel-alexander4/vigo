@@ -73,7 +73,6 @@ impl PolicyCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::proto::PolicyBundle;
 
     #[test]

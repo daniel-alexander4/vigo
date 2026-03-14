@@ -36,7 +36,7 @@ func (h *UsersHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	users, err := h.store.List(r.Context())
 	if err != nil {
 		slog.Error("listing users", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -54,18 +54,18 @@ type createUserRequest struct {
 func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Username == "" {
-		http.Error(w, "username is required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "username is required")
 		return
 	}
 	if req.Role == "" {
 		req.Role = "viewer"
 	}
 	if req.Role != "admin" && req.Role != "viewer" {
-		http.Error(w, "role must be admin or viewer", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "role must be admin or viewer")
 		return
 	}
 
@@ -74,7 +74,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		count, err := h.store.CountUsers(r.Context())
 		if err != nil {
 			slog.Error("counting users", "error", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		if count > 0 {
@@ -99,7 +99,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("creating user", "error", err)
-		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to create user")
 		return
 	}
 
@@ -120,11 +120,11 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	var req updateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Role != "" && req.Role != "admin" && req.Role != "viewer" {
-		http.Error(w, "role must be admin or viewer", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "role must be admin or viewer")
 		return
 	}
 
@@ -132,11 +132,11 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.store.GetByID(r.Context(), id)
 	if err != nil {
 		slog.Error("fetching user", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if existing == nil {
-		http.Error(w, "user not found", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "user not found")
 		return
 	}
 
@@ -153,7 +153,7 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		SshPublicKey: req.SSHPublicKey,
 	}); err != nil {
 		slog.Error("updating user", "error", err)
-		http.Error(w, "failed to update user", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to update user")
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.Delete(r.Context(), id); err != nil {
 		slog.Error("deleting user", "error", err)
-		http.Error(w, "failed to delete user", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to delete user")
 		return
 	}
 

@@ -45,13 +45,13 @@ type createTokenResponse struct {
 func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	u := hobnobauth.UserFromContext(r.Context())
 	if u == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	var req createTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -59,7 +59,7 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresIn != "" {
 		d, err := time.ParseDuration(req.ExpiresIn)
 		if err != nil {
-			http.Error(w, "invalid expires_in duration", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "invalid expires_in duration")
 			return
 		}
 		t := time.Now().Add(d)
@@ -69,7 +69,7 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	plaintext, token, err := h.tokenStore.CreateToken(r.Context(), u.ID, req.Name, expiresAt)
 	if err != nil {
 		slog.Error("creating api token", "error", err)
-		http.Error(w, "failed to create token", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to create token")
 		return
 	}
 
@@ -85,14 +85,14 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 func (h *TokensHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	u := hobnobauth.UserFromContext(r.Context())
 	if u == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	tokens, err := h.tokenStore.ListByUser(r.Context(), u.ID)
 	if err != nil {
 		slog.Error("listing api tokens", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -103,14 +103,14 @@ func (h *TokensHandler) handleList(w http.ResponseWriter, r *http.Request) {
 func (h *TokensHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	u := hobnobauth.UserFromContext(r.Context())
 	if u == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	id := r.PathValue("id")
 	if err := h.tokenStore.Delete(r.Context(), id); err != nil {
 		slog.Error("deleting api token", "error", err)
-		http.Error(w, "failed to delete token", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to delete token")
 		return
 	}
 

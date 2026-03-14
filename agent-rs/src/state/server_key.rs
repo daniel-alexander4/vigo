@@ -40,8 +40,6 @@ impl ServerKeyCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn store_and_load() {
         let dir = tempfile::tempdir().unwrap();

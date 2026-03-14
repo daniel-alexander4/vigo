@@ -74,14 +74,14 @@ func (h *FederationHandler) handleSpokeDetail(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
-	http.Error(w, "spoke not found", http.StatusNotFound)
+	writeJSONError(w, http.StatusNotFound, "spoke not found")
 }
 
 func (h *FederationHandler) handleSpokeThralls(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	thralls, err := h.hub.SpokeListThralls(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -93,7 +93,7 @@ func (h *FederationHandler) handleSpokeRuns(w http.ResponseWriter, r *http.Reque
 	limit := int32(50)
 	runs, err := h.hub.SpokeListRuns(r.Context(), id, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -108,7 +108,7 @@ func (h *FederationHandler) handleSpokePush(w http.ResponseWriter, r *http.Reque
 	json.NewDecoder(r.Body).Decode(&req)
 	count, err := h.hub.SpokeForcePush(r.Context(), id, req.ThrallID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -122,17 +122,17 @@ func (h *FederationHandler) handleReassign(w http.ResponseWriter, r *http.Reques
 		ToSpokeID   string `json:"to_spoke_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.ThrallID == "" || req.FromSpokeID == "" || req.ToSpokeID == "" {
-		http.Error(w, "thrall_id, from_spoke_id, and to_spoke_id are required", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "thrall_id, from_spoke_id, and to_spoke_id are required")
 		return
 	}
 
 	result, err := h.hub.ReassignThrall(r.Context(), req.ThrallID, req.FromSpokeID, req.ToSpokeID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -149,7 +149,7 @@ func (h *FederationHandler) handleDrain(w http.ResponseWriter, r *http.Request) 
 
 	result, err := h.hub.DrainSpoke(r.Context(), spokeID, req.TargetSpokeID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

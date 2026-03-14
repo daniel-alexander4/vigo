@@ -71,7 +71,6 @@ mod tests {
     /// Helper: generate a keypair, sign a bundle, return (pubkey_pem, signed_bundle).
     fn sign_test_bundle(bundle: &mut PolicyBundle) -> String {
         use ed25519_dalek::{Signer, SigningKey};
-        use pkcs8::LineEnding;
         use spki::EncodePublicKey;
 
         let signing = SigningKey::generate(&mut rand::rngs::OsRng);

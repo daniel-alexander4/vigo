@@ -148,7 +148,6 @@ impl PendingQueue {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::proto::{delta_event, DeltaEvent, HeartbeatDelta, RunCompleted};
 
     fn make_delta(run_id: &str, seq: i64) -> DeltaEvent {

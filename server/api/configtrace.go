@@ -29,7 +29,7 @@ func (h *ConfigTraceHandler) RegisterRoutes(mux *http.ServeMux) {
 func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request) {
 	hostname := r.URL.Query().Get("hostname")
 	if hostname == "" {
-		http.Error(w, "missing required ?hostname= parameter", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "missing required ?hostname= parameter")
 		return
 	}
 
