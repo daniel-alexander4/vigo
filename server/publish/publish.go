@@ -121,7 +121,7 @@ func Publish(opts Options) (*Result, error) {
 
 	res, err := ValidateSource(opts)
 	if err != nil {
-		return nil, fmt.Errorf("validation failed: %w", err)
+		return nil, err
 	}
 
 	if len(res.Changed) == 0 && len(res.Removed) == 0 {

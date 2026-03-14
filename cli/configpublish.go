@@ -72,7 +72,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 			res, err := publish.ValidateSource(opts)
 			if err != nil {
 				suggestFixes(err, skipSuggest)
-				return fmt.Errorf("validation failed:\n  %v", err)
+				return err
 			}
 			printFileList(res)
 			fmt.Printf("\nValidation passed: %d modules, %d roles, %d thrall entries\n",

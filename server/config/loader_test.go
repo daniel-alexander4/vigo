@@ -1803,8 +1803,8 @@ thralls:
 	if !strings.Contains(formatted, "bad2") {
 		t.Error("formatted output missing bad2")
 	}
-	if !strings.Contains(formatted, "skip_validation") {
-		t.Error("formatted output should mention skip_validation")
+	if !strings.Contains(formatted, "config publish") {
+		t.Error("formatted output should mention config publish")
 	}
 }
 

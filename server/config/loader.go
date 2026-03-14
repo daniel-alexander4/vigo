@@ -136,38 +136,31 @@ type idempotencyModuleError struct {
 }
 
 func (ie *IdempotencyErrors) Error() string {
-	total := 0
-	for _, m := range ie.Modules {
-		total += len(m.Findings)
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%d idempotency error(s) across %d module(s):\n", total, len(ie.Modules))
-	for _, m := range ie.Modules {
-		for _, f := range m.Findings {
-			fmt.Fprintf(&b, "  - %s\n", f.String())
-		}
-	}
-	return b.String()
+	return ie.Format()
 }
 
-// Format returns a human-readable diagnostic block suitable for container logs.
+// Format returns a human-readable diagnostic block grouped by module.
 func (ie *IdempotencyErrors) Format() string {
-	var b strings.Builder
-	b.WriteString("\n=== hobd failed to start: idempotency validation errors ===\n\n")
-	for i, m := range ie.Modules {
-		fmt.Fprintf(&b, "  %d) module %q (%s)\n", i+1, m.Module, m.Path)
+	total := 0
+	for _, m := range ie.Modules {
 		for _, f := range m.Findings {
-			sev := "ERROR"
-			if f.Severity == validate.SeverityWarning {
-				sev = "WARN"
+			if f.Severity == validate.SeverityError {
+				total++
 			}
-			fmt.Fprintf(&b, "     [%s] %s (%s): %s\n", sev, f.ResourceName, f.ResourceType, f.Message)
 		}
-		b.WriteByte('\n')
 	}
-	b.WriteString("  fix: add idempotency guards (creates, onlyif, unless, subscribes)\n")
-	b.WriteString("       or add skip_validation: true to individual resources\n\n")
-	b.WriteString("=== fix the above errors and republish ===\n")
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n── validation failed: %d error(s) in %d module(s) ──\n", total, len(ie.Modules))
+
+	for _, m := range ie.Modules {
+		fmt.Fprintf(&b, "\n  %s\n", m.Path)
+		for _, f := range m.Findings {
+			fmt.Fprintf(&b, "    %s (%s): %s\n", f.ResourceName, f.ResourceType, f.Message)
+		}
+	}
+
+	b.WriteString("\n── fix the errors above, then run 'hobnobcli config publish' again ──\n")
 	return b.String()
 }
 

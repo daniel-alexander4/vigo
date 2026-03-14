@@ -4,7 +4,7 @@
 package main
 
 import (
-	"log/slog"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -24,15 +24,17 @@ func main() {
 	}
 
 	if err := rootCmd.Execute(); err != nil {
-		slog.Error("command failed", "error", err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "hobnobcli",
-	Short: "Hobnob admin CLI",
-	Long:  "hobnobcli is the administrative CLI for the Hobnob configuration management system.\nIt communicates with the server's REST API to manage enrollment, thralls, and runs.",
+	Use:           "hobnobcli",
+	Short:         "Hobnob admin CLI",
+	Long:          "hobnobcli is the administrative CLI for the Hobnob configuration management system.\nIt communicates with the server's REST API to manage enrollment, thralls, and runs.",
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func init() {
