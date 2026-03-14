@@ -1,22 +1,25 @@
 # Templates
 
-Hobnob uses Go template syntax for dynamic content in resource definitions. Templates are **only allowed in `content:` attributes** — they are rendered server-side at check-in time.
+Hobnob uses Go template syntax for dynamic content in resource definitions. Templates are rendered server-side at check-in time.
 
 ## Where Templates Are Allowed
 
-| Attribute | Templates Allowed |
-|-----------|:-:|
-| `content:` | Yes |
-| `targetpath:` | No |
-| `package:` | No |
-| `service:` | No |
-| `command:` | No |
-| `owner:`, `group:` | No |
-| `mode:` | No |
-| `url:`, `repo:` | No |
-| `stream_edit:` | No |
-| `when:` | No |
-| All other attributes | No |
+| Attribute | Templates Allowed | Notes |
+|-----------|:-:|-------|
+| `content:` | Yes | Inline template in the YAML |
+| `source:` | Yes | External template file (e.g., `source: templates/nginx.conf.tmpl`) |
+| `targetpath:` | No | |
+| `package:` | No | |
+| `service:` | No | |
+| `command:` | No | |
+| `owner:`, `group:` | No | |
+| `mode:` | No | |
+| `url:`, `repo:` | No | |
+| `stream_edit:` | No | |
+| `when:` | No | |
+| All other attributes | No | |
+
+For small templates, use `content:` directly. For larger config files, put the template in the `templates/` directory and reference it with `source:`. The `content:` and `source:` attributes are mutually exclusive.
 
 For attributes that need to vary per-thrall, use `vars` with literal overrides at the node level instead of templates.
 
