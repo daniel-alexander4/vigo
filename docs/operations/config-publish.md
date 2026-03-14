@@ -40,7 +40,7 @@ hobnobcli config publish --skip-url-check
 | `--dry-run` | `false` | Validate only, do not sync |
 | `--skip-url-check` | `false` | Skip HTTP aliveness checks for URLs |
 | `--url-timeout` | `10s` | Timeout per URL aliveness check |
-| `--ai-help` | `false` | Ask AI to suggest fixes for validation errors |
+| `--ask-ai` | `false` | Ask AI to suggest fixes for validation errors |
 
 ## How It Works
 
@@ -96,7 +96,7 @@ Subdirectories not present in proposed are removed from `.live/` (sync is replac
 
 When validation fails, `config publish` calls the AI assistant (if the server is running with AI enabled) to explain each error and suggest corrected YAML. Suggestions stream to stderr below the error output.
 
-Add `--ai-help` to ask the AI assistant to suggest fixes for each error. Requires the server to be running with AI enabled.
+Add `--ask-ai` to ask the AI assistant to suggest fixes for each error. Requires the server to be running with AI enabled.
 
 ## File Permissions
 

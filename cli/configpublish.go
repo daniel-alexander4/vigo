@@ -37,7 +37,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		urlTimeout, _ := cmd.Flags().GetDuration("url-timeout")
 		operator, _ := cmd.Flags().GetString("operator")
 		showDiff, _ := cmd.Flags().GetBool("diff")
-		aiHelp, _ := cmd.Flags().GetBool("ai-help")
+		askAI, _ := cmd.Flags().GetBool("ask-ai")
 		filePath, _ := cmd.Flags().GetString("file")
 
 		if operator == "" {
@@ -60,7 +60,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 			}
 			res, err := publish.PublishFile(filePath, opts)
 			if err != nil {
-				suggestFixes(err, !aiHelp)
+				suggestFixes(err, !askAI)
 				return err
 			}
 			fmt.Printf("Published: %s\n", filePath)
@@ -71,7 +71,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		if dryRun {
 			res, err := publish.ValidateSource(opts)
 			if err != nil {
-				suggestFixes(err, !aiHelp)
+				suggestFixes(err, !askAI)
 				return err
 			}
 			printFileList(res)
@@ -82,7 +82,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 
 		res, err := publish.Publish(opts)
 		if err != nil {
-			suggestFixes(err, !aiHelp)
+			suggestFixes(err, !askAI)
 			return err
 		}
 		printFileList(res)
@@ -300,7 +300,7 @@ func init() {
 	configPublishCmd.Flags().Duration("url-timeout", 10*time.Second, "timeout per URL check")
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
-	configPublishCmd.Flags().Bool("ai-help", false, "ask AI to suggest fixes for validation errors")
+	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
 	configPublishCmd.Flags().String("file", "", "publish a single .hnb file (path relative to proposed/)")
 
 	configCmd.AddCommand(configPublishCmd)
