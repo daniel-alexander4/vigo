@@ -96,6 +96,10 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                     bail!("unterminated string literal starting at position {}", start - 1);
                 }
             }
+            '!' => {
+                tokens.push(Token { kind: TokenKind::Not });
+                pos += 1;
+            }
             _ if ch.is_alphabetic() || ch == '_' => {
                 let start = pos;
                 while pos < chars.len() && (chars[pos].is_alphanumeric() || chars[pos] == '_') {
@@ -705,6 +709,30 @@ mod tests {
         assert_eq!(
             expr,
             WhenExpr::Not(Box::new(WhenExpr::VarRef("is_debian".to_string())))
+        );
+    }
+
+    #[test]
+    fn test_parse_bang_as_not() {
+        // `!` is an alias for `not`
+        let expr = parse("!is_debian").unwrap();
+        assert_eq!(
+            expr,
+            WhenExpr::Not(Box::new(WhenExpr::VarRef("is_debian".to_string())))
+        );
+
+        // With function call
+        let expr = parse("!os_family('debian')").unwrap();
+        assert!(matches!(expr, WhenExpr::Not(_)));
+
+        // Compound: `!a and b`
+        let expr = parse("!a and b").unwrap();
+        assert_eq!(
+            expr,
+            WhenExpr::And(
+                Box::new(WhenExpr::Not(Box::new(WhenExpr::VarRef("a".to_string())))),
+                Box::new(WhenExpr::VarRef("b".to_string())),
+            )
         );
     }
 

@@ -18,6 +18,7 @@ use regex_lite::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use tracing::warn;
 
 /// Regex cache: avoid recompilation across evaluation cycles.
 static REGEX_CACHE: OnceLock<std::sync::Mutex<HashMap<String, Regex>>> = OnceLock::new();
@@ -64,9 +65,18 @@ pub fn eval_bundle(
     for pmod in &bundle.modules {
         // Check module-level when.
         if !pmod.when.is_empty() {
-            let include = eval_module_when(&pmod.when, &vars)?;
-            if !include {
-                continue;
+            match eval_module_when(&pmod.when, &vars) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(e) => {
+                    warn!(
+                        module = %pmod.name,
+                        when = %pmod.when,
+                        error = %e,
+                        "skipping module: when expression failed"
+                    );
+                    continue;
+                }
             }
         }
 
@@ -78,7 +88,19 @@ pub fn eval_bundle(
 
         for pres in &pmod.resources {
             // Evaluate resource when expression.
-            let (should_include, agent_when) = evaluate_resource_when(&pres.when, &vars)?;
+            let (should_include, agent_when) = match evaluate_resource_when(&pres.when, &vars) {
+                Ok(result) => result,
+                Err(e) => {
+                    warn!(
+                        module = %pmod.name,
+                        resource = %pres.name,
+                        when = %pres.when,
+                        error = %e,
+                        "skipping resource: when expression failed"
+                    );
+                    continue;
+                }
+            };
             if !should_include {
                 continue;
             }
@@ -89,10 +111,26 @@ pub fn eval_bundle(
                 vars: &vars_value,
             };
             let mut params = HashMap::with_capacity(pres.attributes.len());
+            let mut render_failed = false;
             for (k, v) in &pres.attributes {
-                let rendered = template::render(v, &ctx)
-                    .with_context(|| format!("rendering template for resource {:?} attr {:?}", pres.name, k))?;
-                params.insert(k.clone(), rendered);
+                match template::render(v, &ctx) {
+                    Ok(rendered) => {
+                        params.insert(k.clone(), rendered);
+                    }
+                    Err(e) => {
+                        warn!(
+                            resource = %pres.name,
+                            attr = %k,
+                            error = %e,
+                            "skipping resource: template render failed"
+                        );
+                        render_failed = true;
+                        break;
+                    }
+                }
+            }
+            if render_failed {
+                continue;
             }
 
             // Mark resources with subscribes_secret so the runner can skip them
@@ -454,6 +492,125 @@ mod tests {
     fn test_eval_bundle_empty() {
         let modules = eval_bundle(None, &json!(null)).unwrap();
         assert_eq!(modules.len(), 0);
+    }
+
+    #[test]
+    fn test_eval_bundle_skips_bad_when_resource() {
+        // A resource with an unparseable when expression should be skipped.
+        let bundle = PolicyBundle {
+            policy_version: 1,
+            modules: vec![PolicyModule {
+                name: "mixed".to_string(),
+                resources: vec![
+                    PolicyResource {
+                        name: "good-resource".to_string(),
+                        r#type: "package".to_string(),
+                        attributes: [("package".to_string(), "nginx".to_string())].into(),
+                        ..Default::default()
+                    },
+                    PolicyResource {
+                        name: "bad-when".to_string(),
+                        r#type: "package".to_string(),
+                        when: "!@#$invalid".to_string(),
+                        attributes: [("package".to_string(), "foo".to_string())].into(),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let modules = eval_bundle(Some(&bundle), &json!(null)).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0].resources.len(), 1);
+        assert_eq!(modules[0].resources[0].name, "good-resource");
+    }
+
+    #[test]
+    fn test_eval_bundle_skips_bad_when_module() {
+        // A module with an unparseable when expression should be skipped.
+        let bundle = PolicyBundle {
+            policy_version: 1,
+            modules: vec![
+                PolicyModule {
+                    name: "bad-module".to_string(),
+                    when: "!@#$invalid".to_string(),
+                    resources: vec![PolicyResource {
+                        name: "res".to_string(),
+                        r#type: "package".to_string(),
+                        attributes: [("package".to_string(), "foo".to_string())].into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                PolicyModule {
+                    name: "good-module".to_string(),
+                    resources: vec![PolicyResource {
+                        name: "res".to_string(),
+                        r#type: "package".to_string(),
+                        attributes: [("package".to_string(), "nginx".to_string())].into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let modules = eval_bundle(Some(&bundle), &json!(null)).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0].name, "good-module");
+    }
+
+    #[test]
+    fn test_eval_bundle_skips_bad_template_resource() {
+        // A resource with a broken template should be skipped, not abort the bundle.
+        let bundle = PolicyBundle {
+            policy_version: 1,
+            modules: vec![PolicyModule {
+                name: "mixed".to_string(),
+                resources: vec![
+                    PolicyResource {
+                        name: "good-resource".to_string(),
+                        r#type: "package".to_string(),
+                        attributes: [
+                            ("package".to_string(), "nginx".to_string()),
+                            ("state".to_string(), "present".to_string()),
+                        ]
+                        .into(),
+                        ..Default::default()
+                    },
+                    PolicyResource {
+                        name: "bad-resource".to_string(),
+                        r#type: "package".to_string(),
+                        attributes: [
+                            ("package".to_string(), "{{ .Vars.missing_closing".to_string()),
+                        ]
+                        .into(),
+                        ..Default::default()
+                    },
+                    PolicyResource {
+                        name: "another-good".to_string(),
+                        r#type: "file".to_string(),
+                        attributes: [
+                            ("targetpath".to_string(), "/etc/foo".to_string()),
+                        ]
+                        .into(),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let modules = eval_bundle(Some(&bundle), &json!(null)).unwrap();
+        assert_eq!(modules.len(), 1);
+        // bad-resource should be skipped, the other two should remain
+        assert_eq!(modules[0].resources.len(), 2);
+        assert_eq!(modules[0].resources[0].name, "good-resource");
+        assert_eq!(modules[0].resources[1].name, "another-good");
     }
 
     #[test]

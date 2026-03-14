@@ -44,6 +44,30 @@ server:
     ca_key_file: "tls/ca_key"                  # CA private key — enables bootstrap CSR signing
 
 # ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+# Controls web UI and REST API authentication. Default is "none" — fully open,
+# identical to having no auth section at all. No overhead when disabled.
+# auth:
+#   method: none                            # none (default) | oidc | isowebauth
+#
+# --- OIDC (OpenID Connect SSO) ---
+# auth:
+#   method: oidc
+#   oidc:
+#     issuer: "https://accounts.google.com"  # OIDC provider discovery URL (required)
+#     client_id: "your-client-id"            # OAuth2 client ID (required)
+#     client_secret: "secret:hobnob/auth/oidc_client_secret"  # client secret (secret:, required)
+#     redirect_url: "http://localhost:8181/auth/callback"      # callback URL (required)
+#     scopes: [openid, profile, email]       # OIDC scopes (default: openid, profile, email)
+#
+# --- Isowebauth (SSH key-based signing) ---
+# auth:
+#   method: isowebauth
+#   isowebauth:
+#     namespace: "hobnob"                    # signing namespace (default: "hobnob")
+
+# ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
 # SQLite (default): dsn is a file path (e.g. "/etc/hobnob-server/db/hobnob.db").

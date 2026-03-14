@@ -43,6 +43,24 @@ type AgentService struct {
 	reassignStore    *ReassignStore     // pending thrall reassignments (spoke side)
 	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
 	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
+	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
+}
+
+// isRecentlyActive returns true if the thrall has checked in within 2× base_interval.
+// Used to distinguish promotable (recently polling) from truly stale agents.
+func (s *AgentService) isRecentlyActive(thrallID string) bool {
+	if s.fleetIndex == nil {
+		return false
+	}
+	ts, ok, _ := s.fleetIndex.GetThrallLite(thrallID)
+	if !ok {
+		return false
+	}
+	staleThreshold := 2 * s.baseInterval
+	if staleThreshold == 0 {
+		staleThreshold = 10 * time.Minute // fallback
+	}
+	return time.Since(ts.LastSeen) <= staleThreshold
 }
 
 // AdminService implements the HobnobAdmin gRPC service.

@@ -246,6 +246,7 @@ message CheckInResponse {
   uint64 policy_version = 8;            // current config version, always set
   string reassign_addr = 9;             // non-empty = agent should reconnect here
   string reassign_id = 10;              // new UUID on target spoke
+  bool stream_requested = 11;           // server wants agent to open AgentStream
 }
 
 // CustomTraitEntry describes a custom trait executable in the server's traits directory.
@@ -395,7 +396,13 @@ message ServerStreamMessage {
     TaskDispatch task_dispatch = 6;
     QueryRequest query_request = 7;
     DeltaAck delta_ack = 8;
+    StreamRelease stream_release = 9;
   }
+}
+
+// StreamRelease tells the agent it may close the promoted stream.
+message StreamRelease {
+  string reason = 1;  // optional human-readable reason
 }
 
 // StreamPolicyPush is sent server→agent when config changes while the stream

@@ -120,22 +120,25 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 	queryID := uuid.New().String()
 	connected := s.streamMgr.connectedThrallIDs()
 
-	// Separate connected and offline targets.
-	var connectedTargets, offlineTargets []targetInfo
+	// Separate connected, promotable, and offline targets.
+	var connectedTargets, promotableTargets, offlineTargets []targetInfo
 	for _, t := range targets {
 		if connected[t.ThrallID] {
 			connectedTargets = append(connectedTargets, t)
+		} else if s.isRecentlyActive(t.ThrallID) {
+			promotableTargets = append(promotableTargets, t)
 		} else {
 			offlineTargets = append(offlineTargets, t)
 		}
 	}
 
-	// Register pending query.
-	hostnames := make(map[string]string, len(connectedTargets))
-	for _, t := range connectedTargets {
+	// Register pending query (connected + promotable may respond).
+	dispatchable := append(connectedTargets, promotableTargets...)
+	hostnames := make(map[string]string, len(dispatchable))
+	for _, t := range dispatchable {
 		hostnames[t.ThrallID] = t.Hostname
 	}
-	resultCh := make(chan queryResult, len(connectedTargets))
+	resultCh := make(chan queryResult, len(dispatchable))
 	pq := &pendingQuery{resultCh: resultCh, hostnames: hostnames}
 	s.queryRouter.register(queryID, pq)
 	defer s.queryRouter.remove(queryID)
@@ -156,6 +159,25 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 		} else {
 			offlineTargets = append(offlineTargets, t)
 		}
+	}
+
+	// Queue promotable thralls for stream promotion.
+	for _, t := range promotableTargets {
+		msg := &pb.ServerStreamMessage{
+			Msg: &pb.ServerStreamMessage_QueryRequest{
+				QueryRequest: &pb.QueryRequest{
+					QueryId:   queryID,
+					TraitPath: traitPath,
+				},
+			},
+		}
+		thrallID := t.ThrallID
+		s.streamMgr.queueForPromotion(t.ThrallID, msg, func() {
+			// On timeout, promotable target becomes offline — query timeout
+			// handles this naturally (results won't arrive).
+			slog.Debug("query promotion timed out", "thrall_id", thrallID, "query_id", queryID)
+		})
+		dispatched[t.ThrallID] = t
 	}
 
 	// Fetch cached traits for offline thralls.

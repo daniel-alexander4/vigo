@@ -15,19 +15,28 @@ import (
 type apiClient struct {
 	baseURL    string
 	httpClient *http.Client
+	authToken  string
 }
 
 func newAPIClient() *apiClient {
-	return &apiClient{
+	c := &apiClient{
 		baseURL: serverURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
+	// Load auth token from config file if present.
+	c.authToken = loadAuthToken()
+	return c
 }
 
 func (c *apiClient) get(path string, result any) error {
-	resp, err := c.httpClient.Get(c.baseURL + path)
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -45,7 +54,37 @@ func (c *apiClient) post(path string, body, result any) error {
 		bodyReader = bytes.NewReader(data)
 	}
 
-	resp, err := c.httpClient.Post(c.baseURL+path, "application/json", bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, bodyReader)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	return c.decodeResponse(resp, result)
+}
+
+func (c *apiClient) put(path string, body, result any) error {
+	var bodyReader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request body: %w", err)
+		}
+		bodyReader = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, c.baseURL+path, bodyReader)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -58,6 +97,7 @@ func (c *apiClient) delete(path string, result any) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+	c.setAuthHeader(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -65,6 +105,12 @@ func (c *apiClient) delete(path string, result any) error {
 	}
 	defer resp.Body.Close()
 	return c.decodeResponse(resp, result)
+}
+
+func (c *apiClient) setAuthHeader(req *http.Request) {
+	if c.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
 }
 
 func (c *apiClient) decodeResponse(resp *http.Response, result any) error {

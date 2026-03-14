@@ -184,12 +184,17 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 			case *pb.AgentStreamMessage_TaskAck:
 				s.taskRouter.handleTaskAck(stream.Context(), thrallID, m.TaskAck)
+				if !m.TaskAck.Accepted {
+					s.streamMgr.workCompleted(thrallID)
+				}
 
 			case *pb.AgentStreamMessage_TaskResult:
 				s.taskRouter.handleTaskResult(stream.Context(), thrallID, m.TaskResult)
+				s.streamMgr.workCompleted(thrallID)
 
 			case *pb.AgentStreamMessage_QueryResponse:
 				s.queryRouter.handleQueryResponse(thrallID, m.QueryResponse)
+				s.streamMgr.workCompleted(thrallID)
 
 			case *pb.AgentStreamMessage_Delta:
 				ack := s.handleDelta(thrallID, thrall.Hostname, m.Delta)
@@ -239,18 +244,21 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	// When FleetIndex is available, check in-memory state for freshest flags.
 	forcePush := thrall.ForcePush != 0
 	hasPending := thrall.PendingRotatedSecrets != "" && thrall.PendingRotatedSecrets != "[]"
+	streamRequested := false
 	if s.fleetIndex != nil {
 		if freshState, ok, _ := s.fleetIndex.GetThrallLite(thrallID); ok {
 			forcePush = freshState.ForcePush
 			hasPending = len(freshState.PendingRotatedSecrets) > 0
+			streamRequested = freshState.StreamRequested
 		}
 	}
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
 		!forcePush && !hasPending {
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 		resp := &pb.CheckInResponse{
-			NoChange:      true,
-			PolicyVersion: configVersion,
+			NoChange:        true,
+			PolicyVersion:   configVersion,
+			StreamRequested: streamRequested,
 		}
 		// Check for pending reassignment even on no-change cycles.
 		if s.reassignStore != nil {
@@ -388,8 +396,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
 
 	resp := &pb.CheckInResponse{
-		PolicyBundle:  bundle,
-		PolicyVersion: configVersion,
+		PolicyBundle:    bundle,
+		PolicyVersion:   configVersion,
+		StreamRequested: streamRequested,
 	}
 
 	// Check for pending reassignment (thrall moving to a different spoke).

@@ -365,7 +365,8 @@ async fn run_once(
         match policy::eval::eval_bundle(Some(bundle), &collected_traits) {
             Ok(modules) => (modules, Some(bundle.clone())),
             Err(e) => {
-                anyhow::bail!("policy evaluation failed: {}", e);
+                warn!("policy evaluation failed, running with compiled modules: {}", e);
+                (resp.modules.clone(), resp.policy_bundle.clone())
             }
         }
     } else {

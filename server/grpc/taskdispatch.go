@@ -299,25 +299,28 @@ func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) 
 		timeoutSecs = 60
 	}
 
-	// Separate connected vs offline targets.
+	// Separate connected vs promotable vs offline targets.
 	connected := s.streamMgr.connectedThrallIDs()
-	var onlineTargets, offlineTargets []targetInfo
+	var onlineTargets, promotableTargets, offlineTargets []targetInfo
 	for _, t := range targets {
 		if connected[t.ThrallID] {
 			onlineTargets = append(onlineTargets, t)
+		} else if s.isRecentlyActive(t.ThrallID) {
+			promotableTargets = append(promotableTargets, t)
 		} else {
 			offlineTargets = append(offlineTargets, t)
 		}
 	}
 
-	// Parse batch size.
-	batchSize, err := parseBatchSpec(params.BatchSize, len(onlineTargets))
+	// Parse batch size (promotable targets count as dispatchable).
+	dispatchable := append(onlineTargets, promotableTargets...)
+	batchSize, err := parseBatchSpec(params.BatchSize, len(dispatchable))
 	if err != nil {
 		return nil, err
 	}
 
 	// Plan batches.
-	batches := planBatches(onlineTargets, batchSize)
+	batches := planBatches(dispatchable, batchSize)
 
 	// Dry-run: return batch plan without executing.
 	if params.DryRun {
@@ -396,7 +399,7 @@ func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) 
 			slog.Error("failed to start task run", "task_run_id", taskRun.ID, "error", err)
 		}
 
-		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.MaxFailures, params.HealthCheck, taskEnv, len(onlineTargets))
+		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.MaxFailures, params.HealthCheck, taskEnv, len(dispatchable))
 	} else {
 		// Non-batched: dispatch all targets inline (original behavior).
 		dispatched := 0
@@ -442,6 +445,51 @@ func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) 
 			}
 		}
 
+		// Queue promotable targets for stream promotion.
+		for _, t := range promotableTargets {
+			target, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
+				TaskRunID: taskRun.ID,
+				ThrallID:  t.ThrallID,
+				Hostname:  t.Hostname,
+				Status:    "pending",
+			})
+			if err != nil {
+				slog.Error("failed to create promotable task run target",
+					"task_run_id", taskRun.ID, "thrall_id", t.ThrallID, "error", err)
+				continue
+			}
+
+			s.taskRouter.trackTarget(taskRun.ID, t.ThrallID, target.ID)
+			dispatched++
+
+			msg := &pb.ServerStreamMessage{
+				Msg: &pb.ServerStreamMessage_TaskDispatch{
+					TaskDispatch: &pb.TaskDispatch{
+						TaskId:         taskRun.ID,
+						Command:        params.Command,
+						TimeoutSeconds: timeoutSecs,
+						Env:            taskEnv,
+					},
+				},
+			}
+
+			targetID := target.ID
+			thrallID := t.ThrallID
+			taskRunID := taskRun.ID
+			s.streamMgr.queueForPromotion(t.ThrallID, msg, func() {
+				if err := s.queries.UpdateTaskRunTarget(context.Background(), db.UpdateTaskRunTargetParams{
+					ID:         targetID,
+					Status:     "offline",
+					FinishedAt: sql.NullTime{Time: time.Now(), Valid: true},
+				}); err != nil {
+					slog.Error("failed to mark promoted target offline",
+						"target_id", targetID, "error", err)
+				}
+				s.taskRouter.removeTarget(taskRunID, thrallID)
+				s.taskRouter.maybeFinishTaskRun(context.Background(), taskRunID)
+			})
+		}
+
 		// Update task run to running.
 		if err := s.queries.UpdateTaskRunStatus(ctx, db.UpdateTaskRunStatusParams{
 			ID:        taskRun.ID,
@@ -463,6 +511,7 @@ func (s *AgentService) DispatchTask(ctx context.Context, params DispatchParams) 
 		"target_spec", params.TargetSpec,
 		"total_targets", len(targets),
 		"online", len(onlineTargets),
+		"promotable", len(promotableTargets),
 		"offline", len(offlineTargets),
 		"rolling", rolling,
 	)

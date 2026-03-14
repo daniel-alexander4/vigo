@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -181,6 +182,57 @@ ORDER BY created_at ASC
 
 func (q *Queries) ListRunResults(ctx context.Context, runID string) ([]RunResult, error) {
 	rows, err := q.db.QueryContext(ctx, listRunResults, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunResult{}
+	for rows.Next() {
+		var i RunResult
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.ModuleName,
+			&i.ResourceType,
+			&i.ResourceName,
+			&i.ActionTaken,
+			&i.Changed,
+			&i.ErrorMessage,
+			&i.DurationMs,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunResultsByRunIDs = `-- name: ListRunResultsByRunIDs :many
+SELECT id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
+FROM run_results
+WHERE run_id IN (/*SLICE:run_ids*/?)
+ORDER BY run_id, created_at ASC
+`
+
+func (q *Queries) ListRunResultsByRunIDs(ctx context.Context, runIds []string) ([]RunResult, error) {
+	query := listRunResultsByRunIDs
+	var queryParams []interface{}
+	if len(runIds) > 0 {
+		for _, v := range runIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:run_ids*/?", strings.Repeat(",?", len(runIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:run_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}

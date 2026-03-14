@@ -65,6 +65,7 @@ The agent's pull loop. Returns the modules to apply based on current state.
 | `policy_version` | uint64 | Current config version |
 | `reassign_addr` | string | Non-empty means agent should reconnect to this address |
 | `reassign_id` | string | New UUID on the target spoke |
+| `stream_requested` | bool | Server wants the agent to open an AgentStream for dispatched work |
 
 **Auth:** Signature-verified. Revoked agents receive an error.
 
@@ -145,7 +146,7 @@ Retrieves a custom trait executable by name.
 
 ### AgentStream
 
-Opens a persistent bidirectional stream between agent and server. Replaces poll-based CheckIn with push-based policy delivery. This is the primary communication channel for connected agents.
+Opens a bidirectional stream between agent and server. Agents default to unary polling and only open a stream when the server sets `stream_requested` in a CheckInResponse (adaptive stream promotion). The stream is used for task/query dispatch and policy pushes.
 
 **Agent sends (`AgentStreamMessage`):**
 
@@ -171,6 +172,7 @@ Opens a persistent bidirectional stream between agent and server. Replaces poll-
 | `task_dispatch` | Ad-hoc command to execute |
 | `query_request` | Live trait query request |
 | `delta_ack` | Acknowledgement of delta events |
+| `stream_release` | Server tells agent it may close the promoted stream (all dispatched work complete) |
 
 ## Delta Streaming Protocol
 

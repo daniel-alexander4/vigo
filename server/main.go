@@ -29,6 +29,7 @@ import (
 
 	hobnobai "github.com/hobnob/hobnob/server/ai"
 	"github.com/hobnob/hobnob/server/api"
+	hobnobauth "github.com/hobnob/hobnob/server/auth"
 	"github.com/hobnob/hobnob/server/backup"
 	"github.com/hobnob/hobnob/server/bootstrap"
 	"github.com/hobnob/hobnob/server/ca"
@@ -254,6 +255,14 @@ func run() error {
 
 	// Start license enforcer periodic check.
 	go enforcer.Run(ctx)
+
+	// Initialize auth provider.
+	authProvider, err := createAuthProvider(ctx, cfg, sqlDB, queries)
+	if err != nil {
+		return fmt.Errorf("initializing auth: %w", err)
+	}
+	authMethod := authProvider.Method()
+	slog.Info("auth provider initialized", "method", authMethod)
 
 	// Initialize subsystems.
 	reg := registry.NewRegistry(queries)
@@ -518,6 +527,22 @@ func run() error {
 	// Start stale thrall checker — fires thrall.stale SMTP events on transition.
 	go runStaleChecker(ctx, queries, fleetIndex, smtpNotifier, baseInterval)
 
+	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer).
+	go func() {
+		// Take an initial snapshot immediately so the sparkline isn't empty on startup.
+		fleetIndex.SnapshotCompliance()
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				fleetIndex.SnapshotCompliance()
+			}
+		}
+	}()
+
 	// Start SMTP digest flush loop (if configured).
 	go smtpNotifier.Start(ctx)
 
@@ -554,6 +579,12 @@ func run() error {
 	tasksHandler := api.NewTasksHandler(queries, agentSvc)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
+
+	// Auth-related API handlers.
+	userStore := hobnobauth.NewUserStore(queries)
+	tokenStore := hobnobauth.NewTokenStore(queries)
+	usersHandler := api.NewUsersHandler(userStore, authMethod)
+	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 
 	// Load workflow definitions and create engine.
 	workflowsDir := envOrDefault("HOBNOB_WORKFLOWS_DIR", "workflows")
@@ -600,12 +631,15 @@ func run() error {
 		queryHandler.RegisterRoutes(mux)
 		workflowHandler.RegisterRoutes(mux)
 		exportHandler.RegisterRoutes(mux)
+		usersHandler.RegisterRoutes(mux)
+		tokensHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
 		}
+		authProvider.RegisterRoutes(mux)
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
-			Handler: api.MaxBodyMiddleware(mux),
+			Handler: authProvider.Middleware(api.MaxBodyMiddleware(mux)),
 		}
 	} else {
 		// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
@@ -642,7 +676,7 @@ func run() error {
 
 		version := envOrDefault("HOBNOB_VERSION", "dev")
 		agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
-		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, gwOpts...)
+		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
@@ -653,12 +687,15 @@ func run() error {
 		queryHandler.RegisterRoutes(gwMux)
 		workflowHandler.RegisterRoutes(gwMux)
 		exportHandler.RegisterRoutes(gwMux)
+		usersHandler.RegisterRoutes(gwMux)
+		tokensHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)
 		}
+		authProvider.RegisterRoutes(gwMux)
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
-			Handler: api.MaxBodyMiddleware(gwMux),
+			Handler: authProvider.Middleware(api.MaxBodyMiddleware(gwMux)),
 		}
 	}
 
@@ -1045,5 +1082,41 @@ func createAIProvider(ctx context.Context, cfg config.AISection) (hobnobai.Provi
 		return hobnobai.NewOpenAICompatProvider(cfg.BaseURL, cfg.APIKey), nil
 	default:
 		return nil, fmt.Errorf("unknown AI provider: %s", cfg.Provider)
+	}
+}
+
+// createAuthProvider builds the appropriate auth provider from config.
+func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sql.DB, queries *db.Queries) (hobnobauth.Provider, error) {
+	method := cfg.Auth.Method
+	if method == "" {
+		method = "none"
+	}
+
+	switch method {
+	case "none":
+		return hobnobauth.NoneProvider{}, nil
+
+	case "oidc":
+		sessions := hobnobauth.NewSessionManager(sqlDB)
+		userStore := hobnobauth.NewUserStore(queries)
+		tokenStore := hobnobauth.NewTokenStore(queries)
+		return hobnobauth.NewOIDCProvider(ctx, hobnobauth.OIDCConfig{
+			Issuer:       cfg.Auth.OIDC.Issuer,
+			ClientID:     cfg.Auth.OIDC.ClientID,
+			ClientSecret: cfg.Auth.OIDC.ClientSecret,
+			RedirectURL:  cfg.Auth.OIDC.RedirectURL,
+			Scopes:       cfg.Auth.OIDC.Scopes,
+		}, sessions, userStore, tokenStore)
+
+	case "isowebauth":
+		sessions := hobnobauth.NewSessionManager(sqlDB)
+		userStore := hobnobauth.NewUserStore(queries)
+		tokenStore := hobnobauth.NewTokenStore(queries)
+		return hobnobauth.NewIsowebauthProvider(hobnobauth.IsowebauthConfig{
+			Namespace: cfg.Auth.Isowebauth.Namespace,
+		}, sessions, userStore, tokenStore)
+
+	default:
+		return nil, fmt.Errorf("unknown auth method: %q (must be none, oidc, or isowebauth)", method)
 	}
 }

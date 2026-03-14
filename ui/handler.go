@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hobnob/hobnob/server/ai"
+	"github.com/hobnob/hobnob/server/auth"
 	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
@@ -34,8 +35,10 @@ type DataSource interface {
 	DashboardData(baseInterval time.Duration) DashboardPageData
 	ComplianceData(baseInterval time.Duration) CompliancePageData
 	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
-	ThrallsData(baseInterval time.Duration, statusFilter string) ThrallsPageData
+	ThrallsData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) ThrallsPageData
 	ThrallDetailData(thrallID string, baseInterval time.Duration) (ThrallDetailPageData, error)
+	ThrallRunsData(thrallID string) (ThrallRunsFragmentData, error)
+	ThrallFactsData(thrallID string) (ThrallFactsFragmentData, error)
 	RunsData(statusFilter string) RunsPageData
 	RunDetailData(runID string) (RunDetailPageData, error)
 	ConfigData(hostname string) (ConfigPageData, error)
@@ -56,6 +59,8 @@ type Handler struct {
 	hub          *federation.Hub
 	docsDir      string
 	docsNav      []DocsNavSection
+	authEnabled  bool
+	authMethod   string
 }
 
 // NewHandler creates a UI handler wired to real database queries.
@@ -64,7 +69,7 @@ type Handler struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource, docsDir string) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource, docsDir string, authMethod string) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -89,6 +94,8 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		assistant:    assistant,
 		hub:          hub,
 		docsDir:      docsDir,
+		authEnabled:  authMethod != "" && authMethod != "none",
+		authMethod:   authMethod,
 	}
 
 	if docsDir != "" {
@@ -136,6 +143,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/thralls-table", h.ThrallsTable)
+	mux.HandleFunc("GET /ui/fragments/thrall-runs/{id}", h.ThrallRunsFragment)
+	mux.HandleFunc("GET /ui/fragments/thrall-facts/{id}", h.ThrallFactsFragment)
 
 	// Federation pages (only registered when running as hub)
 	if h.hub != nil {
@@ -154,6 +163,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /ask", h.AskPage)
 		mux.HandleFunc("POST /ui/ask", h.AskStream)
 	}
+
+	// Admin users page (only when auth is enabled)
+	if h.authEnabled {
+		mux.HandleFunc("GET /admin/users", h.AdminUsers)
+	}
 }
 
 // --- Page data types ---
@@ -165,6 +179,22 @@ type PageData struct {
 	Version           string
 	AIEnabled         bool
 	FederationEnabled bool
+	AuthEnabled       bool
+	AuthMethod        string
+	CurrentUser       *AuthUser
+}
+
+// AuthUser is the UI-visible subset of auth.User (avoids import cycle).
+type AuthUser struct {
+	ID          string
+	Username    string
+	DisplayName string
+	Role        string
+}
+
+// IsAdmin returns true if the user has the admin role.
+func (u *AuthUser) IsAdmin() bool {
+	return u != nil && u.Role == "admin"
 }
 
 // DashboardPageData holds data for the dashboard page.
@@ -231,9 +261,11 @@ type ThrallRow struct {
 // ThrallsPageData holds data for the thralls list page.
 type ThrallsPageData struct {
 	PageData
-	Thralls        []ThrallRow
-	StatusFilter string
-	ThrallCount    int
+	Thralls       []ThrallRow
+	StatusFilter  string
+	ThrallCount   int
+	HasMore       bool
+	NextCursor    string // hostname of last row (cursor for next page)
 }
 
 // ThrallDetailRunRow is a run with its per-module results for the thrall detail page.
@@ -268,6 +300,17 @@ type DriftPoint struct {
 	Status       string
 	ChangedCount int64
 	FailedCount  int64
+}
+
+// ThrallRunsFragmentData holds data for the lazy-loaded runs fragment.
+type ThrallRunsFragmentData struct {
+	Runs         []ThrallDetailRunRow
+	DriftHistory []DriftPoint
+}
+
+// ThrallFactsFragmentData holds data for the lazy-loaded facts fragment.
+type ThrallFactsFragmentData struct {
+	Facts map[string]any
 }
 
 // RunsPageData holds data for the runs list page.
@@ -346,6 +389,22 @@ type DocsPageData struct {
 	NavTree        []DocsNavSection
 	CurrentPath    string
 	CurrentSection string
+}
+
+// AdminUsersPageData holds data for the admin users page.
+type AdminUsersPageData struct {
+	PageData
+	Users []AdminUserRow
+}
+
+// AdminUserRow is a single user displayed in the admin users table.
+type AdminUserRow struct {
+	ID          string
+	Username    string
+	DisplayName string
+	Email       string
+	Role        string
+	CreatedAt   time.Time
 }
 
 // docsSectionOrder defines the display order for documentation sections.
@@ -514,7 +573,7 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 		Content:  template.HTML(content),
 		NavTree:  h.docsNav,
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "docs", data)
 }
 
@@ -592,15 +651,32 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		CurrentPath:    pagePath,
 		CurrentSection: currentSection,
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "docs", data)
 }
 
-// setCommon applies version, AI-enabled, and federation flags to page data.
+// setCommon applies version, AI-enabled, federation, and auth flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	pd.AIEnabled = h.assistant != nil
 	pd.FederationEnabled = h.hub != nil
+	pd.AuthEnabled = h.authEnabled
+	pd.AuthMethod = h.authMethod
+}
+
+// setCommonWithRequest applies common fields and extracts the current user from context.
+func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
+	h.setCommon(pd)
+	if h.authEnabled {
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			pd.CurrentUser = &AuthUser{
+				ID:          u.ID,
+				Username:    u.Username,
+				DisplayName: u.DisplayName,
+				Role:        u.Role,
+			}
+		}
+	}
 }
 
 // --- Handlers ---
@@ -608,7 +684,7 @@ func (h *Handler) setCommon(pd *PageData) {
 // Dashboard renders the main dashboard page.
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 }
 
@@ -621,19 +697,21 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 // Compliance renders the compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
 }
 
-// Thralls renders the thralls list page with optional status filter.
+// Thralls renders the thralls list page with optional status filter and pagination.
 func (h *Handler) Thralls(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	data := h.dataSource.ThrallsData(h.baseInterval, statusFilter)
-	h.setCommon(&data.PageData)
+	after := r.URL.Query().Get("after")
+	data := h.dataSource.ThrallsData(h.baseInterval, statusFilter, after, 100)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "thralls", data)
 }
 
-// ThrallDetail renders the thrall detail page with runs, facts, and drift history.
+// ThrallDetail renders the thrall detail page shell. Runs and facts are loaded
+// asynchronously via HTMX fragment endpoints for instant page rendering.
 func (h *Handler) ThrallDetail(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -646,15 +724,45 @@ func (h *Handler) ThrallDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "thrall not found", http.StatusNotFound)
 		return
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "thrall-detail", data)
+}
+
+// ThrallRunsFragment renders the runs + drift history fragment for a thrall (HTMX lazy load).
+func (h *Handler) ThrallRunsFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid thrall ID", http.StatusBadRequest)
+		return
+	}
+	data, err := h.dataSource.ThrallRunsData(idStr)
+	if err != nil {
+		http.Error(w, "thrall not found", http.StatusNotFound)
+		return
+	}
+	h.renderer.RenderFragment(w, "thrall-detail", "thrall-runs-fragment", data)
+}
+
+// ThrallFactsFragment renders the facts/traits fragment for a thrall (HTMX lazy load).
+func (h *Handler) ThrallFactsFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid thrall ID", http.StatusBadRequest)
+		return
+	}
+	data, err := h.dataSource.ThrallFactsData(idStr)
+	if err != nil {
+		http.Error(w, "thrall not found", http.StatusNotFound)
+		return
+	}
+	h.renderer.RenderFragment(w, "thrall-detail", "thrall-facts-fragment", data)
 }
 
 // Runs renders the runs list page with optional status filter.
 func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	data := h.dataSource.RunsData(statusFilter)
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "runs", data)
 }
 
@@ -671,7 +779,7 @@ func (h *Handler) RunDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "run not found", http.StatusNotFound)
 		return
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "run-detail", data)
 }
 
@@ -683,7 +791,7 @@ func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "config not found", http.StatusNotFound)
 		return
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "config", data)
 }
 
@@ -700,14 +808,15 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "plan not found", http.StatusNotFound)
 		return
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "plans", data)
 }
 
 // ThrallsTable renders the thralls table fragment for HTMX polling.
 func (h *Handler) ThrallsTable(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	data := h.dataSource.ThrallsData(h.baseInterval, statusFilter)
+	after := r.URL.Query().Get("after")
+	data := h.dataSource.ThrallsData(h.baseInterval, statusFilter, after, 100)
 	h.renderer.RenderFragment(w, "thralls", "thralls-table", data)
 }
 
@@ -896,7 +1005,7 @@ func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) Dashboard
 	}
 }
 
-func (ds *dbDataSource) ThrallsData(baseInterval time.Duration, statusFilter string) ThrallsPageData {
+func (ds *dbDataSource) ThrallsData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) ThrallsPageData {
 	ctx := context.Background()
 	thralls, err := ds.queries.ListThralls(ctx)
 	if err != nil {
@@ -904,9 +1013,17 @@ func (ds *dbDataSource) ThrallsData(baseInterval time.Duration, statusFilter str
 		return ThrallsPageData{PageData: PageData{Title: "Thralls", ActiveNav: "thralls"}}
 	}
 
+	// Sort by hostname for consistent pagination.
+	sort.Slice(thralls, func(i, j int) bool {
+		return thralls[i].Hostname < thralls[j].Hostname
+	})
+
 	var rows []ThrallRow
 	for _, n := range thralls {
 		if n.Revoked != 0 {
+			continue
+		}
+		if afterHostname != "" && n.Hostname <= afterHostname {
 			continue
 		}
 		status, _ := ds.thrallComplianceInfo(ctx, n, baseInterval)
@@ -928,13 +1045,29 @@ func (ds *dbDataSource) ThrallsData(baseInterval time.Duration, statusFilter str
 			LastSeen:   lastSeen,
 			Status:     status,
 		})
+
+		if limit > 0 && len(rows) > limit {
+			break
+		}
+	}
+
+	hasMore := len(rows) > limit && limit > 0
+	if hasMore {
+		rows = rows[:limit]
+	}
+
+	nextCursor := ""
+	if hasMore && len(rows) > 0 {
+		nextCursor = rows[len(rows)-1].Hostname
 	}
 
 	return ThrallsPageData{
 		PageData:     PageData{Title: "Thralls", ActiveNav: "thralls"},
-		Thralls:        rows,
+		Thralls:      rows,
 		StatusFilter: statusFilter,
-		ThrallCount:    len(rows),
+		ThrallCount:  len(rows),
+		HasMore:      hasMore,
+		NextCursor:   nextCursor,
 	}
 }
 
@@ -952,49 +1085,67 @@ func (ds *dbDataSource) ThrallDetailData(thrallID string, baseInterval time.Dura
 
 	status, _ := ds.thrallComplianceInfo(ctx, thrall, baseInterval)
 
-	thrallRow := ThrallRow{
-		ID:         thrall.ID,
-		Hostname:   thrall.Hostname,
-		IPAddress:  thrall.IpAddress,
-		EnrolledAt: thrall.EnrolledAt,
-		LastSeen:   lastSeen,
-		Status:     status,
+	// Shell only — runs and facts are loaded via HTMX fragments.
+	return ThrallDetailPageData{
+		PageData: PageData{Title: "Thrall: " + thrall.Hostname, ActiveNav: "thralls"},
+		Thrall: ThrallRow{
+			ID:         thrall.ID,
+			Hostname:   thrall.Hostname,
+			IPAddress:  thrall.IpAddress,
+			EnrolledAt: thrall.EnrolledAt,
+			LastSeen:   lastSeen,
+			Status:     status,
+		},
+	}, nil
+}
+
+func (ds *dbDataSource) ThrallRunsData(thrallID string) (ThrallRunsFragmentData, error) {
+	ctx := context.Background()
+	thrall, err := ds.queries.GetThrallByID(ctx, thrallID)
+	if err != nil {
+		return ThrallRunsFragmentData{}, fmt.Errorf("thrall not found: %w", err)
 	}
 
-	// Fetch last 20 runs with results
 	dbRuns, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
 		ThrallID: thrallID,
-		Limit:  20,
+		Limit:    20,
 	})
 	if err != nil {
 		slog.Error("failed to list runs for thrall", "error", err)
+		return ThrallRunsFragmentData{}, nil
+	}
+
+	// Batch-fetch all run results in one query to avoid N+1.
+	runIDs := make([]string, len(dbRuns))
+	for i, r := range dbRuns {
+		runIDs[i] = r.ID
+	}
+	allResults, err := ds.queries.ListRunResultsByRunIDs(ctx, runIDs)
+	if err != nil {
+		slog.Error("failed to batch-fetch run results", "error", err)
+	}
+
+	// Group results by run ID.
+	resultsByRun := make(map[string][]RunResultRow, len(dbRuns))
+	for _, res := range allResults {
+		errMsg := ""
+		if res.ErrorMessage.Valid {
+			errMsg = res.ErrorMessage.String
+		}
+		resultsByRun[res.RunID] = append(resultsByRun[res.RunID], RunResultRow{
+			ModuleName:   res.ModuleName,
+			ResourceType: res.ResourceType,
+			ResourceName: res.ResourceName,
+			ActionTaken:  res.ActionTaken,
+			Changed:      res.Changed != 0,
+			ErrorMessage: errMsg,
+			DurationMs:   res.DurationMs,
+		})
 	}
 
 	var runs []ThrallDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range dbRuns {
-		dbResults, err := ds.queries.ListRunResults(ctx, r.ID)
-		if err != nil {
-			slog.Error("failed to list run results", "run_id", r.ID, "error", err)
-		}
-
-		var results []RunResultRow
-		for _, res := range dbResults {
-			errMsg := ""
-			if res.ErrorMessage.Valid {
-				errMsg = res.ErrorMessage.String
-			}
-			results = append(results, RunResultRow{
-				ModuleName:   res.ModuleName,
-				ResourceType: res.ResourceType,
-				ResourceName: res.ResourceName,
-				ActionTaken:  res.ActionTaken,
-				Changed:      res.Changed != 0,
-				ErrorMessage: errMsg,
-				DurationMs:   res.DurationMs,
-			})
-		}
-
 		runs = append(runs, ThrallDetailRunRow{
 			RunRow: RunRow{
 				ID:           r.ID,
@@ -1005,9 +1156,8 @@ func (ds *dbDataSource) ThrallDetailData(thrallID string, baseInterval time.Dura
 				ChangedCount: r.ChangedCount,
 				FailedCount:  r.FailedCount,
 			},
-			Results: results,
+			Results: resultsByRun[r.ID],
 		})
-
 		driftHistory = append(driftHistory, DriftPoint{
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
@@ -1016,20 +1166,17 @@ func (ds *dbDataSource) ThrallDetailData(thrallID string, baseInterval time.Dura
 		})
 	}
 
-	// Fetch latest facts
+	return ThrallRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
+}
+
+func (ds *dbDataSource) ThrallFactsData(thrallID string) (ThrallFactsFragmentData, error) {
+	ctx := context.Background()
 	facts := make(map[string]any)
 	cf, err := ds.queries.GetLatestThrallTraits(ctx, thrallID)
 	if err == nil {
 		_ = json.Unmarshal([]byte(cf.Traits), &facts)
 	}
-
-	return ThrallDetailPageData{
-		PageData:     PageData{Title: "Thrall: " + thrall.Hostname, ActiveNav: "thralls"},
-		Thrall:         thrallRow,
-		Runs:         runs,
-		Facts:        facts,
-		DriftHistory: driftHistory,
-	}, nil
+	return ThrallFactsFragmentData{Facts: facts}, nil
 }
 
 func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
@@ -1308,7 +1455,7 @@ func (h *Handler) Tasks(w http.ResponseWriter, r *http.Request) {
 		StatusFilter: statusFilter,
 		TaskCount:    len(rows),
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "tasks", data)
 }
 
@@ -1359,7 +1506,7 @@ func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
 		Targets:   tgtRows,
 		IsRunning: task.Status == "running" || task.Status == "pending",
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "task-detail", data)
 }
 
@@ -1387,7 +1534,7 @@ func (h *Handler) Workflows(w http.ResponseWriter, r *http.Request) {
 		StatusFilter:  statusFilter,
 		WorkflowCount: len(rows),
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "workflows", data)
 }
 
@@ -1443,7 +1590,7 @@ func (h *Handler) WorkflowDetail(w http.ResponseWriter, r *http.Request) {
 		FailedSteps:    failedSteps,
 		IsRunning:      run.Status == "running" || run.Status == "pending",
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "workflow-detail", data)
 }
 
@@ -1452,7 +1599,7 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	data := QueryPageData{
 		PageData: PageData{Title: "Live Query", ActiveNav: "query"},
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "query", data)
 }
 
@@ -1571,7 +1718,7 @@ func (h *Handler) Federation(w http.ResponseWriter, r *http.Request) {
 		CompliancePct:  compPct,
 		Spokes:         spokes,
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "federation", data)
 }
 
@@ -1681,7 +1828,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 		Thralls:       thrallRows,
 		Runs:          runRows,
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "spoke-detail", data)
 }
 
@@ -1745,7 +1892,7 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		DriftCount:    len(driftRows),
 		DriftRows:     driftRows,
 	}
-	h.setCommon(&data.PageData)
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "ask", data)
 }
 
@@ -1835,4 +1982,42 @@ func planActionColor(action string) string {
 	default:
 		return "muted"
 	}
+}
+
+// AdminUsers renders the admin users management page.
+func (h *Handler) AdminUsers(w http.ResponseWriter, r *http.Request) {
+	// Require admin role.
+	if h.authEnabled {
+		u := auth.UserFromContext(r.Context())
+		if u == nil || !u.IsAdmin() {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	users, err := h.queries.ListUsers(r.Context())
+	if err != nil {
+		slog.Error("listing users for admin page", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var rows []AdminUserRow
+	for _, u := range users {
+		rows = append(rows, AdminUserRow{
+			ID:          u.ID,
+			Username:    u.Username,
+			DisplayName: u.DisplayName,
+			Email:       u.Email,
+			Role:        u.Role,
+			CreatedAt:   u.CreatedAt,
+		})
+	}
+
+	data := AdminUsersPageData{
+		PageData: PageData{Title: "Users", ActiveNav: "admin-users"},
+		Users:    rows,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "admin-users", data)
 }

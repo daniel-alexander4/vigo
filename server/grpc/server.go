@@ -157,7 +157,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		traitsBatch:   traitsBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
-		streamMgr:        newStreamManager(cfg.StreamSendBuffer),
+		streamMgr:        newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, 12*time.Minute),
 		taskRouter:       newTaskRouter(cfg.Queries),
 		queryRouter:      newQueryRouter(),
 		taskStore:        cfg.TaskStore,
@@ -168,6 +168,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		reassignStore:    reassignStore,
 		bundleSigner:     cfg.BundleSigner,
 		bundleMaxAge:     cfg.BundleMaxAge,
+		baseInterval:     cfg.BaseInterval,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 

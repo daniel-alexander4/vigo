@@ -51,4 +51,9 @@
         {{end}}
     </tbody>
 </table>
+{{if .HasMore}}
+<div style="text-align:center; padding:16px;">
+    <a href="/thralls?{{if .StatusFilter}}status={{.StatusFilter}}&{{end}}after={{.NextCursor}}" class="btn btn--sm">Load More</a>
+</div>
+{{end}}
 {{end}}

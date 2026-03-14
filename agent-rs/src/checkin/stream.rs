@@ -36,6 +36,8 @@ pub struct StreamHandle {
     pub query_request_rx: mpsc::Receiver<QueryRequest>,
     /// Delta acknowledgements from server.
     pub delta_ack_rx: mpsc::Receiver<DeltaAck>,
+    /// Server requests stream closure (work complete).
+    pub stream_release_rx: mpsc::Receiver<()>,
     /// Notified when the read loop exits. Clone-friendly.
     pub done: tokio::sync::watch::Receiver<bool>,
 }
@@ -130,6 +132,7 @@ pub async fn open(
     let (task_dispatch_tx, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
     let (query_request_tx, query_request_rx) = mpsc::channel::<QueryRequest>(8);
     let (delta_ack_tx, delta_ack_rx) = mpsc::channel::<DeltaAck>(8);
+    let (stream_release_tx, stream_release_rx) = mpsc::channel::<()>(1);
     let (done_tx, done_rx) = tokio::sync::watch::channel(false);
 
     // Spawn the read loop.
@@ -142,6 +145,7 @@ pub async fn open(
             task_dispatch_tx,
             query_request_tx,
             delta_ack_tx,
+            stream_release_tx,
         )
         .await;
         let _ = done_tx.send(true); // signal disconnect
@@ -155,6 +159,7 @@ pub async fn open(
         task_dispatch_rx,
         query_request_rx,
         delta_ack_rx,
+        stream_release_rx,
         done: done_rx,
     };
 
@@ -171,6 +176,7 @@ async fn read_loop(
     task_dispatch_tx: mpsc::Sender<TaskDispatch>,
     query_request_tx: mpsc::Sender<QueryRequest>,
     delta_ack_tx: mpsc::Sender<DeltaAck>,
+    stream_release_tx: mpsc::Sender<()>,
 ) {
     loop {
         match stream.message().await {
@@ -206,6 +212,9 @@ async fn read_loop(
                         }
                         server_stream_message::Msg::DeltaAck(ack) => {
                             let _ = delta_ack_tx.try_send(ack);
+                        }
+                        server_stream_message::Msg::StreamRelease(_) => {
+                            let _ = stream_release_tx.try_send(());
                         }
                     }
                 }
@@ -395,5 +404,63 @@ mod tests {
                 other => panic!("expected ReportResult, got {:?}", other),
             }
         }
+    }
+
+    /// Test that the stream_release channel receives a signal when sent.
+    #[tokio::test]
+    async fn test_stream_release_channel() {
+        let (tx, mut rx) = mpsc::channel::<()>(1);
+
+        tx.try_send(()).expect("send should succeed on fresh channel");
+
+        let result = rx.recv().await;
+        assert_eq!(result, Some(()));
+    }
+
+    /// Test that StreamHandle can be constructed with the stream_release_rx field.
+    #[tokio::test]
+    async fn test_stream_handle_has_release_channel() {
+        let (request_tx, _) = mpsc::channel::<AgentStreamMessage>(4);
+        let (_, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
+        let (_, force_push_rx) = mpsc::channel::<()>(4);
+        let (_, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
+        let (_, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
+        let (_, query_request_rx) = mpsc::channel::<QueryRequest>(8);
+        let (_, delta_ack_rx) = mpsc::channel::<DeltaAck>(8);
+        let (_, stream_release_rx) = mpsc::channel::<()>(1);
+        let (_, done) = tokio::sync::watch::channel(false);
+
+        let handle = StreamHandle {
+            request_tx,
+            policy_push_rx,
+            force_push_rx,
+            check_in_resp_rx,
+            task_dispatch_rx,
+            query_request_rx,
+            delta_ack_rx,
+            stream_release_rx,
+            done,
+        };
+
+        // Verify the stream_release_rx field is accessible and the channel is open.
+        assert!(handle.stream_release_rx.is_empty());
+    }
+
+    /// Test that try_send on the stream_release channel succeeds once, then fills the buffer.
+    #[tokio::test]
+    async fn test_stream_release_try_send() {
+        let (tx, mut rx) = mpsc::channel::<()>(1);
+
+        // First send should succeed (buffer size 1).
+        assert!(tx.try_send(()).is_ok());
+
+        // Second send should fail — buffer is full.
+        assert!(tx.try_send(()).is_err());
+
+        // Drain the channel and verify we can send again.
+        let val = rx.recv().await;
+        assert_eq!(val, Some(()));
+
+        assert!(tx.try_send(()).is_ok());
     }
 }

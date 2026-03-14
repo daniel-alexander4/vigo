@@ -11,6 +11,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
@@ -32,6 +33,7 @@ type ThrallState struct {
 	Traits                map[string]string // flattened key→value for trait index
 	PendingRotatedSecrets []string
 	ForcePush             bool
+	StreamRequested       bool // ephemeral: server wants agent to open stream (not persisted to DB)
 }
 
 // ComplianceCounters holds pre-computed compliance totals.
@@ -55,6 +57,12 @@ type RunSummary struct {
 	FinishedAt   time.Time
 }
 
+// ComplianceSnapshot is a daily compliance snapshot for the sparkline.
+type ComplianceSnapshot struct {
+	Timestamp time.Time
+	Counters  ComplianceCounters
+}
+
 // FleetIndex is a concurrency-safe in-memory index of all thralls. It provides
 // O(1) lookups by ID, hostname, and pubkey, O(k) queries by status and trait,
 // and pre-computed compliance counters. Write methods mark thralls dirty for
@@ -67,8 +75,9 @@ type FleetIndex struct {
 	byStatus   map[string]map[string]bool    // status → set of IDs
 	byTrait    map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
 	compliance ComplianceCounters
-	recentRuns *ringBuffer
-	dirty      map[string]bool // IDs with pending state changes
+	recentRuns        *ringBuffer
+	complianceHistory *complianceRing // rolling 30-day daily snapshots
+	dirty             map[string]bool // IDs with pending state changes
 }
 
 // NewFleetIndex creates an empty FleetIndex.
@@ -79,8 +88,9 @@ func NewFleetIndex() *FleetIndex {
 		pubkeys:    make(map[string]ed25519.PublicKey),
 		byStatus:   make(map[string]map[string]bool),
 		byTrait:    make(map[string]map[string]map[string]bool),
-		recentRuns: newRingBuffer(1000),
-		dirty:      make(map[string]bool),
+		recentRuns:        newRingBuffer(5000),
+		complianceHistory: newComplianceRing(30),
+		dirty:             make(map[string]bool),
 	}
 }
 
@@ -208,6 +218,27 @@ func (f *FleetIndex) ComplianceSummary() ComplianceCounters {
 	return f.compliance
 }
 
+// SnapshotCompliance records a compliance snapshot for the sparkline.
+func (f *FleetIndex) SnapshotCompliance() {
+	f.mu.RLock()
+	snap := ComplianceSnapshot{
+		Timestamp: time.Now(),
+		Counters:  f.compliance,
+	}
+	f.mu.RUnlock()
+
+	f.mu.Lock()
+	f.complianceHistory.Push(snap)
+	f.mu.Unlock()
+}
+
+// ComplianceSparkline returns the rolling compliance history snapshots.
+func (f *FleetIndex) ComplianceSparkline() []ComplianceSnapshot {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.complianceHistory.All()
+}
+
 // AllThralls returns a copy of all ThrallState values.
 func (f *FleetIndex) AllThralls() []ThrallState {
 	f.mu.RLock()
@@ -217,6 +248,40 @@ func (f *FleetIndex) AllThralls() []ThrallState {
 		result = append(result, *ts)
 	}
 	return result
+}
+
+// PaginatedThralls returns up to `limit` non-revoked thralls, sorted by hostname,
+// starting after `afterHostname` (exclusive). Pass "" to start from the beginning.
+// Returns the thralls and whether there are more results.
+func (f *FleetIndex) PaginatedThralls(afterHostname string, limit int, statusFilter string) ([]ThrallState, bool) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	// Collect matching thralls.
+	var candidates []ThrallState
+	for _, ts := range f.thralls {
+		if ts.Revoked {
+			continue
+		}
+		if statusFilter != "" && ts.ComplianceStatus != statusFilter {
+			continue
+		}
+		if afterHostname != "" && ts.Hostname <= afterHostname {
+			continue
+		}
+		candidates = append(candidates, *ts)
+	}
+
+	// Sort by hostname.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Hostname < candidates[j].Hostname
+	})
+
+	hasMore := len(candidates) > limit
+	if hasMore {
+		candidates = candidates[:limit]
+	}
+	return candidates, hasMore
 }
 
 // Count returns the total number of thralls (including revoked).
@@ -398,6 +463,24 @@ func (f *FleetIndex) SetForcePushAll() int {
 		count++
 	}
 	return count
+}
+
+// SetStreamRequested sets the StreamRequested flag (ephemeral, not flushed to DB).
+func (f *FleetIndex) SetStreamRequested(id string, val bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.thralls[id]
+	if !ok {
+		return
+	}
+	ts.StreamRequested = val
+	// No dirty mark — this is ephemeral and not persisted to DB.
+}
+
+// ClearStreamRequested clears the StreamRequested flag.
+func (f *FleetIndex) ClearStreamRequested(id string) {
+	f.SetStreamRequested(id, false)
 }
 
 // SetPendingRotatedSecrets sets the pending rotated secrets list.
@@ -664,6 +747,42 @@ func (rb *ringBuffer) Last(n int) []RunSummary {
 	for i := 0; i < n; i++ {
 		idx := (rb.head - 1 - i + rb.cap) % rb.cap
 		result[i] = rb.buf[idx]
+	}
+	return result
+}
+
+// --- Compliance ring buffer ---
+
+type complianceRing struct {
+	buf  []ComplianceSnapshot
+	cap  int
+	head int
+	len  int
+}
+
+func newComplianceRing(cap int) *complianceRing {
+	return &complianceRing{
+		buf: make([]ComplianceSnapshot, cap),
+		cap: cap,
+	}
+}
+
+func (cr *complianceRing) Push(s ComplianceSnapshot) {
+	cr.buf[cr.head] = s
+	cr.head = (cr.head + 1) % cr.cap
+	if cr.len < cr.cap {
+		cr.len++
+	}
+}
+
+func (cr *complianceRing) All() []ComplianceSnapshot {
+	if cr.len == 0 {
+		return nil
+	}
+	result := make([]ComplianceSnapshot, cr.len)
+	start := (cr.head - cr.len + cr.cap) % cr.cap
+	for i := 0; i < cr.len; i++ {
+		result[i] = cr.buf[(start+i)%cr.cap]
 	}
 	return result
 }

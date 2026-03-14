@@ -135,18 +135,29 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		}
 	}
 
-	// Sparkline from compliance history (DB — historical data).
-	ctx := context.Background()
-	history, err := ds.queries.ListComplianceHistory(ctx, 30)
-	if err != nil {
-		slog.Error("failed to list compliance history", "error", err)
-	}
-
-	sparkData := make([]float64, 0, len(history))
-	for i := len(history) - 1; i >= 0; i-- {
-		h := history[i]
-		if h.Total > 0 {
-			sparkData = append(sparkData, float64(h.Compliant)/float64(h.Total)*100)
+	// Sparkline from FleetIndex ring buffer (in-memory, no DB query).
+	// Falls back to DB compliance_history if the ring buffer is empty.
+	snapshots := ds.fleet.ComplianceSparkline()
+	var sparkData []float64
+	if len(snapshots) > 0 {
+		sparkData = make([]float64, 0, len(snapshots))
+		for _, s := range snapshots {
+			if s.Counters.Total > 0 {
+				sparkData = append(sparkData, float64(s.Counters.Compliant)/float64(s.Counters.Total)*100)
+			}
+		}
+	} else {
+		ctx := context.Background()
+		history, err := ds.queries.ListComplianceHistory(ctx, 30)
+		if err != nil {
+			slog.Error("failed to list compliance history", "error", err)
+		}
+		sparkData = make([]float64, 0, len(history))
+		for i := len(history) - 1; i >= 0; i-- {
+			h := history[i]
+			if h.Total > 0 {
+				sparkData = append(sparkData, float64(h.Compliant)/float64(h.Total)*100)
+			}
 		}
 	}
 
@@ -174,17 +185,11 @@ func (ds *DataSource) DashboardStatsData(baseInterval time.Duration) ui.Dashboar
 	}
 }
 
-func (ds *DataSource) ThrallsData(baseInterval time.Duration, statusFilter string) ui.ThrallsPageData {
-	allThralls := ds.fleet.AllThralls()
+func (ds *DataSource) ThrallsData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) ui.ThrallsPageData {
+	thralls, hasMore := ds.fleet.PaginatedThralls(afterHostname, limit, statusFilter)
 
-	var rows []ui.ThrallRow
-	for _, ts := range allThralls {
-		if ts.Revoked {
-			continue
-		}
-		if statusFilter != "" && ts.ComplianceStatus != statusFilter {
-			continue
-		}
+	rows := make([]ui.ThrallRow, 0, len(thralls))
+	for _, ts := range thralls {
 		rows = append(rows, ui.ThrallRow{
 			ID:         ts.ID,
 			Hostname:   ts.Hostname,
@@ -195,19 +200,25 @@ func (ds *DataSource) ThrallsData(baseInterval time.Duration, statusFilter strin
 		})
 	}
 
+	nextCursor := ""
+	if hasMore && len(rows) > 0 {
+		nextCursor = rows[len(rows)-1].Hostname
+	}
+
 	return ui.ThrallsPageData{
 		PageData:     ui.PageData{Title: "Thralls", ActiveNav: "thralls"},
 		Thralls:      rows,
 		StatusFilter: statusFilter,
 		ThrallCount:  len(rows),
+		HasMore:      hasMore,
+		NextCursor:   nextCursor,
 	}
 }
 
 func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Duration) (ui.ThrallDetailPageData, error) {
-	// FleetIndex for header, DB for run history.
+	// FleetIndex for header (shell only — runs and facts loaded via fragments).
 	ts := ds.fleet.GetThrall(thrallID)
 	if ts == nil {
-		// Fallback to DB.
 		ctx := context.Background()
 		thrall, err := ds.queries.GetThrallByID(ctx, thrallID)
 		if err != nil {
@@ -217,7 +228,6 @@ func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Durati
 		if thrall.LastSeen.Valid {
 			lastSeen = thrall.LastSeen.Time
 		}
-		// Compute status from DB.
 		var ri *compliance.RunInfo
 		runs, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{ThrallID: thrallID, Limit: 1})
 		if err == nil && len(runs) > 0 {
@@ -234,16 +244,26 @@ func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Durati
 		}
 	}
 
-	thrallRow := ui.ThrallRow{
-		ID:         ts.ID,
-		Hostname:   ts.Hostname,
-		IPAddress:  ts.IP,
-		EnrolledAt: ts.EnrolledAt,
-		LastSeen:   ts.LastSeen,
-		Status:     ts.ComplianceStatus,
+	return ui.ThrallDetailPageData{
+		PageData: ui.PageData{Title: "Thrall: " + ts.Hostname, ActiveNav: "thralls"},
+		Thrall: ui.ThrallRow{
+			ID:         ts.ID,
+			Hostname:   ts.Hostname,
+			IPAddress:  ts.IP,
+			EnrolledAt: ts.EnrolledAt,
+			LastSeen:   ts.LastSeen,
+			Status:     ts.ComplianceStatus,
+		},
+	}, nil
+}
+
+func (ds *DataSource) ThrallRunsData(thrallID string) (ui.ThrallRunsFragmentData, error) {
+	ts := ds.fleet.GetThrall(thrallID)
+	hostname := thrallID
+	if ts != nil {
+		hostname = ts.Hostname
 	}
 
-	// Run history from DB (historical data stays in SQLite).
 	ctx := context.Background()
 	dbRuns, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
 		ThrallID: thrallID,
@@ -251,46 +271,51 @@ func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Durati
 	})
 	if err != nil {
 		slog.Error("failed to list runs for thrall", "error", err)
+		return ui.ThrallRunsFragmentData{}, nil
+	}
+
+	// Batch-fetch all run results in one query.
+	runIDs := make([]string, len(dbRuns))
+	for i, r := range dbRuns {
+		runIDs[i] = r.ID
+	}
+	allResults, err := ds.queries.ListRunResultsByRunIDs(ctx, runIDs)
+	if err != nil {
+		slog.Error("failed to batch-fetch run results", "error", err)
+	}
+
+	resultsByRun := make(map[string][]ui.RunResultRow, len(dbRuns))
+	for _, res := range allResults {
+		errMsg := ""
+		if res.ErrorMessage.Valid {
+			errMsg = res.ErrorMessage.String
+		}
+		resultsByRun[res.RunID] = append(resultsByRun[res.RunID], ui.RunResultRow{
+			ModuleName:   res.ModuleName,
+			ResourceType: res.ResourceType,
+			ResourceName: res.ResourceName,
+			ActionTaken:  res.ActionTaken,
+			Changed:      res.Changed != 0,
+			ErrorMessage: errMsg,
+			DurationMs:   res.DurationMs,
+		})
 	}
 
 	var runs []ui.ThrallDetailRunRow
 	var driftHistory []ui.DriftPoint
 	for _, r := range dbRuns {
-		dbResults, err := ds.queries.ListRunResults(ctx, r.ID)
-		if err != nil {
-			slog.Error("failed to list run results", "run_id", r.ID, "error", err)
-		}
-
-		var results []ui.RunResultRow
-		for _, res := range dbResults {
-			errMsg := ""
-			if res.ErrorMessage.Valid {
-				errMsg = res.ErrorMessage.String
-			}
-			results = append(results, ui.RunResultRow{
-				ModuleName:   res.ModuleName,
-				ResourceType: res.ResourceType,
-				ResourceName: res.ResourceName,
-				ActionTaken:  res.ActionTaken,
-				Changed:      res.Changed != 0,
-				ErrorMessage: errMsg,
-				DurationMs:   res.DurationMs,
-			})
-		}
-
 		runs = append(runs, ui.ThrallDetailRunRow{
 			RunRow: ui.RunRow{
 				ID:           r.ID,
-				Hostname:     ts.Hostname,
+				Hostname:     hostname,
 				StartedAt:    r.StartedAt,
 				Status:       r.Status,
 				ModuleCount:  r.ModuleCount,
 				ChangedCount: r.ChangedCount,
 				FailedCount:  r.FailedCount,
 			},
-			Results: results,
+			Results: resultsByRun[r.ID],
 		})
-
 		driftHistory = append(driftHistory, ui.DriftPoint{
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
@@ -299,26 +324,24 @@ func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Durati
 		})
 	}
 
-	// Traits from FleetIndex or DB.
+	return ui.ThrallRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
+}
+
+func (ds *DataSource) ThrallFactsData(thrallID string) (ui.ThrallFactsFragmentData, error) {
+	ts := ds.fleet.GetThrall(thrallID)
 	facts := make(map[string]any)
-	if ts.Traits != nil {
+	if ts != nil && ts.Traits != nil {
 		for k, v := range ts.Traits {
 			facts[k] = v
 		}
 	} else {
+		ctx := context.Background()
 		cf, err := ds.queries.GetLatestThrallTraits(ctx, thrallID)
 		if err == nil {
 			_ = json.Unmarshal([]byte(cf.Traits), &facts)
 		}
 	}
-
-	return ui.ThrallDetailPageData{
-		PageData:     ui.PageData{Title: "Thrall: " + ts.Hostname, ActiveNav: "thralls"},
-		Thrall:       thrallRow,
-		Runs:         runs,
-		Facts:        facts,
-		DriftHistory: driftHistory,
-	}, nil
+	return ui.ThrallFactsFragmentData{Facts: facts}, nil
 }
 
 func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
@@ -329,21 +352,20 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 		return ui.RunsPageData{PageData: ui.PageData{Title: "Runs", ActiveNav: "runs"}}
 	}
 
-	// Build hostname lookup from FleetIndex.
-	allThralls := ds.fleet.AllThralls()
-	thrallMap := make(map[string]string, len(allThralls))
-	for _, ts := range allThralls {
-		thrallMap[ts.ID] = ts.Hostname
-	}
-
+	// Look up hostnames individually from FleetIndex (O(1) per run) instead
+	// of copying the entire thralls map.
 	var rows []ui.RunRow
 	for _, r := range allRuns {
 		if statusFilter != "" && r.Status != statusFilter {
 			continue
 		}
+		hostname := r.ThrallID
+		if ts := ds.fleet.GetThrall(r.ThrallID); ts != nil {
+			hostname = ts.Hostname
+		}
 		rows = append(rows, ui.RunRow{
 			ID:           r.ID,
-			Hostname:     thrallMap[r.ThrallID],
+			Hostname:     hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,

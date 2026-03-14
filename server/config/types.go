@@ -77,6 +77,7 @@ func (f FederationSection) Validate() error {
 type ServerConfig struct {
 	Server     ServerSection    `yaml:"server"`
 	Database   DatabaseSection  `yaml:"database"`
+	Auth       AuthSection      `yaml:"auth"`
 	CheckIn    CheckInSection   `yaml:"checkin"`
 	Watcher    WatcherSection   `yaml:"watcher"`
 	Secrets    secrets.Config   `yaml:"secrets"`
@@ -87,6 +88,28 @@ type ServerConfig struct {
 	AI         AISection        `yaml:"ai"`
 	Backup     BackupSection    `yaml:"backup"`
 	Export     ExportSection    `yaml:"export"`
+}
+
+// AuthSection configures web UI and REST API authentication.
+// Default method is "none" — fully open, identical to no auth config.
+type AuthSection struct {
+	Method     string           `yaml:"method"`      // "none" (default), "oidc", "isowebauth"
+	OIDC       OIDCAuthConfig   `yaml:"oidc"`
+	Isowebauth IsowebauthAuthConfig `yaml:"isowebauth"`
+}
+
+// OIDCAuthConfig holds OIDC provider settings.
+type OIDCAuthConfig struct {
+	Issuer       string   `yaml:"issuer"`
+	ClientID     string   `yaml:"client_id"`
+	ClientSecret string   `yaml:"client_secret"`
+	RedirectURL  string   `yaml:"redirect_url"`
+	Scopes       []string `yaml:"scopes"`
+}
+
+// IsowebauthAuthConfig holds isowebauth settings.
+type IsowebauthAuthConfig struct {
+	Namespace string `yaml:"namespace"` // default: "hobnob"
 }
 
 // ExportSection configures compliance framework export endpoints.

@@ -746,7 +746,7 @@ func (m *mockDataSource) DashboardStatsData(baseInterval time.Duration) Dashboar
 	}
 }
 
-func (m *mockDataSource) ThrallsData(baseInterval time.Duration, statusFilter string) ThrallsPageData {
+func (m *mockDataSource) ThrallsData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) ThrallsPageData {
 	var rows []ThrallRow
 	for _, c := range m.data.thralls {
 		if statusFilter != "" && c.status != statusFilter {
@@ -786,15 +786,24 @@ func (m *mockDataSource) ThrallDetailData(thrallID string, baseInterval time.Dur
 		return ThrallDetailPageData{}, fmt.Errorf("thrall not found")
 	}
 
-	thrallRow := ThrallRow{
-		ID:         found.id.String(),
-		Hostname:   found.hostname,
-		IPAddress:  found.ipAddress,
-		EnrolledAt: found.enrolled,
-		LastSeen:   found.lastSeen,
-		Status:     found.status,
-	}
+	return ThrallDetailPageData{
+		PageData: PageData{
+			Title:     "Thrall: " + found.hostname,
+			ActiveNav: "thralls",
+			Version:   "test",
+		},
+		Thrall: ThrallRow{
+			ID:         found.id.String(),
+			Hostname:   found.hostname,
+			IPAddress:  found.ipAddress,
+			EnrolledAt: found.enrolled,
+			LastSeen:   found.lastSeen,
+			Status:     found.status,
+		},
+	}, nil
+}
 
+func (m *mockDataSource) ThrallRunsData(thrallID string) (ThrallRunsFragmentData, error) {
 	var runs []ThrallDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range m.data.runs {
@@ -831,24 +840,16 @@ func (m *mockDataSource) ThrallDetailData(thrallID string, baseInterval time.Dur
 			})
 		}
 	}
+	return ThrallRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
+}
 
+func (m *mockDataSource) ThrallFactsData(thrallID string) (ThrallFactsFragmentData, error) {
 	parsedID, _ := uuid.Parse(thrallID)
 	facts := m.data.facts[parsedID]
 	if facts == nil {
 		facts = map[string]any{}
 	}
-
-	return ThrallDetailPageData{
-		PageData: PageData{
-			Title:     "Thrall: " + found.hostname,
-			ActiveNav: "thralls",
-			Version:   "test",
-		},
-		Thrall:         thrallRow,
-		Runs:         runs,
-		Facts:        facts,
-		DriftHistory: driftHistory,
-	}, nil
+	return ThrallFactsFragmentData{Facts: facts}, nil
 }
 
 func (m *mockDataSource) RunsData(statusFilter string) RunsPageData {

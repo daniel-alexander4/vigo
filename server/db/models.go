@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+type ApiToken struct {
+	ID         string       `json:"id"`
+	UserID     string       `json:"user_id"`
+	Name       string       `json:"name"`
+	TokenHash  string       `json:"token_hash"`
+	CreatedAt  time.Time    `json:"created_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+	ExpiresAt  sql.NullTime `json:"expires_at"`
+}
+
 type ApprovedPattern struct {
 	ID        string         `json:"id"`
 	Pattern   string         `json:"pattern"`
@@ -107,6 +117,12 @@ type SecretRotationEvent struct {
 	AffectedThralls int64          `json:"affected_thralls"`
 }
 
+type Session struct {
+	Token  string  `json:"token"`
+	Data   []byte  `json:"data"`
+	Expiry float64 `json:"expiry"`
+}
+
 type TaskRun struct {
 	ID           string         `json:"id"`
 	Command      string         `json:"command"`
@@ -155,6 +171,18 @@ type ThrallTrait struct {
 	ThrallID    string    `json:"thrall_id"`
 	Traits      string    `json:"traits"`
 	CollectedAt time.Time `json:"collected_at"`
+}
+
+type User struct {
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	DisplayName  string    `json:"display_name"`
+	Email        string    `json:"email"`
+	Role         string    `json:"role"`
+	SshPublicKey string    `json:"ssh_public_key"`
+	OidcSubject  string    `json:"oidc_subject"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type Webhook struct {

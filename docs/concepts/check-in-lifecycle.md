@@ -115,14 +115,49 @@ Results are stored in the database and used to compute compliance status.
 
 With default settings, an agent checks in every 5m ± 20% jitter (4m–6m). A thrall is considered **stale** if it hasn't checked in within 2× the base interval (10m).
 
-## Streaming Mode
+## Adaptive Stream Promotion
 
-When the bidirectional gRPC stream (AgentStream) is active, the agent uses delta events instead of request/response RPCs:
+Agents default to stateless unary polling (CheckIn RPC). When the server needs to dispatch work (tasks, queries, workflows) to a polling agent, it sets `stream_requested = true` on the next CheckInResponse. The agent opens a bidirectional stream, receives the work, and closes the stream when released.
+
+```
+Agent                                     Server
+  │                                         │
+  │  CheckIn (unary polling)                │
+  │─────────────────────────────────────────>│
+  │                                         │ task dispatched to this agent
+  │  CheckInResponse (stream_requested)     │
+  │<─────────────────────────────────────────│
+  │                                         │
+  │  AgentStream (promoted)                 │
+  │<════════════════════════════════════════>│
+  │                                         │
+  │  TaskDispatch (delivered on connect)    │
+  │<─────────────────────────────────────────│
+  │                                         │
+  │  TaskResult                             │
+  │─────────────────────────────────────────>│
+  │                                         │
+  │  StreamRelease (work complete)          │
+  │<─────────────────────────────────────────│
+  │                                         │
+  │  (stream closes, resume polling)        │
+```
+
+This eliminates the ~230 KiB/connection memory overhead of persistent streams. Agents that are idle (no dispatched work) consume near-zero server memory.
+
+**Target classification:** When dispatching tasks or queries, the server categorizes targets into three groups:
+- **Online** — already has an active stream. Work dispatched immediately.
+- **Promotable** — recently active (checked in within 2× base_interval). `stream_requested` is set; work queued for delivery when the stream opens. A 12-minute timeout marks the target offline if no stream arrives.
+- **Offline** — stale agent. Marked offline immediately.
+
+## Delta Streaming
+
+When the bidirectional stream is active, the agent uses delta events instead of full request/response RPCs:
 
 ```
 Agent                          Server
   │                              │
-  │  AgentStream (persistent)    │
+  │  AgentStream (active)        │
   │<════════════════════════════>│
   │                              │
   │  DeltaEvent: RunCompleted    │

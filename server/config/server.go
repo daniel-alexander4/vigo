@@ -63,6 +63,7 @@ func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider, backend 
 	}
 	fields := []field{
 		{&cfg.Database.DSN, "database.dsn"},
+		{&cfg.Auth.OIDC.ClientSecret, "auth.oidc.client_secret"},
 	}
 
 	var errs []*SecretError

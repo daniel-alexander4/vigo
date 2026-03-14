@@ -38,6 +38,22 @@
             Security
         </a>
         {{end}}
+        {{if and .AuthEnabled .CurrentUser (.CurrentUser.IsAdmin)}}
+        <a href="/admin/users" class="nav-link{{if eq .ActiveNav "admin-users"}} nav-link--active{{end}}">
+            Users
+        </a>
+        {{end}}
     </nav>
+    {{if .AuthEnabled}}{{if .CurrentUser}}
+    <div class="sidebar__footer">
+        <div class="sidebar__user">
+            <span class="sidebar__username">{{if .CurrentUser.DisplayName}}{{.CurrentUser.DisplayName}}{{else}}{{.CurrentUser.Username}}{{end}}</span>
+            <span class="sidebar__role badge badge--{{.CurrentUser.Role}}">{{.CurrentUser.Role}}</span>
+        </div>
+        <form method="POST" action="/logout" class="sidebar__logout">
+            <button type="submit" class="btn btn--text btn--small">Sign out</button>
+        </form>
+    </div>
+    {{end}}{{end}}
 </aside>
 {{end}}

@@ -59,5 +59,7 @@ func init() {
 		workflowCmd,
 		secretsCmd,
 		exportCmd,
+		authCmd,
+		usersCmd,
 	)
 }

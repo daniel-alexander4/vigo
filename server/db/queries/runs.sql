@@ -60,3 +60,9 @@ JOIN thralls t ON t.id = r.thrall_id
 WHERE rr.created_at >= ?1 AND t.hostname = ?2
 ORDER BY rr.created_at DESC
 LIMIT ?3;
+
+-- name: ListRunResultsByRunIDs :many
+SELECT id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
+FROM run_results
+WHERE run_id IN (sqlc.slice('run_ids'))
+ORDER BY run_id, created_at ASC;

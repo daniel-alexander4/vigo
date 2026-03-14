@@ -287,6 +287,7 @@ type CheckInResponse struct {
 	PolicyVersion       uint64                 `protobuf:"varint,8,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`                  // current config version, always set
 	ReassignAddr        string                 `protobuf:"bytes,9,opt,name=reassign_addr,json=reassignAddr,proto3" json:"reassign_addr,omitempty"`                      // non-empty = agent should reconnect here
 	ReassignId          string                 `protobuf:"bytes,10,opt,name=reassign_id,json=reassignId,proto3" json:"reassign_id,omitempty"`                           // new UUID on target spoke
+	StreamRequested     bool                   `protobuf:"varint,11,opt,name=stream_requested,json=streamRequested,proto3" json:"stream_requested,omitempty"`           // server wants agent to open AgentStream
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -389,6 +390,13 @@ func (x *CheckInResponse) GetReassignId() string {
 		return x.ReassignId
 	}
 	return ""
+}
+
+func (x *CheckInResponse) GetStreamRequested() bool {
+	if x != nil {
+		return x.StreamRequested
+	}
+	return false
 }
 
 // CustomTraitEntry describes a custom trait executable in the server's traits directory.
@@ -1572,6 +1580,7 @@ type ServerStreamMessage struct {
 	//	*ServerStreamMessage_TaskDispatch
 	//	*ServerStreamMessage_QueryRequest
 	//	*ServerStreamMessage_DeltaAck
+	//	*ServerStreamMessage_StreamRelease
 	Msg           isServerStreamMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1686,6 +1695,15 @@ func (x *ServerStreamMessage) GetDeltaAck() *DeltaAck {
 	return nil
 }
 
+func (x *ServerStreamMessage) GetStreamRelease() *StreamRelease {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerStreamMessage_StreamRelease); ok {
+			return x.StreamRelease
+		}
+	}
+	return nil
+}
+
 type isServerStreamMessage_Msg interface {
 	isServerStreamMessage_Msg()
 }
@@ -1722,6 +1740,10 @@ type ServerStreamMessage_DeltaAck struct {
 	DeltaAck *DeltaAck `protobuf:"bytes,8,opt,name=delta_ack,json=deltaAck,proto3,oneof"`
 }
 
+type ServerStreamMessage_StreamRelease struct {
+	StreamRelease *StreamRelease `protobuf:"bytes,9,opt,name=stream_release,json=streamRelease,proto3,oneof"`
+}
+
 func (*ServerStreamMessage_CheckInResponse) isServerStreamMessage_Msg() {}
 
 func (*ServerStreamMessage_ReportResultAck) isServerStreamMessage_Msg() {}
@@ -1738,6 +1760,53 @@ func (*ServerStreamMessage_QueryRequest) isServerStreamMessage_Msg() {}
 
 func (*ServerStreamMessage_DeltaAck) isServerStreamMessage_Msg() {}
 
+func (*ServerStreamMessage_StreamRelease) isServerStreamMessage_Msg() {}
+
+// StreamRelease tells the agent it may close the promoted stream.
+type StreamRelease struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"` // optional human-readable reason
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamRelease) Reset() {
+	*x = StreamRelease{}
+	mi := &file_hobnob_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamRelease) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamRelease) ProtoMessage() {}
+
+func (x *StreamRelease) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamRelease.ProtoReflect.Descriptor instead.
+func (*StreamRelease) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *StreamRelease) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 // StreamPolicyPush is sent server→agent when config changes while the stream
 // is open. The agent should evaluate the new bundle immediately.
 type StreamPolicyPush struct {
@@ -1750,7 +1819,7 @@ type StreamPolicyPush struct {
 
 func (x *StreamPolicyPush) Reset() {
 	*x = StreamPolicyPush{}
-	mi := &file_hobnob_proto_msgTypes[20]
+	mi := &file_hobnob_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1762,7 +1831,7 @@ func (x *StreamPolicyPush) String() string {
 func (*StreamPolicyPush) ProtoMessage() {}
 
 func (x *StreamPolicyPush) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[20]
+	mi := &file_hobnob_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1775,7 +1844,7 @@ func (x *StreamPolicyPush) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPolicyPush.ProtoReflect.Descriptor instead.
 func (*StreamPolicyPush) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{20}
+	return file_hobnob_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StreamPolicyPush) GetPolicyBundle() *PolicyBundle {
@@ -1801,7 +1870,7 @@ type StreamForcePush struct {
 
 func (x *StreamForcePush) Reset() {
 	*x = StreamForcePush{}
-	mi := &file_hobnob_proto_msgTypes[21]
+	mi := &file_hobnob_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1813,7 +1882,7 @@ func (x *StreamForcePush) String() string {
 func (*StreamForcePush) ProtoMessage() {}
 
 func (x *StreamForcePush) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[21]
+	mi := &file_hobnob_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1826,7 +1895,7 @@ func (x *StreamForcePush) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamForcePush.ProtoReflect.Descriptor instead.
 func (*StreamForcePush) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{21}
+	return file_hobnob_proto_rawDescGZIP(), []int{22}
 }
 
 // DeltaEvent is sent by the agent on the bidi stream to report state changes
@@ -1846,7 +1915,7 @@ type DeltaEvent struct {
 
 func (x *DeltaEvent) Reset() {
 	*x = DeltaEvent{}
-	mi := &file_hobnob_proto_msgTypes[22]
+	mi := &file_hobnob_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1858,7 +1927,7 @@ func (x *DeltaEvent) String() string {
 func (*DeltaEvent) ProtoMessage() {}
 
 func (x *DeltaEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[22]
+	mi := &file_hobnob_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1871,7 +1940,7 @@ func (x *DeltaEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeltaEvent.ProtoReflect.Descriptor instead.
 func (*DeltaEvent) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{22}
+	return file_hobnob_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DeltaEvent) GetSequence() int64 {
@@ -1955,7 +2024,7 @@ type RunCompleted struct {
 
 func (x *RunCompleted) Reset() {
 	*x = RunCompleted{}
-	mi := &file_hobnob_proto_msgTypes[23]
+	mi := &file_hobnob_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1967,7 +2036,7 @@ func (x *RunCompleted) String() string {
 func (*RunCompleted) ProtoMessage() {}
 
 func (x *RunCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[23]
+	mi := &file_hobnob_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1980,7 +2049,7 @@ func (x *RunCompleted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunCompleted.ProtoReflect.Descriptor instead.
 func (*RunCompleted) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{23}
+	return file_hobnob_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RunCompleted) GetRunId() string {
@@ -2050,7 +2119,7 @@ type TraitsDelta struct {
 
 func (x *TraitsDelta) Reset() {
 	*x = TraitsDelta{}
-	mi := &file_hobnob_proto_msgTypes[24]
+	mi := &file_hobnob_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2062,7 +2131,7 @@ func (x *TraitsDelta) String() string {
 func (*TraitsDelta) ProtoMessage() {}
 
 func (x *TraitsDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[24]
+	mi := &file_hobnob_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2075,7 +2144,7 @@ func (x *TraitsDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraitsDelta.ProtoReflect.Descriptor instead.
 func (*TraitsDelta) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{24}
+	return file_hobnob_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *TraitsDelta) GetChanged() map[string]string {
@@ -2101,7 +2170,7 @@ type HeartbeatDelta struct {
 
 func (x *HeartbeatDelta) Reset() {
 	*x = HeartbeatDelta{}
-	mi := &file_hobnob_proto_msgTypes[25]
+	mi := &file_hobnob_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2113,7 +2182,7 @@ func (x *HeartbeatDelta) String() string {
 func (*HeartbeatDelta) ProtoMessage() {}
 
 func (x *HeartbeatDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[25]
+	mi := &file_hobnob_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2126,7 +2195,7 @@ func (x *HeartbeatDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatDelta.ProtoReflect.Descriptor instead.
 func (*HeartbeatDelta) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{25}
+	return file_hobnob_proto_rawDescGZIP(), []int{26}
 }
 
 // DeltaAck acknowledges receipt of a DeltaEvent by sequence number.
@@ -2139,7 +2208,7 @@ type DeltaAck struct {
 
 func (x *DeltaAck) Reset() {
 	*x = DeltaAck{}
-	mi := &file_hobnob_proto_msgTypes[26]
+	mi := &file_hobnob_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2151,7 +2220,7 @@ func (x *DeltaAck) String() string {
 func (*DeltaAck) ProtoMessage() {}
 
 func (x *DeltaAck) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[26]
+	mi := &file_hobnob_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2164,7 +2233,7 @@ func (x *DeltaAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeltaAck.ProtoReflect.Descriptor instead.
 func (*DeltaAck) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{26}
+	return file_hobnob_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *DeltaAck) GetAckedSequence() int64 {
@@ -2185,7 +2254,7 @@ type StreamCapabilities struct {
 
 func (x *StreamCapabilities) Reset() {
 	*x = StreamCapabilities{}
-	mi := &file_hobnob_proto_msgTypes[27]
+	mi := &file_hobnob_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2197,7 +2266,7 @@ func (x *StreamCapabilities) String() string {
 func (*StreamCapabilities) ProtoMessage() {}
 
 func (x *StreamCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[27]
+	mi := &file_hobnob_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2210,7 +2279,7 @@ func (x *StreamCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamCapabilities.ProtoReflect.Descriptor instead.
 func (*StreamCapabilities) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{27}
+	return file_hobnob_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *StreamCapabilities) GetSupportsDelta() bool {
@@ -2240,7 +2309,7 @@ type TaskDispatch struct {
 
 func (x *TaskDispatch) Reset() {
 	*x = TaskDispatch{}
-	mi := &file_hobnob_proto_msgTypes[28]
+	mi := &file_hobnob_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2252,7 +2321,7 @@ func (x *TaskDispatch) String() string {
 func (*TaskDispatch) ProtoMessage() {}
 
 func (x *TaskDispatch) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[28]
+	mi := &file_hobnob_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2265,7 +2334,7 @@ func (x *TaskDispatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskDispatch.ProtoReflect.Descriptor instead.
 func (*TaskDispatch) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{28}
+	return file_hobnob_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *TaskDispatch) GetTaskId() string {
@@ -2308,7 +2377,7 @@ type TaskAck struct {
 
 func (x *TaskAck) Reset() {
 	*x = TaskAck{}
-	mi := &file_hobnob_proto_msgTypes[29]
+	mi := &file_hobnob_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2320,7 +2389,7 @@ func (x *TaskAck) String() string {
 func (*TaskAck) ProtoMessage() {}
 
 func (x *TaskAck) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[29]
+	mi := &file_hobnob_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2333,7 +2402,7 @@ func (x *TaskAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskAck.ProtoReflect.Descriptor instead.
 func (*TaskAck) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{29}
+	return file_hobnob_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *TaskAck) GetTaskId() string {
@@ -2373,7 +2442,7 @@ type TaskResult struct {
 
 func (x *TaskResult) Reset() {
 	*x = TaskResult{}
-	mi := &file_hobnob_proto_msgTypes[30]
+	mi := &file_hobnob_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2385,7 +2454,7 @@ func (x *TaskResult) String() string {
 func (*TaskResult) ProtoMessage() {}
 
 func (x *TaskResult) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[30]
+	mi := &file_hobnob_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2398,7 +2467,7 @@ func (x *TaskResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResult.ProtoReflect.Descriptor instead.
 func (*TaskResult) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{30}
+	return file_hobnob_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *TaskResult) GetTaskId() string {
@@ -2461,7 +2530,7 @@ type QueryRequest struct {
 
 func (x *QueryRequest) Reset() {
 	*x = QueryRequest{}
-	mi := &file_hobnob_proto_msgTypes[31]
+	mi := &file_hobnob_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2473,7 +2542,7 @@ func (x *QueryRequest) String() string {
 func (*QueryRequest) ProtoMessage() {}
 
 func (x *QueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[31]
+	mi := &file_hobnob_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2486,7 +2555,7 @@ func (x *QueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
 func (*QueryRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{31}
+	return file_hobnob_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *QueryRequest) GetQueryId() string {
@@ -2516,7 +2585,7 @@ type QueryResponse struct {
 
 func (x *QueryResponse) Reset() {
 	*x = QueryResponse{}
-	mi := &file_hobnob_proto_msgTypes[32]
+	mi := &file_hobnob_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2528,7 +2597,7 @@ func (x *QueryResponse) String() string {
 func (*QueryResponse) ProtoMessage() {}
 
 func (x *QueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[32]
+	mi := &file_hobnob_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2541,7 +2610,7 @@ func (x *QueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
 func (*QueryResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{32}
+	return file_hobnob_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *QueryResponse) GetQueryId() string {
@@ -2582,7 +2651,7 @@ type AddApprovedPatternRequest struct {
 
 func (x *AddApprovedPatternRequest) Reset() {
 	*x = AddApprovedPatternRequest{}
-	mi := &file_hobnob_proto_msgTypes[33]
+	mi := &file_hobnob_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2594,7 +2663,7 @@ func (x *AddApprovedPatternRequest) String() string {
 func (*AddApprovedPatternRequest) ProtoMessage() {}
 
 func (x *AddApprovedPatternRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[33]
+	mi := &file_hobnob_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2607,7 +2676,7 @@ func (x *AddApprovedPatternRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddApprovedPatternRequest.ProtoReflect.Descriptor instead.
 func (*AddApprovedPatternRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{33}
+	return file_hobnob_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AddApprovedPatternRequest) GetPattern() string {
@@ -2635,7 +2704,7 @@ type AddApprovedPatternResponse struct {
 
 func (x *AddApprovedPatternResponse) Reset() {
 	*x = AddApprovedPatternResponse{}
-	mi := &file_hobnob_proto_msgTypes[34]
+	mi := &file_hobnob_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2647,7 +2716,7 @@ func (x *AddApprovedPatternResponse) String() string {
 func (*AddApprovedPatternResponse) ProtoMessage() {}
 
 func (x *AddApprovedPatternResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[34]
+	mi := &file_hobnob_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2660,7 +2729,7 @@ func (x *AddApprovedPatternResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddApprovedPatternResponse.ProtoReflect.Descriptor instead.
 func (*AddApprovedPatternResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{34}
+	return file_hobnob_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AddApprovedPatternResponse) GetId() string {
@@ -2692,7 +2761,7 @@ type ListApprovedPatternsRequest struct {
 
 func (x *ListApprovedPatternsRequest) Reset() {
 	*x = ListApprovedPatternsRequest{}
-	mi := &file_hobnob_proto_msgTypes[35]
+	mi := &file_hobnob_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2704,7 +2773,7 @@ func (x *ListApprovedPatternsRequest) String() string {
 func (*ListApprovedPatternsRequest) ProtoMessage() {}
 
 func (x *ListApprovedPatternsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[35]
+	mi := &file_hobnob_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2717,7 +2786,7 @@ func (x *ListApprovedPatternsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovedPatternsRequest.ProtoReflect.Descriptor instead.
 func (*ListApprovedPatternsRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{35}
+	return file_hobnob_proto_rawDescGZIP(), []int{36}
 }
 
 type ListApprovedPatternsResponse struct {
@@ -2729,7 +2798,7 @@ type ListApprovedPatternsResponse struct {
 
 func (x *ListApprovedPatternsResponse) Reset() {
 	*x = ListApprovedPatternsResponse{}
-	mi := &file_hobnob_proto_msgTypes[36]
+	mi := &file_hobnob_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2741,7 +2810,7 @@ func (x *ListApprovedPatternsResponse) String() string {
 func (*ListApprovedPatternsResponse) ProtoMessage() {}
 
 func (x *ListApprovedPatternsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[36]
+	mi := &file_hobnob_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2754,7 +2823,7 @@ func (x *ListApprovedPatternsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovedPatternsResponse.ProtoReflect.Descriptor instead.
 func (*ListApprovedPatternsResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{36}
+	return file_hobnob_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListApprovedPatternsResponse) GetPatterns() []*ApprovedPattern {
@@ -2777,7 +2846,7 @@ type ApprovedPattern struct {
 
 func (x *ApprovedPattern) Reset() {
 	*x = ApprovedPattern{}
-	mi := &file_hobnob_proto_msgTypes[37]
+	mi := &file_hobnob_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2789,7 +2858,7 @@ func (x *ApprovedPattern) String() string {
 func (*ApprovedPattern) ProtoMessage() {}
 
 func (x *ApprovedPattern) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[37]
+	mi := &file_hobnob_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2802,7 +2871,7 @@ func (x *ApprovedPattern) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovedPattern.ProtoReflect.Descriptor instead.
 func (*ApprovedPattern) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{37}
+	return file_hobnob_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ApprovedPattern) GetId() string {
@@ -2849,7 +2918,7 @@ type RevokeApprovedPatternRequest struct {
 
 func (x *RevokeApprovedPatternRequest) Reset() {
 	*x = RevokeApprovedPatternRequest{}
-	mi := &file_hobnob_proto_msgTypes[38]
+	mi := &file_hobnob_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2861,7 +2930,7 @@ func (x *RevokeApprovedPatternRequest) String() string {
 func (*RevokeApprovedPatternRequest) ProtoMessage() {}
 
 func (x *RevokeApprovedPatternRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[38]
+	mi := &file_hobnob_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2874,7 +2943,7 @@ func (x *RevokeApprovedPatternRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApprovedPatternRequest.ProtoReflect.Descriptor instead.
 func (*RevokeApprovedPatternRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{38}
+	return file_hobnob_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RevokeApprovedPatternRequest) GetId() string {
@@ -2892,7 +2961,7 @@ type RevokeApprovedPatternResponse struct {
 
 func (x *RevokeApprovedPatternResponse) Reset() {
 	*x = RevokeApprovedPatternResponse{}
-	mi := &file_hobnob_proto_msgTypes[39]
+	mi := &file_hobnob_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2904,7 +2973,7 @@ func (x *RevokeApprovedPatternResponse) String() string {
 func (*RevokeApprovedPatternResponse) ProtoMessage() {}
 
 func (x *RevokeApprovedPatternResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[39]
+	mi := &file_hobnob_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2917,7 +2986,7 @@ func (x *RevokeApprovedPatternResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApprovedPatternResponse.ProtoReflect.Descriptor instead.
 func (*RevokeApprovedPatternResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{39}
+	return file_hobnob_proto_rawDescGZIP(), []int{40}
 }
 
 type ListThrallsRequest struct {
@@ -2928,7 +2997,7 @@ type ListThrallsRequest struct {
 
 func (x *ListThrallsRequest) Reset() {
 	*x = ListThrallsRequest{}
-	mi := &file_hobnob_proto_msgTypes[40]
+	mi := &file_hobnob_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2940,7 +3009,7 @@ func (x *ListThrallsRequest) String() string {
 func (*ListThrallsRequest) ProtoMessage() {}
 
 func (x *ListThrallsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[40]
+	mi := &file_hobnob_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2953,7 +3022,7 @@ func (x *ListThrallsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListThrallsRequest.ProtoReflect.Descriptor instead.
 func (*ListThrallsRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{40}
+	return file_hobnob_proto_rawDescGZIP(), []int{41}
 }
 
 type ListThrallsResponse struct {
@@ -2965,7 +3034,7 @@ type ListThrallsResponse struct {
 
 func (x *ListThrallsResponse) Reset() {
 	*x = ListThrallsResponse{}
-	mi := &file_hobnob_proto_msgTypes[41]
+	mi := &file_hobnob_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2977,7 +3046,7 @@ func (x *ListThrallsResponse) String() string {
 func (*ListThrallsResponse) ProtoMessage() {}
 
 func (x *ListThrallsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[41]
+	mi := &file_hobnob_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2990,7 +3059,7 @@ func (x *ListThrallsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListThrallsResponse.ProtoReflect.Descriptor instead.
 func (*ListThrallsResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{41}
+	return file_hobnob_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListThrallsResponse) GetThralls() []*Thrall {
@@ -3016,7 +3085,7 @@ type Thrall struct {
 
 func (x *Thrall) Reset() {
 	*x = Thrall{}
-	mi := &file_hobnob_proto_msgTypes[42]
+	mi := &file_hobnob_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3028,7 +3097,7 @@ func (x *Thrall) String() string {
 func (*Thrall) ProtoMessage() {}
 
 func (x *Thrall) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[42]
+	mi := &file_hobnob_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3041,7 +3110,7 @@ func (x *Thrall) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Thrall.ProtoReflect.Descriptor instead.
 func (*Thrall) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{42}
+	return file_hobnob_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *Thrall) GetId() string {
@@ -3109,7 +3178,7 @@ type GetThrallRequest struct {
 
 func (x *GetThrallRequest) Reset() {
 	*x = GetThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[43]
+	mi := &file_hobnob_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3121,7 +3190,7 @@ func (x *GetThrallRequest) String() string {
 func (*GetThrallRequest) ProtoMessage() {}
 
 func (x *GetThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[43]
+	mi := &file_hobnob_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3134,7 +3203,7 @@ func (x *GetThrallRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetThrallRequest.ProtoReflect.Descriptor instead.
 func (*GetThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{43}
+	return file_hobnob_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetThrallRequest) GetId() string {
@@ -3153,7 +3222,7 @@ type GetThrallResponse struct {
 
 func (x *GetThrallResponse) Reset() {
 	*x = GetThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[44]
+	mi := &file_hobnob_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3165,7 +3234,7 @@ func (x *GetThrallResponse) String() string {
 func (*GetThrallResponse) ProtoMessage() {}
 
 func (x *GetThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[44]
+	mi := &file_hobnob_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3178,7 +3247,7 @@ func (x *GetThrallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetThrallResponse.ProtoReflect.Descriptor instead.
 func (*GetThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{44}
+	return file_hobnob_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetThrallResponse) GetThrall() *Thrall {
@@ -3197,7 +3266,7 @@ type RevokeThrallRequest struct {
 
 func (x *RevokeThrallRequest) Reset() {
 	*x = RevokeThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[45]
+	mi := &file_hobnob_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3209,7 +3278,7 @@ func (x *RevokeThrallRequest) String() string {
 func (*RevokeThrallRequest) ProtoMessage() {}
 
 func (x *RevokeThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[45]
+	mi := &file_hobnob_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3222,7 +3291,7 @@ func (x *RevokeThrallRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeThrallRequest.ProtoReflect.Descriptor instead.
 func (*RevokeThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{45}
+	return file_hobnob_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *RevokeThrallRequest) GetId() string {
@@ -3240,7 +3309,7 @@ type RevokeThrallResponse struct {
 
 func (x *RevokeThrallResponse) Reset() {
 	*x = RevokeThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[46]
+	mi := &file_hobnob_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3252,7 +3321,7 @@ func (x *RevokeThrallResponse) String() string {
 func (*RevokeThrallResponse) ProtoMessage() {}
 
 func (x *RevokeThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[46]
+	mi := &file_hobnob_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3265,7 +3334,7 @@ func (x *RevokeThrallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeThrallResponse.ProtoReflect.Descriptor instead.
 func (*RevokeThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{46}
+	return file_hobnob_proto_rawDescGZIP(), []int{47}
 }
 
 type DeleteThrallRequest struct {
@@ -3277,7 +3346,7 @@ type DeleteThrallRequest struct {
 
 func (x *DeleteThrallRequest) Reset() {
 	*x = DeleteThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[47]
+	mi := &file_hobnob_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3289,7 +3358,7 @@ func (x *DeleteThrallRequest) String() string {
 func (*DeleteThrallRequest) ProtoMessage() {}
 
 func (x *DeleteThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[47]
+	mi := &file_hobnob_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3302,7 +3371,7 @@ func (x *DeleteThrallRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteThrallRequest.ProtoReflect.Descriptor instead.
 func (*DeleteThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{47}
+	return file_hobnob_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *DeleteThrallRequest) GetId() string {
@@ -3320,7 +3389,7 @@ type DeleteThrallResponse struct {
 
 func (x *DeleteThrallResponse) Reset() {
 	*x = DeleteThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[48]
+	mi := &file_hobnob_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3332,7 +3401,7 @@ func (x *DeleteThrallResponse) String() string {
 func (*DeleteThrallResponse) ProtoMessage() {}
 
 func (x *DeleteThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[48]
+	mi := &file_hobnob_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3345,7 +3414,7 @@ func (x *DeleteThrallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteThrallResponse.ProtoReflect.Descriptor instead.
 func (*DeleteThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{48}
+	return file_hobnob_proto_rawDescGZIP(), []int{49}
 }
 
 type ForcePushRequest struct {
@@ -3357,7 +3426,7 @@ type ForcePushRequest struct {
 
 func (x *ForcePushRequest) Reset() {
 	*x = ForcePushRequest{}
-	mi := &file_hobnob_proto_msgTypes[49]
+	mi := &file_hobnob_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3369,7 +3438,7 @@ func (x *ForcePushRequest) String() string {
 func (*ForcePushRequest) ProtoMessage() {}
 
 func (x *ForcePushRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[49]
+	mi := &file_hobnob_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3382,7 +3451,7 @@ func (x *ForcePushRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForcePushRequest.ProtoReflect.Descriptor instead.
 func (*ForcePushRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{49}
+	return file_hobnob_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ForcePushRequest) GetThrallId() string {
@@ -3401,7 +3470,7 @@ type ForcePushResponse struct {
 
 func (x *ForcePushResponse) Reset() {
 	*x = ForcePushResponse{}
-	mi := &file_hobnob_proto_msgTypes[50]
+	mi := &file_hobnob_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3413,7 +3482,7 @@ func (x *ForcePushResponse) String() string {
 func (*ForcePushResponse) ProtoMessage() {}
 
 func (x *ForcePushResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[50]
+	mi := &file_hobnob_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3426,7 +3495,7 @@ func (x *ForcePushResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForcePushResponse.ProtoReflect.Descriptor instead.
 func (*ForcePushResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{50}
+	return file_hobnob_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ForcePushResponse) GetThrallsNotified() int32 {
@@ -3445,7 +3514,7 @@ type DryRunRequest struct {
 
 func (x *DryRunRequest) Reset() {
 	*x = DryRunRequest{}
-	mi := &file_hobnob_proto_msgTypes[51]
+	mi := &file_hobnob_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3457,7 +3526,7 @@ func (x *DryRunRequest) String() string {
 func (*DryRunRequest) ProtoMessage() {}
 
 func (x *DryRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[51]
+	mi := &file_hobnob_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3470,7 +3539,7 @@ func (x *DryRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DryRunRequest.ProtoReflect.Descriptor instead.
 func (*DryRunRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{51}
+	return file_hobnob_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *DryRunRequest) GetThrallId() string {
@@ -3489,7 +3558,7 @@ type DryRunResponse struct {
 
 func (x *DryRunResponse) Reset() {
 	*x = DryRunResponse{}
-	mi := &file_hobnob_proto_msgTypes[52]
+	mi := &file_hobnob_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3501,7 +3570,7 @@ func (x *DryRunResponse) String() string {
 func (*DryRunResponse) ProtoMessage() {}
 
 func (x *DryRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[52]
+	mi := &file_hobnob_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3514,7 +3583,7 @@ func (x *DryRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DryRunResponse.ProtoReflect.Descriptor instead.
 func (*DryRunResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{52}
+	return file_hobnob_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *DryRunResponse) GetActions() []*PlannedAction {
@@ -3536,7 +3605,7 @@ type PlannedAction struct {
 
 func (x *PlannedAction) Reset() {
 	*x = PlannedAction{}
-	mi := &file_hobnob_proto_msgTypes[53]
+	mi := &file_hobnob_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3548,7 +3617,7 @@ func (x *PlannedAction) String() string {
 func (*PlannedAction) ProtoMessage() {}
 
 func (x *PlannedAction) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[53]
+	mi := &file_hobnob_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3561,7 +3630,7 @@ func (x *PlannedAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedAction.ProtoReflect.Descriptor instead.
 func (*PlannedAction) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{53}
+	return file_hobnob_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *PlannedAction) GetModuleName() string {
@@ -3602,7 +3671,7 @@ type ListRunsRequest struct {
 
 func (x *ListRunsRequest) Reset() {
 	*x = ListRunsRequest{}
-	mi := &file_hobnob_proto_msgTypes[54]
+	mi := &file_hobnob_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3614,7 +3683,7 @@ func (x *ListRunsRequest) String() string {
 func (*ListRunsRequest) ProtoMessage() {}
 
 func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[54]
+	mi := &file_hobnob_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3627,7 +3696,7 @@ func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListRunsRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{54}
+	return file_hobnob_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ListRunsRequest) GetThrallId() string {
@@ -3653,7 +3722,7 @@ type ListRunsResponse struct {
 
 func (x *ListRunsResponse) Reset() {
 	*x = ListRunsResponse{}
-	mi := &file_hobnob_proto_msgTypes[55]
+	mi := &file_hobnob_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3665,7 +3734,7 @@ func (x *ListRunsResponse) String() string {
 func (*ListRunsResponse) ProtoMessage() {}
 
 func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[55]
+	mi := &file_hobnob_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3678,7 +3747,7 @@ func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListRunsResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{55}
+	return file_hobnob_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ListRunsResponse) GetRuns() []*Run {
@@ -3705,7 +3774,7 @@ type Run struct {
 
 func (x *Run) Reset() {
 	*x = Run{}
-	mi := &file_hobnob_proto_msgTypes[56]
+	mi := &file_hobnob_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3717,7 +3786,7 @@ func (x *Run) String() string {
 func (*Run) ProtoMessage() {}
 
 func (x *Run) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[56]
+	mi := &file_hobnob_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3730,7 +3799,7 @@ func (x *Run) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Run.ProtoReflect.Descriptor instead.
 func (*Run) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{56}
+	return file_hobnob_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *Run) GetId() string {
@@ -3805,7 +3874,7 @@ type GetRunRequest struct {
 
 func (x *GetRunRequest) Reset() {
 	*x = GetRunRequest{}
-	mi := &file_hobnob_proto_msgTypes[57]
+	mi := &file_hobnob_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3817,7 +3886,7 @@ func (x *GetRunRequest) String() string {
 func (*GetRunRequest) ProtoMessage() {}
 
 func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[57]
+	mi := &file_hobnob_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3830,7 +3899,7 @@ func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
 func (*GetRunRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{57}
+	return file_hobnob_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *GetRunRequest) GetId() string {
@@ -3850,7 +3919,7 @@ type GetRunResponse struct {
 
 func (x *GetRunResponse) Reset() {
 	*x = GetRunResponse{}
-	mi := &file_hobnob_proto_msgTypes[58]
+	mi := &file_hobnob_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3862,7 +3931,7 @@ func (x *GetRunResponse) String() string {
 func (*GetRunResponse) ProtoMessage() {}
 
 func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[58]
+	mi := &file_hobnob_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3875,7 +3944,7 @@ func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
 func (*GetRunResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{58}
+	return file_hobnob_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *GetRunResponse) GetRun() *Run {
@@ -3900,7 +3969,7 @@ type GenerateTokenRequest struct {
 
 func (x *GenerateTokenRequest) Reset() {
 	*x = GenerateTokenRequest{}
-	mi := &file_hobnob_proto_msgTypes[59]
+	mi := &file_hobnob_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3912,7 +3981,7 @@ func (x *GenerateTokenRequest) String() string {
 func (*GenerateTokenRequest) ProtoMessage() {}
 
 func (x *GenerateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[59]
+	mi := &file_hobnob_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3925,7 +3994,7 @@ func (x *GenerateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateTokenRequest.ProtoReflect.Descriptor instead.
 func (*GenerateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{59}
+	return file_hobnob_proto_rawDescGZIP(), []int{60}
 }
 
 type GenerateTokenResponse struct {
@@ -3937,7 +4006,7 @@ type GenerateTokenResponse struct {
 
 func (x *GenerateTokenResponse) Reset() {
 	*x = GenerateTokenResponse{}
-	mi := &file_hobnob_proto_msgTypes[60]
+	mi := &file_hobnob_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3949,7 +4018,7 @@ func (x *GenerateTokenResponse) String() string {
 func (*GenerateTokenResponse) ProtoMessage() {}
 
 func (x *GenerateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[60]
+	mi := &file_hobnob_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3962,7 +4031,7 @@ func (x *GenerateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateTokenResponse.ProtoReflect.Descriptor instead.
 func (*GenerateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{60}
+	return file_hobnob_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *GenerateTokenResponse) GetToken() string {
@@ -3983,7 +4052,7 @@ type AddWebhookRequest struct {
 
 func (x *AddWebhookRequest) Reset() {
 	*x = AddWebhookRequest{}
-	mi := &file_hobnob_proto_msgTypes[61]
+	mi := &file_hobnob_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3995,7 +4064,7 @@ func (x *AddWebhookRequest) String() string {
 func (*AddWebhookRequest) ProtoMessage() {}
 
 func (x *AddWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[61]
+	mi := &file_hobnob_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4008,7 +4077,7 @@ func (x *AddWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddWebhookRequest.ProtoReflect.Descriptor instead.
 func (*AddWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{61}
+	return file_hobnob_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *AddWebhookRequest) GetUrl() string {
@@ -4041,7 +4110,7 @@ type AddWebhookResponse struct {
 
 func (x *AddWebhookResponse) Reset() {
 	*x = AddWebhookResponse{}
-	mi := &file_hobnob_proto_msgTypes[62]
+	mi := &file_hobnob_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4053,7 +4122,7 @@ func (x *AddWebhookResponse) String() string {
 func (*AddWebhookResponse) ProtoMessage() {}
 
 func (x *AddWebhookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[62]
+	mi := &file_hobnob_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4066,7 +4135,7 @@ func (x *AddWebhookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddWebhookResponse.ProtoReflect.Descriptor instead.
 func (*AddWebhookResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{62}
+	return file_hobnob_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *AddWebhookResponse) GetWebhook() *WebhookInfo {
@@ -4084,7 +4153,7 @@ type ListWebhooksRequest struct {
 
 func (x *ListWebhooksRequest) Reset() {
 	*x = ListWebhooksRequest{}
-	mi := &file_hobnob_proto_msgTypes[63]
+	mi := &file_hobnob_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4096,7 +4165,7 @@ func (x *ListWebhooksRequest) String() string {
 func (*ListWebhooksRequest) ProtoMessage() {}
 
 func (x *ListWebhooksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[63]
+	mi := &file_hobnob_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4109,7 +4178,7 @@ func (x *ListWebhooksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebhooksRequest.ProtoReflect.Descriptor instead.
 func (*ListWebhooksRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{63}
+	return file_hobnob_proto_rawDescGZIP(), []int{64}
 }
 
 type ListWebhooksResponse struct {
@@ -4121,7 +4190,7 @@ type ListWebhooksResponse struct {
 
 func (x *ListWebhooksResponse) Reset() {
 	*x = ListWebhooksResponse{}
-	mi := &file_hobnob_proto_msgTypes[64]
+	mi := &file_hobnob_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4133,7 +4202,7 @@ func (x *ListWebhooksResponse) String() string {
 func (*ListWebhooksResponse) ProtoMessage() {}
 
 func (x *ListWebhooksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[64]
+	mi := &file_hobnob_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4146,7 +4215,7 @@ func (x *ListWebhooksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebhooksResponse.ProtoReflect.Descriptor instead.
 func (*ListWebhooksResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{64}
+	return file_hobnob_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ListWebhooksResponse) GetWebhooks() []*WebhookInfo {
@@ -4165,7 +4234,7 @@ type DeleteWebhookRequest struct {
 
 func (x *DeleteWebhookRequest) Reset() {
 	*x = DeleteWebhookRequest{}
-	mi := &file_hobnob_proto_msgTypes[65]
+	mi := &file_hobnob_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4177,7 +4246,7 @@ func (x *DeleteWebhookRequest) String() string {
 func (*DeleteWebhookRequest) ProtoMessage() {}
 
 func (x *DeleteWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[65]
+	mi := &file_hobnob_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4190,7 +4259,7 @@ func (x *DeleteWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWebhookRequest.ProtoReflect.Descriptor instead.
 func (*DeleteWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{65}
+	return file_hobnob_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *DeleteWebhookRequest) GetId() string {
@@ -4208,7 +4277,7 @@ type DeleteWebhookResponse struct {
 
 func (x *DeleteWebhookResponse) Reset() {
 	*x = DeleteWebhookResponse{}
-	mi := &file_hobnob_proto_msgTypes[66]
+	mi := &file_hobnob_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4220,7 +4289,7 @@ func (x *DeleteWebhookResponse) String() string {
 func (*DeleteWebhookResponse) ProtoMessage() {}
 
 func (x *DeleteWebhookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[66]
+	mi := &file_hobnob_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4233,7 +4302,7 @@ func (x *DeleteWebhookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWebhookResponse.ProtoReflect.Descriptor instead.
 func (*DeleteWebhookResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{66}
+	return file_hobnob_proto_rawDescGZIP(), []int{67}
 }
 
 type WebhookInfo struct {
@@ -4249,7 +4318,7 @@ type WebhookInfo struct {
 
 func (x *WebhookInfo) Reset() {
 	*x = WebhookInfo{}
-	mi := &file_hobnob_proto_msgTypes[67]
+	mi := &file_hobnob_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4261,7 +4330,7 @@ func (x *WebhookInfo) String() string {
 func (*WebhookInfo) ProtoMessage() {}
 
 func (x *WebhookInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[67]
+	mi := &file_hobnob_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4274,7 +4343,7 @@ func (x *WebhookInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebhookInfo.ProtoReflect.Descriptor instead.
 func (*WebhookInfo) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{67}
+	return file_hobnob_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *WebhookInfo) GetId() string {
@@ -4320,7 +4389,7 @@ type GetComplianceSummaryRequest struct {
 
 func (x *GetComplianceSummaryRequest) Reset() {
 	*x = GetComplianceSummaryRequest{}
-	mi := &file_hobnob_proto_msgTypes[68]
+	mi := &file_hobnob_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4332,7 +4401,7 @@ func (x *GetComplianceSummaryRequest) String() string {
 func (*GetComplianceSummaryRequest) ProtoMessage() {}
 
 func (x *GetComplianceSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[68]
+	mi := &file_hobnob_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4345,7 +4414,7 @@ func (x *GetComplianceSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetComplianceSummaryRequest.ProtoReflect.Descriptor instead.
 func (*GetComplianceSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{68}
+	return file_hobnob_proto_rawDescGZIP(), []int{69}
 }
 
 type GetComplianceSummaryResponse struct {
@@ -4363,7 +4432,7 @@ type GetComplianceSummaryResponse struct {
 
 func (x *GetComplianceSummaryResponse) Reset() {
 	*x = GetComplianceSummaryResponse{}
-	mi := &file_hobnob_proto_msgTypes[69]
+	mi := &file_hobnob_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4375,7 +4444,7 @@ func (x *GetComplianceSummaryResponse) String() string {
 func (*GetComplianceSummaryResponse) ProtoMessage() {}
 
 func (x *GetComplianceSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[69]
+	mi := &file_hobnob_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4388,7 +4457,7 @@ func (x *GetComplianceSummaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetComplianceSummaryResponse.ProtoReflect.Descriptor instead.
 func (*GetComplianceSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{69}
+	return file_hobnob_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetComplianceSummaryResponse) GetTotal() int32 {
@@ -4449,7 +4518,7 @@ type GetThrallComplianceRequest struct {
 
 func (x *GetThrallComplianceRequest) Reset() {
 	*x = GetThrallComplianceRequest{}
-	mi := &file_hobnob_proto_msgTypes[70]
+	mi := &file_hobnob_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4461,7 +4530,7 @@ func (x *GetThrallComplianceRequest) String() string {
 func (*GetThrallComplianceRequest) ProtoMessage() {}
 
 func (x *GetThrallComplianceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[70]
+	mi := &file_hobnob_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4474,7 +4543,7 @@ func (x *GetThrallComplianceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetThrallComplianceRequest.ProtoReflect.Descriptor instead.
 func (*GetThrallComplianceRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{70}
+	return file_hobnob_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetThrallComplianceRequest) GetId() string {
@@ -4495,7 +4564,7 @@ type GetThrallComplianceResponse struct {
 
 func (x *GetThrallComplianceResponse) Reset() {
 	*x = GetThrallComplianceResponse{}
-	mi := &file_hobnob_proto_msgTypes[71]
+	mi := &file_hobnob_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4507,7 +4576,7 @@ func (x *GetThrallComplianceResponse) String() string {
 func (*GetThrallComplianceResponse) ProtoMessage() {}
 
 func (x *GetThrallComplianceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[71]
+	mi := &file_hobnob_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4520,7 +4589,7 @@ func (x *GetThrallComplianceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetThrallComplianceResponse.ProtoReflect.Descriptor instead.
 func (*GetThrallComplianceResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{71}
+	return file_hobnob_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *GetThrallComplianceResponse) GetStatus() string {
@@ -4559,7 +4628,7 @@ type ComplianceSnapshot struct {
 
 func (x *ComplianceSnapshot) Reset() {
 	*x = ComplianceSnapshot{}
-	mi := &file_hobnob_proto_msgTypes[72]
+	mi := &file_hobnob_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4571,7 +4640,7 @@ func (x *ComplianceSnapshot) String() string {
 func (*ComplianceSnapshot) ProtoMessage() {}
 
 func (x *ComplianceSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[72]
+	mi := &file_hobnob_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4584,7 +4653,7 @@ func (x *ComplianceSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceSnapshot.ProtoReflect.Descriptor instead.
 func (*ComplianceSnapshot) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{72}
+	return file_hobnob_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ComplianceSnapshot) GetDate() string {
@@ -4647,7 +4716,7 @@ type RollbackRequest struct {
 
 func (x *RollbackRequest) Reset() {
 	*x = RollbackRequest{}
-	mi := &file_hobnob_proto_msgTypes[73]
+	mi := &file_hobnob_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4659,7 +4728,7 @@ func (x *RollbackRequest) String() string {
 func (*RollbackRequest) ProtoMessage() {}
 
 func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[73]
+	mi := &file_hobnob_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4672,7 +4741,7 @@ func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackRequest.ProtoReflect.Descriptor instead.
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{73}
+	return file_hobnob_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *RollbackRequest) GetThrallId() string {
@@ -4706,7 +4775,7 @@ type RollbackResponse struct {
 
 func (x *RollbackResponse) Reset() {
 	*x = RollbackResponse{}
-	mi := &file_hobnob_proto_msgTypes[74]
+	mi := &file_hobnob_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4718,7 +4787,7 @@ func (x *RollbackResponse) String() string {
 func (*RollbackResponse) ProtoMessage() {}
 
 func (x *RollbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[74]
+	mi := &file_hobnob_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4731,7 +4800,7 @@ func (x *RollbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackResponse.ProtoReflect.Descriptor instead.
 func (*RollbackResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{74}
+	return file_hobnob_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *RollbackResponse) GetSuccess() bool {
@@ -4757,7 +4826,7 @@ type ListPackagesRequest struct {
 
 func (x *ListPackagesRequest) Reset() {
 	*x = ListPackagesRequest{}
-	mi := &file_hobnob_proto_msgTypes[75]
+	mi := &file_hobnob_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4769,7 +4838,7 @@ func (x *ListPackagesRequest) String() string {
 func (*ListPackagesRequest) ProtoMessage() {}
 
 func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[75]
+	mi := &file_hobnob_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4782,7 +4851,7 @@ func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesRequest.ProtoReflect.Descriptor instead.
 func (*ListPackagesRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{75}
+	return file_hobnob_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ListPackagesRequest) GetThrallId() string {
@@ -4801,7 +4870,7 @@ type ListPackagesResponse struct {
 
 func (x *ListPackagesResponse) Reset() {
 	*x = ListPackagesResponse{}
-	mi := &file_hobnob_proto_msgTypes[76]
+	mi := &file_hobnob_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4813,7 +4882,7 @@ func (x *ListPackagesResponse) String() string {
 func (*ListPackagesResponse) ProtoMessage() {}
 
 func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[76]
+	mi := &file_hobnob_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4826,7 +4895,7 @@ func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesResponse.ProtoReflect.Descriptor instead.
 func (*ListPackagesResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{76}
+	return file_hobnob_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *ListPackagesResponse) GetPackages() []*PackageInfo {
@@ -4844,7 +4913,7 @@ type ListPackageDriftRequest struct {
 
 func (x *ListPackageDriftRequest) Reset() {
 	*x = ListPackageDriftRequest{}
-	mi := &file_hobnob_proto_msgTypes[77]
+	mi := &file_hobnob_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4856,7 +4925,7 @@ func (x *ListPackageDriftRequest) String() string {
 func (*ListPackageDriftRequest) ProtoMessage() {}
 
 func (x *ListPackageDriftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[77]
+	mi := &file_hobnob_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4869,7 +4938,7 @@ func (x *ListPackageDriftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageDriftRequest.ProtoReflect.Descriptor instead.
 func (*ListPackageDriftRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{77}
+	return file_hobnob_proto_rawDescGZIP(), []int{78}
 }
 
 type ListPackageDriftResponse struct {
@@ -4881,7 +4950,7 @@ type ListPackageDriftResponse struct {
 
 func (x *ListPackageDriftResponse) Reset() {
 	*x = ListPackageDriftResponse{}
-	mi := &file_hobnob_proto_msgTypes[78]
+	mi := &file_hobnob_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4893,7 +4962,7 @@ func (x *ListPackageDriftResponse) String() string {
 func (*ListPackageDriftResponse) ProtoMessage() {}
 
 func (x *ListPackageDriftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[78]
+	mi := &file_hobnob_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4906,7 +4975,7 @@ func (x *ListPackageDriftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageDriftResponse.ProtoReflect.Descriptor instead.
 func (*ListPackageDriftResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{78}
+	return file_hobnob_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ListPackageDriftResponse) GetDrifts() []*PackageDrift {
@@ -4929,7 +4998,7 @@ type PackageInfo struct {
 
 func (x *PackageInfo) Reset() {
 	*x = PackageInfo{}
-	mi := &file_hobnob_proto_msgTypes[79]
+	mi := &file_hobnob_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4941,7 +5010,7 @@ func (x *PackageInfo) String() string {
 func (*PackageInfo) ProtoMessage() {}
 
 func (x *PackageInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[79]
+	mi := &file_hobnob_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4954,7 +5023,7 @@ func (x *PackageInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageInfo.ProtoReflect.Descriptor instead.
 func (*PackageInfo) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{79}
+	return file_hobnob_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *PackageInfo) GetThrallId() string {
@@ -5006,7 +5075,7 @@ type PackageDrift struct {
 
 func (x *PackageDrift) Reset() {
 	*x = PackageDrift{}
-	mi := &file_hobnob_proto_msgTypes[80]
+	mi := &file_hobnob_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5018,7 +5087,7 @@ func (x *PackageDrift) String() string {
 func (*PackageDrift) ProtoMessage() {}
 
 func (x *PackageDrift) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[80]
+	mi := &file_hobnob_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5031,7 +5100,7 @@ func (x *PackageDrift) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageDrift.ProtoReflect.Descriptor instead.
 func (*PackageDrift) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{80}
+	return file_hobnob_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *PackageDrift) GetThrallId() string {
@@ -5087,7 +5156,7 @@ type PromoteEnvRequest struct {
 
 func (x *PromoteEnvRequest) Reset() {
 	*x = PromoteEnvRequest{}
-	mi := &file_hobnob_proto_msgTypes[81]
+	mi := &file_hobnob_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5099,7 +5168,7 @@ func (x *PromoteEnvRequest) String() string {
 func (*PromoteEnvRequest) ProtoMessage() {}
 
 func (x *PromoteEnvRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[81]
+	mi := &file_hobnob_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5112,7 +5181,7 @@ func (x *PromoteEnvRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteEnvRequest.ProtoReflect.Descriptor instead.
 func (*PromoteEnvRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{81}
+	return file_hobnob_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *PromoteEnvRequest) GetModuleName() string {
@@ -5146,7 +5215,7 @@ type PromoteEnvResponse struct {
 
 func (x *PromoteEnvResponse) Reset() {
 	*x = PromoteEnvResponse{}
-	mi := &file_hobnob_proto_msgTypes[82]
+	mi := &file_hobnob_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5158,7 +5227,7 @@ func (x *PromoteEnvResponse) String() string {
 func (*PromoteEnvResponse) ProtoMessage() {}
 
 func (x *PromoteEnvResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[82]
+	mi := &file_hobnob_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5171,7 +5240,7 @@ func (x *PromoteEnvResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteEnvResponse.ProtoReflect.Descriptor instead.
 func (*PromoteEnvResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{82}
+	return file_hobnob_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *PromoteEnvResponse) GetPromotionId() string {
@@ -5199,7 +5268,7 @@ type EnrollThrallRequest struct {
 
 func (x *EnrollThrallRequest) Reset() {
 	*x = EnrollThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[83]
+	mi := &file_hobnob_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5211,7 +5280,7 @@ func (x *EnrollThrallRequest) String() string {
 func (*EnrollThrallRequest) ProtoMessage() {}
 
 func (x *EnrollThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[83]
+	mi := &file_hobnob_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5224,7 +5293,7 @@ func (x *EnrollThrallRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollThrallRequest.ProtoReflect.Descriptor instead.
 func (*EnrollThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{83}
+	return file_hobnob_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *EnrollThrallRequest) GetHostname() string {
@@ -5257,7 +5326,7 @@ type EnrollThrallResponse struct {
 
 func (x *EnrollThrallResponse) Reset() {
 	*x = EnrollThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[84]
+	mi := &file_hobnob_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5269,7 +5338,7 @@ func (x *EnrollThrallResponse) String() string {
 func (*EnrollThrallResponse) ProtoMessage() {}
 
 func (x *EnrollThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[84]
+	mi := &file_hobnob_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5282,7 +5351,7 @@ func (x *EnrollThrallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollThrallResponse.ProtoReflect.Descriptor instead.
 func (*EnrollThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{84}
+	return file_hobnob_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *EnrollThrallResponse) GetThrallId() string {
@@ -5303,7 +5372,7 @@ type SetReassignmentRequest struct {
 
 func (x *SetReassignmentRequest) Reset() {
 	*x = SetReassignmentRequest{}
-	mi := &file_hobnob_proto_msgTypes[85]
+	mi := &file_hobnob_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5315,7 +5384,7 @@ func (x *SetReassignmentRequest) String() string {
 func (*SetReassignmentRequest) ProtoMessage() {}
 
 func (x *SetReassignmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[85]
+	mi := &file_hobnob_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5328,7 +5397,7 @@ func (x *SetReassignmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReassignmentRequest.ProtoReflect.Descriptor instead.
 func (*SetReassignmentRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{85}
+	return file_hobnob_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *SetReassignmentRequest) GetThrallId() string {
@@ -5360,7 +5429,7 @@ type SetReassignmentResponse struct {
 
 func (x *SetReassignmentResponse) Reset() {
 	*x = SetReassignmentResponse{}
-	mi := &file_hobnob_proto_msgTypes[86]
+	mi := &file_hobnob_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5372,7 +5441,7 @@ func (x *SetReassignmentResponse) String() string {
 func (*SetReassignmentResponse) ProtoMessage() {}
 
 func (x *SetReassignmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[86]
+	mi := &file_hobnob_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5385,7 +5454,7 @@ func (x *SetReassignmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReassignmentResponse.ProtoReflect.Descriptor instead.
 func (*SetReassignmentResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{86}
+	return file_hobnob_proto_rawDescGZIP(), []int{87}
 }
 
 type ReassignThrallRequest struct {
@@ -5399,7 +5468,7 @@ type ReassignThrallRequest struct {
 
 func (x *ReassignThrallRequest) Reset() {
 	*x = ReassignThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[87]
+	mi := &file_hobnob_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5411,7 +5480,7 @@ func (x *ReassignThrallRequest) String() string {
 func (*ReassignThrallRequest) ProtoMessage() {}
 
 func (x *ReassignThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[87]
+	mi := &file_hobnob_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5424,7 +5493,7 @@ func (x *ReassignThrallRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReassignThrallRequest.ProtoReflect.Descriptor instead.
 func (*ReassignThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{87}
+	return file_hobnob_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *ReassignThrallRequest) GetThrallId() string {
@@ -5458,7 +5527,7 @@ type ReassignThrallResponse struct {
 
 func (x *ReassignThrallResponse) Reset() {
 	*x = ReassignThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[88]
+	mi := &file_hobnob_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5470,7 +5539,7 @@ func (x *ReassignThrallResponse) String() string {
 func (*ReassignThrallResponse) ProtoMessage() {}
 
 func (x *ReassignThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[88]
+	mi := &file_hobnob_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5483,7 +5552,7 @@ func (x *ReassignThrallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReassignThrallResponse.ProtoReflect.Descriptor instead.
 func (*ReassignThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{88}
+	return file_hobnob_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *ReassignThrallResponse) GetNewThrallId() string {
@@ -5510,7 +5579,7 @@ type DrainSpokeRequest struct {
 
 func (x *DrainSpokeRequest) Reset() {
 	*x = DrainSpokeRequest{}
-	mi := &file_hobnob_proto_msgTypes[89]
+	mi := &file_hobnob_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5522,7 +5591,7 @@ func (x *DrainSpokeRequest) String() string {
 func (*DrainSpokeRequest) ProtoMessage() {}
 
 func (x *DrainSpokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[89]
+	mi := &file_hobnob_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5535,7 +5604,7 @@ func (x *DrainSpokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSpokeRequest.ProtoReflect.Descriptor instead.
 func (*DrainSpokeRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{89}
+	return file_hobnob_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *DrainSpokeRequest) GetSpokeId() string {
@@ -5563,7 +5632,7 @@ type DrainSpokeResponse struct {
 
 func (x *DrainSpokeResponse) Reset() {
 	*x = DrainSpokeResponse{}
-	mi := &file_hobnob_proto_msgTypes[90]
+	mi := &file_hobnob_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5575,7 +5644,7 @@ func (x *DrainSpokeResponse) String() string {
 func (*DrainSpokeResponse) ProtoMessage() {}
 
 func (x *DrainSpokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[90]
+	mi := &file_hobnob_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5588,7 +5657,7 @@ func (x *DrainSpokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSpokeResponse.ProtoReflect.Descriptor instead.
 func (*DrainSpokeResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{90}
+	return file_hobnob_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *DrainSpokeResponse) GetMoved() int32 {
@@ -5645,7 +5714,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\fcapabilities\x18\t \x01(\v2\x1d.hobnob.v1.StreamCapabilitiesR\fcapabilities\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf2\x03\n" +
 	"\x0fCheckInResponse\x12+\n" +
 	"\amodules\x18\x01 \x03(\v2\x11.hobnob.v1.ModuleR\amodules\x12#\n" +
 	"\rbase_interval\x18\x02 \x01(\tR\fbaseInterval\x12%\n" +
@@ -5658,7 +5727,8 @@ const file_hobnob_proto_rawDesc = "" +
 	"\rreassign_addr\x18\t \x01(\tR\freassignAddr\x12\x1f\n" +
 	"\vreassign_id\x18\n" +
 	" \x01(\tR\n" +
-	"reassignId\">\n" +
+	"reassignId\x12)\n" +
+	"\x10stream_requested\x18\v \x01(\bR\x0fstreamRequested\">\n" +
 	"\x10CustomTraitEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"0\n" +
@@ -5761,7 +5831,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\btask_ack\x18\x05 \x01(\v2\x12.hobnob.v1.TaskAckH\x00R\ataskAck\x12A\n" +
 	"\x0equery_response\x18\x06 \x01(\v2\x18.hobnob.v1.QueryResponseH\x00R\rqueryResponse\x12-\n" +
 	"\x05delta\x18\a \x01(\v2\x15.hobnob.v1.DeltaEventH\x00R\x05deltaB\x05\n" +
-	"\x03msg\"\xb5\x04\n" +
+	"\x03msg\"\xf8\x04\n" +
 	"\x13ServerStreamMessage\x12H\n" +
 	"\x11check_in_response\x18\x01 \x01(\v2\x1a.hobnob.v1.CheckInResponseH\x00R\x0fcheckInResponse\x12M\n" +
 	"\x11report_result_ack\x18\x02 \x01(\v2\x1f.hobnob.v1.ReportResultResponseH\x00R\x0freportResultAck\x12M\n" +
@@ -5772,8 +5842,11 @@ const file_hobnob_proto_rawDesc = "" +
 	"force_push\x18\x05 \x01(\v2\x1a.hobnob.v1.StreamForcePushH\x00R\tforcePush\x12>\n" +
 	"\rtask_dispatch\x18\x06 \x01(\v2\x17.hobnob.v1.TaskDispatchH\x00R\ftaskDispatch\x12>\n" +
 	"\rquery_request\x18\a \x01(\v2\x17.hobnob.v1.QueryRequestH\x00R\fqueryRequest\x122\n" +
-	"\tdelta_ack\x18\b \x01(\v2\x13.hobnob.v1.DeltaAckH\x00R\bdeltaAckB\x05\n" +
-	"\x03msg\"w\n" +
+	"\tdelta_ack\x18\b \x01(\v2\x13.hobnob.v1.DeltaAckH\x00R\bdeltaAck\x12A\n" +
+	"\x0estream_release\x18\t \x01(\v2\x18.hobnob.v1.StreamReleaseH\x00R\rstreamReleaseB\x05\n" +
+	"\x03msg\"'\n" +
+	"\rStreamRelease\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"w\n" +
 	"\x10StreamPolicyPush\x12<\n" +
 	"\rpolicy_bundle\x18\x01 \x01(\v2\x17.hobnob.v1.PolicyBundleR\fpolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x02 \x01(\x04R\rpolicyVersion\"\x11\n" +
@@ -6080,7 +6153,7 @@ func file_hobnob_proto_rawDescGZIP() []byte {
 	return file_hobnob_proto_rawDescData
 }
 
-var file_hobnob_proto_msgTypes = make([]protoimpl.MessageInfo, 97)
+var file_hobnob_proto_msgTypes = make([]protoimpl.MessageInfo, 98)
 var file_hobnob_proto_goTypes = []any{
 	(*RegisterRequest)(nil),               // 0: hobnob.v1.RegisterRequest
 	(*RegisterResponse)(nil),              // 1: hobnob.v1.RegisterResponse
@@ -6102,210 +6175,212 @@ var file_hobnob_proto_goTypes = []any{
 	(*ReportTraitsResponse)(nil),          // 17: hobnob.v1.ReportTraitsResponse
 	(*AgentStreamMessage)(nil),            // 18: hobnob.v1.AgentStreamMessage
 	(*ServerStreamMessage)(nil),           // 19: hobnob.v1.ServerStreamMessage
-	(*StreamPolicyPush)(nil),              // 20: hobnob.v1.StreamPolicyPush
-	(*StreamForcePush)(nil),               // 21: hobnob.v1.StreamForcePush
-	(*DeltaEvent)(nil),                    // 22: hobnob.v1.DeltaEvent
-	(*RunCompleted)(nil),                  // 23: hobnob.v1.RunCompleted
-	(*TraitsDelta)(nil),                   // 24: hobnob.v1.TraitsDelta
-	(*HeartbeatDelta)(nil),                // 25: hobnob.v1.HeartbeatDelta
-	(*DeltaAck)(nil),                      // 26: hobnob.v1.DeltaAck
-	(*StreamCapabilities)(nil),            // 27: hobnob.v1.StreamCapabilities
-	(*TaskDispatch)(nil),                  // 28: hobnob.v1.TaskDispatch
-	(*TaskAck)(nil),                       // 29: hobnob.v1.TaskAck
-	(*TaskResult)(nil),                    // 30: hobnob.v1.TaskResult
-	(*QueryRequest)(nil),                  // 31: hobnob.v1.QueryRequest
-	(*QueryResponse)(nil),                 // 32: hobnob.v1.QueryResponse
-	(*AddApprovedPatternRequest)(nil),     // 33: hobnob.v1.AddApprovedPatternRequest
-	(*AddApprovedPatternResponse)(nil),    // 34: hobnob.v1.AddApprovedPatternResponse
-	(*ListApprovedPatternsRequest)(nil),   // 35: hobnob.v1.ListApprovedPatternsRequest
-	(*ListApprovedPatternsResponse)(nil),  // 36: hobnob.v1.ListApprovedPatternsResponse
-	(*ApprovedPattern)(nil),               // 37: hobnob.v1.ApprovedPattern
-	(*RevokeApprovedPatternRequest)(nil),  // 38: hobnob.v1.RevokeApprovedPatternRequest
-	(*RevokeApprovedPatternResponse)(nil), // 39: hobnob.v1.RevokeApprovedPatternResponse
-	(*ListThrallsRequest)(nil),            // 40: hobnob.v1.ListThrallsRequest
-	(*ListThrallsResponse)(nil),           // 41: hobnob.v1.ListThrallsResponse
-	(*Thrall)(nil),                        // 42: hobnob.v1.Thrall
-	(*GetThrallRequest)(nil),              // 43: hobnob.v1.GetThrallRequest
-	(*GetThrallResponse)(nil),             // 44: hobnob.v1.GetThrallResponse
-	(*RevokeThrallRequest)(nil),           // 45: hobnob.v1.RevokeThrallRequest
-	(*RevokeThrallResponse)(nil),          // 46: hobnob.v1.RevokeThrallResponse
-	(*DeleteThrallRequest)(nil),           // 47: hobnob.v1.DeleteThrallRequest
-	(*DeleteThrallResponse)(nil),          // 48: hobnob.v1.DeleteThrallResponse
-	(*ForcePushRequest)(nil),              // 49: hobnob.v1.ForcePushRequest
-	(*ForcePushResponse)(nil),             // 50: hobnob.v1.ForcePushResponse
-	(*DryRunRequest)(nil),                 // 51: hobnob.v1.DryRunRequest
-	(*DryRunResponse)(nil),                // 52: hobnob.v1.DryRunResponse
-	(*PlannedAction)(nil),                 // 53: hobnob.v1.PlannedAction
-	(*ListRunsRequest)(nil),               // 54: hobnob.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),              // 55: hobnob.v1.ListRunsResponse
-	(*Run)(nil),                           // 56: hobnob.v1.Run
-	(*GetRunRequest)(nil),                 // 57: hobnob.v1.GetRunRequest
-	(*GetRunResponse)(nil),                // 58: hobnob.v1.GetRunResponse
-	(*GenerateTokenRequest)(nil),          // 59: hobnob.v1.GenerateTokenRequest
-	(*GenerateTokenResponse)(nil),         // 60: hobnob.v1.GenerateTokenResponse
-	(*AddWebhookRequest)(nil),             // 61: hobnob.v1.AddWebhookRequest
-	(*AddWebhookResponse)(nil),            // 62: hobnob.v1.AddWebhookResponse
-	(*ListWebhooksRequest)(nil),           // 63: hobnob.v1.ListWebhooksRequest
-	(*ListWebhooksResponse)(nil),          // 64: hobnob.v1.ListWebhooksResponse
-	(*DeleteWebhookRequest)(nil),          // 65: hobnob.v1.DeleteWebhookRequest
-	(*DeleteWebhookResponse)(nil),         // 66: hobnob.v1.DeleteWebhookResponse
-	(*WebhookInfo)(nil),                   // 67: hobnob.v1.WebhookInfo
-	(*GetComplianceSummaryRequest)(nil),   // 68: hobnob.v1.GetComplianceSummaryRequest
-	(*GetComplianceSummaryResponse)(nil),  // 69: hobnob.v1.GetComplianceSummaryResponse
-	(*GetThrallComplianceRequest)(nil),    // 70: hobnob.v1.GetThrallComplianceRequest
-	(*GetThrallComplianceResponse)(nil),   // 71: hobnob.v1.GetThrallComplianceResponse
-	(*ComplianceSnapshot)(nil),            // 72: hobnob.v1.ComplianceSnapshot
-	(*RollbackRequest)(nil),               // 73: hobnob.v1.RollbackRequest
-	(*RollbackResponse)(nil),              // 74: hobnob.v1.RollbackResponse
-	(*ListPackagesRequest)(nil),           // 75: hobnob.v1.ListPackagesRequest
-	(*ListPackagesResponse)(nil),          // 76: hobnob.v1.ListPackagesResponse
-	(*ListPackageDriftRequest)(nil),       // 77: hobnob.v1.ListPackageDriftRequest
-	(*ListPackageDriftResponse)(nil),      // 78: hobnob.v1.ListPackageDriftResponse
-	(*PackageInfo)(nil),                   // 79: hobnob.v1.PackageInfo
-	(*PackageDrift)(nil),                  // 80: hobnob.v1.PackageDrift
-	(*PromoteEnvRequest)(nil),             // 81: hobnob.v1.PromoteEnvRequest
-	(*PromoteEnvResponse)(nil),            // 82: hobnob.v1.PromoteEnvResponse
-	(*EnrollThrallRequest)(nil),           // 83: hobnob.v1.EnrollThrallRequest
-	(*EnrollThrallResponse)(nil),          // 84: hobnob.v1.EnrollThrallResponse
-	(*SetReassignmentRequest)(nil),        // 85: hobnob.v1.SetReassignmentRequest
-	(*SetReassignmentResponse)(nil),       // 86: hobnob.v1.SetReassignmentResponse
-	(*ReassignThrallRequest)(nil),         // 87: hobnob.v1.ReassignThrallRequest
-	(*ReassignThrallResponse)(nil),        // 88: hobnob.v1.ReassignThrallResponse
-	(*DrainSpokeRequest)(nil),             // 89: hobnob.v1.DrainSpokeRequest
-	(*DrainSpokeResponse)(nil),            // 90: hobnob.v1.DrainSpokeResponse
-	nil,                                   // 91: hobnob.v1.CheckInRequest.CachedModuleHashesEntry
-	nil,                                   // 92: hobnob.v1.Resource.ParamsEntry
-	nil,                                   // 93: hobnob.v1.PolicyResource.AttributesEntry
-	nil,                                   // 94: hobnob.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 95: hobnob.v1.TaskDispatch.EnvEntry
-	nil,                                   // 96: hobnob.v1.PromoteEnvResponse.DiffEntry
-	(*timestamppb.Timestamp)(nil),         // 97: google.protobuf.Timestamp
+	(*StreamRelease)(nil),                 // 20: hobnob.v1.StreamRelease
+	(*StreamPolicyPush)(nil),              // 21: hobnob.v1.StreamPolicyPush
+	(*StreamForcePush)(nil),               // 22: hobnob.v1.StreamForcePush
+	(*DeltaEvent)(nil),                    // 23: hobnob.v1.DeltaEvent
+	(*RunCompleted)(nil),                  // 24: hobnob.v1.RunCompleted
+	(*TraitsDelta)(nil),                   // 25: hobnob.v1.TraitsDelta
+	(*HeartbeatDelta)(nil),                // 26: hobnob.v1.HeartbeatDelta
+	(*DeltaAck)(nil),                      // 27: hobnob.v1.DeltaAck
+	(*StreamCapabilities)(nil),            // 28: hobnob.v1.StreamCapabilities
+	(*TaskDispatch)(nil),                  // 29: hobnob.v1.TaskDispatch
+	(*TaskAck)(nil),                       // 30: hobnob.v1.TaskAck
+	(*TaskResult)(nil),                    // 31: hobnob.v1.TaskResult
+	(*QueryRequest)(nil),                  // 32: hobnob.v1.QueryRequest
+	(*QueryResponse)(nil),                 // 33: hobnob.v1.QueryResponse
+	(*AddApprovedPatternRequest)(nil),     // 34: hobnob.v1.AddApprovedPatternRequest
+	(*AddApprovedPatternResponse)(nil),    // 35: hobnob.v1.AddApprovedPatternResponse
+	(*ListApprovedPatternsRequest)(nil),   // 36: hobnob.v1.ListApprovedPatternsRequest
+	(*ListApprovedPatternsResponse)(nil),  // 37: hobnob.v1.ListApprovedPatternsResponse
+	(*ApprovedPattern)(nil),               // 38: hobnob.v1.ApprovedPattern
+	(*RevokeApprovedPatternRequest)(nil),  // 39: hobnob.v1.RevokeApprovedPatternRequest
+	(*RevokeApprovedPatternResponse)(nil), // 40: hobnob.v1.RevokeApprovedPatternResponse
+	(*ListThrallsRequest)(nil),            // 41: hobnob.v1.ListThrallsRequest
+	(*ListThrallsResponse)(nil),           // 42: hobnob.v1.ListThrallsResponse
+	(*Thrall)(nil),                        // 43: hobnob.v1.Thrall
+	(*GetThrallRequest)(nil),              // 44: hobnob.v1.GetThrallRequest
+	(*GetThrallResponse)(nil),             // 45: hobnob.v1.GetThrallResponse
+	(*RevokeThrallRequest)(nil),           // 46: hobnob.v1.RevokeThrallRequest
+	(*RevokeThrallResponse)(nil),          // 47: hobnob.v1.RevokeThrallResponse
+	(*DeleteThrallRequest)(nil),           // 48: hobnob.v1.DeleteThrallRequest
+	(*DeleteThrallResponse)(nil),          // 49: hobnob.v1.DeleteThrallResponse
+	(*ForcePushRequest)(nil),              // 50: hobnob.v1.ForcePushRequest
+	(*ForcePushResponse)(nil),             // 51: hobnob.v1.ForcePushResponse
+	(*DryRunRequest)(nil),                 // 52: hobnob.v1.DryRunRequest
+	(*DryRunResponse)(nil),                // 53: hobnob.v1.DryRunResponse
+	(*PlannedAction)(nil),                 // 54: hobnob.v1.PlannedAction
+	(*ListRunsRequest)(nil),               // 55: hobnob.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),              // 56: hobnob.v1.ListRunsResponse
+	(*Run)(nil),                           // 57: hobnob.v1.Run
+	(*GetRunRequest)(nil),                 // 58: hobnob.v1.GetRunRequest
+	(*GetRunResponse)(nil),                // 59: hobnob.v1.GetRunResponse
+	(*GenerateTokenRequest)(nil),          // 60: hobnob.v1.GenerateTokenRequest
+	(*GenerateTokenResponse)(nil),         // 61: hobnob.v1.GenerateTokenResponse
+	(*AddWebhookRequest)(nil),             // 62: hobnob.v1.AddWebhookRequest
+	(*AddWebhookResponse)(nil),            // 63: hobnob.v1.AddWebhookResponse
+	(*ListWebhooksRequest)(nil),           // 64: hobnob.v1.ListWebhooksRequest
+	(*ListWebhooksResponse)(nil),          // 65: hobnob.v1.ListWebhooksResponse
+	(*DeleteWebhookRequest)(nil),          // 66: hobnob.v1.DeleteWebhookRequest
+	(*DeleteWebhookResponse)(nil),         // 67: hobnob.v1.DeleteWebhookResponse
+	(*WebhookInfo)(nil),                   // 68: hobnob.v1.WebhookInfo
+	(*GetComplianceSummaryRequest)(nil),   // 69: hobnob.v1.GetComplianceSummaryRequest
+	(*GetComplianceSummaryResponse)(nil),  // 70: hobnob.v1.GetComplianceSummaryResponse
+	(*GetThrallComplianceRequest)(nil),    // 71: hobnob.v1.GetThrallComplianceRequest
+	(*GetThrallComplianceResponse)(nil),   // 72: hobnob.v1.GetThrallComplianceResponse
+	(*ComplianceSnapshot)(nil),            // 73: hobnob.v1.ComplianceSnapshot
+	(*RollbackRequest)(nil),               // 74: hobnob.v1.RollbackRequest
+	(*RollbackResponse)(nil),              // 75: hobnob.v1.RollbackResponse
+	(*ListPackagesRequest)(nil),           // 76: hobnob.v1.ListPackagesRequest
+	(*ListPackagesResponse)(nil),          // 77: hobnob.v1.ListPackagesResponse
+	(*ListPackageDriftRequest)(nil),       // 78: hobnob.v1.ListPackageDriftRequest
+	(*ListPackageDriftResponse)(nil),      // 79: hobnob.v1.ListPackageDriftResponse
+	(*PackageInfo)(nil),                   // 80: hobnob.v1.PackageInfo
+	(*PackageDrift)(nil),                  // 81: hobnob.v1.PackageDrift
+	(*PromoteEnvRequest)(nil),             // 82: hobnob.v1.PromoteEnvRequest
+	(*PromoteEnvResponse)(nil),            // 83: hobnob.v1.PromoteEnvResponse
+	(*EnrollThrallRequest)(nil),           // 84: hobnob.v1.EnrollThrallRequest
+	(*EnrollThrallResponse)(nil),          // 85: hobnob.v1.EnrollThrallResponse
+	(*SetReassignmentRequest)(nil),        // 86: hobnob.v1.SetReassignmentRequest
+	(*SetReassignmentResponse)(nil),       // 87: hobnob.v1.SetReassignmentResponse
+	(*ReassignThrallRequest)(nil),         // 88: hobnob.v1.ReassignThrallRequest
+	(*ReassignThrallResponse)(nil),        // 89: hobnob.v1.ReassignThrallResponse
+	(*DrainSpokeRequest)(nil),             // 90: hobnob.v1.DrainSpokeRequest
+	(*DrainSpokeResponse)(nil),            // 91: hobnob.v1.DrainSpokeResponse
+	nil,                                   // 92: hobnob.v1.CheckInRequest.CachedModuleHashesEntry
+	nil,                                   // 93: hobnob.v1.Resource.ParamsEntry
+	nil,                                   // 94: hobnob.v1.PolicyResource.AttributesEntry
+	nil,                                   // 95: hobnob.v1.TraitsDelta.ChangedEntry
+	nil,                                   // 96: hobnob.v1.TaskDispatch.EnvEntry
+	nil,                                   // 97: hobnob.v1.PromoteEnvResponse.DiffEntry
+	(*timestamppb.Timestamp)(nil),         // 98: google.protobuf.Timestamp
 }
 var file_hobnob_proto_depIdxs = []int32{
-	97, // 0: hobnob.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
-	91, // 1: hobnob.v1.CheckInRequest.cached_module_hashes:type_name -> hobnob.v1.CheckInRequest.CachedModuleHashesEntry
-	27, // 2: hobnob.v1.CheckInRequest.capabilities:type_name -> hobnob.v1.StreamCapabilities
+	98, // 0: hobnob.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
+	92, // 1: hobnob.v1.CheckInRequest.cached_module_hashes:type_name -> hobnob.v1.CheckInRequest.CachedModuleHashesEntry
+	28, // 2: hobnob.v1.CheckInRequest.capabilities:type_name -> hobnob.v1.StreamCapabilities
 	7,  // 3: hobnob.v1.CheckInResponse.modules:type_name -> hobnob.v1.Module
 	4,  // 4: hobnob.v1.CheckInResponse.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
 	9,  // 5: hobnob.v1.CheckInResponse.policy_bundle:type_name -> hobnob.v1.PolicyBundle
 	8,  // 6: hobnob.v1.Module.resources:type_name -> hobnob.v1.Resource
-	92, // 7: hobnob.v1.Resource.params:type_name -> hobnob.v1.Resource.ParamsEntry
+	93, // 7: hobnob.v1.Resource.params:type_name -> hobnob.v1.Resource.ParamsEntry
 	10, // 8: hobnob.v1.PolicyBundle.modules:type_name -> hobnob.v1.PolicyModule
 	12, // 9: hobnob.v1.PolicyBundle.conditional_vars:type_name -> hobnob.v1.ConditionalVarDef
 	4,  // 10: hobnob.v1.PolicyBundle.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
 	11, // 11: hobnob.v1.PolicyModule.resources:type_name -> hobnob.v1.PolicyResource
-	93, // 12: hobnob.v1.PolicyResource.attributes:type_name -> hobnob.v1.PolicyResource.AttributesEntry
+	94, // 12: hobnob.v1.PolicyResource.attributes:type_name -> hobnob.v1.PolicyResource.AttributesEntry
 	14, // 13: hobnob.v1.ReportResultRequest.results:type_name -> hobnob.v1.ModuleResult
-	97, // 14: hobnob.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
-	97, // 15: hobnob.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	98, // 14: hobnob.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
+	98, // 15: hobnob.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	2,  // 16: hobnob.v1.AgentStreamMessage.check_in:type_name -> hobnob.v1.CheckInRequest
 	13, // 17: hobnob.v1.AgentStreamMessage.report_result:type_name -> hobnob.v1.ReportResultRequest
 	16, // 18: hobnob.v1.AgentStreamMessage.report_traits:type_name -> hobnob.v1.ReportTraitsRequest
-	30, // 19: hobnob.v1.AgentStreamMessage.task_result:type_name -> hobnob.v1.TaskResult
-	29, // 20: hobnob.v1.AgentStreamMessage.task_ack:type_name -> hobnob.v1.TaskAck
-	32, // 21: hobnob.v1.AgentStreamMessage.query_response:type_name -> hobnob.v1.QueryResponse
-	22, // 22: hobnob.v1.AgentStreamMessage.delta:type_name -> hobnob.v1.DeltaEvent
+	31, // 19: hobnob.v1.AgentStreamMessage.task_result:type_name -> hobnob.v1.TaskResult
+	30, // 20: hobnob.v1.AgentStreamMessage.task_ack:type_name -> hobnob.v1.TaskAck
+	33, // 21: hobnob.v1.AgentStreamMessage.query_response:type_name -> hobnob.v1.QueryResponse
+	23, // 22: hobnob.v1.AgentStreamMessage.delta:type_name -> hobnob.v1.DeltaEvent
 	3,  // 23: hobnob.v1.ServerStreamMessage.check_in_response:type_name -> hobnob.v1.CheckInResponse
 	15, // 24: hobnob.v1.ServerStreamMessage.report_result_ack:type_name -> hobnob.v1.ReportResultResponse
 	17, // 25: hobnob.v1.ServerStreamMessage.report_traits_ack:type_name -> hobnob.v1.ReportTraitsResponse
-	20, // 26: hobnob.v1.ServerStreamMessage.policy_push:type_name -> hobnob.v1.StreamPolicyPush
-	21, // 27: hobnob.v1.ServerStreamMessage.force_push:type_name -> hobnob.v1.StreamForcePush
-	28, // 28: hobnob.v1.ServerStreamMessage.task_dispatch:type_name -> hobnob.v1.TaskDispatch
-	31, // 29: hobnob.v1.ServerStreamMessage.query_request:type_name -> hobnob.v1.QueryRequest
-	26, // 30: hobnob.v1.ServerStreamMessage.delta_ack:type_name -> hobnob.v1.DeltaAck
-	9,  // 31: hobnob.v1.StreamPolicyPush.policy_bundle:type_name -> hobnob.v1.PolicyBundle
-	23, // 32: hobnob.v1.DeltaEvent.run:type_name -> hobnob.v1.RunCompleted
-	24, // 33: hobnob.v1.DeltaEvent.traits:type_name -> hobnob.v1.TraitsDelta
-	25, // 34: hobnob.v1.DeltaEvent.heartbeat:type_name -> hobnob.v1.HeartbeatDelta
-	14, // 35: hobnob.v1.RunCompleted.results:type_name -> hobnob.v1.ModuleResult
-	94, // 36: hobnob.v1.TraitsDelta.changed:type_name -> hobnob.v1.TraitsDelta.ChangedEntry
-	95, // 37: hobnob.v1.TaskDispatch.env:type_name -> hobnob.v1.TaskDispatch.EnvEntry
-	97, // 38: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
-	37, // 39: hobnob.v1.ListApprovedPatternsResponse.patterns:type_name -> hobnob.v1.ApprovedPattern
-	97, // 40: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
-	42, // 41: hobnob.v1.ListThrallsResponse.thralls:type_name -> hobnob.v1.Thrall
-	97, // 42: hobnob.v1.Thrall.enrolled_at:type_name -> google.protobuf.Timestamp
-	97, // 43: hobnob.v1.Thrall.last_seen:type_name -> google.protobuf.Timestamp
-	97, // 44: hobnob.v1.Thrall.revoked_at:type_name -> google.protobuf.Timestamp
-	42, // 45: hobnob.v1.GetThrallResponse.thrall:type_name -> hobnob.v1.Thrall
-	53, // 46: hobnob.v1.DryRunResponse.actions:type_name -> hobnob.v1.PlannedAction
-	56, // 47: hobnob.v1.ListRunsResponse.runs:type_name -> hobnob.v1.Run
-	97, // 48: hobnob.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	97, // 49: hobnob.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
-	56, // 50: hobnob.v1.GetRunResponse.run:type_name -> hobnob.v1.Run
-	14, // 51: hobnob.v1.GetRunResponse.results:type_name -> hobnob.v1.ModuleResult
-	67, // 52: hobnob.v1.AddWebhookResponse.webhook:type_name -> hobnob.v1.WebhookInfo
-	67, // 53: hobnob.v1.ListWebhooksResponse.webhooks:type_name -> hobnob.v1.WebhookInfo
-	97, // 54: hobnob.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
-	56, // 55: hobnob.v1.GetThrallComplianceResponse.last_run:type_name -> hobnob.v1.Run
-	72, // 56: hobnob.v1.GetThrallComplianceResponse.history:type_name -> hobnob.v1.ComplianceSnapshot
-	79, // 57: hobnob.v1.ListPackagesResponse.packages:type_name -> hobnob.v1.PackageInfo
-	80, // 58: hobnob.v1.ListPackageDriftResponse.drifts:type_name -> hobnob.v1.PackageDrift
-	97, // 59: hobnob.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
-	96, // 60: hobnob.v1.PromoteEnvResponse.diff:type_name -> hobnob.v1.PromoteEnvResponse.DiffEntry
-	0,  // 61: hobnob.v1.HobnobAgent.Register:input_type -> hobnob.v1.RegisterRequest
-	2,  // 62: hobnob.v1.HobnobAgent.CheckIn:input_type -> hobnob.v1.CheckInRequest
-	13, // 63: hobnob.v1.HobnobAgent.ReportResult:input_type -> hobnob.v1.ReportResultRequest
-	16, // 64: hobnob.v1.HobnobAgent.ReportTraits:input_type -> hobnob.v1.ReportTraitsRequest
-	5,  // 65: hobnob.v1.HobnobAgent.DownloadCustomTrait:input_type -> hobnob.v1.DownloadCustomTraitRequest
-	18, // 66: hobnob.v1.HobnobAgent.AgentStream:input_type -> hobnob.v1.AgentStreamMessage
-	33, // 67: hobnob.v1.HobnobAdmin.AddApprovedPattern:input_type -> hobnob.v1.AddApprovedPatternRequest
-	35, // 68: hobnob.v1.HobnobAdmin.ListApprovedPatterns:input_type -> hobnob.v1.ListApprovedPatternsRequest
-	38, // 69: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:input_type -> hobnob.v1.RevokeApprovedPatternRequest
-	40, // 70: hobnob.v1.HobnobAdmin.ListThralls:input_type -> hobnob.v1.ListThrallsRequest
-	43, // 71: hobnob.v1.HobnobAdmin.GetThrall:input_type -> hobnob.v1.GetThrallRequest
-	45, // 72: hobnob.v1.HobnobAdmin.RevokeThrall:input_type -> hobnob.v1.RevokeThrallRequest
-	47, // 73: hobnob.v1.HobnobAdmin.DeleteThrall:input_type -> hobnob.v1.DeleteThrallRequest
-	49, // 74: hobnob.v1.HobnobAdmin.ForcePush:input_type -> hobnob.v1.ForcePushRequest
-	51, // 75: hobnob.v1.HobnobAdmin.DryRun:input_type -> hobnob.v1.DryRunRequest
-	54, // 76: hobnob.v1.HobnobAdmin.ListRuns:input_type -> hobnob.v1.ListRunsRequest
-	57, // 77: hobnob.v1.HobnobAdmin.GetRun:input_type -> hobnob.v1.GetRunRequest
-	59, // 78: hobnob.v1.HobnobAdmin.GenerateToken:input_type -> hobnob.v1.GenerateTokenRequest
-	61, // 79: hobnob.v1.HobnobAdmin.AddWebhook:input_type -> hobnob.v1.AddWebhookRequest
-	63, // 80: hobnob.v1.HobnobAdmin.ListWebhooks:input_type -> hobnob.v1.ListWebhooksRequest
-	65, // 81: hobnob.v1.HobnobAdmin.DeleteWebhook:input_type -> hobnob.v1.DeleteWebhookRequest
-	68, // 82: hobnob.v1.HobnobAdmin.GetComplianceSummary:input_type -> hobnob.v1.GetComplianceSummaryRequest
-	70, // 83: hobnob.v1.HobnobAdmin.GetThrallCompliance:input_type -> hobnob.v1.GetThrallComplianceRequest
-	73, // 84: hobnob.v1.HobnobAdmin.Rollback:input_type -> hobnob.v1.RollbackRequest
-	75, // 85: hobnob.v1.HobnobAdmin.ListPackages:input_type -> hobnob.v1.ListPackagesRequest
-	77, // 86: hobnob.v1.HobnobAdmin.ListPackageDrift:input_type -> hobnob.v1.ListPackageDriftRequest
-	81, // 87: hobnob.v1.HobnobAdmin.PromoteEnv:input_type -> hobnob.v1.PromoteEnvRequest
-	83, // 88: hobnob.v1.HobnobAdmin.EnrollThrall:input_type -> hobnob.v1.EnrollThrallRequest
-	85, // 89: hobnob.v1.HobnobAdmin.SetReassignment:input_type -> hobnob.v1.SetReassignmentRequest
-	1,  // 90: hobnob.v1.HobnobAgent.Register:output_type -> hobnob.v1.RegisterResponse
-	3,  // 91: hobnob.v1.HobnobAgent.CheckIn:output_type -> hobnob.v1.CheckInResponse
-	15, // 92: hobnob.v1.HobnobAgent.ReportResult:output_type -> hobnob.v1.ReportResultResponse
-	17, // 93: hobnob.v1.HobnobAgent.ReportTraits:output_type -> hobnob.v1.ReportTraitsResponse
-	6,  // 94: hobnob.v1.HobnobAgent.DownloadCustomTrait:output_type -> hobnob.v1.DownloadCustomTraitResponse
-	19, // 95: hobnob.v1.HobnobAgent.AgentStream:output_type -> hobnob.v1.ServerStreamMessage
-	34, // 96: hobnob.v1.HobnobAdmin.AddApprovedPattern:output_type -> hobnob.v1.AddApprovedPatternResponse
-	36, // 97: hobnob.v1.HobnobAdmin.ListApprovedPatterns:output_type -> hobnob.v1.ListApprovedPatternsResponse
-	39, // 98: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:output_type -> hobnob.v1.RevokeApprovedPatternResponse
-	41, // 99: hobnob.v1.HobnobAdmin.ListThralls:output_type -> hobnob.v1.ListThrallsResponse
-	44, // 100: hobnob.v1.HobnobAdmin.GetThrall:output_type -> hobnob.v1.GetThrallResponse
-	46, // 101: hobnob.v1.HobnobAdmin.RevokeThrall:output_type -> hobnob.v1.RevokeThrallResponse
-	48, // 102: hobnob.v1.HobnobAdmin.DeleteThrall:output_type -> hobnob.v1.DeleteThrallResponse
-	50, // 103: hobnob.v1.HobnobAdmin.ForcePush:output_type -> hobnob.v1.ForcePushResponse
-	52, // 104: hobnob.v1.HobnobAdmin.DryRun:output_type -> hobnob.v1.DryRunResponse
-	55, // 105: hobnob.v1.HobnobAdmin.ListRuns:output_type -> hobnob.v1.ListRunsResponse
-	58, // 106: hobnob.v1.HobnobAdmin.GetRun:output_type -> hobnob.v1.GetRunResponse
-	60, // 107: hobnob.v1.HobnobAdmin.GenerateToken:output_type -> hobnob.v1.GenerateTokenResponse
-	62, // 108: hobnob.v1.HobnobAdmin.AddWebhook:output_type -> hobnob.v1.AddWebhookResponse
-	64, // 109: hobnob.v1.HobnobAdmin.ListWebhooks:output_type -> hobnob.v1.ListWebhooksResponse
-	66, // 110: hobnob.v1.HobnobAdmin.DeleteWebhook:output_type -> hobnob.v1.DeleteWebhookResponse
-	69, // 111: hobnob.v1.HobnobAdmin.GetComplianceSummary:output_type -> hobnob.v1.GetComplianceSummaryResponse
-	71, // 112: hobnob.v1.HobnobAdmin.GetThrallCompliance:output_type -> hobnob.v1.GetThrallComplianceResponse
-	74, // 113: hobnob.v1.HobnobAdmin.Rollback:output_type -> hobnob.v1.RollbackResponse
-	76, // 114: hobnob.v1.HobnobAdmin.ListPackages:output_type -> hobnob.v1.ListPackagesResponse
-	78, // 115: hobnob.v1.HobnobAdmin.ListPackageDrift:output_type -> hobnob.v1.ListPackageDriftResponse
-	82, // 116: hobnob.v1.HobnobAdmin.PromoteEnv:output_type -> hobnob.v1.PromoteEnvResponse
-	84, // 117: hobnob.v1.HobnobAdmin.EnrollThrall:output_type -> hobnob.v1.EnrollThrallResponse
-	86, // 118: hobnob.v1.HobnobAdmin.SetReassignment:output_type -> hobnob.v1.SetReassignmentResponse
-	90, // [90:119] is the sub-list for method output_type
-	61, // [61:90] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	21, // 26: hobnob.v1.ServerStreamMessage.policy_push:type_name -> hobnob.v1.StreamPolicyPush
+	22, // 27: hobnob.v1.ServerStreamMessage.force_push:type_name -> hobnob.v1.StreamForcePush
+	29, // 28: hobnob.v1.ServerStreamMessage.task_dispatch:type_name -> hobnob.v1.TaskDispatch
+	32, // 29: hobnob.v1.ServerStreamMessage.query_request:type_name -> hobnob.v1.QueryRequest
+	27, // 30: hobnob.v1.ServerStreamMessage.delta_ack:type_name -> hobnob.v1.DeltaAck
+	20, // 31: hobnob.v1.ServerStreamMessage.stream_release:type_name -> hobnob.v1.StreamRelease
+	9,  // 32: hobnob.v1.StreamPolicyPush.policy_bundle:type_name -> hobnob.v1.PolicyBundle
+	24, // 33: hobnob.v1.DeltaEvent.run:type_name -> hobnob.v1.RunCompleted
+	25, // 34: hobnob.v1.DeltaEvent.traits:type_name -> hobnob.v1.TraitsDelta
+	26, // 35: hobnob.v1.DeltaEvent.heartbeat:type_name -> hobnob.v1.HeartbeatDelta
+	14, // 36: hobnob.v1.RunCompleted.results:type_name -> hobnob.v1.ModuleResult
+	95, // 37: hobnob.v1.TraitsDelta.changed:type_name -> hobnob.v1.TraitsDelta.ChangedEntry
+	96, // 38: hobnob.v1.TaskDispatch.env:type_name -> hobnob.v1.TaskDispatch.EnvEntry
+	98, // 39: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
+	38, // 40: hobnob.v1.ListApprovedPatternsResponse.patterns:type_name -> hobnob.v1.ApprovedPattern
+	98, // 41: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
+	43, // 42: hobnob.v1.ListThrallsResponse.thralls:type_name -> hobnob.v1.Thrall
+	98, // 43: hobnob.v1.Thrall.enrolled_at:type_name -> google.protobuf.Timestamp
+	98, // 44: hobnob.v1.Thrall.last_seen:type_name -> google.protobuf.Timestamp
+	98, // 45: hobnob.v1.Thrall.revoked_at:type_name -> google.protobuf.Timestamp
+	43, // 46: hobnob.v1.GetThrallResponse.thrall:type_name -> hobnob.v1.Thrall
+	54, // 47: hobnob.v1.DryRunResponse.actions:type_name -> hobnob.v1.PlannedAction
+	57, // 48: hobnob.v1.ListRunsResponse.runs:type_name -> hobnob.v1.Run
+	98, // 49: hobnob.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	98, // 50: hobnob.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	57, // 51: hobnob.v1.GetRunResponse.run:type_name -> hobnob.v1.Run
+	14, // 52: hobnob.v1.GetRunResponse.results:type_name -> hobnob.v1.ModuleResult
+	68, // 53: hobnob.v1.AddWebhookResponse.webhook:type_name -> hobnob.v1.WebhookInfo
+	68, // 54: hobnob.v1.ListWebhooksResponse.webhooks:type_name -> hobnob.v1.WebhookInfo
+	98, // 55: hobnob.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
+	57, // 56: hobnob.v1.GetThrallComplianceResponse.last_run:type_name -> hobnob.v1.Run
+	73, // 57: hobnob.v1.GetThrallComplianceResponse.history:type_name -> hobnob.v1.ComplianceSnapshot
+	80, // 58: hobnob.v1.ListPackagesResponse.packages:type_name -> hobnob.v1.PackageInfo
+	81, // 59: hobnob.v1.ListPackageDriftResponse.drifts:type_name -> hobnob.v1.PackageDrift
+	98, // 60: hobnob.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
+	97, // 61: hobnob.v1.PromoteEnvResponse.diff:type_name -> hobnob.v1.PromoteEnvResponse.DiffEntry
+	0,  // 62: hobnob.v1.HobnobAgent.Register:input_type -> hobnob.v1.RegisterRequest
+	2,  // 63: hobnob.v1.HobnobAgent.CheckIn:input_type -> hobnob.v1.CheckInRequest
+	13, // 64: hobnob.v1.HobnobAgent.ReportResult:input_type -> hobnob.v1.ReportResultRequest
+	16, // 65: hobnob.v1.HobnobAgent.ReportTraits:input_type -> hobnob.v1.ReportTraitsRequest
+	5,  // 66: hobnob.v1.HobnobAgent.DownloadCustomTrait:input_type -> hobnob.v1.DownloadCustomTraitRequest
+	18, // 67: hobnob.v1.HobnobAgent.AgentStream:input_type -> hobnob.v1.AgentStreamMessage
+	34, // 68: hobnob.v1.HobnobAdmin.AddApprovedPattern:input_type -> hobnob.v1.AddApprovedPatternRequest
+	36, // 69: hobnob.v1.HobnobAdmin.ListApprovedPatterns:input_type -> hobnob.v1.ListApprovedPatternsRequest
+	39, // 70: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:input_type -> hobnob.v1.RevokeApprovedPatternRequest
+	41, // 71: hobnob.v1.HobnobAdmin.ListThralls:input_type -> hobnob.v1.ListThrallsRequest
+	44, // 72: hobnob.v1.HobnobAdmin.GetThrall:input_type -> hobnob.v1.GetThrallRequest
+	46, // 73: hobnob.v1.HobnobAdmin.RevokeThrall:input_type -> hobnob.v1.RevokeThrallRequest
+	48, // 74: hobnob.v1.HobnobAdmin.DeleteThrall:input_type -> hobnob.v1.DeleteThrallRequest
+	50, // 75: hobnob.v1.HobnobAdmin.ForcePush:input_type -> hobnob.v1.ForcePushRequest
+	52, // 76: hobnob.v1.HobnobAdmin.DryRun:input_type -> hobnob.v1.DryRunRequest
+	55, // 77: hobnob.v1.HobnobAdmin.ListRuns:input_type -> hobnob.v1.ListRunsRequest
+	58, // 78: hobnob.v1.HobnobAdmin.GetRun:input_type -> hobnob.v1.GetRunRequest
+	60, // 79: hobnob.v1.HobnobAdmin.GenerateToken:input_type -> hobnob.v1.GenerateTokenRequest
+	62, // 80: hobnob.v1.HobnobAdmin.AddWebhook:input_type -> hobnob.v1.AddWebhookRequest
+	64, // 81: hobnob.v1.HobnobAdmin.ListWebhooks:input_type -> hobnob.v1.ListWebhooksRequest
+	66, // 82: hobnob.v1.HobnobAdmin.DeleteWebhook:input_type -> hobnob.v1.DeleteWebhookRequest
+	69, // 83: hobnob.v1.HobnobAdmin.GetComplianceSummary:input_type -> hobnob.v1.GetComplianceSummaryRequest
+	71, // 84: hobnob.v1.HobnobAdmin.GetThrallCompliance:input_type -> hobnob.v1.GetThrallComplianceRequest
+	74, // 85: hobnob.v1.HobnobAdmin.Rollback:input_type -> hobnob.v1.RollbackRequest
+	76, // 86: hobnob.v1.HobnobAdmin.ListPackages:input_type -> hobnob.v1.ListPackagesRequest
+	78, // 87: hobnob.v1.HobnobAdmin.ListPackageDrift:input_type -> hobnob.v1.ListPackageDriftRequest
+	82, // 88: hobnob.v1.HobnobAdmin.PromoteEnv:input_type -> hobnob.v1.PromoteEnvRequest
+	84, // 89: hobnob.v1.HobnobAdmin.EnrollThrall:input_type -> hobnob.v1.EnrollThrallRequest
+	86, // 90: hobnob.v1.HobnobAdmin.SetReassignment:input_type -> hobnob.v1.SetReassignmentRequest
+	1,  // 91: hobnob.v1.HobnobAgent.Register:output_type -> hobnob.v1.RegisterResponse
+	3,  // 92: hobnob.v1.HobnobAgent.CheckIn:output_type -> hobnob.v1.CheckInResponse
+	15, // 93: hobnob.v1.HobnobAgent.ReportResult:output_type -> hobnob.v1.ReportResultResponse
+	17, // 94: hobnob.v1.HobnobAgent.ReportTraits:output_type -> hobnob.v1.ReportTraitsResponse
+	6,  // 95: hobnob.v1.HobnobAgent.DownloadCustomTrait:output_type -> hobnob.v1.DownloadCustomTraitResponse
+	19, // 96: hobnob.v1.HobnobAgent.AgentStream:output_type -> hobnob.v1.ServerStreamMessage
+	35, // 97: hobnob.v1.HobnobAdmin.AddApprovedPattern:output_type -> hobnob.v1.AddApprovedPatternResponse
+	37, // 98: hobnob.v1.HobnobAdmin.ListApprovedPatterns:output_type -> hobnob.v1.ListApprovedPatternsResponse
+	40, // 99: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:output_type -> hobnob.v1.RevokeApprovedPatternResponse
+	42, // 100: hobnob.v1.HobnobAdmin.ListThralls:output_type -> hobnob.v1.ListThrallsResponse
+	45, // 101: hobnob.v1.HobnobAdmin.GetThrall:output_type -> hobnob.v1.GetThrallResponse
+	47, // 102: hobnob.v1.HobnobAdmin.RevokeThrall:output_type -> hobnob.v1.RevokeThrallResponse
+	49, // 103: hobnob.v1.HobnobAdmin.DeleteThrall:output_type -> hobnob.v1.DeleteThrallResponse
+	51, // 104: hobnob.v1.HobnobAdmin.ForcePush:output_type -> hobnob.v1.ForcePushResponse
+	53, // 105: hobnob.v1.HobnobAdmin.DryRun:output_type -> hobnob.v1.DryRunResponse
+	56, // 106: hobnob.v1.HobnobAdmin.ListRuns:output_type -> hobnob.v1.ListRunsResponse
+	59, // 107: hobnob.v1.HobnobAdmin.GetRun:output_type -> hobnob.v1.GetRunResponse
+	61, // 108: hobnob.v1.HobnobAdmin.GenerateToken:output_type -> hobnob.v1.GenerateTokenResponse
+	63, // 109: hobnob.v1.HobnobAdmin.AddWebhook:output_type -> hobnob.v1.AddWebhookResponse
+	65, // 110: hobnob.v1.HobnobAdmin.ListWebhooks:output_type -> hobnob.v1.ListWebhooksResponse
+	67, // 111: hobnob.v1.HobnobAdmin.DeleteWebhook:output_type -> hobnob.v1.DeleteWebhookResponse
+	70, // 112: hobnob.v1.HobnobAdmin.GetComplianceSummary:output_type -> hobnob.v1.GetComplianceSummaryResponse
+	72, // 113: hobnob.v1.HobnobAdmin.GetThrallCompliance:output_type -> hobnob.v1.GetThrallComplianceResponse
+	75, // 114: hobnob.v1.HobnobAdmin.Rollback:output_type -> hobnob.v1.RollbackResponse
+	77, // 115: hobnob.v1.HobnobAdmin.ListPackages:output_type -> hobnob.v1.ListPackagesResponse
+	79, // 116: hobnob.v1.HobnobAdmin.ListPackageDrift:output_type -> hobnob.v1.ListPackageDriftResponse
+	83, // 117: hobnob.v1.HobnobAdmin.PromoteEnv:output_type -> hobnob.v1.PromoteEnvResponse
+	85, // 118: hobnob.v1.HobnobAdmin.EnrollThrall:output_type -> hobnob.v1.EnrollThrallResponse
+	87, // 119: hobnob.v1.HobnobAdmin.SetReassignment:output_type -> hobnob.v1.SetReassignmentResponse
+	91, // [91:120] is the sub-list for method output_type
+	62, // [62:91] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_hobnob_proto_init() }
@@ -6331,8 +6406,9 @@ func file_hobnob_proto_init() {
 		(*ServerStreamMessage_TaskDispatch)(nil),
 		(*ServerStreamMessage_QueryRequest)(nil),
 		(*ServerStreamMessage_DeltaAck)(nil),
+		(*ServerStreamMessage_StreamRelease)(nil),
 	}
-	file_hobnob_proto_msgTypes[22].OneofWrappers = []any{
+	file_hobnob_proto_msgTypes[23].OneofWrappers = []any{
 		(*DeltaEvent_Run)(nil),
 		(*DeltaEvent_Traits)(nil),
 		(*DeltaEvent_Heartbeat)(nil),
@@ -6343,7 +6419,7 @@ func file_hobnob_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hobnob_proto_rawDesc), len(file_hobnob_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   97,
+			NumMessages:   98,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

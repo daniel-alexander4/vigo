@@ -42,7 +42,7 @@ tuning:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `max_concurrent_streams` | `5000` | Maximum number of simultaneous bidirectional gRPC streams (one per connected agent). Set this based on your expected fleet size plus headroom for reconnections. |
+| `max_concurrent_streams` | `5000` | Maximum number of simultaneous bidirectional gRPC streams. With adaptive stream promotion, agents only hold streams during active work (task/query dispatch), so this limit applies to the peak number of agents receiving work concurrently — typically much smaller than the fleet size. |
 | `grpc_read_buffer` | gRPC default (32 KiB) | Per-connection read buffer in bytes. Halving this to 16384 saves ~16 KiB per connection at the cost of more syscalls. |
 | `grpc_write_buffer` | gRPC default (32 KiB) | Per-connection write buffer in bytes. Same trade-off as read buffer. |
 | `max_connection_age` | no limit | Force agents to reconnect after this duration (e.g. `"1h"`). Useful for load balancing across multiple server instances and for freeing leaked resources. |

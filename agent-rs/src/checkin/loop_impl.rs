@@ -28,7 +28,17 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::Instant;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
+
+/// Reason the stream loop exited.
+enum StreamExit {
+    /// Server sent StreamRelease — graceful close, no backoff.
+    Released,
+    /// Stream error or server closed the connection.
+    Disconnected(Option<anyhow::Error>),
+    /// Shutdown signal received.
+    Cancelled,
+}
 
 /// Configuration for the agent self-update mechanism.
 pub struct UpdateConfig {
@@ -71,6 +81,7 @@ pub struct RunResult {
     pub response_fingerprint: String,
     pub policy_version: u64,
     pub policy_bundle: Option<PolicyBundle>,
+    pub stream_requested: bool,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -234,6 +245,7 @@ fn converge(
             response_fingerprint: String::new(),
             policy_version: resp.policy_version,
             policy_bundle: None,
+            stream_requested: resp.stream_requested,
         });
     } else {
         return Ok(RunResult {
@@ -244,6 +256,7 @@ fn converge(
             response_fingerprint: resp.response_fingerprint.clone(),
             policy_version: resp.policy_version,
             policy_bundle: None,
+            stream_requested: resp.stream_requested,
         });
     };
 
@@ -256,7 +269,19 @@ fn converge(
     // Evaluate the policy bundle with traits.
     let modules = match crate::policy::eval::eval_bundle(Some(&bundle), traits_val) {
         Ok(m) => m,
-        Err(e) => anyhow::bail!("evaluating policy bundle: {}", e),
+        Err(e) => {
+            warn!("policy evaluation failed, skipping run: {}", e);
+            return Ok(RunResult {
+                results: vec![],
+                base_interval,
+                jitter_pct,
+                no_change: false,
+                response_fingerprint: resp.response_fingerprint.clone(),
+                policy_version: resp.policy_version,
+                policy_bundle: resp.policy_bundle.clone(),
+                stream_requested: resp.stream_requested,
+            });
+        }
     };
 
     // Strip one-shot _secret_triggered flags.
@@ -272,6 +297,7 @@ fn converge(
             response_fingerprint: resp.response_fingerprint.clone(),
             policy_version: resp.policy_version,
             policy_bundle: resp.policy_bundle.clone(),
+            stream_requested: resp.stream_requested,
         });
     }
 
@@ -292,6 +318,7 @@ fn converge(
         response_fingerprint: resp.response_fingerprint.clone(),
         policy_version: resp.policy_version,
         policy_bundle: resp.policy_bundle.clone(),
+        stream_requested: resp.stream_requested,
     })
 }
 
@@ -590,8 +617,11 @@ fn converge_local(
 
 /// Run the daemon loop until the cancellation token fires.
 ///
-/// Attempts to open a persistent bidirectional stream first (push-based).
-/// Falls back to polling if streaming is unavailable or disconnects.
+/// Defaults to unary polling. When the server sets `stream_requested` in a
+/// CheckInResponse, the agent opens a bidirectional stream to receive dispatched
+/// work (tasks, queries). Once work is complete and the server sends
+/// `StreamRelease`, the agent closes the stream and resumes polling.
+///
 /// When the server is completely unreachable and a state store is available,
 /// converges offline using cached policy and queues results for later delivery.
 pub async fn daemon_loop(
@@ -639,66 +669,7 @@ pub async fn daemon_loop(
         )
         .await;
 
-        // Attempt stream mode.
-        let caps = state_store.as_ref().map(|_| StreamCapabilities {
-            supports_delta: true,
-            last_acked_sequence: 0,
-        });
-        let stream_req = client.build_check_in_request_with_caps(
-            &last_fingerprint,
-            traits_json.clone(),
-            policy_state.version,
-            policy_state.module_cache.hashes(),
-            caps,
-        );
-
-        let mut agent_client = client.agent_client();
-        match stream::open(&mut agent_client, stream_req).await {
-            Ok((mut handle, initial_resp)) => {
-                info!("stream connected, switching to push mode");
-                bo.reset();
-
-                // Deliver pending offline results on reconnect.
-                if !pending_delivered {
-                    if let Some(ref store) = state_store {
-                        deliver_pending(client, store).await;
-                    }
-                }
-
-                let stream_err = stream_loop(
-                    &cancel,
-                    &mut handle,
-                    client,
-                    &initial_resp,
-                    &traits_val,
-                    executors,
-                    &collectors,
-                    &mut result_cache,
-                    &mut policy_state,
-                    &mut last_fingerprint,
-                    state_store.as_ref(),
-                )
-                .await;
-
-                // Cache state after stream disconnect.
-                if let Some(ref store) = state_store {
-                    accept_bundle(store, &policy_state, traits_json.as_deref());
-                }
-
-                if cancel.is_cancelled() {
-                    return Ok(());
-                }
-
-                info!(error = ?stream_err, "stream disconnected, falling back to polling");
-                pending_delivered = false;
-                continue;
-            }
-            Err(e) => {
-                debug!(error = %e, "stream not available, using polling");
-            }
-        }
-
-        // Poll mode: run one cycle.
+        // Poll mode: run one unary check-in cycle.
         match run_once(
             client,
             executors,
@@ -719,7 +690,6 @@ pub async fn daemon_loop(
                 if let Some(ref bundle) = rr.policy_bundle {
                     if let Err(e) = verify::verify_bundle(bundle, &server_pubkey_pem) {
                         warn!(error = %e, "bundle signature verification failed, rejecting");
-                        // Don't update state — continue converging with previously accepted bundle.
                         let wait = bo.next_backoff();
                         tokio::select! {
                             _ = cancel.cancelled() => return Ok(()),
@@ -749,6 +719,76 @@ pub async fn daemon_loop(
                 if let Some(ref ucfg) = update_cfg {
                     if !ucfg.api_addr.is_empty() && !ucfg.current_version.is_empty() {
                         crate::update::check_self_update(&ucfg.api_addr, &ucfg.current_version).await;
+                    }
+                }
+
+                // Stream promotion: server has work to dispatch.
+                if rr.stream_requested {
+                    info!("server requested stream, opening for dispatched work");
+                    let caps = state_store.as_ref().map(|_| StreamCapabilities {
+                        supports_delta: true,
+                        last_acked_sequence: 0,
+                    });
+                    let stream_req = client.build_check_in_request_with_caps(
+                        &last_fingerprint,
+                        traits_json.clone(),
+                        policy_state.version,
+                        policy_state.module_cache.hashes(),
+                        caps,
+                    );
+
+                    let mut agent_client = client.agent_client();
+                    match stream::open(&mut agent_client, stream_req).await {
+                        Ok((mut handle, initial_resp)) => {
+                            info!("promoted stream connected");
+
+                            // Deliver pending offline results on reconnect.
+                            if !pending_delivered {
+                                if let Some(ref store) = state_store {
+                                    deliver_pending(client, store).await;
+                                }
+                            }
+
+                            let exit_reason = stream_loop(
+                                &cancel,
+                                &mut handle,
+                                client,
+                                &initial_resp,
+                                &traits_val,
+                                executors,
+                                &collectors,
+                                &mut result_cache,
+                                &mut policy_state,
+                                &mut last_fingerprint,
+                                state_store.as_ref(),
+                            )
+                            .await;
+
+                            // Cache state after stream disconnect.
+                            if let Some(ref store) = state_store {
+                                accept_bundle(store, &policy_state, traits_json.as_deref());
+                            }
+
+                            if cancel.is_cancelled() {
+                                return Ok(());
+                            }
+
+                            match exit_reason {
+                                StreamExit::Released => {
+                                    info!("stream released, resuming polling");
+                                    pending_delivered = false;
+                                }
+                                StreamExit::Disconnected(err) => {
+                                    info!(error = ?err, "promoted stream disconnected, resuming polling");
+                                    pending_delivered = false;
+                                }
+                                StreamExit::Cancelled => return Ok(()),
+                            }
+                            continue; // back to top → next unary check-in
+                        }
+                        Err(e) => {
+                            warn!(error = %e, "failed to open requested stream, resuming polling");
+                        }
                     }
                 }
 
@@ -897,8 +937,7 @@ async fn send_delta(
     Ok(())
 }
 
-/// Event-driven stream loop. Returns when the stream disconnects or
-/// the cancellation token fires.
+/// Event-driven stream loop. Returns a StreamExit indicating why the loop ended.
 async fn stream_loop(
     cancel: &tokio_util::sync::CancellationToken,
     handle: &mut stream::StreamHandle,
@@ -911,7 +950,7 @@ async fn stream_loop(
     policy_state: &mut PolicyState,
     _last_fingerprint: &mut String,
     state_store: Option<&StateStore>,
-) -> Result<()> {
+) -> StreamExit {
     let use_delta = state_store.is_some();
     let mut delta_seq: i64 = 0;
 
@@ -931,7 +970,9 @@ async fn stream_loop(
     };
 
     // Process initial check-in response.
-    check_reassignment(initial_resp)?;
+    if let Err(e) = check_reassignment(initial_resp) {
+        return StreamExit::Disconnected(Some(e));
+    }
     match converge(
         initial_resp, executors, initial_traits, result_cache, policy_state, false, None,
     ) {
@@ -974,22 +1015,28 @@ async fn stream_loop(
         ref mut task_dispatch_rx,
         ref mut query_request_rx,
         ref mut delta_ack_rx,
+        ref mut stream_release_rx,
         ref mut done,
     } = *handle;
 
-    let result = async {
+    let result: StreamExit = async {
         loop {
             tokio::select! {
-                _ = cancel.cancelled() => return Ok(()),
+                _ = cancel.cancelled() => return StreamExit::Cancelled,
 
                 _ = done.changed() => {
-                    anyhow::bail!("stream disconnected");
+                    return StreamExit::Disconnected(Some(anyhow::anyhow!("stream disconnected")));
+                }
+
+                _ = stream_release_rx.recv() => {
+                    info!("received StreamRelease, closing stream");
+                    return StreamExit::Released;
                 }
 
                 push = policy_push_rx.recv() => {
                     let push = match push {
                         Some(p) => p,
-                        None => anyhow::bail!("stream disconnected (policy push channel closed)"),
+                        None => return StreamExit::Disconnected(Some(anyhow::anyhow!("stream disconnected (policy push channel closed)"))),
                     };
 
                     info!(version = push.policy_version, "received policy push via stream");
@@ -1036,7 +1083,9 @@ async fn stream_loop(
 
                     match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
                         Ok(resp) => {
-                            check_reassignment(&resp)?;
+                            if let Err(e) = check_reassignment(&resp) {
+                                return StreamExit::Disconnected(Some(e));
+                            }
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
@@ -1148,7 +1197,9 @@ async fn stream_loop(
 
                     match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
                         Ok(resp) => {
-                            check_reassignment(&resp)?;
+                            if let Err(e) = check_reassignment(&resp) {
+                                return StreamExit::Disconnected(Some(e));
+                            }
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
@@ -1339,6 +1390,7 @@ mod tests {
                 policy_version: 42,
                 ..Default::default()
             }),
+            stream_requested: false,
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1358,6 +1410,7 @@ mod tests {
             response_fingerprint: "fp".into(),
             policy_version: 10,
             policy_bundle: None,
+            stream_requested: false,
         };
 
         update_state(&mut ps, &rr, None);
@@ -1526,6 +1579,7 @@ mod tests {
                 policy_version: 1,
                 ..Default::default()
             }),
+            stream_requested: false,
         };
 
         update_state(&mut ps, &rr, None);
