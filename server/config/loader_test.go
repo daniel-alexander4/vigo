@@ -2863,3 +2863,391 @@ thralls:
 		t.Errorf("error = %q, want it to contain %q", err, "resolves outside config directory")
 	}
 }
+
+// --- Role Includes ---
+
+func TestRoleIncludes(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "firewall.yaml"), `
+name: firewall
+resources:
+  - name: fw-rules
+    type: file
+    targetpath: /etc/iptables/rules.v4
+`)
+	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+name: sshd
+resources:
+  - name: sshd-config
+    type: file
+    targetpath: /etc/ssh/sshd_config
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "roles", "base-security.yaml"), `
+name: base-security
+modules:
+  - firewall
+  - sshd
+`)
+	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
+name: webserver
+includes:
+  - base-security
+modules:
+  - nginx
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "web.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    roles: [webserver]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.example.com")
+	if len(cfg.Modules) != 3 {
+		t.Fatalf("len(Modules) = %d, want 3", len(cfg.Modules))
+	}
+	if cfg.Modules[0].Name != "firewall" {
+		t.Errorf("Modules[0] = %q, want firewall", cfg.Modules[0].Name)
+	}
+	if cfg.Modules[1].Name != "sshd" {
+		t.Errorf("Modules[1] = %q, want sshd", cfg.Modules[1].Name)
+	}
+	if cfg.Modules[2].Name != "nginx" {
+		t.Errorf("Modules[2] = %q, want nginx", cfg.Modules[2].Name)
+	}
+}
+
+func TestRoleIncludesNestedRejected(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "a.yaml"), `
+name: a
+resources:
+  - name: r
+    type: file
+    targetpath: /tmp/a
+`)
+	writeFile(t, filepath.Join(dir, "roles", "inner.yaml"), `
+name: inner
+includes:
+  - outer
+modules:
+  - a
+`)
+	writeFile(t, filepath.Join(dir, "roles", "outer.yaml"), `
+name: outer
+includes:
+  - inner
+modules:
+  - a
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "x"
+    roles: [outer]
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected error for nested includes, got nil")
+	}
+	if !strings.Contains(err.Error(), "itself has includes") {
+		t.Errorf("error = %q, want it to contain %q", err, "itself has includes")
+	}
+}
+
+func TestRoleIncludesDedup(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "shared.yaml"), `
+name: shared
+resources:
+  - name: r
+    type: file
+    targetpath: /tmp/shared
+`)
+	writeFile(t, filepath.Join(dir, "modules", "web.yaml"), `
+name: web
+resources:
+  - name: r
+    type: file
+    targetpath: /tmp/web
+`)
+	writeFile(t, filepath.Join(dir, "roles", "base.yaml"), `
+name: base
+modules:
+  - shared
+`)
+	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
+name: webserver
+includes:
+  - base
+modules:
+  - shared
+  - web
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "x"
+    roles: [webserver]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("x")
+	if len(cfg.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	}
+	if cfg.Modules[0].Name != "shared" {
+		t.Errorf("Modules[0] = %q, want shared", cfg.Modules[0].Name)
+	}
+	if cfg.Modules[1].Name != "web" {
+		t.Errorf("Modules[1] = %q, want web", cfg.Modules[1].Name)
+	}
+}
+
+// --- Wildcard vars_from ---
+
+func TestVarsFromHostnameSubstitution(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  port: "8080"
+resources:
+  - name: cfg
+    type: file
+    targetpath: /etc/app.conf
+`)
+
+	varsDir := filepath.Join(dir, "vars")
+	if err := os.MkdirAll(varsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(varsDir, "web01.example.com.yaml"), `
+port: "9090"
+`)
+
+	writeFile(t, filepath.Join(dir, "thralls", "web.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    modules: [app]
+    vars_from:
+      - "vars/{{ .Hostname }}.yaml"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web01.example.com")
+	if cfg.Vars["port"] != "9090" {
+		t.Errorf("port = %v, want 9090", cfg.Vars["port"])
+	}
+}
+
+func TestVarsFromHostnameNoSpace(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: cfg
+    type: file
+    targetpath: /etc/app.conf
+`)
+
+	varsDir := filepath.Join(dir, "vars")
+	if err := os.MkdirAll(varsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(varsDir, "host1.yaml"), `
+key: val
+`)
+
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "host1"
+    modules: [app]
+    vars_from:
+      - "vars/{{.Hostname}}.yaml"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("host1")
+	if cfg.Vars["key"] != "val" {
+		t.Errorf("key = %v, want val", cfg.Vars["key"])
+	}
+}
+
+// --- Config Trace ---
+
+func TestConfigTrace(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+vars:
+  worker_processes: "auto"
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+  - name: nginx-config
+    type: file
+    targetpath: /etc/nginx/nginx.conf
+`)
+	writeFile(t, filepath.Join(dir, "modules", "firewall.yaml"), `
+name: firewall
+resources:
+  - name: fw
+    type: file
+    targetpath: /etc/iptables/rules.v4
+`)
+	writeFile(t, filepath.Join(dir, "roles", "base.yaml"), `
+name: base
+modules:
+  - firewall
+`)
+	writeFile(t, filepath.Join(dir, "roles", "web.yaml"), `
+name: web
+includes:
+  - base
+modules:
+  - nginx
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "web01.example.com"
+    environment: production
+    roles: [web]
+    vars:
+      worker_processes: "8"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("web01.example.com")
+	if !trace.Matched {
+		t.Fatal("expected matched=true")
+	}
+	if trace.MatchPattern != "web01.example.com" {
+		t.Errorf("MatchPattern = %q, want web01.example.com", trace.MatchPattern)
+	}
+	if trace.PatternType != "exact" {
+		t.Errorf("PatternType = %q, want exact", trace.PatternType)
+	}
+	if trace.Environment != "production" {
+		t.Errorf("Environment = %q, want production", trace.Environment)
+	}
+	if len(trace.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(trace.Modules))
+	}
+	if trace.Modules[0] != "firewall" || trace.Modules[1] != "nginx" {
+		t.Errorf("Modules = %v, want [firewall nginx]", trace.Modules)
+	}
+	if trace.ResourceCount != 3 {
+		t.Errorf("ResourceCount = %d, want 3", trace.ResourceCount)
+	}
+
+	if len(trace.RoleExpansion) != 1 {
+		t.Fatalf("len(RoleExpansion) = %d, want 1", len(trace.RoleExpansion))
+	}
+	if trace.RoleExpansion[0].Role != "web" {
+		t.Errorf("RoleExpansion[0].Role = %q, want web", trace.RoleExpansion[0].Role)
+	}
+	if len(trace.RoleExpansion[0].Includes) != 1 || trace.RoleExpansion[0].Includes[0] != "base" {
+		t.Errorf("RoleExpansion[0].Includes = %v, want [base]", trace.RoleExpansion[0].Includes)
+	}
+
+	varSourceMap := make(map[string]string)
+	for _, vs := range trace.VarSources {
+		varSourceMap[vs.Key] = vs.Source
+	}
+	if varSourceMap["worker_processes"] != "inline" {
+		t.Errorf("worker_processes source = %q, want inline", varSourceMap["worker_processes"])
+	}
+}
+
+func TestConfigTraceNoMatch(t *testing.T) {
+	dir := setupDir(t)
+	writeFile(t, filepath.Join(dir, "modules", "a.yaml"), `
+name: a
+resources:
+  - name: r
+    type: file
+    targetpath: /tmp/a
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "other"
+    modules: [a]
+`)
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("nonexistent.example.com")
+	if trace.Matched {
+		t.Error("expected matched=false")
+	}
+}
+
+func TestConfigTraceGlobPattern(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+resources:
+  - name: r
+    type: file
+    targetpath: /tmp/app
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+thralls:
+  - match: "web-*.example.com"
+    modules: [app]
+`)
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("web-01.example.com")
+	if !trace.Matched {
+		t.Fatal("expected matched=true")
+	}
+	if trace.PatternType != "glob" {
+		t.Errorf("PatternType = %q, want glob", trace.PatternType)
+	}
+	if trace.MatchPattern != "web-*.example.com" {
+		t.Errorf("MatchPattern = %q, want web-*.example.com", trace.MatchPattern)
+	}
+}

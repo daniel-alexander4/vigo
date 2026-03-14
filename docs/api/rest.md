@@ -390,6 +390,49 @@ Drain all thralls from a spoke (move to target spoke or auto-route by patterns).
 
 ---
 
+## Config
+
+### GET /api/v1/config/trace
+
+Trace config resolution for a hostname. Shows which node entry matched, how roles expanded (including includes), where each variable came from, and the final module list.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `hostname` | Yes | The hostname to trace |
+
+**Response:**
+
+```json
+{
+  "hostname": "web01.prod.example.com",
+  "matched": true,
+  "match_pattern": "web*.prod.example.com",
+  "pattern_type": "glob",
+  "environment": "production",
+  "roles": ["webserver"],
+  "role_expansion": [
+    {
+      "role": "webserver",
+      "includes": ["base-security"],
+      "modules": ["firewall", "sshd", "nginx", "logrotate"]
+    }
+  ],
+  "modules": ["firewall", "sshd", "nginx", "logrotate"],
+  "var_sources": [
+    {"key": "nginx_port", "value": 443, "source": "env_vars[production]"},
+    {"key": "log_level", "value": "info", "source": "node vars"}
+  ],
+  "conditional_vars": ["is_debian", "has_enough_ram"],
+  "resource_count": 14
+}
+```
+
+If no entry matches, `matched` is `false` and other fields are omitted.
+
+---
+
 ## Other Endpoints
 
 | Method | Path | Description |

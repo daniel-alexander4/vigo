@@ -1,3 +1,5 @@
 name: webserver
+includes:
+  - bastion
 modules:
   - nginx

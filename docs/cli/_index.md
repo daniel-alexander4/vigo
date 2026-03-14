@@ -34,5 +34,6 @@ When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 | [doctor](doctor.md) | Run health checks against the Hobnob server |
 | [federation](federation.md) | Manage and inspect federation status |
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
+| [config](config.md) | Config inspection commands (trace resolution) |
 | [secrets](secrets.md) | Manage local encrypted secrets |
 | [vi](vi.md) | Edit a .hnb file with syntax highlighting and validation |

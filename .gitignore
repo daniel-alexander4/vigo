@@ -29,6 +29,9 @@ coverage.html
 # Rust agent build output
 agent-rs/target/
 
+# Local scripts
+full.docker.reset.sh
+
 # IDE
 .idea/
 .vscode/

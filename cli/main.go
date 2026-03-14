@@ -61,5 +61,6 @@ func init() {
 		exportCmd,
 		authCmd,
 		usersCmd,
+		configCmd,
 	)
 }

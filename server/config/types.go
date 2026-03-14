@@ -427,9 +427,12 @@ func (m *ModuleRef) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // RoleDefinition is a named list of modules loaded from config/roles/*.yaml.
+// Roles may include other roles (single level only — included roles cannot
+// themselves include roles).
 type RoleDefinition struct {
-	Name    string      `yaml:"name"`
-	Modules []ModuleRef `yaml:"modules"`
+	Name     string      `yaml:"name"`
+	Includes []string    `yaml:"includes"` // other role names to include (single level)
+	Modules  []ModuleRef `yaml:"modules"`
 }
 
 // ThrallEntry is a single entry in thralls.hnb. It has a custom UnmarshalYAML

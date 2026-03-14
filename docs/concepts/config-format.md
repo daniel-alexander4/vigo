@@ -74,6 +74,21 @@ modules:
 
 Modules in a role can be plain strings or objects with a `when:` expression for conditional inclusion.
 
+### Role Includes
+
+Roles can include other roles using `includes:` to compose shared module sets:
+
+```yaml
+name: webserver
+includes:
+  - base-security
+modules:
+  - nginx
+  - logrotate
+```
+
+Included role modules are prepended before the role's own modules. Includes are **single level only** — an included role cannot itself have `includes:`. Duplicate modules across includes and the role's own list are automatically deduplicated (first occurrence wins).
+
 ## Node Mappings (nodes.hnb)
 
 The `nodes.hnb` file maps thrall hostnames to roles and modules. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the thrall's hostname.
@@ -165,6 +180,21 @@ db_user: postgres
 db_password: "secret:hobnob/db/password"
 db_port: 5432
 ```
+
+#### Hostname Substitution in vars_from
+
+Use `{{ .Hostname }}` in `vars_from` paths to load host-specific var files:
+
+```yaml
+thralls:
+  - match: "web*.example.com"
+    roles: [webserver]
+    vars_from:
+      - "vars/web-common.hnb"
+      - "vars/{{ .Hostname }}.hnb"
+```
+
+This lets a single node entry serve many thralls while each loads its own overrides. Missing var files are silently skipped — the thrall still gets all vars from other sources.
 
 ### Conditional Vars
 

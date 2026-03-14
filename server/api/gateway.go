@@ -67,6 +67,10 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	inventoryHandler := NewInventoryHandler(queries)
 	inventoryHandler.RegisterRoutes(mux)
 
+	// Mount config trace endpoint.
+	configTraceHandler := NewConfigTraceHandler(configStore)
+	configTraceHandler.RegisterRoutes(mux)
+
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
 	bh.SetFleetIndex(fleetIndex)

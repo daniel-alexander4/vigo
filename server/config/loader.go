@@ -195,15 +195,18 @@ type resolvedEntry struct {
 // .hnb/.yaml config files. Secret references are resolved via a
 // secrets.Provider. Hot-reload via fsnotify.
 type ConfigStore struct {
-	mu         sync.RWMutex
-	entries    []resolvedEntry
-	index      patternIndex                 // accelerated hostname lookup
-	rawModules map[string]*ModuleDefinition // unresolved, for secret ref scanning
-	dir        string                       // thrall-configs directory
-	provider   secrets.Provider
-	backend    string // secrets backend name for diagnostic hints
-	dangerous  bool // allow non-idempotent resources
-	version    atomic.Uint64 // incremented on each successful reload
+	mu            sync.RWMutex
+	entries       []resolvedEntry
+	index         patternIndex                 // accelerated hostname lookup
+	rawModules    map[string]*ModuleDefinition // unresolved, for secret ref scanning
+	thrallEntries []ThrallEntry                // original entries for tracing
+	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing
+	moduleDefs    map[string]*ModuleDefinition // loaded modules for tracing
+	dir           string                       // thrall-configs directory
+	provider      secrets.Provider
+	backend       string // secrets backend name for diagnostic hints
+	dangerous     bool   // allow non-idempotent resources
+	version       atomic.Uint64 // incremented on each successful reload
 	onReloadFailure func(err error) // optional callback on reload failure
 }
 
@@ -347,6 +350,204 @@ func (cs *ConfigStore) MatchClone(hostname string) (string, *ThrallConfig) {
 	}
 
 	return "", nil
+}
+
+// ConfigTrace contains detailed resolution information for a hostname.
+type ConfigTrace struct {
+	Hostname        string                `json:"hostname"`
+	Matched         bool                  `json:"matched"`
+	MatchPattern    string                `json:"match_pattern,omitempty"`
+	PatternType     string                `json:"pattern_type,omitempty"` // "exact" or "glob"
+	Environment     string                `json:"environment,omitempty"`
+	Roles           []string              `json:"roles,omitempty"`
+	RoleExpansion   []RoleTraceEntry      `json:"role_expansion,omitempty"`
+	Modules         []string              `json:"modules"`
+	VarSources      []VarSourceEntry      `json:"var_sources"`
+	FinalVars       map[string]any        `json:"final_vars"`
+	ConditionalVars []string              `json:"conditional_vars,omitempty"`
+	ResourceCount   int                   `json:"resource_count"`
+}
+
+// RoleTraceEntry shows which modules came from which role (and includes).
+type RoleTraceEntry struct {
+	Role     string   `json:"role"`
+	Includes []string `json:"includes,omitempty"`
+	Modules  []string `json:"modules"`
+}
+
+// VarSourceEntry tracks where a var's value came from.
+type VarSourceEntry struct {
+	Key    string `json:"key"`
+	Value  any    `json:"value"`
+	Source string `json:"source"` // "module:<name>", "vars_from:<path>", "inline", "env_vars:<env>"
+}
+
+// Trace returns a detailed ConfigTrace for the given hostname, showing
+// exactly how the config was resolved: which pattern matched, which roles
+// expanded to which modules, and where each var came from.
+func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	trace := &ConfigTrace{
+		Hostname:   hostname,
+		Modules:    []string{},
+		VarSources: []VarSourceEntry{},
+		FinalVars:  map[string]any{},
+	}
+
+	idx := cs.index.Lookup(hostname)
+	if idx < 0 {
+		return trace
+	}
+
+	entry := cs.entries[idx]
+	trace.Matched = true
+	trace.MatchPattern = entry.match
+	if isGlobPattern(entry.match) {
+		trace.PatternType = "glob"
+	} else {
+		trace.PatternType = "exact"
+	}
+
+	// Find the original ThrallEntry to trace var sources.
+	var thrallEntry *ThrallEntry
+	for i := range cs.thrallEntries {
+		if cs.thrallEntries[i].Match == entry.match {
+			thrallEntry = &cs.thrallEntries[i]
+			break
+		}
+	}
+	if thrallEntry == nil {
+		return trace
+	}
+
+	trace.Environment = thrallEntry.Environment
+	trace.Roles = thrallEntry.Roles
+
+	// Trace role expansion.
+	for _, roleName := range thrallEntry.Roles {
+		role, ok := cs.roleDefs[roleName]
+		if !ok {
+			continue
+		}
+		rte := RoleTraceEntry{Role: roleName}
+		for _, incName := range role.Includes {
+			rte.Includes = append(rte.Includes, incName)
+			if inc, ok := cs.roleDefs[incName]; ok {
+				for _, ref := range inc.Modules {
+					rte.Modules = append(rte.Modules, ref.Name)
+				}
+			}
+		}
+		for _, ref := range role.Modules {
+			rte.Modules = append(rte.Modules, ref.Name)
+		}
+		trace.RoleExpansion = append(trace.RoleExpansion, rte)
+	}
+
+	// Collect module names from resolved config.
+	cfg := entry.config
+	for _, mod := range cfg.Modules {
+		trace.Modules = append(trace.Modules, mod.Name)
+	}
+
+	// Trace var sources by replaying the merge order.
+	varSource := make(map[string]string) // key → source
+
+	// 1. Module defaults
+	seen := make(map[string]bool)
+	for _, roleName := range thrallEntry.Roles {
+		role, ok := cs.roleDefs[roleName]
+		if !ok {
+			continue
+		}
+		allRefs := make([]ModuleRef, 0)
+		for _, incName := range role.Includes {
+			if inc, ok := cs.roleDefs[incName]; ok {
+				allRefs = append(allRefs, inc.Modules...)
+			}
+		}
+		allRefs = append(allRefs, role.Modules...)
+		for _, ref := range allRefs {
+			if seen[ref.Name] {
+				continue
+			}
+			seen[ref.Name] = true
+			if def, ok := cs.moduleDefs[ref.Name]; ok {
+				for k := range def.Vars {
+					varSource[k] = "module:" + ref.Name
+				}
+			}
+		}
+	}
+	for _, ref := range thrallEntry.Modules {
+		if seen[ref.Name] {
+			continue
+		}
+		seen[ref.Name] = true
+		if def, ok := cs.moduleDefs[ref.Name]; ok {
+			for k := range def.Vars {
+				varSource[k] = "module:" + ref.Name
+			}
+		}
+	}
+
+	// 2. vars_from files
+	for _, relPath := range thrallEntry.VarsFrom {
+		expanded := relPath
+		if strings.Contains(expanded, "{{") {
+			expanded = strings.ReplaceAll(expanded, "{{ .Hostname }}", hostname)
+			expanded = strings.ReplaceAll(expanded, "{{.Hostname}}", hostname)
+		}
+		fileVars, _, err := loadVarsFile(cs.dir, expanded)
+		if err != nil {
+			continue
+		}
+		for k := range fileVars {
+			varSource[k] = "vars_from:" + relPath
+		}
+	}
+
+	// 3. Inline vars
+	for k := range thrallEntry.Vars {
+		varSource[k] = "inline"
+	}
+
+	// 4. env_vars
+	if thrallEntry.Environment != "" {
+		if envVars, ok := thrallEntry.EnvVars[thrallEntry.Environment]; ok {
+			for k := range envVars {
+				varSource[k] = "env_vars:" + thrallEntry.Environment
+			}
+		}
+	}
+
+	// Build ordered var sources from the resolved vars.
+	for _, k := range cfg.VarOrder {
+		src := varSource[k]
+		if src == "" {
+			src = "unknown"
+		}
+		trace.VarSources = append(trace.VarSources, VarSourceEntry{
+			Key:    k,
+			Value:  cfg.Vars[k],
+			Source: src,
+		})
+	}
+	trace.FinalVars = cfg.Vars
+
+	// Conditional vars
+	for _, cv := range cfg.ConditionalVars {
+		trace.ConditionalVars = append(trace.ConditionalVars, cv.Name)
+	}
+
+	// Resource count
+	for _, mod := range cfg.Modules {
+		trace.ResourceCount += len(mod.Resources)
+	}
+
+	return trace
 }
 
 // Watch starts fsnotify watchers on the thrall-configs directory and its
@@ -501,6 +702,9 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.entries = entries
 	cs.index = idx
 	cs.rawModules = moduleDefs
+	cs.thrallEntries = thrallEntries
+	cs.roleDefs = roleDefs
+	cs.moduleDefs = moduleDefs
 	cs.mu.Unlock()
 
 	v := cs.version.Add(1)
@@ -585,14 +789,27 @@ func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
 
 // resolveEntry converts a ThrallEntry into a fully resolved ThrallConfig.
 func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*ThrallConfig, error) {
-	// Collect module refs: roles first, then direct modules. First ref wins
-	// for conditional fields (matching existing var merge behavior).
+	// Collect module refs: roles first (with includes), then direct modules.
+	// First ref wins for conditional fields (matching existing var merge behavior).
 	var moduleRefs []ModuleRef
 	seen := make(map[string]bool)
 	for _, roleName := range entry.Roles {
 		role, ok := roleDefs[roleName]
 		if !ok {
 			return nil, fmt.Errorf("role %q does not exist — add a role definition to roles/", roleName)
+		}
+		// Expand single-level includes before the role's own modules.
+		for _, incName := range role.Includes {
+			inc, ok := roleDefs[incName]
+			if !ok {
+				return nil, fmt.Errorf("role %q includes %q which does not exist", roleName, incName)
+			}
+			for _, ref := range inc.Modules {
+				if !seen[ref.Name] {
+					seen[ref.Name] = true
+					moduleRefs = append(moduleRefs, ref)
+				}
+			}
 		}
 		for _, ref := range role.Modules {
 			if !seen[ref.Name] {
@@ -671,7 +888,12 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		}
 	}
 	// Load vars_from files in order. Later files override earlier ones.
+	// Supports {{ .Hostname }} substitution in paths.
 	for _, relPath := range entry.VarsFrom {
+		if strings.Contains(relPath, "{{") {
+			relPath = strings.ReplaceAll(relPath, "{{ .Hostname }}", entry.Match)
+			relPath = strings.ReplaceAll(relPath, "{{.Hostname}}", entry.Match)
+		}
 		fileVars, fileKeys, err := loadVarsFile(cs.dir, relPath)
 		if err != nil {
 			return nil, fmt.Errorf("entry %q: %w", entry.Match, err)
@@ -923,6 +1145,21 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 		}
 		defs[def.Name] = &def
 	}
+
+	// Validate includes: single level only — included roles must not
+	// themselves have includes.
+	for _, def := range defs {
+		for _, incName := range def.Includes {
+			inc, ok := defs[incName]
+			if !ok {
+				return nil, fmt.Errorf("role %q includes %q which does not exist", def.Name, incName)
+			}
+			if len(inc.Includes) > 0 {
+				return nil, fmt.Errorf("role %q includes %q which itself has includes — only single-level nesting is allowed", def.Name, incName)
+			}
+		}
+	}
+
 	return defs, nil
 }
 
