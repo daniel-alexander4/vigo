@@ -132,40 +132,80 @@ func printFileList(res *publish.Result) {
 	}
 }
 
-// suggestFixes checks if the error contains validation findings and, if so,
-// asks the AI assistant to suggest fixes. Requires the server to be running
-// with AI enabled.
+// suggestFixes asks the AI assistant to suggest fixes for config errors.
+// Handles both idempotency errors (with per-module YAML) and generic parse
+// errors (extracts file path from error message).
 func suggestFixes(err error, disabled bool) {
 	if disabled {
 		return
 	}
 
+	var question string
+
 	var ie *config.IdempotencyErrors
-	if !errors.As(err, &ie) {
+	if errors.As(err, &ie) {
+		// Idempotency/validation errors — include each module's YAML.
+		var b strings.Builder
+		b.WriteString("You are reviewing Hobnob .hnb config files that failed validation.\n")
+		b.WriteString("For each error below, show the corrected YAML for just the failing resource.\n")
+		b.WriteString("Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
+
+		for _, m := range ie.Modules {
+			fmt.Fprintf(&b, "File: %s\n", m.Path)
+			for _, f := range m.Findings {
+				fmt.Fprintf(&b, "  Error: %s (%s): %s\n", f.ResourceName, f.ResourceType, f.Message)
+			}
+			data, readErr := os.ReadFile(m.Path)
+			if readErr != nil {
+				continue
+			}
+			fmt.Fprintf(&b, "\n```yaml\n%s```\n\n", string(data))
+		}
+		question = b.String()
+	} else {
+		// Generic error (YAML parse, missing fields, renamed keys, etc.)
+		// Try to extract a file path from the error and include its content.
+		question = buildGenericFixPrompt(err)
+	}
+
+	if question == "" {
 		return
 	}
 
-	// Build a prompt with the validation errors and the failing module YAML.
-	var b strings.Builder
-	b.WriteString("You are reviewing Hobnob .hnb config files that failed validation.\n")
-	b.WriteString("For each error below, show the corrected YAML for just the failing resource.\n")
-	b.WriteString("Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
+	askAI(question)
+}
 
-	for _, m := range ie.Modules {
-		fmt.Fprintf(&b, "File: %s\n", m.Path)
-		for _, f := range m.Findings {
-			fmt.Fprintf(&b, "  Error: %s (%s): %s\n", f.ResourceName, f.ResourceType, f.Message)
+// buildGenericFixPrompt extracts file paths from error messages and builds
+// an AI prompt with the error and file content.
+func buildGenericFixPrompt(err error) string {
+	errMsg := err.Error()
+
+	// Try to find a file path in the error (e.g., "parsing /srv/hobnob/hnb/proposed/modules/foo.hnb: ...")
+	var filePath string
+	for _, part := range strings.Fields(errMsg) {
+		if strings.HasSuffix(part, ".hnb") || strings.HasSuffix(part, ".hnb:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
+			filePath = strings.TrimSuffix(part, ":")
+			break
 		}
-		data, readErr := os.ReadFile(m.Path)
-		if readErr != nil {
-			continue
-		}
-		fmt.Fprintf(&b, "\n```yaml\n%s```\n\n", string(data))
 	}
 
-	question := b.String()
+	var b strings.Builder
+	b.WriteString("A Hobnob .hnb config file failed to load with this error:\n\n")
+	fmt.Fprintf(&b, "  %s\n\n", errMsg)
+	b.WriteString("Show the corrected YAML. Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
 
-	// Call the AI endpoint.
+	if filePath != "" {
+		data, readErr := os.ReadFile(filePath)
+		if readErr == nil {
+			fmt.Fprintf(&b, "File: %s\n```yaml\n%s```\n", filePath, string(data))
+		}
+	}
+
+	return b.String()
+}
+
+// askAI sends a question to the server's AI endpoint and streams the response.
+func askAI(question string) {
 	body, jsonErr := json.Marshal(map[string]any{"question": question})
 	if jsonErr != nil {
 		return
