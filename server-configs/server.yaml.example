@@ -1,278 +1,244 @@
-# =============================================================================
-# Hobnob Server Configuration — Full Option Reference
-# =============================================================================
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  Hobnob Server Configuration — Full Option Reference                   ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+#
 # Copy to server.yaml and edit. Required options are uncommented.
 # Optional sections are commented out with their defaults shown.
 #
-# Fields marked "secret:" support the secret: prefix for resolution through
-# the configured secrets backend (e.g. secret:hobnob/db/dsn).
-# =============================================================================
+# Fields that accept "secret:path" are resolved through the secrets backend
+# at startup (e.g. secret:hobnob/db/dsn → /srv/hobnob/secrets/hobnob/db/dsn).
 
-# ---------------------------------------------------------------------------
-# Secrets Backend
-# ---------------------------------------------------------------------------
-# Determines how secret: references are resolved. Only one backend is active.
-# Options: "local" (default) or "isopass"
-# Local backend is recommended — secrets are always AES-256-GCM encrypted at rest.
+
+# ── Server ────────────────────────────────────────────────────────────────
+# Ports and TLS. TLS certs are auto-generated on first start.
+
+server:
+  grpc_listen: ":1530"
+  api_listen: ":8181"
+  tls:
+    cert_file: "tls/cert"
+    key_file: "tls/key"
+    ca_file: "tls/ca"
+    ca_key_file: "tls/ca_key"
+  # tls_sans:                                  # extra SANs for auto-generated certs
+  #   - "192.168.1.2"                          # host LAN IP (needed in Docker)
+  #   - "hobnob.example.com"                   # DNS name agents use
+
+
+# ── Database ──────────────────────────────────────────────────────────────
+# SQLite (default): dsn is a file path.
+# Postgres: dsn is a connection string. Set driver: postgres.
+
+database:
+  dsn: "secret:hobnob/db/dsn"
+  # driver: postgres
+  # retention: "90d"                           # auto-prune old runs/tasks/workflows
+
+
+# ── Secrets ───────────────────────────────────────────────────────────────
+# How secret: references are resolved. Only one backend is active.
+
 secrets:
   backend: local
-  # key_file: "/srv/hobnob/master.key"   # 32-byte hex master key (0600); omit to auto-generate
-  # secrets_dir: "/srv/hobnob/secrets"    # encrypted secret files (default)
+  # key_file: "/srv/hobnob/master.key"         # AES-256-GCM key (0600); omit to auto-generate
+  # secrets_dir: "/srv/hobnob/secrets"          # encrypted secret files (default)
 
 # --- Isopass backend (external secrets API) ---
 # secrets:
 #   backend: isopass
-#   url: "https://isopass.internal:8443"         # isopass API base URL (required)
-#   token_file: "/srv/hobnob/isopass-token"  # file containing bearer token (0600, recommended)
-#   tls_skip_verify: false                       # skip TLS verification (default: false)
+#   url: "https://isopass.internal:8443"
+#   token_file: "/srv/hobnob/isopass-token"    # bearer token file (0600)
+#   tls_skip_verify: false
 
-# ---------------------------------------------------------------------------
-# Server Listeners
-# ---------------------------------------------------------------------------
-server:
-  grpc_listen: ":1530"          # gRPC agent port (mTLS)
-  api_listen: ":8181"           # REST API + web UI + metrics port
-  tls:
-    cert_file: "tls/cert"                      # server TLS certificate (auto-generated on first start)
-    key_file: "tls/key"                        # server TLS private key
-    ca_file: "tls/ca"                          # CA cert for mTLS verification
-    ca_key_file: "tls/ca_key"                  # CA private key — enables bootstrap CSR signing
-  # tls_sans:                                  # extra SANs for auto-generated certs (IPs or DNS names)
-  #   - "192.168.1.2"                          # host LAN IP (needed when server runs in Docker)
-  #   - "hobnob.example.com"                   # DNS name agents use to reach the server
 
-# ---------------------------------------------------------------------------
-# Authentication
-# ---------------------------------------------------------------------------
-# Controls web UI and REST API authentication. Default is "none" — fully open,
-# identical to having no auth section at all. No overhead when disabled.
+# ── Check-in ──────────────────────────────────────────────────────────────
+
+checkin:
+  interval: "5m"                               # agent poll frequency (stale = 2x this)
+  jitter_percent: 20                           # randomize timing by 0-N%
+  bundle_max_age: "24h"                        # signed bundle TTL on agents (0 = forever)
+
+
+# ── Bootstrap ─────────────────────────────────────────────────────────────
+# Requires server.tls.ca_key_file. Without it, bootstrap is disabled.
+
+bootstrap:
+  cert_validity: "8760h"                       # agent cert lifetime (default: 1 year)
+  trusted_enrollment:                          # token-free enrollment by pattern + source IP
+    - pattern: "*"
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8"]
+
+
+# ── Authentication ────────────────────────────────────────────────────────
+# Web UI and REST API auth. Default: none (fully open, zero overhead).
+
 # auth:
-#   method: none                            # none (default) | oidc | isowebauth
+#   method: none                               # none | oidc | isowebauth
 #
 # --- OIDC (OpenID Connect SSO) ---
 # auth:
 #   method: oidc
 #   oidc:
-#     issuer: "https://accounts.google.com"  # OIDC provider discovery URL (required)
-#     client_id: "your-client-id"            # OAuth2 client ID (required)
-#     client_secret: "secret:hobnob/auth/oidc_client_secret"  # client secret (secret:, required)
-#     redirect_url: "http://localhost:8181/auth/callback"      # callback URL (required)
-#     scopes: [openid, profile, email]       # OIDC scopes (default: openid, profile, email)
+#     issuer: "https://accounts.google.com"
+#     client_id: "your-client-id"
+#     client_secret: "secret:hobnob/auth/oidc_client_secret"
+#     redirect_url: "http://localhost:8181/auth/callback"
+#     scopes: [openid, profile, email]
 #
-# --- Isowebauth (SSH key-based signing) ---
+# --- Isowebauth (SSH key signing) ---
 # auth:
 #   method: isowebauth
 #   isowebauth:
-#     namespace: "hobnob"                    # signing namespace (default: "hobnob")
+#     namespace: "hobnob"
 
-# ---------------------------------------------------------------------------
-# Database
-# ---------------------------------------------------------------------------
-# SQLite (default): dsn is a file path (e.g. "/srv/hobnob/db/hobnob.db").
-# Postgres: dsn is a connection string (e.g. "postgres://hobnob:pass@localhost/hobnob?sslmode=disable").
-# To enable Postgres: set driver: postgres, add COMPOSE_PROFILES=postgres to .env,
-# and set HOBNOB_DB_DRIVER=postgres in your environment or Docker Compose.
-database:
-  dsn: "secret:hobnob/db/dsn"   # SQLite path or Postgres connection string (secret:)
-  # driver: postgres             # "sqlite" (default) or "postgres"
-  # retention: "90d"             # auto-prune runs/tasks/workflows older than this (empty = no pruning)
 
-# ---------------------------------------------------------------------------
-# Backup (Litestream WAL Replication — SQLite only)
-# ---------------------------------------------------------------------------
-# Continuously streams SQLite WAL changes to a replica for disaster recovery.
-# Disabled when url is empty or when database.driver is "postgres".
-# Restore: litestream restore -config <generated> -o <db-path> <db-path>
-# backup:
-#   url: "s3://my-bucket/hobnob"              # s3://, gcs://, sftp://, file:///path
-#   access_key_id: "secret:hobnob/backup/aws_access_key"   # S3/GCS auth (secret:)
-#   secret_access_key: "secret:hobnob/backup/aws_secret_key"
-#   region: "us-east-1"                       # AWS region (optional)
-#   endpoint: ""                              # S3-compatible endpoint (MinIO, Backblaze)
-#   force_path_style: false                   # path-style S3 URLs (required for MinIO)
-#   retention: "720h"                         # snapshot retention (default: 30 days)
-#   sync_interval: "1s"                       # WAL sync frequency (default: 1s)
+# ── Webhooks ──────────────────────────────────────────────────────────────
+# Configure endpoints via hobnobcli or REST API. This section controls dispatch.
 
-# ---------------------------------------------------------------------------
-# Agent Check-In
-# ---------------------------------------------------------------------------
-checkin:
-  interval: "5m"                # agent check-in frequency (stale threshold = 2x this)
-  jitter_percent: 20            # randomize check-in timing by 0-N% (avoids thundering herd)
-  bundle_max_age: "24h"         # how long signed policy bundles remain valid on agents (0 = forever)
+webhooks:
+  timeout: "10s"
+  max_retries: 3
 
-# ---------------------------------------------------------------------------
-# Secret Rotation Watcher
-# ---------------------------------------------------------------------------
-# Polls isopass for version changes. Disabled on spoke servers and non-isopass backends.
+
+# ── Secret Rotation Watcher ──────────────────────────────────────────────
+# Polls for secret version changes and force-pushes affected thralls.
+
 watcher:
-  enabled: true                 # enable secret rotation polling (default: true)
-  poll_interval: "5m"           # how often to check for rotated secrets (default: "5m")
+  enabled: true
+  poll_interval: "5m"
 
-# ---------------------------------------------------------------------------
-# Bootstrap Enrollment
-# ---------------------------------------------------------------------------
-# Requires server.tls.ca_key_file to be set. Without it, bootstrap is disabled.
-bootstrap:
-  cert_validity: "8760h"        # signed agent certificate lifetime (default: 1 year)
-  # Token-free enrollment patterns. Thralls matching pattern+CIDR enroll without a token.
-  # Tighten patterns and CIDRs for production.
-  trusted_enrollment:
-    - pattern: "*"
-      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8"]
 
-# ---------------------------------------------------------------------------
-# Federation (Hub-Spoke Scaling)
-# ---------------------------------------------------------------------------
-# Omit entirely or set role: standalone for single-server deployments.
+# ── SMTP Notifications ───────────────────────────────────────────────────
+# Disabled when host is empty. Omit events to enable all with default recipients.
+
+# smtp:
+#   host: "smtp.example.com"
+#   port: 587
+#   from: "hobnob@example.com"
+#   username: "hobnob"
+#   password: "secret:hobnob/smtp/password"
+#   tls: true
+#   recipients:
+#     - "admin@example.com"
+#   events:
+#     thrall.enrolled: {}
+#     run.success: {}
+#     run.failure:
+#       recipients: ["ops@example.com"]
+#     drift.detected: {}
+#     secret.rotated: {}
+#     config.reload.failure: {}
+#     thrall.stale: {}
+#     compliance.threshold:
+#       threshold: 90
+#   digest:
+#     interval: "1h"
+#     events:
+#       - "run.success"
+#       - "drift.detected"
+
+
+# ── Federation ────────────────────────────────────────────────────────────
+# Hub-spoke scaling. Omit for single-server deployments.
+
 # federation:
-#   role: standalone              # standalone (default) | hub | spoke
+#   role: standalone                           # standalone | hub | spoke
 #
-# --- Hub mode: aggregates admin queries from spokes ---
+# --- Hub: aggregates admin queries from spokes ---
 # federation:
 #   role: hub
 #   spokes:
-#     - id: dc1                   # unique spoke identifier (required)
-#       addr: "spoke1.example.com:1530"  # spoke gRPC address (required)
-#       patterns: ["*.dc1.*"]     # hostname globs routed to this spoke (optional)
+#     - id: dc1
+#       addr: "spoke1.example.com:1530"
+#       patterns: ["*.dc1.*"]
 #     - id: dc2
 #       addr: "spoke2.example.com:1530"
 #       patterns: ["*.dc2.*"]
 #
-# --- Spoke mode: handles agent check-ins only ---
+# --- Spoke: handles agent check-ins only ---
 # federation:
 #   role: spoke
-#   spoke_id: "dc1"              # unique spoke ID (required)
-#   hub_addr: "hub.example.com:1530"  # hub gRPC address (optional)
+#   spoke_id: "dc1"
+#   hub_addr: "hub.example.com:1530"
 
-# ---------------------------------------------------------------------------
-# Operational Tuning
-# ---------------------------------------------------------------------------
-# All fields are optional with sensible defaults.
-# tuning:
-#   signature_window: "5m"          # max age of signed agent requests (default: "5m")
-#   last_seen_flush: "10s"          # FleetIndex dirty-set flush interval (default: "10s")
-#   traits_prune_interval: "5m"     # stale trait cleanup frequency (default: "5m")
-#   metrics_interval: "30s"         # Prometheus metrics collection interval (default: "30s")
-#   traits_scanner_ttl: "30s"       # custom trait collector cache TTL (default: "30s")
-#   run_store: "database"           # run history backend: "database" or "memory" (default: "database")
-#   run_store_capacity: 20          # per-thrall run depth in memory mode (default: 20)
-#   max_concurrent_streams: 5000    # gRPC bidirectional stream limit (default: 5000)
-#
-#   # Go runtime tuning (large fleets only).
-#   # gogc: 50                       # GC target percentage (default: 100); lower = less memory, more CPU
-#   # memory_limit: "4GiB"           # hard memory ceiling (GOMEMLIMIT); empty = no limit
-#
-#   # gRPC transport tuning (large fleets only).
-#   # grpc_read_buffer: 16384        # per-connection read buffer bytes (default: gRPC 32 KiB)
-#   # grpc_write_buffer: 16384       # per-connection write buffer bytes (default: gRPC 32 KiB)
-#   # max_connection_age: "1h"       # force client reconnect after this duration (default: no limit)
-#   # max_connection_idle: "15m"     # close idle connections after (default: "15m")
-#   # keepalive_time: "30s"          # server→client ping interval (default: "30s")
-#   # keepalive_timeout: "10s"       # ping response deadline (default: "10s")
-#   # stream_send_buffer: 8          # per-agent server→agent message buffer (default: 8)
-#
-#   webhook:
-#     timeout: "10s"                # HTTP request timeout (default: "10s")
-#     max_retries: 3                # retry attempts on transient failures (default: 3)
-#     max_concurrent: 20            # max concurrent webhook deliveries (default: 20)
-#     retry_delay: "5s"             # base delay between retries, exponential backoff (default: "5s")
 
-# ---------------------------------------------------------------------------
-# Webhook Dispatch
-# ---------------------------------------------------------------------------
-# Configure webhook endpoints via hobnobcli or the REST API, not here.
-# The webhooks section only controls dispatch behavior.
-# webhooks:
-#   timeout: "10s"
-#   max_retries: 3
-
-# ---------------------------------------------------------------------------
-# SMTP Email Notifications
-# ---------------------------------------------------------------------------
-# Disabled when host is empty. Omit events map to enable all with default recipients.
-# smtp:
-#   host: "smtp.example.com"              # SMTP relay hostname (empty = disabled)
-#   port: 587                             # SMTP port (default: 587)
-#   from: "hobnob@example.com"            # sender address
-#   username: "hobnob"                    # SMTP auth username (optional)
-#   password: "secret:hobnob/smtp/password"  # SMTP auth password (secret:, optional)
-#   tls: true                             # use STARTTLS (default: true)
-#   recipients:                           # default recipients for all events
-#     - "admin@example.com"
-#   events:                               # omit to enable all with default recipients
-#     thrall.enrolled: {}                 # new thrall registered
-#     run.success: {}                     # convergence run succeeded
-#     run.failure:                        # convergence run failed
-#       recipients: ["ops@example.com"]   #   override recipients for this event
-#     drift.detected: {}                  # config drift corrected
-#     secret.rotated: {}                  # secret version bumped, thralls re-queued
-#     config.reload.failure: {}           # YAML config reload error
-#     thrall.stale: {}                    # thrall missed check-in window
-#     compliance.threshold:               # compliance % dropped below threshold
-#       threshold: 90
-#   digest:                               # batch low-priority events into summaries
-#     interval: "1h"                      # flush window (e.g. "1h", "30m"); empty = disabled
-#     events:                             # events routed to digest instead of immediate
-#       - "run.success"
-#       - "drift.detected"
-
-# ---------------------------------------------------------------------------
-# AI Assistant
-# ---------------------------------------------------------------------------
+# ── AI Assistant ──────────────────────────────────────────────────────────
 # Disabled by default. Ollama (free, local) is the default provider.
-# Paid providers (claude, openai) require an API key.
+
 # ai:
-#   enabled: true                         # enable AI assistant (default: false)
-#   provider: "ollama"                    # ollama | claude | openai | openai-compat
-#   model: "qwen2.5:7b"                  # provider-specific model name
-#                                         #   ollama default: qwen2.5:7b
-#                                         #   claude default: claude-sonnet-4-20250514
-#                                         #   openai default: gpt-4o
-#   max_tokens: 4096                      # max tokens per response (default: 4096)
-#   base_url: ""                          # auto for ollama; required for openai-compat
-#   api_key: "secret:hobnob/ai/api_key"   # API key for paid providers (secret:)
-#   rate_limit: 0                         # requests/minute, 0 = unlimited (default: 0)
-#   max_tool_rounds: 10                   # max tool-use iterations per request (default: 10)
-#   context_mode: "auto"                  # tools | prefetch | auto (default: auto for ollama, tools otherwise)
-#   docs_mode: "full"                     # full | condensed | off — inject docs into AI system prompt (default: full)
-#                                         #   full: entire docs corpus (~80-120KB), best for large-context models
-#                                         #   condensed: tables + summaries only (~15-20KB), for small-context models
-#                                         #   off: no docs injection, use static system prompt only
+#   enabled: true
+#   provider: "ollama"                         # ollama | claude | openai | openai-compat
+#   model: "qwen2.5:7b"
+#   max_tokens: 4096
+#   base_url: ""                               # auto for ollama; required for openai-compat
+#   api_key: "secret:hobnob/ai/api_key"        # for paid providers
+#   rate_limit: 0                              # requests/minute (0 = unlimited)
+#   max_tool_rounds: 10
+#   context_mode: "auto"                       # tools | prefetch | auto
+#   docs_mode: "full"                          # full | condensed | off
 
-# ---------------------------------------------------------------------------
-# Compliance Framework Export
-# ---------------------------------------------------------------------------
-# Feed Hobnob data to external compliance tools. Each export type is independently
-# toggleable — disabled by default. Disabled endpoints are not registered.
+
+# ── Backup (Litestream — SQLite only) ────────────────────────────────────
+# Streams WAL changes to a replica for disaster recovery.
+
+# backup:
+#   url: "s3://my-bucket/hobnob"
+#   access_key_id: "secret:hobnob/backup/aws_access_key"
+#   secret_access_key: "secret:hobnob/backup/aws_secret_key"
+#   region: "us-east-1"
+#   endpoint: ""                               # S3-compatible (MinIO, Backblaze)
+#   force_path_style: false                    # required for MinIO
+#   retention: "720h"                          # snapshot retention (default: 30 days)
+#   sync_interval: "1s"
+
+
+# ── Compliance Export ─────────────────────────────────────────────────────
+# Feed data to external compliance tools. Each type is independent.
+
 # export:
-#   siem: false                            # SIEM event export (/api/v1/export/siem)
-#   cmdb: false                            # CMDB configuration items (/api/v1/export/cmdb)
-#   oscal: false                           # OSCAL assessment results stub (/api/v1/export/oscal)
+#   siem: false                                # /api/v1/export/siem
+#   cmdb: false                                # /api/v1/export/cmdb
+#   oscal: false                               # /api/v1/export/oscal
 
-# ---------------------------------------------------------------------------
-# Directory Paths
-# ---------------------------------------------------------------------------
-# All paths default to subdirectories of the working directory. Override here
-# instead of using environment variables.
-# paths:
-#   migrations: "migrations"                     # database migration files
-#   custom_traits: "custom-traits"               # custom trait collector scripts
-#   docs: "docs"                                 # documentation directory
-#   tasks: "tasks"                               # reusable task definitions
-#   workflows: "workflows"                       # workflow definitions
-#   agent_dist: "dist/agent"                     # agent binary distribution
-#   license_dir: "/srv/hobnob/license"    # license file directory
 
-# --- Rate Limiting ---
-# Token-bucket rate limiting on check-in RPCs to protect the server
-# from excessive traffic during fleet-wide events.
-#rate_limit:
-#  enabled: false
-#  checkin_per_thrall: 6   # requests/minute per thrall (default: 6)
-#  checkin_global: 500     # requests/second globally (default: 500)
+# ── Rate Limiting ─────────────────────────────────────────────────────────
+# Token-bucket throttling on check-in RPCs.
 
-# --- Maintenance ---
-# Global change freeze. While active, config publishes are blocked.
-#maintenance:
-#  freeze_until: ""        # RFC3339 timestamp (empty = no freeze)
+# rate_limit:
+#   enabled: false
+#   checkin_per_thrall: 6                      # requests/minute per thrall
+#   checkin_global: 500                        # requests/second globally
+
+
+# ── Maintenance ───────────────────────────────────────────────────────────
+# Global change freeze. Blocks config publish while active.
+
+# maintenance:
+#   freeze_until: ""                           # RFC3339 timestamp (empty = no freeze)
+
+
+# ── Tuning ────────────────────────────────────────────────────────────────
+# Advanced. All fields optional with sensible defaults.
+
+# tuning:
+#   signature_window: "5m"
+#   last_seen_flush: "10s"
+#   traits_prune_interval: "5m"
+#   metrics_interval: "30s"
+#   traits_scanner_ttl: "30s"
+#   run_store: "database"                      # "database" or "memory"
+#   run_store_capacity: 20                     # per-thrall depth in memory mode
+#   max_concurrent_streams: 5000
+#
+#   # Go runtime (large fleets only)
+#   # gogc: 50                                 # GC target % (default: 100)
+#   # memory_limit: "4GiB"                     # GOMEMLIMIT hard ceiling
+#
+#   # gRPC transport (large fleets only)
+#   # grpc_read_buffer: 16384
+#   # grpc_write_buffer: 16384
+#   # max_connection_age: "1h"
+#   # max_connection_idle: "15m"
+#   # keepalive_time: "30s"
+#   # keepalive_timeout: "10s"
+#   # stream_send_buffer: 8
