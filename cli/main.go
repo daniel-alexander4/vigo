@@ -58,5 +58,6 @@ func init() {
 		askCmd,
 		workflowCmd,
 		secretsCmd,
+		exportCmd,
 	)
 }

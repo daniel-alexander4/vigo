@@ -38,10 +38,10 @@ server:
   grpc_listen: ":1530"          # gRPC agent port (mTLS)
   api_listen: ":8181"           # REST API + web UI + metrics port
   tls:
-    cert_file: "secrets/hobnob/tls/cert"       # server TLS certificate (auto-generated on first start)
-    key_file: "secrets/hobnob/tls/key"         # server TLS private key
-    ca_file: "secrets/hobnob/tls/ca"           # CA cert for mTLS verification
-    ca_key_file: "secrets/hobnob/tls/ca_key"   # CA private key — enables bootstrap CSR signing
+    cert_file: "tls/cert"                      # server TLS certificate (auto-generated on first start)
+    key_file: "tls/key"                        # server TLS private key
+    ca_file: "tls/ca"                          # CA cert for mTLS verification
+    ca_key_file: "tls/ca_key"                  # CA private key — enables bootstrap CSR signing
 
 # ---------------------------------------------------------------------------
 # Database
@@ -199,3 +199,17 @@ bootstrap:
 #   rate_limit: 0                         # requests/minute, 0 = unlimited (default: 0)
 #   max_tool_rounds: 10                   # max tool-use iterations per request (default: 10)
 #   context_mode: "auto"                  # tools | prefetch | auto (default: auto for ollama, tools otherwise)
+#   docs_mode: "full"                     # full | condensed | off — inject docs into AI system prompt (default: full)
+#                                         #   full: entire docs corpus (~80-120KB), best for large-context models
+#                                         #   condensed: tables + summaries only (~15-20KB), for small-context models
+#                                         #   off: no docs injection, use static system prompt only
+
+# ---------------------------------------------------------------------------
+# Compliance Framework Export
+# ---------------------------------------------------------------------------
+# Feed Hobnob data to external compliance tools. Each export type is independently
+# toggleable — disabled by default. Disabled endpoints are not registered.
+# export:
+#   siem: false                            # SIEM event export (/api/v1/export/siem)
+#   cmdb: false                            # CMDB configuration items (/api/v1/export/cmdb)
+#   oscal: false                           # OSCAL assessment results stub (/api/v1/export/oscal)

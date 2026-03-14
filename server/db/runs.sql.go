@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const createRun = `-- name: CreateRun :one
@@ -198,6 +199,153 @@ func (q *Queries) ListRunResults(ctx context.Context, runID string) ([]RunResult
 			&i.ErrorMessage,
 			&i.DurationMs,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunResultsSince = `-- name: ListRunResultsSince :many
+SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
+       rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
+       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       t.hostname
+FROM run_results rr
+JOIN runs r ON r.id = rr.run_id
+JOIN thralls t ON t.id = r.thrall_id
+WHERE rr.created_at >= ?1
+ORDER BY rr.created_at DESC
+LIMIT ?2
+`
+
+type ListRunResultsSinceParams struct {
+	CreatedAt time.Time `json:"created_at"`
+	Limit     int64     `json:"limit"`
+}
+
+type ListRunResultsSinceRow struct {
+	ID           string         `json:"id"`
+	RunID        string         `json:"run_id"`
+	ModuleName   string         `json:"module_name"`
+	ResourceType string         `json:"resource_type"`
+	ResourceName string         `json:"resource_name"`
+	ActionTaken  string         `json:"action_taken"`
+	Changed      int64          `json:"changed"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	DurationMs   int64          `json:"duration_ms"`
+	CreatedAt    time.Time      `json:"created_at"`
+	ThrallID     string         `json:"thrall_id"`
+	RunStatus    string         `json:"run_status"`
+	RunStartedAt time.Time      `json:"run_started_at"`
+	Hostname     string         `json:"hostname"`
+}
+
+func (q *Queries) ListRunResultsSince(ctx context.Context, arg ListRunResultsSinceParams) ([]ListRunResultsSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRunResultsSince, arg.CreatedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRunResultsSinceRow{}
+	for rows.Next() {
+		var i ListRunResultsSinceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.ModuleName,
+			&i.ResourceType,
+			&i.ResourceName,
+			&i.ActionTaken,
+			&i.Changed,
+			&i.ErrorMessage,
+			&i.DurationMs,
+			&i.CreatedAt,
+			&i.ThrallID,
+			&i.RunStatus,
+			&i.RunStartedAt,
+			&i.Hostname,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunResultsSinceByThrall = `-- name: ListRunResultsSinceByThrall :many
+SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
+       rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
+       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       t.hostname
+FROM run_results rr
+JOIN runs r ON r.id = rr.run_id
+JOIN thralls t ON t.id = r.thrall_id
+WHERE rr.created_at >= ?1 AND t.hostname = ?2
+ORDER BY rr.created_at DESC
+LIMIT ?3
+`
+
+type ListRunResultsSinceByThrallParams struct {
+	CreatedAt time.Time `json:"created_at"`
+	Hostname  string    `json:"hostname"`
+	Limit     int64     `json:"limit"`
+}
+
+type ListRunResultsSinceByThrallRow struct {
+	ID           string         `json:"id"`
+	RunID        string         `json:"run_id"`
+	ModuleName   string         `json:"module_name"`
+	ResourceType string         `json:"resource_type"`
+	ResourceName string         `json:"resource_name"`
+	ActionTaken  string         `json:"action_taken"`
+	Changed      int64          `json:"changed"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	DurationMs   int64          `json:"duration_ms"`
+	CreatedAt    time.Time      `json:"created_at"`
+	ThrallID     string         `json:"thrall_id"`
+	RunStatus    string         `json:"run_status"`
+	RunStartedAt time.Time      `json:"run_started_at"`
+	Hostname     string         `json:"hostname"`
+}
+
+func (q *Queries) ListRunResultsSinceByThrall(ctx context.Context, arg ListRunResultsSinceByThrallParams) ([]ListRunResultsSinceByThrallRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRunResultsSinceByThrall, arg.CreatedAt, arg.Hostname, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRunResultsSinceByThrallRow{}
+	for rows.Next() {
+		var i ListRunResultsSinceByThrallRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.ModuleName,
+			&i.ResourceType,
+			&i.ResourceName,
+			&i.ActionTaken,
+			&i.Changed,
+			&i.ErrorMessage,
+			&i.DurationMs,
+			&i.CreatedAt,
+			&i.ThrallID,
+			&i.RunStatus,
+			&i.RunStartedAt,
+			&i.Hostname,
 		); err != nil {
 			return nil, err
 		}

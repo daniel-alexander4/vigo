@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -117,6 +118,9 @@ func run() error {
 		"grpc_listen", cfg.Server.GRPCListen,
 		"api_listen", cfg.Server.APIListen,
 	)
+
+	// Apply Go runtime tuning early (before allocations ramp up).
+	applyRuntimeTuning(cfg.Tuning)
 
 	// Determine database driver.
 	dbDriver := cfg.Database.Driver
@@ -538,6 +542,7 @@ func run() error {
 	federationHandler := api.NewFederationHandler(role, cfg.Federation.SpokeID, hub)
 	tasksHandler := api.NewTasksHandler(queries, agentSvc)
 	queryHandler := api.NewQueryHandler(agentSvc)
+	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
 
 	// Load workflow definitions and create engine.
 	workflowsDir := envOrDefault("HOBNOB_WORKFLOWS_DIR", "workflows")
@@ -583,6 +588,7 @@ func run() error {
 		tasksHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
 		workflowHandler.RegisterRoutes(mux)
+		exportHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
 		}
@@ -635,6 +641,7 @@ func run() error {
 		tasksHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)
 		workflowHandler.RegisterRoutes(gwMux)
+		exportHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)
 		}
@@ -747,6 +754,59 @@ func parseDuration(s string, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+// applyRuntimeTuning configures Go GC and memory limits from the tuning section.
+func applyRuntimeTuning(t config.TuningSection) {
+	if t.GOGC != nil {
+		old := debug.SetGCPercent(*t.GOGC)
+		slog.Info("Go GC tuning applied", "gogc", *t.GOGC, "previous", old)
+	}
+	if t.MemoryLimit != "" {
+		limit := parseMemoryLimit(t.MemoryLimit)
+		if limit > 0 {
+			old := debug.SetMemoryLimit(limit)
+			slog.Info("Go memory limit applied", "limit", t.MemoryLimit, "bytes", limit, "previous", old)
+		}
+	}
+}
+
+// parseMemoryLimit parses a human-readable memory size (e.g. "4GiB", "512MiB",
+// "1073741824") into bytes. Supports B, KiB, MiB, GiB, TiB suffixes.
+func parseMemoryLimit(s string) int64 {
+	if s == "" {
+		return 0
+	}
+
+	type suffix struct {
+		name string
+		mult int64
+	}
+	suffixes := []suffix{
+		{"TiB", 1 << 40},
+		{"GiB", 1 << 30},
+		{"MiB", 1 << 20},
+		{"KiB", 1 << 10},
+		{"B", 1},
+	}
+
+	for _, sf := range suffixes {
+		if len(s) > len(sf.name) && s[len(s)-len(sf.name):] == sf.name {
+			var n int64
+			if _, err := fmt.Sscanf(s[:len(s)-len(sf.name)], "%d", &n); err == nil && n > 0 {
+				return n * sf.mult
+			}
+		}
+	}
+
+	// Try plain integer (bytes).
+	var n int64
+	if _, err := fmt.Sscanf(s, "%d", &n); err == nil && n > 0 {
+		return n
+	}
+
+	slog.Warn("invalid memory_limit, ignoring", "value", s)
+	return 0
 }
 
 // runStaleChecker periodically scans thralls and fires a thrall.stale SMTP

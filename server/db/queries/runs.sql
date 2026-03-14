@@ -36,3 +36,27 @@ SELECT id, thrall_id, started_at, finished_at, status, module_count, changed_cou
 FROM runs
 ORDER BY started_at DESC
 LIMIT ?;
+
+-- name: ListRunResultsSince :many
+SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
+       rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
+       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       t.hostname
+FROM run_results rr
+JOIN runs r ON r.id = rr.run_id
+JOIN thralls t ON t.id = r.thrall_id
+WHERE rr.created_at >= ?1
+ORDER BY rr.created_at DESC
+LIMIT ?2;
+
+-- name: ListRunResultsSinceByThrall :many
+SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
+       rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
+       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       t.hostname
+FROM run_results rr
+JOIN runs r ON r.id = rr.run_id
+JOIN thralls t ON t.id = r.thrall_id
+WHERE rr.created_at >= ?1 AND t.hostname = ?2
+ORDER BY rr.created_at DESC
+LIMIT ?3;

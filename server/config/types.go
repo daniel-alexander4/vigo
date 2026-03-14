@@ -86,6 +86,15 @@ type ServerConfig struct {
 	SMTP       SMTPSection      `yaml:"smtp"`
 	AI         AISection        `yaml:"ai"`
 	Backup     BackupSection    `yaml:"backup"`
+	Export     ExportSection    `yaml:"export"`
+}
+
+// ExportSection configures compliance framework export endpoints.
+// All types are disabled by default and must be individually enabled.
+type ExportSection struct {
+	SIEM  bool `yaml:"siem"`  // enable SIEM export endpoint
+	CMDB  bool `yaml:"cmdb"`  // enable CMDB export endpoint
+	OSCAL bool `yaml:"oscal"` // enable OSCAL export endpoint
 }
 
 // BackupSection configures continuous SQLite WAL replication via Litestream.
@@ -114,6 +123,7 @@ type AISection struct {
 	RateLimit     int    `yaml:"rate_limit"`
 	MaxToolRounds int    `yaml:"max_tool_rounds"`
 	ContextMode   string `yaml:"context_mode"`
+	DocsMode      string `yaml:"docs_mode"` // full | condensed | off (default: full)
 }
 
 // SMTPSection configures email notifications via an SMTP relay.
@@ -156,6 +166,19 @@ type TuningSection struct {
 	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-thrall run history depth for memory mode (default 20)
 	MaxConcurrentStreams uint32       `yaml:"max_concurrent_streams"` // gRPC bidirectional stream limit (default 5000)
 	Webhook             WebhookTuning `yaml:"webhook"`
+
+	// Go runtime tuning.
+	GOGC        *int   `yaml:"gogc"`         // GOGC percentage (nil → Go default 100)
+	MemoryLimit string `yaml:"memory_limit"` // GOMEMLIMIT (e.g. "4GiB", "512MiB"); empty → no limit
+
+	// gRPC transport tuning.
+	GRPCReadBuffer     int    `yaml:"grpc_read_buffer"`       // per-connection read buffer bytes (0 → gRPC default 32 KiB)
+	GRPCWriteBuffer    int    `yaml:"grpc_write_buffer"`      // per-connection write buffer bytes (0 → gRPC default 32 KiB)
+	MaxConnectionAge   string `yaml:"max_connection_age"`     // force reconnect after this duration (empty → no limit)
+	MaxConnectionIdle  string `yaml:"max_connection_idle"`    // close idle connections after (default "15m")
+	KeepaliveTime      string `yaml:"keepalive_time"`         // server→client ping interval (default "30s")
+	KeepaliveTimeout   string `yaml:"keepalive_timeout"`      // ping response deadline (default "10s")
+	StreamSendBuffer   int    `yaml:"stream_send_buffer"`     // per-agent send channel capacity (default 8)
 }
 
 // WebhookTuning holds webhook dispatch tuning parameters.
