@@ -82,18 +82,18 @@ echo "s3cret" | hobnobcli secrets set hobnob/api/key
 hobnobcli secrets set hobnob/test/key testvalue
 ```
 
-## get
+## reveal
 
 Decrypt and display a secret value.
 
 ```bash
-hobnobcli secrets get <key>
+hobnobcli secrets reveal <key>
 ```
 
 ### Example
 
 ```bash
-hobnobcli secrets get hobnob/db/dsn
+hobnobcli secrets reveal hobnob/db/dsn
 ```
 
 ```

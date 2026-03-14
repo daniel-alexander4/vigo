@@ -52,7 +52,7 @@ prompt for sensitive values.`,
 }
 
 var secretsGetCmd = &cobra.Command{
-	Use:   "get <key>",
+	Use:   "reveal <key>",
 	Short: "Decrypt and display a secret",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSecretsGet,
