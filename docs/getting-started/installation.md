@@ -7,50 +7,14 @@ Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the
 The fastest way to run the server:
 
 ```bash
-git clone https://github.com/hobnob/hobnob.git
-cd hobnob
-make up
+sudo mkdir -p /etc/hobnob-server
+docker run -d --name hobnob \
+  -p 8181:8181 -p 1530:1530 \
+  -v /etc/hobnob-server:/etc/hobnob-server \
+  hobnob/hobnob:latest
 ```
 
-This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). TLS certificates are auto-generated on first start.
-
-## From Source
-
-### Prerequisites
-
-- Go 1.25+
-- Rust 1.75+ (for the agent)
-- SQLite 3.35+ or PostgreSQL 14+
-- buf (for proto generation)
-- golangci-lint (for linting)
-
-### Build All Binaries
-
-```bash
-make build
-```
-
-This produces:
-- `bin/hobd` — the server
-- `bin/hobnobcli` — the admin CLI
-- `bin/hobnob` — the agent
-
-### Build Individual Components
-
-```bash
-make build-server   # Go server + CLI only
-make build-agent    # Rust agent only (release mode)
-```
-
-### Cross-Compile for Distribution
-
-```bash
-make dist                # Static server/CLI binaries (linux amd64+arm64)
-make dist-agent          # Static agent binaries (musl, linux amd64+arm64)
-make dist-agent-macos    # macOS agent (amd64+arm64, native or via osxcross)
-make dist-agent-freebsd  # FreeBSD agent (amd64, via cross)
-make dist-agent-windows  # Windows agent (amd64, via cross)
-```
+This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). TLS certificates, a default config, and the SQLite database are auto-generated on first start. All persistent state lives in `/etc/hobnob-server`.
 
 ## Server Setup
 

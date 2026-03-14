@@ -138,8 +138,8 @@ bootstrap:
 - Check certificate hasn't expired (`cert_validity` setting)
 
 **Agent binary download fails:**
-- Ensure the binary for the target platform exists on the server (e.g., `dist/agent/linux/{amd64,arm64}/hobnob`, `dist/agent/darwin/{amd64,arm64}/hobnob`, `dist/agent/freebsd/amd64/hobnob`)
-- Run the appropriate build target: `make dist-agent` (Linux), `make dist-agent-macos`, `make dist-agent-freebsd`
+- Ensure the server's container image includes agent binaries for the target platform
+- Check that the `/etc/hobnob-server/` volume is correctly mounted
 
 ## Related
 
