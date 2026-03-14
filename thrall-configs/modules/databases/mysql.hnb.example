@@ -63,4 +63,3 @@ resources:
     enabled: true
     state: running
     depends_on: [mysql-cnf]
-    subscribes: [mysql-cnf]

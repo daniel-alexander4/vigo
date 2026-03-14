@@ -148,7 +148,6 @@ resources:
     state: running
     when: "os_family('debian')"
     depends_on: [tomcat-server-xml-debian, tomcat-defaults-debian]
-    subscribes: [tomcat-server-xml-debian, tomcat-defaults-debian]
 
   - name: tomcat-service-redhat
     type: service
@@ -157,4 +156,3 @@ resources:
     state: running
     when: "!os_family('debian')"
     depends_on: [tomcat-server-xml-redhat, tomcat-defaults-redhat]
-    subscribes: [tomcat-server-xml-redhat, tomcat-defaults-redhat]

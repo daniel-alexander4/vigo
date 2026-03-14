@@ -101,4 +101,3 @@ resources:
     enabled: true
     state: running
     depends_on: [openvpn-server-conf]
-    subscribes: [openvpn-server-conf]

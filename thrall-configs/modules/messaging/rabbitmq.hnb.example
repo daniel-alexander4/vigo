@@ -68,4 +68,3 @@ resources:
     enabled: true
     state: running
     depends_on: [rabbitmq-conf, enable-management-plugin]
-    subscribes: [rabbitmq-conf]

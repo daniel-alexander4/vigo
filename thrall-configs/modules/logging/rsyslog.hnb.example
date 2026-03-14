@@ -41,4 +41,3 @@ resources:
     enabled: true
     state: running
     depends_on: [rsyslog-hobnob-conf]
-    subscribes: [rsyslog-hobnob-conf]

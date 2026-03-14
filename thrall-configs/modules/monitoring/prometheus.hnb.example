@@ -54,4 +54,3 @@ resources:
     enabled: true
     state: running
     depends_on: [prometheus-conf]
-    subscribes: [prometheus-conf]

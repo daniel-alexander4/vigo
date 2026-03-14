@@ -81,7 +81,6 @@ resources:
     enabled: true
     state: running
     depends_on: [chrony-conf]
-    subscribes: [chrony-conf]
     when: "os_family('debian')"
 
   - name: chrony-service
@@ -90,5 +89,4 @@ resources:
     enabled: true
     state: running
     depends_on: [chrony-conf]
-    subscribes: [chrony-conf]
     when: "!os_family('debian')"

@@ -37,4 +37,3 @@ resources:
     enabled: true
     state: running
     depends_on: [memcached-conf]
-    subscribes: [memcached-conf]

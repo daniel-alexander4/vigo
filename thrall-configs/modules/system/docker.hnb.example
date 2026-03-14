@@ -81,7 +81,6 @@ resources:
     enabled: true
     state: running
     depends_on: [install-docker, docker-daemon-json]
-    subscribes: [docker-daemon-json]
 
   - name: containerd-service
     type: service

@@ -53,4 +53,3 @@ resources:
     enabled: true
     state: running
     depends_on: [redis-conf]
-    subscribes: [redis-conf]

@@ -79,4 +79,3 @@ resources:
     enabled: true
     state: running
     depends_on: [haproxy-cfg]
-    subscribes: [haproxy-cfg]

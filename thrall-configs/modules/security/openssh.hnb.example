@@ -59,4 +59,3 @@ resources:
     enabled: true
     state: running
     depends_on: [sshd-config]
-    subscribes: [sshd-config]

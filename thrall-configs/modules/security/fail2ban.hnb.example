@@ -45,4 +45,3 @@ resources:
     enabled: true
     state: running
     depends_on: [fail2ban-jail]
-    subscribes: [fail2ban-jail]

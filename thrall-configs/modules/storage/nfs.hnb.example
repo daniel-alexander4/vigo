@@ -24,9 +24,8 @@ resources:
   # --- Export directory ---
 
   - name: nfs-export-dir
-    type: file
+    type: directory
     targetpath: /srv/nfs
-    state: directory
     owner: root
     group: root
     mode: "0755"
@@ -74,9 +73,8 @@ resources:
   # --- Client mount ---
 
   - name: nfs-mount-dir
-    type: file
+    type: directory
     targetpath: /mnt/nfs
-    state: directory
     owner: root
     group: root
     mode: "0755"

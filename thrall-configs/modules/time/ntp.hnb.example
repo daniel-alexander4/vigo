@@ -40,7 +40,6 @@ resources:
     enabled: true
     state: running
     depends_on: [ntp-conf]
-    subscribes: [ntp-conf]
     when: "os_family('debian')"
 
   - name: ntp-service
@@ -49,5 +48,4 @@ resources:
     enabled: true
     state: running
     depends_on: [ntp-conf]
-    subscribes: [ntp-conf]
     when: "!os_family('debian')"

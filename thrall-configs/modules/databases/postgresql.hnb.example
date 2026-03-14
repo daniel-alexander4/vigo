@@ -55,9 +55,8 @@ resources:
     notify: [postgresql-service]
 
   - name: backup-dir
-    type: file
+    type: directory
     targetpath: /var/backups/postgresql
-    state: directory
     owner: postgres
     group: postgres
     mode: "0750"
@@ -78,4 +77,3 @@ resources:
     enabled: true
     state: running
     depends_on: [pg-conf, pg-hba]
-    subscribes: [pg-conf, pg-hba]

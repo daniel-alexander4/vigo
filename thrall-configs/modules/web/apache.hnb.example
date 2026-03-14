@@ -179,7 +179,6 @@ resources:
     state: running
     when: "os_family('debian')"
     depends_on: [apache-conf-debian]
-    subscribes: [apache-conf-debian]
 
   - name: apache-service-redhat
     type: service
@@ -188,4 +187,3 @@ resources:
     state: running
     when: "!os_family('debian')"
     depends_on: [apache-conf-redhat]
-    subscribes: [apache-conf-redhat]

@@ -64,4 +64,3 @@ resources:
     enabled: true
     state: running
     depends_on: [grafana-ini]
-    subscribes: [grafana-ini]

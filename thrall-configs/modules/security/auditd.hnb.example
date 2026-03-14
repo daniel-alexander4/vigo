@@ -76,4 +76,3 @@ resources:
     enabled: true
     state: running
     depends_on: [auditd-conf, auditd-rules]
-    subscribes: [auditd-conf, auditd-rules]

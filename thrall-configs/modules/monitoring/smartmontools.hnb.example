@@ -58,7 +58,6 @@ resources:
     enabled: true
     state: running
     depends_on: [smartd-conf]
-    subscribes: [smartd-conf]
     when: "os_family('debian')"
 
   - name: smartd-service
@@ -67,5 +66,4 @@ resources:
     enabled: true
     state: running
     depends_on: [smartd-conf]
-    subscribes: [smartd-conf]
     when: "!os_family('debian')"

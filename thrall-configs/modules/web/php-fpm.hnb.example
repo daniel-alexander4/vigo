@@ -96,18 +96,16 @@ resources:
     notify: [php-fpm-service-redhat]
 
   - name: php-fpm-log-dir-debian
-    type: file
+    type: directory
     targetpath: /var/log/php-fpm
-    state: directory
     owner: www-data
     group: www-data
     mode: "0755"
     when: "os_family('debian')"
 
   - name: php-fpm-log-dir-redhat
-    type: file
+    type: directory
     targetpath: /var/log/php-fpm
-    state: directory
     owner: apache
     group: apache
     mode: "0755"
@@ -120,7 +118,6 @@ resources:
     state: running
     when: "os_family('debian')"
     depends_on: [php-fpm-pool-debian, php-fpm-log-dir-debian]
-    subscribes: [php-fpm-pool-debian]
 
   - name: php-fpm-service-redhat
     type: service
@@ -129,4 +126,3 @@ resources:
     state: running
     when: "!os_family('debian')"
     depends_on: [php-fpm-pool-redhat, php-fpm-log-dir-redhat]
-    subscribes: [php-fpm-pool-redhat]

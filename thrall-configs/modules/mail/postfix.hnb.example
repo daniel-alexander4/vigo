@@ -58,4 +58,3 @@ resources:
     enabled: true
     state: running
     depends_on: [postfix-main-cf]
-    subscribes: [postfix-main-cf]

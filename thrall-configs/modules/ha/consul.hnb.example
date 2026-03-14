@@ -29,18 +29,16 @@ resources:
   # --- Data directory ---
 
   - name: consul-data-dir
-    type: file
+    type: directory
     targetpath: /opt/consul/data
-    state: directory
     owner: consul
     group: consul
     mode: "0750"
     depends_on: [consul-user]
 
   - name: consul-config-dir
-    type: file
+    type: directory
     targetpath: /etc/consul.d
-    state: directory
     owner: consul
     group: consul
     mode: "0750"
@@ -125,4 +123,3 @@ resources:
     enabled: true
     state: running
     depends_on: [daemon-reload, consul-data-dir]
-    subscribes: [daemon-reload, consul-hcl]

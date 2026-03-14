@@ -49,9 +49,8 @@ resources:
   # --- Mount ---
 
   - name: mount-dir
-    type: file
+    type: directory
     targetpath: /data
-    state: directory
     owner: root
     group: root
     mode: "0755"

@@ -120,4 +120,3 @@ resources:
     enabled: true
     state: running
     depends_on: [collectd-conf]
-    subscribes: [collectd-conf]

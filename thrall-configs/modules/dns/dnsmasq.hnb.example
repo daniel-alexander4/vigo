@@ -53,4 +53,3 @@ resources:
     enabled: true
     state: running
     depends_on: [dnsmasq-conf]
-    subscribes: [dnsmasq-conf]

@@ -74,7 +74,6 @@ resources:
     enabled: true
     state: running
     depends_on: [nrpe-cfg]
-    subscribes: [nrpe-cfg]
     when: "os_family('debian')"
 
   - name: nrpe-service
@@ -83,5 +82,4 @@ resources:
     enabled: true
     state: running
     depends_on: [nrpe-cfg]
-    subscribes: [nrpe-cfg]
     when: "!os_family('debian')"

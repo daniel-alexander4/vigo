@@ -143,7 +143,6 @@ resources:
     enabled: true
     state: running
     depends_on: [elasticsearch-yml, elasticsearch-heap]
-    subscribes: [elasticsearch-yml, elasticsearch-heap]
 
   - name: kibana-service
     type: service
@@ -151,7 +150,6 @@ resources:
     enabled: true
     state: running
     depends_on: [kibana-yml, elasticsearch-service]
-    subscribes: [kibana-yml]
 
   - name: logstash-service
     type: service
@@ -159,4 +157,3 @@ resources:
     enabled: true
     state: running
     depends_on: [logstash-yml, elasticsearch-service]
-    subscribes: [logstash-yml]

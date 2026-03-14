@@ -15,9 +15,8 @@ resources:
     state: present
 
   - name: app-workdir
-    type: file
+    type: directory
     targetpath: /opt/myapp
-    state: directory
     owner: myapp
     group: myapp
     mode: "0755"
@@ -60,4 +59,3 @@ resources:
     enabled: true
     state: running
     depends_on: [daemon-reload]
-    subscribes: [daemon-reload]

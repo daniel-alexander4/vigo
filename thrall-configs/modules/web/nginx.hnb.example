@@ -41,9 +41,8 @@ resources:
     notify: [nginx-service]
 
   - name: doc-root
-    type: file
+    type: directory
     targetpath: /var/www/html
-    state: directory
     owner: www-data
     group: www-data
     mode: "0755"
@@ -66,4 +65,3 @@ resources:
     enabled: true
     state: running
     depends_on: [nginx-conf, default-site]
-    subscribes: [nginx-conf, default-site]
