@@ -160,7 +160,7 @@ func (ie *IdempotencyErrors) Format() string {
 		}
 	}
 
-	b.WriteString("\n── fix the errors above, then run 'hobnobcli config publish' again ──\n")
+	b.WriteByte('\n')
 	return b.String()
 }
 

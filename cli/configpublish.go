@@ -133,7 +133,8 @@ func printFileList(res *publish.Result) {
 }
 
 // suggestFixes checks if the error contains validation findings and, if so,
-// asks the AI assistant to suggest fixes. Requires the server to be running.
+// asks the AI assistant to suggest fixes. Requires the server to be running
+// with AI enabled.
 func suggestFixes(err error, disabled bool) {
 	if disabled {
 		return
@@ -144,29 +145,33 @@ func suggestFixes(err error, disabled bool) {
 		return
 	}
 
-	// Build a question with the validation errors and the failing module YAML.
+	// Build a prompt with the validation errors and the failing module YAML.
 	var b strings.Builder
-	b.WriteString("The following Hobnob config validation errors must be fixed before publishing.\n")
-	b.WriteString("For each error, explain what is wrong and show the corrected YAML.\n\n")
-	b.WriteString("Validation errors:\n")
-	b.WriteString(ie.Error())
-	b.WriteString("\n")
+	b.WriteString("You are reviewing Hobnob .hnb config files that failed validation.\n")
+	b.WriteString("For each error below, show the corrected YAML for just the failing resource.\n")
+	b.WriteString("Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
 
 	for _, m := range ie.Modules {
+		fmt.Fprintf(&b, "File: %s\n", m.Path)
+		for _, f := range m.Findings {
+			fmt.Fprintf(&b, "  Error: %s (%s): %s\n", f.ResourceName, f.ResourceType, f.Message)
+		}
 		data, readErr := os.ReadFile(m.Path)
 		if readErr != nil {
 			continue
 		}
-		fmt.Fprintf(&b, "--- %s ---\n%s\n\n", m.Path, string(data))
+		fmt.Fprintf(&b, "\n```yaml\n%s```\n\n", string(data))
 	}
 
 	question := b.String()
 
-	// Call the AI endpoint (best-effort — skip silently if server is not running).
+	// Call the AI endpoint.
 	body, jsonErr := json.Marshal(map[string]any{"question": question})
 	if jsonErr != nil {
 		return
 	}
+
+	fmt.Fprintf(os.Stderr, "\nAsking AI for fix suggestions...\n")
 
 	req, reqErr := http.NewRequest("POST", serverURL+"/api/v1/ask", bytes.NewReader(body))
 	if reqErr != nil {
@@ -178,15 +183,17 @@ func suggestFixes(err error, disabled bool) {
 	client := &http.Client{Timeout: 2 * time.Minute}
 	resp, doErr := client.Do(req)
 	if doErr != nil {
+		fmt.Fprintf(os.Stderr, "(AI unavailable — server not running or AI not enabled)\n")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "(AI unavailable — server returned %d)\n", resp.StatusCode)
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "\n--- AI suggestions ---\n\n")
+	fmt.Fprintln(os.Stderr)
 
 	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 		_ = streamPublishSSE(resp.Body)
@@ -199,7 +206,7 @@ func suggestFixes(err error, disabled bool) {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "\n--- end suggestions ---\n")
+	fmt.Fprintln(os.Stderr)
 }
 
 // streamPublishSSE writes AI delta text to stderr for publish suggestions.
