@@ -14,7 +14,7 @@
 
 services:
   hobnob:
-    image: hobnob/hobnob:latest
+    image: ghcr.io/daniel-alexander4/hobnob:latest
     container_name: hobnob
     restart: unless-stopped
     ports:

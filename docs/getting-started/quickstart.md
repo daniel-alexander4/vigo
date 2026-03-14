@@ -6,7 +6,7 @@ Get Hobnob running and manage your first thrall in 10 minutes.
 
 ```bash
 sudo mkdir -p /srv/hobnob
-docker run --rm -v /srv/hobnob:/srv/hobnob hobnob/hobnob:latest true
+docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest true
 cd /srv/hobnob
 docker compose up -d
 ```
@@ -20,7 +20,7 @@ sudo mkdir -p /srv/hobnob
 docker run -d --name hobnob \
   -p 8181:8181 -p 1530:1530 \
   -v /srv/hobnob:/srv/hobnob \
-  hobnob/hobnob:latest
+  ghcr.io/daniel-alexander4/hobnob:latest
 ```
 
 The server starts on `localhost:8181` (REST/UI) and `localhost:1530` (gRPC). TLS certificates, `server.yaml`, `.env`, and example configs are auto-generated on first start. Open `http://localhost:8181` to see the dashboard.
