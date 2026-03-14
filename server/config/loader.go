@@ -727,6 +727,9 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		secretErrs = append(secretErrs, cs.resolveModuleSecrets(entry.Match, &cfg.Modules[i])...)
 	}
 	if len(secretErrs) > 0 {
+		for range secretErrs {
+			metrics.SecretResolutionErrorsTotal.Inc()
+		}
 		return nil, &SecretErrors{Errors: secretErrs, Backend: cs.backend}
 	}
 

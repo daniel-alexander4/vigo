@@ -28,13 +28,79 @@ The Hobnob server exposes Prometheus metrics at `GET /metrics` on the REST port 
 
 The `hobnob_checkin_age_seconds` histogram uses custom buckets: 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. This replaced per-thrall last-seen gauges to avoid cardinality explosion at scale.
 
+### gRPC
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_grpc_requests_total` | Counter | `method`, `code` | Total gRPC requests by full method name and status code |
+| `hobnob_grpc_request_duration_seconds` | Histogram | `method` | gRPC request latency in seconds |
+
+Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirectional streams (AgentStream) are not included — they use the check-in and delta metrics instead.
+
 ### Runs
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `hobnob_run_duration_seconds` | Histogram | `thrall` | Duration of agent runs in seconds |
+| `hobnob_run_duration_seconds` | Histogram | `thrall` | Duration of agent convergence runs in seconds |
 | `hobnob_drift_detected_total` | Counter | `thrall`, `module` | Drift detection events |
 | `hobnob_module_actions_total` | Counter | `type`, `action` | Module actions taken (by resource type and action) |
+
+### Orchestration
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_task_runs_total` | Counter | `status` | Completed task runs by final status (complete, failed) |
+| `hobnob_workflow_runs_total` | Counter | `status` | Completed workflow runs by final status (complete, failed) |
+
+### Webhooks
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_webhook_deliveries_total` | Counter | `status` | Webhook delivery outcomes (success, failed, rejected, cancelled, error) |
+| `hobnob_webhook_duration_seconds` | Histogram | | Webhook delivery latency including retries |
+
+### SMTP
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_smtp_sends_total` | Counter | `event`, `status` | Email send attempts by event type and outcome (success, error) |
+
+### Federation
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_federation_spoke_latency_seconds` | Histogram | `spoke` | Spoke RPC probe latency in seconds |
+| `hobnob_federation_spoke_up` | Gauge | `spoke` | Spoke reachability (1=up, 0=down) |
+
+Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
+
+### License
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `hobnob_license_thralls_used` | Gauge | Current number of active (non-revoked) thralls |
+| `hobnob_license_thralls_max` | Gauge | Maximum thralls allowed by the license |
+| `hobnob_license_stage` | Gauge | Enforcement stage: 0=compliant, 1=grace, 2=enrollment\_block, 3=service\_stop |
+
+### FleetIndex
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `hobnob_fleetindex_flush_duration_seconds` | Histogram | Time to flush dirty thrall state from the FleetIndex to SQLite |
+| `hobnob_fleetindex_dirty_count` | Gauge | Number of dirty entries in the last flush |
+
+### Bootstrap
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_enrollments_total` | Counter | `status` | Bootstrap enrollment attempts (success, denied, error) |
+
+### Secrets
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `hobnob_secret_rotations_total` | Counter | Secret rotation events detected by the watcher |
+| `hobnob_secret_resolution_errors_total` | Counter | Secret resolution failures during config loading |
 
 ### Security
 
@@ -49,7 +115,17 @@ The `hobnob_checkin_age_seconds` histogram uses custom buckets: 60s, 120s, 300s,
 | `hobnob_config_reload_duration_seconds` | Histogram | Duration of config reloads |
 | `hobnob_config_reload_errors_total` | Counter | Config reload failures |
 
-Config reload duration uses buckets: 10ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s.
+## AI Assistant Metrics
+
+Defined in `server/ai/metrics.go`, registered separately.
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_ai_requests_total` | Counter | | AI assistant requests |
+| `hobnob_ai_tokens_total` | Counter | | Tokens consumed by AI responses |
+| `hobnob_ai_request_duration_seconds` | Histogram | | AI request latency |
+| `hobnob_ai_tool_calls_total` | Counter | `tool` | AI tool invocations by tool name |
+| `hobnob_ai_errors_total` | Counter | | AI request errors |
 
 ## Scrape Configuration
 
@@ -83,10 +159,39 @@ scrape_configs:
 - **Failure rate**: `rate(hobnob_checkins_total{status="failure"}[5m])`
 - **Drift rate**: `rate(hobnob_drift_detected_total[5m])`
 
+### gRPC Latency
+
+- **P99 check-in latency**: `histogram_quantile(0.99, rate(hobnob_grpc_request_duration_seconds_bucket{method="/hobnob.HobnobAgent/CheckIn"}[5m]))`
+- **Error rate by method**: `rate(hobnob_grpc_requests_total{code!="OK"}[5m])`
+
+### Orchestration
+
+- **Task throughput**: `rate(hobnob_task_runs_total[5m])`
+- **Task failure rate**: `rate(hobnob_task_runs_total{status="failed"}[5m])`
+- **Workflow success rate**: `rate(hobnob_workflow_runs_total{status="complete"}[5m]) / rate(hobnob_workflow_runs_total[5m])`
+
+### Webhooks
+
+- **Delivery success rate**: `rate(hobnob_webhook_deliveries_total{status="success"}[5m]) / rate(hobnob_webhook_deliveries_total[5m])`
+- **P95 delivery latency**: `histogram_quantile(0.95, rate(hobnob_webhook_duration_seconds_bucket[5m]))`
+- Alert on `rate(hobnob_webhook_deliveries_total{status="failed"}[5m]) > 0`
+
+### License
+
+- **Thrall utilization**: `hobnob_license_thralls_used / hobnob_license_thralls_max * 100`
+- Alert on `hobnob_license_stage > 0` (any violation)
+- Alert on `hobnob_license_thralls_used / hobnob_license_thralls_max > 0.9` (approaching limit)
+
+### Federation
+
+- **Spoke latency**: `histogram_quantile(0.95, rate(hobnob_federation_spoke_latency_seconds_bucket[5m]))`
+- Alert on `hobnob_federation_spoke_up == 0` (spoke unreachable)
+
 ### Security Alerts
 
 - Alert on `rate(hobnob_sig_verify_failed_total[5m]) > 0` to detect signature verification failures
 - Alert on `hobnob_config_reload_errors_total` increases
+- Alert on `rate(hobnob_secret_resolution_errors_total[5m]) > 0`
 
 ### Check-in Staleness
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/metrics"
 )
 
 // StateFlusher reads dirty thralls from the FleetIndex and batch-writes their
@@ -63,6 +64,12 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 	if len(dirty) == 0 {
 		return
 	}
+
+	start := time.Now()
+	metrics.FleetIndexDirtyCount.Set(float64(len(dirty)))
+	defer func() {
+		metrics.FleetIndexFlushDuration.Observe(time.Since(start).Seconds())
+	}()
 
 	// Collect IDs for batch last_seen update.
 	var lastSeenIDs []string

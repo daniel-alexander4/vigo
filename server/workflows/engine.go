@@ -19,6 +19,7 @@ import (
 
 	"github.com/hobnob/hobnob/server/db"
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	"github.com/hobnob/hobnob/server/metrics"
 )
 
 // StepDef defines a single workflow step.
@@ -315,6 +316,7 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		StartedAt:   now,
 		FinishedAt:  finished,
 	})
+	metrics.WorkflowRunsTotal.WithLabelValues("complete").Inc()
 	slog.Info("workflow: completed", "workflow_run_id", runID)
 }
 
@@ -362,6 +364,7 @@ func (e *Engine) failWorkflow(ctx context.Context, runID string, step int, reaso
 		FinishedAt:    finished,
 		FailureReason: sql.NullString{String: reason, Valid: true},
 	})
+	metrics.WorkflowRunsTotal.WithLabelValues("failed").Inc()
 	slog.Info("workflow: failed", "workflow_run_id", runID, "reason", reason)
 }
 

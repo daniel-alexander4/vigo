@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/metrics"
 )
 
 // EventPayload is the JSON body sent to webhook endpoints.
@@ -131,12 +132,14 @@ func (d *Dispatcher) DispatchRotation(ctx context.Context, event string, secretP
 
 // deliver sends the payload to a single webhook endpoint with retries.
 func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, body []byte) {
+	start := time.Now()
 	signature := "sha256=" + sign(wh.Secret, body)
 
 	if !d.skipSSRFCheck {
 		if err := validateWebhookURL(wh.Url); err != nil {
 			slog.Error("webhook: URL rejected by SSRF policy",
 				"webhook_id", wh.ID, "url", wh.Url, "error", err)
+			metrics.WebhookDeliveriesTotal.WithLabelValues("rejected").Inc()
 			return
 		}
 	}
@@ -148,6 +151,7 @@ func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, b
 			case <-ctx.Done():
 				slog.Warn("webhook: delivery cancelled during retry backoff",
 					"webhook_id", wh.ID, "event", event)
+				metrics.WebhookDeliveriesTotal.WithLabelValues("cancelled").Inc()
 				return
 			case <-time.After(delay):
 			}
@@ -157,6 +161,7 @@ func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, b
 		if err != nil {
 			slog.Error("webhook: failed to create request",
 				"webhook_id", wh.ID, "url", wh.Url, "error", err)
+			metrics.WebhookDeliveriesTotal.WithLabelValues("error").Inc()
 			return // bad URL, no point retrying
 		}
 
@@ -175,6 +180,8 @@ func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, b
 		if resp.StatusCode < 300 {
 			slog.Info("webhook: delivered",
 				"webhook_id", wh.ID, "event", event, "status", resp.StatusCode)
+			metrics.WebhookDeliveriesTotal.WithLabelValues("success").Inc()
+			metrics.WebhookDuration.Observe(time.Since(start).Seconds())
 			return
 		}
 
@@ -183,6 +190,8 @@ func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, b
 			"status", resp.StatusCode, "url", wh.Url)
 	}
 
+	metrics.WebhookDeliveriesTotal.WithLabelValues("failed").Inc()
+	metrics.WebhookDuration.Observe(time.Since(start).Seconds())
 	slog.Error("webhook: delivery failed after retries",
 		"webhook_id", wh.ID, "event", event,
 		"url", wh.Url, "max_retries", d.maxRetries)

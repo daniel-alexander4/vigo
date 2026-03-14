@@ -17,6 +17,18 @@ func TestAllMetricsRegistered(t *testing.T) {
 	ComplianceStatus.WithLabelValues("test", "test").Set(0)
 	CheckinAgeDist.Observe(0)
 	RunDuration.WithLabelValues("test").Observe(0)
+	SigVerifyFailed.WithLabelValues("test").Add(0)
+	GRPCRequestsTotal.WithLabelValues("test", "test").Add(0)
+	GRPCRequestDuration.WithLabelValues("test").Observe(0)
+	TaskRunsTotal.WithLabelValues("test").Add(0)
+	WorkflowRunsTotal.WithLabelValues("test").Add(0)
+	WebhookDeliveriesTotal.WithLabelValues("test").Add(0)
+	WebhookDuration.Observe(0)
+	SMTPSendsTotal.WithLabelValues("test", "test").Add(0)
+	FederationSpokeLatency.WithLabelValues("test").Observe(0)
+	FederationSpokeUp.WithLabelValues("test").Set(0)
+	FleetIndexFlushDuration.Observe(0)
+	EnrollmentsTotal.WithLabelValues("test").Add(0)
 
 	// Gathering from the default registry should include all our metrics.
 	mfs, err := prometheus.DefaultGatherer.Gather()
@@ -31,6 +43,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	}
 
 	required := []string{
+		// Original metrics.
 		"hobnob_nodes_total",
 		"hobnob_nodes_active_total",
 		"hobnob_checkins_total",
@@ -40,6 +53,28 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"hobnob_compliance_status",
 		"hobnob_compliance_pct",
 		"hobnob_checkin_age_seconds",
+		"hobnob_sig_verify_failed_total",
+		"hobnob_config_reload_duration_seconds",
+		"hobnob_config_reload_errors_total",
+		"hobnob_database_size_bytes",
+		// New metrics.
+		"hobnob_grpc_requests_total",
+		"hobnob_grpc_request_duration_seconds",
+		"hobnob_task_runs_total",
+		"hobnob_workflow_runs_total",
+		"hobnob_webhook_deliveries_total",
+		"hobnob_webhook_duration_seconds",
+		"hobnob_smtp_sends_total",
+		"hobnob_federation_spoke_latency_seconds",
+		"hobnob_federation_spoke_up",
+		"hobnob_license_thralls_used",
+		"hobnob_license_thralls_max",
+		"hobnob_license_stage",
+		"hobnob_fleetindex_flush_duration_seconds",
+		"hobnob_fleetindex_dirty_count",
+		"hobnob_enrollments_total",
+		"hobnob_secret_rotations_total",
+		"hobnob_secret_resolution_errors_total",
 	}
 
 	for _, name := range required {
@@ -54,14 +89,31 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	CheckinsTotal.WithLabelValues("success").Inc()
 	DriftDetected.WithLabelValues("testnode", "testmodule").Inc()
 	ModuleActions.WithLabelValues("file", "create").Inc()
+	GRPCRequestsTotal.WithLabelValues("/hobnob.HobnobAgent/CheckIn", "OK").Inc()
+	TaskRunsTotal.WithLabelValues("complete").Inc()
+	WorkflowRunsTotal.WithLabelValues("complete").Inc()
+	WebhookDeliveriesTotal.WithLabelValues("success").Inc()
+	SMTPSendsTotal.WithLabelValues("run.failure", "success").Inc()
+	EnrollmentsTotal.WithLabelValues("success").Inc()
+	SecretRotationsTotal.Inc()
+	SecretResolutionErrorsTotal.Inc()
 
 	// Verify gauges can be set.
 	ThrallsTotal.Set(5)
 	ThrallsActive.Set(3)
 	CompliancePct.Set(0.85)
 	ComplianceStatus.WithLabelValues("testnode", "compliant").Set(1)
-	CheckinAgeDist.Observe(30.0)
+	LicenseThrallsUsed.Set(10)
+	LicenseThrallsMax.Set(25)
+	LicenseStage.Set(0)
+	FederationSpokeUp.WithLabelValues("dc1").Set(1)
+	FleetIndexDirtyCount.Set(42)
 
-	// Verify histogram can observe.
+	// Verify histograms can observe.
+	CheckinAgeDist.Observe(30.0)
 	RunDuration.WithLabelValues("testnode").Observe(1.5)
+	GRPCRequestDuration.WithLabelValues("/hobnob.HobnobAgent/CheckIn").Observe(0.05)
+	WebhookDuration.Observe(0.5)
+	FederationSpokeLatency.WithLabelValues("dc1").Observe(0.1)
+	FleetIndexFlushDuration.Observe(0.01)
 }

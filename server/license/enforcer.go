@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/hobnob/hobnob/server/metrics"
 )
 
 // Stage represents the current license enforcement stage.
@@ -221,6 +223,7 @@ func (e *Enforcer) evaluateLocked() error {
 		e.graceStart = nil
 		e.violation = ""
 		clearGraceStart(e.graceDir)
+		e.updateMetrics()
 		return nil
 	}
 
@@ -249,6 +252,7 @@ func (e *Enforcer) evaluateLocked() error {
 	switch {
 	case elapsed >= totalDaysToStop:
 		e.stage = StageServiceStop
+		e.updateMetrics()
 		return fmt.Errorf("license enforcement stage 3: %s — server must shut down (day %d of %d)", e.violation, elapsed, totalDaysToStop)
 	case elapsed >= graceDays:
 		e.stage = StageEnrollBlock
@@ -256,7 +260,20 @@ func (e *Enforcer) evaluateLocked() error {
 		e.stage = StageGrace
 	}
 
+	e.updateMetrics()
 	return nil
+}
+
+// updateMetrics sets Prometheus gauges for current license state.
+// Must be called with e.mu held.
+func (e *Enforcer) updateMetrics() {
+	metrics.LicenseStage.Set(float64(e.stage))
+	if e.license != nil {
+		metrics.LicenseThrallsMax.Set(float64(e.license.Payload.MaxThralls))
+	}
+	if count, err := e.counter(context.Background()); err == nil {
+		metrics.LicenseThrallsUsed.Set(float64(count))
+	}
 }
 
 // FreeLicenseID is the license_id of the built-in 25-node community license.

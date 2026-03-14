@@ -19,6 +19,7 @@ import (
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -344,7 +345,9 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Error = r.err.Error()
 			if pr, ok := r.value.(*probeResult); ok {
 				statuses[i].LatencyMs = pr.latency.Milliseconds()
+				metrics.FederationSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
 			}
+			metrics.FederationSpokeUp.WithLabelValues(sc.id).Set(0)
 		} else {
 			pr := r.value.(*probeResult)
 			statuses[i].Healthy = true
@@ -356,6 +359,8 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Unknown = pr.resp.Unknown
 			statuses[i].CompliancePct = pr.resp.CompliancePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()
+			metrics.FederationSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+			metrics.FederationSpokeUp.WithLabelValues(sc.id).Set(1)
 		}
 	}
 	return statuses

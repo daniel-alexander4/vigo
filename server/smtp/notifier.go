@@ -17,6 +17,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/hobnob/hobnob/server/metrics"
 )
 
 // Event mirrors webhook.EventPayload but is decoupled from that package.
@@ -160,11 +162,13 @@ func (n *Notifier) Notify(event Event) {
 
 	go func() {
 		if err := n.send(event, recipients); err != nil {
+			metrics.SMTPSendsTotal.WithLabelValues(event.Name, "error").Inc()
 			slog.Error("smtp: failed to send notification",
 				"event", event.Name,
 				"error", err,
 			)
 		} else {
+			metrics.SMTPSendsTotal.WithLabelValues(event.Name, "success").Inc()
 			slog.Info("smtp: notification sent",
 				"event", event.Name,
 				"recipients", len(recipients),

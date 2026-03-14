@@ -19,6 +19,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/webhook"
 )
@@ -290,6 +291,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 			"hostname", req.Hostname,
 			"error", err,
 		)
+		metrics.EnrollmentsTotal.WithLabelValues("denied").Inc()
 		code := http.StatusForbidden
 		if strings.Contains(err.Error(), "revoked") {
 			code = http.StatusForbidden
@@ -302,10 +304,12 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	signedCert, err := h.ca.SignCSR([]byte(req.CSRPEM), req.Hostname, h.certValidity)
 	if err != nil {
 		slog.Error("CSR signing failed", "hostname", req.Hostname, "error", err)
+		metrics.EnrollmentsTotal.WithLabelValues("error").Inc()
 		http.Error(w, "registration failed", http.StatusInternalServerError)
 		return
 	}
 
+	metrics.EnrollmentsTotal.WithLabelValues("success").Inc()
 	slog.Info("thrall bootstrapped",
 		"hostname", req.Hostname,
 		"thrall_id", thrallID,

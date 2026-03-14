@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/hobnob/hobnob/server/metrics"
 )
 
 // VersionProvider retrieves version information for a secret path.
@@ -178,6 +180,7 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 			continue
 		}
 
+		metrics.SecretRotationsTotal.Inc()
 		slog.Info("secret rotated",
 			"path", path,
 			"old_version", lastVersion,
