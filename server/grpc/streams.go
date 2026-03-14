@@ -14,8 +14,9 @@ import (
 // When config changes, it pushes new policy bundles to all connected agents.
 // When a force-push is requested, it signals the target agent's stream.
 type streamManager struct {
-	mu      sync.RWMutex
-	streams map[string]*agentStream // thrall_id → stream
+	mu             sync.RWMutex
+	streams        map[string]*agentStream // thrall_id → stream
+	sendBufferSize int                     // per-agent send channel capacity
 }
 
 type agentStream struct {
@@ -25,9 +26,13 @@ type agentStream struct {
 	done     chan struct{}
 }
 
-func newStreamManager() *streamManager {
+func newStreamManager(sendBuf int) *streamManager {
+	if sendBuf <= 0 {
+		sendBuf = 8
+	}
 	return &streamManager{
-		streams: make(map[string]*agentStream),
+		streams:        make(map[string]*agentStream),
+		sendBufferSize: sendBuf,
 	}
 }
 
@@ -36,7 +41,7 @@ func (sm *streamManager) register(thrallID, hostname string) (*agentStream, func
 	as := &agentStream{
 		thrallID:   thrallID,
 		hostname: hostname,
-		send:     make(chan *pb.ServerStreamMessage, 8),
+		send:     make(chan *pb.ServerStreamMessage, sm.sendBufferSize),
 		done:     make(chan struct{}),
 	}
 

@@ -48,6 +48,9 @@ COPY --from=rust-builder /build/agent-rs/target/x86_64-unknown-linux-musl/releas
 COPY server-configs/server.yaml /seed/server.yaml
 COPY thrall-configs/ /seed/thrall-configs/
 
+# Documentation — seeded into /etc/hobnob-server/docs/ by entrypoint.
+COPY docs/ /seed/docs/
+
 COPY entrypoint.sh /entrypoint.sh
 
 EXPOSE 1530 8181

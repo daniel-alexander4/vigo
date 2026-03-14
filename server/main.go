@@ -288,6 +288,10 @@ func run() error {
 	traitsScannerTTL := parseDuration(cfg.Tuning.TraitsScannerTTL, 0)
 	whTimeout := parseDuration(cfg.Tuning.Webhook.Timeout, 0)
 	whRetryDelay := parseDuration(cfg.Tuning.Webhook.RetryDelay, 0)
+	maxConnAge := parseDuration(cfg.Tuning.MaxConnectionAge, 0)
+	maxConnIdle := parseDuration(cfg.Tuning.MaxConnectionIdle, 0)
+	kaTime := parseDuration(cfg.Tuning.KeepaliveTime, 0)
+	kaTimeout := parseDuration(cfg.Tuning.KeepaliveTimeout, 0)
 
 	// Create run store backend.
 	var runStore db.RunStore
@@ -408,6 +412,13 @@ func run() error {
 		SignatureWindow:      sigWindow,
 		TraitsScannerTTL:     traitsScannerTTL,
 		MaxConcurrentStreams: cfg.Tuning.MaxConcurrentStreams,
+		GRPCReadBuffer:      cfg.Tuning.GRPCReadBuffer,
+		GRPCWriteBuffer:     cfg.Tuning.GRPCWriteBuffer,
+		MaxConnectionAge:    maxConnAge,
+		MaxConnectionIdle:   maxConnIdle,
+		KeepaliveTime:       kaTime,
+		KeepaliveTimeout:    kaTimeout,
+		StreamSendBuffer:    cfg.Tuning.StreamSendBuffer,
 		Hub:                  hub,
 		SMTPNotifier:         smtpNotifier,
 		LicenseEnforcer:      enforcer,

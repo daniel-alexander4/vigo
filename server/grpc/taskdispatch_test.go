@@ -73,7 +73,7 @@ func TestTaskRouterRemoveTarget(t *testing.T) {
 }
 
 func TestStreamManagerIsConnected(t *testing.T) {
-	sm := newStreamManager()
+	sm := newStreamManager(0)
 
 	_, cleanup := sm.register("thrall-1", "host-1")
 	defer cleanup()
@@ -88,7 +88,7 @@ func TestStreamManagerIsConnected(t *testing.T) {
 }
 
 func TestStreamManagerConnectedThrallIDs(t *testing.T) {
-	sm := newStreamManager()
+	sm := newStreamManager(0)
 
 	_, cleanup1 := sm.register("thrall-1", "host-1")
 	defer cleanup1()
@@ -105,7 +105,7 @@ func TestStreamManagerConnectedThrallIDs(t *testing.T) {
 }
 
 func TestStreamManagerDispatchTask(t *testing.T) {
-	sm := newStreamManager()
+	sm := newStreamManager(0)
 
 	as, cleanup := sm.register("thrall-1", "host-1")
 	defer cleanup()
@@ -146,7 +146,7 @@ func TestStreamManagerDispatchTask(t *testing.T) {
 }
 
 func TestStreamManagerDispatchCleanup(t *testing.T) {
-	sm := newStreamManager()
+	sm := newStreamManager(0)
 
 	_, cleanup := sm.register("thrall-1", "host-1")
 	cleanup() // Disconnect.

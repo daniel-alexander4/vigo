@@ -23,7 +23,7 @@ SEED_DIR="/seed"
 SECRETS_DIR="${DATA_DIR}/secrets"
 
 mkdir -p "$THRALLS_DIR" "$MODULES_DIR" "$ROLES_DIR" "$TEMPLATES_DIR" "${DATA_DIR}/db"
-mkdir -p -m 700 "${DATA_DIR}/license" "$SECRETS_DIR"
+mkdir -p -m 700 "${DATA_DIR}/license" "$SECRETS_DIR" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------
 # Lock down license file permissions if present
@@ -129,6 +129,15 @@ find "${SEED_DIR}/thrall-configs" -name '*.hnb.example' -type f | while IFS= rea
         cp "$src" "$dest"
     fi
 done
+
+# ---------------------------------------------------------------------------
+# Seed documentation into bind-mounted volume
+# ---------------------------------------------------------------------------
+
+if [ -d "${SEED_DIR}/docs" ]; then
+    mkdir -p "${DATA_DIR}/docs"
+    cp -r "${SEED_DIR}/docs/." "${DATA_DIR}/docs/"
+fi
 
 # ---------------------------------------------------------------------------
 # Install CLI tools to host (bind-mounted /usr/local/bin via /host-bin)

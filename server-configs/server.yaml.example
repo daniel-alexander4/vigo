@@ -136,6 +136,20 @@ bootstrap:
 #   run_store: "database"           # run history backend: "database" or "memory" (default: "database")
 #   run_store_capacity: 20          # per-thrall run depth in memory mode (default: 20)
 #   max_concurrent_streams: 5000    # gRPC bidirectional stream limit (default: 5000)
+#
+#   # Go runtime tuning (large fleets only).
+#   # gogc: 50                       # GC target percentage (default: 100); lower = less memory, more CPU
+#   # memory_limit: "4GiB"           # hard memory ceiling (GOMEMLIMIT); empty = no limit
+#
+#   # gRPC transport tuning (large fleets only).
+#   # grpc_read_buffer: 16384        # per-connection read buffer bytes (default: gRPC 32 KiB)
+#   # grpc_write_buffer: 16384       # per-connection write buffer bytes (default: gRPC 32 KiB)
+#   # max_connection_age: "1h"       # force client reconnect after this duration (default: no limit)
+#   # max_connection_idle: "15m"     # close idle connections after (default: "15m")
+#   # keepalive_time: "30s"          # server→client ping interval (default: "30s")
+#   # keepalive_timeout: "10s"       # ping response deadline (default: "10s")
+#   # stream_send_buffer: 8          # per-agent server→agent message buffer (default: 8)
+#
 #   webhook:
 #     timeout: "10s"                # HTTP request timeout (default: "10s")
 #     max_retries: 3                # retry attempts on transient failures (default: 3)

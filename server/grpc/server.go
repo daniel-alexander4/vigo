@@ -66,6 +66,13 @@ type ServerConfig struct {
 	SignatureWindow      time.Duration // 0 → default 5m
 	TraitsScannerTTL     time.Duration // 0 → default 30s
 	MaxConcurrentStreams uint32        // 0 → default 5000
+	GRPCReadBuffer      int           // 0 → gRPC default 32 KiB
+	GRPCWriteBuffer     int           // 0 → gRPC default 32 KiB
+	MaxConnectionAge    time.Duration // 0 → no forced reconnect
+	MaxConnectionIdle   time.Duration // 0 → default 15m
+	KeepaliveTime       time.Duration // 0 → default 30s
+	KeepaliveTimeout    time.Duration // 0 → default 10s
+	StreamSendBuffer    int           // 0 → default 8
 	Hub              *federation.Hub // non-nil when role=hub
 	SMTPNotifier     *hobnobsmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
@@ -100,21 +107,42 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	if maxStreams == 0 {
 		maxStreams = 5000
 	}
+	maxConnIdle := cfg.MaxConnectionIdle
+	if maxConnIdle == 0 {
+		maxConnIdle = 15 * time.Minute
+	}
+	kaTime := cfg.KeepaliveTime
+	if kaTime == 0 {
+		kaTime = 30 * time.Second
+	}
+	kaTimeout := cfg.KeepaliveTimeout
+	if kaTimeout == 0 {
+		kaTimeout = 10 * time.Second
+	}
 
-	srv := grpc.NewServer(
+	opts := []grpc.ServerOption{
 		grpc.Creds(creds),
 		grpc.UnaryInterceptor(SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex)),
 		grpc.MaxConcurrentStreams(maxStreams),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionIdle: 15 * time.Minute,
-			Time:              30 * time.Second,
-			Timeout:           10 * time.Second,
+			MaxConnectionIdle: maxConnIdle,
+			MaxConnectionAge:  cfg.MaxConnectionAge, // 0 = no forced reconnect
+			Time:              kaTime,
+			Timeout:           kaTimeout,
 		}),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             10 * time.Second,
 			PermitWithoutStream: true,
 		}),
-	)
+	}
+	if cfg.GRPCReadBuffer > 0 {
+		opts = append(opts, grpc.ReadBufferSize(cfg.GRPCReadBuffer))
+	}
+	if cfg.GRPCWriteBuffer > 0 {
+		opts = append(opts, grpc.WriteBufferSize(cfg.GRPCWriteBuffer))
+	}
+
+	srv := grpc.NewServer(opts...)
 
 	reassignStore := NewReassignStore()
 
@@ -129,7 +157,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		traitsBatch:   traitsBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
-		streamMgr:        newStreamManager(),
+		streamMgr:        newStreamManager(cfg.StreamSendBuffer),
 		taskRouter:       newTaskRouter(cfg.Queries),
 		queryRouter:      newQueryRouter(),
 		taskStore:        cfg.TaskStore,
