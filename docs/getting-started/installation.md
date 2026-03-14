@@ -54,22 +54,18 @@ hobnobcli doctor                     # full diagnostic
 
 ### Optional services
 
-Edit `.env` or pass `COMPOSE_PROFILES` to enable optional services:
+Edit `HOBNOB_SERVICES` in `/srv/hobnob/.env` to enable optional containers:
 
 ```bash
-# AI assistant (local Ollama, free, CPU-only)
-COMPOSE_PROFILES=ollama docker compose up -d
-
-# Postgres instead of SQLite
-COMPOSE_PROFILES=postgres docker compose up -d
-
-# Both
-COMPOSE_PROFILES=ollama,postgres docker compose up -d
+# In .env, uncomment one of:
+HOBNOB_SERVICES=ollama              # local AI assistant (free, CPU-only)
+HOBNOB_SERVICES=postgres            # Postgres instead of SQLite
+HOBNOB_SERVICES=ollama,postgres     # both
 ```
 
 ### Configuration
 
-Edit `server.yaml` for server settings (check-in interval, TLS paths, federation, SMTP, webhooks). Edit `.env` for environment variables (AI provider, database driver, compose profiles). See [Server Configuration](server-config.md) for the full reference.
+Edit `server.yaml` for server settings (check-in interval, TLS paths, federation, SMTP, webhooks). Edit `.env` for optional services and environment variables. See [Server Configuration](server-config.md) for the full reference.
 
 ### Upgrading
 

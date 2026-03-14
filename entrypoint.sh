@@ -89,12 +89,17 @@ if [ ! -f "$ENV_FILE" ]; then
 # HOBNOB_PG_DB=hobnob
 
 # =============================================================================
-# DOCKER COMPOSE — controls which optional services start.
+# OPTIONAL SERVICES — uncomment to enable
 # =============================================================================
-# Set to "ollama" to start the local Ollama container alongside hobnob.
-# Add "postgres" to use the Postgres container (e.g. COMPOSE_PROFILES=ollama,postgres).
-# Leave empty for no-AI or API-based AI (claude, openai).
-# COMPOSE_PROFILES=ollama
+# These start additional Docker containers alongside hobnob.
+# Set to comma-separated list: ollama, postgres, or both.
+#
+# HOBNOB_SERVICES=ollama              # local AI (free, CPU-only)
+# HOBNOB_SERVICES=postgres            # Postgres instead of SQLite
+# HOBNOB_SERVICES=ollama,postgres     # both
+
+# Maps HOBNOB_SERVICES to Docker Compose (do not edit this line).
+COMPOSE_PROFILES=${HOBNOB_SERVICES:-}
 ENVEOF
     echo "Default .env created."
 fi

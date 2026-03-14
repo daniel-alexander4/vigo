@@ -2,15 +2,13 @@
 #
 # Quick start:
 #   mkdir -p /srv/hobnob
-#   docker compose -f docker-compose.prod.yml up -d
+#   docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
+#   cd /srv/hobnob && docker compose up -d
 #
-# The first run creates /srv/hobnob/server.yaml, .env, TLS certs, and
-# example configs automatically. Edit server.yaml and .env, then restart.
-#
-# Optional services:
-#   COMPOSE_PROFILES=ollama docker compose -f docker-compose.prod.yml up -d
-#   COMPOSE_PROFILES=postgres docker compose -f docker-compose.prod.yml up -d
-#   COMPOSE_PROFILES=ollama,postgres docker compose -f docker-compose.prod.yml up -d
+# Optional services — set HOBNOB_SERVICES in .env:
+#   HOBNOB_SERVICES=ollama              # local AI assistant
+#   HOBNOB_SERVICES=postgres            # Postgres instead of SQLite
+#   HOBNOB_SERVICES=ollama,postgres     # both
 
 services:
   hobnob:
