@@ -81,6 +81,8 @@ Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
 | `hobnob_license_thralls_used` | Gauge | Current number of active (non-revoked) thralls |
 | `hobnob_license_thralls_max` | Gauge | Maximum thralls allowed by the license |
 | `hobnob_license_stage` | Gauge | Enforcement stage: 0=compliant, 1=grace, 2=enrollment\_block, 3=service\_stop |
+| `hobnob_license_days_remaining` | Gauge | Days until license expiry (negative if expired) |
+| `hobnob_license_expiry_timestamp` | Gauge | Unix timestamp of license expiration date |
 
 ### FleetIndex
 
@@ -88,6 +90,14 @@ Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
 |--------|------|-------------|
 | `hobnob_fleetindex_flush_duration_seconds` | Histogram | Time to flush dirty thrall state from the FleetIndex to SQLite |
 | `hobnob_fleetindex_dirty_count` | Gauge | Number of dirty entries in the last flush |
+
+### Server
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `hobnob_uptime_seconds` | Gauge | | Seconds since the server process started |
+| `hobnob_build_info` | Gauge | `version` | Server build information (always 1, version as label) |
+| `hobnob_streams_active` | Gauge | | Number of currently connected agent streams |
 
 ### Bootstrap
 
@@ -179,13 +189,24 @@ scrape_configs:
 ### License
 
 - **Thrall utilization**: `hobnob_license_thralls_used / hobnob_license_thralls_max * 100`
+- **Days until expiry**: `hobnob_license_days_remaining`
+- **Expiry date**: `timestamp(hobnob_license_expiry_timestamp)` for Grafana absolute time display
 - Alert on `hobnob_license_stage > 0` (any violation)
 - Alert on `hobnob_license_thralls_used / hobnob_license_thralls_max > 0.9` (approaching limit)
+- Alert on `hobnob_license_days_remaining < 30` (license expiring soon)
 
 ### Federation
 
 - **Spoke latency**: `histogram_quantile(0.95, rate(hobnob_federation_spoke_latency_seconds_bucket[5m]))`
 - Alert on `hobnob_federation_spoke_up == 0` (spoke unreachable)
+
+### Server Health
+
+- **Uptime**: `hobnob_uptime_seconds` (detects restarts in Grafana)
+- **Version**: `hobnob_build_info` label `version` (track rollout across instances)
+- **Active streams**: `hobnob_streams_active` (monitor agent connectivity)
+- Alert on `hobnob_uptime_seconds < 300` for recent restart detection
+- Alert on `hobnob_streams_active == 0` when `hobnob_nodes_active_total > 0` (agents not connecting via stream)
 
 ### Security Alerts
 

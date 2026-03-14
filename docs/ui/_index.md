@@ -18,6 +18,7 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Federation](federation.md) | `/federation` | Hub-spoke topology and health |
 | [Audit](audit.md) | `/audit` | Unified audit log |
 | [Config History](config-history.md) | `/config-history` | Config publish history |
+| [License](license.md) | `/license` | License status, usage, and enforcement |
 | [Security](security.md) | `/thralls/{id}` | Thrall detail and security info |
 
 ## Technology

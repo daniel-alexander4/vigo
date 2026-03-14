@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/hobnob/hobnob/server/metrics"
 )
 
 // streamManager tracks connected agent streams for push notifications.
@@ -95,6 +96,7 @@ func (sm *streamManager) register(thrallID, hostname string) (*agentStream, func
 	}
 	sm.mu.Unlock()
 
+	metrics.StreamsActive.Set(float64(len(sm.streams)))
 	slog.Info("agent stream connected", "thrall_id", thrallID, "hostname", hostname,
 		"promoted", as.promoted)
 
@@ -104,6 +106,7 @@ func (sm *streamManager) register(thrallID, hostname string) (*agentStream, func
 		if sm.streams[thrallID] == as {
 			delete(sm.streams, thrallID)
 		}
+		metrics.StreamsActive.Set(float64(len(sm.streams)))
 		sm.mu.Unlock()
 		slog.Info("agent stream disconnected", "thrall_id", thrallID, "hostname", hostname)
 	}

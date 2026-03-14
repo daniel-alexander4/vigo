@@ -521,6 +521,23 @@ func run() error {
 		}
 	}()
 
+	// Set build info metric and start uptime tracker.
+	version := envOrDefault("HOBNOB_VERSION", "dev")
+	metrics.BuildInfo.WithLabelValues(version).Set(1)
+	serverStartTime := time.Now()
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			metrics.UptimeSeconds.Set(time.Since(serverStartTime).Seconds())
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+
 	// Start metrics collector in background.
 	metricsCollector := metrics.NewCollector(queries, sqlDB)
 	go metricsCollector.Run(ctx, metricsInterval)
@@ -677,9 +694,8 @@ func run() error {
 			}
 		}
 
-		version := envOrDefault("HOBNOB_VERSION", "dev")
 		agentDir := envOrDefault("HOBNOB_AGENT_DIR", "dist/agent")
-		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, gwOpts...)
+		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}

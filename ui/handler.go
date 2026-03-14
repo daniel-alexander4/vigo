@@ -27,6 +27,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/license"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -59,6 +60,7 @@ type Handler struct {
 	hub          *federation.Hub
 	docsDir      string
 	docsNav      []DocsNavSection
+	enforcer     *license.Enforcer
 	authEnabled  bool
 	authMethod   string
 }
@@ -69,7 +71,7 @@ type Handler struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource, docsDir string, authMethod string) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -94,6 +96,7 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		assistant:    assistant,
 		hub:          hub,
 		docsDir:      docsDir,
+		enforcer:     enforcer,
 		authEnabled:  authMethod != "" && authMethod != "none",
 		authMethod:   authMethod,
 	}
@@ -164,6 +167,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("POST /ui/ask", h.AskStream)
 	}
 
+	// License page
+	mux.HandleFunc("GET /license", h.License)
+
 	// Admin users page (only when auth is enabled)
 	if h.authEnabled {
 		mux.HandleFunc("GET /admin/users", h.AdminUsers)
@@ -182,6 +188,24 @@ type PageData struct {
 	AuthEnabled       bool
 	AuthMethod        string
 	CurrentUser       *AuthUser
+	LicenseWarning    string // non-empty when license is near or over limits
+}
+
+// LicensePageData holds data for the license status page.
+type LicensePageData struct {
+	PageData
+	Tier          string
+	CustomerName  string
+	LicenseID     string
+	MaxThralls    int
+	ActiveThralls int
+	UsagePct      float64
+	ExpiresAt     string
+	DaysRemaining int
+	Stage         string
+	StageNum      int
+	Violation     string
+	IsFreeTier    bool
 }
 
 // AuthUser is the UI-visible subset of auth.User (avoids import cycle).
@@ -656,13 +680,26 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "docs", data)
 }
 
-// setCommon applies version, AI-enabled, federation, and auth flags to page data.
+// setCommon applies version, AI-enabled, federation, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	pd.AIEnabled = h.assistant != nil
 	pd.FederationEnabled = h.hub != nil
 	pd.AuthEnabled = h.authEnabled
 	pd.AuthMethod = h.authMethod
+
+	if h.enforcer != nil {
+		s := h.enforcer.GetStatus()
+		if s.Stage > 0 {
+			pd.LicenseWarning = s.Violation
+		} else if s.MaxThralls > 0 {
+			threshold := float64(s.MaxThralls) * 0.9
+			if float64(s.ActiveThralls) >= threshold {
+				pd.LicenseWarning = fmt.Sprintf("License usage at %d/%d nodes (%d%%) — approaching limit",
+					s.ActiveThralls, s.MaxThralls, s.ActiveThralls*100/s.MaxThralls)
+			}
+		}
+	}
 }
 
 // setCommonWithRequest applies common fields and extracts the current user from context.
@@ -2021,4 +2058,34 @@ func (h *Handler) AdminUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "admin-users", data)
+}
+
+// License renders the license status page.
+func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
+	data := LicensePageData{
+		PageData: PageData{Title: "License", ActiveNav: "license"},
+	}
+
+	if h.enforcer != nil {
+		s := h.enforcer.GetStatus()
+		data.StageNum = int(s.Stage)
+		data.Stage = s.Stage.String()
+		data.ActiveThralls = s.ActiveThralls
+		data.MaxThralls = s.MaxThralls
+		data.ExpiresAt = s.ExpiresAt
+		data.DaysRemaining = s.DaysRemaining
+		data.Violation = s.Violation
+		data.IsFreeTier = h.enforcer.IsFreeLicense()
+		if s.MaxThralls > 0 {
+			data.UsagePct = float64(s.ActiveThralls) / float64(s.MaxThralls) * 100
+		}
+		if s.License != nil {
+			data.Tier = s.License.TierDisplayName()
+			data.CustomerName = s.License.CustomerName
+			data.LicenseID = s.License.LicenseID
+		}
+	}
+
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "license", data)
 }

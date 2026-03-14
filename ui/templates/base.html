@@ -11,6 +11,12 @@
     <div class="layout">
         {{template "nav" .}}
         <main class="content">
+            {{if .LicenseWarning}}
+            <div class="license-banner">
+                <span class="license-banner__text">{{.LicenseWarning}}</span>
+                <a href="/license" class="license-banner__link">View license</a>
+            </div>
+            {{end}}
             {{block "page-content" .}}{{end}}
         </main>
     </div>

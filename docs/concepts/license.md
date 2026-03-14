@@ -49,6 +49,8 @@ Day 0                Day 15               Day 30
 
 ## Checking License Status
 
+### CLI
+
 ```bash
 hobnobcli license status
 ```
@@ -62,6 +64,27 @@ Current:       12
 Stage:         compliant
 Expires:       never
 ```
+
+### Web UI
+
+The [license page](../ui/license.md) at `/license` shows live status, node usage, and enforcement stage. A yellow warning banner appears on all pages when usage reaches 90% of the licensed maximum or when in an enforcement stage.
+
+### Prometheus Metrics
+
+Five license metrics are exposed at `GET /metrics`:
+
+| Metric | Description |
+|--------|-------------|
+| `hobnob_license_thralls_used` | Current active (non-revoked) thralls |
+| `hobnob_license_thralls_max` | Maximum allowed by the license |
+| `hobnob_license_stage` | Enforcement stage (0–3) |
+| `hobnob_license_days_remaining` | Days until expiry (negative if expired) |
+| `hobnob_license_expiry_timestamp` | Unix timestamp of expiration |
+
+Suggested alerts:
+- `hobnob_license_stage > 0` — any enforcement violation
+- `hobnob_license_thralls_used / hobnob_license_thralls_max > 0.9` — approaching node limit
+- `hobnob_license_days_remaining < 30` — license expiring soon
 
 ## License Reload
 
@@ -83,5 +106,7 @@ Place the license file at `$HOBNOB_LICENSE_DIR/license.json`.
 
 ## Related
 
+- [License UI Page](../ui/license.md) — Web dashboard license view
+- [Prometheus Metrics](../operations/metrics.md) — License and server metrics
 - [Server Configuration](../getting-started/server-config.md) — Environment variables
 - [Troubleshooting](../operations/troubleshooting.md)

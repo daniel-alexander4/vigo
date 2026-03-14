@@ -28,6 +28,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	FederationSpokeLatency.WithLabelValues("test").Observe(0)
 	FederationSpokeUp.WithLabelValues("test").Set(0)
 	FleetIndexFlushDuration.Observe(0)
+	BuildInfo.WithLabelValues("test").Set(1)
 	EnrollmentsTotal.WithLabelValues("test").Add(0)
 
 	// Gathering from the default registry should include all our metrics.
@@ -70,6 +71,11 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"hobnob_license_thralls_used",
 		"hobnob_license_thralls_max",
 		"hobnob_license_stage",
+		"hobnob_license_days_remaining",
+		"hobnob_license_expiry_timestamp",
+		"hobnob_uptime_seconds",
+		"hobnob_build_info",
+		"hobnob_streams_active",
 		"hobnob_fleetindex_flush_duration_seconds",
 		"hobnob_fleetindex_dirty_count",
 		"hobnob_enrollments_total",
@@ -106,6 +112,11 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	LicenseThrallsUsed.Set(10)
 	LicenseThrallsMax.Set(25)
 	LicenseStage.Set(0)
+	LicenseDaysRemaining.Set(365)
+	LicenseExpiryTimestamp.Set(1.8e9)
+	UptimeSeconds.Set(3600)
+	BuildInfo.WithLabelValues("dev").Set(1)
+	StreamsActive.Set(5)
 	FederationSpokeUp.WithLabelValues("dc1").Set(1)
 	FleetIndexDirtyCount.Set(42)
 

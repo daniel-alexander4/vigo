@@ -41,6 +41,9 @@
             Security
         </a>
         {{end}}
+        <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
+            License
+        </a>
         {{if and .AuthEnabled .CurrentUser (.CurrentUser.IsAdmin)}}
         <a href="/admin/users" class="nav-link{{if eq .ActiveNav "admin-users"}} nav-link--active{{end}}">
             Users

@@ -180,6 +180,19 @@ var (
 		Help: "License enforcement stage (0=compliant, 1=grace, 2=enrollment_block, 3=service_stop).",
 	})
 
+	// LicenseDaysRemaining is the number of days until the license expires.
+	// Negative values indicate the license has already expired.
+	LicenseDaysRemaining = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hobnob_license_days_remaining",
+		Help: "Days until license expiry (negative if expired).",
+	})
+
+	// LicenseExpiryTimestamp is the Unix timestamp of license expiration.
+	LicenseExpiryTimestamp = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hobnob_license_expiry_timestamp",
+		Help: "Unix timestamp of license expiration date.",
+	})
+
 	// --- FleetIndex ---
 
 	// FleetIndexFlushDuration observes FleetIndex dirty-set flush latency.
@@ -202,6 +215,26 @@ var (
 		Name: "hobnob_enrollments_total",
 		Help: "Total bootstrap enrollment attempts by outcome.",
 	}, []string{"status"})
+
+	// --- Server ---
+
+	// UptimeSeconds tracks how long the server has been running.
+	UptimeSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hobnob_uptime_seconds",
+		Help: "Seconds since the server process started.",
+	})
+
+	// BuildInfo is a constant gauge with the server version as a label.
+	BuildInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "hobnob_build_info",
+		Help: "Server build information (version label, always 1).",
+	}, []string{"version"})
+
+	// StreamsActive is the current number of connected agent streams.
+	StreamsActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "hobnob_streams_active",
+		Help: "Number of currently connected agent streams.",
+	})
 
 	// --- Secrets ---
 

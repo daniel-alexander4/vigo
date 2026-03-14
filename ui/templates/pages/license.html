@@ -1,0 +1,56 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>License</h1>
+    <p>{{.Tier}}</p>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-card__label">Status</div>
+        <div class="stat-card__value text-{{if eq .StageNum 0}}success{{else if eq .StageNum 1}}warning{{else}}danger{{end}}">{{.Stage}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Nodes Used</div>
+        <div class="stat-card__value">{{.ActiveThralls}} / {{.MaxThralls}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Usage</div>
+        <div class="stat-card__value text-{{if gt .UsagePct 90.0}}danger{{else if gt .UsagePct 75.0}}warning{{else}}success{{end}}">{{printf "%.0f" .UsagePct}}%</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Days Remaining</div>
+        <div class="stat-card__value text-{{if lt .DaysRemaining 30}}warning{{else}}success{{end}}">{{.DaysRemaining}}</div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <h2>License Details</h2>
+    <table class="table">
+        <tbody>
+            {{if .CustomerName}}
+            <tr><td class="text-muted" style="width:200px">Customer</td><td>{{.CustomerName}}</td></tr>
+            {{end}}
+            <tr><td class="text-muted">License ID</td><td><code>{{.LicenseID}}</code></td></tr>
+            <tr><td class="text-muted">Tier</td><td>{{.Tier}}{{if .IsFreeTier}} <span class="badge badge--info">built-in</span>{{end}}</td></tr>
+            <tr><td class="text-muted">Max Nodes</td><td>{{.MaxThralls}}</td></tr>
+            <tr><td class="text-muted">Active Nodes</td><td>{{.ActiveThralls}}</td></tr>
+            <tr><td class="text-muted">Expires</td><td>{{.ExpiresAt}}</td></tr>
+            <tr><td class="text-muted">Days Remaining</td><td>{{.DaysRemaining}}</td></tr>
+            <tr><td class="text-muted">Enforcement Stage</td><td>
+                <span class="badge badge--{{if eq .StageNum 0}}success{{else if eq .StageNum 1}}warning{{else}}danger{{end}}">{{.Stage}}</span>
+            </td></tr>
+            {{if .Violation}}
+            <tr><td class="text-muted">Violation</td><td class="text-danger">{{.Violation}}</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if .IsFreeTier}}
+<div class="card mt-3">
+    <h2>Upgrade</h2>
+    <p>The built-in free license supports up to 25 nodes. To manage more nodes or enable federation, install a paid license:</p>
+    <pre><code>hobnobcli license install --file=license.lic</code></pre>
+</div>
+{{end}}
+{{end}}

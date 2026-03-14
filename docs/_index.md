@@ -59,6 +59,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Workflows](ui/workflows.md) — Multi-step orchestration
 - [Query](ui/query.md) — Live fleet queries
 - [Federation](ui/federation.md) — Hub-spoke dashboard
+- [License](ui/license.md) — License status and usage
 - [Security](ui/security.md) — AI chat and compliance
 
 ## AI Assistant

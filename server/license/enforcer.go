@@ -270,6 +270,11 @@ func (e *Enforcer) updateMetrics() {
 	metrics.LicenseStage.Set(float64(e.stage))
 	if e.license != nil {
 		metrics.LicenseThrallsMax.Set(float64(e.license.Payload.MaxThralls))
+		if exp, err := e.license.ExpiresTime(); err == nil {
+			days := int(time.Until(exp).Hours() / 24)
+			metrics.LicenseDaysRemaining.Set(float64(days))
+			metrics.LicenseExpiryTimestamp.Set(float64(exp.Unix()))
+		}
 	}
 	if count, err := e.counter(context.Background()); err == nil {
 		metrics.LicenseThrallsUsed.Set(float64(count))
