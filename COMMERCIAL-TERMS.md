@@ -1,10 +1,14 @@
 # Hobnob Commercial Terms
 
-Effective 2026-03-11. Alexander4, LLC reserves the right to update these terms.
+Effective 2026-03-14. Alexander4, LLC reserves the right to update these terms.
 
 ## Licensing
 
-Hobnob is released under the Business Source License 1.1 (see LICENSE).
+Hobnob uses a split-license model:
+
+- **Agent** (`hobnob`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code. You may not offer Hobnob as a managed service, redistribute modified versions, or remove license keys.
+- **Server** (`hobd`) and **CLI** (`hobnobcli`): Proprietary. Distributed as compiled binaries and container images.
+
 You may use Hobnob to manage up to 25 nodes at no cost. Beyond 25 nodes,
 a commercial license is required.
 
@@ -14,17 +18,45 @@ count — nothing else changes.
 
 ## Pricing
 
-Pricing is per managed node, per year. All features are included at every tier.
+Pricing is per managed node, per year, set at 75% of Puppet Enterprise
+list price at every tier. Tiers are cumulative — each band prices only
+the nodes in that band, so crossing a tier boundary never spikes the bill.
 
-| Tier       | Nodes       | Per Node / Year | Example Annual Price |
-|------------|-------------|-----------------|----------------------|
-| Free       | 1 – 25      | $0              | $0                   |
-| Standard   | 26 – 250    | $72             | 100 nodes = $7,200   |
-| Growth     | 251 – 2,500 | $48             | 1,000 nodes = $48,000|
-| Enterprise | 2,501+      | $30             | 5,000 nodes = $150,000|
+| Tier        | Nodes          | Per Node / Year | Example Annual Price          |
+|-------------|----------------|-----------------|-------------------------------|
+| Community   | 1 – 25         | $0              | $0                            |
+| Starter     | 26 – 250       | $84             | 100 nodes = $6,300            |
+| Growth      | 251 – 1,000    | $74             | 500 nodes = $37,400           |
+| Business    | 1,001 – 5,000  | $64             | 2,500 nodes = $170,400        |
+| Enterprise  | 5,001 – 25,000 | $54             | 10,000 nodes = $600,400       |
+| Scale       | 25,001 – 100,000 | $41           | 50,000 nodes = $2,435,400     |
+| Unlimited   | 100,001+       | $31             | Contact us                    |
 
-Billed annually. Licenses are non-refundable once issued. Multi-year
-discounts are available on request.
+Example: a 2,500-node fleet pays (225 × $84) + (750 × $74) + (1,500 × $64) = $18,900 + $55,500 + $96,000 = **$170,400/year**.
+
+Billed annually. Licenses are non-refundable once issued.
+
+## Loyalty Discount
+
+Long-term customers pay less every year. After year 5, your rate
+decreases automatically:
+
+| Year  | Discount | 1K-node customer pays |
+|-------|----------|-----------------------|
+| 1 – 5 | 0%      | $74,400               |
+| 6     | 10%     | $66,960               |
+| 7     | 20%     | $59,520               |
+| 8     | 30%     | $52,080               |
+| 9     | 35%     | $48,360               |
+| 10    | 40%     | $44,640               |
+| 11+   | 45%     | $40,920               |
+| Floor | 50%     | $37,200               |
+
+The discount applies to the per-node rate at every tier. The floor is
+50% — your rate will never drop below half the list price. The loyalty
+clock starts from the date of your first paid license and is tied to your
+organization, not a specific license term. Continuous renewal is required;
+a lapse of more than 90 days resets the loyalty clock.
 
 ## What You Get
 
@@ -32,17 +64,19 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- Hub-spoke federation (requires paid license), AI assistant, all executors, all integrations
+- Hub-spoke federation, AI assistant, compliance export, RBAC, all 59 executors, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
+
+The Community tier (1–25 nodes) includes all features with no time limit.
 
 ## Support
 
-| Level       | Included With   | Response Time    | Channel                          |
-|-------------|-----------------|------------------|----------------------------------|
-| Community   | Free tier       | Best effort      | GitHub Issues                    |
-| Standard    | Standard+       | 2 business days  | Email                            |
-| Priority    | Growth+         | 1 business day   | Email + direct                   |
-| Dedicated   | Enterprise      | 4 business hours | Email + direct + scheduled calls |
+| Level       | Included With    | Response Time    | Channel                          |
+|-------------|------------------|------------------|----------------------------------|
+| Community   | Community tier   | Best effort      | GitHub Issues                    |
+| Standard    | Starter, Growth  | 2 business days  | Email                            |
+| Priority    | Business+        | 1 business day   | Email + direct                   |
+| Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
 
 Support covers configuration guidance, bug triage, and upgrade assistance.
 It does not cover writing your modules, managing your infrastructure, or

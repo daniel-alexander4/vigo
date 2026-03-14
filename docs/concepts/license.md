@@ -2,6 +2,33 @@
 
 Hobnob includes a built-in free license for up to 25 thralls. Beyond that, a license file is required. Enforcement is gradual — operations are never abruptly disrupted.
 
+## Licensing Model
+
+Hobnob uses a split-license model:
+
+- **Agent** (`hobnob`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code — critical since it runs as root on managed machines.
+- **Server** (`hobd`) and **CLI** (`hobnobcli`): Proprietary. Distributed as compiled binaries and container images.
+
+## Pricing
+
+Pricing is per managed node, per year. Tiers are cumulative — each band prices only the nodes in that band.
+
+| Tier        | Nodes            | Per Node / Year |
+|-------------|------------------|-----------------|
+| Community   | 1 – 25           | Free            |
+| Starter     | 26 – 250         | $84             |
+| Growth      | 251 – 1,000      | $74             |
+| Business    | 1,001 – 5,000    | $64             |
+| Enterprise  | 5,001 – 25,000   | $54             |
+| Scale       | 25,001 – 100,000 | $41             |
+| Unlimited   | 100,001+         | $31             |
+
+All features are included at every tier — there are no enterprise-only features.
+
+### Loyalty Discount
+
+After year 5 of continuous renewal, per-node rates decrease automatically: 10% at year 6, increasing to a floor of 50% at year 11+. See [COMMERCIAL-TERMS.md](https://github.com/hobnob/hobnob/blob/main/COMMERCIAL-TERMS.md) for the full schedule.
+
 ## Free Tier
 
 Every Hobnob server starts with a built-in free license:
