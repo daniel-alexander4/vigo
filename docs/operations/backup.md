@@ -86,3 +86,95 @@ To restore from a backup:
 Check the Litestream subprocess output in the server logs. Litestream logs replication status, snapshot creation, and any errors to stdout/stderr, which the server captures.
 
 If the Litestream binary is not found in PATH, the server logs a warning but continues running without backup.
+
+---
+
+## Manual Snapshots
+
+For point-in-time backups before risky changes, hardware migrations, or disaster recovery, use the CLI backup commands. These create a single tar.gz archive containing the database, configs, secrets, TLS certs, and server.yaml.
+
+No server API is needed — these commands operate directly on the local filesystem.
+
+### Create a Backup
+
+```bash
+hobnobcli backup create /tmp/hobnob-backup.tar.gz
+```
+
+The command reads `server.yaml` to find the database path, then:
+
+1. Snapshots the SQLite database using the sqlite3 backup API (safe with concurrent WAL writers)
+2. Copies `hnb/proposed/` (config source of truth)
+3. Copies `secrets/` (already AES-256-GCM encrypted at rest)
+4. Copies `tls/` (CA + server certs)
+5. Copies `server.yaml`
+6. Writes a `manifest.json` with metadata
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--server-yaml` | `/etc/hobnob-server/server.yaml` | Path to server.yaml |
+| `--server-root` | `/etc/hobnob-server` | Root directory containing hnb/, secrets/, tls/ |
+
+### Inspect a Backup
+
+```bash
+hobnobcli backup inspect /tmp/hobnob-backup.tar.gz
+```
+
+Prints the manifest JSON without extracting the full archive.
+
+### Restore from a Backup
+
+```bash
+# Stop the server first
+systemctl stop hobd
+
+# Preview what will be restored
+hobnobcli backup restore /tmp/hobnob-backup.tar.gz --dry-run
+
+# Restore everything
+hobnobcli backup restore /tmp/hobnob-backup.tar.gz
+
+# Publish configs and restart
+hobnobcli config publish
+systemctl start hobd
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--target` | `/etc/hobnob-server` | Root directory to restore into |
+| `--db-only` | `false` | Restore only the database, skip config/secrets/tls |
+| `--dry-run` | `false` | Show what would be restored without writing |
+
+### Archive Layout
+
+```
+hobnob-backup-2026-03-13T14:30:00Z.tar.gz
+├── manifest.json
+├── db/
+│   └── hobnob.db
+├── hnb/
+│   └── proposed/
+│       ├── modules/
+│       ├── roles/
+│       ├── thralls/
+│       └── vars/
+├── secrets/
+│   └── (encrypted files, directory structure preserved)
+├── tls/
+│   └── (cert, key, ca, ca_key PEM files)
+└── server.yaml
+```
+
+### Scheduled Snapshots
+
+Use cron for periodic snapshots. Litestream handles continuous replication; manual snapshots are for explicit recovery points.
+
+```bash
+# Daily backup at 2 AM, retain 7 days
+0 2 * * * /usr/local/bin/hobnobcli backup create /backup/hobnob-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'hobnob-*.tar.gz' -mtime +7 -delete
+```
