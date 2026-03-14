@@ -39,6 +39,22 @@ See [Metrics](metrics.md) for the full list.
 
 ## Common Issues
 
+### Bootstrap Fails with "Connection refused"
+
+**Symptoms:** `curl: (7) Failed to connect to <server> port 8181: Connection refused` immediately after starting the server.
+
+**Cause:** The server takes 30–60 seconds to start — it compiles TLS certs on first run, runs database migrations, loads configs, and rehydrates the FleetIndex. The bootstrap endpoint is not available until the server logs `server ready`.
+
+**Fix:** Wait for the server to finish starting:
+
+```bash
+# Watch for "server ready" in the logs
+docker compose logs -f hobnob | grep -m1 "server ready"
+
+# Then bootstrap
+curl -sSf http://<server>:8181/bootstrap | sudo sh
+```
+
 ### Agent Won't Connect
 
 **Symptoms:** Agent logs show TLS handshake failures or connection refused.
