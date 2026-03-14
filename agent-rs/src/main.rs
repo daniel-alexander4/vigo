@@ -36,6 +36,7 @@ struct Cli {
     trait_refresh_cycles: usize,
     result_cache_cycles: usize,
     dry_run: bool,
+    once: bool,
     command: Option<Commands>,
 }
 
@@ -74,6 +75,7 @@ fn parse_args() -> Result<Cli> {
         trait_refresh_cycles: 10,
         result_cache_cycles: 5,
         dry_run: false,
+        once: false,
         command: None,
     };
 
@@ -108,6 +110,7 @@ fn parse_args() -> Result<Cli> {
             "--trait-refresh-cycles" => { i += 1; cli.trait_refresh_cycles = arg_val(&args, i)?.parse().context("--trait-refresh-cycles must be a number")?; explicit.insert("trait_refresh_cycles"); }
             "--result-cache-cycles" => { i += 1; cli.result_cache_cycles = arg_val(&args, i)?.parse().context("--result-cache-cycles must be a number")?; explicit.insert("result_cache_cycles"); }
             "--dry-run" => { cli.dry_run = true; }
+            "--once" => { cli.once = true; }
             other if other.starts_with('-') => bail!("unknown flag: {}", other),
             _ => {
                 positional.push(args[i].clone());
@@ -239,6 +242,7 @@ FLAGS:
     --trait-refresh-cycles <N>    Trait refresh interval in cycles [default: 10]
     --result-cache-cycles <N>     Result cache lifetime in cycles [default: 5]
     --dry-run                     Preview mode
+    --once                        Run a single convergence cycle and exit
 
 COMMANDS:
     run         Run a single convergence cycle and exit
@@ -951,6 +955,11 @@ async fn main() -> Result<()> {
                 cli.dry_run || *run_dry_run,
             )
             .await
+        }
+
+        None if cli.once => {
+            // --once flag: single convergence cycle and exit.
+            run_once(&cli, None, cli.dry_run).await
         }
 
         None => {

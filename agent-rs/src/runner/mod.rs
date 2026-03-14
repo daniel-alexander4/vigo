@@ -491,6 +491,7 @@ pub fn build_executors_with_snapshots(
     executors.insert("pip".to_string(), Box::new(pip::PipExecutor::new()));
     executors.insert("gem".to_string(), Box::new(gem::GemExecutor::new()));
     executors.insert("npm".to_string(), Box::new(npm::NpmExecutor::new()));
+    executors.insert("docker_compose".to_string(), Box::new(docker_compose::DockerComposeExecutor::new()));
     executors.insert("docker_container".to_string(), Box::new(docker_container::DockerContainerExecutor::new()));
     executors.insert("docker_image".to_string(), Box::new(docker_image::DockerImageExecutor::new()));
     executors.insert("replace".to_string(), Box::new(replace::ReplaceExecutor));
@@ -513,6 +514,7 @@ pub fn build_executors_with_snapshots(
     #[cfg(target_os = "linux")]
     {
         executors.insert("service".to_string(), Box::new(service::ServiceExecutor::new()));
+        executors.insert("systemd_dropin".to_string(), Box::new(systemd_dropin::SystemdDropinExecutor::new()));
         executors.insert("user".to_string(), Box::new(user::UserExecutor::new()));
         executors.insert("group".to_string(), Box::new(group::GroupExecutor::new()));
         executors.insert("cron".to_string(), Box::new(cron::CronExecutor));

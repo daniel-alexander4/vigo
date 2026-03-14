@@ -30,7 +30,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 
 ## Reference
 
-- [Executors](executors/_index.md) — All 57 resource executors
+- [Executors](executors/_index.md) — All 59 resource executors
 - [Trait Collectors](traits/_index.md) — All 27 trait collectors
 - [CLI Reference](cli/_index.md) — hobnobcli commands
 - [API Reference](api/_index.md) — gRPC and REST APIs

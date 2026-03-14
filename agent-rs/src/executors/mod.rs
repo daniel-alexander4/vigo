@@ -13,6 +13,7 @@ pub mod atomic;
 pub mod blockinfile;
 pub mod custom;
 pub mod directory;
+pub mod docker_compose;
 pub mod docker_container;
 pub mod docker_image;
 pub mod exec;
@@ -67,6 +68,8 @@ pub mod mount;
 pub mod selinux;
 #[cfg(target_os = "linux")]
 pub mod service;
+#[cfg(target_os = "linux")]
+pub mod systemd_dropin;
 #[cfg(target_os = "linux")]
 pub mod swap;
 #[cfg(target_os = "linux")]

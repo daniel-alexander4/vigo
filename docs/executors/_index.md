@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 57 built-in executors that manage system resources idempotently across six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 59 built-in executors that manage system resources idempotently across six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -14,7 +14,7 @@ Every resource in a `.hnb` config declares a `type:` field that maps to an execu
 | `Deleted` | Resource existed and was removed. |
 | `Skipped` | Resource was skipped due to a guard condition. |
 
-## Cross-Platform Executors (23)
+## Cross-Platform Executors (24)
 
 These executors compile and run on all six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows).
 
@@ -39,6 +39,7 @@ These executors compile and run on all six supported platforms (Linux, macOS, Fr
 | `pip` | Manage Python packages via pip | [pip](pip.md) |
 | `gem` | Manage Ruby gems | [gem](gem.md) |
 | `npm` | Manage Node.js packages via npm | [npm](npm.md) |
+| `docker_compose` | Manage Docker Compose stacks | [docker_compose](docker_compose.md) |
 | `docker_container` | Manage Docker containers | [docker_container](docker_container.md) |
 | `docker_image` | Manage Docker images | [docker_image](docker_image.md) |
 | `reboot` | Trigger or cancel system reboots | [reboot](reboot.md) |
@@ -65,7 +66,7 @@ These executors manage OS-level resources across Unix platforms. Each type uses 
 
 A "--" means the executor is not available on that platform.
 
-## Linux-Only Executors (4)
+## Linux-Only Executors (5)
 
 These executors use Linux-specific tools with no equivalent on other platforms.
 
@@ -75,6 +76,7 @@ These executors use Linux-specific tools with no equivalent on other platforms.
 | `logrotate` | Manage logrotate configs | [logrotate](logrotate.md) |
 | `alternatives` | Manage update-alternatives entries | [alternatives](alternatives.md) |
 | `selinux` | Manage SELinux file contexts | [selinux](selinux.md) |
+| `systemd_dropin` | Manage systemd unit drop-in override files | [systemd_dropin](systemd_dropin.md) |
 
 ## Windows-Only Executors (7)
 

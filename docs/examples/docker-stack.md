@@ -1,6 +1,6 @@
 # Docker Stack Management
 
-This example uses the `docker_image` and `docker_container` [executors](../executors/_index.md) to manage containerized services.
+This example uses the `docker_image`, `docker_container`, and `docker_compose` [executors](../executors/_index.md) to manage containerized services.
 
 ## Module Definition
 
@@ -114,6 +114,44 @@ hobnobcli task run \
   --batch-size 25% \
   --health-check "curl -sf http://localhost:8080/health"
 ```
+
+## Using Docker Compose
+
+For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
+
+`thrall-configs/modules/compose-app.hnb`:
+
+```yaml
+name: compose-app
+resources:
+  - name: compose-file
+    type: file
+    targetpath: /opt/myapp/docker-compose.yml
+    content: |
+      services:
+        web:
+          image: nginx:latest
+          ports:
+            - "80:80"
+        api:
+          image: myregistry.example.com/api:v2.1.0
+          ports:
+            - "8080:8080"
+          environment:
+            DATABASE_URL: "${DATABASE_URL}"
+        redis:
+          image: redis:7-alpine
+    notify: app-stack
+
+  - name: app-stack
+    type: docker_compose
+    compose_file: /opt/myapp/docker-compose.yml
+    pull: always
+    remove_orphans: "true"
+    subscribes: compose-file
+```
+
+The `docker_compose` executor checks if all services are running via `docker compose ps`. When the compose file changes, the `notify`/`subscribes` relationship triggers a re-up.
 
 ## Container Lifecycle
 
