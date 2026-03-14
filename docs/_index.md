@@ -1,6 +1,6 @@
 # Hobnob Documentation
 
-Hobnob is a Puppet-style configuration management system. Agents on managed nodes (thralls) pull desired state from a central server, apply idempotent changes, and report results back.
+Hobnob is a configuration management system. Agents on managed nodes (thralls) pull desired state from a central server, apply idempotent changes, and report results back.
 
 ## Getting Started
 

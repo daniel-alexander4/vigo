@@ -69,7 +69,7 @@ bootstrap:
       cidrs: ["192.168.0.0/16"]
 ```
 
-Thralls matching both the hostname glob and source CIDR enroll without a token. This is the Puppet-style autosigning equivalent.
+Thralls matching both the hostname glob and source CIDR enroll without a token.
 
 ### One-Time Token
 

@@ -150,9 +150,9 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 }
 
 // TrustedRegister enrolls a thrall without a token by validating the hostname
-// and source IP against trusted enrollment patterns. This is the Puppet-style
-// autosigning path: if the thrall's hostname matches a trusted pattern and its
-// IP falls within an allowed CIDR, it is enrolled without a one-time token.
+// and source IP against trusted enrollment patterns. If the thrall's hostname
+// matches a trusted pattern and its IP falls within an allowed CIDR, it is
+// enrolled without a one-time token.
 func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM string, trustedPatterns []config.TrustedEnrollment, peerIP string) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")

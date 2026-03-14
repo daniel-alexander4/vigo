@@ -293,7 +293,7 @@ Hobnob supports two enrollment modes. Both use CSR signing — the server acts a
 
 ### Trusted enrollment (autosigning)
 
-Like Puppet's autosign, the server auto-enrolls nodes matching configured hostname patterns + CIDR ranges. Configure in `server-configs/server.yaml`:
+The server auto-enrolls nodes matching configured hostname patterns + CIDR ranges. Configure in `server-configs/server.yaml`:
 
 ```yaml
 server:
@@ -384,7 +384,7 @@ hnbvi thrall-configs/modules/nginx.hnb
 ## Key features
 
 - **Bootstrap enrollment** — CSR-based: server signs agent certs, no pre-distribution needed
-- **Trusted enrollment** — Puppet-style autosigning with hostname patterns + CIDR restrictions
+- **Trusted enrollment** — autosigning with hostname patterns + CIDR restrictions
 - **mTLS everywhere** — no plaintext gRPC connections
 - **ED25519 auth** — every agent request is signature-verified
 - **Dependency DAG** — resources declare `depends_on`, topologically sorted

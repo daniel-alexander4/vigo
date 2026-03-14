@@ -212,7 +212,7 @@ type TLSConfig struct {
 
 // TrustedEnrollment defines a hostname/CIDR pattern for token-free enrollment.
 // Thralls matching the pattern and originating from an allowed CIDR are enrolled
-// without a one-time token (Puppet-style autosigning).
+// without a one-time token (trusted autosigning).
 type TrustedEnrollment struct {
 	Pattern string   `yaml:"pattern"`
 	CIDRs   []string `yaml:"cidrs,omitempty"`
