@@ -14,7 +14,7 @@ use crate::customtraits;
 use crate::executors::{Executor, ResourceResult};
 use crate::proto::{
     agent_stream_message, delta_event, AgentStreamMessage, CheckInResponse, CustomTraitEntry,
-    DeltaEvent, HeartbeatDelta, ModuleResult, PolicyBundle, RunCompleted,
+    DeltaEvent, HeartbeatDelta, ModuleResult, PolicyBundle, ProxiedDevice, RunCompleted,
     StreamCapabilities,
 };
 use crate::runner::{self, cache::ResultCache, RunOptions};
@@ -82,6 +82,8 @@ pub struct RunResult {
     pub policy_version: u64,
     pub policy_bundle: Option<PolicyBundle>,
     pub stream_requested: bool,
+    /// Network devices this gateway should converge (empty for non-gateways).
+    pub proxied_devices: Vec<ProxiedDevice>,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -217,6 +219,10 @@ fn converge(
     dry_run: bool,
     module_filter: Option<&str>,
 ) -> Result<RunResult> {
+    for w in &resp.warnings {
+        warn!("server: {}", w);
+    }
+
     // Parse server-provided timing.
     let base_interval = if resp.base_interval.is_empty() {
         Duration::from_secs(300) // 5m default
@@ -228,6 +234,8 @@ fn converge(
     } else {
         resp.jitter_percent
     };
+
+    let proxied_devices = resp.proxied_devices.clone();
 
     // Determine which policy bundle to evaluate.
     let mut bundle = if resp.no_change && policy_state.accepted_bundle.is_some() {
@@ -246,6 +254,7 @@ fn converge(
             policy_version: resp.policy_version,
             policy_bundle: None,
             stream_requested: resp.stream_requested,
+            proxied_devices,
         });
     } else {
         return Ok(RunResult {
@@ -257,6 +266,7 @@ fn converge(
             policy_version: resp.policy_version,
             policy_bundle: None,
             stream_requested: resp.stream_requested,
+            proxied_devices,
         });
     };
 
@@ -280,6 +290,7 @@ fn converge(
                 policy_version: resp.policy_version,
                 policy_bundle: resp.policy_bundle.clone(),
                 stream_requested: resp.stream_requested,
+                proxied_devices: proxied_devices.clone(),
             });
         }
     };
@@ -298,6 +309,7 @@ fn converge(
             policy_version: resp.policy_version,
             policy_bundle: resp.policy_bundle.clone(),
             stream_requested: resp.stream_requested,
+            proxied_devices,
         });
     }
 
@@ -319,6 +331,7 @@ fn converge(
         policy_version: resp.policy_version,
         policy_bundle: resp.policy_bundle.clone(),
         stream_requested: resp.stream_requested,
+        proxied_devices,
     })
 }
 
@@ -701,6 +714,11 @@ pub async fn daemon_loop(
 
                 update_state(&mut policy_state, &rr, Some(&mut last_fingerprint));
                 log_run_result(&rr);
+
+                // Proxy convergence: converge network devices managed by this gateway.
+                if !rr.proxied_devices.is_empty() {
+                    converge_proxied_devices(client, &rr.proxied_devices, executors).await;
+                }
 
                 // Deliver pending results on successful reconnect.
                 if !pending_delivered {
@@ -1284,6 +1302,156 @@ fn parse_go_duration(s: &str) -> Option<Duration> {
     }
 }
 
+/// Converge network devices managed by this gateway agent.
+///
+/// For each proxied device, evaluates its policy bundle and runs convergence
+/// using SSH-backed executors (ssh_exec, network_config). Results are reported
+/// to the server under the device's virtual thrall_id.
+async fn converge_proxied_devices(
+    client: &mut Client,
+    devices: &[ProxiedDevice],
+    executors: &HashMap<String, Box<dyn Executor>>,
+) {
+    info!(count = devices.len(), "converging proxied network devices");
+
+    for device in devices {
+        let device_id = &device.thrall_id;
+        let hostname = &device.hostname;
+        let device_type = &device.device_type;
+
+        info!(
+            device_id,
+            hostname,
+            device_type,
+            "converging proxied device"
+        );
+
+        // Evaluate the device's policy bundle.
+        let bundle = match &device.policy {
+            Some(b) => b,
+            None => {
+                warn!(hostname, "proxied device has no policy bundle, skipping");
+                continue;
+            }
+        };
+
+        // Collect device traits over SSH.
+        let port = if device.port == 0 { 22 } else { device.port };
+        let username_for_ssh = if device.username.is_empty() {
+            "admin"
+        } else {
+            &device.username
+        };
+        let ip_for_ssh = if device.ip_address.is_empty() {
+            hostname.as_str()
+        } else {
+            &device.ip_address
+        };
+
+        let device_traits = match crate::transport::ssh::SshSession::connect(
+            ip_for_ssh,
+            port as u16,
+            username_for_ssh,
+            &device.credential,
+            None,
+        )
+        .await
+        {
+            Ok(session) => {
+                let traits = crate::traits::network_device::collect_device_traits(
+                    &session,
+                    device_type,
+                )
+                .await;
+
+                // Report traits to server under device's thrall_id.
+                let traits_bytes = serde_json::to_vec(&traits).unwrap_or_default();
+                if !traits_bytes.is_empty() {
+                    if let Err(e) = client.report_traits_for(device_id, &traits_bytes).await {
+                        warn!(hostname, error = %e, "failed to report device traits");
+                    }
+                }
+
+                let _ = session.close().await;
+                traits
+            }
+            Err(e) => {
+                warn!(hostname, error = %e, "SSH connect for trait collection failed");
+                serde_json::json!({
+                    "device": {
+                        "type": device_type,
+                        "hostname": hostname,
+                    }
+                })
+            }
+        };
+
+        let modules = match crate::policy::eval::eval_bundle(Some(bundle), &device_traits) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!(hostname, error = %e, "device policy evaluation failed, skipping");
+                continue;
+            }
+        };
+
+        if modules.is_empty() {
+            info!(hostname, "device has no modules after evaluation");
+            continue;
+        }
+
+        // Inject SSH connection params into each resource's attributes.
+        // The executors (ssh_exec, network_config) expect host/port/username/credential.
+        let mut patched_modules = modules;
+        for module in &mut patched_modules {
+            for resource in &mut module.resources {
+                resource.params.insert("host".to_string(), ip_for_ssh.to_string());
+                resource.params.insert("port".to_string(), port.to_string());
+                resource.params.insert("username".to_string(), username_for_ssh.to_string());
+                resource.params.insert("credential".to_string(), device.credential.clone());
+                resource.params.insert("device_type".to_string(), device_type.clone());
+            }
+        }
+
+        let run_id = uuid::Uuid::new_v4().to_string();
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: run_id.clone(),
+        };
+
+        let mut device_cache = ResultCache::new(1);
+        let results = runner::converge(&patched_modules, executors, &mut device_cache, &opts, &device_traits);
+
+        let changed = results.iter().filter(|r| r.changed).count();
+        let failed = results.iter().filter(|r| r.error.is_some()).count();
+
+        info!(
+            hostname,
+            device_id,
+            total = results.len(),
+            changed,
+            failed,
+            "proxied device convergence complete"
+        );
+
+        // Report results under the device's thrall_id.
+        if !results.is_empty() {
+            let proto_results = results_to_proto(&results);
+            if let Err(e) = client
+                .report_result_for(&run_id, device_id, proto_results)
+                .await
+            {
+                warn!(
+                    hostname,
+                    device_id,
+                    error = %e,
+                    "failed to report proxied device results"
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1391,6 +1559,7 @@ mod tests {
                 ..Default::default()
             }),
             stream_requested: false,
+            proxied_devices: vec![],
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1411,6 +1580,7 @@ mod tests {
             policy_version: 10,
             policy_bundle: None,
             stream_requested: false,
+            proxied_devices: vec![],
         };
 
         update_state(&mut ps, &rr, None);
@@ -1580,6 +1750,7 @@ mod tests {
                 ..Default::default()
             }),
             stream_requested: false,
+            proxied_devices: vec![],
         };
 
         update_state(&mut ps, &rr, None);

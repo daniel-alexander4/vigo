@@ -1,0 +1,4 @@
+# network-router — role for managed Juniper routers.
+name: network-router
+modules:
+  - router-base

@@ -1,0 +1,5 @@
+# network-switch — role for managed Cisco switches.
+name: network-switch
+modules:
+  - switch-base
+  - switch-vlans

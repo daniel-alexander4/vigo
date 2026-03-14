@@ -247,6 +247,22 @@ message CheckInResponse {
   string reassign_addr = 9;             // non-empty = agent should reconnect here
   string reassign_id = 10;              // new UUID on target spoke
   bool stream_requested = 11;           // server wants agent to open AgentStream
+  repeated string warnings = 12;        // config errors, missing modules, etc.
+  repeated ProxiedDevice proxied_devices = 13;  // network devices this gateway manages
+}
+
+// ProxiedDevice describes a network device managed through a gateway thrall.
+// The gateway agent receives these alongside its own policy and converges
+// each device over SSH during its convergence cycle.
+message ProxiedDevice {
+  string thrall_id   = 1;   // server-assigned UUID for this virtual thrall
+  string hostname    = 2;   // device hostname (from nodes.hnb match pattern)
+  string device_type = 3;   // cisco_ios, cisco_nxos, juniper_junos
+  string credential  = 4;   // resolved secret value (SSH key or password)
+  string username    = 5;   // SSH username
+  uint32 port        = 6;   // SSH port (default 22)
+  string ip_address  = 7;   // management IP
+  PolicyBundle policy = 8;  // the device's resolved config
 }
 
 // CustomTraitEntry describes a custom trait executable in the server's traits directory.

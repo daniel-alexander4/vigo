@@ -457,6 +457,19 @@ pub fn build_executors_with_snapshots(
     executors.insert("replace".to_string(), Box::new(replace::ReplaceExecutor));
     executors.insert("field_edit".to_string(), Box::new(field_edit::FieldEditExecutor));
 
+    // Network device executors (SSH-backed, used for gateway proxy convergence).
+    executors.insert("ssh_exec".to_string(), Box::new(ssh_exec::SshExecExecutor::new()));
+    executors.insert("network_config".to_string(), Box::new(network_config::NetworkConfigExecutor::new()));
+    executors.insert("cisco_vlan".to_string(), Box::new(cisco_vlan::CiscoVlanExecutor::new()));
+    executors.insert("cisco_interface".to_string(), Box::new(cisco_interface::CiscoInterfaceExecutor::new()));
+    executors.insert("cisco_acl".to_string(), Box::new(cisco_acl::CiscoAclExecutor::new()));
+    executors.insert("junos_interface".to_string(), Box::new(junos_interface::JunosInterfaceExecutor::new()));
+    executors.insert("network_ntp".to_string(), Box::new(network_ntp::NetworkNtpExecutor::new()));
+    executors.insert("network_syslog".to_string(), Box::new(network_syslog::NetworkSyslogExecutor::new()));
+    executors.insert("network_snmp".to_string(), Box::new(network_snmp::NetworkSnmpExecutor::new()));
+    executors.insert("network_user".to_string(), Box::new(network_user::NetworkUserExecutor::new()));
+    executors.insert("network_banner".to_string(), Box::new(network_banner::NetworkBannerExecutor::new()));
+
     // Linux-only executors.
     #[cfg(target_os = "linux")]
     {

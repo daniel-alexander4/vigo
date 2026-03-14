@@ -1,0 +1,41 @@
+# switch-vlans — VLAN configuration for Cisco IOS switches.
+name: switch-vlans
+resources:
+  - name: mgmt-vlan
+    type: cisco_vlan
+    vlan_id: "100"
+    name: Management
+    state: present
+
+  - name: server-vlan
+    type: cisco_vlan
+    vlan_id: "200"
+    name: Servers
+    state: present
+
+  - name: user-vlan
+    type: cisco_vlan
+    vlan_id: "300"
+    name: Users
+    state: present
+
+  - name: remove-vlan-999
+    type: cisco_vlan
+    vlan_id: "999"
+    name: Deprecated
+    state: absent
+
+  - name: trunk-to-router
+    type: cisco_interface
+    interface: GigabitEthernet0/1
+    description: "Uplink to edge-rtr01"
+    switchport_mode: trunk
+    depends_on: [mgmt-vlan, server-vlan, user-vlan]
+
+  - name: server-port
+    type: cisco_interface
+    interface: GigabitEthernet0/24
+    description: "Database Server"
+    switchport_mode: access
+    access_vlan: "200"
+    depends_on: [server-vlan]

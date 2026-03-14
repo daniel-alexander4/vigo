@@ -190,6 +190,33 @@ impl Client {
         Ok(resp.into_inner())
     }
 
+    /// ReportResult for a different thrall (used by gateway proxy for device results).
+    pub async fn report_result_for(
+        &mut self,
+        run_id: &str,
+        thrall_id: &str,
+        results: Vec<ModuleResult>,
+    ) -> Result<ReportResultResponse> {
+        let ts = Self::timestamp_str();
+        let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
+
+        let req = ReportResultRequest {
+            run_id: run_id.to_string(),
+            thrall_id: thrall_id.to_string(),
+            results,
+            signature: sig,
+            timestamp: Some(Self::now_timestamp()),
+        };
+
+        let resp = self
+            .agent
+            .report_result(tonic::Request::new(req))
+            .await
+            .context("report-result-for RPC")?;
+
+        Ok(resp.into_inner())
+    }
+
     /// ReportTraits calls the server's ReportTraits RPC with signed traits JSON.
     pub async fn report_traits(&mut self, traits_json: &[u8]) -> Result<()> {
         let ts = Self::timestamp_str();
@@ -206,6 +233,26 @@ impl Client {
             .report_traits(tonic::Request::new(req))
             .await
             .context("report-traits RPC")?;
+
+        Ok(())
+    }
+
+    /// ReportTraits for a different thrall (used by gateway proxy for device traits).
+    pub async fn report_traits_for(&mut self, thrall_id: &str, traits_json: &[u8]) -> Result<()> {
+        let ts = Self::timestamp_str();
+        let sig = signer::sign_payload(traits_json, &ts, &self.signing_key);
+
+        let req = ReportTraitsRequest {
+            thrall_id: thrall_id.to_string(),
+            traits_json: traits_json.to_vec(),
+            signature: sig,
+            timestamp: Some(Self::now_timestamp()),
+        };
+
+        self.agent
+            .report_traits(tonic::Request::new(req))
+            .await
+            .context("report-traits-for RPC")?;
 
         Ok(())
     }
@@ -279,6 +326,25 @@ impl Client {
         ReportResultRequest {
             run_id: run_id.to_string(),
             thrall_id: self.thrall_id.clone(),
+            results,
+            signature: sig,
+            timestamp: Some(Self::now_timestamp()),
+        }
+    }
+
+    /// Build a signed ReportResultRequest for a different thrall (gateway proxy).
+    pub fn build_report_result_for_request(
+        &self,
+        run_id: &str,
+        thrall_id: &str,
+        results: Vec<ModuleResult>,
+    ) -> ReportResultRequest {
+        let ts = Self::timestamp_str();
+        let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
+
+        ReportResultRequest {
+            run_id: run_id.to_string(),
+            thrall_id: thrall_id.to_string(),
             results,
             signature: sig,
             timestamp: Some(Self::now_timestamp()),

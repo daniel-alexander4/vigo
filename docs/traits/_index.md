@@ -54,6 +54,14 @@ All 25 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Users | `users` | Local user account names | [users_windows.md](users_windows.md) |
 | Filesystem | `filesystem` | Per-drive disk usage (total, used, free, percent) | [filesystem_windows.md](filesystem_windows.md) |
 
+## Network Device Traits
+
+Network devices managed via the [gateway proxy](../concepts/network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.
+
+| Name | Trait Path | Description | Doc |
+|------|------------|-------------|-----|
+| Network Device | `device` | Device model, firmware, serial, interfaces, VLANs, routes | [network_device.md](network_device.md) |
+
 ## Platform Implementation Details
 
 The following collectors share the same trait path across all platforms but use platform-specific implementations: `os`, `hardware`, `identity`, `memory`, `mountpoints`, `network`, `packages`, `processors`, `swap`, `timezone`, `uptime`, `users`, `filesystem`.

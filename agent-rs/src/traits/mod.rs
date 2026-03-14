@@ -5,6 +5,7 @@
 //! Traits are used in Go templates as .Traits.os.family, .Traits.hardware.cpu_count, etc.
 
 pub mod cached;
+pub mod network_device;
 
 // Cross-platform collectors.
 mod cloud;

@@ -153,6 +153,21 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 				}
 
 			case *pb.AgentStreamMessage_ReportResult:
+				// Authorization check for proxied device results: if the
+				// result's thrall_id differs from the stream owner, verify
+				// the sender is the authorized gateway for that device.
+				resultThrallID := m.ReportResult.GetThrallId()
+				if resultThrallID != thrallID {
+					if !isAuthorizedGateway(s.configStore, resultThrallID, thrall.Hostname) {
+						slog.Warn("rejected proxied result from unauthorized gateway",
+							"device_thrall_id", resultThrallID,
+							"gateway_thrall_id", thrallID,
+							"gateway_hostname", thrall.Hostname,
+						)
+						continue
+					}
+				}
+
 				resp, err := s.ReportResult(stream.Context(), m.ReportResult)
 				if err != nil {
 					slog.Error("stream report-result error", "thrall_id", thrallID, "error", err)
@@ -401,6 +416,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		StreamRequested: streamRequested,
 	}
 
+	// Surface config reload errors as warnings so agents know why
+	// expected modules may be missing from the policy.
+	if reloadErr := s.configStore.LastReloadError(); reloadErr != nil {
+		resp.Warnings = append(resp.Warnings, "server config reload failed: "+reloadErr.Error())
+	}
+
 	// Check for pending reassignment (thrall moving to a different spoke).
 	if s.reassignStore != nil {
 		if info, ok := s.reassignStore.Pop(thrallID); ok {
@@ -412,6 +433,51 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 				"new_thrall_id", info.NewThrallID,
 			)
 		}
+	}
+
+	// Build ProxiedDevice list for gateway thralls. Network devices whose
+	// gateway field matches this thrall's hostname get their resolved config
+	// included in the response so the gateway agent can converge them over SSH.
+	devices := s.configStore.DevicesForGateway(thrall.Hostname)
+	for _, dev := range devices {
+		devBundle, err := buildPolicyBundle(dev.Config, configVersion, nil)
+		if err != nil {
+			slog.Error("failed to build policy bundle for proxied device",
+				"device", dev.Hostname,
+				"gateway", thrall.Hostname,
+				"error", err,
+			)
+			continue
+		}
+		// Sign device bundles too if a signer is configured.
+		if s.bundleSigner != nil {
+			if err := s.bundleSigner.Sign(devBundle, s.bundleMaxAge); err != nil {
+				slog.Error("failed to sign proxied device bundle",
+					"device", dev.Hostname,
+					"error", err,
+				)
+			}
+		}
+
+		// Generate a stable virtual thrall ID from the device hostname.
+		deviceID := DeviceVirtualID(dev.Hostname)
+
+		resp.ProxiedDevices = append(resp.ProxiedDevices, &pb.ProxiedDevice{
+			ThrallId:   deviceID,
+			Hostname:   dev.Hostname,
+			DeviceType: dev.DeviceType,
+			Credential: dev.Credential,
+			Username:   dev.Username,
+			Port:       uint32(dev.Port),
+			IpAddress:  dev.IPAddress,
+			Policy:     devBundle,
+		})
+
+		slog.Debug("included proxied device in gateway response",
+			"device", dev.Hostname,
+			"device_id", deviceID,
+			"gateway", thrall.Hostname,
+		)
 	}
 
 	return resp, nil

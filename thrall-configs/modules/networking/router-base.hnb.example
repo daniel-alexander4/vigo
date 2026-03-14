@@ -1,0 +1,35 @@
+# router-base — baseline configuration for Juniper Junos routers.
+name: router-base
+resources:
+  - name: login-banner
+    type: network_banner
+    device_type: juniper_junos
+    banner_type: login
+    text: "Authorized access only."
+    state: present
+
+  - name: ntp-server
+    type: network_ntp
+    device_type: juniper_junos
+    server: "10.0.0.1"
+    state: present
+
+  - name: syslog-server
+    type: network_syslog
+    device_type: juniper_junos
+    syslog_host: "10.0.0.50"
+    state: present
+
+  - name: wan-interface
+    type: junos_interface
+    interface: ge-0/0/0
+    description: "WAN Uplink"
+    ip_address: "10.0.1.1/24"
+    unit: "0"
+    family: inet
+
+  - name: loopback
+    type: junos_interface
+    interface: lo0
+    ip_address: "10.255.0.1/32"
+    unit: "0"

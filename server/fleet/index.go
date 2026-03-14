@@ -33,7 +33,9 @@ type ThrallState struct {
 	Traits                map[string]string // flattened key→value for trait index
 	PendingRotatedSecrets []string
 	ForcePush             bool
-	StreamRequested       bool // ephemeral: server wants agent to open stream (not persisted to DB)
+	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
+	Gateway               string // hostname of gateway thrall (empty for normal thralls)
+	DeviceType            string // network device type (empty for normal thralls)
 }
 
 // ComplianceCounters holds pre-computed compliance totals.
@@ -309,6 +311,34 @@ func (f *FleetIndex) RecentRuns(n int) []RunSummary {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.recentRuns.Last(n)
+}
+
+// ListByGateway returns all non-revoked thralls whose Gateway field matches the given hostname.
+// Used to find network devices managed by a specific gateway thrall.
+func (f *FleetIndex) ListByGateway(gatewayHostname string) []*ThrallState {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var results []*ThrallState
+	for _, ts := range f.thralls {
+		if ts.Revoked || ts.Gateway != gatewayHostname {
+			continue
+		}
+		cp := *ts
+		results = append(results, &cp)
+	}
+	return results
+}
+
+// GetGatewayForDevice returns the gateway hostname for a device thrall, or "" if
+// the thrall is not a network device.
+func (f *FleetIndex) GetGatewayForDevice(thrallID string) string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	ts := f.thralls[thrallID]
+	if ts == nil {
+		return ""
+	}
+	return ts.Gateway
 }
 
 // ListByStatus returns all thrall IDs with the given compliance status.

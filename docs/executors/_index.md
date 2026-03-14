@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 45 built-in executors that manage system resources idempotently across six supported platforms: Linux, macOS, FreeBSD, OpenBSD, NetBSD, and Windows. Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 56 built-in executors that manage system resources idempotently across six supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -88,6 +88,41 @@ These executors replace their Unix counterparts on Windows. They are registered 
 | `cron` (Windows) | Manage Windows scheduled tasks | [cron_windows](cron_windows.md) |
 | `hostname` (Windows) | Set the Windows hostname | [hostname_windows](hostname_windows.md) |
 | `timezone` (Windows) | Set the Windows timezone | [timezone_windows](timezone_windows.md) |
+
+## Network Device Executors (11)
+
+These executors manage network devices (switches, routers) over SSH via the [gateway proxy](../concepts/network-devices.md) pattern. They run on the gateway thrall and connect to the target device. SSH connection parameters are auto-injected.
+
+### Transport Executors (2)
+
+| Type | Description | Doc |
+|------|-------------|-----|
+| `ssh_exec` | Run commands on remote devices over SSH | [ssh_exec](ssh_exec.md) |
+| `network_config` | Declarative config-block management | [network_config](network_config.md) |
+
+### Cisco Executors (3)
+
+| Type | Description | Doc |
+|------|-------------|-----|
+| `cisco_vlan` | Manage VLANs on Cisco IOS/NX-OS | [cisco_vlan](cisco_vlan.md) |
+| `cisco_interface` | Manage Cisco interface config | [cisco_interface](cisco_interface.md) |
+| `cisco_acl` | Manage Cisco access control lists | [cisco_acl](cisco_acl.md) |
+
+### Juniper Executors (1)
+
+| Type | Description | Doc |
+|------|-------------|-----|
+| `junos_interface` | Manage Junos interface config | [junos_interface](junos_interface.md) |
+
+### Cross-Platform Network Executors (5)
+
+| Type | Description | Cisco | Junos | Doc |
+|------|-------------|:-----:|:-----:|-----|
+| `network_ntp` | NTP server config | Yes | Yes | [network_ntp](network_ntp.md) |
+| `network_syslog` | Syslog server config | Yes | Yes | [network_syslog](network_syslog.md) |
+| `network_snmp` | SNMP community config | Yes | Yes | [network_snmp](network_snmp.md) |
+| `network_user` | Local user management | Yes | Yes | [network_user](network_user.md) |
+| `network_banner` | Login/MOTD banners | Yes | Yes | [network_banner](network_banner.md) |
 
 ## Common Patterns
 

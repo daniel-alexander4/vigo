@@ -205,9 +205,10 @@ type ConfigStore struct {
 	dir           string                       // thrall-configs directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
-	dangerous     bool   // allow non-idempotent resources
-	version       atomic.Uint64 // incremented on each successful reload
+	dangerous       bool   // allow non-idempotent resources
+	version         atomic.Uint64 // incremented on each successful reload
 	onReloadFailure func(err error) // optional callback on reload failure
+	lastReloadErr   error // last reload error (nil if last reload succeeded)
 }
 
 // SetBackend sets the secrets backend name for diagnostic hints.
@@ -298,6 +299,14 @@ func (cs *ConfigStore) Reload() error {
 // reload, used by the response cache to detect config changes.
 func (cs *ConfigStore) Version() uint64 {
 	return cs.version.Load()
+}
+
+// LastReloadError returns the error from the most recent config reload,
+// or nil if the last reload succeeded. Surfaced to agents as a check-in warning.
+func (cs *ConfigStore) LastReloadError() error {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.lastReloadErr
 }
 
 // Get returns the resolved config for the given hostname. Entries are
@@ -630,6 +639,11 @@ func (cs *ConfigStore) loadAll() error {
 	start := time.Now()
 	err := cs.loadAllInner()
 	elapsed := time.Since(start)
+
+	cs.mu.Lock()
+	cs.lastReloadErr = err
+	cs.mu.Unlock()
+
 	if err != nil {
 		metrics.ConfigReloadErrors.Inc()
 		return err
@@ -665,6 +679,11 @@ func (cs *ConfigStore) loadAllInner() error {
 				return fmt.Errorf("role %q references module %q which does not exist — add a module definition to modules/", role.Name, ref.Name)
 			}
 		}
+	}
+
+	// Validate network device entries: gateway references, device types, credentials.
+	if err := validateDeviceEntries(thrallEntries); err != nil {
+		return err
 	}
 
 	var entries []resolvedEntry
@@ -918,7 +937,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 	}
 
 	cfg := &ThrallConfig{
-		Thrall:            entry.Match,
+		Thrall:          entry.Match,
 		MatchPattern:    entry.Match,
 		Environment:     entry.Environment,
 		Roles:           entry.Roles,
@@ -927,6 +946,12 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		VarOrder:        varOrder,
 		EnvVars:         entry.EnvVars,
 		ConditionalVars: condVars,
+		Gateway:         entry.Gateway,
+		DeviceType:      entry.DeviceType,
+		Credential:      entry.Credential,
+		Username:        entry.Username,
+		Port:            entry.Port,
+		IPAddress:       entry.IPAddress,
 	}
 
 	// Merge environment-specific vars.
@@ -948,6 +973,24 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 	for i := range cfg.Modules {
 		secretErrs = append(secretErrs, cs.resolveModuleSecrets(entry.Match, &cfg.Modules[i])...)
 	}
+
+	// Resolve the device credential secret if this is a network device entry.
+	if cfg.Credential != "" && strings.HasPrefix(cfg.Credential, secretPrefix) {
+		key := strings.TrimPrefix(cfg.Credential, secretPrefix)
+		val, err := cs.provider.Get(context.Background(), key)
+		if err != nil {
+			secretErrs = append(secretErrs, &SecretError{
+				Match:   entry.Match,
+				Attr:    "credential",
+				Secret:  key,
+				Err:     err,
+				Backend: cs.backend,
+			})
+		} else {
+			cfg.Credential = val
+		}
+	}
+
 	if len(secretErrs) > 0 {
 		for range secretErrs {
 			metrics.SecretResolutionErrorsTotal.Inc()
@@ -956,6 +999,134 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 	}
 
 	return cfg, nil
+}
+
+// validateDeviceEntries checks network device entry constraints:
+// - device_type must be a supported type
+// - gateway must reference an existing thrall entry without a device_type
+// - credential must use the secret: prefix
+// - gateway entries must not themselves have a device_type
+func validateDeviceEntries(entries []ThrallEntry) error {
+	// Build lookup: match pattern → entry for gateway reference validation.
+	byMatch := make(map[string]*ThrallEntry, len(entries))
+	for i := range entries {
+		byMatch[entries[i].Match] = &entries[i]
+	}
+
+	for _, entry := range entries {
+		if entry.DeviceType == "" && entry.Gateway == "" {
+			continue // normal thrall
+		}
+
+		// device_type and gateway must be set together.
+		if entry.DeviceType != "" && entry.Gateway == "" {
+			return fmt.Errorf("thrall entry %q has device_type %q but no gateway — network devices require a gateway", entry.Match, entry.DeviceType)
+		}
+		if entry.Gateway != "" && entry.DeviceType == "" {
+			return fmt.Errorf("thrall entry %q has gateway %q but no device_type — gateway is only for network devices", entry.Match, entry.Gateway)
+		}
+
+		// Validate device_type.
+		if !ValidDeviceTypes[entry.DeviceType] {
+			valid := make([]string, 0, len(ValidDeviceTypes))
+			for k := range ValidDeviceTypes {
+				valid = append(valid, k)
+			}
+			sort.Strings(valid)
+			return fmt.Errorf("thrall entry %q has unsupported device_type %q (valid: %s)", entry.Match, entry.DeviceType, strings.Join(valid, ", "))
+		}
+
+		// Validate credential uses secret: prefix.
+		if entry.Credential == "" {
+			return fmt.Errorf("thrall entry %q (device_type=%s) requires a credential field", entry.Match, entry.DeviceType)
+		}
+		if !strings.HasPrefix(entry.Credential, secretPrefix) {
+			return fmt.Errorf("thrall entry %q credential must use \"secret:\" prefix", entry.Match)
+		}
+
+		// Validate gateway references an existing entry.
+		gw, ok := byMatch[entry.Gateway]
+		if !ok {
+			return fmt.Errorf("thrall entry %q references gateway %q which does not exist", entry.Match, entry.Gateway)
+		}
+
+		// Gateway must be a normal thrall, not itself a device.
+		if gw.DeviceType != "" {
+			return fmt.Errorf("thrall entry %q references gateway %q which is itself a network device", entry.Match, entry.Gateway)
+		}
+	}
+
+	return nil
+}
+
+// DeviceConfig holds the resolved config and connection details for a network device.
+type DeviceConfig struct {
+	Hostname   string       // device hostname (match pattern)
+	DeviceType string       // cisco_ios, cisco_nxos, juniper_junos
+	Credential string       // resolved secret value
+	Username   string       // SSH username
+	Port       int          // SSH port
+	IPAddress  string       // management IP
+	Config     *ThrallConfig // resolved config (modules, vars, etc.)
+}
+
+// DevicesForGateway returns all network device entries whose gateway field
+// matches the given gateway hostname. Used during gateway check-in to build
+// the ProxiedDevice list.
+func (cs *ConfigStore) DevicesForGateway(gatewayHostname string) []DeviceConfig {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	var devices []DeviceConfig
+	for _, entry := range cs.entries {
+		cfg := entry.config
+		if cfg.Gateway != gatewayHostname {
+			continue
+		}
+		port := cfg.Port
+		if port == 0 {
+			port = 22
+		}
+		username := cfg.Username
+		if username == "" {
+			username = "admin"
+		}
+		devices = append(devices, DeviceConfig{
+			Hostname:   cfg.Thrall,
+			DeviceType: cfg.DeviceType,
+			Credential: cfg.Credential,
+			Username:   username,
+			Port:       port,
+			IPAddress:  cfg.IPAddress,
+			Config:     cfg,
+		})
+	}
+	return devices
+}
+
+// DeviceEntry holds minimal info about a network device config entry.
+type DeviceEntry struct {
+	Hostname   string // match pattern / hostname
+	Gateway    string // gateway hostname
+	DeviceType string // cisco_ios, cisco_nxos, juniper_junos
+}
+
+// AllDeviceEntries returns all network device entries (entries with a non-empty DeviceType).
+func (cs *ConfigStore) AllDeviceEntries() []DeviceEntry {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	var entries []DeviceEntry
+	for _, e := range cs.entries {
+		if e.config.DeviceType != "" {
+			entries = append(entries, DeviceEntry{
+				Hostname:   e.config.Thrall,
+				Gateway:    e.config.Gateway,
+				DeviceType: e.config.DeviceType,
+			})
+		}
+	}
+	return entries
 }
 
 // ThrallsReferencingSecret returns the match patterns of all thrall entries

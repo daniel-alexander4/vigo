@@ -15,6 +15,7 @@ pub mod snapshots;
 pub mod state;
 pub mod task;
 pub mod traits;
+pub mod transport;
 pub mod update;
 
 pub mod proto {
@@ -384,6 +385,10 @@ async fn run_once(
 
     // Check-in with server.
     let resp = client.check_in("", None, 0, None).await?;
+
+    for w in &resp.warnings {
+        warn!("server warning: {}", w);
+    }
 
     if resp.no_change {
         info!("server reports no change");

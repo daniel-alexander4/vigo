@@ -281,6 +281,13 @@ type ThrallConfig struct {
 	VarOrder        []string                  `yaml:"-"`
 	EnvVars         map[string]map[string]any `yaml:"env_vars"`
 	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
+	// Network device fields — populated for virtual thralls managed via gateway proxy.
+	Gateway    string `yaml:"-"` // hostname of managing gateway thrall
+	DeviceType string `yaml:"-"` // cisco_ios, cisco_nxos, juniper_junos
+	Credential string `yaml:"-"` // resolved secret value for SSH auth
+	Username   string `yaml:"-"` // SSH username
+	Port       int    `yaml:"-"` // SSH port
+	IPAddress  string `yaml:"-"` // management IP
 }
 
 // Clone returns a deep-enough copy of the ThrallConfig. Safe to mutate
@@ -436,6 +443,13 @@ type RoleDefinition struct {
 	Modules  []ModuleRef `yaml:"modules"`
 }
 
+// ValidDeviceTypes lists the supported network device types for gateway proxy management.
+var ValidDeviceTypes = map[string]bool{
+	"cisco_ios":      true,
+	"cisco_nxos":     true,
+	"juniper_junos":  true,
+}
+
 // ThrallEntry is a single entry in thralls.hnb. It has a custom UnmarshalYAML
 // that merges duplicate 'modules' and 'roles' keys (standard YAML would
 // silently keep only the last value).
@@ -447,6 +461,14 @@ type ThrallEntry struct {
 	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to thrall-configs/)
 	Vars        map[string]any            `yaml:"vars"`
 	EnvVars     map[string]map[string]any `yaml:"env_vars"`
+	// Network device fields — set when this entry is a virtual thrall managed
+	// through a gateway. Gateway must be a real compute thrall.
+	Gateway    string `yaml:"gateway"`     // hostname of managing gateway thrall
+	DeviceType string `yaml:"device_type"` // cisco_ios, cisco_nxos, juniper_junos
+	Credential string `yaml:"credential"`  // secret: path for SSH auth
+	Username   string `yaml:"username"`    // SSH username (default: admin)
+	Port       int    `yaml:"port"`        // SSH port (default: 22)
+	IPAddress  string `yaml:"ip_address"`  // management IP (if different from DNS)
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ThrallEntry. It walks the
@@ -498,6 +520,30 @@ func (n *ThrallEntry) UnmarshalYAML(value *yaml.Node) error {
 		case "env_vars":
 			if err := val.Decode(&n.EnvVars); err != nil {
 				return fmt.Errorf("decoding env_vars: %w", err)
+			}
+		case "gateway":
+			if err := val.Decode(&n.Gateway); err != nil {
+				return fmt.Errorf("decoding gateway: %w", err)
+			}
+		case "device_type":
+			if err := val.Decode(&n.DeviceType); err != nil {
+				return fmt.Errorf("decoding device_type: %w", err)
+			}
+		case "credential":
+			if err := val.Decode(&n.Credential); err != nil {
+				return fmt.Errorf("decoding credential: %w", err)
+			}
+		case "username":
+			if err := val.Decode(&n.Username); err != nil {
+				return fmt.Errorf("decoding username: %w", err)
+			}
+		case "port":
+			if err := val.Decode(&n.Port); err != nil {
+				return fmt.Errorf("decoding port: %w", err)
+			}
+		case "ip_address":
+			if err := val.Decode(&n.IPAddress); err != nil {
+				return fmt.Errorf("decoding ip_address: %w", err)
 			}
 		}
 	}

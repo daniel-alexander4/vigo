@@ -1,0 +1,42 @@
+# switch-base — baseline configuration for Cisco IOS switches.
+# Apply to all managed switches via roles.
+name: switch-base
+resources:
+  - name: login-banner
+    type: network_banner
+    device_type: cisco_ios
+    banner_type: login
+    text: "Authorized access only. All activity is monitored and logged."
+    state: present
+
+  - name: ntp-primary
+    type: network_ntp
+    device_type: cisco_ios
+    server: "10.0.0.1"
+    state: present
+
+  - name: ntp-secondary
+    type: network_ntp
+    device_type: cisco_ios
+    server: "10.0.0.2"
+    state: present
+
+  - name: syslog-server
+    type: network_syslog
+    device_type: cisco_ios
+    syslog_host: "10.0.0.50"
+    facility: local7
+    state: present
+
+  - name: snmp-community
+    type: network_snmp
+    device_type: cisco_ios
+    community: "monitoring-ro"
+    permission: RO
+    acl: MGMT-ACCESS
+    state: present
+
+  - name: enable-ssh-v2
+    type: ssh_exec
+    command: "ip ssh version 2"
+    unless: "show ip ssh | include version 2"
