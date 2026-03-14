@@ -294,6 +294,36 @@ func TestBuildPolicyBundle_SubscribesSecretSerialized(t *testing.T) {
 	}
 }
 
+func TestBuildPolicyModule_SliceAttributeSerializedAsJSON(t *testing.T) {
+	mod := config.ModuleConfig{
+		Name: "nginx",
+		Resources: []config.ResourceConfig{
+			{
+				Name: "conf",
+				Type: "file",
+				Attributes: map[string]any{
+					"content":     "server {}",
+					"stream_edit": []interface{}{"/usr/local/bin/strip-comments", "/usr/local/bin/envsubst"},
+				},
+			},
+		},
+	}
+
+	pbMod := buildPolicyModule(mod)
+	res := pbMod.Resources[0]
+
+	got := res.Attributes["stream_edit"]
+	want := `["/usr/local/bin/strip-comments","/usr/local/bin/envsubst"]`
+	if got != want {
+		t.Errorf("stream_edit attribute = %q, want %q", got, want)
+	}
+
+	// Scalar attributes should still work as before.
+	if res.Attributes["content"] != "server {}" {
+		t.Errorf("content = %q, want %q", res.Attributes["content"], "server {}")
+	}
+}
+
 func TestBuildPolicyBundle_CachedHashMismatch_SendsFull(t *testing.T) {
 	mod := config.ModuleConfig{
 		Name: "nginx",

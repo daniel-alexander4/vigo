@@ -4,12 +4,18 @@
 package ui
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,13 +52,17 @@ type Handler struct {
 	version      string
 	assistant    *ai.Assistant
 	hub          *federation.Hub
+	docsDir      string
+	docsNav      []DocsNavSection
 }
 
 // NewHandler creates a UI handler wired to real database queries.
 // The assistant parameter is optional — pass nil to disable the Ask page.
 // The customDS parameter is optional — when provided, it replaces the default
 // DB-backed DataSource (used by FleetIndex integration).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource) (*Handler, error) {
+// The docsDir parameter specifies the path to the docs directory for the
+// built-in documentation browser (pass "" to disable).
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource, docsDir string) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -65,7 +75,7 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		ds = &dbDataSource{queries: queries, configStore: configStore}
 	}
 
-	return &Handler{
+	h := &Handler{
 		renderer:     renderer,
 		dataSource:   ds,
 		queries:      queries,
@@ -76,7 +86,14 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		version:      version,
 		assistant:    assistant,
 		hub:          hub,
-	}, nil
+		docsDir:      docsDir,
+	}
+
+	if docsDir != "" {
+		h.docsNav = buildDocsNav(docsDir)
+	}
+
+	return h, nil
 }
 
 // securityHeaders wraps a handler to add standard security response headers.
@@ -122,6 +139,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	if h.hub != nil {
 		mux.HandleFunc("GET /federation", h.Federation)
 		mux.HandleFunc("GET /federation/spokes/{id}", h.SpokeDetail)
+	}
+
+	// Docs pages (only registered when docsDir is configured and exists)
+	if h.docsDir != "" {
+		mux.HandleFunc("GET /docs", h.DocsIndex)
+		mux.HandleFunc("GET /docs/{path...}", h.DocsPage)
 	}
 
 	// AI chat page (only registered when assistant is available)
@@ -290,6 +313,236 @@ type PlanDetailPageData struct {
 	UpdateCount int
 	DeleteCount int
 	SkipCount   int
+}
+
+// --- Docs types ---
+
+// DocsNavSection represents a section in the docs navigation tree.
+type DocsNavSection struct {
+	Title string
+	Path  string // e.g. "getting-started"
+	Pages []DocsNavPage
+}
+
+// DocsNavPage represents a single page within a docs section.
+type DocsNavPage struct {
+	Title string
+	Path  string // e.g. "getting-started/installation"
+}
+
+// DocsCrumb represents a breadcrumb entry.
+type DocsCrumb struct {
+	Title string
+	Path  string // empty for the current (last) crumb
+}
+
+// DocsPageData holds data for the docs page template.
+type DocsPageData struct {
+	PageData
+	Content        template.HTML
+	Breadcrumbs    []DocsCrumb
+	NavTree        []DocsNavSection
+	CurrentPath    string
+	CurrentSection string
+}
+
+// docsSectionOrder defines the display order for documentation sections.
+var docsSectionOrder = []string{
+	"getting-started",
+	"concepts",
+	"executors",
+	"traits",
+	"cli",
+	"api",
+	"operations",
+	"ui",
+	"ai",
+	"examples",
+}
+
+// buildDocsNav walks the docs directory and builds a nav tree.
+func buildDocsNav(docsDir string) []DocsNavSection {
+	info, err := os.Stat(docsDir)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+
+	// Read subdirectories.
+	entries, err := os.ReadDir(docsDir)
+	if err != nil {
+		slog.Warn("docs: failed to read directory", "dir", docsDir, "error", err)
+		return nil
+	}
+
+	sectionMap := make(map[string]DocsNavSection)
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
+		sectionPath := entry.Name()
+		sectionTitle := extractMDTitle(filepath.Join(docsDir, sectionPath, "_index.md"))
+		if sectionTitle == "" {
+			sectionTitle = strings.ReplaceAll(sectionPath, "-", " ")
+			sectionTitle = strings.Title(sectionTitle)
+		}
+
+		// Read pages in this section.
+		pageFiles, err := os.ReadDir(filepath.Join(docsDir, sectionPath))
+		if err != nil {
+			continue
+		}
+
+		var pages []DocsNavPage
+		for _, pf := range pageFiles {
+			if pf.IsDir() || !strings.HasSuffix(pf.Name(), ".md") || pf.Name() == "_index.md" {
+				continue
+			}
+
+			pageName := strings.TrimSuffix(pf.Name(), ".md")
+			pageTitle := extractMDTitle(filepath.Join(docsDir, sectionPath, pf.Name()))
+			if pageTitle == "" {
+				pageTitle = strings.ReplaceAll(pageName, "-", " ")
+				pageTitle = strings.ReplaceAll(pageTitle, "_", " ")
+			}
+
+			pages = append(pages, DocsNavPage{
+				Title: pageTitle,
+				Path:  sectionPath + "/" + pageName,
+			})
+		}
+
+		sort.Slice(pages, func(i, j int) bool {
+			return pages[i].Title < pages[j].Title
+		})
+
+		sectionMap[sectionPath] = DocsNavSection{
+			Title: sectionTitle,
+			Path:  sectionPath,
+			Pages: pages,
+		}
+	}
+
+	// Order sections by the predefined list, then any remaining alphabetically.
+	var nav []DocsNavSection
+	seen := make(map[string]bool)
+	for _, name := range docsSectionOrder {
+		if sec, ok := sectionMap[name]; ok {
+			nav = append(nav, sec)
+			seen[name] = true
+		}
+	}
+	for name, sec := range sectionMap {
+		if !seen[name] {
+			nav = append(nav, sec)
+		}
+	}
+
+	return nav
+}
+
+// extractMDTitle reads a markdown file and returns the first # heading.
+func extractMDTitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimPrefix(line, "# ")
+		}
+	}
+	return ""
+}
+
+// DocsIndex renders the docs landing page.
+func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
+	content := ""
+	indexPath := filepath.Join(h.docsDir, "_index.md")
+	if raw, err := os.ReadFile(indexPath); err == nil {
+		content = RenderMarkdown(string(raw))
+	} else {
+		content = "<h1>Documentation</h1><p>No docs found. Place markdown files in the docs directory.</p>"
+	}
+
+	data := DocsPageData{
+		PageData: PageData{Title: "Documentation", ActiveNav: "docs"},
+		Content:  template.HTML(content),
+		NavTree:  h.docsNav,
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "docs", data)
+}
+
+// DocsPage renders an individual docs page from disk.
+func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
+	pagePath := r.PathValue("path")
+
+	// Sanitize: only allow alphanumeric, hyphens, underscores, slashes.
+	pagePath = filepath.Clean(pagePath)
+	if strings.Contains(pagePath, "..") {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	// Try exact .md file first, then _index.md for directories.
+	var raw []byte
+	var err error
+	mdPath := filepath.Join(h.docsDir, pagePath+".md")
+	if raw, err = os.ReadFile(mdPath); err != nil {
+		mdPath = filepath.Join(h.docsDir, pagePath, "_index.md")
+		if raw, err = os.ReadFile(mdPath); err != nil {
+			http.Error(w, "page not found", http.StatusNotFound)
+			return
+		}
+	}
+
+	content := RenderMarkdown(string(raw))
+
+	// Build breadcrumbs from path.
+	parts := strings.Split(pagePath, "/")
+	var breadcrumbs []DocsCrumb
+	for i, part := range parts {
+		title := strings.ReplaceAll(part, "-", " ")
+		title = strings.ReplaceAll(title, "_", " ")
+		// Try to find a better title from the nav tree.
+		if i == 0 {
+			for _, sec := range h.docsNav {
+				if sec.Path == part {
+					title = sec.Title
+					break
+				}
+			}
+		}
+		if i < len(parts)-1 {
+			breadcrumbs = append(breadcrumbs, DocsCrumb{
+				Title: title,
+				Path:  strings.Join(parts[:i+1], "/"),
+			})
+		} else {
+			breadcrumbs = append(breadcrumbs, DocsCrumb{Title: title})
+		}
+	}
+
+	currentSection := ""
+	if len(parts) > 0 {
+		currentSection = parts[0]
+	}
+
+	data := DocsPageData{
+		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
+		Content:        template.HTML(content),
+		Breadcrumbs:    breadcrumbs,
+		NavTree:        h.docsNav,
+		CurrentPath:    pagePath,
+		CurrentSection: currentSection,
+	}
+	h.setCommon(&data.PageData)
+	h.renderer.Render(w, "docs", data)
 }
 
 // setCommon applies version, AI-enabled, and federation flags to page data.

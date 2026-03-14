@@ -113,6 +113,7 @@ impl Executor for DockerImageExecutor {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::os::unix::process::ExitStatusExt;

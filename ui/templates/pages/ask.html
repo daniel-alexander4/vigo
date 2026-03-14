@@ -93,7 +93,7 @@
                     </div>
                 </div>
             </div>
-            <form class="chat-input-form" id="chat-form" onsubmit="return handleSubmit(event)">
+            <form class="chat-input-form" id="chat-form" hx-boost="false" onsubmit="return handleSubmit(event)">
                 <div class="chat-input-wrapper">
                     <textarea class="chat-input" id="chat-input" placeholder="Ask a question..." rows="1"
                         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSubmit(event)}"></textarea>

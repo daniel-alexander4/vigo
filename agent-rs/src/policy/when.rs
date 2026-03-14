@@ -447,8 +447,8 @@ pub fn evaluate_builtin(name: &str, args: &[String], traits: &Value) -> Result<b
         }
         "flag_set" => {
             check_arity(name, args, 1)?;
-            let path = format!("/var/lib/hobnob/flags/{}", args[0]);
-            Ok(Path::new(&path).exists())
+            let path = crate::platform::paths::default_flags_dir().join(&args[0]);
+            Ok(path.exists())
         }
         "os_family" => {
             check_arity(name, args, 1)?;
@@ -483,8 +483,9 @@ fn check_arity(name: &str, args: &[String], expected: usize) -> Result<()> {
 }
 
 fn command_succeeds(cmd: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
+    let (shell, shell_arg) = crate::platform::paths::shell_command();
+    Command::new(shell)
+        .arg(shell_arg)
         .arg(cmd)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -493,6 +494,7 @@ fn command_succeeds(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(target_os = "linux")]
 fn process_running(name: &str) -> bool {
     let Ok(entries) = std::fs::read_dir("/proc") else { return false };
     for entry in entries.flatten() {
@@ -510,6 +512,29 @@ fn process_running(name: &str) -> bool {
     false
 }
 
+#[cfg(windows)]
+fn process_running(name: &str) -> bool {
+    // Use tasklist to check if process is running.
+    let search = if name.ends_with(".exe") {
+        name.to_string()
+    } else {
+        format!("{}.exe", name)
+    };
+    Command::new("tasklist")
+        .args(["/FI", &format!("IMAGENAME eq {}", search), "/NH"])
+        .output()
+        .map(|o| {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            stdout.contains(&search)
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn process_running(_name: &str) -> bool {
+    false
+}
+
 /// Get local hour (0-23) using libc localtime.
 fn local_hour() -> u32 {
     local_time().0
@@ -522,14 +547,57 @@ fn local_day_of_month() -> u32 {
 
 /// Returns (hour, weekday 0=Sun..6=Sat, day_of_month).
 fn local_time() -> (u32, u32, u32) {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as libc::time_t;
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe { libc::localtime_r(&secs, &mut tm) };
-    (tm.tm_hour as u32, tm.tm_wday as u32, tm.tm_mday as u32)
+    #[cfg(unix)]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as libc::time_t;
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        unsafe { libc::localtime_r(&secs, &mut tm) };
+        (tm.tm_hour as u32, tm.tm_wday as u32, tm.tm_mday as u32)
+    }
+    #[cfg(not(unix))]
+    {
+        // Fallback: UTC-based. On Windows this loses timezone info but is safe.
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let days = secs / 86400;
+        let time_of_day = secs % 86400;
+        let hour = (time_of_day / 3600) as u32;
+        // Jan 1 1970 was a Thursday (4).
+        let wday = ((days + 4) % 7) as u32;
+        // Approximate day of month (sufficient for basic checks).
+        // Full Gregorian calculation:
+        let mut y = 1970i64;
+        let mut remaining = days as i64;
+        loop {
+            let year_days = if is_leap(y) { 366 } else { 365 };
+            if remaining < year_days { break; }
+            remaining -= year_days;
+            y += 1;
+        }
+        let leap = is_leap(y);
+        let month_days: [i64; 12] = [
+            31, if leap { 29 } else { 28 }, 31, 30, 31, 30,
+            31, 31, 30, 31, 30, 31,
+        ];
+        let mut mday = remaining;
+        for md in &month_days {
+            if mday < *md { break; }
+            mday -= md;
+        }
+        ((hour), wday, (mday + 1) as u32)
+    }
+}
+
+#[cfg(not(unix))]
+fn is_leap(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 }
 
 fn hour_in_range(hour: u32, start: u32, end: u32) -> bool {
@@ -580,6 +648,7 @@ fn version_ge(actual: &str, required: &str) -> bool {
     true // equal
 }
 
+#[cfg(unix)]
 fn in_group(group: &str) -> bool {
     Command::new("getent")
         .args(["group", group])
@@ -588,6 +657,22 @@ fn in_group(group: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn in_group(group: &str) -> bool {
+    Command::new("net")
+        .args(["localgroup", group])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn in_group(_group: &str) -> bool {
+    false
 }
 
 #[cfg(test)]

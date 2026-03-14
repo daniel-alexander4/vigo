@@ -177,6 +177,7 @@ impl Executor for GitExecutor {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::os::unix::process::ExitStatusExt;

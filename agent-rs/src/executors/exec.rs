@@ -14,7 +14,6 @@ use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::time::Instant;
 
@@ -184,7 +183,7 @@ fn run_with_secret_file(
     {
         let mut f = fs::File::create(&tmp_path)
             .map_err(|e| format!("creating secret temp file: {}", e))?;
-        fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600))
+        crate::platform::permissions::set_owner_only(&tmp_path)
             .map_err(|e| format!("setting secret file permissions: {}", e))?;
         f.write_all(secret.as_bytes())
             .map_err(|e| format!("writing secret file: {}", e))?;

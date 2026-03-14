@@ -18,41 +18,38 @@ import (
 	"time"
 )
 
-// TLS cert file names within the secrets directory (hobnob/tls/).
+// TLS cert file names within the TLS directory.
 const (
-	tlsDir     = "hobnob/tls"
-	tlsCA      = "ca"
-	tlsCAKey   = "ca_key"
-	tlsCert    = "cert"
-	tlsKey     = "key"
+	tlsCA    = "ca"
+	tlsCAKey = "ca_key"
+	tlsCert  = "cert"
+	tlsKey   = "key"
 )
 
-// TLSCertPaths returns the absolute paths for the four TLS files under dir.
-func TLSCertPaths(secretsDir string) (ca, caKey, cert, key string) {
-	d := filepath.Join(secretsDir, tlsDir)
-	return filepath.Join(d, tlsCA),
-		filepath.Join(d, tlsCAKey),
-		filepath.Join(d, tlsCert),
-		filepath.Join(d, tlsKey)
+// TLSCertPaths returns the absolute paths for the four TLS files under tlsDir.
+func TLSCertPaths(tlsDir string) (ca, caKey, cert, key string) {
+	return filepath.Join(tlsDir, tlsCA),
+		filepath.Join(tlsDir, tlsCAKey),
+		filepath.Join(tlsDir, tlsCert),
+		filepath.Join(tlsDir, tlsKey)
 }
 
-// EnsureTLSCerts checks whether the four TLS PEM files exist under the
-// secrets directory and generates self-signed certificates if any are missing.
-// Files are written as plain PEM (not encrypted) since they are loaded
-// directly by the TLS stack via file paths in server.yaml.
+// EnsureTLSCerts checks whether the four TLS PEM files exist under tlsDir
+// and generates self-signed certificates if any are missing. Files are written
+// as plain PEM (not encrypted) since they are loaded directly by the TLS stack.
 //
 // Only called for the local backend — isopass/static manage certs externally.
-func (p *LocalProvider) EnsureTLSCerts() error {
-	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(p.secretsDir)
+func EnsureTLSCerts(tlsDir string) error {
+	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(tlsDir)
 	for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
 		if _, err := os.Stat(f); os.IsNotExist(err) {
-			return p.generateSelfSignedCerts()
+			return generateSelfSignedCerts(tlsDir)
 		}
 	}
 	return nil
 }
 
-func (p *LocalProvider) generateSelfSignedCerts() error {
+func generateSelfSignedCerts(tlsDir string) error {
 	// SAN list: localhost + hostname + 127.0.0.1.
 	dnsNames := []string{"localhost"}
 	ips := []net.IP{net.IPv4(127, 0, 0, 1)}
@@ -117,9 +114,9 @@ func (p *LocalProvider) generateSelfSignedCerts() error {
 	serverKeyDER, _ := x509.MarshalECPrivateKey(serverKey)
 	serverKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER})
 
-	// Write PEM files to secrets/hobnob/tls/.
-	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(p.secretsDir)
-	if err := os.MkdirAll(filepath.Dir(caPath), 0700); err != nil {
+	// Write PEM files to the TLS directory.
+	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(tlsDir)
+	if err := os.MkdirAll(tlsDir, 0700); err != nil {
 		return fmt.Errorf("creating TLS directory: %w", err)
 	}
 

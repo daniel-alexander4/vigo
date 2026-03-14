@@ -7,11 +7,10 @@
 //! they check current state before acting and only modify the system when drift
 //! is detected.
 
-pub mod alternatives;
+// Cross-platform executors.
 pub mod archive;
 pub mod atomic;
 pub mod blockinfile;
-pub mod cron;
 pub mod custom;
 pub mod directory;
 pub mod docker_container;
@@ -20,17 +19,11 @@ pub mod exec;
 pub mod field_edit;
 pub mod file;
 pub mod file_line;
-pub mod firewall;
 pub mod gem;
 pub mod git;
-pub mod group;
 pub mod host;
-pub mod hostname;
 pub mod ini;
 pub mod json_file;
-pub mod kernel_module;
-pub mod logrotate;
-pub mod mount;
 pub mod npm;
 pub mod pip;
 pub mod pkgmgr;
@@ -39,14 +32,54 @@ pub mod replace;
 pub mod process;
 pub mod reboot;
 pub mod repository;
-pub mod service;
 pub mod sshkey;
-pub mod swap;
 pub mod symlink;
+
+// Linux-only executors.
+#[cfg(target_os = "linux")]
+pub mod alternatives;
+#[cfg(target_os = "linux")]
+pub mod cron;
+#[cfg(target_os = "linux")]
+pub mod firewall;
+#[cfg(target_os = "linux")]
+pub mod group;
+#[cfg(target_os = "linux")]
+pub mod hostname;
+#[cfg(target_os = "linux")]
+pub mod kernel_module;
+#[cfg(target_os = "linux")]
+pub mod logrotate;
+#[cfg(target_os = "linux")]
+pub mod mount;
+#[cfg(target_os = "linux")]
+pub mod service;
+#[cfg(target_os = "linux")]
+pub mod swap;
+#[cfg(target_os = "linux")]
 pub mod sysctl;
+#[cfg(target_os = "linux")]
 pub mod timezone;
+#[cfg(target_os = "linux")]
 pub mod tmpfile;
+#[cfg(target_os = "linux")]
 pub mod user;
+
+// Windows-native executors.
+#[cfg(windows)]
+pub mod cron_windows;
+#[cfg(windows)]
+pub mod firewall_windows;
+#[cfg(windows)]
+pub mod hostname_windows;
+#[cfg(windows)]
+pub mod package_windows;
+#[cfg(windows)]
+pub mod service_windows;
+#[cfg(windows)]
+pub mod timezone_windows;
+#[cfg(windows)]
+pub mod user_windows;
 
 use std::collections::HashMap;
 use std::fmt;

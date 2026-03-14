@@ -1,4 +1,4 @@
-.PHONY: build build-agent test test-agent lint lint-agent dist dist-agent \
+.PHONY: build build-agent test test-agent lint lint-agent dist dist-agent dist-agent-windows \
        proto certs seed migrate sqlc up down logs clean
 
 VERSION ?= dev
@@ -49,6 +49,15 @@ dist-agent:
 	cp agent-rs/target/x86_64-unknown-linux-musl/release/hobnob dist/agent/linux/amd64/hobnob
 	cd agent-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
 	cp agent-rs/target/aarch64-unknown-linux-musl/release/hobnob dist/agent/linux/arm64/hobnob
+
+# Cross-compile Rust agent for Windows.
+# Prerequisites:
+#   rustup target add x86_64-pc-windows-msvc
+#   Install cross: cargo install cross
+dist-agent-windows:
+	mkdir -p dist/agent/windows/amd64
+	cd agent-rs && cross build --release --target x86_64-pc-windows-msvc
+	cp agent-rs/target/x86_64-pc-windows-msvc/release/hobnob.exe dist/agent/windows/amd64/hobnob.exe
 
 # --- Codegen ---
 

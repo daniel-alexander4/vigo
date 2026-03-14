@@ -1,0 +1,206 @@
+# Monitoring Stack
+
+This example sets up Prometheus node_exporter, Prometheus server, and Grafana using the package-config-service pattern.
+
+## Node Exporter Module
+
+Deployed to every thrall for metrics collection.
+
+`thrall-configs/modules/node-exporter.hnb`:
+
+```yaml
+name: node-exporter
+vars:
+  node_exporter_port: "9100"
+resources:
+  - name: node-exporter-package
+    type: package
+    package: prometheus-node-exporter
+    ensure: present
+    when: "os_family('debian')"
+
+  - name: node-exporter-package-rhel
+    type: package
+    package: node_exporter
+    ensure: present
+    when: "!os_family('debian')"
+
+  - name: node-exporter-config
+    type: file
+    targetpath: /etc/default/prometheus-node-exporter
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      ARGS="--web.listen-address=:{{ .Vars.node_exporter_port }}"
+    notify:
+      - node-exporter-service
+
+  - name: node-exporter-service
+    type: service
+    service: prometheus-node-exporter
+    ensure: running
+    enable: true
+```
+
+## Prometheus Module
+
+Deployed to monitoring servers.
+
+`thrall-configs/modules/prometheus.hnb`:
+
+```yaml
+name: prometheus
+vars:
+  prometheus_port: "9090"
+  prometheus_retention: 30d
+  prometheus_scrape_interval: 15s
+resources:
+  - name: prometheus-package
+    type: package
+    package: prometheus
+    ensure: present
+
+  - name: prometheus-config
+    type: file
+    targetpath: /etc/prometheus/prometheus.yml
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+    content: |
+      global:
+        scrape_interval: {{ .Vars.prometheus_scrape_interval }}
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: prometheus
+          static_configs:
+            - targets: ['localhost:{{ .Vars.prometheus_port }}']
+
+        - job_name: node
+          file_sd_configs:
+            - files:
+                - /etc/prometheus/targets/*.json
+              refresh_interval: 30s
+
+        - job_name: hobnob
+          static_configs:
+            - targets: ['{{ .Vars.hobnob_server }}:8181']
+    notify:
+      - prometheus-service
+
+  - name: prometheus-targets-dir
+    type: directory
+    path: /etc/prometheus/targets
+    owner: prometheus
+    group: prometheus
+    mode: "0755"
+
+  - name: prometheus-service
+    type: service
+    service: prometheus
+    ensure: running
+    enable: true
+```
+
+## Grafana Module
+
+`thrall-configs/modules/grafana.hnb`:
+
+```yaml
+name: grafana
+depends_on:
+  - prometheus
+vars:
+  grafana_port: "3000"
+  grafana_admin_user: admin
+resources:
+  - name: grafana-package
+    type: package
+    package: grafana
+    ensure: present
+
+  - name: grafana-config
+    type: file
+    targetpath: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: "0640"
+    content: |
+      [server]
+      http_port = {{ .Vars.grafana_port }}
+
+      [security]
+      admin_user = {{ .Vars.grafana_admin_user }}
+
+      [auth.anonymous]
+      enabled = false
+    notify:
+      - grafana-service
+
+  - name: grafana-datasource
+    type: file
+    targetpath: /etc/grafana/provisioning/datasources/prometheus.yaml
+    owner: root
+    group: grafana
+    mode: "0640"
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://localhost:{{ .Vars.prometheus_port }}
+          isDefault: true
+          access: proxy
+    notify:
+      - grafana-service
+
+  - name: grafana-service
+    type: service
+    service: grafana-server
+    ensure: running
+    enable: true
+```
+
+## Role Definition
+
+`thrall-configs/roles/monitoring.hnb`:
+
+```yaml
+name: monitoring
+modules:
+  - node-exporter
+  - prometheus
+  - grafana
+```
+
+## Node Assignment
+
+`thrall-configs/nodes.hnb`:
+
+```yaml
+thralls:
+  # All servers get node_exporter
+  - match: "*.example.com"
+    modules:
+      - node-exporter
+
+  # Monitoring servers get the full stack
+  - match: "mon-*.example.com"
+    environment: production
+    roles: [monitoring]
+    vars:
+      hobnob_server: hobnob.internal
+      prometheus_retention: 90d
+      grafana_port: "3000"
+```
+
+## Execution Order
+
+1. **node-exporter** -- no dependencies, runs first
+2. **prometheus** -- no explicit dependency on node-exporter (it discovers targets via file_sd)
+3. **grafana** -- depends on prometheus (needs the datasource to be available)
+
+## Adding Hobnob Metrics
+
+Point Prometheus at the Hobnob server's `/metrics` endpoint to monitor the configuration management system itself. See [Prometheus Metrics](../operations/metrics.md) for available metrics and Grafana dashboard suggestions.

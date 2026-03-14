@@ -433,51 +433,22 @@ pub fn build_executors_with_snapshots(
 
     let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
 
-    // Core executors (Phase 3).
+    // Cross-platform executors.
     executors.insert("file".to_string(), Box::new(file::FileExecutor::new(snapshot_mgr)));
     executors.insert("directory".to_string(), Box::new(directory::DirectoryExecutor::new()));
     executors.insert("symlink".to_string(), Box::new(symlink::SymlinkExecutor::new()));
     executors.insert("exec".to_string(), Box::new(exec::ExecExecutor::new()));
-    executors.insert("service".to_string(), Box::new(service::ServiceExecutor::new()));
-
-    // Package executor: detect package manager from OS traits.
-    match pkgmgr::detect(os_family, os_distro) {
-        Ok(pm) => {
-            executors.insert(
-                "package".to_string(),
-                Box::new(PackageExecutorWrapper { pkg_mgr: pm }),
-            );
-        }
-        Err(e) => {
-            warn!(error = %e, "no package manager detected, package resources will fail");
-        }
-    }
-
-    // Phase 5 executors.
-    executors.insert("user".to_string(), Box::new(user::UserExecutor::new()));
-    executors.insert("group".to_string(), Box::new(group::GroupExecutor::new()));
-    executors.insert("cron".to_string(), Box::new(cron::CronExecutor));
     executors.insert("process".to_string(), Box::new(process::ProcessExecutor::new()));
     executors.insert("file_line".to_string(), Box::new(file_line::FileLineExecutor));
     executors.insert("host".to_string(), Box::new(host::HostExecutor::new()));
-    executors.insert("hostname".to_string(), Box::new(hostname::HostnameExecutor::new()));
-    executors.insert("timezone".to_string(), Box::new(timezone::TimezoneExecutor::new()));
-    executors.insert("sysctl".to_string(), Box::new(sysctl::SysctlExecutor::new()));
     executors.insert("sshkey".to_string(), Box::new(sshkey::SshKeyExecutor));
-    executors.insert("firewall".to_string(), Box::new(firewall::FirewallExecutor::new()));
-    executors.insert("kernel_module".to_string(), Box::new(kernel_module::KernelModuleExecutor::new()));
-    executors.insert("mount".to_string(), Box::new(mount::MountExecutor::new()));
-    executors.insert("swap".to_string(), Box::new(swap::SwapExecutor::new()));
-    executors.insert("tmpfile".to_string(), Box::new(tmpfile::TmpfileExecutor::new()));
     executors.insert("ini".to_string(), Box::new(ini::IniExecutor));
     executors.insert("json_file".to_string(), Box::new(json_file::JsonFileExecutor));
     executors.insert("blockinfile".to_string(), Box::new(blockinfile::BlockInFileExecutor));
     executors.insert("archive".to_string(), Box::new(archive::ArchiveExecutor::new()));
     executors.insert("repository".to_string(), Box::new(repository::RepositoryExecutor::for_os(os_family)));
     executors.insert("git".to_string(), Box::new(git::GitExecutor::new()));
-    executors.insert("logrotate".to_string(), Box::new(logrotate::LogrotateExecutor));
     executors.insert("reboot".to_string(), Box::new(reboot::RebootExecutor::new()));
-    executors.insert("alternatives".to_string(), Box::new(alternatives::AlternativesExecutor::new()));
     executors.insert("pip".to_string(), Box::new(pip::PipExecutor::new()));
     executors.insert("gem".to_string(), Box::new(gem::GemExecutor::new()));
     executors.insert("npm".to_string(), Box::new(npm::NpmExecutor::new()));
@@ -485,6 +456,50 @@ pub fn build_executors_with_snapshots(
     executors.insert("docker_image".to_string(), Box::new(docker_image::DockerImageExecutor::new()));
     executors.insert("replace".to_string(), Box::new(replace::ReplaceExecutor));
     executors.insert("field_edit".to_string(), Box::new(field_edit::FieldEditExecutor));
+
+    // Linux-only executors.
+    #[cfg(target_os = "linux")]
+    {
+        executors.insert("service".to_string(), Box::new(service::ServiceExecutor::new()));
+        executors.insert("user".to_string(), Box::new(user::UserExecutor::new()));
+        executors.insert("group".to_string(), Box::new(group::GroupExecutor::new()));
+        executors.insert("cron".to_string(), Box::new(cron::CronExecutor));
+        executors.insert("hostname".to_string(), Box::new(hostname::HostnameExecutor::new()));
+        executors.insert("timezone".to_string(), Box::new(timezone::TimezoneExecutor::new()));
+        executors.insert("sysctl".to_string(), Box::new(sysctl::SysctlExecutor::new()));
+        executors.insert("firewall".to_string(), Box::new(firewall::FirewallExecutor::new()));
+        executors.insert("kernel_module".to_string(), Box::new(kernel_module::KernelModuleExecutor::new()));
+        executors.insert("mount".to_string(), Box::new(mount::MountExecutor::new()));
+        executors.insert("swap".to_string(), Box::new(swap::SwapExecutor::new()));
+        executors.insert("tmpfile".to_string(), Box::new(tmpfile::TmpfileExecutor::new()));
+        executors.insert("logrotate".to_string(), Box::new(logrotate::LogrotateExecutor));
+        executors.insert("alternatives".to_string(), Box::new(alternatives::AlternativesExecutor::new()));
+
+        // Linux package manager detection.
+        match pkgmgr::detect(os_family, os_distro) {
+            Ok(pm) => {
+                executors.insert(
+                    "package".to_string(),
+                    Box::new(PackageExecutorWrapper { pkg_mgr: pm }),
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "no package manager detected, package resources will fail");
+            }
+        }
+    }
+
+    // Windows-native executors.
+    #[cfg(windows)]
+    {
+        executors.insert("service".to_string(), Box::new(service_windows::ServiceWindowsExecutor::new()));
+        executors.insert("user".to_string(), Box::new(user_windows::UserWindowsExecutor::new()));
+        executors.insert("package".to_string(), Box::new(package_windows::PackageWindowsExecutor::new()));
+        executors.insert("cron".to_string(), Box::new(cron_windows::CronWindowsExecutor::new()));
+        executors.insert("hostname".to_string(), Box::new(hostname_windows::HostnameWindowsExecutor::new()));
+        executors.insert("timezone".to_string(), Box::new(timezone_windows::TimezoneWindowsExecutor::new()));
+        executors.insert("firewall".to_string(), Box::new(firewall_windows::FirewallWindowsExecutor::new()));
+    }
 
     executors
 }
@@ -505,15 +520,9 @@ pub fn load_custom_executors(
             continue;
         }
 
-        // Check executable bit.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Ok(meta) = path.metadata() {
-                if meta.permissions().mode() & 0o111 == 0 {
-                    continue; // Not executable.
-                }
-            }
+        // Check if executable (mode bits on Unix, extension on Windows).
+        if !crate::platform::permissions::is_executable(&path) {
+            continue;
         }
 
         let name = path

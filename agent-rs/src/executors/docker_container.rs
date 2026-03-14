@@ -301,6 +301,7 @@ impl Executor for DockerContainerExecutor {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::os::unix::process::ExitStatusExt;

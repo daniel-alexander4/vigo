@@ -168,6 +168,41 @@ Available namespaces:
 - `.Vars` -- merged variables (module defaults + thrall overrides + env_vars)
 - `.Traits` -- thrall's collected traits (os, hardware, network, etc.)
 
+## Stream Edit
+
+Pipe file content through a script (or chain of scripts) on the thrall before writing. The script reads stdin and writes the transformed result to stdout:
+
+```yaml
+resources:
+  - name: strip-comments-script
+    type: file
+    targetpath: /usr/local/bin/strip-comments.sh
+    content: |
+      #!/bin/sh
+      grep -v '^[[:space:]]*#'
+    mode: "0755"
+
+  - name: clean-config
+    type: file
+    targetpath: /etc/myapp/config.conf
+    content: |
+      # database settings
+      host = localhost
+      port = 5432
+    stream_edit: /usr/local/bin/strip-comments.sh
+    depends_on: [strip-comments-script]
+```
+
+For chained transforms, pass a list:
+
+```yaml
+    stream_edit:
+      - /usr/local/bin/strip-comments.sh
+      - /usr/local/bin/sort-dedup.sh
+```
+
+Pipeline results are cached across convergence cycles — scripts only re-run when input content, script files, or the target file change. Non-zero exit fails the resource (no file written). See [file executor docs](../docs/executors/file.md#stream-edit).
+
 ## Conditional Variables
 
 Define variables whose value depends on a thrall's traits:

@@ -1,0 +1,147 @@
+# Check-in Lifecycle
+
+The agent check-in is the core data flow in Hobnob. Every 5 minutes (configurable), the agent contacts the server, receives its desired state, applies changes, and reports results.
+
+## Pull Loop
+
+```
+Agent                                     Server
+  │                                         │
+  │  ┌─── Loop every base_interval ───┐    │
+  │  │                                 │    │
+  │  │  1. Collect traits              │    │
+  │  │  2. Compute state fingerprint   │    │
+  │  │                                 │    │
+  │  │  CheckIn(uuid, traits,          │    │
+  │  │          fingerprint)           │    │
+  │  │─────────────────────────────────────>│
+  │  │                                 │    │ 3. Verify signature
+  │  │                                 │    │ 4. Update FleetIndex
+  │  │                                 │    │ 5. Match hostname → config
+  │  │                                 │    │ 6. Resolve modules + vars
+  │  │                                 │    │ 7. Compare fingerprint
+  │  │  Response: modules[]            │    │
+  │  │  (or "no change" if match)      │    │
+  │  │<─────────────────────────────────────│
+  │  │                                 │    │
+  │  │  8. Build resource DAG          │    │
+  │  │  9. Execute in topo order       │    │
+  │  │  10. Collect results            │    │
+  │  │                                 │    │
+  │  │  ReportResult(run_id, results[])│    │
+  │  │─────────────────────────────────────>│
+  │  │                                 │    │ 11. Store run
+  │  │                                 │    │ 12. Update compliance
+  │  │                                 │    │ 13. Fire webhooks
+  │  └─────────────────────────────────┘    │
+```
+
+## Step by Step
+
+### 1. Trait Collection
+
+The agent runs all trait collectors (OS, hardware, network, packages, etc.) to gather current system state. Traits are cached in LMDB with a configurable TTL.
+
+### 2. State Fingerprint
+
+The agent computes a fingerprint of its current state — a hash of its UUID, last-applied policy hash, and trait hashes. This enables delta transfer: if nothing changed, the server can respond with "no change."
+
+### 3. Signature Verification
+
+Every request from the agent is signed with its ED25519 private key. The server verifies the signature against the stored public key. Replay protection uses a timestamp window (default 5m).
+
+### 4. FleetIndex Update
+
+The server updates the in-memory FleetIndex with the thrall's last-seen timestamp. This is O(1) and touches no database — the dirty set is flushed to SQLite asynchronously every 10s.
+
+### 5. Config Resolution
+
+The server resolves the thrall's desired state:
+
+```
+Hostname match (nodes.hnb, first match wins)
+    ↓
+Expand roles → module list
+    ↓
+Load module definitions
+    ↓
+Merge vars: module defaults → node vars → env_vars → conditional vars
+    ↓
+Resolve secret: references through secrets provider
+    ↓
+Evaluate server-side when: expressions (filter modules/resources)
+    ↓
+Render content: templates with .Vars and .Traits
+    ↓
+Build module DAG (topological sort)
+```
+
+### 6. Delta Transfer
+
+If the computed policy fingerprint matches the agent's fingerprint, the server responds with "no change" — no modules are sent. This dramatically reduces bandwidth for stable fleets.
+
+When the policy has changed, only the changed modules are sent (delta streaming).
+
+### 7. Resource Execution
+
+The agent executes resources in topological order:
+
+```
+For each module (in DAG order):
+    For each resource (in depends_on order):
+        1. Evaluate when: expression → skip if false
+        2. Check current state (executor-specific)
+        3. If state matches desired → report "ok" (no change)
+        4. If drift detected → apply change
+        5. Report result (changed/failed/ok)
+        6. If changed → trigger notify targets
+```
+
+### 8. Result Reporting
+
+After all resources are applied, the agent sends results to the server:
+- Per-resource: action taken, changed flag, error message, duration
+- Per-run: total modules, changed count, failed count, duration
+
+Results are stored in the database and used to compute compliance status.
+
+## Timing
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `checkin.base_interval` | `5m` | Check-in frequency |
+| `checkin.jitter_percent` | `20` | Random jitter to avoid thundering herd |
+| `checkin.bundle_max_age` | `24h` | Compiled promise validity period |
+
+With default settings, an agent checks in every 5m ± 20% jitter (4m–6m). A thrall is considered **stale** if it hasn't checked in within 2× the base interval (10m).
+
+## Streaming Mode
+
+When the bidirectional gRPC stream (AgentStream) is active, the agent uses delta events instead of request/response RPCs:
+
+```
+Agent                          Server
+  │                              │
+  │  AgentStream (persistent)    │
+  │<════════════════════════════>│
+  │                              │
+  │  DeltaEvent: RunCompleted    │
+  │─────────────────────────────>│
+  │                              │
+  │  DeltaEvent: TraitsDelta     │
+  │─────────────────────────────>│
+  │                              │
+  │  DeltaEvent: HeartbeatDelta  │
+  │─────────────────────────────>│
+  │                              │
+  │  DeltaAck                    │
+  │<─────────────────────────────│
+```
+
+Delta streaming reduces per-check-in overhead by sending only what changed.
+
+## Related
+
+- [Architecture](architecture.md) — System overview
+- [Compiled Promises](compiled-promises.md) — Offline convergence
+- [Compliance](compliance.md) — How run results map to compliance status

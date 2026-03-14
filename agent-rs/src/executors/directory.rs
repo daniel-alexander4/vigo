@@ -7,7 +7,6 @@ use super::file::{apply_ownership, check_ownership, lookup_gid, lookup_uid};
 use super::{Action, Executor, ResourceResult};
 use std::collections::HashMap;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::time::Instant;
 
@@ -61,8 +60,8 @@ fn execute_directory(
     let p = Path::new(path);
 
     if p.is_dir() {
-        let meta = fs::metadata(p).map_err(|e| format!("stat {}: {}", path, e))?;
-        let current_mode = meta.permissions().mode() & 0o7777;
+        let current_mode = crate::platform::permissions::get_mode(p)
+            .map_err(|e| format!("stat {}: {}", path, e))?;
         let ownership_match = check_ownership(path, desired_uid, desired_gid);
 
         if current_mode == mode && ownership_match {
@@ -79,7 +78,7 @@ fn execute_directory(
         }
 
         if current_mode != mode {
-            fs::set_permissions(p, fs::Permissions::from_mode(mode))
+            crate::platform::permissions::set_mode(p, mode)
                 .map_err(|e| format!("chmod {}: {}", path, e))?;
         }
         if !ownership_match {
@@ -96,7 +95,7 @@ fn execute_directory(
     }
 
     fs::create_dir_all(p).map_err(|e| format!("create directory {}: {}", path, e))?;
-    fs::set_permissions(p, fs::Permissions::from_mode(mode))
+    crate::platform::permissions::set_mode(p, mode)
         .map_err(|e| format!("chmod {}: {}", path, e))?;
     if desired_uid.is_some() || desired_gid.is_some() {
         apply_ownership(path, desired_uid, desired_gid)?;
@@ -128,7 +127,6 @@ fn handle_absent(path: &str, dry_run: bool, result: &mut ResourceResult) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
     fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
@@ -154,8 +152,11 @@ mod tests {
         assert!(result.changed);
         assert!(result.error.is_none());
         assert!(path.is_dir());
-        let meta = fs::metadata(&path).unwrap();
-        assert_eq!(meta.permissions().mode() & 0o7777, 0o755);
+        #[cfg(unix)]
+        {
+            let mode = crate::platform::permissions::get_mode(&path).unwrap();
+            assert_eq!(mode, 0o755);
+        }
     }
 
     #[test]
@@ -163,7 +164,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("existing_dir");
         fs::create_dir(&path).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        crate::platform::permissions::set_mode(&path, 0o755).unwrap();
         let path_str = path.to_str().unwrap();
 
         let de = DirectoryExecutor::new();
@@ -181,7 +182,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("modedir");
         fs::create_dir(&path).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+        crate::platform::permissions::set_mode(&path, 0o700).unwrap();
         let path_str = path.to_str().unwrap();
 
         let de = DirectoryExecutor::new();
@@ -192,8 +193,11 @@ mod tests {
 
         assert_eq!(result.action, Action::Updated);
         assert!(result.changed);
-        let meta = fs::metadata(&path).unwrap();
-        assert_eq!(meta.permissions().mode() & 0o7777, 0o755);
+        #[cfg(unix)]
+        {
+            let mode = crate::platform::permissions::get_mode(&path).unwrap();
+            assert_eq!(mode, 0o755);
+        }
     }
 
     #[test]

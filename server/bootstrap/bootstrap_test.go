@@ -347,7 +347,6 @@ func TestAgentDownload_RejectsInvalidOsArch(t *testing.T) {
 	tests := []struct {
 		path string
 	}{
-		{"/api/v1/agent/download/windows/amd64"},
 		{"/api/v1/agent/download/linux/386"},
 		{"/api/v1/agent/download/freebsd/arm64"},
 	}

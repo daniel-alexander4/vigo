@@ -80,13 +80,12 @@ var secretsInitCmd = &cobra.Command{
 var secretsGenerateCertsCmd = &cobra.Command{
 	Use:   "generate-certs",
 	Short: "Generate self-signed CA and server TLS certificates",
-	Long: `Generate a self-signed CA keypair and server certificate, then store
-all four values as encrypted secrets:
+	Long: `Generate a self-signed CA keypair and server certificate as plain PEM files:
 
-  hobnob/tls/ca       CA certificate (PEM)
-  hobnob/tls/ca_key   CA private key (PEM)
-  hobnob/tls/cert     Server certificate (PEM)
-  hobnob/tls/key      Server private key (PEM)
+  tls/ca       CA certificate (PEM)
+  tls/ca_key   CA private key (PEM)
+  tls/cert     Server certificate (PEM)
+  tls/key      Server private key (PEM)
 
 Uses ECDSA P-256 keys. The server certificate includes SANs for
 localhost, the system hostname, and any additional names specified
@@ -103,6 +102,7 @@ func init() {
 	secretsInitCmd.Flags().String("key-file", "", "Path to write the new master key")
 	secretsInitCmd.MarkFlagRequired("key-file")
 
+	secretsGenerateCertsCmd.Flags().String("tls-dir", "/etc/hobnob-server/tls", "Directory for TLS certificate files")
 	secretsGenerateCertsCmd.Flags().StringSlice("san", nil, "Additional SANs (DNS names or IPs)")
 	secretsGenerateCertsCmd.Flags().Int("ca-days", 3650, "CA certificate validity in days")
 	secretsGenerateCertsCmd.Flags().Int("server-days", 365, "Server certificate validity in days")
@@ -278,9 +278,9 @@ func runSecretsInit(cmd *cobra.Command, _ []string) error {
 }
 
 func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
-	secretsDir, _ := cmd.Flags().GetString("secrets-dir")
-	if secretsDir == "" {
-		secretsDir = "/etc/hobnob-server/secrets"
+	tlsDir, _ := cmd.Flags().GetString("tls-dir")
+	if tlsDir == "" {
+		tlsDir = "/etc/hobnob-server/tls"
 	}
 
 	force, _ := cmd.Flags().GetBool("force")
@@ -289,7 +289,7 @@ func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
 	extraSANs, _ := cmd.Flags().GetStringSlice("san")
 
 	// Check for existing cert files.
-	caPath, caKeyPath, certPath, keyPath := secrets.TLSCertPaths(secretsDir)
+	caPath, caKeyPath, certPath, keyPath := secrets.TLSCertPaths(tlsDir)
 	if !force {
 		for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
 			if _, err := os.Stat(f); err == nil {
@@ -372,8 +372,8 @@ func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
 	serverKeyDER, _ := x509.MarshalECPrivateKey(serverKey)
 	serverKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER})
 
-	// Write PEM files directly to secrets/hobnob/tls/.
-	if err := os.MkdirAll(filepath.Dir(caPath), 0700); err != nil {
+	// Write PEM files to the TLS directory.
+	if err := os.MkdirAll(tlsDir, 0700); err != nil {
 		return fmt.Errorf("creating TLS directory: %w", err)
 	}
 

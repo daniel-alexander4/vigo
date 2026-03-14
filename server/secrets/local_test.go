@@ -394,15 +394,14 @@ func TestLocalProviderInterfaceSatisfied(t *testing.T) {
 }
 
 func TestEnsureTLSCertsGenerates(t *testing.T) {
-	p := setupAutoKeyProvider(t)
-	defer p.Close()
+	tlsDir := t.TempDir()
 
-	if err := p.EnsureTLSCerts(); err != nil {
+	if err := EnsureTLSCerts(tlsDir); err != nil {
 		t.Fatalf("EnsureTLSCerts: %v", err)
 	}
 
 	// All four PEM files should exist on disk.
-	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(p.Dir())
+	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(tlsDir)
 	for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
 		data, err := os.ReadFile(f)
 		if err != nil {
@@ -415,18 +414,17 @@ func TestEnsureTLSCertsGenerates(t *testing.T) {
 }
 
 func TestEnsureTLSCertsIdempotent(t *testing.T) {
-	p := setupAutoKeyProvider(t)
-	defer p.Close()
+	tlsDir := t.TempDir()
 
-	if err := p.EnsureTLSCerts(); err != nil {
+	if err := EnsureTLSCerts(tlsDir); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
 
-	caPath, _, _, _ := TLSCertPaths(p.Dir())
+	caPath, _, _, _ := TLSCertPaths(tlsDir)
 	first, _ := os.ReadFile(caPath)
 
 	// Second call should be a no-op (files already exist).
-	if err := p.EnsureTLSCerts(); err != nil {
+	if err := EnsureTLSCerts(tlsDir); err != nil {
 		t.Fatalf("second call: %v", err)
 	}
 

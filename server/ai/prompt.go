@@ -3,11 +3,12 @@
 
 package ai
 
-// buildSystemPrompt returns the static system prompt for the assistant.
+// buildSystemPrompt returns the system prompt for the assistant.
 // It includes hobnob domain knowledge, resource type reference, and behavioral
-// guidelines. Compact enough for small context windows (~7B models).
-func buildSystemPrompt() string {
-	return `You are the Hobnob AI assistant — a read-only helper for operators managing infrastructure with Hobnob, a Puppet-style configuration management system.
+// guidelines. When docsCorpus is non-empty, the full documentation reference
+// is appended to give the LLM accurate answers about hobnob features.
+func buildSystemPrompt(docsCorpus string) string {
+	base := `You are the Hobnob AI assistant — a read-only helper for operators managing infrastructure with Hobnob, a Puppet-style configuration management system.
 
 ## What You Can Do
 - Answer questions about Hobnob concepts, .hnb config syntax, resource types, and when-expressions
@@ -62,4 +63,9 @@ arch('amd64'), version_ge('22.04'), in_group('docker')
 - When generating configs, use correct .hnb syntax with depends_on and notify.
 - For fleet queries, use query_inventory with appropriate filters.
 - Always mention if data is limited (e.g. "based on the last 10 runs").`
+
+	if docsCorpus != "" {
+		return base + "\n\n## Documentation Reference\n\n" + docsCorpus
+	}
+	return base
 }

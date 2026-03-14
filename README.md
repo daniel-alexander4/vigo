@@ -175,6 +175,29 @@ Use `baseindent` to prepend a fixed number of spaces to every non-empty line of 
 
 This writes each line with 2 extra leading spaces (4 for the already-indented lines), while empty lines remain empty. Defaults to 0 (no extra indent).
 
+Use `stream_edit` to pipe content through a script (or chain of scripts) on the thrall before writing. Each script reads stdin and writes transformed output to stdout:
+
+```yaml
+  - name: app-conf
+    type: file
+    targetpath: /etc/myapp/config.conf
+    content: |
+      # database settings
+      host = localhost
+      port = 5432
+    stream_edit: /usr/local/bin/strip-comments.sh
+```
+
+For chained transforms, pass a list — scripts execute left-to-right as a pipeline:
+
+```yaml
+    stream_edit:
+      - /usr/local/bin/strip-comments.sh
+      - /usr/local/bin/sort-dedup.sh
+```
+
+Scripts must already exist on the thrall. Deploy them with a file resource and `depends_on`. Pipeline results are cached — scripts only re-run when content, script files, or the target file change. Non-zero exit fails the resource (no file written). See [file executor docs](docs/executors/file.md#stream-edit) for details and example scripts.
+
 Group modules into roles in `thrall-configs/roles/`:
 
 ```yaml
@@ -275,7 +298,7 @@ Like Puppet's autosign, the server auto-enrolls nodes matching configured hostna
 ```yaml
 server:
   tls:
-    ca_key_file: "secret:hobnob/tls/ca_key"  # required for CSR signing
+    ca_key_file: "tls/ca_key"  # required for CSR signing
 
 bootstrap:
   cert_validity: "8760h"  # 1 year
@@ -634,17 +657,17 @@ The server also polls isopass for secret version changes. When a secret rotates,
 
 ## Server secrets
 
-The server's own config (`server-configs/server.yaml`) uses `secret:` references resolved by the secrets backend. With the default `local` backend, these map to files in `/etc/hobnob-server/secrets/`:
+The server's own config (`server-configs/server.yaml`) uses `secret:` references resolved by the secrets backend. With the default `local` backend, secrets map to files in `/etc/hobnob-server/secrets/`. TLS certificates are stored separately in `/etc/hobnob-server/tls/` as plain PEM files:
 
-| Secret path | File | Default value |
-|-------------|------|---------------|
-| `hobnob/db/dsn` | `secrets/hobnob/db/dsn` | `/etc/hobnob-server/db/hobnob.db` |
-| `hobnob/tls/cert` | `secrets/hobnob/tls/cert` | `certs/server.crt` |
-| `hobnob/tls/key` | `secrets/hobnob/tls/key` | `certs/server.key` |
-| `hobnob/tls/ca` | `secrets/hobnob/tls/ca` | `certs/ca.crt` |
-| `hobnob/tls/ca_key` | `secrets/hobnob/tls/ca_key` | `certs/ca.key` |
+| Path | Description |
+|------|-------------|
+| `secrets/hobnob/db/dsn` | Database connection string (encrypted) |
+| `tls/ca` | CA certificate (PEM) |
+| `tls/ca_key` | CA private key (PEM) |
+| `tls/cert` | Server TLS certificate (PEM) |
+| `tls/key` | Server TLS private key (PEM) |
 
-If a secret file is missing, the built-in default is used. The entrypoint seeds these files on first run.
+TLS certificates are auto-generated on first start (local backend only). The entrypoint seeds config files on first run.
 
 ## Development
 

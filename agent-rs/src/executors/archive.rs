@@ -326,6 +326,7 @@ fn walkdir(dir: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::os::unix::process::ExitStatusExt;

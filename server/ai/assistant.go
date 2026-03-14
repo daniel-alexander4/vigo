@@ -40,19 +40,41 @@ type AskResponse struct {
 
 // Assistant wraps an LLM provider with hobnob tools and system context.
 type Assistant struct {
-	provider    Provider
-	tools       *toolDeps
-	cfg         config.AISection
-	rateLimiter *rateLimiter
+	provider     Provider
+	tools        *toolDeps
+	cfg          config.AISection
+	rateLimiter  *rateLimiter
+	systemPrompt string
 }
 
 // NewAssistant creates an assistant with the given provider and dependencies.
-func NewAssistant(provider Provider, queries *db.Queries, configStore *config.ConfigStore, runStore db.RunStore, baseInterval time.Duration, cfg config.AISection) *Assistant {
+// The docsDir parameter specifies the path to docs for system prompt injection
+// (controlled by cfg.DocsMode: "full", "condensed", or "off").
+func NewAssistant(provider Provider, queries *db.Queries, configStore *config.ConfigStore, runStore db.RunStore, baseInterval time.Duration, cfg config.AISection, docsDir string) *Assistant {
 	cfg = withDefaults(cfg)
 	var rl *rateLimiter
 	if cfg.RateLimit > 0 {
 		rl = newRateLimiter(cfg.RateLimit)
 	}
+
+	// Load docs corpus for system prompt injection.
+	docsMode := cfg.DocsMode
+	if docsMode == "" {
+		docsMode = "full"
+	}
+	var docsCorpus string
+	if docsMode != "off" && docsDir != "" {
+		full := LoadDocsCorpus(docsDir)
+		if docsMode == "condensed" {
+			docsCorpus = CondenseDocsCorpus(full)
+		} else {
+			docsCorpus = full
+		}
+		if docsCorpus != "" {
+			slog.Info("ai: docs corpus loaded", "mode", docsMode, "bytes", len(docsCorpus))
+		}
+	}
+
 	return &Assistant{
 		provider: provider,
 		tools: &toolDeps{
@@ -61,8 +83,9 @@ func NewAssistant(provider Provider, queries *db.Queries, configStore *config.Co
 			runStore:     runStore,
 			baseInterval: baseInterval,
 		},
-		cfg:         cfg,
-		rateLimiter: rl,
+		cfg:          cfg,
+		rateLimiter:  rl,
+		systemPrompt: buildSystemPrompt(docsCorpus),
 	}
 }
 
@@ -79,7 +102,7 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 	}()
 
 	messages := []Message{
-		{Role: RoleSystem, Content: buildSystemPrompt()},
+		{Role: RoleSystem, Content: a.systemPrompt},
 	}
 
 	// Augment question with thrall context if provided.
@@ -195,7 +218,7 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 	}()
 
 	messages := []Message{
-		{Role: RoleSystem, Content: buildSystemPrompt()},
+		{Role: RoleSystem, Content: a.systemPrompt},
 	}
 
 	question := req.Question

@@ -7,6 +7,7 @@ pub mod checkin;
 pub mod customtraits;
 pub mod executors;
 pub mod guardrails;
+pub mod platform;
 pub mod policy;
 pub mod runner;
 pub mod snapshots;
@@ -65,15 +66,15 @@ enum Commands {
 
 fn parse_args() -> Result<Cli> {
     let mut cli = Cli {
-        data_dir: PathBuf::from("/etc/hobnob-thrall"),
+        data_dir: platform::paths::default_data_dir(),
         server: "localhost:1530".into(),
         ca_file: None,
         cert_file: None,
         key_file: None,
         log_level: "info".into(),
         api_addr: "http://localhost:8181".into(),
-        executors_dir: "/etc/hobnob-thrall/executors".into(),
-        snapshot_dir: "/var/lib/hobnob/snapshots".into(),
+        executors_dir: platform::paths::default_executors_dir().to_string_lossy().into(),
+        snapshot_dir: platform::paths::default_snapshot_dir().to_string_lossy().into(),
         snapshot_retention: 5,
         trait_refresh_cycles: 10,
         result_cache_cycles: 5,
@@ -187,21 +188,24 @@ fn arg_val(args: &[String], i: usize) -> Result<String> {
 }
 
 fn print_usage() {
+    let data_dir = platform::paths::default_data_dir();
+    let exec_dir = platform::paths::default_executors_dir();
+    let snap_dir = platform::paths::default_snapshot_dir();
     eprintln!("hobnob — Hobnob configuration management agent
 
 USAGE:
     hobnob [FLAGS] [COMMAND]
 
 FLAGS:
-    --data-dir <PATH>             Agent data directory [default: /etc/hobnob-thrall]
+    --data-dir <PATH>             Agent data directory [default: {}]
     --server <ADDR>               Server gRPC address [default: localhost:1530]
     --ca-file <PATH>              CA certificate file
     --cert-file <PATH>            Client certificate file
     --key-file <PATH>             Client key file
     --log-level <LEVEL>           Log level [default: info]
     --api-addr <URL>              Server REST API address [default: http://localhost:8181]
-    --executors-dir <PATH>        Custom executor scripts [default: /etc/hobnob-thrall/executors]
-    --snapshot-dir <PATH>         File snapshots directory [default: /var/lib/hobnob/snapshots]
+    --executors-dir <PATH>        Custom executor scripts [default: {}]
+    --snapshot-dir <PATH>         File snapshots directory [default: {}]
     --snapshot-retention <N>      Max snapshots per file [default: 5]
     --trait-refresh-cycles <N>    Trait refresh interval in cycles [default: 10]
     --result-cache-cycles <N>     Result cache lifetime in cycles [default: 5]
@@ -214,7 +218,7 @@ COMMANDS:
     version     Print agent version
     traits      Print collected traits as JSON [COLLECTORS...]
 
-With no command, runs as a daemon.");
+With no command, runs as a daemon.", data_dir.display(), exec_dir.display(), snap_dir.display());
 }
 
 fn setup_logger(level: &str) {
@@ -565,7 +569,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     });
 
     // Open persistent state store for offline convergence.
-    let state_dir = std::path::PathBuf::from("/var/lib/hobnob/state");
+    let state_dir = platform::paths::default_state_dir();
     let state_store = match state::StateStore::open(&state_dir) {
         Ok(s) => {
             info!(path = %state_dir.display(), "persistent state store ready");
@@ -604,6 +608,34 @@ fn get_outbound_ip() -> String {
         })
         .map(|addr| addr.ip().to_string())
         .unwrap_or_else(|_| "127.0.0.1".to_string())
+}
+
+/// Platform-specific service installation.
+#[cfg(target_os = "linux")]
+async fn install_platform_service(
+    bootstrap_server: &str,
+    grpc_port: &str,
+    data_dir: &std::path::Path,
+) -> Result<String> {
+    bootstrap::systemd::install_service(bootstrap_server, grpc_port, data_dir).await
+}
+
+#[cfg(windows)]
+async fn install_platform_service(
+    bootstrap_server: &str,
+    grpc_port: &str,
+    data_dir: &std::path::Path,
+) -> Result<String> {
+    bootstrap::windows_service::install_service(bootstrap_server, grpc_port, data_dir).await
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+async fn install_platform_service(
+    _bootstrap_server: &str,
+    _grpc_port: &str,
+    _data_dir: &std::path::Path,
+) -> Result<String> {
+    bail!("service installation is not supported on this platform")
 }
 
 #[tokio::main]
@@ -777,15 +809,16 @@ async fn main() -> Result<()> {
                 "bootstrap successful"
             );
 
-            // Install systemd service if requested.
+            // Install system service if requested.
             if *install_service {
-                match bootstrap::systemd::install_service(
+                let install_result = install_platform_service(
                     bootstrap_server,
                     grpc_port,
                     &cli.data_dir,
                 )
-                .await
-                {
+                .await;
+
+                match install_result {
                     Ok(grpc_addr) => {
                         // Verify connectivity with a single check-in.
                         info!("verifying agent check-in...");
@@ -803,7 +836,7 @@ async fn main() -> Result<()> {
                         {
                             Ok(mut client) => {
                                 match client.check_in("", None, 0, None).await {
-                                    Ok(_) => info!("check-in verified, hobnob-thrall service is running"),
+                                    Ok(_) => info!("check-in verified, service is running"),
                                     Err(e) => warn!(error = %e, "verification check-in failed — service is installed but may not reach the server"),
                                 }
                             }
@@ -811,7 +844,7 @@ async fn main() -> Result<()> {
                         }
                     }
                     Err(e) => {
-                        warn!(error = %e, "systemd service installation failed");
+                        warn!(error = %e, "service installation failed");
                         eprintln!(
                             "Service install failed: {}\nStart the agent manually:\n  hobnob --server <grpc-host>:1530 --data-dir {}",
                             e,

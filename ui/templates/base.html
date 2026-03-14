@@ -14,6 +14,41 @@
             {{block "page-content" .}}{{end}}
         </main>
     </div>
+    {{if .AIEnabled}}
+    <button class="ai-fab" id="ai-fab" onclick="toggleAIChat()" title="Ask AI">
+        <svg class="ai-fab__icon" id="ai-fab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <svg class="ai-fab__icon ai-fab__icon--close" id="ai-fab-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+    </button>
+    <div class="ai-drawer" id="ai-drawer">
+        <div class="ai-drawer__header">
+            <span class="ai-drawer__title">Ask AI</span>
+            <button class="ai-drawer__close" onclick="toggleAIChat()">&times;</button>
+        </div>
+        <div class="ai-drawer__messages" id="ai-drawer-messages">
+            <div class="ai-drawer__welcome">
+                <p>Ask anything about your fleet, compliance, or configuration.</p>
+                <div class="ai-drawer__suggestions">
+                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many thralls?</button>
+                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which thralls are failing and why?">Failing thralls?</button>
+                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>
+                </div>
+            </div>
+        </div>
+        <form class="ai-drawer__form" id="ai-drawer-form" hx-boost="false" onsubmit="return aiDrawerSubmit(event)">
+            <div class="chat-input-wrapper">
+                <textarea class="chat-input" id="ai-drawer-input" placeholder="Ask a question..." rows="1"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiDrawerSubmit(event)}"
+                    oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+                <button class="chat-send" type="submit" id="ai-drawer-send">Send</button>
+            </div>
+        </form>
+    </div>
+    <script src="/static/js/ai-drawer.js"></script>
+    {{end}}
 </body>
 </html>
 {{end}}

@@ -8,7 +8,6 @@
 
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tracing::{debug, info, warn};
 
@@ -122,7 +121,7 @@ pub async fn apply(
 
     // Write temp file.
     std::fs::write(&tmp_path, &body).context("write temp binary")?;
-    std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o755))
+    crate::platform::permissions::set_executable(&tmp_path)
         .context("chmod temp binary")?;
 
     // Atomic rename.
@@ -136,11 +135,24 @@ pub async fn apply(
 
     // Exec replaces the current process.
     if exec_self {
-        let args: Vec<std::ffi::CString> = std::env::args()
-            .map(|a| std::ffi::CString::new(a).unwrap())
-            .collect();
-        let binary = std::ffi::CString::new(current_binary).unwrap();
-        nix::unistd::execv(&binary, &args).context("exec new binary")?;
+        #[cfg(unix)]
+        {
+            let args: Vec<std::ffi::CString> = std::env::args()
+                .map(|a| std::ffi::CString::new(a).unwrap())
+                .collect();
+            let binary = std::ffi::CString::new(current_binary).unwrap();
+            nix::unistd::execv(&binary, &args).context("exec new binary")?;
+        }
+        #[cfg(windows)]
+        {
+            // On Windows, spawn the new binary and exit the current process.
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            std::process::Command::new(current_binary)
+                .args(&args)
+                .spawn()
+                .context("spawn new binary")?;
+            std::process::exit(0);
+        }
     }
 
     Ok(())

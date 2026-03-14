@@ -75,9 +75,10 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
         "executing task"
     );
 
-    // Build the command: /bin/sh -c "<command>"
-    let mut cmd = tokio::process::Command::new("/bin/sh");
-    cmd.arg("-c").arg(&dispatch.command);
+    // Build the command via platform shell.
+    let (shell, shell_arg) = crate::platform::paths::shell_command();
+    let mut cmd = tokio::process::Command::new(shell);
+    cmd.arg(shell_arg).arg(&dispatch.command);
 
     // Inject environment variables from the dispatch.
     for (k, v) in &dispatch.env {
@@ -89,12 +90,7 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
     cmd.stderr(std::process::Stdio::piped());
 
     // Create a new process group so we can signal the entire group.
-    unsafe {
-        cmd.pre_exec(|| {
-            libc::setpgid(0, 0);
-            Ok(())
-        });
-    }
+    crate::platform::process::configure_process_group(&mut cmd);
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,
@@ -225,14 +221,13 @@ async fn read_pipe<R: tokio::io::AsyncRead + Unpin>(pipe: Option<R>, max: usize)
     }
 }
 
-/// SIGTERM a process group, wait for grace period, then SIGKILL.
+/// Kill a process group (platform-specific).
 async fn kill_process_group(pid: i32) {
-    let pgid = nix::unistd::Pid::from_raw(pid);
-    if let Err(e) = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGTERM) {
-        warn!(pid = pid, error = %e, "SIGTERM to process group failed");
-    }
-    tokio::time::sleep(std::time::Duration::from_secs(KILL_GRACE_SECS)).await;
-    let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGKILL);
+    crate::platform::process::kill_process_tree(
+        pid as u32,
+        std::time::Duration::from_secs(KILL_GRACE_SECS),
+    )
+    .await;
 }
 
 /// Truncate a Vec<u8> in place, appending a marker if truncated.

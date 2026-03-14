@@ -145,6 +145,7 @@ impl Executor for NpmExecutor {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::os::unix::process::ExitStatusExt;

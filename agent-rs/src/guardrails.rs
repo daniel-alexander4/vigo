@@ -12,6 +12,7 @@ use std::collections::HashMap;
 /// Paths that must never be deleted, overwritten, or have permissions changed
 /// by any resource. A resource targets a protected path if its target is equal
 /// to or is a child of any entry here.
+#[cfg(unix)]
 const PROTECTED_PATHS: &[&str] = &[
     // Agent
     "/usr/local/bin/hobnob",
@@ -27,6 +28,13 @@ const PROTECTED_PATHS: &[&str] = &[
     "/etc/systemd/system/hobd.service",
 ];
 
+#[cfg(windows)]
+const PROTECTED_PATHS: &[&str] = &[
+    // Agent (Windows standard paths)
+    r"C:\Program Files\Hobnob\",
+    r"C:\ProgramData\Hobnob\",
+];
+
 /// Services that must never be stopped, disabled, or masked.
 const PROTECTED_SERVICES: &[&str] = &["hobnob-thrall", "hobd"];
 
@@ -35,6 +43,7 @@ const PROTECTED_PACKAGES: &[&str] = &["hobnob", "hobd", "hobnobcli"];
 
 /// Dangerous command fragments that target hobnob processes or files.
 /// Used for heuristic scanning of exec commands and ad-hoc tasks.
+#[cfg(unix)]
 const DANGEROUS_PATTERNS: &[&str] = &[
     "systemctl stop hobnob",
     "systemctl disable hobnob",
@@ -58,6 +67,15 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     "rm -rf /var/lib/hobnob",
     "rm -rf /etc/hobnob-server",
     "rm -rf /etc/hobnob-thrall",
+];
+
+#[cfg(windows)]
+const DANGEROUS_PATTERNS: &[&str] = &[
+    "sc stop hobnob",
+    "sc delete hobnob",
+    "taskkill /im hobnob",
+    "del /f hobnob.exe",
+    "rmdir /s hobnob",
 ];
 
 /// Result of a guardrail check.

@@ -3,26 +3,36 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::mem::MaybeUninit;
 
 pub fn collect() -> Result<Value> {
     let (local, utc) = local_and_utc_time();
 
     Ok(json!({
-        "hour": local.tm_hour,
-        "minute": local.tm_min,
-        "weekday": weekday_name(local.tm_wday),
-        "day": local.tm_mday,
-        "month": local.tm_mon + 1,
-        "year": local.tm_year + 1900,
+        "hour": local.hour,
+        "minute": local.min,
+        "weekday": weekday_name(local.wday),
+        "day": local.mday,
+        "month": local.mon + 1,
+        "year": local.year + 1900,
         "timezone": get_timezone_name(),
-        "utc_hour": utc.tm_hour,
-        "clock": format!("{:02}:{:02}", local.tm_hour, local.tm_min),
-        "date": format!("{:04}-{:02}-{:02}", local.tm_year + 1900, local.tm_mon + 1, local.tm_mday),
+        "utc_hour": utc.hour,
+        "clock": format!("{:02}:{:02}", local.hour, local.min),
+        "date": format!("{:04}-{:02}-{:02}", local.year + 1900, local.mon + 1, local.mday),
     }))
 }
 
-fn local_and_utc_time() -> (libc::tm, libc::tm) {
+struct TimeFields {
+    hour: i32,
+    min: i32,
+    wday: i32,  // 0 = Sunday
+    mday: i32,  // 1–31
+    mon: i32,   // 0-based (0 = January)
+    year: i32,  // years since 1900
+}
+
+#[cfg(unix)]
+fn local_and_utc_time() -> (TimeFields, TimeFields) {
+    use std::mem::MaybeUninit;
     unsafe {
         let mut t: libc::time_t = 0;
         libc::time(&mut t);
@@ -33,7 +43,63 @@ fn local_and_utc_time() -> (libc::tm, libc::tm) {
         let mut utc = MaybeUninit::<libc::tm>::uninit();
         libc::gmtime_r(&t, utc.as_mut_ptr());
 
-        (local.assume_init(), utc.assume_init())
+        let l = local.assume_init();
+        let u = utc.assume_init();
+        (
+            TimeFields {
+                hour: l.tm_hour, min: l.tm_min, wday: l.tm_wday,
+                mday: l.tm_mday, mon: l.tm_mon, year: l.tm_year,
+            },
+            TimeFields {
+                hour: u.tm_hour, min: u.tm_min, wday: u.tm_wday,
+                mday: u.tm_mday, mon: u.tm_mon, year: u.tm_year,
+            },
+        )
+    }
+}
+
+#[cfg(windows)]
+fn local_and_utc_time() -> (TimeFields, TimeFields) {
+    #[repr(C)]
+    struct WinSystemTime {
+        year: u16,
+        month: u16,
+        day_of_week: u16,
+        day: u16,
+        hour: u16,
+        minute: u16,
+        second: u16,
+        milliseconds: u16,
+    }
+
+    extern "system" {
+        fn GetLocalTime(st: *mut WinSystemTime);
+        fn GetSystemTime(st: *mut WinSystemTime);
+    }
+
+    unsafe {
+        let mut local: WinSystemTime = std::mem::zeroed();
+        let mut utc: WinSystemTime = std::mem::zeroed();
+        GetLocalTime(&mut local);
+        GetSystemTime(&mut utc);
+        (
+            TimeFields {
+                hour: local.hour as i32,
+                min: local.minute as i32,
+                wday: local.day_of_week as i32,
+                mday: local.day as i32,
+                mon: local.month as i32 - 1,
+                year: local.year as i32 - 1900,
+            },
+            TimeFields {
+                hour: utc.hour as i32,
+                min: utc.minute as i32,
+                wday: utc.day_of_week as i32,
+                mday: utc.day as i32,
+                mon: utc.month as i32 - 1,
+                year: utc.year as i32 - 1900,
+            },
+        )
     }
 }
 

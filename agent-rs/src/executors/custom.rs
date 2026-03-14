@@ -122,6 +122,7 @@ impl Executor for CustomExecutor {
 }
 
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
     use std::os::unix::fs::OpenOptionsExt;

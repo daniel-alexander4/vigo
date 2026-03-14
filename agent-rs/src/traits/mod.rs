@@ -5,31 +5,84 @@
 //! Traits are used in Go templates as .Traits.os.family, .Traits.hardware.cpu_count, etc.
 
 pub mod cached;
-mod blockdevices;
+
+// Cross-platform collectors.
 mod cloud;
 mod dmi;
 mod docker;
-mod filesystem;
-mod gpu;
-mod hardware;
-mod identity;
-mod kernel;
-mod loadavg;
-mod locale;
-mod memory;
-mod mountpoints;
-mod network;
-mod os;
-mod packages;
-mod processors;
-mod selinux;
-mod swap;
-mod systemd;
 mod time_collector;
+
+// Linux-specific collectors.
+#[cfg(target_os = "linux")]
+mod blockdevices;
+#[cfg(target_os = "linux")]
+mod filesystem;
+#[cfg(target_os = "linux")]
+mod gpu;
+#[cfg(target_os = "linux")]
+mod hardware;
+#[cfg(target_os = "linux")]
+mod identity;
+#[cfg(target_os = "linux")]
+mod kernel;
+#[cfg(target_os = "linux")]
+mod loadavg;
+#[cfg(target_os = "linux")]
+mod locale;
+#[cfg(target_os = "linux")]
+mod memory;
+#[cfg(target_os = "linux")]
+mod mountpoints;
+#[cfg(target_os = "linux")]
+mod network;
+#[cfg(target_os = "linux")]
+mod os;
+#[cfg(target_os = "linux")]
+mod packages;
+#[cfg(target_os = "linux")]
+mod processors;
+#[cfg(target_os = "linux")]
+mod selinux;
+#[cfg(target_os = "linux")]
+mod swap;
+#[cfg(target_os = "linux")]
+mod systemd;
+#[cfg(target_os = "linux")]
 mod timezone;
+#[cfg(target_os = "linux")]
 mod uptime;
+#[cfg(target_os = "linux")]
 mod users;
+#[cfg(target_os = "linux")]
 mod virt;
+
+// Windows-specific collectors.
+#[cfg(windows)]
+mod filesystem_windows;
+#[cfg(windows)]
+mod hardware_windows;
+#[cfg(windows)]
+mod identity_windows;
+#[cfg(windows)]
+mod memory_windows;
+#[cfg(windows)]
+mod mountpoints_windows;
+#[cfg(windows)]
+mod network_windows;
+#[cfg(windows)]
+mod os_windows;
+#[cfg(windows)]
+mod packages_windows;
+#[cfg(windows)]
+mod processors_windows;
+#[cfg(windows)]
+mod swap_windows;
+#[cfg(windows)]
+mod timezone_windows;
+#[cfg(windows)]
+mod uptime_windows;
+#[cfg(windows)]
+mod users_windows;
 
 use anyhow::Result;
 use serde_json::Value;
@@ -104,31 +157,88 @@ impl CollectorKind {
     /// Collect traits for this collector.
     pub fn collect(&self) -> Result<Value> {
         match self {
-            Self::Os => os::collect(),
-            Self::Hardware => hardware::collect(),
-            Self::Network => network::collect(),
-            Self::Packages => packages::collect(),
             Self::Time => time_collector::collect(),
-            Self::Identity => identity::collect(),
-            Self::Virtual => virt::collect(),
-            Self::Uptime => uptime::collect(),
-            Self::LoadAvg => loadavg::collect(),
-            Self::Mountpoints => mountpoints::collect(),
-            Self::Processors => processors::collect(),
             Self::Dmi => dmi::collect(),
             Self::Cloud => cloud::collect(),
-            Self::Filesystem => filesystem::collect(),
-            Self::Kernel => kernel::collect(),
-            Self::Users => users::collect(),
-            Self::Memory => memory::collect(),
-            Self::BlockDevices => blockdevices::collect(),
             Self::Docker => docker::collect(),
+
+            // Linux implementations.
+            #[cfg(target_os = "linux")]
+            Self::Os => os::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Hardware => hardware::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Network => network::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Packages => packages::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Identity => identity::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Virtual => virt::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Uptime => uptime::collect(),
+            #[cfg(target_os = "linux")]
+            Self::LoadAvg => loadavg::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Mountpoints => mountpoints::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Processors => processors::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Filesystem => filesystem::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Kernel => kernel::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Users => users::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Memory => memory::collect(),
+            #[cfg(target_os = "linux")]
+            Self::BlockDevices => blockdevices::collect(),
+            #[cfg(target_os = "linux")]
             Self::Systemd => systemd::collect(),
+            #[cfg(target_os = "linux")]
             Self::SELinux => selinux::collect(),
+            #[cfg(target_os = "linux")]
             Self::Timezone => timezone::collect(),
+            #[cfg(target_os = "linux")]
             Self::Locale => locale::collect(),
+            #[cfg(target_os = "linux")]
             Self::Swap => swap::collect(),
+            #[cfg(target_os = "linux")]
             Self::Gpu => gpu::collect(),
+
+            // Windows implementations.
+            #[cfg(windows)]
+            Self::Os => os_windows::collect(),
+            #[cfg(windows)]
+            Self::Hardware => hardware_windows::collect(),
+            #[cfg(windows)]
+            Self::Network => network_windows::collect(),
+            #[cfg(windows)]
+            Self::Packages => packages_windows::collect(),
+            #[cfg(windows)]
+            Self::Identity => identity_windows::collect(),
+            #[cfg(windows)]
+            Self::Uptime => uptime_windows::collect(),
+            #[cfg(windows)]
+            Self::Mountpoints => mountpoints_windows::collect(),
+            #[cfg(windows)]
+            Self::Processors => processors_windows::collect(),
+            #[cfg(windows)]
+            Self::Filesystem => filesystem_windows::collect(),
+            #[cfg(windows)]
+            Self::Users => users_windows::collect(),
+            #[cfg(windows)]
+            Self::Memory => memory_windows::collect(),
+            #[cfg(windows)]
+            Self::Swap => swap_windows::collect(),
+            #[cfg(windows)]
+            Self::Timezone => timezone_windows::collect(),
+
+            // Collectors that skip on unsupported platforms.
+            #[cfg(windows)]
+            Self::Virtual | Self::LoadAvg | Self::Kernel |
+            Self::BlockDevices | Self::Systemd | Self::SELinux |
+            Self::Locale | Self::Gpu => Ok(Value::Null),
         }
     }
 

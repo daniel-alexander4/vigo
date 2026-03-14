@@ -69,10 +69,10 @@ server:
   grpc_listen: "0.0.0.0:1530"
   api_listen: "0.0.0.0:8181"
   tls:
-    cert_file: "secret:hobnob/tls/cert"
-    key_file: "secret:hobnob/tls/key"
-    ca_file: "secret:hobnob/tls/ca"
-    ca_key_file: "secret:hobnob/tls/ca_key"  # optional, enables bootstrap CSR signing
+    cert_file: "tls/cert"
+    key_file: "tls/key"
+    ca_file: "tls/ca"
+    ca_key_file: "tls/ca_key"  # optional, enables bootstrap CSR signing
 
 database:
   dsn: "secret:hobnob/db/dsn"

@@ -79,7 +79,17 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 	for _, res := range mod.Resources {
 		attrs := make(map[string]string, len(res.Attributes))
 		for k, v := range res.Attributes {
-			attrs[k] = fmt.Sprintf("%v", v)
+			switch val := v.(type) {
+			case []interface{}:
+				jsonBytes, err := json.Marshal(val)
+				if err != nil {
+					attrs[k] = fmt.Sprintf("%v", v)
+				} else {
+					attrs[k] = string(jsonBytes)
+				}
+			default:
+				attrs[k] = fmt.Sprintf("%v", v)
+			}
 		}
 
 		pbRes := &pb.PolicyResource{

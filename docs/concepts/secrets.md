@@ -1,0 +1,158 @@
+# Secrets
+
+Hobnob never stores secrets in config files, environment variables, logs, or database records. All secret values use the `secret:` prefix and are resolved through a pluggable backend at runtime.
+
+## The secret: Prefix
+
+Any config value starting with `secret:` is resolved through the secrets provider:
+
+```yaml
+database:
+  dsn: "secret:hobnob/db/dsn"
+
+smtp:
+  password: "secret:hobnob/smtp/password"
+```
+
+At startup, the server resolves `secret:hobnob/db/dsn` by calling `provider.Get("hobnob/db/dsn")`. The actual secret value is never written to disk in plaintext.
+
+## Three Backends
+
+### local (default, recommended)
+
+Secrets are stored as AES-256-GCM encrypted files on disk. The master key is a 32-byte hex key stored in a 0600-permission file.
+
+```yaml
+secrets:
+  backend: local
+  key_file: "/etc/hobnob-server/master.key"
+  secrets_dir: "/etc/hobnob-server/secrets"
+```
+
+Secret path mapping: `secret:hobnob/db/dsn` → file at `secrets_dir/hobnob/db/dsn`.
+
+On first start, the local backend auto-generates:
+- The master key (if `key_file` doesn't exist)
+- TLS certificates (self-signed CA + server cert)
+- A random database DSN
+
+### isopass (production)
+
+Resolves secrets from an external isopass API server. Supports versioning for rotation detection.
+
+```yaml
+secrets:
+  backend: isopass
+  url: "https://isopass.internal:8443"
+  token_env: "HOBNOB_SECRETS_TOKEN"
+```
+
+### static (legacy)
+
+Reads secrets from a `.env` file. Plaintext — not recommended for production.
+
+```yaml
+secrets:
+  backend: static
+  env_file: ".env"
+```
+
+## Secret Resolution Flow
+
+```
+server.yaml                  Secrets Provider
+┌─────────────────┐         ┌──────────────────┐
+│ dsn: "secret:   │────────>│ local: read file  │
+│   hobnob/db/dsn"│         │   + AES-GCM decrypt│
+└─────────────────┘         │                    │
+                            │ isopass: HTTP GET  │
+                            │   /v1/secrets/path │
+                            │                    │
+                            │ static: read .env  │
+                            │   key=value lookup │
+                            └────────┬───────────┘
+                                     │
+                                     ▼
+                            Resolved plaintext value
+                            (held in memory only)
+```
+
+## Fail-Fast
+
+If the secrets provider is unreachable or a secret path doesn't exist, the server **refuses to start**. It never falls back to insecure defaults.
+
+```
+$ hobd
+ERROR server failed error="loading server config: resolving secret 'hobnob/db/dsn': file not found"
+```
+
+## Secret Rotation
+
+With the isopass backend, the server polls for version changes:
+
+```yaml
+watcher:
+  enabled: true
+  poll_interval: "5m"
+```
+
+When a secret is rotated:
+1. Watcher detects the version change
+2. Server re-resolves the secret value
+3. Resources with `subscribes_secret: ["path"]` are force-pushed to affected thralls
+4. Webhook event fired + SMTP notification sent
+
+## Secrets in Modules
+
+Modules reference secrets via vars:
+
+```yaml
+# nodes.hnb
+thralls:
+  - match: "db*.example.com"
+    roles: [database]
+    vars:
+      db_password: "secret:hobnob/db/password"
+```
+
+The `content:` template renders the resolved value:
+
+```yaml
+# modules/database.hnb
+resources:
+  - name: pg-config
+    type: file
+    targetpath: /etc/postgresql/conf.d/auth.conf
+    content: |
+      password = {{ .Vars.db_password }}
+    subscribes_secret: ["hobnob/db/password"]
+    notify: [pg-service]
+```
+
+## Exec Secret Safety
+
+Never embed secrets in command strings (they appear in process listings). Use `stdin` or `secret_file`:
+
+```yaml
+# GOOD — pipe to stdin
+- name: set-grafana-password
+  type: exec
+  command: "grafana-cli admin reset-admin-password --password-from-stdin"
+  stdin: "secret:hobnob/grafana/admin_password"
+
+# GOOD — temporary 0600 file
+- name: deploy-with-key
+  type: exec
+  command: "deploy.sh --key-file {{secret_file}}"
+  secret_file: "secret:hobnob/deploy/key"
+
+# BAD — secret visible in ps output
+- name: bad-example
+  type: exec
+  command: "grafana-cli admin reset-admin-password MySecret123"
+```
+
+## Related
+
+- [Server Configuration](../getting-started/server-config.md) — secrets: section
+- [Resource DAG](resource-dag.md) — subscribes_secret

@@ -3,13 +3,28 @@
 
 //! Symlink executor — manages symbolic and hard links idempotently.
 
-use super::file::{apply_ownership, check_ownership, lookup_gid, lookup_uid};
+use super::file::{lookup_gid, lookup_uid};
 use super::{Action, Executor, ResourceResult};
 use std::collections::HashMap;
 use std::fs;
-use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::time::Instant;
+
+/// Create a symbolic link (cross-platform).
+#[cfg(unix)]
+fn create_symlink<P: AsRef<Path>, Q: AsRef<Path>>(target: P, link: Q) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_symlink<P: AsRef<Path>, Q: AsRef<Path>>(target: P, link: Q) -> std::io::Result<()> {
+    let target_ref = target.as_ref();
+    if target_ref.is_dir() {
+        std::os::windows::fs::symlink_dir(target, link)
+    } else {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+}
 
 pub struct SymlinkExecutor;
 
@@ -115,7 +130,7 @@ fn handle_soft_link(
         }
         fs::remove_file(path)
             .map_err(|e| format!("remove old symlink {}: {}", path_str, e))?;
-        unix_fs::symlink(target, path)
+        create_symlink(target, path)
             .map_err(|e| format!("symlink {} -> {}: {}", path_str, target, e))?;
         apply_symlink_ownership(&path_str, desired_uid, desired_gid)?;
         return Ok(());
@@ -141,7 +156,7 @@ fn handle_soft_link(
             fs::remove_file(path)
                 .map_err(|e| format!("remove {}: {}", path_str, e))?;
         }
-        unix_fs::symlink(target, path)
+        create_symlink(target, path)
             .map_err(|e| format!("symlink {} -> {}: {}", path_str, target, e))?;
         apply_symlink_ownership(&path_str, desired_uid, desired_gid)?;
         return Ok(());
@@ -162,7 +177,7 @@ fn handle_soft_link(
         }
     }
 
-    unix_fs::symlink(target, path)
+    create_symlink(target, path)
         .map_err(|e| format!("symlink {} -> {}: {}", path_str, target, e))?;
     apply_symlink_ownership(&path_str, desired_uid, desired_gid)?;
     Ok(())
@@ -274,6 +289,7 @@ fn handle_absent(path: &str, dry_run: bool, result: &mut ResourceResult) -> Resu
 }
 
 /// Check if two paths share the same inode (i.e., are hard links to each other).
+#[cfg(unix)]
 fn same_inode(a: &Path, b: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
     let ma = match fs::metadata(a) {
@@ -287,7 +303,14 @@ fn same_inode(a: &Path, b: &Path) -> bool {
     ma.dev() == mb.dev() && ma.ino() == mb.ino()
 }
 
+#[cfg(not(unix))]
+fn same_inode(_a: &Path, _b: &Path) -> bool {
+    // No inode concept on Windows; report mismatch to force re-link.
+    false
+}
+
 /// Check symlink ownership using lstat (doesn't follow the link).
+#[cfg(unix)]
 fn check_symlink_ownership(path: &str, desired_uid: Option<u32>, desired_gid: Option<u32>) -> bool {
     use std::os::unix::fs::MetadataExt;
     let meta = match fs::symlink_metadata(path) {
@@ -307,7 +330,13 @@ fn check_symlink_ownership(path: &str, desired_uid: Option<u32>, desired_gid: Op
     true
 }
 
+#[cfg(not(unix))]
+fn check_symlink_ownership(_path: &str, _uid: Option<u32>, _gid: Option<u32>) -> bool {
+    true // No ownership concept on Windows
+}
+
 /// Apply ownership to a symlink (lchown — doesn't follow the link).
+#[cfg(unix)]
 fn apply_symlink_ownership(
     path: &str,
     uid: Option<u32>,
@@ -331,6 +360,15 @@ fn apply_symlink_ownership(
         ));
     }
     Ok(())
+}
+
+#[cfg(not(unix))]
+fn apply_symlink_ownership(
+    _path: &str,
+    _uid: Option<u32>,
+    _gid: Option<u32>,
+) -> Result<(), String> {
+    Ok(()) // No ownership concept on Windows
 }
 
 #[cfg(test)]
@@ -376,7 +414,7 @@ mod tests {
         let target = dir.path().join("real_file");
         fs::write(&target, "data").unwrap();
         let link = dir.path().join("link");
-        unix_fs::symlink(&target, &link).unwrap();
+        create_symlink(&target, &link).unwrap();
 
         let se = SymlinkExecutor::new();
         let result = se.execute(
@@ -399,7 +437,7 @@ mod tests {
         fs::write(&old_target, "old").unwrap();
         fs::write(&new_target, "new").unwrap();
         let link = dir.path().join("link");
-        unix_fs::symlink(&old_target, &link).unwrap();
+        create_symlink(&old_target, &link).unwrap();
 
         let se = SymlinkExecutor::new();
         let result = se.execute(
@@ -514,7 +552,7 @@ mod tests {
         let target = dir.path().join("real");
         fs::write(&target, "data").unwrap();
         let link = dir.path().join("link");
-        unix_fs::symlink(&target, &link).unwrap();
+        create_symlink(&target, &link).unwrap();
 
         let se = SymlinkExecutor::new();
         let result = se.execute(
@@ -554,7 +592,7 @@ mod tests {
     fn symlink_absent_broken_link() {
         let dir = TempDir::new().unwrap();
         let link = dir.path().join("broken");
-        unix_fs::symlink("/nonexistent/target", &link).unwrap();
+        create_symlink("/nonexistent/target", &link).unwrap();
 
         let se = SymlinkExecutor::new();
         let result = se.execute(
