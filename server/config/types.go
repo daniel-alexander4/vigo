@@ -223,6 +223,7 @@ type ServerSection struct {
 	GRPCListen string    `yaml:"grpc_listen"`
 	APIListen  string    `yaml:"api_listen"`
 	TLS        TLSConfig `yaml:"tls"`
+	TLSSANs    []string  `yaml:"tls_sans"` // extra Subject Alternative Names for auto-generated certs (IPs or DNS names)
 }
 
 // TLSConfig holds TLS file paths.

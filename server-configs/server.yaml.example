@@ -42,6 +42,9 @@ server:
     key_file: "tls/key"                        # server TLS private key
     ca_file: "tls/ca"                          # CA cert for mTLS verification
     ca_key_file: "tls/ca_key"                  # CA private key — enables bootstrap CSR signing
+  # tls_sans:                                  # extra SANs for auto-generated certs (IPs or DNS names)
+  #   - "192.168.1.2"                          # host LAN IP (needed when server runs in Docker)
+  #   - "hobnob.example.com"                   # DNS name agents use to reach the server
 
 # ---------------------------------------------------------------------------
 # Authentication

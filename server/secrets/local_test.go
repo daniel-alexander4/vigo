@@ -6,7 +6,9 @@ package secrets
 import (
 	"context"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"strings"
@@ -431,6 +433,47 @@ func TestEnsureTLSCertsIdempotent(t *testing.T) {
 	second, _ := os.ReadFile(caPath)
 	if string(first) != string(second) {
 		t.Error("EnsureTLSCerts regenerated existing certs — should be idempotent")
+	}
+}
+
+func TestEnsureTLSCertsExtraSANs(t *testing.T) {
+	tlsDir := t.TempDir()
+
+	if err := EnsureTLSCerts(tlsDir, "192.168.1.2", "hobnob.example.com"); err != nil {
+		t.Fatalf("EnsureTLSCerts: %v", err)
+	}
+
+	_, _, certPath, _ := TLSCertPaths(tlsDir)
+	data, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	block, _ := pem.Decode(data)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("ParseCertificate: %v", err)
+	}
+
+	// Check that the extra IP is present.
+	foundIP := false
+	for _, ip := range cert.IPAddresses {
+		if ip.String() == "192.168.1.2" {
+			foundIP = true
+		}
+	}
+	if !foundIP {
+		t.Errorf("cert IPAddresses %v missing 192.168.1.2", cert.IPAddresses)
+	}
+
+	// Check that the extra DNS name is present.
+	foundDNS := false
+	for _, name := range cert.DNSNames {
+		if name == "hobnob.example.com" {
+			foundDNS = true
+		}
+	}
+	if !foundDNS {
+		t.Errorf("cert DNSNames %v missing hobnob.example.com", cert.DNSNames)
 	}
 }
 

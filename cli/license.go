@@ -88,6 +88,7 @@ func runLicenseInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("License installed: %s\n", destPath)
 	fmt.Printf("  License ID:  %s\n", lic.Payload.LicenseID)
 	fmt.Printf("  Customer:    %s\n", lic.Payload.CustomerName)
+	fmt.Printf("  Tier:        %s\n", lic.Payload.TierDisplayName())
 	fmt.Printf("  Max thralls: %d\n", lic.Payload.MaxThralls)
 	fmt.Printf("  Expires:     %s\n", lic.Payload.ExpiresAt)
 
@@ -111,6 +112,7 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 			CustomerName string `json:"customer_name"`
 			CustomerID   string `json:"customer_id"`
 			LicenseID    string `json:"license_id"`
+			Tier         string `json:"tier"`
 			MaxThralls   int    `json:"max_thralls"`
 			IssuedAt     string `json:"issued_at"`
 			ExpiresAt    string `json:"expires_at"`
@@ -144,9 +146,14 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Enforcement Stage: %s\n", stageName)
 
 	if status.License != nil {
+		tier := status.License.Tier
+		if tier == "" {
+			tier = "Free (25 nodes)"
+		}
 		fmt.Printf("\nLicense:\n")
 		fmt.Printf("  License ID:  %s\n", status.License.LicenseID)
 		fmt.Printf("  Customer:    %s (%s)\n", status.License.CustomerName, status.License.CustomerID)
+		fmt.Printf("  Tier:        %s\n", tier)
 		fmt.Printf("  Version:     %d\n", status.License.Version)
 		fmt.Printf("  Issued:      %s\n", status.License.IssuedAt)
 		fmt.Printf("  Expires:     %s\n", status.ExpiresAt)
@@ -194,6 +201,7 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	p := lic.Payload
 	fmt.Printf("License ID:    %s\n", p.LicenseID)
 	fmt.Printf("Customer:      %s (%s)\n", p.CustomerName, p.CustomerID)
+	fmt.Printf("Tier:          %s\n", p.TierDisplayName())
 	fmt.Printf("Max thralls:   %d\n", p.MaxThralls)
 	fmt.Printf("Issued:        %s\n", p.IssuedAt)
 	fmt.Printf("Expires:       %s\n", p.ExpiresAt)

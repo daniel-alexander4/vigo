@@ -27,6 +27,7 @@ var licenseCmd = &cobra.Command{
 var (
 	createCustomer   string
 	createCustomerID string
+	createTier       string
 	createMaxThralls int
 	createExpires    string
 	createOut        string
@@ -89,11 +90,13 @@ var licenseListCmd = &cobra.Command{
 func init() {
 	licenseCreateCmd.Flags().StringVar(&createCustomer, "customer", "", "Customer name (required)")
 	licenseCreateCmd.Flags().StringVar(&createCustomerID, "customer-id", "", "Customer ID (required)")
+	licenseCreateCmd.Flags().StringVar(&createTier, "tier", "", "License tier: standard, growth, enterprise (required)")
 	licenseCreateCmd.Flags().IntVar(&createMaxThralls, "max-thralls", 0, "Maximum thrall count (required)")
 	licenseCreateCmd.Flags().StringVar(&createExpires, "expires", "", "Expiry date YYYY-MM-DD (required)")
 	licenseCreateCmd.Flags().StringVar(&createOut, "out", "", "Output file path (required)")
 	licenseCreateCmd.MarkFlagRequired("customer")
 	licenseCreateCmd.MarkFlagRequired("customer-id")
+	licenseCreateCmd.MarkFlagRequired("tier")
 	licenseCreateCmd.MarkFlagRequired("max-thralls")
 	licenseCreateCmd.MarkFlagRequired("expires")
 	licenseCreateCmd.MarkFlagRequired("out")
@@ -122,7 +125,17 @@ func init() {
 	licenseCmd.AddCommand(licenseListCmd)
 }
 
+// validTiers lists the allowed commercial tier values.
+var validTiers = map[string]bool{
+	"standard":   true,
+	"growth":     true,
+	"enterprise": true,
+}
+
 func runLicenseCreate(cmd *cobra.Command, args []string) error {
+	if !validTiers[createTier] {
+		return fmt.Errorf("invalid tier %q: must be standard, growth, or enterprise", createTier)
+	}
 	if _, err := time.Parse("2006-01-02", createExpires); err != nil {
 		return fmt.Errorf("invalid expiry date %q: use YYYY-MM-DD format", createExpires)
 	}
@@ -149,6 +162,7 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 		CustomerName: createCustomer,
 		CustomerID:   createCustomerID,
 		LicenseID:    licenseID,
+		Tier:         createTier,
 		MaxThralls:   createMaxThralls,
 		IssuedAt:     issuedAt,
 		ExpiresAt:    createExpires,
@@ -166,8 +180,8 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 
 	// Record in database.
 	_, err = db.Exec(
-		`INSERT INTO licenses (license_id, customer_id, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?)`,
-		licenseID, createCustomerID, createMaxThralls, issuedAt, createExpires, 1,
+		`INSERT INTO licenses (license_id, customer_id, tier, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		licenseID, createCustomerID, createTier, createMaxThralls, issuedAt, createExpires, 1,
 	)
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
@@ -176,6 +190,7 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("License created: %s\n", createOut)
 	fmt.Printf("  License ID:  %s\n", licenseID)
 	fmt.Printf("  Customer:    %s (%s)\n", createCustomer, createCustomerID)
+	fmt.Printf("  Tier:        %s\n", createTier)
 	fmt.Printf("  Max thralls: %d\n", createMaxThralls)
 	fmt.Printf("  Expires:     %s\n", createExpires)
 	return nil
@@ -193,13 +208,13 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 	defer db.Close()
 
 	// Look up existing license.
-	var customerID, customerName string
+	var customerID, customerName, tier string
 	var maxThralls, version int
 	err = db.QueryRow(
-		`SELECT l.customer_id, c.customer_name, l.max_thralls, l.version
+		`SELECT l.customer_id, c.customer_name, l.tier, l.max_thralls, l.version
 		 FROM licenses l JOIN customers c ON l.customer_id = c.customer_id
 		 WHERE l.license_id = ?`, renewLicenseID,
-	).Scan(&customerID, &customerName, &maxThralls, &version)
+	).Scan(&customerID, &customerName, &tier, &maxThralls, &version)
 	if err != nil {
 		return fmt.Errorf("license %q not found in database", renewLicenseID)
 	}
@@ -212,6 +227,7 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 		CustomerName: customerName,
 		CustomerID:   customerID,
 		LicenseID:    newLicenseID,
+		Tier:         tier,
 		MaxThralls:   maxThralls,
 		IssuedAt:     issuedAt,
 		ExpiresAt:    renewExpires,
@@ -229,8 +245,8 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 
 	// Record new license and mark old as superseded.
 	_, err = db.Exec(
-		`INSERT INTO licenses (license_id, customer_id, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?)`,
-		newLicenseID, customerID, maxThralls, issuedAt, renewExpires, newVersion,
+		`INSERT INTO licenses (license_id, customer_id, tier, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		newLicenseID, customerID, tier, maxThralls, issuedAt, renewExpires, newVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
@@ -250,13 +266,13 @@ func runLicenseUpdateThralls(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	var customerID, customerName, expiresAt string
+	var customerID, customerName, tier, expiresAt string
 	var version int
 	err = db.QueryRow(
-		`SELECT l.customer_id, c.customer_name, l.expires_at, l.version
+		`SELECT l.customer_id, c.customer_name, l.tier, l.expires_at, l.version
 		 FROM licenses l JOIN customers c ON l.customer_id = c.customer_id
 		 WHERE l.license_id = ?`, updateLicenseID,
-	).Scan(&customerID, &customerName, &expiresAt, &version)
+	).Scan(&customerID, &customerName, &tier, &expiresAt, &version)
 	if err != nil {
 		return fmt.Errorf("license %q not found in database", updateLicenseID)
 	}
@@ -269,6 +285,7 @@ func runLicenseUpdateThralls(cmd *cobra.Command, args []string) error {
 		CustomerName: customerName,
 		CustomerID:   customerID,
 		LicenseID:    newLicenseID,
+		Tier:         tier,
 		MaxThralls:   updateMaxThralls,
 		IssuedAt:     issuedAt,
 		ExpiresAt:    expiresAt,
@@ -285,8 +302,8 @@ func runLicenseUpdateThralls(cmd *cobra.Command, args []string) error {
 	}
 
 	_, err = db.Exec(
-		`INSERT INTO licenses (license_id, customer_id, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?)`,
-		newLicenseID, customerID, updateMaxThralls, issuedAt, expiresAt, newVersion,
+		`INSERT INTO licenses (license_id, customer_id, tier, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		newLicenseID, customerID, tier, updateMaxThralls, issuedAt, expiresAt, newVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
@@ -321,6 +338,7 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	p := lic.Payload
 	fmt.Printf("License ID:    %s\n", p.LicenseID)
 	fmt.Printf("Customer:      %s (%s)\n", p.CustomerName, p.CustomerID)
+	fmt.Printf("Tier:          %s\n", p.TierDisplayName())
 	fmt.Printf("Max thralls:   %d\n", p.MaxThralls)
 	fmt.Printf("Issued:        %s\n", p.IssuedAt)
 	fmt.Printf("Expires:       %s\n", p.ExpiresAt)
@@ -365,7 +383,7 @@ func runLicenseList(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	query := `SELECT l.license_id, c.customer_name, l.max_thralls, l.issued_at, l.expires_at, l.superseded_by
+	query := `SELECT l.license_id, c.customer_name, l.tier, l.max_thralls, l.issued_at, l.expires_at, l.superseded_by
 		FROM licenses l JOIN customers c ON l.customer_id = c.customer_id`
 	queryArgs := []any{}
 
@@ -382,13 +400,13 @@ func runLicenseList(cmd *cobra.Command, args []string) error {
 	defer rows.Close()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "LICENSE_ID\tCUSTOMER\tMAX_THRALLS\tISSUED\tEXPIRES\tSTATUS")
+	fmt.Fprintln(w, "LICENSE_ID\tCUSTOMER\tTIER\tMAX_THRALLS\tISSUED\tEXPIRES\tSTATUS")
 
 	for rows.Next() {
-		var id, customer, issued, expires string
+		var id, customer, tier, issued, expires string
 		var maxThralls int
 		var supersededBy *string
-		if err := rows.Scan(&id, &customer, &maxThralls, &issued, &expires, &supersededBy); err != nil {
+		if err := rows.Scan(&id, &customer, &tier, &maxThralls, &issued, &expires, &supersededBy); err != nil {
 			return err
 		}
 
@@ -399,7 +417,10 @@ func runLicenseList(cmd *cobra.Command, args []string) error {
 			status = "expired"
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n", id, customer, maxThralls, issued, expires, status)
+		if tier == "" {
+			tier = "free"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", id, customer, tier, maxThralls, issued, expires, status)
 	}
 	return w.Flush()
 }

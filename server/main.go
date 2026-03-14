@@ -94,7 +94,8 @@ func run() error {
 	// Auto-generate self-signed TLS certs on first start (local backend only).
 	if _, ok := provider.(*secrets.LocalProvider); ok {
 		tlsDir := filepath.Join(filepath.Dir(configFile), "tls")
-		if err := secrets.EnsureTLSCerts(tlsDir); err != nil {
+		extraSANs := config.LoadTLSSANs(configFile)
+		if err := secrets.EnsureTLSCerts(tlsDir, extraSANs...); err != nil {
 			return fmt.Errorf("auto-generating TLS certificates: %w", err)
 		}
 	}

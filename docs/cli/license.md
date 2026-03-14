@@ -40,6 +40,7 @@ hobnobcli license install --file ./hobnob-enterprise.lic
 License installed: /etc/hobnob-server/licenses/hobnob-enterprise.lic
   License ID:  lic-a1b2c3d4
   Customer:    Acme Corp
+  Tier:        Enterprise
   Max thralls: 500
   Expires:     2027-03-13
 
@@ -66,6 +67,7 @@ Enforcement Stage: Compliant
 License:
   License ID:  lic-a1b2c3d4
   Customer:    Acme Corp (cust-001)
+  Tier:        Enterprise
   Version:     1
   Issued:      2026-01-01
   Expires:     2027-03-13
@@ -104,6 +106,7 @@ SIGNATURE: VALID
 
 License ID:    lic-a1b2c3d4
 Customer:      Acme Corp (cust-001)
+Tier:          Enterprise
 Max thralls:   500
 Issued:        2026-01-01
 Expires:       2027-03-13
@@ -114,6 +117,7 @@ Raw payload:
   {
     "license_id": "lic-a1b2c3d4",
     "customer_name": "Acme Corp",
+    "tier": "enterprise",
     ...
   }
 ```

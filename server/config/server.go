@@ -32,6 +32,24 @@ func LoadSecretsConfig(path string) (secrets.Config, error) {
 	return raw.Secrets, nil
 }
 
+// LoadTLSSANs reads just the server.tls_sans list from server.yaml.
+// Called before the full config load so EnsureTLSCerts can include extra SANs.
+func LoadTLSSANs(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var raw struct {
+		Server struct {
+			TLSSANs []string `yaml:"tls_sans"`
+		} `yaml:"server"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	return raw.Server.TLSSANs
+}
+
 // LoadServerConfig reads server.yaml from the given path and resolves any
 // secret: prefixed values using the provided secrets provider.
 // The backend name is used for diagnostic hints on failure.

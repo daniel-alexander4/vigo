@@ -23,10 +23,30 @@ type Payload struct {
 	CustomerName string `json:"customer_name"`
 	CustomerID   string `json:"customer_id"`
 	LicenseID    string `json:"license_id"`
+	Tier         string `json:"tier,omitempty"` // "free", "standard", "growth", "enterprise"
 	MaxThralls   int    `json:"max_thralls"`
 	IssuedAt     string `json:"issued_at"`
 	ExpiresAt    string `json:"expires_at"`
 	Version      int    `json:"version"`
+}
+
+// TierDisplayName returns a human-readable name for the tier.
+func (p *Payload) TierDisplayName() string {
+	switch p.Tier {
+	case "free":
+		return "Free (25 nodes)"
+	case "standard":
+		return "Standard"
+	case "growth":
+		return "Growth"
+	case "enterprise":
+		return "Enterprise"
+	default:
+		if p.Tier == "" {
+			return "Free (25 nodes)"
+		}
+		return p.Tier
+	}
 }
 
 // License is the on-disk format: a payload plus its Ed25519 signature.

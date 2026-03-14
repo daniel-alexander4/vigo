@@ -3,10 +3,20 @@ FROM rust:alpine AS builder
 RUN apk add --no-cache musl-dev protobuf-dev
 
 WORKDIR /build
-COPY agent-rs/ agent-rs/
-COPY proto/ proto/
 
-RUN cd agent-rs && cargo build --release --target x86_64-unknown-linux-musl
+# Cache Rust dependencies: copy manifests + proto, build with dummy source.
+COPY agent-rs/Cargo.toml agent-rs/Cargo.lock agent-rs/
+COPY agent-rs/build.rs agent-rs/
+COPY agent-rs/proto/ agent-rs/proto/
+COPY proto/ proto/
+RUN mkdir -p agent-rs/src && echo "fn main() {}" > agent-rs/src/main.rs \
+    && cd agent-rs && cargo build --release --target x86_64-unknown-linux-musl \
+    && rm -rf src
+
+# Now build real source (dependencies already compiled).
+COPY agent-rs/src/ agent-rs/src/
+RUN cd agent-rs && touch src/main.rs \
+    && cargo build --release --target x86_64-unknown-linux-musl
 
 FROM alpine:3.21
 

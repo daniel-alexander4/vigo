@@ -35,26 +35,44 @@ func TLSCertPaths(tlsDir string) (ca, caKey, cert, key string) {
 }
 
 // EnsureTLSCerts checks whether the four TLS PEM files exist under tlsDir
-// and generates self-signed certificates if any are missing. Files are written
-// as plain PEM (not encrypted) since they are loaded directly by the TLS stack.
+// and generates self-signed certificates if any are missing. extraSANs are
+// additional DNS names or IP addresses to include (e.g., the host's LAN IP
+// when running inside Docker). Files are written as plain PEM (not encrypted)
+// since they are loaded directly by the TLS stack.
 //
 // Only called for the local backend — isopass/static manage certs externally.
-func EnsureTLSCerts(tlsDir string) error {
+func EnsureTLSCerts(tlsDir string, extraSANs ...string) error {
 	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(tlsDir)
 	for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
 		if _, err := os.Stat(f); os.IsNotExist(err) {
-			return generateSelfSignedCerts(tlsDir)
+			return generateSelfSignedCerts(tlsDir, extraSANs)
 		}
 	}
 	return nil
 }
 
-func generateSelfSignedCerts(tlsDir string) error {
-	// SAN list: localhost + hostname + 127.0.0.1.
+func generateSelfSignedCerts(tlsDir string, extraSANs []string) error {
+	// SAN list: localhost + hostname + 127.0.0.1 + all non-loopback interface IPs.
 	dnsNames := []string{"localhost"}
 	ips := []net.IP{net.IPv4(127, 0, 0, 1)}
 	if hostname, err := os.Hostname(); err == nil && hostname != "localhost" {
 		dnsNames = append(dnsNames, hostname)
+	}
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		for _, a := range addrs {
+			if ipNet, ok := a.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+				ips = append(ips, ipNet.IP)
+			}
+		}
+	}
+
+	// Add extra SANs from config (e.g., host LAN IP when running in Docker).
+	for _, san := range extraSANs {
+		if ip := net.ParseIP(san); ip != nil {
+			ips = append(ips, ip)
+		} else {
+			dnsNames = append(dnsNames, san)
+		}
 	}
 
 	// Generate CA.

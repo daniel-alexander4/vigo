@@ -292,7 +292,31 @@ Check statuses: `pass`, `warn`, `fail`, `skip`. Overall status: `healthy`, `degr
 
 ### GET /api/v1/license
 
-Returns current license status including stage, thrall counts, and expiration.
+Returns current license status including stage, tier, thrall counts, and expiration.
+
+**Response:**
+
+```json
+{
+  "stage": 0,
+  "license": {
+    "customer_name": "Acme Corp",
+    "customer_id": "acme",
+    "license_id": "lic-20260313-acme",
+    "tier": "enterprise",
+    "max_thralls": 500,
+    "issued_at": "2026-03-13",
+    "expires_at": "2027-03-13",
+    "version": 1
+  },
+  "active_thralls": 12,
+  "max_thralls": 500,
+  "expires_at": "2027-03-13",
+  "days_remaining": 365
+}
+```
+
+The `tier` field is `"free"`, `"standard"`, `"growth"`, or `"enterprise"`. Omitted for legacy licenses without a tier (treated as free).
 
 ---
 

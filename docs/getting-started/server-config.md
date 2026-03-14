@@ -48,6 +48,9 @@ server:
     key_file: "tls/key"
     ca_file: "tls/ca"
     ca_key_file: "tls/ca_key"
+  tls_sans:
+    - "192.168.1.2"
+    - "hobnob.example.com"
 ```
 
 | Option | Default | Description |
@@ -58,8 +61,9 @@ server:
 | `tls.key_file` | — | Server TLS private key path |
 | `tls.ca_file` | — | CA certificate for mTLS verification |
 | `tls.ca_key_file` | — | CA private key — enables bootstrap CSR signing |
+| `tls_sans` | `[]` | Extra Subject Alternative Names (IPs or DNS names) for auto-generated certs |
 
-TLS certificates are auto-generated on first start when using the `local` secrets backend.
+TLS certificates are auto-generated on first start when using the `local` secrets backend. The auto-generated cert includes `localhost`, `127.0.0.1`, the machine hostname, and all non-loopback interface IPs as SANs. When running in Docker, the container won't see the host's LAN IP — use `tls_sans` to add it so remote agents can verify the server certificate.
 
 ### database
 

@@ -1,0 +1,26 @@
+# Rust build artifacts (~9+ GB)
+agent-rs/target/
+
+# Host build outputs
+bin/
+dist/
+
+# Git history
+.git/
+
+# TLS certs (generated at runtime)
+certs/
+
+# IDE
+.vscode/
+.idea/
+
+# Test/coverage artifacts
+*.out
+coverage.html
+
+# Local scripts
+full.docker.reset.sh
+
+# Claude Code
+.claude/
