@@ -81,9 +81,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 			// Require admin role for subsequent creates.
 			u := auth.UserFromContext(r.Context())
 			if u == nil || !u.IsAdmin() {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				json.NewEncoder(w).Encode(map[string]string{"error": "admin role required"})
+				writeJSONError(w, http.StatusForbidden, "admin role required")
 				return
 			}
 		} else {
@@ -168,9 +166,7 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	// Cannot delete yourself.
 	u := auth.UserFromContext(r.Context())
 	if u != nil && u.ID == id {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "cannot delete yourself"})
+		writeJSONError(w, http.StatusBadRequest, "cannot delete yourself")
 		return
 	}
 

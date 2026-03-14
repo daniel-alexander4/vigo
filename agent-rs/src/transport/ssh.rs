@@ -2,17 +2,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! SSH transport using russh for network device management.
-//!
-//! Provides `SshSession` (single connection) and `SshPool` (per-device
-//! connection cache for the duration of a convergence cycle).
 
 use anyhow::{anyhow, Context, Result};
 use russh::keys::key;
 use russh::{client, ChannelMsg};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use russh_keys::PublicKeyBase64;
 use tracing::debug;
 
@@ -61,11 +56,7 @@ impl client::Handler for ClientHandler {
 
 /// An established SSH session to a network device.
 pub struct SshSession {
-    host: String,
-    port: u16,
     handle: client::Handle<ClientHandler>,
-    /// The server's host key, cached for future verification.
-    pub host_key: Option<key::PublicKey>,
 }
 
 impl SshSession {
@@ -99,12 +90,7 @@ impl SshSession {
         }
 
         debug!(host, port, username, "SSH session established (password)");
-        Ok(Self {
-            host: host.to_string(),
-            port,
-            handle,
-            host_key: None,
-        })
+        Ok(Self { handle })
     }
 
     /// Connect and authenticate with an SSH private key (PEM-encoded).
@@ -140,12 +126,7 @@ impl SshSession {
         }
 
         debug!(host, port, username, "SSH session established (key)");
-        Ok(Self {
-            host: host.to_string(),
-            port,
-            handle,
-            host_key: None,
-        })
+        Ok(Self { handle })
     }
 
     /// Connect using a credential string. If it looks like a PEM private key,
@@ -288,49 +269,6 @@ impl SshSession {
     }
 }
 
-/// Connection pool for SSH sessions, cached by (host, port) for the
-/// duration of a convergence cycle. Closed at cycle end.
-pub struct SshPool {
-    sessions: Arc<Mutex<HashMap<(String, u16), Arc<SshSession>>>>,
-}
-
-impl SshPool {
-    pub fn new() -> Self {
-        Self {
-            sessions: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    /// Get or create a session for the given host/port.
-    pub async fn get_or_connect(
-        &self,
-        host: &str,
-        port: u16,
-        username: &str,
-        credential: &str,
-    ) -> Result<Arc<SshSession>> {
-        let key = (host.to_string(), port);
-        let mut sessions = self.sessions.lock().await;
-
-        if let Some(session) = sessions.get(&key) {
-            return Ok(Arc::clone(session));
-        }
-
-        let session = SshSession::connect(host, port, username, credential, None).await?;
-        let arc = Arc::new(session);
-        sessions.insert(key, Arc::clone(&arc));
-        Ok(arc)
-    }
-
-    /// Close all pooled sessions.
-    pub async fn close_all(&self) {
-        let mut sessions = self.sessions.lock().await;
-        // We can't close sessions through Arc, so just drop them.
-        // The Drop impl on the handle will clean up.
-        sessions.clear();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,12 +282,6 @@ mod tests {
         };
         assert_eq!(output.exit_code, 0);
         assert_eq!(output.stdout, "hello\n");
-    }
-
-    #[test]
-    fn test_ssh_pool_new() {
-        let _pool = SshPool::new();
-        // Just verify construction doesn't panic.
     }
 
     #[test]

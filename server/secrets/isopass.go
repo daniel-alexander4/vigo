@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -49,6 +50,7 @@ func NewIsopassProvider(baseURL, bearerToken string, tlsSkipVerify bool) (*Isopa
 		Timeout: 10 * time.Second,
 	}
 	if tlsSkipVerify {
+		slog.Warn("isopass TLS verification disabled — connections are vulnerable to MITM attacks; use a proper CA cert for production")
 		client.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}

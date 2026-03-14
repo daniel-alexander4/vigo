@@ -332,32 +332,9 @@ impl Client {
         }
     }
 
-    /// Build a signed ReportResultRequest for a different thrall (gateway proxy).
-    pub fn build_report_result_for_request(
-        &self,
-        run_id: &str,
-        thrall_id: &str,
-        results: Vec<ModuleResult>,
-    ) -> ReportResultRequest {
-        let ts = Self::timestamp_str();
-        let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
-
-        ReportResultRequest {
-            run_id: run_id.to_string(),
-            thrall_id: thrall_id.to_string(),
-            results,
-            signature: sig,
-            timestamp: Some(Self::now_timestamp()),
-        }
-    }
-
     /// Get a clone of the underlying gRPC agent client (for stream mode).
     pub fn agent_client(&self) -> HobnobAgentClient<Channel> {
         self.agent.clone()
     }
 
-    /// Close the client (channel is dropped automatically in Rust).
-    pub fn close(self) {
-        drop(self);
-    }
 }

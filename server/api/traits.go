@@ -24,12 +24,6 @@ func NewTraitsHandler(queries *db.Queries) *TraitsHandler {
 	return &TraitsHandler{queries: queries}
 }
 
-// newTraitsHandlerWithDB creates a TraitsHandler from a raw DBTX, used in tests
-// to inject mock database connections.
-func newTraitsHandlerWithDB(dbtx db.DBTX) *TraitsHandler {
-	return &TraitsHandler{queries: db.New(dbtx)}
-}
-
 // RegisterRoutes registers the traits endpoint on the given mux.
 func (h *TraitsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/thralls/{hostname}/traits", h.HandleGetTraits)

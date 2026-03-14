@@ -95,12 +95,35 @@ func planBatches(targets []targetInfo, batchSize int) [][]targetInfo {
 	return batches
 }
 
+// validateHealthCheck rejects health check commands containing shell
+// metacharacters that could enable command chaining or injection.
+func validateHealthCheck(command string) error {
+	if len(command) > 512 {
+		return fmt.Errorf("health check command too long: %d chars (max 512)", len(command))
+	}
+	// Reject shell metacharacters that enable chaining, redirection, or expansion.
+	for _, meta := range []string{";", "&&", "||", "|", "`", "$(", "${", "$", ">", "<", "\n", "\r"} {
+		if strings.Contains(command, meta) {
+			return fmt.Errorf("health check command contains disallowed shell metacharacter: %q", meta)
+		}
+	}
+	return nil
+}
+
 // runHealthCheck executes a health check command on the server.
 // Returns nil if the command exits 0, error otherwise.
 func runHealthCheck(command string) error {
-	cmd := exec.Command("/bin/sh", "-c", command)
+	if err := validateHealthCheck(command); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("health check timed out after 30s: %s", command)
+		}
 		return fmt.Errorf("health check failed: %s (output: %s)", err, strings.TrimSpace(string(output)))
 	}
 	return nil

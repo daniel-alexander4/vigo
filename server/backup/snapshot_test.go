@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -558,6 +559,45 @@ func TestReadManifest_InvalidArchive(t *testing.T) {
 	_, err := ReadManifest(badPath)
 	if err == nil {
 		t.Fatal("expected error for invalid archive")
+	}
+}
+
+func TestSanitizePgDSN_URI(t *testing.T) {
+	dsn := "postgres://admin:s3cret@db.example.com:5432/hobnob?sslmode=require"
+	sanitized, pw := sanitizePgDSN(dsn)
+	if pw != "s3cret" {
+		t.Errorf("password = %q, want s3cret", pw)
+	}
+	if strings.Contains(sanitized, "s3cret") {
+		t.Errorf("sanitized DSN still contains password: %s", sanitized)
+	}
+	if !strings.Contains(sanitized, "admin@db.example.com") {
+		t.Errorf("sanitized DSN missing user/host: %s", sanitized)
+	}
+}
+
+func TestSanitizePgDSN_KeyValue(t *testing.T) {
+	dsn := "host=db.example.com port=5432 user=admin password=s3cret dbname=hobnob"
+	sanitized, pw := sanitizePgDSN(dsn)
+	if pw != "s3cret" {
+		t.Errorf("password = %q, want s3cret", pw)
+	}
+	if strings.Contains(sanitized, "s3cret") {
+		t.Errorf("sanitized DSN still contains password: %s", sanitized)
+	}
+	if !strings.Contains(sanitized, "host=db.example.com") {
+		t.Errorf("sanitized DSN missing host: %s", sanitized)
+	}
+}
+
+func TestSanitizePgDSN_NoPassword(t *testing.T) {
+	dsn := "postgres://admin@db.example.com:5432/hobnob"
+	sanitized, pw := sanitizePgDSN(dsn)
+	if pw != "" {
+		t.Errorf("password = %q, want empty", pw)
+	}
+	if sanitized != dsn {
+		t.Errorf("sanitized = %q, want original %q", sanitized, dsn)
 	}
 }
 

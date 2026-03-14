@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,8 +73,14 @@ func SnapshotSQLite(srcDSN, dstPath string) error {
 }
 
 // SnapshotPostgres runs pg_dump and writes the output to dstPath.
+// The DSN is passed via --dbname flag and PGPASSWORD env var to avoid
+// leaking credentials in the process listing.
 func SnapshotPostgres(dsn, dstPath string) error {
-	cmd := exec.Command("pg_dump", "--format=plain", dsn)
+	sanitized, password := sanitizePgDSN(dsn)
+	cmd := exec.Command("pg_dump", "--format=plain", "--dbname", sanitized)
+	if password != "" {
+		cmd.Env = append(os.Environ(), "PGPASSWORD="+password)
+	}
 	out, err := os.Create(dstPath)
 	if err != nil {
 		return fmt.Errorf("creating dump file: %w", err)
@@ -87,6 +94,42 @@ func SnapshotPostgres(dsn, dstPath string) error {
 		return fmt.Errorf("pg_dump: %w", err)
 	}
 	return nil
+}
+
+// sanitizePgDSN extracts the password from a PostgreSQL DSN and returns
+// the DSN without the password plus the extracted password separately.
+// Supports both URI format (postgres://user:pass@host/db) and keyword/value
+// format (host=h user=u password=p dbname=d).
+func sanitizePgDSN(dsn string) (sanitized, password string) {
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return dsn, ""
+		}
+		pw, _ := u.User.Password()
+		if pw != "" {
+			u.User = url.UserPassword(u.User.Username(), "")
+			// Rebuild without password — url.UserPassword("user","") still
+			// includes a colon, so strip it manually.
+			sanitized = strings.Replace(u.String(), ":@", "@", 1)
+			return sanitized, pw
+		}
+		return dsn, ""
+	}
+
+	// Keyword/value format: extract password=... field.
+	var parts []string
+	for _, field := range strings.Fields(dsn) {
+		if strings.HasPrefix(field, "password=") {
+			password = strings.TrimPrefix(field, "password=")
+		} else {
+			parts = append(parts, field)
+		}
+	}
+	if password != "" {
+		return strings.Join(parts, " "), password
+	}
+	return dsn, ""
 }
 
 // CreateArchive builds a tar.gz backup at archivePath.
@@ -237,7 +280,11 @@ func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) 
 	} else {
 		srcDump := filepath.Join(tmpDir, "db", "dump.sql")
 		if _, err := os.Stat(srcDump); err == nil {
-			cmd := exec.Command("psql", manifest.DBDSN, "-f", srcDump)
+			sanitized, pw := sanitizePgDSN(manifest.DBDSN)
+		cmd := exec.Command("psql", "--dbname", sanitized, "-f", srcDump)
+		if pw != "" {
+			cmd.Env = append(os.Environ(), "PGPASSWORD="+pw)
+		}
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
