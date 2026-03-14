@@ -116,13 +116,13 @@ func run() error {
 		return fmt.Errorf("loading server config: %w", err)
 	}
 
-	// Resolve directory paths from server.yaml paths: section.
-	migrationsDir := stringOrDefault(cfg.Paths.Migrations, "migrations")
-	traitsDir := stringOrDefault(cfg.Paths.CustomTraits, "custom-traits")
-	docsDir := stringOrDefault(cfg.Paths.Docs, "docs")
-	tasksDir := stringOrDefault(cfg.Paths.Tasks, "tasks")
-	workflowsDir := stringOrDefault(cfg.Paths.Workflows, "workflows")
-	agentDir := stringOrDefault(cfg.Paths.AgentDist, "dist/agent")
+	// Resolve directory paths: env var > server.yaml paths: > default.
+	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
+	traitsDir := envOrDefault("HOBNOB_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
+	docsDir := envOrDefault("HOBNOB_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "docs"))
+	tasksDir := envOrDefault("HOBNOB_TASKS_DIR", stringOrDefault(cfg.Paths.Tasks, "tasks"))
+	workflowsDir := envOrDefault("HOBNOB_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, "workflows"))
+	agentDir := envOrDefault("HOBNOB_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
 

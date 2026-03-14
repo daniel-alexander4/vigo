@@ -198,19 +198,11 @@ AIEOF
     echo "AI configured: provider=${HOBNOB_AI_PROVIDER} model=${AI_MODEL}"
 fi
 
-# Ensure paths: section exists for Docker layout.
-if ! grep -q '^paths:' "$SERVER_YAML"; then
-    cat >> "$SERVER_YAML" <<'PATHSEOF'
-
-paths:
-  migrations: /migrations
-  agent_dist: /dist/agent
-PATHSEOF
-fi
-
 # Run from /srv/hobnob so relative paths in .env and server.yaml resolve correctly.
 cd "$DATA_DIR"
 
 export HOBNOB_CONFIG_FILE="server.yaml"
+export HOBNOB_MIGRATIONS_DIR="/migrations"
+export HOBNOB_AGENT_DIR="/dist/agent"
 
 exec hobd "$@"
