@@ -14,17 +14,17 @@ count — nothing else changes.
 
 ## Pricing
 
-| Tier       | Nodes      | Annual Price (USD) |
-|------------|------------|--------------------|
-| Free       | 1 – 25     | $0                 |
-| Starter    | 26 – 100   | $2,000             |
-| Standard   | 101 – 500  | $8,000             |
-| Growth     | 501 – 2,000| $20,000            |
-| Scale      | 2,001 – 10,000 | $50,000        |
-| Unlimited  | 10,001+    | Contact us         |
+Pricing is per managed node, per year. All features are included at every tier.
 
-Prices are per year, billed annually. Licenses are non-refundable once
-issued. Multi-year discounts are available on request.
+| Tier       | Nodes       | Per Node / Year | Example Annual Price |
+|------------|-------------|-----------------|----------------------|
+| Free       | 1 – 25      | $0              | $0                   |
+| Standard   | 26 – 250    | $72             | 100 nodes = $7,200   |
+| Growth     | 251 – 2,500 | $48             | 1,000 nodes = $48,000|
+| Enterprise | 2,501+      | $30             | 5,000 nodes = $150,000|
+
+Billed annually. Licenses are non-refundable once issued. Multi-year
+discounts are available on request.
 
 ## What You Get
 
@@ -37,12 +37,12 @@ Every paid tier includes:
 
 ## Support
 
-| Level       | Included With   | Response Time    | Channel          |
-|-------------|-----------------|------------------|------------------|
-| Community   | Free tier       | Best effort      | GitHub Issues    |
-| Standard    | Starter+        | 2 business days  | Email            |
-| Priority    | Growth+         | 1 business day   | Email + direct   |
-| Dedicated   | Scale+          | 4 business hours | Email + direct + scheduled calls |
+| Level       | Included With   | Response Time    | Channel                          |
+|-------------|-----------------|------------------|----------------------------------|
+| Community   | Free tier       | Best effort      | GitHub Issues                    |
+| Standard    | Standard+       | 2 business days  | Email                            |
+| Priority    | Growth+         | 1 business day   | Email + direct                   |
+| Dedicated   | Enterprise      | 4 business hours | Email + direct + scheduled calls |
 
 Support covers configuration guidance, bug triage, and upgrade assistance.
 It does not cover writing your modules, managing your infrastructure, or
