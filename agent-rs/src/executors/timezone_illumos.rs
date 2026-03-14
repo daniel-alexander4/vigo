@@ -30,7 +30,7 @@ impl TimezoneIllumosExecutor {
 impl Executor for TimezoneIllumosExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let desired = params.get("timezone").or_else(|| params.get("name")).cloned().unwrap_or_default();
+        let desired = params.get("timezone").cloned().unwrap_or_default();
         let mut result = ResourceResult::new("timezone", &desired);
 
         if desired.is_empty() {

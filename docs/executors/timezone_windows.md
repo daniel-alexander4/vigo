@@ -6,7 +6,7 @@ Sets the Windows timezone idempotently via `tzutil.exe`.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `timezone` | Yes | -- | Desired timezone in Windows format (e.g., `Eastern Standard Time`, `Pacific Standard Time`). Also accepts `name`. |
+| `timezone` | Yes | -- | Desired timezone in Windows format (e.g., `Eastern Standard Time`, `Pacific Standard Time`). |
 
 ## States
 

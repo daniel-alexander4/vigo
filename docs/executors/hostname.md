@@ -6,7 +6,7 @@ Sets the system hostname idempotently.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `hostname` | Yes | -- | Desired hostname. Also accepts `name`. |
+| `hostname` | Yes | -- | Desired hostname. |
 
 ## States
 

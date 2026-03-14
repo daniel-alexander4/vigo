@@ -37,7 +37,7 @@ impl MountBsdExecutor {
 impl Executor for MountBsdExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let mountpoint = params.get("mountpoint").or_else(|| params.get("path")).or_else(|| params.get("name")).cloned().unwrap_or_default();
+        let mountpoint = params.get("mountpoint").cloned().unwrap_or_default();
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("mounted");
 
         let mut result = ResourceResult::new("mount", &mountpoint);

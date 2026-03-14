@@ -6,7 +6,7 @@ Sets the system timezone idempotently.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `timezone` | Yes | -- | Desired timezone (e.g., `America/New_York`, `UTC`). Also accepts `name`. |
+| `timezone` | Yes | -- | Desired timezone (e.g., `America/New_York`, `UTC`). |
 
 ## States
 

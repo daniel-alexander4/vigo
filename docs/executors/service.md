@@ -6,7 +6,7 @@ Manages systemd services -- start, stop, restart, reload, and enable/disable at 
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `service` | Yes | -- | Service unit name (e.g., `nginx`). Also accepts `name`. |
+| `service` | Yes | -- | Service unit name (e.g., `nginx`). |
 | `state` | No | `running` | Desired state: `running`, `stopped`, `restarted`, or `reloaded`. |
 | `enabled` | No | -- | Boot-time enable: `true` to enable, `false` to disable. Empty means do not change. |
 | `restart_cmd` | No | -- | Custom command to run instead of `systemctl restart` when `state: restarted`. |

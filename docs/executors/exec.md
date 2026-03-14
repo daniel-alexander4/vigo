@@ -6,7 +6,7 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `command` | Yes | -- | The command to execute (passed to `sh -c`). Also accepts `name`. |
+| `command` | Yes | -- | The command to execute (passed to `sh -c`). |
 | `creates` | No | -- | Skip if this file path already exists. |
 | `onlyif` | No | -- | Run the command only if this guard command succeeds (exit 0). |
 | `unless` | No | -- | Run the command only if this guard command fails (non-zero exit). |

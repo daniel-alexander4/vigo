@@ -36,7 +36,7 @@ impl SwapBsdExecutor {
 impl Executor for SwapBsdExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let device = params.get("device").or_else(|| params.get("path")).or_else(|| params.get("name")).cloned().unwrap_or_default();
+        let device = params.get("device").cloned().unwrap_or_default();
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
         let mut result = ResourceResult::new("swap", &device);
 

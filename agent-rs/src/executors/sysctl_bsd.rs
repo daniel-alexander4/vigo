@@ -27,7 +27,7 @@ impl SysctlBsdExecutor {
 impl Executor for SysctlBsdExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let key = params.get("key").or_else(|| params.get("name")).cloned().unwrap_or_default();
+        let key = params.get("key").cloned().unwrap_or_default();
         let value = params.get("value").cloned().unwrap_or_default();
 
         let mut result = ResourceResult::new("sysctl", &key);

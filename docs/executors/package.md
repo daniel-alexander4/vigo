@@ -6,7 +6,7 @@ Installs, upgrades, and removes OS packages. Auto-detects the system's package m
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `package` | Yes | -- | Package name. Also accepts `name`. Supports comma-separated lists for multiple packages. |
+| `package` | Yes | -- | Package name. Supports comma-separated lists for multiple packages. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `version` | No | -- | Specific version to install. Format depends on the package manager (e.g., `1.2.3-1` for APT/DNF). |
 | `allow_downgrade` | No | `false` | When `true`, uses downgrade-safe commands when changing to a different version. APT uses `--allow-downgrades`, DNF/YUM use `dnf downgrade`/`yum downgrade`. Other package managers fall back to a regular install. |
@@ -68,7 +68,7 @@ resources:
 resources:
   - name: docker-repo
     type: repository
-    repo_name: docker-ce
+    repository: docker-ce
     repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable"
     key_url: https://download.docker.com/linux/ubuntu/gpg
 

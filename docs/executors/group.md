@@ -6,7 +6,7 @@ Manages local groups -- create, modify, and delete groups.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `group` | Yes | -- | Group name. Also accepts `name`. |
+| `group` | Yes | -- | Group name. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `gid` | No | -- | Desired GID (group ID). |
 | `system` | No | `false` | If `true`, create as a system group (`groupadd --system`, GID < 1000). |

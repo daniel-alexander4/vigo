@@ -6,7 +6,7 @@ Manages Windows packages using the first available package manager: Chocolatey, 
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `package` | Yes | -- | Package name/ID. Also accepts `name`. |
+| `package` | Yes | -- | Package name/ID. |
 | `state` | No | `present` | Desired state: `present`, `absent`, or `latest`. |
 
 ## States

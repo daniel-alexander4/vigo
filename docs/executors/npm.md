@@ -6,7 +6,7 @@ Manages Node.js packages globally via npm.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `package` | Yes | -- | Package name. Also accepts `name`. |
+| `package` | Yes | -- | Package name. |
 | `state` | No | `present` | Desired state: `present`, `absent`, or `latest`. |
 | `version` | No | -- | Specific version to install. |
 | `npm_cmd` | No | `npm` | The npm command to use. |

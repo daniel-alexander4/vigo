@@ -27,7 +27,7 @@ impl HostnameBsdExecutor {
 impl Executor for HostnameBsdExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let desired = params.get("hostname").or_else(|| params.get("name")).cloned().unwrap_or_default();
+        let desired = params.get("hostname").cloned().unwrap_or_default();
         let mut result = ResourceResult::new("hostname", &desired);
 
         if desired.is_empty() {

@@ -6,7 +6,7 @@ Manages file content, permissions, and ownership idempotently. Uses SHA-256 cont
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `targetpath` | Yes | -- | Absolute path to the file. Also accepts `name`. |
+| `targetpath` | Yes | -- | Absolute path to the file. |
 | `content` | No | -- | Desired file content. Supports Go templates with `.Traits` and `.Vars` namespaces. |
 | `mode` | No | `0644` | File permission mode (octal string). |
 | `state` | No | `present` | Desired state: `present` or `absent`. |

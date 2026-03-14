@@ -6,7 +6,7 @@ Manages entries in `/etc/hosts` (or the system hosts file) idempotently.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `hostname` | Yes | -- | The hostname to manage. Also accepts `name`. |
+| `hostname` | Yes | -- | The hostname to manage. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `ip` | Yes (for present) | -- | IP address for the hosts entry. |
 | `aliases` | No | -- | Space-separated list of hostname aliases. |

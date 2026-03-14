@@ -24,7 +24,6 @@ impl Executor for HostExecutor {
         let start = Instant::now();
         let name = params
             .get("hostname")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

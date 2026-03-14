@@ -47,7 +47,6 @@ impl Executor for KernelModuleExecutor {
         let start = Instant::now();
         let name = params
             .get("module")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

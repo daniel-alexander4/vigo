@@ -35,7 +35,6 @@ impl Executor for HostnameWindowsExecutor {
         let start = Instant::now();
         let desired = params
             .get("hostname")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

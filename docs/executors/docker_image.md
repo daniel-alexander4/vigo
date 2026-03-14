@@ -6,7 +6,7 @@ Manages Docker images -- pulls, checks for, and removes images.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `image` | Yes | -- | Image name (with or without tag). Also accepts `name`. |
+| `image` | Yes | -- | Image name (with or without tag). |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `tag` | No | `latest` | Image tag. Only used when the `image` parameter does not include a tag. |
 | `force` | No | `false` | If `true`, pull the image even if it already exists locally (useful for updating `latest` tags). |

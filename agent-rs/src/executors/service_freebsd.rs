@@ -107,7 +107,7 @@ impl ServiceFreebsdExecutor {
 impl Executor for ServiceFreebsdExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let services = params.get("service").or_else(|| params.get("name")).cloned().unwrap_or_default();
+        let services = params.get("service").cloned().unwrap_or_default();
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("running");
         let mut result = ResourceResult::new("service", &services);
 

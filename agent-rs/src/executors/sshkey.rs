@@ -14,7 +14,6 @@ impl Executor for SshKeyExecutor {
         let start = Instant::now();
         let hostname = params
             .get("hostname")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

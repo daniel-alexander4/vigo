@@ -139,15 +139,14 @@ impl Executor for RepositoryExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let name = params
-            .get("repo_name")
-            .or_else(|| params.get("name"))
+            .get("repository")
             .cloned()
             .unwrap_or_default();
 
         let mut result = ResourceResult::new("repository", &name);
 
         if name.is_empty() {
-            result.error = Some("repository executor: repo_name param is required".into());
+            result.error = Some("repository executor: repository param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -258,7 +257,7 @@ mod tests {
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("repo_name param is required"),
+            result.error.as_deref().unwrap().contains("repository param is required"),
             "unexpected error: {:?}",
             result.error
         );
@@ -273,7 +272,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "docker-ce"),
+                ("repository", "docker-ce"),
                 ("repo", "deb https://download.docker.com/linux/ubuntu jammy stable"),
                 ("key_url", "https://download.docker.com/linux/ubuntu/gpg"),
                 ("state", "present"),
@@ -297,7 +296,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "docker-ce"),
+                ("repository", "docker-ce"),
                 ("state", "present"),
                 ("repo", "deb https://download.docker.com/linux/ubuntu jammy stable"),
             ]),
@@ -316,7 +315,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "docker-ce"),
+                ("repository", "docker-ce"),
                 ("state", "present"),
             ]),
             false,
@@ -338,7 +337,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "docker-ce"),
+                ("repository", "docker-ce"),
                 ("state", "absent"),
             ]),
             false,
@@ -359,7 +358,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "docker-ce"),
+                ("repository", "docker-ce"),
                 ("state", "absent"),
             ]),
             false,

@@ -39,7 +39,6 @@ impl Executor for FirewallExecutor {
         let start = Instant::now();
         let port = params
             .get("port")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

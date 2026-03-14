@@ -66,14 +66,13 @@ impl Executor for GroupExecutor {
         let start = Instant::now();
         let name = params
             .get("group")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
         let mut result = ResourceResult::new("group", &name);
 
         if name.is_empty() {
-            result.error = Some("group executor: group or name param is required".into());
+            result.error = Some("group executor: group param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -272,7 +271,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("state", "present")]),
+            &make_params(&[("group", "deploy"), ("state", "present")]),
             false,
         );
 
@@ -300,7 +299,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("gid", "1001"), ("state", "present")]),
+            &make_params(&[("group", "deploy"), ("gid", "1001"), ("state", "present")]),
             false,
         );
 
@@ -325,7 +324,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("gid", "2000"), ("state", "present")]),
+            &make_params(&[("group", "deploy"), ("gid", "2000"), ("state", "present")]),
             false,
         );
 
@@ -353,7 +352,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "ghost"), ("state", "absent")]),
+            &make_params(&[("group", "ghost"), ("state", "absent")]),
             false,
         );
 
@@ -378,7 +377,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("state", "absent")]),
+            &make_params(&[("group", "deploy"), ("state", "absent")]),
             false,
         );
 
@@ -406,7 +405,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "sysgroup"), ("state", "present"), ("system", "true")]),
+            &make_params(&[("group", "sysgroup"), ("state", "present"), ("system", "true")]),
             false,
         );
 
@@ -445,7 +444,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("group", "deploy"),
                 ("state", "present"),
                 ("members", "alice,bob"),
             ]),
@@ -477,7 +476,7 @@ mod tests {
 
         let result = exec.execute(
             &make_params(&[
-                ("name", "deploy"),
+                ("group", "deploy"),
                 ("state", "present"),
                 ("members", "alice"),
             ]),
@@ -507,7 +506,7 @@ mod tests {
         };
 
         let result = exec.execute(
-            &make_params(&[("name", "deploy"), ("state", "present")]),
+            &make_params(&[("group", "deploy"), ("state", "present")]),
             true,
         );
 

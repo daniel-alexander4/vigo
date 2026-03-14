@@ -216,7 +216,6 @@ impl Executor for PackageWindowsExecutor {
         let start = Instant::now();
         let name = params
             .get("package")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
@@ -224,7 +223,7 @@ impl Executor for PackageWindowsExecutor {
 
         if name.is_empty() {
             result.error = Some(
-                "package_windows executor: name param is required".to_string(),
+                "package_windows executor: package param is required".to_string(),
             );
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;

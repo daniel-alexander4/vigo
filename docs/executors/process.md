@@ -6,7 +6,7 @@ Manages running processes -- ensures processes are running or stopped, with opti
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `process` | Yes | -- | Process name to match. Also accepts `name`. |
+| `process` | Yes | -- | Process name to match. |
 | `state` | No | `running` | Desired state: `running` or `stopped`. |
 | `signal` | No | `TERM` | Signal to send when stopping processes. |
 | `match` | No | `exact` | Match mode: `exact` (process name equals) or `pattern` (regex match via `pgrep -f`). |

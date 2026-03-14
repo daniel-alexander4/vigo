@@ -6,7 +6,7 @@ Manages OS package repository configurations. Supports APT (Debian/Ubuntu) and D
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `repo_name` | Yes | -- | Repository identifier name. Also accepts `name`. |
+| `repository` | Yes | -- | Repository identifier name. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `repo` | Yes (for present) | -- | Repository URL or definition string. For APT: a deb line (e.g., `deb https://... stable main`). For DNF/YUM: the baseurl. |
 | `key_url` | No | -- | URL to the GPG signing key for the repository. Downloaded and imported automatically. |
@@ -28,7 +28,7 @@ Checks if the repository configuration file exists and whether its content match
 resources:
   - name: docker-ce
     type: repository
-    repo_name: docker-ce
+    repository: docker-ce
     repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable"
     key_url: https://download.docker.com/linux/ubuntu/gpg
 ```
@@ -39,7 +39,7 @@ resources:
 resources:
   - name: epel
     type: repository
-    repo_name: epel
+    repository: epel
     repo: "https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/"
 ```
 
@@ -49,7 +49,7 @@ resources:
 resources:
   - name: old-repo
     type: repository
-    repo_name: old-repo
+    repository: old-repo
     state: absent
 ```
 
@@ -59,7 +59,7 @@ resources:
 resources:
   - name: docker-repo
     type: repository
-    repo_name: docker-ce
+    repository: docker-ce
     repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu jammy stable"
     key_url: https://download.docker.com/linux/ubuntu/gpg
 

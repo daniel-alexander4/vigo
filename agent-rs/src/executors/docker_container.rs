@@ -110,14 +110,13 @@ impl Executor for DockerContainerExecutor {
         let start = Instant::now();
         let name = params
             .get("container")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
         let mut result = ResourceResult::new("docker_container", &name);
 
         if name.is_empty() {
-            result.error = Some("docker_container executor: name param is required".into());
+            result.error = Some("docker_container executor: container param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -316,7 +315,7 @@ mod tests {
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("name param is required"),
+            result.error.as_deref().unwrap().contains("container param is required"),
             "unexpected error: {:?}",
             result.error
         );
@@ -336,7 +335,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "web"),
+                ("container", "web"),
                 ("image", "nginx:latest"),
                 ("state", "running"),
             ]),
@@ -368,7 +367,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "web"),
+                ("container", "web"),
                 ("image", "nginx:latest"),
                 ("state", "running"),
             ]),
@@ -399,7 +398,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "web"),
+                ("container", "web"),
                 ("image", "nginx:latest"),
                 ("state", "running"),
             ]),
@@ -427,7 +426,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "web"),
+                ("container", "web"),
                 ("state", "stopped"),
             ]),
             false,
@@ -455,7 +454,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "web"),
+                ("container", "web"),
                 ("state", "absent"),
             ]),
             false,
@@ -480,7 +479,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "web"),
+                ("container", "web"),
                 ("state", "absent"),
             ]),
             false,
@@ -503,7 +502,7 @@ mod tests {
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "web"),
+                ("container", "web"),
                 ("image", "nginx:latest"),
                 ("state", "running"),
             ]),

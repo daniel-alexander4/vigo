@@ -6,7 +6,7 @@ Sets the Windows hostname idempotently using PowerShell's `Rename-Computer` cmdl
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `hostname` | Yes | -- | Desired hostname. Also accepts `name`. |
+| `hostname` | Yes | -- | Desired hostname. |
 
 ## States
 

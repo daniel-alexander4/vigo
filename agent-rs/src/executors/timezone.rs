@@ -42,7 +42,6 @@ impl Executor for TimezoneExecutor {
         let start = Instant::now();
         let desired = params
             .get("timezone")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
@@ -194,18 +193,4 @@ mod tests {
         assert_eq!(calls.len(), 0, "dry_run should not call timedatectl");
     }
 
-    #[test]
-    fn unknown_state_uses_name_alias() {
-        // The "name" param is accepted as an alias for "timezone".
-        let desired = "Fake/Another_Test_Zone";
-        let timedatectl = ok_output("");
-        let mock = MockRunner::new(vec![timedatectl]);
-        let exec = TimezoneExecutor {
-            runner: Box::new(mock),
-        };
-        let result = exec.execute(&make_params(&[("name", desired)]), false);
-        assert_eq!(result.action, Action::Updated);
-        assert!(result.changed);
-        assert!(result.error.is_none());
-    }
 }

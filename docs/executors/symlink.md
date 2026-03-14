@@ -6,7 +6,7 @@ Manages symbolic and hard links idempotently.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `targetpath` | Yes | -- | Path where the link will be created. Also accepts `name`. |
+| `targetpath` | Yes | -- | Path where the link will be created. |
 | `to` | Yes (for present) | -- | Target path the link points to. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `link_type` | No | `soft` | Link type: `soft` (symbolic) or `hard`. |

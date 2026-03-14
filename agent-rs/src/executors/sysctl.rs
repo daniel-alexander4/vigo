@@ -38,7 +38,6 @@ impl Executor for SysctlExecutor {
         let start = Instant::now();
         let key = params
             .get("key")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

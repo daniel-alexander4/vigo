@@ -6,7 +6,7 @@ Manages Docker containers idempotently. Supports creating, starting, stopping, a
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `container` | Yes | -- | Container name. Also accepts `name`. |
+| `container` | Yes | -- | Container name. |
 | `state` | No | `running` | Desired state: `running`, `stopped`, `present`, or `absent`. |
 | `image` | Yes (for running/present) | -- | Docker image to use (e.g., `nginx:latest`). |
 | `ports` | No | -- | Comma-separated port mappings (e.g., `8080:80,8443:443`). |

@@ -141,7 +141,6 @@ impl Executor for MountExecutor {
         let start = Instant::now();
         let mount_point = params
             .get("path")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

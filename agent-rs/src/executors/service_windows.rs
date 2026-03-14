@@ -224,7 +224,6 @@ impl Executor for ServiceWindowsExecutor {
         let start = Instant::now();
         let name_param = params
             .get("service")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
@@ -232,7 +231,7 @@ impl Executor for ServiceWindowsExecutor {
 
         if name_param.is_empty() {
             result.error = Some(
-                "service_windows executor: name param is required".to_string(),
+                "service_windows executor: service param is required".to_string(),
             );
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;

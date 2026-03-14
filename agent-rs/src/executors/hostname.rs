@@ -38,7 +38,6 @@ impl Executor for HostnameExecutor {
         let start = Instant::now();
         let desired = params
             .get("hostname")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
@@ -194,20 +193,4 @@ mod tests {
         assert!(result.changed);
     }
 
-    #[test]
-    fn name_alias_works() {
-        let current = current_hostname_value();
-        let mock = MockRunner::empty();
-        let exec = HostnameExecutor {
-            runner: Box::new(mock),
-        };
-        // Using "name" key instead of "hostname".
-        let result = exec.execute(
-            &make_params(&[("name", &current)]),
-            false,
-        );
-        assert_eq!(result.action, Action::None);
-        assert!(!result.changed);
-        assert!(result.error.is_none());
-    }
 }

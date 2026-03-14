@@ -50,14 +50,13 @@ impl Executor for ProcessExecutor {
         let start = Instant::now();
         let name = params
             .get("process")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
         let mut result = ResourceResult::new("process", &name);
 
         if name.is_empty() {
-            result.error = Some("process executor: name param is required".into());
+            result.error = Some("process executor: process param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -260,7 +259,7 @@ mod tests {
         };
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("name param is required"));
+        assert!(result.error.unwrap().contains("process param is required"));
     }
 
     #[test]
@@ -272,7 +271,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("name", "nginx"), ("state", "running")]),
+            &make_params(&[("process", "nginx"), ("state", "running")]),
             false,
         );
         assert_eq!(result.action, Action::None);
@@ -289,7 +288,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("name", "nginx"), ("state", "running")]),
+            &make_params(&[("process", "nginx"), ("state", "running")]),
             false,
         );
         assert!(result.error.is_some());
@@ -305,7 +304,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("name", "nginx"), ("state", "stopped")]),
+            &make_params(&[("process", "nginx"), ("state", "stopped")]),
             false,
         );
         assert_eq!(result.action, Action::None);
@@ -324,7 +323,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("name", "nginx"), ("state", "stopped")]),
+            &make_params(&[("process", "nginx"), ("state", "stopped")]),
             false,
         );
         assert_eq!(result.action, Action::Deleted);
@@ -347,7 +346,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("name", "worker"), ("state", "running"), ("count", "3")]),
+            &make_params(&[("process", "worker"), ("state", "running"), ("count", "3")]),
             false,
         );
         assert_eq!(result.action, Action::None);
@@ -365,7 +364,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("name", "nginx"), ("state", "stopped")]),
+            &make_params(&[("process", "nginx"), ("state", "stopped")]),
             true,
         );
         assert_eq!(result.action, Action::Deleted);

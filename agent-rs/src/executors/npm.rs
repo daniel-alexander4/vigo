@@ -41,7 +41,6 @@ impl Executor for NpmExecutor {
         let start = Instant::now();
         let name = params
             .get("package")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

@@ -6,7 +6,7 @@ Creates and removes directories with specified permissions and ownership.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `targetpath` | Yes | -- | Absolute path to the directory. Also accepts `name`. |
+| `targetpath` | Yes | -- | Absolute path to the directory. |
 | `mode` | No | `0755` | Directory permission mode (octal string). |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `owner` | No | -- | Directory owner (username or UID). Linux only. |

@@ -6,7 +6,7 @@ Loads and unloads Linux kernel modules, with optional persistence across reboots
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `module` | Yes | -- | Kernel module name (e.g., `br_netfilter`). Also accepts `name`. |
+| `module` | Yes | -- | Kernel module name (e.g., `br_netfilter`). |
 | `state` | No | `present` | Desired state: `present`, `absent`, `loaded`, or `unloaded`. |
 | `params` | No | -- | Module parameters (space-separated key=value pairs passed to `modprobe`). |
 | `persist` | No | `true` | If `true`, persist the module configuration to `/etc/modules-load.d/`. |

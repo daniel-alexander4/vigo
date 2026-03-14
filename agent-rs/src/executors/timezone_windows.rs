@@ -34,7 +34,6 @@ impl Executor for TimezoneWindowsExecutor {
         let start = Instant::now();
         let desired = params
             .get("timezone")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

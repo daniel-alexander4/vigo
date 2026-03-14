@@ -31,7 +31,6 @@ impl Executor for DockerImageExecutor {
         let start = Instant::now();
         let mut image = params
             .get("image")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 

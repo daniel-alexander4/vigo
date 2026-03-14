@@ -71,7 +71,6 @@ impl Executor for SwapExecutor {
         let start = Instant::now();
         let path = params
             .get("path")
-            .or_else(|| params.get("name"))
             .cloned()
             .unwrap_or_default();
 
