@@ -75,7 +75,7 @@ func TestExecWithUnless_IsClean(t *testing.T) {
 	}
 }
 
-func TestServiceRestarted_WithoutSubscribes_IsWarning(t *testing.T) {
+func TestServiceRestarted_WithoutSubscribes_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -87,14 +87,8 @@ func TestServiceRestarted_WithoutSubscribes_IsWarning(t *testing.T) {
 	}
 
 	findings := ValidateModule(mod)
-	if HasErrors(findings) {
-		t.Fatal("restarted service without subscribes should be warning, not error")
-	}
-	if len(findings) == 0 {
-		t.Fatal("expected a warning")
-	}
-	if findings[0].Severity != SeverityWarning {
-		t.Errorf("expected warning severity, got %d", findings[0].Severity)
+	if !HasErrors(findings) {
+		t.Fatal("restarted service without subscribes should be an error")
 	}
 }
 
@@ -216,7 +210,7 @@ func TestFileValidation_SourceSatisfiesContent(t *testing.T) {
 	}
 }
 
-func TestUnknownType_IsWarning(t *testing.T) {
+func TestUnknownType_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -225,14 +219,25 @@ func TestUnknownType_IsWarning(t *testing.T) {
 	}
 
 	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("unknown type without custom: true should be an error")
+	}
+}
+
+func TestUnknownType_WithCustomFlag_IsClean(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "deploy", Type: "capistrano", Attributes: map[string]any{
+				"custom":  true,
+				"command": "cap deploy",
+			}},
+		},
+	}
+
+	findings := ValidateModule(mod)
 	if HasErrors(findings) {
-		t.Fatal("unknown types should be warnings (for custom executors), not errors")
-	}
-	if len(findings) == 0 {
-		t.Fatal("expected a warning for unknown type")
-	}
-	if findings[0].Severity != SeverityWarning {
-		t.Errorf("expected warning severity, got %d", findings[0].Severity)
+		t.Errorf("unknown type with custom: true should pass, got: %s", FormatFindings(findings))
 	}
 }
 
@@ -747,7 +752,7 @@ func TestBefore_UnknownResource_IsError(t *testing.T) {
 	}
 }
 
-func TestRedundantNotifySubscribes_IsWarning(t *testing.T) {
+func TestRedundantNotifySubscribes_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -759,21 +764,21 @@ func TestRedundantNotifySubscribes_IsWarning(t *testing.T) {
 		},
 	}
 	findings := ValidateModule(mod)
-	if HasErrors(findings) {
-		t.Fatal("redundant trigger should be warning, not error")
+	if !HasErrors(findings) {
+		t.Fatal("redundant trigger should be an error")
 	}
 	found := false
 	for _, f := range findings {
-		if f.Severity == SeverityWarning && f.ResourceName == "svc" {
+		if f.Severity == SeverityError && f.ResourceName == "svc" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected redundant trigger warning, got: %s", FormatFindings(findings))
+		t.Errorf("expected redundant trigger error, got: %s", FormatFindings(findings))
 	}
 }
 
-func TestFileStateDirectory_IsWarning(t *testing.T) {
+func TestFileStateDirectory_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -783,17 +788,8 @@ func TestFileStateDirectory_IsWarning(t *testing.T) {
 		},
 	}
 	findings := ValidateModule(mod)
-	if HasErrors(findings) {
-		t.Fatal("file with state: directory should be warning, not error")
-	}
-	found := false
-	for _, f := range findings {
-		if f.Severity == SeverityWarning && f.Message == "file resource with state: directory — use type: directory instead" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("expected state:directory warning, got: %s", FormatFindings(findings))
+	if !HasErrors(findings) {
+		t.Fatal("file with state: directory should be an error")
 	}
 }
 

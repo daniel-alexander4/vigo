@@ -212,7 +212,7 @@ func validateCrossReferences(mod Module) []Finding {
 					Module:       mod.Name,
 					ResourceName: res.Name,
 					ResourceType: res.Type,
-					Severity:     SeverityWarning,
+					Severity:     SeverityError,
 					Message:      fmt.Sprintf("redundant trigger: %q already has notify: [%s] — remove subscribes or notify, not both", sub, res.Name),
 				}
 				findings = append(findings, f)
@@ -270,9 +270,13 @@ func validateResource(moduleName string, res Resource) []Finding {
 	}
 
 	if !knownTypes[res.Type] {
+		if attrBool(res.Attributes, "custom") {
+			// Explicitly marked as custom executor — skip type validation.
+			return findings
+		}
 		f := base
-		f.Severity = SeverityWarning
-		f.Message = fmt.Sprintf("unknown resource type %q (custom executor required on agent)", res.Type)
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf("unknown resource type %q — add custom: true if this is a custom executor", res.Type)
 		findings = append(findings, f)
 		return findings
 	}
@@ -331,7 +335,7 @@ func validateFile(base Finding, res Resource) []Finding {
 	state := attrString(res.Attributes, "state")
 	if state == "directory" {
 		f := base
-		f.Severity = SeverityWarning
+		f.Severity = SeverityError
 		f.Message = "file resource with state: directory — use type: directory instead"
 		findings = append(findings, f)
 	} else if state != "absent" {
@@ -429,8 +433,8 @@ func validateService(base Finding, res Resource) []Finding {
 
 	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) == 0 {
 		f := base
-		f.Severity = SeverityWarning
-		f.Message = fmt.Sprintf("service with state %q runs every convergence — consider adding subscribes", state)
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf("service with state %q runs every convergence — add subscribes to gate on dependency change", state)
 		findings = append(findings, f)
 	}
 
@@ -447,7 +451,7 @@ func validateReboot(base Finding, res Resource) []Finding {
 	}
 
 	f := base
-	f.Severity = SeverityWarning
+	f.Severity = SeverityError
 	f.Message = "reboot resource has no subscribes guard and no reboot_required_file — will reboot every convergence"
 	return []Finding{f}
 }
@@ -654,6 +658,18 @@ func requireHTTPURL(base Finding, res Resource, field string) []Finding {
 		}
 	}
 	return nil
+}
+
+func attrBool(attrs map[string]any, key string) bool {
+	if attrs == nil {
+		return false
+	}
+	v, ok := attrs[key]
+	if !ok {
+		return false
+	}
+	b, _ := v.(bool)
+	return b
 }
 
 func attrString(attrs map[string]any, key string) string {
