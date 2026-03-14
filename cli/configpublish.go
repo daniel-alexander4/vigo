@@ -142,6 +142,12 @@ func suggestFixes(err error, disabled bool) {
 
 	var question string
 
+	// Secret errors already include fix commands — no AI needed.
+	var se *config.SecretErrors
+	if errors.As(err, &se) {
+		return
+	}
+
 	var ie *config.IdempotencyErrors
 	if errors.As(err, &ie) {
 		// Idempotency/validation errors — include each module's YAML.

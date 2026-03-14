@@ -91,35 +91,33 @@ type SecretErrors struct {
 }
 
 func (se *SecretErrors) Error() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%d secret resolution error(s):\n", len(se.Errors))
-	for _, e := range se.Errors {
-		fmt.Fprintf(&b, "  - %s\n", e.Error())
-	}
-	return b.String()
+	return se.Format()
 }
 
-// Format returns a human-readable diagnostic block suitable for container logs.
+// Format returns a human-readable diagnostic block with fix commands.
 func (se *SecretErrors) Format() string {
 	var b strings.Builder
-	b.WriteString("\n=== hobd failed to start: secret resolution errors ===\n\n")
-	for i, e := range se.Errors {
+	fmt.Fprintf(&b, "\n── %d secret(s) could not be resolved ──\n", len(se.Errors))
+
+	for _, e := range se.Errors {
 		if e.Backend == "" && se.Backend != "" {
 			e.Backend = se.Backend
 		}
-		fmt.Fprintf(&b, "  %d) %s\n", i+1, e.Match)
+		b.WriteByte('\n')
+		loc := e.Match
 		if e.Module != "" {
-			fmt.Fprintf(&b, "     module:   %s\n", e.Module)
+			loc += " > " + e.Module
 		}
 		if e.Resource != "" {
-			fmt.Fprintf(&b, "     resource: %s\n", e.Resource)
+			loc += " > " + e.Resource
 		}
-		fmt.Fprintf(&b, "     attr:     %s\n", e.Attr)
-		fmt.Fprintf(&b, "     secret:   %s\n", e.Secret)
-		fmt.Fprintf(&b, "     error:    %v\n", e.Err)
-		fmt.Fprintf(&b, "     fix:      %s\n\n", e.Hint())
+		fmt.Fprintf(&b, "  %s\n", loc)
+		fmt.Fprintf(&b, "    secret: %s\n", e.Secret)
+		fmt.Fprintf(&b, "    error:  %v\n", e.Err)
+		fmt.Fprintf(&b, "    fix:    %s\n", e.Hint())
 	}
-	b.WriteString("=== fix the above errors and restart hobd ===\n")
+
+	b.WriteByte('\n')
 	return b.String()
 }
 
