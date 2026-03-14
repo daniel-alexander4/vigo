@@ -40,6 +40,8 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 			if err := val.Decode(&def.DependsOn); err != nil {
 				return nil, fmt.Errorf("decoding %s: %w", key, err)
 			}
+		case "require":
+			return nil, fmt.Errorf("require was renamed to depends_on — update your config")
 		case "before":
 			if err := val.Decode(&def.Before); err != nil {
 				return nil, fmt.Errorf("decoding before: %w", err)
@@ -150,10 +152,14 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 			if err := val.Decode(&res.WatchSecret); err != nil {
 				return res, fmt.Errorf("decoding watch_secret: %w", err)
 			}
+		case key == "subscribes_secret":
+			return res, fmt.Errorf("subscribes_secret was renamed to watch_secret — update your config")
 		case key == "depends_on":
 			if err := val.Decode(&res.DependsOn); err != nil {
 				return res, fmt.Errorf("decoding %s: %w", key, err)
 			}
+		case key == "require":
+			return res, fmt.Errorf("require was renamed to depends_on — update your config")
 		case key == "before":
 			if err := val.Decode(&res.Before); err != nil {
 				return res, fmt.Errorf("decoding before: %w", err)
