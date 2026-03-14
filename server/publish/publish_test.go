@@ -267,7 +267,7 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
 	writeFile(t, filepath.Join(live, "modules", "deleted.hnb"), "will be removed")
 
-	changed, removed, err := diffTrees(proposed, live)
+	_, changed, removed, err := diffTrees(proposed, live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestDiff_EmptyLive(t *testing.T) {
 	writeValidConfig(t, proposed)
 
 	// .live doesn't exist yet — everything is new.
-	changed, removed, err := diffTrees(proposed, live)
+	_, changed, removed, err := diffTrees(proposed, live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}

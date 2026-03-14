@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +67,7 @@ type Result struct {
 	Roles       int
 	Entries     int
 	Files       int      // total files synced (0 for validate-only)
+	AllFiles    []string // all files examined in proposed/
 	Changed     []string // files that are new or changed vs .live
 	Removed     []string // files in .live not present in proposed
 	DiffSummary string   // unified diff of changed files
@@ -81,7 +83,7 @@ func ValidateSource(opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	changed, removed, err := diffTrees(ProposedDir, LiveDir)
+	allFiles, changed, removed, err := diffTrees(ProposedDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
@@ -97,11 +99,12 @@ func ValidateSource(opts Options) (*Result, error) {
 
 	stats := store.Stats()
 	return &Result{
-		Modules: stats.Modules,
-		Roles:   len(store.ListRoleNames()),
-		Entries: stats.Entries,
-		Changed: changed,
-		Removed: removed,
+		Modules:  stats.Modules,
+		Roles:    len(store.ListRoleNames()),
+		Entries:  stats.Entries,
+		AllFiles: allFiles,
+		Changed:  changed,
+		Removed:  removed,
 	}, nil
 }
 
@@ -150,16 +153,21 @@ func Publish(opts Options) (*Result, error) {
 
 // diffTrees compares proposed vs live and returns paths (relative to root)
 // that are new/changed or removed.
-func diffTrees(proposed, live string) (changed, removed []string, err error) {
+func diffTrees(proposed, live string) (allFiles, changed, removed []string, err error) {
 	proposedFiles, err := hashTree(proposed)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	liveFiles, err := hashTree(live)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+
+	for path := range proposedFiles {
+		allFiles = append(allFiles, path)
+	}
+	sort.Strings(allFiles)
 
 	for path, hash := range proposedFiles {
 		if liveHash, ok := liveFiles[path]; !ok || liveHash != hash {
@@ -173,7 +181,7 @@ func diffTrees(proposed, live string) (changed, removed []string, err error) {
 		}
 	}
 
-	return changed, removed, nil
+	return allFiles, changed, removed, nil
 }
 
 // hashTree walks a config directory and returns a map of relative path → SHA-256 hex.

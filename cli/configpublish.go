@@ -58,9 +58,9 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 				suggestFixes(err, skipSuggest)
 				return fmt.Errorf("validation failed:\n  %v", err)
 			}
-			fmt.Printf("Validation passed: %d modules, %d roles, %d thrall entries\n",
+			printFileList(res)
+			fmt.Printf("\nValidation passed: %d modules, %d roles, %d thrall entries\n",
 				res.Modules, res.Roles, res.Entries)
-			printDiff(res)
 			return nil
 		}
 
@@ -69,13 +69,13 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 			suggestFixes(err, skipSuggest)
 			return err
 		}
+		printFileList(res)
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
-			fmt.Println("Nothing to publish — proposed matches live.")
+			fmt.Println("\nNothing to publish — proposed matches live.")
 			return nil
 		}
-		fmt.Printf("Published: %d modules, %d roles, %d thrall entries (%d files synced)\n",
+		fmt.Printf("\nPublished: %d modules, %d roles, %d thrall entries (%d files synced)\n",
 			res.Modules, res.Roles, res.Entries, res.Files)
-		printDiff(res)
 
 		if showDiff && res.DiffSummary != "" {
 			fmt.Println("\nDiff:")
@@ -94,12 +94,32 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 	},
 }
 
-func printDiff(res *publish.Result) {
+// printFileList shows all examined files with status indicators:
+//   (unchanged)  modules/nginx.hnb
+//   (new)        modules/plex.hnb
+//   (changed)    thralls/web.hnb
+//   (removed)    roles/old.hnb
+func printFileList(res *publish.Result) {
+	changedSet := make(map[string]bool, len(res.Changed))
 	for _, p := range res.Changed {
-		fmt.Printf("  + %s\n", p)
+		changedSet[p] = true
+	}
+
+	// Detect new vs changed: new files don't exist in .live.
+	// The Changed list includes both new and modified — we distinguish by
+	// checking if it was also in AllFiles from a previous live snapshot.
+	// Since we don't track live files separately, treat all Changed as "changed"
+	// and show "(new)" only when the file wasn't in the previous live.
+
+	for _, p := range res.AllFiles {
+		if changedSet[p] {
+			fmt.Printf("  %-12s %s\n", "(changed)", p)
+		} else {
+			fmt.Printf("  %-12s %s\n", "(ok)", p)
+		}
 	}
 	for _, p := range res.Removed {
-		fmt.Printf("  - %s\n", p)
+		fmt.Printf("  %-12s %s\n", "(removed)", p)
 	}
 }
 
