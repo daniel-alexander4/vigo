@@ -6,13 +6,21 @@ Get Hobnob running and manage your first thrall in 10 minutes.
 
 ```bash
 sudo mkdir -p /srv/hobnob
+curl -sSfO https://raw.githubusercontent.com/hobnob/hobnob/main/docker-compose.prod.yml
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Or with a single `docker run`:
+
+```bash
+sudo mkdir -p /srv/hobnob
 docker run -d --name hobnob \
   -p 8181:8181 -p 1530:1530 \
   -v /srv/hobnob:/srv/hobnob \
   hobnob/hobnob:latest
 ```
 
-The server starts on `localhost:8181` (REST/UI) and `localhost:1530` (gRPC). TLS certificates and a default config are auto-generated on first start. Open `http://localhost:8181` to see the dashboard.
+The server starts on `localhost:8181` (REST/UI) and `localhost:1530` (gRPC). TLS certificates, `server.yaml`, `.env`, and example configs are auto-generated on first start. Open `http://localhost:8181` to see the dashboard.
 
 ## 2. Enroll a Thrall
 

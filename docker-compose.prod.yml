@@ -1,0 +1,83 @@
+# Production compose — pulls pre-built image from registry.
+#
+# Quick start:
+#   mkdir -p /srv/hobnob
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# The first run creates /srv/hobnob/server.yaml, .env, TLS certs, and
+# example configs automatically. Edit server.yaml and .env, then restart.
+#
+# Optional services:
+#   COMPOSE_PROFILES=ollama docker compose -f docker-compose.prod.yml up -d
+#   COMPOSE_PROFILES=postgres docker compose -f docker-compose.prod.yml up -d
+#   COMPOSE_PROFILES=ollama,postgres docker compose -f docker-compose.prod.yml up -d
+
+services:
+  hobnob:
+    image: hobnob/hobnob:latest
+    container_name: hobnob
+    restart: unless-stopped
+    ports:
+      - "1530:1530"   # gRPC (agent check-in)
+      - "8181:8181"   # REST API + Web UI
+    env_file:
+      - /srv/hobnob/.env
+    volumes:
+      - /srv/hobnob:/srv/hobnob
+      - /usr/local/bin:/host-bin
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: hobnob-postgres
+    restart: unless-stopped
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: hobnob
+      POSTGRES_USER: hobnob
+      POSTGRES_PASSWORD: hobnob
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hobnob"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hobnob-ollama
+    restart: unless-stopped
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_THREADS=8
+      - OLLAMA_FLASH_ATTENTION=1
+    # GPU passthrough (uncomment for GPU-accelerated AI)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  ollama-data:
+  postgres-data:

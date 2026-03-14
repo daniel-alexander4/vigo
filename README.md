@@ -4,45 +4,17 @@ Pull-based configuration management for Linux and macOS. Agents on managed nodes
 
 ## Quickstart
 
-### 1. Create `/srv/hobnob`
-
-All server config lives in `/srv/hobnob` on the host. The container bind-mounts it.
+### 1. Start the server
 
 ```bash
-sudo mkdir -p /srv/hobnob/certs
+sudo mkdir -p /srv/hobnob
+curl -sSfO https://raw.githubusercontent.com/hobnob/hobnob/main/docker-compose.prod.yml
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-### 2. Generate TLS certificates
+The first run auto-generates TLS certificates, `server.yaml`, `.env`, and example configs in `/srv/hobnob/`. The dashboard is at `http://localhost:8181/`.
 
-```bash
-make certs
-sudo cp certs/* /srv/hobnob/certs/
-```
-
-For production, replace with your own CA and server cert. Keep the CA private key accessible to the server if you want bootstrap CSR signing (see [Bootstrap enrollment](#bootstrap-enrollment)).
-
-### 3. Copy config files
-
-```bash
-sudo cp server-configs/server.yaml /srv/hobnob/
-sudo cp -r thrall-configs/modules thrall-configs/roles thrall-configs/templates /srv/hobnob/
-```
-
-### 4. Start the server
-
-```bash
-docker compose up -d
-```
-
-This starts the hobnob server with an embedded SQLite database. Migrations run automatically. Verify:
-
-```bash
-docker compose ps
-```
-
-You should see `hobnob` running. The dashboard is at `http://<server-ip>:8181/`.
-
-### 6. Bootstrap managed nodes
+### 2. Bootstrap managed nodes
 
 On each node you want to manage, run:
 

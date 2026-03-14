@@ -1,3 +1,6 @@
+# Development compose — builds from source. Used by `make up`.
+# For production, see docker-compose.prod.yml.
+
 services:
   hobnob:
     container_name: hobnob
@@ -65,7 +68,6 @@ services:
     #         - driver: nvidia
     #           count: all
     #           capabilities: [gpu]
-  # Agent is NOT run in compose -- it is installed on each managed node separately
 
 volumes:
   ollama-data:

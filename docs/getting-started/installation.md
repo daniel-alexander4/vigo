@@ -2,9 +2,66 @@
 
 Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the agent (`hobnob`).
 
-## Docker (recommended)
+## Docker Compose (recommended)
 
-The fastest way to run the server:
+```bash
+sudo mkdir -p /srv/hobnob
+curl -sSfO https://raw.githubusercontent.com/hobnob/hobnob/main/docker-compose.prod.yml
+docker compose -f docker-compose.prod.yml up -d
+```
+
+This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). On first start, the container seeds `/srv/hobnob/` with:
+
+- `server.yaml` — server configuration
+- `.env` — environment variables (non-secret)
+- `tls/` — auto-generated mTLS certificates
+- `hnb/proposed/` — directory for your `.hnb` config files
+- `examples/` — example modules, roles, and node configs
+- `docs/` — browsable documentation (also at `http://localhost:8181/docs`)
+
+All persistent state lives in `/srv/hobnob` on the host.
+
+### Optional services
+
+Enable AI assistant (local Ollama) or Postgres by setting `COMPOSE_PROFILES`:
+
+```bash
+# With AI assistant
+COMPOSE_PROFILES=ollama docker compose -f docker-compose.prod.yml up -d
+
+# With Postgres instead of SQLite
+COMPOSE_PROFILES=postgres docker compose -f docker-compose.prod.yml up -d
+
+# Both
+COMPOSE_PROFILES=ollama,postgres docker compose -f docker-compose.prod.yml up -d
+```
+
+### Directory layout
+
+After first start, `/srv/hobnob/` contains:
+
+```
+/srv/hobnob/
+├── server.yaml              # server config
+├── .env                     # non-secret env vars
+├── tls/                     # mTLS certificates (auto-generated)
+├── license/                 # license .lic files
+├── db/                      # SQLite database
+├── secrets/                 # encrypted secret files
+├── hnb/
+│   ├── proposed/            # edit .hnb files here
+│   │   ├── modules/
+│   │   ├── roles/
+│   │   └── thralls/
+│   └── .live/               # published config (do not edit directly)
+├── config-history/          # rollback snapshots
+├── examples/                # example .hnb files
+└── docs/                    # documentation
+```
+
+### Single-container alternative
+
+If you prefer `docker run` without compose:
 
 ```bash
 sudo mkdir -p /srv/hobnob
@@ -13,8 +70,6 @@ docker run -d --name hobnob \
   -v /srv/hobnob:/srv/hobnob \
   hobnob/hobnob:latest
 ```
-
-This starts the server on ports 1530 (gRPC) and 8181 (REST/UI). TLS certificates, a default config, and the SQLite database are auto-generated on first start. All persistent state lives in `/srv/hobnob`.
 
 ## Server Setup
 
