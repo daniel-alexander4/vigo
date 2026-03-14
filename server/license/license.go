@@ -23,7 +23,7 @@ type Payload struct {
 	CustomerName string `json:"customer_name"`
 	CustomerID   string `json:"customer_id"`
 	LicenseID    string `json:"license_id"`
-	Tier         string `json:"tier,omitempty"` // "free", "standard", "growth", "enterprise"
+	Tier         string `json:"tier"` // "free", "standard", "growth", "enterprise"
 	MaxThralls   int    `json:"max_thralls"`
 	IssuedAt     string `json:"issued_at"`
 	ExpiresAt    string `json:"expires_at"`
@@ -42,9 +42,6 @@ func (p *Payload) TierDisplayName() string {
 	case "enterprise":
 		return "Enterprise"
 	default:
-		if p.Tier == "" {
-			return "Free (25 nodes)"
-		}
 		return p.Tier
 	}
 }
@@ -99,6 +96,9 @@ func Parse(data []byte) (*License, error) {
 	}
 	if lic.Payload.LicenseID == "" {
 		return nil, fmt.Errorf("license file missing license_id")
+	}
+	if lic.Payload.Tier == "" {
+		return nil, fmt.Errorf("license file missing tier")
 	}
 	if lic.Signature == "" {
 		return nil, fmt.Errorf("license file missing signature")

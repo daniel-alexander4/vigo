@@ -32,6 +32,7 @@ func testPayload() Payload {
 		CustomerName: "Test Corp",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-20250301-test",
+		Tier:         "standard",
 		MaxThralls:   100,
 		IssuedAt:     "2025-03-01",
 		ExpiresAt:    "2027-03-01",
@@ -129,14 +130,21 @@ func TestVerifyEmptyKey(t *testing.T) {
 
 func TestParseMissingFields(t *testing.T) {
 	// Missing license_id.
-	data := `{"payload":{"customer_name":"X"},"signature":"abc"}`
+	data := `{"payload":{"customer_name":"X","tier":"free"},"signature":"abc"}`
 	_, err := Parse([]byte(data))
 	if err == nil {
 		t.Fatal("expected error for missing license_id")
 	}
 
+	// Missing tier.
+	data = `{"payload":{"license_id":"x"},"signature":"abc"}`
+	_, err = Parse([]byte(data))
+	if err == nil {
+		t.Fatal("expected error for missing tier")
+	}
+
 	// Missing signature.
-	data = `{"payload":{"license_id":"x"}}`
+	data = `{"payload":{"license_id":"x","tier":"free"}}`
 	_, err = Parse([]byte(data))
 	if err == nil {
 		t.Fatal("expected error for missing signature")
@@ -196,6 +204,9 @@ func TestFreeLicense(t *testing.T) {
 	}
 	if lic.Payload.LicenseID != "free-25" {
 		t.Errorf("license_id = %q, want %q", lic.Payload.LicenseID, "free-25")
+	}
+	if lic.Payload.Tier != "free" {
+		t.Errorf("tier = %q, want %q", lic.Payload.Tier, "free")
 	}
 	if lic.Payload.CustomerName != "Community" {
 		t.Errorf("customer_name = %q, want %q", lic.Payload.CustomerName, "Community")

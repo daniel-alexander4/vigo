@@ -146,14 +146,10 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Enforcement Stage: %s\n", stageName)
 
 	if status.License != nil {
-		tier := status.License.Tier
-		if tier == "" {
-			tier = "Free (25 nodes)"
-		}
 		fmt.Printf("\nLicense:\n")
 		fmt.Printf("  License ID:  %s\n", status.License.LicenseID)
 		fmt.Printf("  Customer:    %s (%s)\n", status.License.CustomerName, status.License.CustomerID)
-		fmt.Printf("  Tier:        %s\n", tier)
+		fmt.Printf("  Tier:        %s\n", status.License.Tier)
 		fmt.Printf("  Version:     %d\n", status.License.Version)
 		fmt.Printf("  Issued:      %s\n", status.License.IssuedAt)
 		fmt.Printf("  Expires:     %s\n", status.ExpiresAt)

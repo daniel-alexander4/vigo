@@ -125,8 +125,9 @@ func init() {
 	licenseCmd.AddCommand(licenseListCmd)
 }
 
-// validTiers lists the allowed commercial tier values.
+// validTiers lists the allowed tier values.
 var validTiers = map[string]bool{
+	"free":       true,
 	"standard":   true,
 	"growth":     true,
 	"enterprise": true,
@@ -134,7 +135,7 @@ var validTiers = map[string]bool{
 
 func runLicenseCreate(cmd *cobra.Command, args []string) error {
 	if !validTiers[createTier] {
-		return fmt.Errorf("invalid tier %q: must be standard, growth, or enterprise", createTier)
+		return fmt.Errorf("invalid tier %q: must be free, standard, growth, or enterprise", createTier)
 	}
 	if _, err := time.Parse("2006-01-02", createExpires); err != nil {
 		return fmt.Errorf("invalid expiry date %q: use YYYY-MM-DD format", createExpires)
@@ -417,9 +418,6 @@ func runLicenseList(cmd *cobra.Command, args []string) error {
 			status = "expired"
 		}
 
-		if tier == "" {
-			tier = "free"
-		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", id, customer, tier, maxThralls, issued, expires, status)
 	}
 	return w.Flush()
