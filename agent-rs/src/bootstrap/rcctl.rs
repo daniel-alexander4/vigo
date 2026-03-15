@@ -17,20 +17,18 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 }
 
 /// Generate the rc.d script content for OpenBSD.
-fn rc_script(grpc_addr: &str, data_dir: &str) -> String {
+fn rc_script() -> String {
     format!(
         r#"#!/bin/ksh
 
 daemon="{bin}"
-daemon_flags="--server {server} --data-dir {data_dir}"
+daemon_flags=""
 
 . /etc/rc.d/rc.subr
 
 rc_cmd $1
 "#,
         bin = INSTALL_PATH,
-        server = grpc_addr,
-        data_dir = data_dir,
     )
 }
 
@@ -38,7 +36,7 @@ rc_cmd $1
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &Path,
+    _data_dir: &Path,
 ) -> Result<String> {
     if !Path::new("/usr/sbin/rcctl").exists() {
         bail!("rcctl not found");
@@ -61,8 +59,7 @@ pub async fn install_service(
     }
 
     // Write rc.d script.
-    let data_dir_str = data_dir.to_string_lossy();
-    let script = rc_script(&grpc_addr, &data_dir_str);
+    let script = rc_script();
     std::fs::write(RC_D_PATH, &script).context("write rc.d script")?;
     #[cfg(unix)]
     {
@@ -97,9 +94,9 @@ mod tests {
 
     #[test]
     fn test_rc_script() {
-        let script = rc_script("hobd.example.com:1530", "/etc/hobnob-thrall");
+        let script = rc_script();
         assert!(script.contains("/usr/local/sbin/hobnob"));
-        assert!(script.contains("hobd.example.com:1530"));
+        assert!(!script.contains("--server"), "service should read config from file");
         assert!(script.contains("rc.subr"));
     }
 }

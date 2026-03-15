@@ -25,7 +25,7 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 }
 
 /// Generate the rc.d script content.
-fn rc_script(grpc_addr: &str, data_dir: &str) -> String {
+fn rc_script() -> String {
     format!(
         r#"#!/bin/sh
 #
@@ -38,7 +38,7 @@ fn rc_script(grpc_addr: &str, data_dir: &str) -> String {
 name="{name}"
 rcvar="{name}_enable"
 command="{bin}"
-command_args="--server {server} --data-dir {data_dir}"
+command_args=""
 pidfile="/var/run/${{name}}.pid"
 command_interpreter=""
 
@@ -48,8 +48,6 @@ run_rc_command "$1"
 "#,
         name = SERVICE_NAME,
         bin = INSTALL_PATH,
-        server = grpc_addr,
-        data_dir = data_dir,
     )
 }
 
@@ -57,7 +55,7 @@ run_rc_command "$1"
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &Path,
+    _data_dir: &Path,
 ) -> Result<String> {
     let grpc_addr = derive_grpc_addr(bootstrap_server, grpc_port);
 
@@ -76,8 +74,7 @@ pub async fn install_service(
     }
 
     // Write rc.d script.
-    let data_dir_str = data_dir.to_string_lossy();
-    let script = rc_script(&grpc_addr, &data_dir_str);
+    let script = rc_script();
     let script_path = rc_d_path();
     std::fs::write(script_path, &script).context("write rc.d script")?;
     #[cfg(unix)]
@@ -128,10 +125,10 @@ mod tests {
 
     #[test]
     fn test_rc_script() {
-        let script = rc_script("hobd.example.com:1530", "/etc/hobnob-thrall");
+        let script = rc_script();
         assert!(script.contains("hobnob_thrall"));
         assert!(script.contains("/usr/local/sbin/hobnob"));
-        assert!(script.contains("hobd.example.com:1530"));
+        assert!(!script.contains("--server"), "service should read config from file");
         assert!(script.contains("PROVIDE: hobnob_thrall"));
     }
 }

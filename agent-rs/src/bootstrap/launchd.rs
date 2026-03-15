@@ -17,7 +17,8 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 }
 
 /// Generate the launchd plist content.
-fn plist_content(grpc_addr: &str, data_dir: &str) -> String {
+/// The agent reads server address from the config file written during bootstrap.
+fn plist_content(data_dir: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -27,8 +28,6 @@ fn plist_content(grpc_addr: &str, data_dir: &str) -> String {
     <string>{}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{}</string>
-        <string>--server</string>
         <string>{}</string>
         <string>--data-dir</string>
         <string>{}</string>
@@ -44,7 +43,7 @@ fn plist_content(grpc_addr: &str, data_dir: &str) -> String {
 </dict>
 </plist>
 "#,
-        SERVICE_LABEL, INSTALL_PATH, grpc_addr, data_dir
+        SERVICE_LABEL, INSTALL_PATH, data_dir
     )
 }
 
@@ -76,7 +75,7 @@ pub async fn install_service(
 
     // Write plist.
     let data_dir_str = data_dir.to_string_lossy();
-    let plist = plist_content(&grpc_addr, &data_dir_str);
+    let plist = plist_content(&data_dir_str);
     std::fs::write(PLIST_PATH, &plist).context("write launchd plist")?;
 
     // Load and start.
@@ -102,10 +101,10 @@ mod tests {
 
     #[test]
     fn test_plist_content() {
-        let plist = plist_content("hobd.example.com:1530", "/usr/local/etc/hobnob-thrall");
+        let plist = plist_content("/usr/local/etc/hobnob-thrall");
         assert!(plist.contains("com.hobnob.thrall"));
         assert!(plist.contains("/usr/local/sbin/hobnob"));
-        assert!(plist.contains("hobd.example.com:1530"));
+        assert!(!plist.contains("--server"), "service should read config from file");
         assert!(plist.contains("KeepAlive"));
     }
 }

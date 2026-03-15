@@ -17,7 +17,8 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 }
 
 /// Generate the systemd unit file content.
-fn unit_file(grpc_addr: &str, data_dir: &str) -> String {
+/// The agent reads server address from the config file written during bootstrap.
+fn unit_file() -> String {
     format!(
         "[Unit]\n\
          Description=Hobnob Configuration Management Agent\n\
@@ -26,14 +27,14 @@ fn unit_file(grpc_addr: &str, data_dir: &str) -> String {
          \n\
          [Service]\n\
          Type=simple\n\
-         ExecStart={} --server {} --data-dir {}\n\
+         ExecStart={}\n\
          Restart=always\n\
          RestartSec=10\n\
          LimitNOFILE=65536\n\
          \n\
          [Install]\n\
          WantedBy=multi-user.target\n",
-        INSTALL_PATH, grpc_addr, data_dir
+        INSTALL_PATH
     )
 }
 
@@ -41,7 +42,7 @@ fn unit_file(grpc_addr: &str, data_dir: &str) -> String {
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &Path,
+    _data_dir: &Path,
 ) -> Result<String> {
     // Check systemctl exists.
     if !Path::new("/usr/bin/systemctl").exists() && !Path::new("/bin/systemctl").exists() {
@@ -65,8 +66,7 @@ pub async fn install_service(
     }
 
     // Write unit file.
-    let data_dir_str = data_dir.to_string_lossy();
-    let unit = unit_file(&grpc_addr, &data_dir_str);
+    let unit = unit_file();
     std::fs::write(UNIT_PATH, &unit).context("write systemd unit file")?;
 
     // daemon-reload, enable, start.
@@ -122,8 +122,9 @@ mod tests {
 
     #[test]
     fn test_unit_file_content() {
-        let unit = unit_file("hobd.example.com:1530", "/etc/hobnob-thrall");
-        assert!(unit.contains("ExecStart=/usr/local/sbin/hobnob --server hobd.example.com:1530 --data-dir /etc/hobnob-thrall"));
+        let unit = unit_file();
+        assert!(unit.contains("ExecStart=/usr/local/sbin/hobnob"));
+        assert!(!unit.contains("--server"), "service should read config from file, not CLI flags");
         assert!(unit.contains("Restart=always"));
         assert!(unit.contains("WantedBy=multi-user.target"));
     }

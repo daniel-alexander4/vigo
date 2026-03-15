@@ -17,7 +17,7 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 }
 
 /// Generate the SMF manifest XML content.
-fn smf_manifest(grpc_addr: &str, data_dir: &str) -> String {
+fn smf_manifest() -> String {
     format!(
         r#"<?xml version="1.0"?>
 <!DOCTYPE service_bundle SYSTEM "/usr/share/lib/xml/dtd/service_bundle.dtd.1">
@@ -35,7 +35,7 @@ fn smf_manifest(grpc_addr: &str, data_dir: &str) -> String {
     </dependency>
 
     <exec_method type="method" name="start"
-      exec="{bin} --server {server} --data-dir {data_dir} &amp;"
+      exec="{bin} &amp;"
       timeout_seconds="60">
       <method_context>
         <method_credential user="root" group="root"/>
@@ -55,8 +55,6 @@ fn smf_manifest(grpc_addr: &str, data_dir: &str) -> String {
 </service_bundle>
 "#,
         bin = INSTALL_PATH,
-        server = grpc_addr,
-        data_dir = data_dir,
     )
 }
 
@@ -64,7 +62,7 @@ fn smf_manifest(grpc_addr: &str, data_dir: &str) -> String {
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &Path,
+    _data_dir: &Path,
 ) -> Result<String> {
     let grpc_addr = derive_grpc_addr(bootstrap_server, grpc_port);
 
@@ -83,8 +81,7 @@ pub async fn install_service(
     }
 
     // Write SMF manifest.
-    let data_dir_str = data_dir.to_string_lossy();
-    let manifest = smf_manifest(&grpc_addr, &data_dir_str);
+    let manifest = smf_manifest();
     std::fs::write(MANIFEST_PATH, &manifest).context("write SMF manifest")?;
 
     // Import and enable the service.
@@ -118,10 +115,10 @@ mod tests {
 
     #[test]
     fn test_smf_manifest() {
-        let manifest = smf_manifest("hobd.example.com:1530", "/etc/hobnob-thrall");
+        let manifest = smf_manifest();
         assert!(manifest.contains("hobnob-thrall"));
         assert!(manifest.contains("/usr/local/sbin/hobnob"));
-        assert!(manifest.contains("hobd.example.com:1530"));
+        assert!(!manifest.contains("--server"), "service should read config from file");
         assert!(manifest.contains("service_bundle"));
         assert!(manifest.contains("system/hobnob-thrall"));
         assert!(manifest.contains("milestone/network"));

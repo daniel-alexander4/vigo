@@ -33,7 +33,7 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &Path,
+    _data_dir: &Path,
 ) -> Result<String> {
     let grpc_addr = derive_grpc_addr(bootstrap_server, grpc_port);
     let binary_path = paths::default_binary_path();
@@ -52,7 +52,6 @@ pub async fn install_service(
         info!(path = %binary_path.display(), "installed hobnob binary");
     }
 
-    let data_dir_str = data_dir.to_string_lossy();
     let bin_path_str = binary_path.to_string_lossy();
 
     // Install service via sc.exe.
@@ -60,7 +59,7 @@ pub async fn install_service(
         .args([
             "create",
             SERVICE_NAME,
-            &format!("binPath= \"{} --server {} --data-dir {}\"", bin_path_str, grpc_addr, data_dir_str),
+            &format!("binPath= \"{}\"", bin_path_str),
             "start=", "auto",
         ])
         .status()
