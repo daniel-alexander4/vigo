@@ -297,5 +297,5 @@ func init() {
 	thrallsMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
 	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd,
 		thrallsTraitsCmd, thrallsTagCmd, thrallsUntagCmd, thrallsMaintenanceCmd,
-		pushCmd, rollbackCmd, previewCmd)
+		pushCmd, rollbackCmd, previewCmd, packagesCmd)
 }

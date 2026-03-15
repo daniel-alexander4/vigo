@@ -47,8 +47,6 @@ func init() {
 		runsCmd,
 		taskCmd,
 		queryCmd,
-		webhooksCmd,
-		packagesCmd,
 		viCmd,
 		inventoryCmd,
 		cliLicenseCmd,
