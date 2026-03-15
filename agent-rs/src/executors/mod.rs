@@ -137,6 +137,12 @@ pub mod firewall_windows;
 #[cfg(windows)]
 pub mod hostname_windows;
 #[cfg(windows)]
+pub mod certificate_windows;
+#[cfg(windows)]
+pub mod domain_membership;
+#[cfg(windows)]
+pub mod iis_app_pool;
+#[cfg(windows)]
 pub mod iis_site;
 #[cfg(windows)]
 pub mod package_windows;
@@ -153,9 +159,13 @@ pub mod timezone_windows;
 #[cfg(windows)]
 pub mod user_windows;
 #[cfg(windows)]
+pub mod local_security_policy;
+#[cfg(windows)]
 pub mod windows_env;
 #[cfg(windows)]
 pub mod windows_feature;
+#[cfg(windows)]
+pub mod windows_update;
 
 #[cfg(test)]
 pub mod test_support;

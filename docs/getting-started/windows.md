@@ -1,6 +1,6 @@
 # Windows Support
 
-Hobnob fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 12 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
+Hobnob fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 19 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
 
 ## Bootstrap
 
@@ -354,6 +354,175 @@ Run PowerShell scripts with `$ErrorActionPreference = 'Stop'` and idempotency gu
 Always use at least one guard (`creates`, `unless`, `onlyif`) to maintain idempotency.
 
 See [powershell executor](../executors/powershell.md) for full reference.
+
+### iis_site
+
+Manage IIS websites with bindings, application pools, and SSL certificates.
+
+```yaml
+- name: myapp-site
+  type: iis_site
+  site: MyApp
+  physical_path: "C:\\inetpub\\wwwroot\\myapp"
+  port: "8080"
+  depends_on: [install-iis]
+
+- name: secure-site
+  type: iis_site
+  site: SecureApp
+  physical_path: "C:\\inetpub\\wwwroot\\secureapp"
+  port: "443"
+  protocol: https
+  ssl_cert_hash: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
+  host_header: app.example.com
+
+- name: remove-old-site
+  type: iis_site
+  site: OldApp
+  state: absent
+```
+
+Requires the IIS-WebServer feature. Application pools are auto-created using the site name (or `app_pool` if specified).
+
+See [iis_site executor](../executors/iis_site.md) for full reference.
+
+### iis_app_pool
+
+Manage IIS application pools with fine-grained control over .NET runtime, pipeline mode, process identity, idle timeout, and recycling.
+
+```yaml
+- name: api-pool
+  type: iis_app_pool
+  app_pool: ApiPool
+  runtime_version: v4.0
+  pipeline_mode: Integrated
+  identity_type: NetworkService
+  idle_timeout: "0"
+
+- name: static-pool
+  type: iis_app_pool
+  app_pool: StaticPool
+  runtime_version: ""
+  recycle_interval: "0"
+
+- name: custom-identity-pool
+  type: iis_app_pool
+  app_pool: AppPool
+  identity_type: SpecificUser
+  username: "DOMAIN\\svc-app"
+  password: "secret:hobnob/iis/pool-password"
+```
+
+**Identity types:** `ApplicationPoolIdentity` (default), `LocalSystem`, `LocalService`, `NetworkService`, `SpecificUser`.
+
+See [iis_app_pool executor](../executors/iis_app_pool.md) for full reference.
+
+### certificate_windows
+
+Manage certificates in Windows certificate stores. Import PFX/CER/CRT files and remove certificates by thumbprint.
+
+```yaml
+- name: import-ssl-cert
+  type: certificate_windows
+  source: "C:\\certs\\app.pfx"
+  password: "secret:hobnob/certs/app-password"
+  thumbprint: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
+  exportable: "true"
+
+- name: import-ca
+  type: certificate_windows
+  source: "C:\\certs\\corporate-ca.cer"
+  store: "Cert:\\LocalMachine\\Root"
+
+- name: remove-expired
+  type: certificate_windows
+  thumbprint: "DEADBEEF1234567890DEADBEEF1234567890DEAD"
+  state: absent
+```
+
+**Common stores:** `Cert:\LocalMachine\My` (default, personal), `Cert:\LocalMachine\Root` (trusted root CAs), `Cert:\LocalMachine\CA` (intermediate CAs).
+
+See [certificate_windows executor](../executors/certificate_windows.md) for full reference.
+
+### domain_membership
+
+Manage Active Directory domain join and leave operations.
+
+```yaml
+- name: join-domain
+  type: domain_membership
+  domain: corp.example.com
+  username: "admin@corp.example.com"
+  password: "secret:hobnob/ad/join-password"
+  ou_path: "OU=WebServers,DC=corp,DC=example,DC=com"
+
+- name: leave-domain
+  type: domain_membership
+  domain: corp.example.com
+  state: absent
+  username: "admin@corp.example.com"
+  password: "secret:hobnob/ad/leave-password"
+```
+
+By default, the machine restarts after join/leave. Set `restart: "false"` to defer the reboot and use `reboot_windows` with `depends_on` for controlled restarts.
+
+See [domain_membership executor](../executors/domain_membership.md) for full reference.
+
+### local_security_policy
+
+Manage local security policies (passwords, lockout, auditing) via `secedit`.
+
+```yaml
+- name: min-password-length
+  type: local_security_policy
+  policy: MinimumPasswordLength
+  value: "14"
+
+- name: lockout-threshold
+  type: local_security_policy
+  policy: LockoutBadCount
+  value: "5"
+
+- name: audit-logon
+  type: local_security_policy
+  policy: AuditLogonEvents
+  value: "3"
+```
+
+**Password policies:** `MinimumPasswordLength`, `MaximumPasswordAge`, `MinimumPasswordAge`, `PasswordComplexity`, `PasswordHistorySize`.
+**Lockout policies:** `LockoutBadCount`, `LockoutDuration`, `ResetLockoutCount`.
+**Audit policies:** `AuditLogonEvents`, `AuditObjectAccess`, `AuditPrivilegeUse`, `AuditPolicyChange`, `AuditAccountManage`.
+
+See [local_security_policy executor](../executors/local_security_policy.md) for full reference.
+
+### windows_update
+
+Manage Windows Update and WSUS configuration via registry policies.
+
+```yaml
+- name: configure-wsus
+  type: windows_update
+  wsus_server: "https://wsus.corp.example.com:8531"
+  auto_update: enabled
+
+- name: scheduled-updates
+  type: windows_update
+  auto_update: scheduled
+  scheduled_day: "1"
+  scheduled_time: "3"
+
+- name: disable-auto-update
+  type: windows_update
+  auto_update: disabled
+
+- name: remove-wsus-policy
+  type: windows_update
+  state: absent
+```
+
+**Auto-update modes:** `enabled` (auto-install), `disabled`, `notify` (notify before download), `download` (download only), `scheduled` (install on schedule).
+
+See [windows_update executor](../executors/windows_update.md) for full reference.
 
 ## Windows Trait Collectors
 

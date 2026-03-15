@@ -733,6 +733,11 @@ pub fn build_executors_with_snapshots(
         executors.insert("reboot_windows".to_string(), Box::new(reboot_windows::RebootWindowsExecutor::new()));
         executors.insert("powershell".to_string(), Box::new(powershell::PowershellExecutor::new()));
         executors.insert("iis_site".to_string(), Box::new(iis_site::IisSiteExecutor::new()));
+        executors.insert("iis_app_pool".to_string(), Box::new(iis_app_pool::IisAppPoolExecutor::new()));
+        executors.insert("certificate_windows".to_string(), Box::new(certificate_windows::CertificateWindowsExecutor::new()));
+        executors.insert("domain_membership".to_string(), Box::new(domain_membership::DomainMembershipExecutor::new()));
+        executors.insert("local_security_policy".to_string(), Box::new(local_security_policy::LocalSecurityPolicyExecutor::new()));
+        executors.insert("windows_update".to_string(), Box::new(windows_update::WindowsUpdateExecutor::new()));
     }
 
     executors
