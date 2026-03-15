@@ -77,3 +77,12 @@ Cross-platform.
 - The default markers look like `# BEGIN managed - managed by hobnob` and `# END managed - managed by hobnob`. Customize with `label`, `marker_begin`, and `marker_end`.
 - When `create: true` and the file does not exist, it is created with the block and markers.
 - Multiple blocks can coexist in the same file using different `label` values.
+
+## Choosing the Right File Editor
+
+| Executor | Best for |
+|----------|----------|
+| **blockinfile** | Managing a cohesive multi-line section with BEGIN/END markers |
+| [file_line](file_line.md) | Ensuring a single line exists or is absent |
+| [replace](replace.md) | Regex find-and-replace for scattered settings |
+| [file](file.md) | Replacing the entire file content from a template |

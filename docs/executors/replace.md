@@ -79,3 +79,12 @@ Cross-platform.
 - Uses Rust regex syntax. Backreferences use `$1`, `$2` notation.
 - Region constraints limit replacements to lines between `region_start` and `region_end` markers.
 - If no matches are found, the executor returns `Action::None`.
+
+## Choosing the Right File Editor
+
+| Executor | Best for |
+|----------|----------|
+| **replace** | Regex find-and-replace across a file (e.g., updating a version or IP everywhere) |
+| [file_line](file_line.md) | Ensuring a single line exists, without regex complexity |
+| [blockinfile](blockinfile.md) | Managing a multi-line block with markers, not individual patterns |
+| [file](file.md) | Replacing the entire file content from a template |

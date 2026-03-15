@@ -80,3 +80,15 @@ Cross-platform.
 - When both `line` and `match` are provided for `state: present`, lines matching the regex are replaced with the specified `line`.
 - The `position` parameter only applies when inserting a new line (no existing match found).
 - Region constraints limit operations to lines between `region_start` and `region_end`.
+
+## Choosing the Right File Editor
+
+| Executor | Best for |
+|----------|----------|
+| **file_line** | Ensuring a single line exists or is absent (e.g., a config directive) |
+| [replace](replace.md) | Regex find-and-replace across a file (e.g., updating a version number everywhere) |
+| [blockinfile](blockinfile.md) | Managing a cohesive multi-line block with BEGIN/END markers (e.g., SSH hardening section) |
+| [file](file.md) | Replacing the entire file content from a template |
+| [ini](ini.md) | Managing key=value pairs within INI-style [section] files |
+| [json_file](json_file.md) | Setting values in JSON files by dot-path |
+| [field_edit](field_edit.md) | Editing fields in columnar files like `/etc/passwd` |

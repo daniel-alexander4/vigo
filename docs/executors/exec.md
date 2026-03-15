@@ -121,6 +121,21 @@ resources:
 
 The command is skipped on normal check-ins and only runs when the watched secret is rotated or when another resource triggers it via notify. `when: "changed"` can be combined with other expressions: `when: "changed && os_family('debian')"`.
 
+## When NOT to Use exec
+
+Use a specialized executor instead of `exec` whenever one exists. Specialized executors provide idempotency, cross-platform support, and error handling that raw shell commands don't.
+
+| Instead of... | Use... |
+|---------------|--------|
+| `exec: "apt-get install nginx"` | `type: package` — handles idempotency, version checking, and works on apt/dnf/yum/brew/pkg |
+| `exec: "systemctl restart nginx"` | `type: service` — manages state (running/stopped), enable/disable, works across systemd/launchd/rcctl/SMF |
+| `exec: "useradd -m deploy"` | `type: user` — manages UID, shell, groups, authorized_keys, detects drift |
+| `exec: "git clone ..."` | `type: git` — tracks branch HEAD, updates on drift |
+| `exec: "echo '0 * * * * root /opt/task.sh' > /etc/cron.d/task"` | `type: cron` — manages schedule fields, validates syntax |
+| `exec: "docker compose up -d"` | `type: docker_compose` — handles pull, build, orphan removal |
+
+`exec` is appropriate for operations with no dedicated executor — database migrations, one-time initialization scripts, custom health checks, or calling vendor-specific CLI tools.
+
 ## Notes
 
 - The `stdin` and `secret_file` parameters are mutually exclusive. Using both is an error.
