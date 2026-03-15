@@ -42,7 +42,7 @@ cd /srv/hobnob
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8181** (REST API, web UI, metrics, bootstrap). Open `http://localhost:8181` to see the dashboard.
+The server starts on ports **1530** (gRPC, agent check-in) and **8181** (REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli users create --username admin --role admin` and set a password with `hobnobcli users set-password --username admin`, then sign in at `http://localhost:8181/login`.
 
 ### 3. Verify
 
