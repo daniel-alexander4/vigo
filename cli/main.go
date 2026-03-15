@@ -58,6 +58,8 @@ func init() {
 		exportCmd,
 		authCmd,
 		usersCmd,
+		webhooksCmd,
+		tokensCmd,
 		configCmd,
 		backupCmd,
 		dbCmd,

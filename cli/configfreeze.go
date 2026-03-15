@@ -59,5 +59,5 @@ var configUnfreezeCmd = &cobra.Command{
 
 func init() {
 	configFreezeCmd.Flags().String("until", "", "freeze until (RFC3339 or duration like 24h)")
-	configCmd.AddCommand(configFreezeCmd, configUnfreezeCmd, webhooksCmd)
+	configCmd.AddCommand(configFreezeCmd, configUnfreezeCmd)
 }

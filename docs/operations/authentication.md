@@ -59,6 +59,8 @@ When the CLI runs on the same host as the server (or Docker host), API requests 
 
 Localhost (`127.0.0.1`, `::1`) and Docker bridge networks (`172.16.0.0/12`) are trusted. Remote CLI access requires an API token via `hobnobcli auth set-token`.
 
+**Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Hobnob is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8181` from an untrusted network — the proxy's requests would be trusted as local.
+
 ## OIDC (OpenID Connect)
 
 OIDC integrates with any OpenID Connect-compliant identity provider.

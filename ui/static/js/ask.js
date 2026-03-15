@@ -77,7 +77,8 @@
             var msg = err.name === 'AbortError'
                 ? 'Request timed out. Check that the AI provider is running and reachable.'
                 : err.message;
-            contentEl.innerHTML = '<p class="chat-error">Error: ' + msg + '</p>';
+            contentEl.className = 'chat-msg-content chat-error';
+            contentEl.textContent = 'Error: ' + msg;
             finish();
         });
 
@@ -95,6 +96,7 @@
             break;
         case 'delta':
             statusEl.remove();
+            // Server-rendered HTML — sanitized by goldmark (raw HTML stripped, see render.go).
             contentEl.innerHTML = ev.html;
             scrollToBottom();
             break;
@@ -113,7 +115,8 @@
             break;
         case 'error':
             statusEl.remove();
-            contentEl.innerHTML = '<p class="chat-error">Error: ' + ev.text + '</p>';
+            contentEl.className = 'chat-msg-content chat-error';
+            contentEl.textContent = 'Error: ' + ev.text;
             finish();
             break;
         }

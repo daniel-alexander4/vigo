@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 
@@ -227,7 +228,7 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
             <h1 class="login-title">Hobnob</h1>
             <p class="login-subtitle">Sign in to continue</p>`))
 	if errMsg != "" {
-		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + errMsg + `</p>`))
+		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + html.EscapeString(errMsg) + `</p>`))
 	}
 	w.Write([]byte(`
             <form method="POST" action="/login">
