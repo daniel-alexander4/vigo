@@ -106,9 +106,10 @@ type PathsSection struct {
 }
 
 // AuthSection configures web UI and REST API authentication.
-// Default method is "none" — fully open, identical to no auth config.
+// Default method is "basic" — username/password with bcrypt hashes in the
+// local secrets store at hobnob/web/auth/<username>.
 type AuthSection struct {
-	Method     string           `yaml:"method"`      // "none" (default), "oidc", "isowebauth"
+	Method     string           `yaml:"method"`      // "basic" (default), "none", "oidc", "isowebauth"
 	OIDC       OIDCAuthConfig   `yaml:"oidc"`
 	Isowebauth IsowebauthAuthConfig `yaml:"isowebauth"`
 }

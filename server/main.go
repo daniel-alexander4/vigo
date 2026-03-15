@@ -275,7 +275,7 @@ func run() error {
 	go enforcer.Run(ctx)
 
 	// Initialize auth provider.
-	authProvider, err := createAuthProvider(ctx, cfg, sqlDB, queries)
+	authProvider, err := createAuthProvider(ctx, cfg, sqlDB, queries, provider)
 	if err != nil {
 		return fmt.Errorf("initializing auth: %w", err)
 	}
@@ -1155,15 +1155,21 @@ func createAIProvider(ctx context.Context, cfg config.AISection) (hobnobai.Provi
 }
 
 // createAuthProvider builds the appropriate auth provider from config.
-func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sql.DB, queries *db.Queries) (hobnobauth.Provider, error) {
+func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sql.DB, queries *db.Queries, secretsProvider secrets.Provider) (hobnobauth.Provider, error) {
 	method := cfg.Auth.Method
 	if method == "" {
-		method = "none"
+		method = "basic"
 	}
 
 	switch method {
 	case "none":
 		return hobnobauth.NoneProvider{}, nil
+
+	case "basic":
+		sessions := hobnobauth.NewSessionManager(sqlDB)
+		userStore := hobnobauth.NewUserStore(queries)
+		tokenStore := hobnobauth.NewTokenStore(queries)
+		return hobnobauth.NewBasicProvider(sessions, userStore, tokenStore, secretsProvider), nil
 
 	case "oidc":
 		sessions := hobnobauth.NewSessionManager(sqlDB)
@@ -1186,6 +1192,6 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		}, sessions, userStore, tokenStore)
 
 	default:
-		return nil, fmt.Errorf("unknown auth method: %q (must be none, oidc, or isowebauth)", method)
+		return nil, fmt.Errorf("unknown auth method: %q (must be basic, none, oidc, or isowebauth)", method)
 	}
 }

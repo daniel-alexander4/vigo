@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package auth provides pluggable authentication for the Hobnob web UI and
-// REST API. Three methods are supported: "none" (default, fully open),
-// "oidc" (OpenID Connect SSO), and "isowebauth" (SSH key-based signing).
+// REST API. Four methods are supported: "basic" (default, username/password
+// with credentials in the secrets store), "none" (fully open), "oidc"
+// (OpenID Connect SSO), and "isowebauth" (SSH key-based signing).
 package auth
 
 import (
@@ -73,6 +74,7 @@ var publicPaths = map[string]bool{
 	"/metrics":            true,
 	"/healthz":            true,
 	"/login":              true,
+	"/setup":              true,
 	"/api/v1/bootstrap":   true,
 }
 

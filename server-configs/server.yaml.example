@@ -70,10 +70,16 @@ bootstrap:
 
 
 # ── Authentication ────────────────────────────────────────────────────────
-# Web UI and REST API auth. Default: none (fully open, zero overhead).
+# Web UI and REST API auth. Default: basic (username/password).
+# Passwords stored as bcrypt hashes in the local secrets provider
+# at hobnob/web/auth/<username>. Set via: hobnobcli users set-password
 
 # auth:
-#   method: none                               # none | oidc | isowebauth
+#   method: basic                              # basic | none | oidc | isowebauth
+#
+# --- Disable auth (development only) ---
+# auth:
+#   method: none
 #
 # --- OIDC (OpenID Connect SSO) ---
 # auth:

@@ -4,11 +4,12 @@ title: Authentication
 
 # Authentication
 
-Hobnob supports three authentication methods for the web UI and REST API:
+Hobnob supports four authentication methods for the web UI and REST API:
 
 | Method | Description | Use Case |
 |--------|-------------|----------|
-| `none` | Fully open (default) | Development, private networks |
+| `basic` | Username/password (default) | Most deployments |
+| `none` | Fully open | Development, private networks |
 | `oidc` | OpenID Connect SSO | Enterprise SSO (Keycloak, Okta, Auth0, Google, Azure AD) |
 | `isowebauth` | SSH key-based signing | Sysadmin teams using SSH keys |
 
@@ -18,10 +19,44 @@ Set `auth.method` in `server.yaml`:
 
 ```yaml
 auth:
-  method: oidc   # or: isowebauth, none
+  method: basic   # or: none, oidc, isowebauth
 ```
 
-When `method` is omitted or set to `none`, authentication is completely disabled with zero overhead — identical to running without the auth section.
+When `method` is omitted, basic authentication is enabled by default. Set to `none` to disable authentication entirely.
+
+## Basic (Username/Password)
+
+Basic authentication stores user accounts in the database and password hashes (bcrypt) in the local secrets provider. This separation ensures credentials never appear in the database.
+
+### Initial Setup
+
+On first access, the web UI displays setup instructions. Use the CLI to create the admin account:
+
+```bash
+# 1. Create the admin user
+hobnobcli users create --username admin --role admin
+
+# 2. Set the password (prompts securely)
+hobnobcli users set-password --username admin
+```
+
+The account is not active for login until a password is set. Password hashes are stored at `hobnob/web/auth/<username>` in the secrets provider.
+
+### Adding Users
+
+```bash
+# Create a viewer account
+hobnobcli users create --username alice --role viewer --email alice@example.com
+
+# Set their password
+hobnobcli users set-password --username alice
+```
+
+### Resetting Passwords
+
+```bash
+hobnobcli users set-password --username admin
+```
 
 ## OIDC (OpenID Connect)
 
@@ -203,6 +238,7 @@ The token is stored at `~/.config/hobnob/token` (mode 0600).
 ```bash
 hobnobcli users list
 hobnobcli users create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
+hobnobcli users set-password --username alice
 hobnobcli users delete --username alice
 ```
 
