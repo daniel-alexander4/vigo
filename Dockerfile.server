@@ -50,10 +50,12 @@ COPY --from=go-builder /build/hobnobcli /usr/local/bin/hobnobcli
 COPY --from=go-builder /build/hobnob-license-manager /usr/local/bin/hobnob-license-manager
 COPY --from=go-builder /build/migrations /migrations
 
-# Agent binaries — amd64 built from source, arm64 from pre-built dist/.
-RUN mkdir -p /dist/agent/linux/amd64 /dist/agent/linux/arm64
+# Agent binaries — amd64 built from source, all others from pre-built dist/.
+# Bootstrap serves /api/v1/agent/download/{os}/{arch}. Missing binaries return 404.
+# Build additional platforms with: make dist-agent dist-agent-macos dist-agent-freebsd etc.
+RUN mkdir -p /dist/agent/linux/amd64
 COPY --from=rust-builder /build/agent-rs/target/x86_64-unknown-linux-musl/release/hobnob /dist/agent/linux/amd64/hobnob
-COPY dist/agent/linux/arm64/hobnob /dist/agent/linux/arm64/hobnob
+COPY dist/agent/ /dist/agent/
 
 # Seed configs — copied to /srv/hobnob on first run by entrypoint.
 COPY server-configs/server.yaml /seed/server.yaml
