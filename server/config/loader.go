@@ -1303,6 +1303,16 @@ func loadThrallsDir(dir string) ([]ThrallEntry, error) {
 		}
 		allEntries = append(allEntries, cfg.Thralls...)
 	}
+
+	// Reject duplicate match patterns — a hostname should only match one entry.
+	seen := make(map[string]string, len(allEntries))
+	for _, entry := range allEntries {
+		if prev, exists := seen[entry.Match]; exists {
+			return nil, fmt.Errorf("duplicate thrall match pattern %q (also defined in %s)", entry.Match, prev)
+		}
+		seen[entry.Match] = entry.Match
+	}
+
 	return allEntries, nil
 }
 
