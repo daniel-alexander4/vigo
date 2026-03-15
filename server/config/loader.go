@@ -1225,6 +1225,15 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 		def.MatchVars = matchVars
 		def.MatchVarDefaults = matchVarDefaults
 
+		// Warn about match vars without a default — thralls that don't match
+		// any branch will get an empty var, likely causing resource failures.
+		for name := range matchVars {
+			if _, hasDefault := matchVarDefaults[name]; !hasDefault {
+				slog.Warn("match var has no default — thralls not matching any branch will get an empty value",
+					"module", def.Name, "var", name)
+			}
+		}
+
 		// Idempotency validation — collect errors across all modules.
 		findings := validate.ValidateModule(moduleToValidate(def))
 		for _, f := range findings {
