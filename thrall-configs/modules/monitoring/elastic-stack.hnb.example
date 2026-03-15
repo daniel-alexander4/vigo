@@ -12,6 +12,7 @@ resources:
 
   - name: elastic-repo
     type: repository
+    repository: elastic-8.x
     key_url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
     repo: "deb [signed-by=/etc/apt/keyrings/elastic.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main"
     state: present
@@ -19,6 +20,7 @@ resources:
 
   - name: elastic-repo
     type: repository
+    repository: elastic-8.x
     key_url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
     repo: "https://artifacts.elastic.co/packages/8.x/yum"
     state: present

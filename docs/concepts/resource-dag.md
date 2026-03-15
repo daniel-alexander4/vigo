@@ -37,8 +37,8 @@ The inverse of `depends_on`. Declares that other resources must run after this o
 resources:
   - name: repo-setup
     type: repository
-    name: nginx-repo
-    url: "https://nginx.org/packages/debian"
+    repository: nginx
+    repo: "https://nginx.org/packages/debian"
     before: [nginx-package]
 
   - name: nginx-package

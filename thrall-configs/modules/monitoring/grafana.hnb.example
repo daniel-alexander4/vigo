@@ -7,6 +7,7 @@ vars:
 resources:
   - name: grafana-repo
     type: repository
+    repository: grafana
     key_url: https://apt.grafana.com/gpg.key
     repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
     state: present

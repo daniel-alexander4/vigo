@@ -11,6 +11,7 @@ resources:
 
   - name: erlang-repo
     type: repository
+    repository: erlang
     key_url: https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc
     repo: "deb [signed-by=/etc/apt/keyrings/erlang_solutions.gpg] https://packages.erlang-solutions.com/ubuntu jammy contrib"
     state: present
@@ -18,6 +19,7 @@ resources:
 
   - name: rabbitmq-repo
     type: repository
+    repository: rabbitmq-server
     key_url: https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey
     repo: "deb [signed-by=/etc/apt/keyrings/rabbitmq-server.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu jammy main"
     state: present

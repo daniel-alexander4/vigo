@@ -13,6 +13,7 @@ resources:
 
   - name: docker-repo
     type: repository
+    repository: docker-ce
     key_url: https://download.docker.com/linux/ubuntu/gpg
     repo: "deb [signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"
     state: present

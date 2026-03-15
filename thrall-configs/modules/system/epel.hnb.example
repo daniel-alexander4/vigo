@@ -6,6 +6,7 @@ resources:
     resources:
       - name: epel-repo
         type: repository
+        repository: epel
         key_url: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9"
         repo: "epel"
         state: present

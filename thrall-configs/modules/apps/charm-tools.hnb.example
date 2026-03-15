@@ -3,6 +3,7 @@ name: charm-tools
 resources:
   - name: charm-repo
     type: repository
+    repository: charm
     key_url: https://repo.charm.sh/apt/gpg.key
     repo: "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *"
     state: present

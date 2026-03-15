@@ -3,6 +3,7 @@ name: nodejs
 resources:
   - name: nodesource-repo-debian
     type: repository
+    repository: nodesource-20
     key_url: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
     repo: "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main"
     state: present
@@ -10,6 +11,7 @@ resources:
 
   - name: nodesource-repo-rhel
     type: repository
+    repository: nodesource-20
     key_url: "https://rpm.nodesource.com/pub_20.x/nodistro/repo/nodesource-repo.gpg.key"
     repo: "nodesource-20"
     state: present
