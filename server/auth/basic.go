@@ -4,6 +4,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -36,8 +37,23 @@ func NewBasicProvider(sessions *SessionManager, userStore *UserStore, tokenStore
 
 func (p *BasicProvider) Method() string { return "basic" }
 
-// Middleware checks for a valid session or API token. When no users exist,
-// all non-public requests redirect to /setup (instructions page). Otherwise,
+// needsSetup returns true when the admin user exists but has no password set.
+// This is the state after first startup — the server seeds an admin account
+// but the operator hasn't run hobnobcli users set-password yet.
+func (p *BasicProvider) needsSetup(ctx context.Context) bool {
+	count, err := p.userStore.CountUsers(ctx)
+	if err != nil || count == 0 {
+		return true
+	}
+	// Check if the admin user has a password secret.
+	if _, err := p.secrets.Get(ctx, "hobnob/web/auth/admin"); err != nil {
+		return true
+	}
+	return false
+}
+
+// Middleware checks for a valid session or API token. When the admin account
+// has no password, all non-public requests redirect to /setup. Otherwise,
 // unauthenticated UI requests redirect to /login; API requests get 401.
 func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 	return p.sessions.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -81,17 +97,8 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Not authenticated — check if setup is needed.
-		count, err := p.userStore.CountUsers(r.Context())
-		if err != nil {
-			slog.Error("counting users in middleware", "error", err)
-		}
-		if count == 0 {
-			// Allow first-user bootstrap via POST /api/v1/users.
-			if r.Method == http.MethodPost && r.URL.Path == "/api/v1/users" {
-				next.ServeHTTP(w, r)
-				return
-			}
+		// Not authenticated — check if setup is needed (admin has no password).
+		if p.needsSetup(r.Context()) {
 			if isAPIPath(r.URL.Path) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
@@ -128,9 +135,8 @@ func (p *BasicProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	// If no users exist, redirect to setup.
-	count, _ := p.userStore.CountUsers(r.Context())
-	if count == 0 {
+	// If admin has no password, redirect to setup.
+	if p.needsSetup(r.Context()) {
 		http.Redirect(w, r, "/setup", http.StatusFound)
 		return
 	}
@@ -197,9 +203,7 @@ func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *BasicProvider) handleSetupPage(w http.ResponseWriter, r *http.Request) {
-	// Only show setup when no users exist.
-	count, _ := p.userStore.CountUsers(r.Context())
-	if count > 0 {
+	if !p.needsSetup(r.Context()) {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
@@ -245,7 +249,8 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
 </html>`))
 }
 
-// serveSetupPage renders the initial setup instructions.
+// serveSetupPage renders the password setup page.
+// The admin account is auto-created at server startup — just needs a password.
 func serveSetupPage(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(`<!DOCTYPE html>
@@ -253,29 +258,23 @@ func serveSetupPage(w http.ResponseWriter) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hobnob - Setup</title>
+    <title>Hobnob - Set Admin Password</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
-        <div class="login-card" style="max-width:540px">
+        <div class="login-card" style="max-width:480px">
             <h1 class="login-title">Hobnob</h1>
-            <p class="login-subtitle">Initial Setup</p>
+            <p class="login-subtitle">Set Admin Password</p>
             <p style="color:#6c757d;text-align:center;margin-bottom:1.5rem;font-size:0.9rem">
-                No user accounts exist yet. Use the CLI to create an admin account and set a password.
+                An <strong>admin</strong> account has been created. Set its password to sign in.
             </p>
             <div style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:1rem;font-family:monospace;font-size:0.85rem;line-height:1.6;margin-bottom:1rem">
-                <div style="color:#6c7086;margin-bottom:0.5rem"># 1. Create the admin account</div>
-                <div>hobnobcli users create \</div>
-                <div style="padding-left:1.5rem">--username admin --role admin</div>
-                <div style="color:#6c7086;margin-top:0.75rem;margin-bottom:0.5rem"># 2. Set the password</div>
-                <div>hobnobcli users set-password \</div>
-                <div style="padding-left:1.5rem">--username admin</div>
-                <div style="color:#6c7086;font-size:0.8rem;margin-top:0.25rem">(prompts securely for the password)</div>
+                <div>hobnobcli users set-password --username admin</div>
             </div>
             <hr style="border:none;border-top:1px solid #e0e0e0;margin:1.5rem 0">
             <p style="color:#6c757d;text-align:center;font-size:0.85rem">
-                Once the account is created, <a href="/login">sign in here</a>.
+                Once set, <a href="/login">sign in here</a>.
             </p>
         </div>
     </div>

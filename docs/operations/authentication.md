@@ -30,17 +30,13 @@ Basic authentication stores user accounts in the database and password hashes (b
 
 ### Initial Setup
 
-On first access, the web UI displays setup instructions. Use the CLI to create the admin account:
+The server automatically creates an `admin` account on first startup. The web UI redirects to a setup page with the one command needed to activate it:
 
 ```bash
-# 1. Create the admin user
-hobnobcli users create --username admin --role admin
-
-# 2. Set the password (prompts securely)
 hobnobcli users set-password --username admin
 ```
 
-The account is not active for login until a password is set. Password hashes are stored at `hobnob/web/auth/<username>` in the secrets provider.
+Until a password is set, all web UI requests redirect to the setup page. Password hashes are stored at `hobnob/web/auth/<username>` in the secrets provider.
 
 ### Adding Users
 

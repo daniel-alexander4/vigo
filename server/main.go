@@ -630,6 +630,20 @@ func run() error {
 	usersHandler := api.NewUsersHandler(userStore, authMethod)
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 
+	// Seed default admin account on first startup (no password — must be set via CLI).
+	if authMethod != "none" {
+		if count, err := userStore.CountUsers(ctx); err == nil && count == 0 {
+			if _, err := userStore.Create(ctx, db.InsertUserParams{
+				Username: "admin",
+				Role:     "admin",
+			}); err != nil {
+				slog.Warn("failed to seed admin user", "error", err)
+			} else {
+				slog.Info("seeded default admin account (no password — run: hobnobcli users set-password --username admin)")
+			}
+		}
+	}
+
 	// Backup API handler.
 	serverRoot := filepath.Dir(configFile)
 	backupHandler := api.NewBackupHandler(configFile, serverRoot, dbDriver, cfg.Database.DSN, version, authMethod)
