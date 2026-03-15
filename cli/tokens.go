@@ -11,12 +11,12 @@ import (
 
 var tokensCmd = &cobra.Command{
 	Use:   "tokens",
-	Short: "Manage enrollment tokens",
+	Short: "Generate one-time tokens used by agents during bootstrap enrollment",
 }
 
 var tokensGenerateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Generate a new one-time enrollment token",
+	Short: "Generate a cryptographic token that authorizes a single agent bootstrap",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {

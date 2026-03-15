@@ -38,7 +38,7 @@ func colorAction(action string) string {
 
 var previewCmd = &cobra.Command{
 	Use:   "preview [hostname-or-uuid]",
-	Short: "Dry-run to preview planned changes",
+	Short: "Dry-run config resolution for a thrall to see what resources would change without applying",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
 		env, _ := cmd.Flags().GetString("env")

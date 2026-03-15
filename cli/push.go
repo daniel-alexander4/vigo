@@ -11,7 +11,7 @@ import (
 
 var pushCmd = &cobra.Command{
 	Use:   "push [hostname-or-uuid]",
-	Short: "Trigger an immediate check-in for a thrall or all thralls",
+	Short: "Force targeted thralls to check in and converge immediately instead of waiting for their next interval",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
 		thrallID := ""

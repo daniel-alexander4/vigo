@@ -15,12 +15,12 @@ import (
 
 var thrallsCmd = &cobra.Command{
 	Use:   "thralls",
-	Short: "Manage enrolled thralls",
+	Short: "Inspect and manage enrolled managed nodes (thralls)",
 }
 
 var thrallsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all enrolled thralls",
+	Short: "List all managed nodes with enrollment status and last check-in time",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
@@ -61,7 +61,7 @@ var thrallsListCmd = &cobra.Command{
 
 var thrallsShowCmd = &cobra.Command{
 	Use:   "show <id>",
-	Short: "Show details for a thrall",
+	Short: "Show enrollment details, compliance status, and recent runs for a thrall",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -111,7 +111,7 @@ var thrallsShowCmd = &cobra.Command{
 
 var thrallsRevokeCmd = &cobra.Command{
 	Use:   "revoke <id>",
-	Short: "Revoke an enrolled thrall",
+	Short: "Block a thrall from checking in and receiving policy updates",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -125,7 +125,7 @@ var thrallsRevokeCmd = &cobra.Command{
 
 var thrallsDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
-	Short: "Permanently delete a thrall and all its history",
+	Short: "Permanently remove a thrall, its run history, and traits from the server",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -139,7 +139,7 @@ var thrallsDeleteCmd = &cobra.Command{
 
 var thrallsTraitsCmd = &cobra.Command{
 	Use:   "traits <hostname> [dot.path]",
-	Short: "View collected traits for a thrall",
+	Short: "View auto-discovered system facts (OS, hardware, network, packages) for a thrall",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hostname := args[0]
@@ -209,7 +209,7 @@ func formatTraitValue(v any) string {
 
 var thrallsTagCmd = &cobra.Command{
 	Use:   "tag <id> <tag1,tag2,...>",
-	Short: "Set tags on a thrall",
+	Short: "Apply classification tags to a thrall for use in task targeting",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -228,7 +228,7 @@ var thrallsTagCmd = &cobra.Command{
 
 var thrallsUntagCmd = &cobra.Command{
 	Use:   "untag <id> <tag1,tag2,...>",
-	Short: "Remove specific tags from a thrall",
+	Short: "Remove classification tags from a thrall",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -264,7 +264,7 @@ var thrallsUntagCmd = &cobra.Command{
 
 var thrallsMaintenanceCmd = &cobra.Command{
 	Use:   "maintenance <id>",
-	Short: "Set or clear maintenance mode for a thrall",
+	Short: "Suppress convergence on a thrall until a specified time",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

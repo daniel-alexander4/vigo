@@ -14,7 +14,7 @@ import (
 
 var configHistoryCmd = &cobra.Command{
 	Use:   "history",
-	Short: "List recent config publishes",
+	Short: "List recent config publish events with operator, timestamp, and changed files",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
@@ -48,7 +48,7 @@ var configHistoryCmd = &cobra.Command{
 
 var configHistoryShowCmd = &cobra.Command{
 	Use:   "show <id>",
-	Short: "Show details for a config publish",
+	Short: "Show the diff and changed files for a specific config publish",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

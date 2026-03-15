@@ -11,7 +11,7 @@ import (
 
 var configRollbackCmd = &cobra.Command{
 	Use:   "rollback [version]",
-	Short: "Rollback config to a previous version",
+	Short: "Restore .live/ config to a previous timestamped snapshot",
 	Long:  "Lists available versions if no argument given. Rolls back to the specified version otherwise.",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

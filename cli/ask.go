@@ -21,7 +21,7 @@ var askThrall string
 
 var askCmd = &cobra.Command{
 	Use:   "ask [question]",
-	Short: "Ask the AI assistant a question about your fleet",
+	Short: "Ask the AI assistant a natural language question about fleet state, configs, or compliance",
 	Long: `Ask the Hobnob AI assistant a natural language question about your
 infrastructure. The assistant can query thralls, runs, traits, compliance,
 configs, modules, and packages to answer questions.

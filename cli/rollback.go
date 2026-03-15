@@ -11,7 +11,7 @@ import (
 
 var rollbackCmd = &cobra.Command{
 	Use:   "rollback <hostname-or-uuid>",
-	Short: "Rollback a thrall to a previous state",
+	Short: "Revert a thrall's file resources to a previous convergence run's state",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runID, _ := cmd.Flags().GetString("run")

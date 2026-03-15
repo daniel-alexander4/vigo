@@ -156,6 +156,22 @@ hobnobcli users create --username bob --role viewer --ssh-key-file /path/to/bob.
 6. Server verifies using `ssh-keygen -Y verify` against the stored public key.
 7. On success, a session cookie is created.
 
+## Public Endpoints
+
+The following paths are accessible without authentication regardless of the configured auth method. This ensures agent bootstrap, health checks, and metrics scraping work without credentials.
+
+| Path prefix | Purpose |
+|-------------|---------|
+| `/bootstrap` | Agent bootstrap script and certificate endpoints |
+| `/api/v1/agent/` | Agent binary downloads |
+| `/api/v1/bootstrap/` | Agent enrollment registration |
+| `/metrics` | Prometheus metrics scraping |
+| `/healthz` | Health check probe |
+| `/static/` | CSS, JavaScript, and image assets |
+| `/auth/` | Login and SSO callback handlers |
+| `/login` | Login page |
+| `/setup` | First-user setup page |
+
 ## Roles and Permissions
 
 Two roles are supported:

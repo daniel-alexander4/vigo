@@ -79,6 +79,11 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 			slog.Error("counting users in middleware", "error", err)
 		}
 		if count == 0 {
+			// Allow first-user bootstrap via POST /api/v1/users.
+			if r.Method == http.MethodPost && r.URL.Path == "/api/v1/users" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if isAPIPath(r.URL.Path) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)

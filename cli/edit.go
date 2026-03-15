@@ -15,7 +15,7 @@ import (
 
 var viCmd = &cobra.Command{
 	Use:   "vi <file.hnb>",
-	Short: "Edit a .hnb file with syntax highlighting and validation",
+	Short: "Open a .hnb config file in an editor with YAML validation on save",
 	Long: `Opens a .hnb file in vim with hobnob-aware syntax highlighting.
 
 On save, the file is checked for YAML correctness and idempotency. If

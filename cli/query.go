@@ -13,7 +13,7 @@ import (
 
 var queryCmd = &cobra.Command{
 	Use:   "query <trait-path> --target <spec>",
-	Short: "Query trait values from targeted thralls",
+	Short: "Query a trait value from connected thralls in real time, with cached fallback for offline nodes",
 	Long:  "Queries current trait values from connected thralls and cached values from offline thralls.\nExamples:\n  hobnobcli query os.distro --target '*.web.*'\n  hobnobcli query memory.total_mb --target 'os.family=debian'",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

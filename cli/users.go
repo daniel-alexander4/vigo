@@ -15,12 +15,12 @@ import (
 
 var usersCmd = &cobra.Command{
 	Use:   "users",
-	Short: "Manage users",
+	Short: "Manage web UI and API user accounts (admin/viewer roles)",
 }
 
 var usersListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all users",
+	Short: "List all user accounts with role and creation time",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var users []struct {
@@ -53,7 +53,7 @@ var (
 
 var usersCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a new user",
+	Short: "Create a new user account with a username, password, and admin/viewer role",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if userUsername == "" {
 			return fmt.Errorf("--username is required")
@@ -94,7 +94,7 @@ var usersCreateCmd = &cobra.Command{
 
 var usersDeleteCmd = &cobra.Command{
 	Use:   "delete",
-	Short: "Delete a user",
+	Short: "Permanently remove a user account and revoke their sessions",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if userUsername == "" {
 			return fmt.Errorf("--username is required")
@@ -132,7 +132,7 @@ var usersDeleteCmd = &cobra.Command{
 
 var usersSetPasswordCmd = &cobra.Command{
 	Use:   "set-password",
-	Short: "Set or reset a user's password",
+	Short: "Set or reset a user's password (prompts interactively)",
 	Long: `Set the password for a web UI user account. The password is bcrypt-hashed
 and stored in the local secrets provider at hobnob/web/auth/<username>.
 

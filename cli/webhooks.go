@@ -14,12 +14,12 @@ import (
 
 var webhooksCmd = &cobra.Command{
 	Use:   "webhooks",
-	Short: "Manage webhook endpoints",
+	Short: "Manage HMAC-signed HTTP webhook endpoints for event notifications",
 }
 
 var webhooksAddCmd = &cobra.Command{
 	Use:   "add <url>",
-	Short: "Register a new webhook endpoint",
+	Short: "Register a URL to receive HMAC-signed event notifications (runs, drift, secrets)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		events, _ := cmd.Flags().GetString("events")
@@ -56,7 +56,7 @@ var webhooksAddCmd = &cobra.Command{
 
 var webhooksListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all registered webhooks",
+	Short: "List all registered webhook endpoints with their subscribed events",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
@@ -83,7 +83,7 @@ var webhooksListCmd = &cobra.Command{
 
 var webhooksDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
-	Short: "Remove a webhook",
+	Short: "Unregister a webhook endpoint so it stops receiving events",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

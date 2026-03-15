@@ -12,7 +12,7 @@ import (
 
 var configFreezeCmd = &cobra.Command{
 	Use:   "freeze",
-	Short: "Freeze config publishes until a specified time",
+	Short: "Block all config publishes until a specified time (maintenance window)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		until, _ := cmd.Flags().GetString("until")
 		if until == "" {
@@ -41,7 +41,7 @@ var configFreezeCmd = &cobra.Command{
 
 var configUnfreezeCmd = &cobra.Command{
 	Use:   "unfreeze",
-	Short: "Remove the config publish freeze",
+	Short: "Lift the config publish freeze and allow publishes to proceed",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		if err := client.post("/api/v1/config/unfreeze", nil, nil); err != nil {

@@ -23,7 +23,7 @@ import (
 
 var configPublishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Validate and publish config from proposed to live",
+	Short: "Validate .hnb files in proposed/, sync to .live/, and trigger a server config reload",
 	Long: fmt.Sprintf(`Validates all .hnb config files in %s using the same
 logic as the server's config loader. If valid, atomically syncs to %s.
 

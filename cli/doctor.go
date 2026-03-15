@@ -24,7 +24,7 @@ var doctorConfigFile string
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Run health checks against the Hobnob server",
+	Short: "Validate server health: config, TLS, secrets, database, license, and federation",
 	Long: `Run health checks to verify the server is operating correctly.
 
 By default, queries the running server's /api/v1/doctor endpoint.

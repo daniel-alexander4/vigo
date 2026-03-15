@@ -14,12 +14,12 @@ import (
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Export compliance data (SIEM, CMDB, OSCAL)",
+	Short: "Export fleet compliance evidence for external security and audit tools",
 }
 
 var exportSIEMCmd = &cobra.Command{
 	Use:   "siem",
-	Short: "Export SIEM events from run results",
+	Short: "Export per-resource convergence events as JSON for SIEM ingestion",
 	Long: `Export run results as SIEM-consumable JSON events.
 
 Examples:
@@ -61,7 +61,7 @@ Examples:
 
 var exportCMDBCmd = &cobra.Command{
 	Use:   "cmdb",
-	Short: "Export CMDB configuration items from fleet data",
+	Short: "Export fleet inventory (OS, hardware, compliance) as JSON for CMDB import",
 	Long: `Export thrall data as CMDB-consumable JSON records.
 
 Examples:
@@ -99,7 +99,7 @@ Examples:
 
 var exportOSCALCmd = &cobra.Command{
 	Use:   "oscal",
-	Short: "Export OSCAL assessment results stub",
+	Short: "Export a minimal OSCAL v1.1.2 assessment results envelope",
 	Long: `Export a minimal OSCAL Assessment Results JSON envelope.
 
 Examples:

@@ -13,12 +13,12 @@ import (
 
 var packagesCmd = &cobra.Command{
 	Use:   "packages",
-	Short: "Query package audit information",
+	Short: "Compare installed vs desired package versions across the fleet",
 }
 
 var packagesListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List packages across thralls",
+	Short: "List managed packages with installed and desired versions per thrall",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		thrallID, _ := cmd.Flags().GetString("thrall")
 
@@ -53,7 +53,7 @@ var packagesListCmd = &cobra.Command{
 
 var packagesDriftCmd = &cobra.Command{
 	Use:   "drift",
-	Short: "List packages where installed version differs from desired",
+	Short: "Show packages where the installed version doesn't match the desired version",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {

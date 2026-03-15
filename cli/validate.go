@@ -16,7 +16,7 @@ import (
 
 var validateCmd = &cobra.Command{
 	Use:   "validate <file.hnb> [file2.hnb ...]",
-	Short: "Check .hnb files for YAML correctness and idempotency",
+	Short: "Validate .hnb files for YAML syntax, cross-references, and idempotency guards",
 	Long: `Validate one or more .hnb files.
 
 Checks performed:

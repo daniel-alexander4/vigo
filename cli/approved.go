@@ -13,12 +13,12 @@ import (
 
 var approvedCmd = &cobra.Command{
 	Use:   "approved",
-	Short: "Manage approved enrollment patterns",
+	Short: "Manage hostname patterns that control which machines can enroll",
 }
 
 var approvedAddCmd = &cobra.Command{
 	Use:   "add <pattern>",
-	Short: "Add an approved pattern with a one-time token",
+	Short: "Allow machines matching a hostname glob to enroll using a one-time token",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token, _ := cmd.Flags().GetString("token")
@@ -46,7 +46,7 @@ var approvedAddCmd = &cobra.Command{
 
 var approvedListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all approved patterns",
+	Short: "Show all enrollment patterns and whether their token has been consumed",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
@@ -77,7 +77,7 @@ var approvedListCmd = &cobra.Command{
 
 var approvedRevokeCmd = &cobra.Command{
 	Use:   "revoke <id>",
-	Short: "Revoke an approved pattern",
+	Short: "Delete an enrollment pattern so no new machines can match it",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

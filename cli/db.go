@@ -15,13 +15,13 @@ import (
 
 var dbCmd = &cobra.Command{
 	Use:   "db",
-	Short: "Database operations",
+	Short: "Inspect and maintain the server's SQLite database",
 	Long:  "Inspect, maintain, and query the server database.",
 }
 
 var dbStatsCmd = &cobra.Command{
 	Use:   "stats",
-	Short: "Show database statistics",
+	Short: "Show database file size, WAL size, page count, and per-table row counts",
 	Long:  "Display database file size, WAL size, page count, and table row counts.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -51,7 +51,7 @@ var dbStatsCmd = &cobra.Command{
 
 var dbTablesCmd = &cobra.Command{
 	Use:   "tables",
-	Short: "List tables with row counts",
+	Short: "List all database tables with their current row counts",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var tables map[string]any
@@ -69,7 +69,7 @@ var dbTablesCmd = &cobra.Command{
 
 var dbIntegrityCmd = &cobra.Command{
 	Use:   "integrity",
-	Short: "Run database integrity check",
+	Short: "Run PRAGMA integrity_check to verify database consistency",
 	Long:  "Runs PRAGMA integrity_check (SQLite) or connection health check (Postgres).",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -99,7 +99,7 @@ var dbIntegrityCmd = &cobra.Command{
 
 var dbVacuumCmd = &cobra.Command{
 	Use:   "vacuum",
-	Short: "Reclaim unused space (SQLite only)",
+	Short: "Run VACUUM to reclaim unused disk space from the database file",
 	Long: `Runs VACUUM on the SQLite database to reclaim space from deleted rows.
 This operation rewrites the entire database file and may take a few seconds
 on large databases. The server remains available during VACUUM.`,
@@ -129,7 +129,7 @@ on large databases. The server remains available during VACUUM.`,
 
 var dbCheckpointCmd = &cobra.Command{
 	Use:   "checkpoint",
-	Short: "Force WAL checkpoint (SQLite only)",
+	Short: "Force a WAL checkpoint to flush pending writes to the main database file",
 	Long: `Forces a WAL checkpoint, writing all pending WAL pages to the main database
 file and truncating the WAL. Useful before taking a backup to ensure the
 database file is self-contained.`,
@@ -148,7 +148,7 @@ database file is self-contained.`,
 
 var dbQueryCmd = &cobra.Command{
 	Use:   "query <SQL>",
-	Short: "Run a read-only SQL query",
+	Short: "Execute a read-only SQL query and display results as a table or JSON",
 	Long: `Execute a read-only SELECT query against the database. Write operations
 (INSERT, UPDATE, DELETE, DROP, etc.) are blocked.
 
@@ -199,7 +199,7 @@ Examples:
 
 var dbResetCmd = &cobra.Command{
 	Use:   "reset",
-	Short: "Delete and recreate the database (DESTRUCTIVE)",
+	Short: "Drop all tables and recreate the schema from scratch (DESTROYS ALL DATA)",
 	Long: `Deletes the SQLite database file and WAL. The server will recreate the
 database from migrations on next restart.
 

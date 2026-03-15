@@ -19,7 +19,7 @@ var inventoryShow []string
 
 var inventoryCmd = &cobra.Command{
 	Use:   "inventory",
-	Short: "Query thralls by traits",
+	Short: "Search the fleet by trait values (e.g., OS, memory, packages) and display matching thralls",
 	Long: `Query enrolled thralls by their collected traits.
 
 Examples:

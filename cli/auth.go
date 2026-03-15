@@ -14,12 +14,12 @@ import (
 
 var authCmd = &cobra.Command{
 	Use:   "auth",
-	Short: "Manage CLI authentication",
+	Short: "Manage the API token used by this CLI to authenticate with the server",
 }
 
 var authSetTokenCmd = &cobra.Command{
 	Use:   "set-token <token>",
-	Short: "Store an API token for CLI authentication",
+	Short: "Save an hbt_ API token to ~/.config/hobnob/token for subsequent CLI requests",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token := strings.TrimSpace(args[0])
@@ -36,7 +36,7 @@ var authSetTokenCmd = &cobra.Command{
 
 var authStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show current CLI authentication status",
+	Short: "Show whether a token is configured and which server it targets",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token := loadAuthToken()
 		if token == "" {
@@ -52,7 +52,7 @@ var authStatusCmd = &cobra.Command{
 
 var authClearCmd = &cobra.Command{
 	Use:   "clear",
-	Short: "Remove the stored API token",
+	Short: "Delete the stored API token so CLI requests are unauthenticated",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		p := tokenFilePath()
 		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {

@@ -15,12 +15,12 @@ import (
 
 var workflowCmd = &cobra.Command{
 	Use:   "workflow",
-	Short: "Run and monitor multi-step workflows",
+	Short: "Execute and monitor multi-step orchestration workflows defined in workflows/*.yaml",
 }
 
 var workflowRunCmd = &cobra.Command{
 	Use:   "run <name>",
-	Short: "Start a workflow execution",
+	Short: "Start a named workflow and optionally wait for all steps to complete",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		operator, _ := cmd.Flags().GetString("operator")
@@ -82,7 +82,7 @@ var workflowRunCmd = &cobra.Command{
 
 var workflowStatusCmd = &cobra.Command{
 	Use:   "status <id>",
-	Short: "Show status and step details for a workflow run",
+	Short: "Show step-by-step progress and outcomes for a workflow execution",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -97,7 +97,7 @@ var workflowStatusCmd = &cobra.Command{
 
 var workflowListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List recent workflow runs",
+	Short: "List recent workflow executions with step progress and final status",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		limit, _ := cmd.Flags().GetInt("limit")
 		client := newAPIClient()
@@ -138,7 +138,7 @@ var workflowListCmd = &cobra.Command{
 
 var workflowAbortCmd = &cobra.Command{
 	Use:   "abort <id>",
-	Short: "Abort a running workflow",
+	Short: "Cancel a running workflow and stop further step execution",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

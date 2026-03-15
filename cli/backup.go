@@ -24,7 +24,7 @@ type minimalServerConfig struct {
 
 var backupCmd = &cobra.Command{
 	Use:   "backup",
-	Short: "Backup and restore server state",
+	Short: "Create and restore full server backups (database, configs, secrets, TLS certs)",
 	Long: `Create and restore full server backups including database, configs, secrets, and TLS certs.
 
 These commands operate directly on the local filesystem — no server API required.
@@ -33,7 +33,7 @@ Run them on the server host.`,
 
 var backupCreateCmd = &cobra.Command{
 	Use:   "create <path>",
-	Short: "Create a full backup archive",
+	Short: "Snapshot the database, configs, secrets, and TLS certs into a tar.gz archive",
 	Long: `Create a tar.gz backup archive containing:
   - SQLite database snapshot (safe with concurrent WAL writes)
   - Config files (hnb/proposed/)
@@ -104,7 +104,7 @@ Examples:
 
 var backupRestoreCmd = &cobra.Command{
 	Use:   "restore <path>",
-	Short: "Restore server state from a backup archive",
+	Short: "Restore the database, configs, secrets, and TLS certs from a backup archive",
 	Long: `Restore all server state from a backup archive. Stop the server before restoring.
 
 Components restored:
@@ -175,7 +175,7 @@ Examples:
 
 var backupInspectCmd = &cobra.Command{
 	Use:   "inspect <path>",
-	Short: "Show backup archive manifest",
+	Short: "List the files and metadata inside a backup archive without extracting",
 	Long: `Read and display the manifest from a backup archive without extracting.
 
 Examples:

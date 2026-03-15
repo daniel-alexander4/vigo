@@ -27,13 +27,13 @@ import (
 
 var secretsCmd = &cobra.Command{
 	Use:   "secrets",
-	Short: "Manage local encrypted secrets",
-	Long:  "Manage secrets stored as AES-256-GCM encrypted files.",
+	Short: "Manage AES-256-GCM encrypted secrets resolved by the secret: prefix in configs",
+	Long:  "Manage secrets stored as AES-256-GCM encrypted files. These are the values resolved when configs use the secret: prefix.",
 }
 
 var secretsSetCmd = &cobra.Command{
 	Use:   "set <key> [value]",
-	Short: "Encrypt and store a secret",
+	Short: "Encrypt and store a secret value, then notify the server to trigger watch_secret resources",
 	Long: `Encrypt and store a secret value.
 
 The value can be provided in three ways (in priority order):
@@ -53,33 +53,33 @@ prompt for sensitive values.`,
 
 var secretsGetCmd = &cobra.Command{
 	Use:   "reveal <key>",
-	Short: "Decrypt and display a secret",
+	Short: "Decrypt and print a secret value to stdout",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSecretsGet,
 }
 
 var secretsDeleteCmd = &cobra.Command{
 	Use:   "delete <key>",
-	Short: "Remove an encrypted secret",
+	Short: "Delete an encrypted secret file from the secrets directory",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSecretsDelete,
 }
 
 var secretsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all secret keys",
+	Short: "List all secret paths available for use with the secret: prefix",
 	RunE:  runSecretsList,
 }
 
 var secretsInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Generate a new master key file",
+	Short: "Generate a new AES-256 master key for encrypting secrets at rest",
 	RunE:  runSecretsInit,
 }
 
 var secretsGenerateCertsCmd = &cobra.Command{
 	Use:   "generate-certs",
-	Short: "Generate self-signed CA and server TLS certificates",
+	Short: "Generate self-signed CA and server TLS certificates for mTLS bootstrap",
 	Long: `Generate a self-signed CA keypair and server certificate as plain PEM files:
 
   tls/ca       CA certificate (PEM)

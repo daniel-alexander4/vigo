@@ -16,12 +16,12 @@ import (
 
 var taskCmd = &cobra.Command{
 	Use:   "task",
-	Short: "Dispatch and monitor ad-hoc commands on thralls",
+	Short: "Push ad-hoc commands to targeted thralls and view results in real time",
 }
 
 var taskRunCmd = &cobra.Command{
 	Use:   "run <command-or-task-name>",
-	Short: "Run a command or named task on targeted thralls",
+	Short: "Execute an ad-hoc shell command or a stored task definition on matching thralls",
 	Long: `Run an ad-hoc command or a named task on targeted thralls.
 
   Ad-hoc command:  hobnobcli task run "uptime" --target "*.web.*"
@@ -146,7 +146,7 @@ var taskRunCmd = &cobra.Command{
 
 var taskStatusCmd = &cobra.Command{
 	Use:   "status <id>",
-	Short: "Show status and results for a task run",
+	Short: "Show per-target exit codes, stdout, and timing for a dispatched task",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -161,7 +161,7 @@ var taskStatusCmd = &cobra.Command{
 
 var taskListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List recent task runs",
+	Short: "List recent ad-hoc task dispatches with completion status",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		limit, _ := cmd.Flags().GetInt("limit")
 

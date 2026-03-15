@@ -20,26 +20,26 @@ import (
 
 var cliLicenseCmd = &cobra.Command{
 	Use:   "license",
-	Short: "Manage the Hobnob license",
+	Short: "View, install, and inspect the server license that governs thrall limits",
 }
 
 var licenseInstallFile string
 
 var cliLicenseInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install a license file on this server",
+	Short: "Copy a .lic file to the server's license directory and trigger a reload",
 	RunE:  runLicenseInstall,
 }
 
 var cliLicenseStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show license status from the running server",
+	Short: "Show current license tier, thrall usage, enforcement stage, and expiry",
 	RunE:  runLicenseStatus,
 }
 
 var cliLicenseInspectCmd = &cobra.Command{
 	Use:   "inspect [file]",
-	Short: "Decode and display a license file (offline, no server needed)",
+	Short: "Decode and display a .lic file without contacting the server",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runLicenseInspect,
 }

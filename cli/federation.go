@@ -14,59 +14,59 @@ import (
 
 var federationCmd = &cobra.Command{
 	Use:   "federation",
-	Short: "Manage and inspect federation status",
+	Short: "Manage hub-spoke federation topology, spoke health, and thrall routing",
 }
 
 var federationStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show federation role and spoke health",
+	Short: "Show this server's federation role (standalone/hub/spoke) and spoke availability",
 	RunE:  runFederationStatus,
 }
 
 var federationSpokesCmd = &cobra.Command{
 	Use:   "spokes",
-	Short: "List all spokes",
+	Short: "List all registered spokes with status, latency, and thrall counts",
 	RunE:  runFederationSpokes,
 }
 
 var federationSpokeDetailCmd = &cobra.Command{
 	Use:   "spoke <spoke-id>",
-	Short: "Show spoke detail and compliance",
+	Short: "Show a spoke's compliance breakdown, thrall count, and recent activity",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFederationSpokeDetail,
 }
 
 var federationSpokeThrallsCmd = &cobra.Command{
 	Use:   "spoke-thralls <spoke-id>",
-	Short: "List thralls on a spoke",
+	Short: "List all thralls managed by a specific spoke server",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFederationSpokeThralls,
 }
 
 var federationSpokeRunsCmd = &cobra.Command{
 	Use:   "spoke-runs <spoke-id>",
-	Short: "List runs on a spoke",
+	Short: "List recent convergence runs on a specific spoke server",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFederationSpokeRuns,
 }
 
 var federationSpokePushCmd = &cobra.Command{
 	Use:   "spoke-push <spoke-id>",
-	Short: "Force push on a spoke",
+	Short: "Trigger immediate check-in for all thralls on a specific spoke",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFederationSpokePush,
 }
 
 var federationReassignCmd = &cobra.Command{
 	Use:   "reassign <thrall-id>",
-	Short: "Reassign a thrall from one spoke to another",
+	Short: "Move a thrall to a different spoke server without re-enrollment",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFederationReassign,
 }
 
 var federationDrainCmd = &cobra.Command{
 	Use:   "drain <spoke-id>",
-	Short: "Drain all thralls from a spoke",
+	Short: "Migrate all thralls off a spoke to prepare it for maintenance or decommission",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFederationDrain,
 }

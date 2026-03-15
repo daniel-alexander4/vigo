@@ -63,6 +63,8 @@ func UserFromContext(ctx context.Context) *User {
 var publicPrefixes = []string{
 	"/static/",
 	"/auth/",
+	"/api/v1/agent/",
+	"/api/v1/bootstrap/",
 }
 
 // publicPaths are exact URL paths that never require authentication.

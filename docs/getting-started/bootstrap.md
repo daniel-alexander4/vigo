@@ -95,6 +95,7 @@ bootstrap:
 - Agent public keys are stored server-side and verified on every check-in (ED25519 signatures)
 - One-time tokens prevent replay attacks
 - Revoked agents receive an error on check-in and cannot re-enroll with the same UUID
+- Bootstrap endpoints (`/bootstrap`, `/api/v1/agent/*`, `/api/v1/bootstrap/*`) are exempt from web UI authentication so agents can enroll without credentials
 - The bootstrap endpoint can be restricted to specific CIDRs via reverse proxy
 
 ## Troubleshooting

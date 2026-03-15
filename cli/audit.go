@@ -13,12 +13,12 @@ import (
 
 var auditCmd = &cobra.Command{
 	Use:   "audit",
-	Short: "View audit log",
+	Short: "View the unified audit trail of config publishes, tasks, and workflows",
 }
 
 var auditListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List recent audit events",
+	Short: "List recent audit events filtered by type, operator, or time range",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 

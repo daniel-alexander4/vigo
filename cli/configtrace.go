@@ -12,12 +12,12 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Config inspection commands",
+	Short: "Publish, inspect, freeze, and rollback .hnb configuration",
 }
 
 var configTraceCmd = &cobra.Command{
 	Use:   "trace <hostname>",
-	Short: "Trace config resolution for a hostname",
+	Short: "Show which node entry matched, role expansion, var sources, and final modules for a hostname",
 	Long:  "Shows which pattern matched, how roles expanded, where each var came from, and the final module list.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -13,12 +13,12 @@ import (
 
 var runsCmd = &cobra.Command{
 	Use:   "runs",
-	Short: "View run history",
+	Short: "View convergence run history showing what changed on each thrall",
 }
 
 var runsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List recent runs",
+	Short: "List recent convergence runs with status and resource change counts",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		thrallID, _ := cmd.Flags().GetString("thrall")
 		limit, _ := cmd.Flags().GetInt("limit")
@@ -67,7 +67,7 @@ var runsListCmd = &cobra.Command{
 
 var runsShowCmd = &cobra.Command{
 	Use:   "show <id>",
-	Short: "Show details for a run",
+	Short: "Show per-resource outcomes for a specific convergence run",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
