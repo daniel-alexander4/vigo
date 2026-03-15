@@ -8,6 +8,7 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Disaster Recovery](disaster-recovery.md) -- Full DR playbook for server failure scenarios
 - [Email Notifications](smtp.md) -- SMTP-based alerting for server events
 - [Prometheus Metrics](metrics.md) -- Monitoring and observability
+- [Grafana Dashboards](grafana.md) -- Pre-built dashboards and alert rules
 - [Database](database.md) -- SQLite and Postgres configuration, schema, and retention
 - [FleetIndex](fleet-index.md) -- In-memory index for zero-DB check-in performance
 - [Tuning Parameters](tuning.md) -- All configurable tuning knobs

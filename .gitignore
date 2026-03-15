@@ -38,3 +38,4 @@ full.docker.reset.sh
 *.swp
 *.swo
 *~
+github.token.txt
