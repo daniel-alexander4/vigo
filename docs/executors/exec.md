@@ -72,6 +72,8 @@ resources:
     type: exec
     command: grafana-cli admin reset-admin-password --password-from-stdin
     stdin: "secret:grafana/admin-password"
+    watch_secret: ["grafana/admin-password"]
+    when: "changed"
 ```
 
 ### With secret_file

@@ -295,7 +295,7 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 
 7. **No Puppet Forge.** There's no package manager for modules. Modules are plain `.hnb` YAML files in your config directory. Copy, adapt, and version-control them directly.
 
-8. **No `exec` refresh.** Puppet's `exec` resources can be `refreshonly => true` to only run on notification. Hobnob's `exec` executor runs its check (`creates:`/`onlyif:`/`unless:`) every convergence. Use `subscribes:` to trigger an exec only when a dependency changes.
+8. **Exec refresh.** Puppet's `exec` resources use `refreshonly => true` to only run on notification. Hobnob uses `when: "changed"` — the resource is skipped on normal check-ins and only runs when triggered by `notify`, `subscribes`, or `watch_secret`.
 
 ## Related
 

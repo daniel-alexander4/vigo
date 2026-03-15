@@ -99,6 +99,8 @@ resources:
     stdin: "secret:hobnob/app/db_password"
     command: "psql -c \"ALTER ROLE {{ .Vars.app_db_user }} PASSWORD '$(cat -)';\""
     user: postgres
+    watch_secret: ["hobnob/app/db_password"]
+    when: "changed"
 
   - name: grant-app-privileges
     type: exec

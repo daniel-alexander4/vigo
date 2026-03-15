@@ -126,11 +126,13 @@ resources:
 Never embed secrets in command strings (they appear in process listings). Use `stdin` or `secret_file`:
 
 ```yaml
-# GOOD — pipe to stdin
+# GOOD — pipe to stdin, only runs on secret rotation
 - name: set-grafana-password
   type: exec
   command: "grafana-cli admin reset-admin-password --password-from-stdin"
   stdin: "secret:hobnob/grafana/admin_password"
+  watch_secret: ["hobnob/grafana/admin_password"]
+  when: "changed"
 
 # GOOD — temporary 0600 file
 - name: deploy-with-key

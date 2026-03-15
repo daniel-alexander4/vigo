@@ -39,9 +39,11 @@ resources:
 
   - name: grafana-set-password
     type: exec
-    command: "grafana-cli admin reset-admin-password 'secret:hobnob/grafana/admin-password'"
+    command: "grafana-cli admin reset-admin-password --password-from-stdin"
+    stdin: "secret:hobnob/grafana/admin-password"
     depends_on: [grafana-service]
     watch_secret: ["hobnob/grafana/admin-password"]
+    when: "changed"
 
   - name: grafana-logrotate
     type: logrotate

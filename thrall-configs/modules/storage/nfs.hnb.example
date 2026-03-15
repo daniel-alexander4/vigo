@@ -49,6 +49,8 @@ resources:
     type: exec
     command: "exportfs -ra"
     depends_on: [nfs-exports]
+    subscribes: [nfs-exports]
+    when: "changed"
 
   # --- Service (distro-specific) ---
 
