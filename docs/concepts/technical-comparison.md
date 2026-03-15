@@ -136,7 +136,7 @@ All six tools enforce idempotency — check current state, act only if drift is 
 | LVM/RAID | No | Yes | No | Yes | No |
 | Docker containers | No | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng |
 
-Hobnob has 73 built-in executors covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Hobnob's custom executor JSON protocol allows extending coverage without modifying the agent binary.
+Hobnob has 98 built-in executors covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Hobnob's custom executor JSON protocol allows extending coverage without modifying the agent binary.
 
 ### Package management depth
 
@@ -247,7 +247,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 
 ## What Others Do Better
 
-1. **Ecosystem.** Puppet Forge has 6000+ modules. Ansible Galaxy has 30K+ roles. Hobnob has 73 built-in executors and zero community modules. For common infrastructure (Kubernetes, cloud providers, databases), you'll write modules from scratch.
+1. **Ecosystem.** Puppet Forge has 6000+ modules. Ansible Galaxy has 30K+ roles. Hobnob has 98 built-in executors and zero community modules. For common infrastructure (Kubernetes, cloud providers, databases), you'll write modules from scratch.
 
 2. **Expressiveness ceiling.** When you need complex logic (dynamic resource generation, cross-node dependency resolution, inheritance hierarchies), Puppet's DSL and Chef's Ruby give you a real programming language. Hobnob's YAML composition handles 90% of cases but hits a wall on the other 10%.
 
@@ -259,7 +259,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 
 6. **Agentless option.** Ansible's SSH-based push model means zero agent installation. Useful for one-off tasks, heterogeneous environments, and network devices. Hobnob requires an agent on every managed node.
 
-7. **Battle-testing.** Puppet has 15+ years of production use at 40K+ organizations. Every edge case in file permissions, package manager quirks, and OS-specific behavior has been found and fixed. Hobnob has zero production deployments. The 1500+ tests catch a lot, but real-world deployment finds things tests don't.
+7. **Battle-testing.** Puppet has 15+ years of production use at 40K+ organizations. Every edge case in file permissions, package manager quirks, and OS-specific behavior has been found and fixed. Hobnob has zero production deployments. The 1,900+ tests catch a lot, but real-world deployment finds things tests don't.
 
 ## When to Choose Hobnob
 
