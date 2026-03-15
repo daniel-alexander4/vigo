@@ -728,6 +728,11 @@ pub fn build_executors_with_snapshots(
         executors.insert("firewall".to_string(), Box::new(firewall_windows::FirewallWindowsExecutor::new()));
         executors.insert("registry".to_string(), Box::new(registry_windows::RegistryWindowsExecutor::new()));
         executors.insert("acl".to_string(), Box::new(acl_windows::AclWindowsExecutor::new()));
+        executors.insert("windows_feature".to_string(), Box::new(windows_feature::WindowsFeatureExecutor::new()));
+        executors.insert("windows_env".to_string(), Box::new(windows_env::WindowsEnvExecutor::new()));
+        executors.insert("reboot_windows".to_string(), Box::new(reboot_windows::RebootWindowsExecutor::new()));
+        executors.insert("powershell".to_string(), Box::new(powershell::PowershellExecutor::new()));
+        executors.insert("iis_site".to_string(), Box::new(iis_site::IisSiteExecutor::new()));
     }
 
     executors
