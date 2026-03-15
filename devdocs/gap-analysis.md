@@ -59,7 +59,7 @@ Rolling execution supports batch sizing and health checks, but no multi-stage ca
 
 ### Web UI Authentication (Gap 21)
 
-Default auth method changed from `none` to `basic`. Four pluggable methods: basic (username/password with bcrypt hashes in secrets store), none, OIDC, isowebauth. Sessions backed by SQLite (SCS). API tokens (`hbt_` prefix, bcrypt at rest). Two roles: admin/viewer. Localhost CLI requests trusted with implicit admin access (peer auth model). First-time setup page with CLI instructions.
+Authentication is always required. Three pluggable methods: basic (default, username/password with bcrypt hashes in secrets store), OIDC, isowebauth. Admin account auto-seeded on first startup. Sessions backed by SQLite (SCS). API tokens (`hbt_` prefix, bcrypt at rest). Two roles: admin/viewer. Localhost CLI requests trusted with implicit admin access (peer auth model).
 
 ### Admin UI (Gap 22)
 

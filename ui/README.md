@@ -20,7 +20,7 @@ http://localhost:8181/
 
 No separate build step is needed -- all assets are compiled into the `hobd` binary.
 
-No authentication is required. The UI is secured at the network level (same as the REST API).
+Authentication is required for all UI and API access. See `server/auth/` for the pluggable provider system (basic, OIDC, isowebauth).
 
 ## Pages
 

@@ -137,13 +137,13 @@ auth:
 
 ### User Management
 
-Unlike OIDC, isowebauth requires users to be pre-created with their SSH public keys:
+Unlike OIDC, isowebauth requires users to be pre-created with their SSH public keys. The auto-seeded admin account can be used to create them:
 
 ```bash
-# Create the first admin (no auth required when DB is empty):
-hobnobcli users create --username alice --role admin --ssh-key-file ~/.ssh/id_ed25519.pub
+# First, set the admin password to get CLI access:
+hobnobcli users set-password --username admin
 
-# Create additional users (requires admin auth):
+# Create users with SSH keys:
 hobnobcli users create --username bob --role viewer --ssh-key-file /path/to/bob.pub
 ```
 
@@ -246,11 +246,9 @@ The token is stored at `~/.config/hobnob/token` (mode 0600).
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/v1/users` | GET | Admin | List all users |
-| `/api/v1/users` | POST | Admin* | Create a user |
+| `/api/v1/users` | POST | Admin | Create a user |
 | `/api/v1/users/{id}` | PUT | Admin | Update a user |
 | `/api/v1/users/{id}` | DELETE | Admin | Delete a user |
-
-*First user creation is allowed without auth when the database has no users (bootstrap).
 
 ### CLI
 
