@@ -30,6 +30,16 @@ The script:
    - **illumos:** SMF service manifest (`svc:/system/hobnob-thrall:default`)
 9. Starts the service
 
+### Windows Bootstrap
+
+For Windows, use the PowerShell bootstrap:
+
+```powershell
+irm http://<server>:8181/bootstrap?os=windows | iex
+```
+
+The PowerShell script performs the same steps but installs a Windows Service via `sc.exe` with automatic restart on failure. See [Windows Support](windows.md) for details.
+
 ## Enrollment Methods
 
 ### Token-Free (Trusted Enrollment)
