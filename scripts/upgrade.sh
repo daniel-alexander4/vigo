@@ -49,8 +49,23 @@ timeout 60 docker compose logs -f hobnob 2>&1 | grep -m1 "server ready" || true
 echo "Updating host binaries..."
 docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
 ln -sf hobnobcli /usr/local/bin/hnbvi
-docker cp hobnob:/dist/agent/linux/amd64/hobnob /usr/local/bin/hobnob
-systemctl restart hobnob-thrall 2>/dev/null || true
+
+# Copy the agent binary matching the host architecture.
+HOST_ARCH=$(uname -m)
+case "$HOST_ARCH" in
+    x86_64)  AGENT_ARCH="amd64" ;;
+    aarch64) AGENT_ARCH="arm64" ;;
+    *)       AGENT_ARCH="$HOST_ARCH" ;;
+esac
+HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+if docker exec hobnob test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" 2>/dev/null; then
+    docker cp "hobnob:/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/bin/hobnob
+    echo "Installed agent binary: $HOST_OS/$AGENT_ARCH"
+    systemctl restart hobnob-thrall 2>/dev/null || true
+else
+    echo "WARNING: No agent binary for $HOST_OS/$AGENT_ARCH in container"
+fi
 
 echo ""
 docker compose ps
@@ -99,15 +114,24 @@ if [ "${1:-}" = "--build" ] && [ -d "$REPO_DIR" ]; then
         echo "  OK     hobnobcli"
     fi
 
-    # Check agent binary.
+    # Check agent binaries (all platforms in container).
     NEWEST_RS=$(find "$REPO_DIR/agent-rs/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_RS=${NEWEST_RS%.*}
-    CTR_AGENT=$(docker exec hobnob stat -c '%Y' /dist/agent/linux/amd64/hobnob 2>/dev/null || echo 0)
-    if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
-        echo "  STALE  agent in container (source is newer than binary)"
-        STALE=1
+    AGENT_PLATFORMS=$(docker exec hobnob find /dist/agent -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null)
+    if [ -n "$AGENT_PLATFORMS" ]; then
+        for agent_path in $AGENT_PLATFORMS; do
+            CTR_AGENT=$(docker exec hobnob stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
+            platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/hobnob.*||')
+            if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
+                echo "  STALE  agent $platform (source is newer than binary)"
+                STALE=1
+            else
+                echo "  OK     agent $platform"
+            fi
+        done
     else
-        echo "  OK     agent"
+        echo "  WARN   no agent binaries found in container"
+        STALE=1
     fi
 
     # Check entrypoint.sh.
