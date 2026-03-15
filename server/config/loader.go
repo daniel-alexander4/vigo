@@ -718,11 +718,9 @@ func (cs *ConfigStore) loadAllInner() error {
 	v := cs.version.Add(1)
 
 	slog.Info("config loaded",
+		"thralls", len(entries),
 		"modules", len(moduleDefs),
 		"roles", len(roleDefs),
-		"entries", len(entries),
-		"exact_patterns", len(idx.exact),
-		"glob_patterns", len(idx.globs),
 		"version", v)
 
 	return nil
