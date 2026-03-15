@@ -1,6 +1,6 @@
 # Windows Support
 
-Hobnob fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 7 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
+Hobnob fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 12 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
 
 ## Bootstrap
 
@@ -206,6 +206,154 @@ Set the system timezone. Uses Windows timezone names (not IANA).
 ```
 
 Common Windows timezone names: `Eastern Standard Time`, `Central Standard Time`, `Mountain Standard Time`, `Pacific Standard Time`, `UTC`, `GMT Standard Time`, `Tokyo Standard Time`, `AUS Eastern Standard Time`.
+
+### windows_feature
+
+Manage Windows Features (IIS, Hyper-V, .NET Framework). Automatically uses the correct cmdlets for Server and client SKUs.
+
+```yaml
+- name: install-iis
+  type: windows_feature
+  feature: IIS-WebServer
+  include_management_tools: "true"
+
+- name: install-dotnet45
+  type: windows_feature
+  feature: NET-Framework-45-Core
+
+- name: install-hyperv
+  type: windows_feature
+  feature: Microsoft-Hyper-V-All
+
+- name: remove-telnet
+  type: windows_feature
+  feature: TelnetClient
+  state: absent
+```
+
+See [windows_feature executor](../executors/windows_feature.md) for full reference.
+
+### acl
+
+Manage NTFS ACL permissions on files and directories via PowerShell `Get-Acl`/`Set-Acl`.
+
+```yaml
+- name: admin-full-control
+  type: acl
+  path: "C:\\AppData\\MyApp"
+  identity: "BUILTIN\\Administrators"
+  rights: FullControl
+
+- name: web-read-execute
+  type: acl
+  path: "C:\\inetpub\\wwwroot\\mysite"
+  identity: IIS_IUSRS
+  rights: ReadAndExecute
+
+- name: deny-guest-write
+  type: acl
+  path: "C:\\Shares\\Public"
+  identity: "BUILTIN\\Guests"
+  rights: Write
+  type: Deny
+
+- name: remove-old-access
+  type: acl
+  path: "C:\\Data\\Archive"
+  identity: "DOMAIN\\OldTeam"
+  rights: Modify
+  state: absent
+```
+
+See [acl_windows executor](../executors/acl_windows.md) for full reference.
+
+### windows_env
+
+Manage persistent environment variables via the .NET `[Environment]::SetEnvironmentVariable()` API.
+
+```yaml
+- name: set-java-home
+  type: windows_env
+  variable: JAVA_HOME
+  value: "C:\\Program Files\\Java\\jdk-17"
+
+- name: set-go-root
+  type: windows_env
+  variable: GOROOT
+  value: "C:\\Go"
+
+- name: set-node-env
+  type: windows_env
+  variable: NODE_ENV
+  value: production
+
+- name: remove-legacy-var
+  type: windows_env
+  variable: OLD_APP_HOME
+  state: absent
+```
+
+**Scopes:** `Machine` (default, system-wide) or `User` (current user). Machine scope requires administrator privileges.
+
+See [windows_env executor](../executors/windows_env.md) for full reference.
+
+### reboot_windows
+
+Manage pending reboots. Checks well-known registry keys for pending reboot state before triggering a restart.
+
+```yaml
+# Reboot only if a reboot is pending (default)
+- name: pending-reboot
+  type: reboot_windows
+
+# Reboot after feature install
+- name: reboot-after-hyperv
+  type: reboot_windows
+  message: "Rebooting to complete Hyper-V installation"
+  timeout: "120"
+  depends_on: [install-hyperv]
+
+# Forced reboot (always reboots)
+- name: maintenance-reboot
+  type: reboot_windows
+  when_pending: "false"
+  message: "Scheduled maintenance reboot"
+  timeout: "30"
+```
+
+The executor checks `RebootPending`, `RebootRequired`, and `PendingFileRenameOperations` registry keys. If none are set, the resource is skipped.
+
+See [reboot_windows executor](../executors/reboot_windows.md) for full reference.
+
+### powershell
+
+Run PowerShell scripts with `$ErrorActionPreference = 'Stop'` and idempotency guards (`creates`, `unless`, `onlyif`).
+
+```yaml
+- name: init-database
+  type: powershell
+  command: "& C:\\Scripts\\init-db.ps1 -Server localhost -Database MyApp"
+  creates: "C:\\ProgramData\\MyApp\\db-initialized.flag"
+
+- name: import-cert
+  type: powershell
+  command: |
+    Import-PfxCertificate -FilePath C:\certs\app.pfx `
+      -CertStoreLocation Cert:\LocalMachine\My `
+      -Password (ConvertTo-SecureString 'changeit' -AsPlainText -Force)
+  unless: "Get-ChildItem Cert:\\LocalMachine\\My | Where-Object { $_.Subject -match 'CN=myapp' }"
+
+- name: deploy-app
+  type: powershell
+  command: "& C:\\Scripts\\deploy.ps1"
+  cwd: "C:\\Deployments\\myapp"
+  environment: "APP_ENV=production,DB_HOST=sql01.internal"
+  creates: "C:\\Deployments\\myapp\\deployed.flag"
+```
+
+Always use at least one guard (`creates`, `unless`, `onlyif`) to maintain idempotency.
+
+See [powershell executor](../executors/powershell.md) for full reference.
 
 ## Windows Trait Collectors
 

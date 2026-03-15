@@ -1,94 +1,108 @@
 # acl (Windows)
 
-Manages Windows file and directory access control lists (ACLs) idempotently via `icacls.exe`. Grants, removes, or enforces permissions for principals (users, groups, SIDs).
+Manages NTFS file and directory access control lists (ACLs) idempotently via PowerShell `Get-Acl`/`Set-Acl`. Grants or removes access rules for specific identities (users, groups) with fine-grained control over rights, inheritance, and access type.
 
 ## Parameters
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `path` | Yes | -- | File or directory path to manage ACLs on. |
-| `entries` | Yes (for present) | -- | Comma-separated ACL entries in `principal:access` format. |
-| `inherit` | No | `true` | Enable (`true`) or disable (`false`) permission inheritance from parent. |
-| `purge` | No | `false` | Remove all explicit ACL entries not in the `entries` list. |
-| `state` | No | `present` | `present` to grant permissions, `absent` to remove them. |
-
-## Access Levels
-
-| Code | Meaning |
-|------|---------|
-| `F` | Full Control |
-| `M` | Modify (read, write, execute, delete) |
-| `RX` | Read and Execute |
-| `R` | Read only |
-| `W` | Write only |
+| `identity` | Yes | -- | User or group identity (e.g., `BUILTIN\Administrators`, `IIS_IUSRS`, `DOMAIN\AppService`). |
+| `rights` | Yes | -- | Comma-separated .NET `FileSystemRights` values: `FullControl`, `Modify`, `ReadAndExecute`, `Read`, `Write`. |
+| `type` | No | `Allow` | Access control type: `Allow` or `Deny`. |
+| `inheritance` | No | auto | Inheritance flags. Defaults to `ContainerInherit,ObjectInherit` for directories, `None` for files. |
+| `state` | No | `present` | `present` to ensure the ACL rule exists, `absent` to remove it. |
 
 ## States
 
-- **`present`** -- Ensure the specified principals have the specified access. Missing entries are added. Existing entries with different access levels are updated.
-- **`absent`** -- Remove the specified principals from the ACL entirely.
+- **`present`** -- Ensure the specified identity has an access rule with the given rights and type. If a matching rule already exists, no action is taken. Otherwise, the rule is added via `$acl.SetAccessRule()`.
+- **`absent`** -- Remove the access rule matching the identity, rights, and type via `$acl.RemoveAccessRule()`.
+
+## Idempotency
+
+The executor queries the current ACL via `Get-Acl` and inspects the `Access` entries for a match on all three criteria: `IdentityReference`, `FileSystemRights`, and `AccessControlType`. Only when no matching entry is found does it make changes.
 
 ## Examples
 
-### Grant access to a directory
+### Grant full control to administrators
 
 ```yaml
 resources:
-  - name: app-data-permissions
+  - name: admin-full-control
     type: acl
     path: "C:\\AppData\\MyApp"
-    entries: "BUILTIN\\Administrators:F,NT AUTHORITY\\SYSTEM:F,MyApp-Service:RX"
+    identity: "BUILTIN\\Administrators"
+    rights: FullControl
 ```
 
-### Lock down a directory (purge unlisted entries)
+### Grant read-execute to a service account
 
 ```yaml
 resources:
-  - name: secure-config-dir
+  - name: app-service-access
     type: acl
-    path: "C:\\ProgramData\\MyApp\\config"
-    entries: "BUILTIN\\Administrators:F,NT AUTHORITY\\SYSTEM:F"
-    purge: "true"
-    inherit: "false"
+    path: "C:\\inetpub\\wwwroot\\mysite"
+    identity: IIS_IUSRS
+    rights: ReadAndExecute
 ```
 
-### Remove a principal's access
+### Deny write access
 
 ```yaml
 resources:
-  - name: remove-guest-access
+  - name: deny-guest-write
     type: acl
-    path: "C:\\Shares\\Internal"
-    entries: "BUILTIN\\Guests:R"
+    path: "C:\\Shares\\Public"
+    identity: "BUILTIN\\Guests"
+    rights: Write
+    type: Deny
+```
+
+### Remove an ACL entry
+
+```yaml
+resources:
+  - name: remove-old-access
+    type: acl
+    path: "C:\\Data\\Archive"
+    identity: "DOMAIN\\OldTeam"
+    rights: Modify
     state: absent
+```
+
+### Set inheritance explicitly
+
+```yaml
+resources:
+  - name: file-acl-no-inherit
+    type: acl
+    path: "C:\\Secrets\\config.json"
+    identity: "NT AUTHORITY\\SYSTEM"
+    rights: FullControl
+    inheritance: None
 ```
 
 ### Web server content permissions
 
 ```yaml
 resources:
-  - name: web-content-acl
+  - name: web-admin-acl
     type: acl
     path: "C:\\inetpub\\wwwroot\\mysite"
-    entries: "BUILTIN\\Administrators:F,IIS_IUSRS:RX,IUSR:R"
-    purge: "true"
-    inherit: "false"
-```
+    identity: "BUILTIN\\Administrators"
+    rights: FullControl
 
-### Security hardening example
-
-```yaml
-resources:
-  - name: restrict-system32-drivers
+  - name: web-iis-acl
     type: acl
-    path: "C:\\Windows\\System32\\drivers"
-    entries: "BUILTIN\\Administrators:F,NT AUTHORITY\\SYSTEM:F,NT SERVICE\\TrustedInstaller:F"
-    purge: "true"
-    inherit: "false"
+    path: "C:\\inetpub\\wwwroot\\mysite"
+    identity: IIS_IUSRS
+    rights: ReadAndExecute
 
-  - name: app-log-permissions
+  - name: web-iusr-acl
     type: acl
-    path: "C:\\Logs\\MyApp"
-    entries: "BUILTIN\\Administrators:F,NT AUTHORITY\\SYSTEM:F,MyApp-Service:M"
+    path: "C:\\inetpub\\wwwroot\\mysite"
+    identity: IUSR
+    rights: Read
 ```
 
 ## Platform
@@ -97,8 +111,8 @@ Windows only.
 
 ## Notes
 
-- Entries use `principal:access` format separated by commas. Backslashes in principal names must be doubled in YAML (`BUILTIN\\Administrators`).
-- When `purge: true`, all explicit ACL entries not in the `entries` list are removed. Inherited entries (marked with `(I)` by icacls) are not affected by purge.
-- When `inherit: false`, inheritance from the parent directory is disabled. Existing inherited entries are converted to explicit entries.
-- Permissions are applied with `(OI)(CI)` flags (Object Inherit + Container Inherit) so they propagate to child objects in directories.
-- The executor uses `icacls.exe` which is available on all supported Windows versions (Vista/Server 2008+).
+- The `rights` parameter accepts .NET `FileSystemRights` enum values. Common values: `FullControl`, `Modify`, `ReadAndExecute`, `Read`, `Write`. Multiple rights can be combined with commas (e.g., `Read,Write`).
+- Backslashes in identity names must be doubled in YAML (`BUILTIN\\Administrators`).
+- The `inheritance` parameter maps to .NET `InheritanceFlags`. For directories, the default `ContainerInherit,ObjectInherit` propagates permissions to child objects and containers. For files, `None` is used since files have no children.
+- The propagation flag is always set to `None` (no propagation-only rules). Inheritance flags control whether child objects inherit the rule.
+- Matching is exact on all three fields (identity, rights, access type). If you change the rights for an identity, the old rule remains and a new one is added. Remove the old rule explicitly with `state: absent` if needed.

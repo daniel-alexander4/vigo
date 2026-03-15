@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: Elastic-2.0
 #![cfg(windows)]
 
-//! Windows ACL executor — manages file and directory access control lists
-//! idempotently via `icacls.exe`.
+//! Windows ACL executor — manages NTFS ACL permissions idempotently via
+//! PowerShell `Get-Acl`/`Set-Acl`.
 //!
 //! Parameters:
-//! - `path`: File or directory path to manage ACLs on
-//! - `entries`: Comma-separated ACL entries in `principal:access` format
-//!   Access levels: F (Full), M (Modify), RX (Read+Execute), R (Read), W (Write)
-//!   Example: "BUILTIN\\Administrators:F,NT AUTHORITY\\SYSTEM:F,AppUser:RX"
-//! - `inherit`: "true" (default) or "false" — enable/disable inheritance
-//! - `purge`: "true" or "false" (default) — remove entries not in the list
+//! - `path` (required): File or directory path
+//! - `identity` (required): User or group (e.g., "BUILTIN\\Administrators", "IIS_IUSRS")
+//! - `rights` (required): Comma-separated rights: "FullControl", "Modify",
+//!   "ReadAndExecute", "Read", "Write"
+//! - `type`: "Allow" (default) or "Deny"
+//! - `inheritance`: Inheritance flags — "ContainerInherit,ObjectInherit" (default
+//!   for directories), "None" (default for files)
 //! - `state`: "present" (default) or "absent"
+//!
+//! Check: `(Get-Acl '<path>').Access | Where-Object { $_.IdentityReference -eq '<identity>' }`
+//! Set: Build an `AccessRule` object and call `$acl.SetAccessRule()` then `Set-Acl`.
+//! Remove: `$acl.RemoveAccessRule()`.
 
 use super::{Action, Executor, ResourceResult, run_command};
 use std::collections::HashMap;
@@ -25,62 +30,49 @@ impl AclWindowsExecutor {
         Self
     }
 
-    /// Parse entries string into (principal, access) pairs.
-    fn parse_entries(entries: &str) -> Vec<(String, String)> {
-        entries
-            .split(',')
-            .filter_map(|e| {
-                let e = e.trim();
-                if e.is_empty() {
-                    return None;
-                }
-                let parts: Vec<&str> = e.rsplitn(2, ':').collect();
-                if parts.len() == 2 {
-                    Some((parts[1].to_string(), parts[0].to_string()))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    /// Query current ACL entries via icacls. Returns list of (principal, permissions) as raw strings.
-    fn current_acl(path: &str) -> Vec<String> {
-        match run_command("icacls", &[path]) {
+    /// Check if the specified ACL rule already exists with matching rights and type.
+    /// Returns true if an ACL entry matches identity, rights, and access control type.
+    fn rule_exists(path: &str, identity: &str, rights: &str, access_type: &str) -> bool {
+        let ps = format!(
+            "$acl = Get-Acl -Path '{}'; \
+             $match = $acl.Access | Where-Object {{ \
+                 $_.IdentityReference.Value -eq '{}' -and \
+                 $_.FileSystemRights.ToString() -eq '{}' -and \
+                 $_.AccessControlType.ToString() -eq '{}' \
+             }}; \
+             if ($match) {{ Write-Output 'FOUND' }} else {{ Write-Output 'MISSING' }}",
+            path.replace('\'', "''"),
+            identity.replace('\'', "''"),
+            rights.replace('\'', "''"),
+            access_type,
+        );
+        match run_command("powershell.exe", &["-NoProfile", "-NonInteractive", "-Command", &ps]) {
             Ok(o) if o.status.success() => {
-                let stdout = String::from_utf8_lossy(&o.stdout);
-                // icacls output format: "C:\path principal:(permissions)"
-                // Skip the first line (path header) and last line (summary).
-                stdout
-                    .lines()
-                    .filter(|l| l.contains(":("))
-                    .map(|l| l.trim().to_string())
-                    .collect()
+                let stdout = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                stdout == "FOUND"
             }
-            _ => vec![],
+            _ => false,
         }
     }
 
-    /// Check if a principal already has the specified access level.
-    fn has_access(acl_lines: &[String], principal: &str, access: &str) -> bool {
-        let access_upper = access.to_uppercase();
-        for line in acl_lines {
-            if line.to_uppercase().contains(&principal.to_uppercase()) {
-                // Map short codes to icacls output patterns.
-                let has = match access_upper.as_str() {
-                    "F" => line.contains("(F)") || line.contains("(OI)(CI)(F)"),
-                    "M" => line.contains("(M)") || line.contains("(OI)(CI)(M)"),
-                    "RX" => line.contains("(RX)") || line.contains("(OI)(CI)(RX)"),
-                    "R" => line.contains("(R)") || line.contains("(OI)(CI)(R)"),
-                    "W" => line.contains("(W)") || line.contains("(OI)(CI)(W)"),
-                    _ => line.to_uppercase().contains(&format!("({})", access_upper)),
-                };
-                if has {
-                    return true;
+    /// Determine the default inheritance flags based on whether the path is a
+    /// directory or a file.
+    fn default_inheritance(path: &str) -> &'static str {
+        let ps = format!(
+            "if (Test-Path -Path '{}' -PathType Container) {{ Write-Output 'DIR' }} else {{ Write-Output 'FILE' }}",
+            path.replace('\'', "''"),
+        );
+        match run_command("powershell.exe", &["-NoProfile", "-NonInteractive", "-Command", &ps]) {
+            Ok(o) if o.status.success() => {
+                let stdout = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                if stdout == "DIR" {
+                    "ContainerInherit,ObjectInherit"
+                } else {
+                    "None"
                 }
             }
+            _ => "None",
         }
-        false
     }
 }
 
@@ -88,13 +80,17 @@ impl Executor for AclWindowsExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let path = params.get("path").cloned().unwrap_or_default();
-        let entries_str = params.get("entries").cloned().unwrap_or_default();
-        let inherit = params.get("inherit").map(|s| s != "false").unwrap_or(true);
-        let purge = params.get("purge").map(|s| s == "true").unwrap_or(false);
+        let identity = params.get("identity").cloned().unwrap_or_default();
+        let rights = params.get("rights").cloned().unwrap_or_default();
+        let access_type = params.get("type").map(|s| s.as_str()).unwrap_or("Allow");
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
-        let resource_name = params.get("name").map(|s| s.as_str()).unwrap_or(&path);
+        let resource_name = if !identity.is_empty() {
+            format!("{} on {}", identity, path)
+        } else {
+            path.clone()
+        };
 
-        let mut result = ResourceResult::new("acl", resource_name);
+        let mut result = ResourceResult::new("acl", &resource_name);
 
         if path.is_empty() {
             result.error = Some("acl executor: path param is required".to_string());
@@ -102,58 +98,42 @@ impl Executor for AclWindowsExecutor {
             return result;
         }
 
-        let entries = Self::parse_entries(&entries_str);
-        if entries.is_empty() && state == "present" {
-            result.error = Some("acl executor: entries param is required for state: present".to_string());
+        if identity.is_empty() {
+            result.error = Some("acl executor: identity param is required".to_string());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
 
-        let current = Self::current_acl(&path);
+        if rights.is_empty() {
+            result.error = Some("acl executor: rights param is required".to_string());
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        // Validate access type.
+        if access_type != "Allow" && access_type != "Deny" {
+            result.error = Some(format!(
+                "acl executor: type must be Allow or Deny, got {:?}",
+                access_type
+            ));
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        let inheritance = params
+            .get("inheritance")
+            .map(|s| s.as_str())
+            .unwrap_or_else(|| Self::default_inheritance(&path));
 
         match state {
             "present" => {
-                // Check which entries need to be added.
-                let mut needs_change = false;
-                let mut grants: Vec<(&str, &str)> = Vec::new();
-
-                for (principal, access) in &entries {
-                    if !Self::has_access(&current, principal, access) {
-                        needs_change = true;
-                        grants.push((principal, access));
-                    }
-                }
-
-                // Check inheritance state.
-                // icacls /inheritance:e enables, /inheritance:d disables.
-                // We check by looking for "(I)" markers in ACL lines.
-                let has_inherited = current.iter().any(|l| l.contains("(I)"));
-                if inherit && !has_inherited && !current.is_empty() {
-                    // Can't reliably detect this without inherited entries, skip.
-                } else if !inherit && has_inherited {
-                    needs_change = true;
-                }
-
-                if purge {
-                    // In purge mode, any entry not in our list is drift.
-                    for line in &current {
-                        let found = entries.iter().any(|(p, _)| {
-                            line.to_uppercase().contains(&p.to_uppercase())
-                        });
-                        if !found && !line.contains("(I)") {
-                            needs_change = true;
-                            break;
-                        }
-                    }
-                }
-
-                if !needs_change {
+                if Self::rule_exists(&path, &identity, &rights, access_type) {
                     result.action = Action::None;
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
 
-                result.action = Action::Updated;
+                result.action = Action::Created;
                 result.changed = true;
 
                 if dry_run {
@@ -161,57 +141,38 @@ impl Executor for AclWindowsExecutor {
                     return result;
                 }
 
-                // Apply: if purge, reset then grant. Otherwise just grant missing.
-                if purge {
-                    // Reset: remove all explicit ACLs.
-                    if let Err(e) = run_command("icacls", &[&path, "/reset", "/T", "/Q"])
-                        .map_err(|e| e.to_string())
-                        .and_then(|o| if o.status.success() { Ok(()) } else {
-                            Err(String::from_utf8_lossy(&o.stderr).to_string())
-                        })
-                    {
-                        result.error = Some(format!("icacls reset {}: {}", path, e));
-                        result.duration_ms = start.elapsed().as_millis() as i32;
-                        return result;
+                let ps = format!(
+                    "$acl = Get-Acl -Path '{}'; \
+                     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(\
+                         '{}', '{}', '{}', 'None', '{}'); \
+                     $acl.SetAccessRule($rule); \
+                     Set-Acl -Path '{}' -AclObject $acl",
+                    path.replace('\'', "''"),
+                    identity.replace('\'', "''"),
+                    rights.replace('\'', "''"),
+                    inheritance,
+                    access_type,
+                    path.replace('\'', "''"),
+                );
+                match run_command("powershell.exe", &["-NoProfile", "-NonInteractive", "-Command", &ps]) {
+                    Ok(o) if !o.status.success() => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        result.error = Some(format!(
+                            "acl SetAccessRule on {}: {}",
+                            path, stderr.trim()
+                        ));
                     }
-                }
-
-                // Disable inheritance if requested.
-                if !inherit {
-                    let _ = run_command("icacls", &[&path, "/inheritance:d", "/Q"]);
-                }
-
-                // Grant each entry.
-                for (principal, access) in &entries {
-                    let grant_spec = format!("{}:(OI)(CI){}", principal, access);
-                    match run_command("icacls", &[&path, "/grant", &grant_spec, "/Q"]) {
-                        Ok(o) if !o.status.success() => {
-                            result.error = Some(format!(
-                                "icacls grant {} on {}: {}",
-                                grant_spec, path, String::from_utf8_lossy(&o.stderr)
-                            ));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
-                        }
-                        Err(e) => {
-                            result.error = Some(format!("icacls grant {}: {}", grant_spec, e));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
-                        }
-                        _ => {}
+                    Err(e) => {
+                        result.error = Some(format!(
+                            "acl SetAccessRule on {}: {}",
+                            path, e
+                        ));
                     }
+                    _ => {}
                 }
             }
             "absent" => {
-                // Remove specified entries.
-                let mut needs_change = false;
-                for (principal, access) in &entries {
-                    if Self::has_access(&current, principal, access) {
-                        needs_change = true;
-                    }
-                }
-
-                if !needs_change {
+                if !Self::rule_exists(&path, &identity, &rights, access_type) {
                     result.action = Action::None;
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
@@ -225,33 +186,109 @@ impl Executor for AclWindowsExecutor {
                     return result;
                 }
 
-                for (principal, _) in &entries {
-                    match run_command("icacls", &[&path, "/remove", principal, "/Q"]) {
-                        Ok(o) if !o.status.success() => {
-                            result.error = Some(format!(
-                                "icacls remove {} from {}: {}",
-                                principal, path, String::from_utf8_lossy(&o.stderr)
-                            ));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
-                        }
-                        Err(e) => {
-                            result.error = Some(format!("icacls remove {}: {}", principal, e));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
-                        }
-                        _ => {}
+                let ps = format!(
+                    "$acl = Get-Acl -Path '{}'; \
+                     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(\
+                         '{}', '{}', '{}', 'None', '{}'); \
+                     $acl.RemoveAccessRule($rule) | Out-Null; \
+                     Set-Acl -Path '{}' -AclObject $acl",
+                    path.replace('\'', "''"),
+                    identity.replace('\'', "''"),
+                    rights.replace('\'', "''"),
+                    inheritance,
+                    access_type,
+                    path.replace('\'', "''"),
+                );
+                match run_command("powershell.exe", &["-NoProfile", "-NonInteractive", "-Command", &ps]) {
+                    Ok(o) if !o.status.success() => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        result.error = Some(format!(
+                            "acl RemoveAccessRule on {}: {}",
+                            path, stderr.trim()
+                        ));
                     }
+                    Err(e) => {
+                        result.error = Some(format!(
+                            "acl RemoveAccessRule on {}: {}",
+                            path, e
+                        ));
+                    }
+                    _ => {}
                 }
             }
             other => {
                 result.error = Some(format!(
-                    "acl executor: unknown state {:?} (must be present or absent)", other
+                    "acl executor: unknown state {:?} (must be present or absent)",
+                    other
                 ));
             }
         }
 
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_path() {
+        let exec = AclWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("identity".to_string(), "BUILTIN\\Administrators".to_string());
+        params.insert("rights".to_string(), "FullControl".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("path param is required"));
+    }
+
+    #[test]
+    fn missing_identity() {
+        let exec = AclWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("path".to_string(), "C:\\test".to_string());
+        params.insert("rights".to_string(), "FullControl".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("identity param is required"));
+    }
+
+    #[test]
+    fn missing_rights() {
+        let exec = AclWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("path".to_string(), "C:\\test".to_string());
+        params.insert("identity".to_string(), "Users".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("rights param is required"));
+    }
+
+    #[test]
+    fn invalid_access_type() {
+        let exec = AclWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("path".to_string(), "C:\\test".to_string());
+        params.insert("identity".to_string(), "Users".to_string());
+        params.insert("rights".to_string(), "Read".to_string());
+        params.insert("type".to_string(), "Maybe".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("type must be Allow or Deny"));
+    }
+
+    #[test]
+    fn invalid_state() {
+        let exec = AclWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("path".to_string(), "C:\\test".to_string());
+        params.insert("identity".to_string(), "Users".to_string());
+        params.insert("rights".to_string(), "Read".to_string());
+        params.insert("state".to_string(), "bogus".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
     }
 }
