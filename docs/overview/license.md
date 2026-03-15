@@ -35,7 +35,7 @@ Every Hobnob server starts with a built-in free license:
 - **25 thralls** included
 - No license file needed
 - No expiration
-- All features except [federation](federation.md) — hub/spoke mode requires a paid license
+- All features except [spanner](spanner.md) — hub/spoke mode requires a paid license
 
 ## Enforcement Stages
 

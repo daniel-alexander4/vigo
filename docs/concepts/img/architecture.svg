@@ -83,7 +83,7 @@
   <text x="480" y="307" text-anchor="middle" font-size="11" fill="#2a69ac">Webhooks</text>
 
   <rect x="540" y="285" width="100" height="35" rx="6" fill="#f0f7ff" stroke="#90cdf4" stroke-width="1"/>
-  <text x="590" y="307" text-anchor="middle" font-size="11" fill="#2a69ac">Federation</text>
+  <text x="590" y="307" text-anchor="middle" font-size="11" fill="#2a69ac">Spanner</text>
 
   <rect x="650" y="285" width="100" height="35" rx="6" fill="#f0f7ff" stroke="#90cdf4" stroke-width="1"/>
   <text x="700" y="307" text-anchor="middle" font-size="11" fill="#2a69ac">AI Assistant</text>

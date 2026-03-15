@@ -25,9 +25,9 @@
         <a href="/query" class="nav-link{{if eq .ActiveNav "query"}} nav-link--active{{end}}">
             Query
         </a>
-        {{if .FederationEnabled}}
-        <a href="/federation" class="nav-link{{if eq .ActiveNav "federation"}} nav-link--active{{end}}">
-            Federation
+        {{if .SpannerEnabled}}
+        <a href="/spanner" class="nav-link{{if eq .ActiveNav "spanner"}} nav-link--active{{end}}">
+            Spanner
         </a>
         {{end}}
         <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">

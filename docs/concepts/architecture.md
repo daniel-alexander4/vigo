@@ -59,7 +59,7 @@ The admin CLI written in Go. It:
 | Registry | `server/registry/` | Enrollment: pattern match + token validation |
 | Secrets | `server/secrets/` | Pluggable secret backend (local, isopass) |
 | Compliance | `server/compliance/` | Per-thrall status: compliant/drifted/failing/stale/unknown |
-| Federation | `server/federation/` | Hub-spoke scaling with enrollment routing |
+| Spanner | `server/spanner/` | Hub-spoke scaling with enrollment routing |
 
 ## Related
 

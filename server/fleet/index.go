@@ -225,7 +225,7 @@ func (f *FleetIndex) ComplianceSummary() ComplianceCounters {
 }
 
 // ComplianceCounts returns the compliance breakdown as flat values.
-// Satisfies the federation.ComplianceSource interface.
+// Satisfies the spanner.ComplianceSource interface.
 func (f *FleetIndex) ComplianceCounts() (total, compliant, drifted, failing, stale, unknown int) {
 	c := f.ComplianceSummary()
 	return c.Total, c.Compliant, c.Drifted, c.Failing, c.Stale, c.Unknown

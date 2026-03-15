@@ -27,7 +27,7 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 var _ = time.Now // used by format
 
-// configSyncer is implemented by federation.Hub to push config to spokes.
+// configSyncer is implemented by spanner.Hub to push config to spokes.
 // Defined as an interface to avoid an import cycle.
 type configSyncer interface {
 	SyncConfigToSpokes(ctx context.Context, configDir string) error

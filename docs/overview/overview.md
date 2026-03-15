@@ -156,7 +156,7 @@ resources:
 
 ## Observability
 
-- Web UI (HTMX) — fleet dashboard, compliance gauges, run history, task/workflow execution, federation status
+- Web UI (HTMX) — fleet dashboard, compliance gauges, run history, task/workflow execution, spanner status
 - Prometheus metrics — 20+ gauges, counters, histograms at `GET /metrics`
 - Compliance monitoring — compliant / drifted / failing / stale / unknown classification per node
 - Compliance export — SIEM, CMDB, OSCAL endpoints (independently toggleable)
@@ -164,7 +164,7 @@ resources:
 - Email notifications — stale nodes, compliance thresholds, secret rotation, config reload failures
 - Audit log — config changes, enrollments, revocations, task executions
 
-## Federation
+## Spanner
 
 Hub-spoke topology for multi-site deployments. The hub routes enrollment to the nearest spoke by hostname pattern. Admin queries fan out from hub to all spokes. Per-spoke compliance breakdown and latency metrics. Thrall reassignment between spokes with zero re-enrollment. Spoke drain for maintenance.
 

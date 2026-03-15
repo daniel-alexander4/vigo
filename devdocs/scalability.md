@@ -93,7 +93,7 @@ With ~300 µs realistic per-check-in cost on cache hit:
 
 Each thrall checks in once per 240-360 seconds (5-min interval with 20% jitter). A 4-core server processing 10,000 check-ins/sec can serve ~3 million thralls at steady state. RWMutex contention under load, GC pauses, and network I/O reduce throughput further at scale.
 
-**Conservative realistic estimate:** 50,000-200,000 thralls on a single 4-core server with comfortable headroom. Beyond 200,000, consider federation (hub-spoke) or PostgreSQL for the write path.
+**Conservative realistic estimate:** 50,000-200,000 thralls on a single 4-core server with comfortable headroom. Beyond 200,000, consider spanner (hub-spoke) or PostgreSQL for the write path.
 
 ## Database Write Capacity
 
@@ -213,7 +213,7 @@ checkin:
   jitter_percent: 30
 ```
 
-At this scale, consider federation (hub-spoke) to distribute load across multiple servers.
+At this scale, consider spanner (hub-spoke) to distribute load across multiple servers.
 
 ## Comparison
 

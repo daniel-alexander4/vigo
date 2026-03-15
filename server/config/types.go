@@ -14,24 +14,24 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// FederationRole defines the server's role in a federated deployment.
-type FederationRole string
+// SpannerRole defines the server's role in a spanner deployment.
+type SpannerRole string
 
 const (
 	// RoleStandalone is the default: a single server handling everything.
-	RoleStandalone FederationRole = "standalone"
-	// RoleHub is the central server in a federated deployment.
+	RoleStandalone SpannerRole = "standalone"
+	// RoleHub is the central server in a spanner deployment.
 	// Handles UI, webhooks, bootstrap, and aggregates data from spokes.
-	RoleHub FederationRole = "hub"
+	RoleHub SpannerRole = "hub"
 	// RoleSpoke is a partition server handling agent check-ins for a
 	// subset of thralls. Disables webhooks, bootstrap, and secret watcher.
-	RoleSpoke FederationRole = "spoke"
+	RoleSpoke SpannerRole = "spoke"
 )
 
-// FederationSection configures hub-spoke federation. Omit entirely
+// SpannerSection configures hub-spoke spanner. Omit entirely
 // (or set role: standalone) for single-server deployments.
-type FederationSection struct {
-	Role         FederationRole     `yaml:"role"`          // standalone (default), hub, spoke
+type SpannerSection struct {
+	Role         SpannerRole        `yaml:"role"`          // standalone (default), hub, spoke
 	SpokeID      string             `yaml:"spoke_id"`      // required for spoke mode
 	HubAddr      string             `yaml:"hub_addr"`      // hub gRPC address (for spoke→hub status reporting)
 	Spokes       []SpokeEntry       `yaml:"spokes"`        // hub-only: spoke definitions
@@ -54,33 +54,33 @@ type SpokeEntry struct {
 	Patterns []string `yaml:"patterns"` // hostname glob patterns routed to this spoke
 }
 
-// Validate checks that federation config is internally consistent.
-func (f FederationSection) Validate() error {
+// Validate checks that spanner config is internally consistent.
+func (f SpannerSection) Validate() error {
 	role := f.Role
 	if role == "" || role == RoleStandalone {
 		return nil
 	}
 	if role == RoleHub {
 		if len(f.Spokes) == 0 {
-			return fmt.Errorf("federation.spokes is required when role is 'hub'")
+			return fmt.Errorf("spanner.spokes is required when role is 'hub'")
 		}
 		for i, s := range f.Spokes {
 			if s.ID == "" {
-				return fmt.Errorf("federation.spokes[%d].id is required", i)
+				return fmt.Errorf("spanner.spokes[%d].id is required", i)
 			}
 			if s.Addr == "" {
-				return fmt.Errorf("federation.spokes[%d].addr is required", i)
+				return fmt.Errorf("spanner.spokes[%d].addr is required", i)
 			}
 		}
 		return nil
 	}
 	if role == RoleSpoke {
 		if f.SpokeID == "" {
-			return fmt.Errorf("federation.spoke_id is required when role is 'spoke'")
+			return fmt.Errorf("spanner.spoke_id is required when role is 'spoke'")
 		}
 		return nil
 	}
-	return fmt.Errorf("federation.role must be standalone, hub, or spoke (got %q)", role)
+	return fmt.Errorf("spanner.role must be standalone, hub, or spoke (got %q)", role)
 }
 
 // ServerConfig represents the top-level server configuration from server.yaml.
@@ -92,7 +92,7 @@ type ServerConfig struct {
 	Watcher    WatcherSection   `yaml:"watcher"`
 	Secrets    secrets.Config   `yaml:"secrets"`
 	Bootstrap  BootstrapConfig  `yaml:"bootstrap"`
-	Federation FederationSection `yaml:"federation"`
+	Spanner    SpannerSection   `yaml:"spanner"`
 	Tuning     TuningSection    `yaml:"tuning"`
 	SMTP       SMTPSection      `yaml:"smtp"`
 	AI         AISection        `yaml:"ai"`

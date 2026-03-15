@@ -183,7 +183,7 @@ Two roles are supported:
 |--------|-------|--------|
 | View dashboards, thralls, runs, compliance | Yes | Yes |
 | View tasks, workflows, query results | Yes | Yes |
-| View docs, federation status | Yes | Yes |
+| View docs, spanner status | Yes | Yes |
 | Dispatch tasks | Yes | No |
 | Run workflows | Yes | No |
 | Execute queries | Yes | No |

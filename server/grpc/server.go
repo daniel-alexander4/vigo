@@ -16,7 +16,7 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
@@ -73,7 +73,7 @@ type ServerConfig struct {
 	KeepaliveTime       time.Duration // 0 → default 30s
 	KeepaliveTimeout    time.Duration // 0 → default 10s
 	StreamSendBuffer    int           // 0 → default 8
-	Hub              *federation.Hub // non-nil when role=hub
+	Hub              *spanner.Hub // non-nil when role=hub
 	SMTPNotifier     *hobnobsmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
 	TaskStore        *tasks.Store

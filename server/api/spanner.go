@@ -8,50 +8,50 @@ import (
 	"net/http"
 
 	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 )
 
-// FederationStatus is the response for GET /api/v1/federation/status.
-type FederationStatus struct {
-	Role    string                   `json:"role"`
-	SpokeID string                  `json:"spoke_id,omitempty"`
-	Spokes  []federation.SpokeStatus `json:"spokes,omitempty"`
+// SpannerStatus is the response for GET /api/v1/spanner/status.
+type SpannerStatus struct {
+	Role    string                  `json:"role"`
+	SpokeID string                 `json:"spoke_id,omitempty"`
+	Spokes  []spanner.SpokeStatus  `json:"spokes,omitempty"`
 }
 
-// FederationHandler serves federation status endpoints.
-type FederationHandler struct {
-	role    config.FederationRole
+// SpannerHandler serves spanner status endpoints.
+type SpannerHandler struct {
+	role    config.SpannerRole
 	spokeID string
-	hub     *federation.Hub
+	hub     *spanner.Hub
 }
 
-// NewFederationHandler creates a federation handler.
-func NewFederationHandler(role config.FederationRole, spokeID string, hub *federation.Hub) *FederationHandler {
-	return &FederationHandler{role: role, spokeID: spokeID, hub: hub}
+// NewSpannerHandler creates a spanner handler.
+func NewSpannerHandler(role config.SpannerRole, spokeID string, hub *spanner.Hub) *SpannerHandler {
+	return &SpannerHandler{role: role, spokeID: spokeID, hub: hub}
 }
 
-// RegisterRoutes mounts federation endpoints on the given mux.
-func (h *FederationHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/federation/status", h.handleStatus)
+// RegisterRoutes mounts spanner endpoints on the given mux.
+func (h *SpannerHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/spanner/status", h.handleStatus)
 	// Spoke drill-down (Phase 2)
 	if h.hub != nil {
-		mux.HandleFunc("GET /api/v1/federation/spokes/{id}", h.handleSpokeDetail)
-		mux.HandleFunc("GET /api/v1/federation/spokes/{id}/thralls", h.handleSpokeThralls)
-		mux.HandleFunc("GET /api/v1/federation/spokes/{id}/runs", h.handleSpokeRuns)
-		mux.HandleFunc("POST /api/v1/federation/spokes/{id}/push", h.handleSpokePush)
+		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}", h.handleSpokeDetail)
+		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/thralls", h.handleSpokeThralls)
+		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/runs", h.handleSpokeRuns)
+		mux.HandleFunc("POST /api/v1/spanner/spokes/{id}/push", h.handleSpokePush)
 		// Reassignment + drain (Phase 3)
-		mux.HandleFunc("POST /api/v1/federation/reassign", h.handleReassign)
-		mux.HandleFunc("POST /api/v1/federation/spokes/{id}/drain", h.handleDrain)
+		mux.HandleFunc("POST /api/v1/spanner/reassign", h.handleReassign)
+		mux.HandleFunc("POST /api/v1/spanner/spokes/{id}/drain", h.handleDrain)
 	}
 }
 
-func (h *FederationHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	role := string(h.role)
 	if role == "" {
 		role = "standalone"
 	}
 
-	resp := FederationStatus{
+	resp := SpannerStatus{
 		Role:    role,
 		SpokeID: h.spokeID,
 	}
@@ -64,7 +64,7 @@ func (h *FederationHandler) handleStatus(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (h *FederationHandler) handleSpokeDetail(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleSpokeDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	statuses := h.hub.SpokeStatuses(r.Context())
 	for _, s := range statuses {
@@ -77,7 +77,7 @@ func (h *FederationHandler) handleSpokeDetail(w http.ResponseWriter, r *http.Req
 	writeJSONError(w, http.StatusNotFound, "spoke not found")
 }
 
-func (h *FederationHandler) handleSpokeThralls(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleSpokeThralls(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	thralls, err := h.hub.SpokeListThralls(r.Context(), id)
 	if err != nil {
@@ -88,7 +88,7 @@ func (h *FederationHandler) handleSpokeThralls(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(map[string]any{"thralls": thralls})
 }
 
-func (h *FederationHandler) handleSpokeRuns(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleSpokeRuns(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	limit := int32(50)
 	runs, err := h.hub.SpokeListRuns(r.Context(), id, limit)
@@ -100,7 +100,7 @@ func (h *FederationHandler) handleSpokeRuns(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(map[string]any{"runs": runs})
 }
 
-func (h *FederationHandler) handleSpokePush(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleSpokePush(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
 		ThrallID string `json:"thrall_id"`
@@ -115,7 +115,7 @@ func (h *FederationHandler) handleSpokePush(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(map[string]any{"thralls_notified": count})
 }
 
-func (h *FederationHandler) handleReassign(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleReassign(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ThrallID    string `json:"thrall_id"`
 		FromSpokeID string `json:"from_spoke_id"`
@@ -140,7 +140,7 @@ func (h *FederationHandler) handleReassign(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(result)
 }
 
-func (h *FederationHandler) handleDrain(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleDrain(w http.ResponseWriter, r *http.Request) {
 	spokeID := r.PathValue("id")
 	var req struct {
 		TargetSpokeID string `json:"target_spoke_id"`

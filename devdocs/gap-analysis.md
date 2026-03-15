@@ -14,7 +14,7 @@ Last updated: 2026-03-15
 | 2 | Maintenance windows / change freeze | Critical | Resolved — per-thrall + global freeze_until |
 | 3 | Config change attribution | Critical | Resolved — publish audit trail with operator, diffs |
 | 4 | Resource execution timeouts | Critical | Resolved — per-resource timeout via runner |
-| 5 | Horizontal scaling / HA | Critical | Partially resolved — federation + auto-failover. P2P design doc written |
+| 5 | Horizontal scaling / HA | Critical | Partially resolved — spanner + auto-failover. P2P design doc written |
 | 6 | Config rollback | High | Resolved — timestamped snapshots, version-based rollback |
 | 7 | Node tagging / classification | High | Resolved — tags on thralls, tag-based targeting |
 | 8 | Per-resource rollback beyond files | High | **Deferred** |
@@ -32,9 +32,9 @@ Last updated: 2026-03-15
 | 20 | Phased rollout | Medium | **Deferred** — rolling execution covers batch + health check |
 | 21 | Web UI authentication | High | Resolved — basic auth default, OIDC, isowebauth |
 | 22 | Admin UI for server management | High | Resolved — admin section with 6 pages |
-| 23 | Federation config sync | High | Resolved — hub pushes config to spokes on publish |
-| 24 | Federation auto-failover | High | Resolved — hub auto-drains unhealthy spokes |
-| 25 | Federation spoke→hub reporting | Medium | Resolved — spokes push status via hub_addr |
+| 23 | Spanner config sync | High | Resolved — hub pushes config to spokes on publish |
+| 24 | Spanner auto-failover | High | Resolved — hub auto-drains unhealthy spokes |
+| 25 | Spanner spoke→hub reporting | Medium | Resolved — spokes push status via hub_addr |
 | 26 | Backup management via web UI | Medium | Resolved — snapshot creation + browser download |
 
 ---
@@ -73,15 +73,15 @@ Dedicated admin area with its own layout and sidebar navigation. Six admin pages
 
 Top bar with user identity and pill-shaped logout button across all pages.
 
-### Federation Config Sync (Gap 23)
+### Spanner Config Sync (Gap 23)
 
 Hub automatically pushes `.live/` config directory to all spokes on config publish. Uses `SyncConfig` gRPC RPC with tar.gz payload. Best-effort per spoke — partial failures logged but don't block publish. Path traversal protection on archive extraction.
 
-### Federation Auto-Failover (Gap 24)
+### Spanner Auto-Failover (Gap 24)
 
-Background goroutine on hub periodically probes spoke health (default 30s). After configurable consecutive failures (default 3 = 90s), automatically drains all thralls to other healthy spokes based on hostname pattern matching. Spokes marked healthy again on recovery. Configurable via `federation.auto_failover` in server.yaml.
+Background goroutine on hub periodically probes spoke health (default 30s). After configurable consecutive failures (default 3 = 90s), automatically drains all thralls to other healthy spokes based on hostname pattern matching. Spokes marked healthy again on recovery. Configurable via `spanner.auto_failover` in server.yaml.
 
-### Federation Spoke Reporting (Gap 25)
+### Spanner Spoke Reporting (Gap 25)
 
 Spokes proactively push compliance metrics to hub via `ReportSpokeStatus` gRPC RPC (every 30s). Uses the previously unused `hub_addr` config field. Hub merges self-reports with probe results — if a spoke is unreachable but has a recent report, last-known compliance data is preserved. Graceful degradation: spoke operates normally if hub unreachable.
 
@@ -93,7 +93,7 @@ Two new REST endpoints: `POST /api/v1/backup/snapshot` (create archive) and `GET
 
 - **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (hobnob, hobd, hobnob-license-manager). CLI stays at `/usr/local/bin/hobnobcli`.
 - **Package timeout**: default increased from 60s to 300s for package and repository executors (arm64/low-powered hardware was timing out during apt installs).
-- **P2P federation architecture document**: design doc for future peer-to-peer federation eliminating hub as SPOF. Covers git-based config, peer discovery, leader election. Not implemented — hub-spoke sufficient for current use.
+- **P2P spanner architecture document**: design doc for future peer-to-peer spanner eliminating hub as SPOF. Covers git-based config, peer discovery, leader election. Not implemented — hub-spoke sufficient for current use.
 
 ---
 

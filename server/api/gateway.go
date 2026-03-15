@@ -21,7 +21,7 @@ import (
 	"github.com/hobnob/hobnob/server/bootstrap"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/ui"
@@ -32,7 +32,7 @@ import (
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
 // at the given address using mTLS credentials. It registers the HobnobAdmin
 // service handlers on /api/ paths and mounts the web UI on /.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *hobnobai.Assistant, hub *federation.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, gwOpts ...GatewayOption) (*http.ServeMux, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *hobnobai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, gwOpts ...GatewayOption) (*http.ServeMux, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {

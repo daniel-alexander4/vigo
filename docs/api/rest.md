@@ -276,7 +276,7 @@ Health check endpoint that validates server subsystems.
     {"name": "tls", "status": "pass", "message": "expires 2027-03-13"},
     {"name": "secrets", "status": "pass", "message": "local"},
     {"name": "license", "status": "pass", "message": "compliant, 12/25 thralls"},
-    {"name": "federation", "status": "skip", "message": "standalone"},
+    {"name": "spanner", "status": "skip", "message": "standalone"},
     {"name": "smtp", "status": "skip", "message": "not configured"},
     {"name": "config", "status": "pass", "message": "15 modules, 8 entries"},
     {"name": "stale_thralls", "status": "pass"}
@@ -372,29 +372,29 @@ Query thralls by trait values.
 
 ---
 
-## Federation
+## Spanner
 
-### GET /api/v1/federation/status
+### GET /api/v1/spanner/status
 
-Returns federation role and spoke statuses (hub mode only).
+Returns spanner role and spoke statuses (hub mode only).
 
-### GET /api/v1/federation/spokes/{id}
+### GET /api/v1/spanner/spokes/{id}
 
 Returns detailed status for a single spoke.
 
-### GET /api/v1/federation/spokes/{id}/thralls
+### GET /api/v1/spanner/spokes/{id}/thralls
 
 List thralls on a specific spoke.
 
-### GET /api/v1/federation/spokes/{id}/runs
+### GET /api/v1/spanner/spokes/{id}/runs
 
 List recent runs on a specific spoke.
 
-### POST /api/v1/federation/spokes/{id}/push
+### POST /api/v1/spanner/spokes/{id}/push
 
 Force-push to thralls on a specific spoke.
 
-### POST /api/v1/federation/reassign
+### POST /api/v1/spanner/reassign
 
 Reassign a thrall from one spoke to another.
 
@@ -408,7 +408,7 @@ Reassign a thrall from one spoke to another.
 }
 ```
 
-### POST /api/v1/federation/spokes/{id}/drain
+### POST /api/v1/spanner/spokes/{id}/drain
 
 Drain all thralls from a spoke (move to target spoke or auto-route by patterns).
 

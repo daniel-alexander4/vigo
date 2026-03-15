@@ -53,7 +53,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 
 ## Scaling
 
-- [Federation](concepts/federation.md) — Hub-spoke scaling
+- [Spanner](concepts/spanner.md) — Hub-spoke scaling
 - [License](concepts/license.md) — Free tier, pricing, and enforcement stages
 
 ## Web UI
@@ -65,7 +65,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Tasks](ui/tasks.md) — Ad-hoc task execution
 - [Workflows](ui/workflows.md) — Multi-step orchestration
 - [Query](ui/query.md) — Live fleet queries
-- [Federation](ui/federation.md) — Hub-spoke dashboard
+- [Spanner](ui/spanner.md) — Hub-spoke dashboard
 - [License](ui/license.md) — License status and usage
 - [Security](ui/security.md) — AI chat and compliance
 

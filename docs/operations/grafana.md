@@ -7,7 +7,7 @@ Pre-built Grafana dashboards for monitoring Hobnob via Prometheus.
 | Dashboard | Panels | Download |
 |-----------|--------|----------|
 | **Fleet Overview** | 28 panels across 7 rows: fleet stats, compliance breakdown, check-ins & gRPC latency, convergence & drift, operations (tasks/workflows/enrollments), infrastructure (config reload, FleetIndex flush), webhooks & SMTP, secrets, AI assistant | [hobnob-overview.json](grafana/hobnob-overview.json) |
-| **Federation** | 2 panels: spoke availability (UP/DOWN status map) and spoke latency (p50/p95 time series) | [hobnob-federation.json](grafana/hobnob-federation.json) |
+| **Spanner** | 2 panels: spoke availability (UP/DOWN status map) and spoke latency (p50/p95 time series) | [hobnob-spanner.json](grafana/hobnob-spanner.json) |
 
 ## Import
 
@@ -99,16 +99,16 @@ Pre-built Grafana dashboards for monitoring Hobnob via Prometheus.
 | AI Latency (p50/p95) | Time series | `histogram_quantile` on `hobnob_ai_request_duration_seconds` |
 | AI Errors | Stat (green/red) | `hobnob_ai_errors_total` |
 
-## Federation Dashboard
+## Spanner Dashboard
 
-[Download hobnob-federation.json](grafana/hobnob-federation.json)
+[Download hobnob-spanner.json](grafana/hobnob-spanner.json)
 
 Only populated on hub servers.
 
 | Panel | Type | Metric |
 |-------|------|--------|
-| Spoke Availability | Stat with UP/DOWN mapping | `hobnob_federation_spoke_up` by `spoke_id` |
-| Spoke Latency (p50/p95) | Time series by spoke | `histogram_quantile` on `hobnob_federation_spoke_latency_seconds` |
+| Spoke Availability | Stat with UP/DOWN mapping | `hobnob_spanner_spoke_up` by `spoke_id` |
+| Spoke Latency (p50/p95) | Time series by spoke | `histogram_quantile` on `hobnob_spanner_spoke_latency_seconds` |
 
 ## Prometheus Configuration
 
@@ -163,9 +163,9 @@ groups:
           summary: "ED25519 signature verification failures detected"
 
       - alert: HobnobSpokeDown
-        expr: hobnob_federation_spoke_up == 0
+        expr: hobnob_spanner_spoke_up == 0
         for: 5m
         labels: { severity: critical }
         annotations:
-          summary: "Federation spoke {{ $labels.spoke_id }} is down"
+          summary: "Spanner spoke {{ $labels.spoke_id }} is down"
 ```

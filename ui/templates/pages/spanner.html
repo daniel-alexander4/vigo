@@ -1,6 +1,6 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Federation</h1>
+    <h1>Spanner</h1>
     <p>Hub status and spoke health</p>
 </div>
 
@@ -53,7 +53,7 @@
         <tbody>
             {{range .Spokes}}
             <tr>
-                <td><a href="/federation/spokes/{{.ID}}"><strong>{{.ID}}</strong></a></td>
+                <td><a href="/spanner/spokes/{{.ID}}"><strong>{{.ID}}</strong></a></td>
                 <td class="text-muted">{{.Addr}}</td>
                 <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
                 <td>{{.ThrallCount}}</td>

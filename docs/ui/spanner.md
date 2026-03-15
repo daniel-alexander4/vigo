@@ -1,6 +1,6 @@
-# Federation
+# Spanner
 
-The Federation page shows hub-spoke topology and health. Available at `/federation`. Only visible in hub mode.
+The Spanner page shows hub-spoke topology and health. Available at `/spanner`. Only visible in hub mode.
 
 ## Layout
 
@@ -22,7 +22,7 @@ Seven top-level stat cards:
 
 | Column | Description |
 |--------|-------------|
-| Spoke ID | Clickable link to spoke detail page (`/federation/spokes/{id}`) |
+| Spoke ID | Clickable link to spoke detail page (`/spanner/spokes/{id}`) |
 | Address | gRPC address of the spoke |
 | Patterns | Hostname glob patterns routed to this spoke |
 | Thralls | Number of thralls on this spoke |
@@ -39,6 +39,6 @@ Seven top-level stat cards:
 
 ## Data Sources
 
-- Spoke statuses: `federation.Hub.SpokeStatuses()` which queries each spoke via gRPC
+- Spoke statuses: `spanner.Hub.SpokeStatuses()` which queries each spoke via gRPC
 - Per-spoke compliance: Aggregated from spoke responses including thrall counts, compliance breakdown, and latency measurements
 - The hub periodically polls spokes for status updates

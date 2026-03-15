@@ -1,14 +1,14 @@
-# hobnobcli federation
+# hobnobcli spanner
 
-Manage and inspect hub-spoke federation status, including spoke health, compliance, thrall reassignment, and spoke draining.
+Manage and inspect hub-spoke spanner status, including spoke health, compliance, thrall reassignment, and spoke draining.
 
-> **Note:** Federation requires a paid license. The server will not start in hub or spoke mode on the built-in free license.
+> **Note:** Spanner requires a paid license. The server will not start in hub or spoke mode on the built-in free license.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
-| `status` | Show federation role and spoke health |
+| `status` | Show spanner role and spoke health |
 | `spokes` | List all spokes |
 | `spoke` | Show spoke detail and compliance |
 | `spoke-thralls` | List thralls on a spoke |
@@ -20,21 +20,21 @@ Manage and inspect hub-spoke federation status, including spoke health, complian
 ## Usage
 
 ```bash
-hobnobcli federation [subcommand] [flags]
+hobnobcli spanner [subcommand] [flags]
 ```
 
 ## status
 
-Show the federation role and an overview of all spokes with health, compliance, and latency.
+Show the spanner role and an overview of all spokes with health, compliance, and latency.
 
 ```bash
-hobnobcli federation status
+hobnobcli spanner status
 ```
 
 ### Example
 
 ```bash
-hobnobcli federation status
+hobnobcli spanner status
 ```
 
 ```
@@ -53,7 +53,7 @@ hobnobcli federation status
 List all spokes in a compact table format.
 
 ```bash
-hobnobcli federation spokes
+hobnobcli spanner spokes
 ```
 
 ### Example output
@@ -70,13 +70,13 @@ hobnobcli federation spokes
 Show detailed information for a specific spoke, including compliance breakdown.
 
 ```bash
-hobnobcli federation spoke <spoke-id>
+hobnobcli spanner spoke <spoke-id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli federation spoke east
+hobnobcli spanner spoke east
 ```
 
 ```
@@ -100,13 +100,13 @@ hobnobcli federation spoke east
 List all thralls enrolled on a specific spoke.
 
 ```bash
-hobnobcli federation spoke-thralls <spoke-id>
+hobnobcli spanner spoke-thralls <spoke-id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli federation spoke-thralls east
+hobnobcli spanner spoke-thralls east
 ```
 
 ```
@@ -121,13 +121,13 @@ hobnobcli federation spoke-thralls east
 List recent runs on a specific spoke.
 
 ```bash
-hobnobcli federation spoke-runs <spoke-id>
+hobnobcli spanner spoke-runs <spoke-id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli federation spoke-runs east
+hobnobcli spanner spoke-runs east
 ```
 
 ```
@@ -141,7 +141,7 @@ hobnobcli federation spoke-runs east
 Force push an immediate check-in on a spoke, optionally targeting a specific thrall.
 
 ```bash
-hobnobcli federation spoke-push <spoke-id> [flags]
+hobnobcli spanner spoke-push <spoke-id> [flags]
 ```
 
 ### Flags
@@ -153,7 +153,7 @@ hobnobcli federation spoke-push <spoke-id> [flags]
 ### Examples
 
 ```bash
-hobnobcli federation spoke-push east
+hobnobcli spanner spoke-push east
 ```
 
 ```
@@ -161,7 +161,7 @@ hobnobcli federation spoke-push east
 ```
 
 ```bash
-hobnobcli federation spoke-push east --thrall-id a1b2c3d4
+hobnobcli spanner spoke-push east --thrall-id a1b2c3d4
 ```
 
 ```
@@ -173,7 +173,7 @@ hobnobcli federation spoke-push east --thrall-id a1b2c3d4
 Reassign a thrall from one spoke to another. The agent reconnects on its next check-in.
 
 ```bash
-hobnobcli federation reassign <thrall-id> --from <spoke-id> --to <spoke-id>
+hobnobcli spanner reassign <thrall-id> --from <spoke-id> --to <spoke-id>
 ```
 
 ### Flags
@@ -186,7 +186,7 @@ hobnobcli federation reassign <thrall-id> --from <spoke-id> --to <spoke-id>
 ### Example
 
 ```bash
-hobnobcli federation reassign a1b2c3d4 --from east --to west
+hobnobcli spanner reassign a1b2c3d4 --from east --to west
 ```
 
 ```
@@ -201,7 +201,7 @@ hobnobcli federation reassign a1b2c3d4 --from east --to west
 Drain all thralls from a spoke, redistributing them to another spoke or auto-routing by pattern.
 
 ```bash
-hobnobcli federation drain <spoke-id> [flags]
+hobnobcli spanner drain <spoke-id> [flags]
 ```
 
 ### Flags
@@ -215,7 +215,7 @@ hobnobcli federation drain <spoke-id> [flags]
 #### Drain to a specific spoke
 
 ```bash
-hobnobcli federation drain east --to west
+hobnobcli spanner drain east --to west
 ```
 
 ```
@@ -225,7 +225,7 @@ hobnobcli federation drain east --to west
 #### Drain with auto-routing
 
 ```bash
-hobnobcli federation drain east
+hobnobcli spanner drain east
 ```
 
 ```

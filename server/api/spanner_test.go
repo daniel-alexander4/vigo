@@ -10,15 +10,15 @@ import (
 	"testing"
 
 	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 )
 
-func TestFederationStatusStandalone(t *testing.T) {
-	handler := NewFederationHandler("", "", nil)
+func TestSpannerStatusStandalone(t *testing.T) {
+	handler := NewSpannerHandler("", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/federation/status", nil)
+	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -26,7 +26,7 @@ func TestFederationStatusStandalone(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp FederationStatus
+	var resp SpannerStatus
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -42,12 +42,12 @@ func TestFederationStatusStandalone(t *testing.T) {
 	}
 }
 
-func TestFederationStatusWithSpokeRole(t *testing.T) {
-	handler := NewFederationHandler(config.RoleSpoke, "spoke-east-1", nil)
+func TestSpannerStatusWithSpokeRole(t *testing.T) {
+	handler := NewSpannerHandler(config.RoleSpoke, "spoke-east-1", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/federation/status", nil)
+	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -55,7 +55,7 @@ func TestFederationStatusWithSpokeRole(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp FederationStatus
+	var resp SpannerStatus
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -68,13 +68,13 @@ func TestFederationStatusWithSpokeRole(t *testing.T) {
 	}
 }
 
-func TestFederationStatusHubNilSpokes(t *testing.T) {
+func TestSpannerStatusHubNilSpokes(t *testing.T) {
 	// Hub role but nil hub -- no spokes connected. Status still returns role.
-	handler := NewFederationHandler(config.RoleHub, "", nil)
+	handler := NewSpannerHandler(config.RoleHub, "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/federation/status", nil)
+	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -82,7 +82,7 @@ func TestFederationStatusHubNilSpokes(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp FederationStatus
+	var resp SpannerStatus
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -96,12 +96,12 @@ func TestFederationStatusHubNilSpokes(t *testing.T) {
 	}
 }
 
-func TestFederationStatusResponseFormat(t *testing.T) {
-	handler := NewFederationHandler("", "", nil)
+func TestSpannerStatusResponseFormat(t *testing.T) {
+	handler := NewSpannerHandler("", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/federation/status", nil)
+	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -113,7 +113,7 @@ func TestFederationStatusResponseFormat(t *testing.T) {
 
 func TestSpokeDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 	// When hub is nil, spoke drill-down routes should not be registered.
-	handler := NewFederationHandler(config.RoleStandalone, "", nil)
+	handler := NewSpannerHandler(config.RoleStandalone, "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -121,12 +121,12 @@ func TestSpokeDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 		method string
 		path   string
 	}{
-		{"GET", "/api/v1/federation/spokes/spoke-1"},
-		{"GET", "/api/v1/federation/spokes/spoke-1/thralls"},
-		{"GET", "/api/v1/federation/spokes/spoke-1/runs"},
-		{"POST", "/api/v1/federation/spokes/spoke-1/push"},
-		{"POST", "/api/v1/federation/reassign"},
-		{"POST", "/api/v1/federation/spokes/spoke-1/drain"},
+		{"GET", "/api/v1/spanner/spokes/spoke-1"},
+		{"GET", "/api/v1/spanner/spokes/spoke-1/thralls"},
+		{"GET", "/api/v1/spanner/spokes/spoke-1/runs"},
+		{"POST", "/api/v1/spanner/spokes/spoke-1/push"},
+		{"POST", "/api/v1/spanner/reassign"},
+		{"POST", "/api/v1/spanner/spokes/spoke-1/drain"},
 	}
 
 	for _, ep := range endpoints {
@@ -144,13 +144,13 @@ func TestSpokeDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 	}
 }
 
-func TestFederationStatusJSON(t *testing.T) {
+func TestSpannerStatusJSON(t *testing.T) {
 	// Verify the JSON structure has the expected keys.
-	handler := NewFederationHandler(config.RoleSpoke, "east-1", nil)
+	handler := NewSpannerHandler(config.RoleSpoke, "east-1", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/federation/status", nil)
+	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -167,5 +167,5 @@ func TestFederationStatusJSON(t *testing.T) {
 	}
 }
 
-// Verify the FederationStatus type matches the expected JSON structure.
-var _ = federation.SpokeStatus{} // ensure type is importable
+// Verify the SpannerStatus type matches the expected JSON structure.
+var _ = spanner.SpokeStatus{} // ensure type is importable

@@ -64,7 +64,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- Hub-spoke federation, AI assistant, compliance export, RBAC, all 74 executors, all integrations
+- Hub-spoke spanner, AI assistant, compliance export, RBAC, all 74 executors, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–25 nodes) includes all features with no time limit.

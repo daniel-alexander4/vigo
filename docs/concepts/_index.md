@@ -13,7 +13,7 @@ Core concepts that explain how Hobnob works.
 - [Compiled Promises](compiled-promises.md) — Bundle signing, TTL, offline convergence
 - [Compliance](compliance.md) — Per-resource to fleet-wide compliance
 - [Secrets](secrets.md) — Two backends and the secret: prefix
-- [Federation](federation.md) — Hub-spoke scaling
+- [Spanner](spanner.md) — Hub-spoke scaling
 - [License](license.md) — Free tier and enforcement stages
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
 - [Custom Executors](custom-executors.md) — JSON stdin/stdout protocol

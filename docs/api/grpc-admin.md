@@ -184,9 +184,9 @@ See [Webhooks](webhooks.md) for payload format and signing details.
 
 ---
 
-### Federation (Internal)
+### Spanner (Internal)
 
-These RPCs are used for hub-to-spoke communication in federated deployments:
+These RPCs are used for hub-to-spoke communication in spanner deployments:
 
 | RPC | Description |
 |-----|-------------|

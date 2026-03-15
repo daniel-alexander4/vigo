@@ -145,19 +145,19 @@ var (
 		Help: "Total SMTP email sends by event and status.",
 	}, []string{"event", "status"})
 
-	// --- Federation ---
+	// --- Spanner ---
 
-	// FederationSpokeLatency observes spoke RPC latency by spoke ID.
-	FederationSpokeLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "hobnob_federation_spoke_latency_seconds",
-		Help:    "Federation spoke RPC latency in seconds.",
+	// SpannerSpokeLatency observes spoke RPC latency by spoke ID.
+	SpannerSpokeLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "hobnob_spanner_spoke_latency_seconds",
+		Help:    "Spanner spoke RPC latency in seconds.",
 		Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
 	}, []string{"spoke"})
 
-	// FederationSpokeUp indicates spoke reachability (1=up, 0=down).
-	FederationSpokeUp = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "hobnob_federation_spoke_up",
-		Help: "Whether a federation spoke is reachable (1=up, 0=down).",
+	// SpannerSpokeUp indicates spoke reachability (1=up, 0=down).
+	SpannerSpokeUp = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "hobnob_spanner_spoke_up",
+		Help: "Whether a spanner spoke is reachable (1=up, 0=down).",
 	}, []string{"spoke"})
 
 	// --- License ---

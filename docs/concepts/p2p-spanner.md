@@ -1,6 +1,6 @@
-# P2P Federation Architecture (Future)
+# P2P Spanner Architecture (Future)
 
-This document describes a peer-to-peer federation model that eliminates the hub as a single point of failure. This is a design document — the current implementation uses hub-spoke federation, which is sufficient for most deployments.
+This document describes a peer-to-peer spanner model that eliminates the hub as a single point of failure. This is a design document — the current implementation uses hub-spoke spanner, which is sufficient for most deployments.
 
 ## Motivation
 
@@ -96,7 +96,7 @@ Peers need to find each other. Options:
 ### Static configuration
 
 ```yaml
-federation:
+spanner:
   role: peer
   peer_id: "dc1"
   peers:
@@ -111,7 +111,7 @@ Simple, explicit, works for fixed infrastructure. Adding a peer requires config 
 ### DNS SRV records
 
 ```yaml
-federation:
+spanner:
   role: peer
   peer_id: "dc1"
   discovery: dns
@@ -125,7 +125,7 @@ Peers query DNS SRV records to discover each other. Adding a peer requires only 
 Peers use a gossip protocol (e.g., Serf/memberlist) to discover and monitor each other. Only one seed peer address is needed.
 
 ```yaml
-federation:
+spanner:
   role: peer
   peer_id: "dc1"
   discovery: gossip
@@ -182,7 +182,7 @@ The web UI includes a peer selector or automatically queries all peers. The peer
 | Majority of peers down | Loss of quorum (Raft only). Read-only mode. Agents continue with cached policy. | Restore peers, quorum recovers. |
 | Network partition | Each partition operates independently. Thralls converge locally. | Heal partition, peers reconcile. |
 
-The critical insight: agents always have cached policy and offline convergence. The control plane can be entirely down and agents continue enforcing desired state. P2P federation improves control plane availability, not data plane availability (which is already resilient).
+The critical insight: agents always have cached policy and offline convergence. The control plane can be entirely down and agents continue enforcing desired state. P2P spanner improves control plane availability, not data plane availability (which is already resilient).
 
 ## Migration Path
 
@@ -194,7 +194,7 @@ Moving from hub-spoke to P2P:
 4. Peer discovery configured (static, DNS, or gossip)
 5. Agents don't change — they still connect to their assigned peer's gRPC address
 
-The agent protocol is unchanged. P2P federation is purely a server-side topology change.
+The agent protocol is unchanged. P2P spanner is purely a server-side topology change.
 
 ## When to Use P2P vs Hub-Spoke
 

@@ -81,10 +81,10 @@ watcher:
 #   recipients:
 #     - "admin@example.com"
 
-# ── Federation ────────────────────────────────────────────────────────────
+# ── Spanner ────────────────────────────────────────────────────────────
 # Requires a paid license. See server.yaml.example for hub/spoke setup.
 #
-# federation:
+# spanner:
 #   role: standalone                           # standalone | hub | spoke
 
 # ── AI Assistant ──────────────────────────────────────────────────────────

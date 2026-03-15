@@ -168,7 +168,7 @@ The conservative 50K-200K estimate accounts for: real-world GC pauses under sust
 
 | | Horizontal approach | Automatic failover | Config sync | Enrollment routing |
 |---|---|---|---|---|
-| Hobnob | Hub-spoke federation | Yes (auto-drain at configurable threshold) | Yes (tar.gz push on publish) | Yes (hostname pattern matching) |
+| Hobnob | Hub-spoke spanner | Yes (auto-drain at configurable threshold) | Yes (tar.gz push on publish) | Yes (hostname pattern matching) |
 | Puppet | Compile masters + PuppetDB replication | Manual | Via code manager / r10k | Via ENC or Hiera |
 | Chef | Multi-org, Chef HA (deprecated), Automate | Manual | Via Chef Server replication | N/A |
 | Ansible | Tower/AWX clusters | Via HA proxy | Via SCM (git) | N/A (push model) |
@@ -199,7 +199,7 @@ Puppet's catalog compilation is the most expensive per-node operation. CFEngine 
 
 Hobnob and CFEngine are in the same class — orders of magnitude more memory-efficient than Ruby/Python-based tools. This is a direct consequence of compiled languages with intentional data structure design vs. dynamic language object overhead.
 
-Hobnob's federation is simpler to configure than Puppet's compile master infrastructure or Salt's syndic topology. The auto-failover and config sync features are unusual — most CM tools require manual intervention when a spoke/compile-master goes down.
+Hobnob's spanner is simpler to configure than Puppet's compile master infrastructure or Salt's syndic topology. The auto-failover and config sync features are unusual — most CM tools require manual intervention when a spoke/compile-master goes down.
 
 ## Operational Characteristics
 

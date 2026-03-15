@@ -65,12 +65,12 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 |--------|------|--------|-------------|
 | `hobnob_smtp_sends_total` | Counter | `event`, `status` | Email send attempts by event type and outcome (success, error) |
 
-### Federation
+### Spanner
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `hobnob_federation_spoke_latency_seconds` | Histogram | `spoke` | Spoke RPC probe latency in seconds |
-| `hobnob_federation_spoke_up` | Gauge | `spoke` | Spoke reachability (1=up, 0=down) |
+| `hobnob_spanner_spoke_latency_seconds` | Histogram | `spoke` | Spoke RPC probe latency in seconds |
+| `hobnob_spanner_spoke_up` | Gauge | `spoke` | Spoke reachability (1=up, 0=down) |
 
 Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
 
@@ -195,10 +195,10 @@ scrape_configs:
 - Alert on `hobnob_license_thralls_used / hobnob_license_thralls_max > 0.9` (approaching limit)
 - Alert on `hobnob_license_days_remaining < 30` (license expiring soon)
 
-### Federation
+### Spanner
 
-- **Spoke latency**: `histogram_quantile(0.95, rate(hobnob_federation_spoke_latency_seconds_bucket[5m]))`
-- Alert on `hobnob_federation_spoke_up == 0` (spoke unreachable)
+- **Spoke latency**: `histogram_quantile(0.95, rate(hobnob_spanner_spoke_latency_seconds_bucket[5m]))`
+- Alert on `hobnob_spanner_spoke_up == 0` (spoke unreachable)
 
 ### Server Health
 

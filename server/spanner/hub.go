@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package federation provides hub-spoke coordination for federated deployments.
+// Package spanner provides hub-spoke coordination for spanner deployments.
 // The Hub connects to spoke servers via gRPC and aggregates admin queries
 // (ListThralls, GetComplianceSummary, ListRuns, ForcePush) across all spokes.
-package federation
+package spanner
 
 import (
 	"archive/tar"
@@ -357,9 +357,9 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Error = r.err.Error()
 			if pr, ok := r.value.(*probeResult); ok {
 				statuses[i].LatencyMs = pr.latency.Milliseconds()
-				metrics.FederationSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+				metrics.SpannerSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
 			}
-			metrics.FederationSpokeUp.WithLabelValues(sc.id).Set(0)
+			metrics.SpannerSpokeUp.WithLabelValues(sc.id).Set(0)
 
 			// If probe failed but we have a self-report from the spoke,
 			// populate compliance data so dashboards are not blank.
@@ -383,8 +383,8 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Unknown = pr.resp.Unknown
 			statuses[i].CompliancePct = pr.resp.CompliancePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()
-			metrics.FederationSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
-			metrics.FederationSpokeUp.WithLabelValues(sc.id).Set(1)
+			metrics.SpannerSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+			metrics.SpannerSpokeUp.WithLabelValues(sc.id).Set(1)
 		}
 	}
 	return statuses

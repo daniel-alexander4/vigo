@@ -26,7 +26,7 @@ import (
 	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/license"
 )
 
@@ -57,7 +57,7 @@ type Handler struct {
 	agentDir     string
 	version      string
 	assistant    *ai.Assistant
-	hub          *federation.Hub
+	hub          *spanner.Hub
 	docsDir      string
 	docsNav      []DocsNavSection
 	enforcer     *license.Enforcer
@@ -71,7 +71,7 @@ type Handler struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *federation.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *spanner.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -149,10 +149,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/thrall-runs/{id}", h.ThrallRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/thrall-facts/{id}", h.ThrallFactsFragment)
 
-	// Federation pages (only registered when running as hub)
+	// Spanner pages (only registered when running as hub)
 	if h.hub != nil {
-		mux.HandleFunc("GET /federation", h.Federation)
-		mux.HandleFunc("GET /federation/spokes/{id}", h.SpokeDetail)
+		mux.HandleFunc("GET /spanner", h.Spanner)
+		mux.HandleFunc("GET /spanner/spokes/{id}", h.SpokeDetail)
 	}
 
 	// Docs pages (only registered when docsDir is configured and exists)
@@ -190,7 +190,7 @@ type PageData struct {
 	ActiveNav         string
 	Version           string
 	AIEnabled         bool
-	FederationEnabled bool
+	SpannerEnabled bool
 	AuthEnabled       bool
 	AuthMethod        string
 	CurrentUser       *AuthUser
@@ -826,11 +826,11 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "docs", data)
 }
 
-// setCommon applies version, AI-enabled, federation, auth, and license flags to page data.
+// setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	pd.AIEnabled = h.assistant != nil
-	pd.FederationEnabled = h.hub != nil
+	pd.SpannerEnabled = h.hub != nil
 	pd.AuthEnabled = h.authEnabled
 	pd.AuthMethod = h.authMethod
 
@@ -1824,8 +1824,8 @@ func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
 	return row
 }
 
-// FederationSpokeRow represents a spoke in the federation UI table.
-type FederationSpokeRow struct {
+// SpannerSpokeRow represents a spoke in the spanner UI table.
+type SpannerSpokeRow struct {
 	ID            string
 	Addr          string
 	Patterns      []string
@@ -1841,8 +1841,8 @@ type FederationSpokeRow struct {
 	Error         string
 }
 
-// FederationPageData holds data for the federation page.
-type FederationPageData struct {
+// SpannerPageData holds data for the spanner page.
+type SpannerPageData struct {
 	PageData
 	SpokeCount     int
 	HealthyCount   int
@@ -1851,18 +1851,18 @@ type FederationPageData struct {
 	TotalDrifted   int32
 	TotalFailing   int32
 	CompliancePct  float32
-	Spokes         []FederationSpokeRow
+	Spokes         []SpannerSpokeRow
 }
 
-// Federation renders the federation hub status page.
-func (h *Handler) Federation(w http.ResponseWriter, r *http.Request) {
+// Spanner renders the spanner hub status page.
+func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 	statuses := h.hub.SpokeStatuses(r.Context())
 
-	var spokes []FederationSpokeRow
+	var spokes []SpannerSpokeRow
 	healthyCount := 0
 	var totalThralls, totalCompliant, totalDrifted, totalFailing int32
 	for _, s := range statuses {
-		spokes = append(spokes, FederationSpokeRow{
+		spokes = append(spokes, SpannerSpokeRow{
 			ID:            s.ID,
 			Addr:          s.Addr,
 			Patterns:      s.Patterns,
@@ -1891,8 +1891,8 @@ func (h *Handler) Federation(w http.ResponseWriter, r *http.Request) {
 		compPct = float32(totalCompliant) / float32(totalThralls) * 100
 	}
 
-	data := FederationPageData{
-		PageData:       PageData{Title: "Federation", ActiveNav: "federation"},
+	data := SpannerPageData{
+		PageData:       PageData{Title: "Spanner", ActiveNav: "spanner"},
 		SpokeCount:     len(spokes),
 		HealthyCount:   healthyCount,
 		TotalThralls:   totalThralls,
@@ -1903,7 +1903,7 @@ func (h *Handler) Federation(w http.ResponseWriter, r *http.Request) {
 		Spokes:         spokes,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "federation", data)
+	h.renderer.Render(w, "spanner", data)
 }
 
 // SpokeDetailPageData holds data for the spoke detail page.
@@ -1950,7 +1950,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	statuses := h.hub.SpokeStatuses(ctx)
-	var spoke *federation.SpokeStatus
+	var spoke *spanner.SpokeStatus
 	for i := range statuses {
 		if statuses[i].ID == id {
 			spoke = &statuses[i]
@@ -1997,7 +1997,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := SpokeDetailPageData{
-		PageData:      PageData{Title: "Spoke: " + id, ActiveNav: "federation"},
+		PageData:      PageData{Title: "Spoke: " + id, ActiveNav: "spanner"},
 		SpokeID:       spoke.ID,
 		Addr:          spoke.Addr,
 		Healthy:       spoke.Healthy,

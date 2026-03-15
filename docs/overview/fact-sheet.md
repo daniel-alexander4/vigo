@@ -139,7 +139,7 @@ Beyond continuous convergence, Hobnob supports ad-hoc operations:
 - **Live queries.** Run read-only commands across the fleet and aggregate results instantly.
 - **Reusable task definitions.** Store common operations in YAML files. Execute by name with parameter overrides.
 
-## Federation
+## Spanner
 
 Hub-spoke topology for multi-site and multi-region deployments:
 
@@ -150,7 +150,7 @@ Hub-spoke topology for multi-site and multi-region deployments:
 
 ## Observability
 
-- **Web UI.** HTMX-based dashboards for fleet overview, compliance, runs, tasks, workflows, queries, federation, and license status. No JavaScript framework, no build step.
+- **Web UI.** HTMX-based dashboards for fleet overview, compliance, runs, tasks, workflows, queries, spanner, and license status. No JavaScript framework, no build step.
 - **Prometheus metrics.** 20+ gauges, counters, and histograms covering fleet health, gRPC performance, compliance, license, streams, and AI usage.
 - **Compliance monitoring.** Every node is continuously classified as compliant, drifted, failing, stale, or unknown. Sparkline history, threshold alerts, compliance export (SIEM, CMDB, OSCAL).
 - **Webhooks.** HMAC-SHA256 signed event delivery with retry and backoff.

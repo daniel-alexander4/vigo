@@ -146,12 +146,12 @@ open http://<server-ip>:8181/
 
 If thralls show as "stale" after restore, that's expected — they'll transition back to compliant/drifted after their next check-in.
 
-## Federation Recovery
+## Spanner Recovery
 
-In a hub-spoke federation topology:
+In a hub-spoke spanner topology:
 
 - **Spoke failure**: Restore the spoke independently. Thralls enrolled to that spoke reconnect automatically. The hub will resume receiving aggregated data on the spoke's next heartbeat.
-- **Hub failure**: Restore the hub. Spokes will reconnect and resume federation heartbeats. Thrall reassignments and drain operations should be re-verified after hub restore.
+- **Hub failure**: Restore the hub. Spokes will reconnect and resume spanner heartbeats. Thrall reassignments and drain operations should be re-verified after hub restore.
 - **Hub and spoke have independent databases** — restoring one does not affect the other.
 
 ## Best Practices

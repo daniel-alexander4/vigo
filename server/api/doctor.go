@@ -16,7 +16,7 @@ import (
 
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/license"
 )
 
@@ -52,10 +52,10 @@ type DoctorConfig struct {
 	ConfigStore    *config.ConfigStore
 	Queries        *db.Queries
 	Interval       time.Duration
-	Hub            *federation.Hub
+	Hub            *spanner.Hub
 	SMTPHost       string
 	SMTPPort       int
-	Role           config.FederationRole
+	Role           config.SpannerRole
 	SecretsBackend string
 }
 
@@ -68,10 +68,10 @@ type DoctorHandler struct {
 	configStore    *config.ConfigStore
 	queries        *db.Queries
 	baseInterval   time.Duration
-	hub            *federation.Hub
+	hub            *spanner.Hub
 	smtpHost       string
 	smtpPort       int
-	role           config.FederationRole
+	role           config.SpannerRole
 	secretsBackend string
 }
 
@@ -106,7 +106,7 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkTLS(),
 		h.checkSecrets(),
 		h.checkLicense(ctx),
-		h.checkFederation(),
+		h.checkSpanner(),
 		h.checkSMTP(),
 		h.checkConfig(),
 		h.checkStaleThralls(ctx),
@@ -188,17 +188,17 @@ func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
 	}
 }
 
-func (h *DoctorHandler) checkFederation() DoctorCheck {
+func (h *DoctorHandler) checkSpanner() DoctorCheck {
 	switch h.role {
 	case config.RoleHub:
 		if h.hub == nil {
-			return DoctorCheck{Name: "federation", Status: StatusFail, Message: "hub mode but no spoke connections"}
+			return DoctorCheck{Name: "spanner", Status: StatusFail, Message: "hub mode but no spoke connections"}
 		}
-		return DoctorCheck{Name: "federation", Status: StatusPass, Message: fmt.Sprintf("hub, %d spokes", h.hub.SpokeCount())}
+		return DoctorCheck{Name: "spanner", Status: StatusPass, Message: fmt.Sprintf("hub, %d spokes", h.hub.SpokeCount())}
 	case config.RoleSpoke:
-		return DoctorCheck{Name: "federation", Status: StatusPass, Message: "spoke"}
+		return DoctorCheck{Name: "spanner", Status: StatusPass, Message: "spoke"}
 	default:
-		return DoctorCheck{Name: "federation", Status: StatusSkip, Message: "standalone"}
+		return DoctorCheck{Name: "spanner", Status: StatusSkip, Message: "standalone"}
 	}
 }
 

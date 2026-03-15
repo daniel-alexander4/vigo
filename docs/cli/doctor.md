@@ -54,7 +54,7 @@ Checks performed in pre-start mode:
 | `tls_certs` | Check cert files exist, parse, and verify expiry |
 | `config_dir` | Verify `hnb/proposed/` exists with `modules/`, `roles/`, `thralls/` subdirs |
 | `config_validation` | Load and validate all `.hnb` module files |
-| `federation` | Validate federation configuration |
+| `spanner` | Validate spanner configuration |
 
 ### Example pre-start output
 
@@ -69,7 +69,7 @@ hobnobcli doctor --pre-start --config /srv/hobnob/server.yaml
   tls_certs ............ WARN (expires in 28 days (2026-04-10))
   config_dir ........... OK (hnb/.live)
   config_validation .... OK (12 modules)
-  federation ........... OK (standalone)
+  spanner ........... OK (standalone)
 
   Status: degraded
 ```

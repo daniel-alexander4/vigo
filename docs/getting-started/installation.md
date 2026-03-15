@@ -65,7 +65,7 @@ HOBNOB_SERVICES=ollama,postgres     # both
 
 ### Configuration
 
-Edit `server.yaml` for server settings (check-in interval, TLS paths, federation, SMTP, webhooks). Edit `.env` for optional services and environment variables. See [Server Configuration](server-config.md) for the full reference.
+Edit `server.yaml` for server settings (check-in interval, TLS paths, spanner, SMTP, webhooks). Edit `.env` for optional services and environment variables. See [Server Configuration](server-config.md) for the full reference.
 
 ### Upgrading
 

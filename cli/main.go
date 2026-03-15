@@ -51,7 +51,7 @@ func init() {
 		inventoryCmd,
 		cliLicenseCmd,
 		doctorCmd,
-		federationCmd,
+		spannerCmd,
 		askCmd,
 		workflowCmd,
 		secretsCmd,

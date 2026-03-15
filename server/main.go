@@ -37,7 +37,7 @@ import (
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/publish"
 	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/hardening"
 	"github.com/hobnob/hobnob/server/fleet"
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
@@ -126,12 +126,12 @@ func run() error {
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
 
-	// Determine federation role.
-	role := cfg.Federation.Role
+	// Determine spanner role.
+	role := cfg.Spanner.Role
 	if role == "" {
 		role = config.RoleStandalone
 	}
-	if err := cfg.Federation.Validate(); err != nil {
+	if err := cfg.Spanner.Validate(); err != nil {
 		return err
 	}
 
@@ -251,9 +251,9 @@ func run() error {
 		"stage", enforcer.GetStatus().Stage.String(),
 	)
 
-	// Federation requires a paid license — reject hub/spoke on free tier.
+	// Spanner requires a paid license — reject hub/spoke on free tier.
 	if role != config.RoleStandalone && enforcer.IsFreeLicense() {
-		return fmt.Errorf("federation (role %q) requires a paid license — the built-in free license does not support federation", role)
+		return fmt.Errorf("spanner (role %q) requires a paid license — the built-in free license does not support spanner", role)
 	}
 
 	// Set up SIGHUP handler for license reload.
@@ -390,23 +390,23 @@ func run() error {
 	})
 
 	// Connect to spokes (hub mode only).
-	var hub *federation.Hub
+	var hub *spanner.Hub
 	if role == config.RoleHub {
-		hub, err = federation.NewHub(ctx, cfg.Federation.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+		hub, err = spanner.NewHub(ctx, cfg.Spanner.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
 		if err != nil {
 			return fmt.Errorf("connecting to spokes: %w", err)
 		}
 		defer hub.Close()
-		slog.Info("federation hub initialized", "spokes", hub.SpokeCount())
+		slog.Info("spanner hub initialized", "spokes", hub.SpokeCount())
 
 		// Start auto-failover if enabled.
-		if cfg.Federation.AutoFailover.Enabled {
-			foThreshold := cfg.Federation.AutoFailover.Threshold
+		if cfg.Spanner.AutoFailover.Enabled {
+			foThreshold := cfg.Spanner.AutoFailover.Threshold
 			if foThreshold <= 0 {
 				foThreshold = 3
 			}
-			foInterval := parseDuration(cfg.Federation.AutoFailover.Interval, 30*time.Second)
-			failover := federation.NewFailover(hub, foThreshold, foInterval)
+			foInterval := parseDuration(cfg.Spanner.AutoFailover.Interval, 30*time.Second)
+			failover := spanner.NewFailover(hub, foThreshold, foInterval)
 			go failover.Run(ctx)
 		}
 	}
@@ -619,7 +619,7 @@ func run() error {
 		SecretsBackend: secretsCfg.Backend,
 	})
 
-	federationHandler := api.NewFederationHandler(role, cfg.Federation.SpokeID, hub)
+	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
 	tasksHandler := api.NewTasksHandler(queries, agentSvc)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
@@ -685,13 +685,13 @@ func run() error {
 	}
 
 	if role == config.RoleSpoke {
-		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Federation.SpokeID)
+		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Spanner.SpokeID)
 		if gwErr != nil {
 			return fmt.Errorf("creating spoke gateway: %w", gwErr)
 		}
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
-		federationHandler.RegisterRoutes(mux)
+		spannerHandler.RegisterRoutes(mux)
 		tasksHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
 		workflowHandler.RegisterRoutes(mux)
@@ -746,7 +746,7 @@ func run() error {
 		}
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
-		federationHandler.RegisterRoutes(gwMux)
+		spannerHandler.RegisterRoutes(gwMux)
 		tasksHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)
 		workflowHandler.RegisterRoutes(gwMux)
@@ -775,10 +775,10 @@ func run() error {
 
 	if role == config.RoleSpoke {
 		// Start spoke status reporter if hub address is configured.
-		if cfg.Federation.HubAddr != "" {
-			reporter := federation.NewReporter(
-				cfg.Federation.SpokeID,
-				cfg.Federation.HubAddr,
+		if cfg.Spanner.HubAddr != "" {
+			reporter := spanner.NewReporter(
+				cfg.Spanner.SpokeID,
+				cfg.Spanner.HubAddr,
 				cfg.Server.TLS.CertFile,
 				cfg.Server.TLS.KeyFile,
 				cfg.Server.TLS.CAFile,
@@ -789,7 +789,7 @@ func run() error {
 		}
 
 		slog.Info("spoke ready",
-			"spoke_id", cfg.Federation.SpokeID,
+			"spoke_id", cfg.Spanner.SpokeID,
 			"grpc", cfg.Server.GRPCListen,
 			"api", cfg.Server.APIListen,
 		)

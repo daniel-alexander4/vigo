@@ -12,86 +12,86 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var federationCmd = &cobra.Command{
-	Use:   "federation",
-	Short: "Manage hub-spoke federation topology, spoke health, and thrall routing",
+var spannerCmd = &cobra.Command{
+	Use:   "spanner",
+	Short: "Manage hub-spoke spanner topology, spoke health, and thrall routing",
 }
 
-var federationStatusCmd = &cobra.Command{
+var spannerStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show this server's federation role (standalone/hub/spoke) and spoke availability",
-	RunE:  runFederationStatus,
+	Short: "Show this server's spanner role (standalone/hub/spoke) and spoke availability",
+	RunE:  runSpannerStatus,
 }
 
-var federationSpokesCmd = &cobra.Command{
+var spannerSpokesCmd = &cobra.Command{
 	Use:   "spokes",
 	Short: "List all registered spokes with status, latency, and thrall counts",
-	RunE:  runFederationSpokes,
+	RunE:  runSpannerSpokes,
 }
 
-var federationSpokeDetailCmd = &cobra.Command{
+var spannerSpokeDetailCmd = &cobra.Command{
 	Use:   "spoke <spoke-id>",
 	Short: "Show a spoke's compliance breakdown, thrall count, and recent activity",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runFederationSpokeDetail,
+	RunE:  runSpannerSpokeDetail,
 }
 
-var federationSpokeThrallsCmd = &cobra.Command{
+var spannerSpokeThrallsCmd = &cobra.Command{
 	Use:   "spoke-thralls <spoke-id>",
 	Short: "List all thralls managed by a specific spoke server",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runFederationSpokeThralls,
+	RunE:  runSpannerSpokeThralls,
 }
 
-var federationSpokeRunsCmd = &cobra.Command{
+var spannerSpokeRunsCmd = &cobra.Command{
 	Use:   "spoke-runs <spoke-id>",
 	Short: "List recent convergence runs on a specific spoke server",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runFederationSpokeRuns,
+	RunE:  runSpannerSpokeRuns,
 }
 
-var federationSpokePushCmd = &cobra.Command{
+var spannerSpokePushCmd = &cobra.Command{
 	Use:   "spoke-push <spoke-id>",
 	Short: "Trigger immediate check-in for all thralls on a specific spoke",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runFederationSpokePush,
+	RunE:  runSpannerSpokePush,
 }
 
-var federationReassignCmd = &cobra.Command{
+var spannerReassignCmd = &cobra.Command{
 	Use:   "reassign <thrall-id>",
 	Short: "Move a thrall to a different spoke server without re-enrollment",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runFederationReassign,
+	RunE:  runSpannerReassign,
 }
 
-var federationDrainCmd = &cobra.Command{
+var spannerDrainCmd = &cobra.Command{
 	Use:   "drain <spoke-id>",
 	Short: "Migrate all thralls off a spoke to prepare it for maintenance or decommission",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runFederationDrain,
+	RunE:  runSpannerDrain,
 }
 
 func init() {
-	federationSpokePushCmd.Flags().String("thrall-id", "", "Target a specific thrall by ID")
+	spannerSpokePushCmd.Flags().String("thrall-id", "", "Target a specific thrall by ID")
 
-	federationReassignCmd.Flags().String("from", "", "Source spoke ID")
-	federationReassignCmd.Flags().String("to", "", "Target spoke ID")
-	federationReassignCmd.MarkFlagRequired("from")
-	federationReassignCmd.MarkFlagRequired("to")
+	spannerReassignCmd.Flags().String("from", "", "Source spoke ID")
+	spannerReassignCmd.Flags().String("to", "", "Target spoke ID")
+	spannerReassignCmd.MarkFlagRequired("from")
+	spannerReassignCmd.MarkFlagRequired("to")
 
-	federationDrainCmd.Flags().String("to", "", "Target spoke ID (optional, auto-route by pattern if empty)")
+	spannerDrainCmd.Flags().String("to", "", "Target spoke ID (optional, auto-route by pattern if empty)")
 
-	federationCmd.AddCommand(federationStatusCmd)
-	federationCmd.AddCommand(federationSpokesCmd)
-	federationCmd.AddCommand(federationSpokeDetailCmd)
-	federationCmd.AddCommand(federationSpokeThrallsCmd)
-	federationCmd.AddCommand(federationSpokeRunsCmd)
-	federationCmd.AddCommand(federationSpokePushCmd)
-	federationCmd.AddCommand(federationReassignCmd)
-	federationCmd.AddCommand(federationDrainCmd)
+	spannerCmd.AddCommand(spannerStatusCmd)
+	spannerCmd.AddCommand(spannerSpokesCmd)
+	spannerCmd.AddCommand(spannerSpokeDetailCmd)
+	spannerCmd.AddCommand(spannerSpokeThrallsCmd)
+	spannerCmd.AddCommand(spannerSpokeRunsCmd)
+	spannerCmd.AddCommand(spannerSpokePushCmd)
+	spannerCmd.AddCommand(spannerReassignCmd)
+	spannerCmd.AddCommand(spannerDrainCmd)
 }
 
-func runFederationStatus(cmd *cobra.Command, args []string) error {
+func runSpannerStatus(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
@@ -114,7 +114,7 @@ func runFederationStatus(cmd *cobra.Command, args []string) error {
 		} `json:"spokes"`
 	}
 
-	if err := client.get("/api/v1/federation/status", &resp); err != nil {
+	if err := client.get("/api/v1/spanner/status", &resp); err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
@@ -125,7 +125,7 @@ func runFederationStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if resp.Role == "standalone" {
-		fmt.Println("  No federation configured.")
+		fmt.Println("  No spanner configured.")
 		return nil
 	}
 
@@ -164,7 +164,7 @@ func runFederationStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runFederationSpokes(cmd *cobra.Command, args []string) error {
+func runSpannerSpokes(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
@@ -179,7 +179,7 @@ func runFederationSpokes(cmd *cobra.Command, args []string) error {
 		} `json:"spokes"`
 	}
 
-	if err := client.get("/api/v1/federation/status", &resp); err != nil {
+	if err := client.get("/api/v1/spanner/status", &resp); err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
@@ -202,7 +202,7 @@ func runFederationSpokes(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runFederationSpokeDetail(cmd *cobra.Command, args []string) error {
+func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 	spokeID := args[0]
 
@@ -222,7 +222,7 @@ func runFederationSpokeDetail(cmd *cobra.Command, args []string) error {
 		Error         string   `json:"error"`
 	}
 
-	if err := client.get("/api/v1/federation/spokes/"+spokeID, &resp); err != nil {
+	if err := client.get("/api/v1/spanner/spokes/"+spokeID, &resp); err != nil {
 		return fmt.Errorf("spoke %q not found or unreachable: %w", spokeID, err)
 	}
 
@@ -252,7 +252,7 @@ func runFederationSpokeDetail(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runFederationSpokeThralls(cmd *cobra.Command, args []string) error {
+func runSpannerSpokeThralls(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 	spokeID := args[0]
 
@@ -266,7 +266,7 @@ func runFederationSpokeThralls(cmd *cobra.Command, args []string) error {
 		} `json:"thralls"`
 	}
 
-	if err := client.get("/api/v1/federation/spokes/"+spokeID+"/thralls", &resp); err != nil {
+	if err := client.get("/api/v1/spanner/spokes/"+spokeID+"/thralls", &resp); err != nil {
 		return fmt.Errorf("cannot list thralls for spoke %q: %w", spokeID, err)
 	}
 
@@ -288,7 +288,7 @@ func runFederationSpokeThralls(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runFederationSpokeRuns(cmd *cobra.Command, args []string) error {
+func runSpannerSpokeRuns(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 	spokeID := args[0]
 
@@ -304,7 +304,7 @@ func runFederationSpokeRuns(cmd *cobra.Command, args []string) error {
 		} `json:"runs"`
 	}
 
-	if err := client.get("/api/v1/federation/spokes/"+spokeID+"/runs", &resp); err != nil {
+	if err := client.get("/api/v1/spanner/spokes/"+spokeID+"/runs", &resp); err != nil {
 		return fmt.Errorf("cannot list runs for spoke %q: %w", spokeID, err)
 	}
 
@@ -323,7 +323,7 @@ func runFederationSpokeRuns(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runFederationSpokePush(cmd *cobra.Command, args []string) error {
+func runSpannerSpokePush(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 	spokeID := args[0]
 
@@ -338,7 +338,7 @@ func runFederationSpokePush(cmd *cobra.Command, args []string) error {
 		body["thrall_id"] = thrallID
 	}
 
-	if err := client.post("/api/v1/federation/spokes/"+spokeID+"/push", body, &resp); err != nil {
+	if err := client.post("/api/v1/spanner/spokes/"+spokeID+"/push", body, &resp); err != nil {
 		return fmt.Errorf("cannot push to spoke %q: %w", spokeID, err)
 	}
 
@@ -346,7 +346,7 @@ func runFederationSpokePush(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runFederationReassign(cmd *cobra.Command, args []string) error {
+func runSpannerReassign(cmd *cobra.Command, args []string) error {
 	if !confirmAction("Reassign this thrall to a different spoke?") {
 		fmt.Println("Cancelled.")
 		return nil
@@ -368,7 +368,7 @@ func runFederationReassign(cmd *cobra.Command, args []string) error {
 		"to_spoke_id":   toSpoke,
 	}
 
-	if err := client.post("/api/v1/federation/reassign", body, &resp); err != nil {
+	if err := client.post("/api/v1/spanner/reassign", body, &resp); err != nil {
 		return fmt.Errorf("reassign failed: %w", err)
 	}
 
@@ -380,7 +380,7 @@ func runFederationReassign(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runFederationDrain(cmd *cobra.Command, args []string) error {
+func runSpannerDrain(cmd *cobra.Command, args []string) error {
 	if !confirmAction("Drain all thralls from this spoke? They will be migrated to other spokes.") {
 		fmt.Println("Cancelled.")
 		return nil
@@ -401,7 +401,7 @@ func runFederationDrain(cmd *cobra.Command, args []string) error {
 		body["target_spoke_id"] = toSpoke
 	}
 
-	if err := client.post("/api/v1/federation/spokes/"+spokeID+"/drain", body, &resp); err != nil {
+	if err := client.post("/api/v1/spanner/spokes/"+spokeID+"/drain", body, &resp); err != nil {
 		return fmt.Errorf("drain failed: %w", err)
 	}
 

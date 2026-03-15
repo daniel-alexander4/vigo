@@ -144,14 +144,14 @@ watcher:
 #       - "drift.detected"
 
 
-# ── Federation ────────────────────────────────────────────────────────────
+# ── Spanner ────────────────────────────────────────────────────────────
 # Hub-spoke scaling. Omit for single-server deployments.
 
-# federation:
+# spanner:
 #   role: standalone                           # standalone | hub | spoke
 #
 # --- Hub: aggregates admin queries from spokes ---
-# federation:
+# spanner:
 #   role: hub
 #   spokes:
 #     - id: dc1
@@ -166,7 +166,7 @@ watcher:
 #     interval: "30s"                            # health check interval
 #
 # --- Spoke: handles agent check-ins only ---
-# federation:
+# spanner:
 #   role: spoke
 #   spoke_id: "dc1"
 #   hub_addr: "hub.example.com:1530"            # enables spoke→hub status reporting

@@ -147,10 +147,10 @@ watcher:
 
 Only active when the secrets backend supports versioning (isopass). Disabled on spoke servers.
 
-### federation
+### spanner
 
 ```yaml
-federation:
+spanner:
   role: standalone
 ```
 
@@ -167,7 +167,7 @@ federation:
 | `auto_failover.threshold` | `3` | Consecutive failures before drain |
 | `auto_failover.interval` | `30s` | Health check interval |
 
-Federation requires a paid license — the server will refuse to start in hub or spoke mode on the built-in free license. See [Federation](../concepts/federation.md) for details.
+Spanner requires a paid license — the server will refuse to start in hub or spoke mode on the built-in free license. See [Spanner](../concepts/spanner.md) for details.
 
 ### tuning
 

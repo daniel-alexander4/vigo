@@ -1,6 +1,6 @@
 # CLI Reference
 
-`hobnobcli` is the administrative CLI for the Hobnob configuration management system. It communicates with the server's REST API to manage enrollment, thralls, operations, orchestration, secrets, and federation.
+`hobnobcli` is the administrative CLI for the Hobnob configuration management system. It communicates with the server's REST API to manage enrollment, thralls, operations, orchestration, secrets, and spanner.
 
 When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 
@@ -33,7 +33,7 @@ When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 | [inventory](inventory.md) | Query thralls by traits |
 | [license](license.md) | Manage the Hobnob license |
 | [doctor](doctor.md) | Run health checks against the Hobnob server |
-| [federation](federation.md) | Manage and inspect federation status |
+| [spanner](spanner.md) | Manage and inspect spanner status |
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
 | [config](config.md) | Config inspection, publish history, rollback, and freeze |
 | [secrets](secrets.md) | Manage local encrypted secrets |

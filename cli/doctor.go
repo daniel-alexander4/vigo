@@ -24,14 +24,14 @@ var doctorConfigFile string
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Validate server health: config, TLS, secrets, database, license, and federation",
+	Short: "Validate server health: config, TLS, secrets, database, license, and spanner",
 	Long: `Run health checks to verify the server is operating correctly.
 
 By default, queries the running server's /api/v1/doctor endpoint.
 
 With --pre-start, runs local checks without a running server:
   config_file, secrets_provider, secret_resolution, tls_certs,
-  config_dir, config_validation, federation`,
+  config_dir, config_validation, spanner`,
 	RunE: runDoctor,
 }
 
@@ -154,20 +154,20 @@ func runDoctorPreStart() error {
 	// 6. config_validation — load all .hnb module files and validate
 	checks = append(checks, checkConfigValidation(configDir))
 
-	// 7. federation
+	// 7. spanner
 	if serverCfg != nil {
-		if err := serverCfg.Federation.Validate(); err != nil {
-			checks = append(checks, preStartCheck{"federation", "fail", err.Error()})
+		if err := serverCfg.Spanner.Validate(); err != nil {
+			checks = append(checks, preStartCheck{"spanner", "fail", err.Error()})
 			hasFailure = true
 		} else {
-			role := string(serverCfg.Federation.Role)
+			role := string(serverCfg.Spanner.Role)
 			if role == "" {
 				role = "standalone"
 			}
-			checks = append(checks, preStartCheck{"federation", "pass", role})
+			checks = append(checks, preStartCheck{"spanner", "pass", role})
 		}
 	} else {
-		checks = append(checks, preStartCheck{"federation", "skip", "config unavailable"})
+		checks = append(checks, preStartCheck{"spanner", "skip", "config unavailable"})
 	}
 
 	// Print results
@@ -209,7 +209,7 @@ func loadConfigForDoctor(path string) (secrets.Config, *config.ServerConfig, err
 		return secrets.Config{}, nil, err
 	}
 
-	// Also do a raw parse (without secret resolution) to get TLS/federation fields.
+	// Also do a raw parse (without secret resolution) to get TLS/spanner fields.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return secretsCfg, nil, nil

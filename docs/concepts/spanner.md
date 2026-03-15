@@ -1,18 +1,18 @@
-# Federation
+# Spanner
 
-Federation enables hub-spoke scaling for large fleets. A hub server aggregates data from spoke servers, each of which handles a partition of thralls.
+Spanner enables hub-spoke scaling for large fleets. A hub server aggregates data from spoke servers, each of which handles a partition of thralls.
 
-> **License requirement:** Federation requires a paid license. The built-in free license (25 thralls) does not support hub or spoke mode. The server will refuse to start if `federation.role` is set to `hub` or `spoke` on the free license.
+> **License requirement:** Spanner requires a paid license. The built-in free license (25 thralls) does not support hub or spoke mode. The server will refuse to start if `spanner.role` is set to `hub` or `spoke` on the free license.
 
 ## Architecture
 
-![Federation Architecture](img/federation.svg)
+![Spanner Architecture](img/spanner.svg)
 
 ## Roles
 
 ### standalone (default)
 
-Single server handles everything. No federation config needed.
+Single server handles everything. No spanner config needed.
 
 ### hub
 
@@ -24,7 +24,7 @@ The central server that:
 - Handles license enforcement
 
 ```yaml
-federation:
+spanner:
   role: hub
   spokes:
     - id: dc1
@@ -44,7 +44,7 @@ A partition server that:
 - Does not serve the web UI, webhooks, or bootstrap
 
 ```yaml
-federation:
+spanner:
   role: spoke
   spoke_id: "dc1"
 ```
@@ -96,7 +96,7 @@ The hub monitors spoke health via periodic gRPC probes. Spokes can also push the
 Spokes can proactively report their status to the hub:
 
 ```yaml
-federation:
+spanner:
   role: spoke
   spoke_id: "dc1"
   hub_addr: "hub.example.com:1530"  # enables spoke→hub reporting
@@ -109,7 +109,7 @@ The spoke sends compliance metrics to the hub every 30 seconds. If the hub is un
 The hub can automatically drain unhealthy spokes:
 
 ```yaml
-federation:
+spanner:
   role: hub
   auto_failover:
     enabled: true
@@ -124,13 +124,13 @@ When a spoke fails `threshold` consecutive health checks (default: 3 failures = 
 Move thralls between spokes:
 
 ```bash
-hobnobcli federation reassign --hostname "web3.dc1.*" --to dc2
+hobnobcli spanner reassign --hostname "web3.dc1.*" --to dc2
 ```
 
 Drain all thralls from a spoke:
 
 ```bash
-hobnobcli federation drain --spoke dc1 --to dc2
+hobnobcli spanner drain --spoke dc1 --to dc2
 ```
 
 The agent handles reconnection automatically — on next check-in, it's redirected to the new spoke.
@@ -140,12 +140,12 @@ The agent handles reconnection automatically — on next check-in, it's redirect
 View detailed spoke information:
 
 ```bash
-hobnobcli federation spoke dc1
+hobnobcli spanner spoke dc1
 ```
 
-The web UI has a spoke detail page at `/federation/spokes/{id}` showing per-spoke compliance, recent runs, and thrall list.
+The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke compliance, recent runs, and thrall list.
 
 ## Related
 
 - [Architecture](architecture.md) — System overview
-- [Server Configuration](../getting-started/server-config.md) — federation: section
+- [Server Configuration](../getting-started/server-config.md) — spanner: section

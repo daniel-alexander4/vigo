@@ -9,7 +9,7 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/federation"
+	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
@@ -36,7 +36,7 @@ type AgentService struct {
 	taskRouter       *taskRouter
 	queryRouter      *queryRouter
 	taskStore        *tasks.Store
-	hub              *federation.Hub    // non-nil when role=hub; routes enrollment to spokes
+	hub              *spanner.Hub    // non-nil when role=hub; routes enrollment to spokes
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
@@ -71,7 +71,7 @@ type AdminService struct {
 	runStore      db.RunStore
 	configStore   *config.ConfigStore
 	baseInterval  time.Duration
-	hub           *federation.Hub   // non-nil when role=hub; aggregates from spokes
+	hub           *spanner.Hub   // non-nil when role=hub; aggregates from spokes
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending thrall reassignments (spoke side)
 }

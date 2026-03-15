@@ -25,8 +25,8 @@ func TestAllMetricsRegistered(t *testing.T) {
 	WebhookDeliveriesTotal.WithLabelValues("test").Add(0)
 	WebhookDuration.Observe(0)
 	SMTPSendsTotal.WithLabelValues("test", "test").Add(0)
-	FederationSpokeLatency.WithLabelValues("test").Observe(0)
-	FederationSpokeUp.WithLabelValues("test").Set(0)
+	SpannerSpokeLatency.WithLabelValues("test").Observe(0)
+	SpannerSpokeUp.WithLabelValues("test").Set(0)
 	FleetIndexFlushDuration.Observe(0)
 	BuildInfo.WithLabelValues("test").Set(1)
 	EnrollmentsTotal.WithLabelValues("test").Add(0)
@@ -66,8 +66,8 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"hobnob_webhook_deliveries_total",
 		"hobnob_webhook_duration_seconds",
 		"hobnob_smtp_sends_total",
-		"hobnob_federation_spoke_latency_seconds",
-		"hobnob_federation_spoke_up",
+		"hobnob_spanner_spoke_latency_seconds",
+		"hobnob_spanner_spoke_up",
 		"hobnob_license_thralls_used",
 		"hobnob_license_thralls_max",
 		"hobnob_license_stage",
@@ -117,7 +117,7 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	UptimeSeconds.Set(3600)
 	BuildInfo.WithLabelValues("dev").Set(1)
 	StreamsActive.Set(5)
-	FederationSpokeUp.WithLabelValues("dc1").Set(1)
+	SpannerSpokeUp.WithLabelValues("dc1").Set(1)
 	FleetIndexDirtyCount.Set(42)
 
 	// Verify histograms can observe.
@@ -125,6 +125,6 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	RunDuration.WithLabelValues("testnode").Observe(1.5)
 	GRPCRequestDuration.WithLabelValues("/hobnob.HobnobAgent/CheckIn").Observe(0.05)
 	WebhookDuration.Observe(0.5)
-	FederationSpokeLatency.WithLabelValues("dc1").Observe(0.1)
+	SpannerSpokeLatency.WithLabelValues("dc1").Observe(0.1)
 	FleetIndexFlushDuration.Observe(0.01)
 }
