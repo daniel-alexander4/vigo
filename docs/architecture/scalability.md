@@ -56,30 +56,44 @@ FleetIndex memory scales linearly. There is no per-thrall database table scan, n
 
 ### Per-Check-in Cost
 
+**In-process hot path only** (what the benchmarks measure):
+
 | Step | Cost | Notes |
 |------|------|-------|
 | ED25519 signature verify | ~10 µs | Crypto operation, unavoidable |
 | Timestamp validation | < 1 ns | Simple comparison |
-| FleetIndex lookup | ~287 ns | GetThrallLite, single RLock |
+| FleetIndex lookup | ~283 ns | GetThrallLite, single RLock |
 | Policy cache hit | ~1-2 µs | Pre-built bundle, shallow copy |
 | Policy cache miss | 10-50 ms | Full role → module → resource resolution + template render |
-| MarkSeen (update last_seen) | ~174 ns | In-memory, async flush to DB |
-| **Total (cache hit)** | **~12 µs** | |
+| MarkSeen (update last_seen) | ~170 ns | In-memory, async flush to DB |
+| **Hot path subtotal** | **~12 µs** | |
+
+**End-to-end cost** (what actually happens per gRPC call):
+
+| Step | Cost | Notes |
+|------|------|-------|
+| TLS decrypt + gRPC framing | ~50-100 µs | rustls/Go TLS handshake amortized, per-message decrypt |
+| Proto unmarshal (request) | ~5-10 µs | CheckInRequest deserialization |
+| Hot path (above) | ~12 µs | FleetIndex + policy cache + signature |
+| Proto marshal (response) | ~10-50 µs | PolicyBundle serialization (varies by config size) |
+| TLS encrypt + socket write | ~50-100 µs | Response encryption + kernel buffer |
+| Go scheduler + GC overhead | ~10-50 µs | Goroutine scheduling, GC assist (amortized) |
+| **Total (cache hit)** | **~200-400 µs** | |
 | **Total (cache miss)** | **~10-50 ms** | First check-in per pattern after config change |
 
 ### Throughput Estimates
 
-With a 12 µs per-check-in cost on cache hit:
+With ~300 µs realistic per-check-in cost on cache hit:
 
 | Cores | Check-ins/sec | Thralls at 5-min interval |
 |-------|---------------|--------------------------|
-| 1 | ~83,000 | 25,000,000 |
-| 4 | ~250,000 | 75,000,000 |
-| 8 | ~400,000 | 120,000,000 |
+| 1 | ~3,300 | 1,000,000 |
+| 4 | ~10,000 | 3,000,000 |
+| 8 | ~16,000 | 4,800,000 |
 
-The check-in RPC is CPU-bound on signature verification (10 µs). At a 5-minute interval with 20% jitter, each thrall checks in once per 240-360 seconds. A single core can theoretically serve 25 million thralls at steady state. In practice, GC pauses, network I/O, and config compilation reduce this significantly.
+Each thrall checks in once per 240-360 seconds (5-min interval with 20% jitter). A 4-core server processing 10,000 check-ins/sec can serve ~3 million thralls at steady state. RWMutex contention under load, GC pauses, and network I/O reduce throughput further at scale.
 
-**Realistic estimate:** 100,000-500,000 thralls on a single 4-core server with comfortable headroom.
+**Conservative realistic estimate:** 50,000-200,000 thralls on a single 4-core server with comfortable headroom. Beyond 200,000, consider federation (hub-spoke) or PostgreSQL for the write path.
 
 ## Database Write Capacity
 
