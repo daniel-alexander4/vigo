@@ -6,8 +6,18 @@ set -euo pipefail
 # Replaces:  container image, docs/, examples/, docker-compose.yml (if unchanged)
 #
 # Usage:
-#   sudo scripts/upgrade.sh              # pull latest and restart
-#   sudo scripts/upgrade.sh --build      # build from source and restart (dev)
+#   sudo scripts/upgrade.sh                        # pull latest and restart
+#   sudo scripts/upgrade.sh --build                # build from source and restart (dev)
+#   sudo scripts/upgrade.sh --build --cross        # build + cross-compile agent (linux amd64+arm64)
+#   sudo scripts/upgrade.sh --build --cross arm64  # build + cross-compile specific platform(s)
+#
+# Cross-compile targets:
+#   amd64      Linux x86_64 (musl static)
+#   arm64      Linux aarch64 (musl static)
+#   darwin     macOS x86_64 + arm64 (requires osxcross in PATH)
+#   freebsd    FreeBSD x86_64 (via cross)
+#   windows    Windows x86_64 (via cross)
+#   all        All of the above
 
 DATA_DIR="/srv/hobnob"
 IMAGE="ghcr.io/daniel-alexander4/hobnob:latest"
@@ -23,10 +33,134 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "$DATA_DIR"
 
+# Parse flags.
+BUILD=false
+CROSS_TARGETS=()
+parsing_cross=false
+for arg in "$@"; do
+    case "$arg" in
+        --build) BUILD=true; parsing_cross=false ;;
+        --cross) parsing_cross=true ;;
+        *)
+            if $parsing_cross; then
+                CROSS_TARGETS+=("$arg")
+            fi
+            ;;
+    esac
+done
+
+# --cross with no args defaults to amd64+arm64.
+if $parsing_cross && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
+    CROSS_TARGETS=(amd64 arm64)
+fi
+
+# Expand "all".
+expanded=()
+for t in "${CROSS_TARGETS[@]}"; do
+    if [ "$t" = "all" ]; then
+        expanded=(amd64 arm64 darwin freebsd windows)
+        break
+    fi
+    expanded+=("$t")
+done
+CROSS_TARGETS=("${expanded[@]+"${expanded[@]}"}")
+
 echo "Stopping containers..."
 docker compose down --remove-orphans 2>/dev/null || true
 
-if [ "${1:-}" = "--build" ]; then
+if $BUILD; then
+    # Cross-compile agent binaries inside Docker (no local Rust toolchain needed).
+    if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
+        echo "Cross-compiling agent for: ${CROSS_TARGETS[*]}"
+
+        # Determine which targets to pass into the container.
+        RUST_TARGETS=""
+        APT_PACKAGES="musl-tools protobuf-compiler"
+        BUILD_SCRIPT=""
+
+        for t in "${CROSS_TARGETS[@]}"; do
+            case "$t" in
+                amd64)
+                    RUST_TARGETS="$RUST_TARGETS x86_64-unknown-linux-musl"
+                    BUILD_SCRIPT="$BUILD_SCRIPT
+echo 'Building linux/amd64...'
+CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
+mkdir -p /build/dist/agent/linux/amd64
+cp target/x86_64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/amd64/hobnob"
+                    ;;
+                arm64)
+                    RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
+                    APT_PACKAGES="$APT_PACKAGES gcc-aarch64-linux-gnu"
+                    BUILD_SCRIPT="$BUILD_SCRIPT
+echo 'Building linux/arm64...'
+CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc \
+CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
+    cargo build --release --target aarch64-unknown-linux-musl
+mkdir -p /build/dist/agent/linux/arm64
+cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm64/hobnob"
+                    ;;
+                freebsd)
+                    echo "  freebsd: requires 'cross' tool — using cargo-cross container"
+                    (cd "$REPO_DIR" && \
+                        docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
+                        ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
+                            cargo build --release --target x86_64-unknown-freebsd 2>&1
+                            mkdir -p /build/dist/agent/freebsd/amd64
+                            cp target/x86_64-unknown-freebsd/release/hobnob /build/dist/agent/freebsd/amd64/hobnob
+                        ') || echo "  WARN: freebsd cross-compile failed (install cross: cargo install cross)"
+                    ;;
+                windows)
+                    echo "  windows: requires 'cross' tool — using cargo-cross container"
+                    (cd "$REPO_DIR" && \
+                        docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
+                        ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
+                            cargo build --release --target x86_64-pc-windows-msvc 2>&1
+                            mkdir -p /build/dist/agent/windows/amd64
+                            cp target/x86_64-pc-windows-msvc/release/hobnob.exe /build/dist/agent/windows/amd64/hobnob.exe
+                        ') || echo "  WARN: windows cross-compile failed (install cross: cargo install cross)"
+                    ;;
+                darwin)
+                    echo "  darwin: requires osxcross — skipping unless available in PATH"
+                    if command -v x86_64-apple-darwin-gcc > /dev/null 2>&1 || command -v o64-clang > /dev/null 2>&1; then
+                        (cd "$REPO_DIR" && make dist-agent-macos) || echo "  WARN: darwin cross-compile failed"
+                    else
+                        echo "  SKIP: osxcross not found — build natively on macOS or install osxcross"
+                    fi
+                    ;;
+                *)
+                    echo "  Unknown target: $t (valid: amd64, arm64, freebsd, windows, darwin, all)"
+                    ;;
+            esac
+        done
+
+        # Run the Linux builds (amd64/arm64) together in a single container.
+        if [ -n "$BUILD_SCRIPT" ]; then
+            docker run --rm \
+                -v "$REPO_DIR/agent-rs:/build/agent-rs" \
+                -v "$REPO_DIR/proto:/build/proto" \
+                -v "$REPO_DIR/dist:/build/dist" \
+                -w /build/agent-rs \
+                rust:bookworm sh -c "
+                    set -e
+                    apt-get update -qq && apt-get install -y -qq $APT_PACKAGES > /dev/null 2>&1
+                    rustup target add $RUST_TARGETS
+                    $BUILD_SCRIPT
+                    echo 'Linux builds complete.'
+                "
+        fi
+
+        # Show results.
+        echo ""
+        echo "Agent binaries:"
+        find "$REPO_DIR/dist/agent" -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null | while read -r f; do
+            platform="${f#$REPO_DIR/dist/agent/}"
+            platform="${platform%/hobnob*}"
+            size=$(ls -lh "$f" | awk '{print $5}')
+            echo "  $platform  $size"
+        done
+        echo ""
+    fi
+
     echo "Building image from source..."
     docker build -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
 else
@@ -91,7 +225,7 @@ if [ -f /usr/local/bin/hobnobcli ]; then
 fi
 
 # Compare container binaries against repo source (--build mode only).
-if [ "${1:-}" = "--build" ] && [ -d "$REPO_DIR" ]; then
+if $BUILD && [ -d "$REPO_DIR" ]; then
     # Check server binary build time vs latest source modification.
     NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_GO=${NEWEST_GO%.*}
