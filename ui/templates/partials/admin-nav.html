@@ -1,0 +1,35 @@
+{{define "admin-nav"}}
+<aside class="sidebar sidebar--admin">
+    <div class="sidebar__brand">
+        <a href="/admin" class="sidebar__logo sidebar__logo--link">Admin</a>
+    </div>
+    <nav class="sidebar__nav">
+        <a href="/admin" class="nav-link{{if eq .ActiveNav "admin"}} nav-link--active{{end}}">
+            Overview
+        </a>
+        <a href="/admin/users" class="nav-link{{if eq .ActiveNav "admin-users"}} nav-link--active{{end}}">
+            Users
+        </a>
+        <a href="/admin/approved" class="nav-link{{if eq .ActiveNav "admin-approved"}} nav-link--active{{end}}">
+            Enrollment
+        </a>
+        <a href="/admin/tokens" class="nav-link{{if eq .ActiveNav "admin-tokens"}} nav-link--active{{end}}">
+            Tokens
+        </a>
+        <a href="/admin/webhooks" class="nav-link{{if eq .ActiveNav "admin-webhooks"}} nav-link--active{{end}}">
+            Webhooks
+        </a>
+        <a href="/admin/doctor" class="nav-link{{if eq .ActiveNav "admin-doctor"}} nav-link--active{{end}}">
+            Health
+        </a>
+        <a href="/admin/backup" class="nav-link{{if eq .ActiveNav "admin-backup"}} nav-link--active{{end}}">
+            Backup
+        </a>
+    </nav>
+    <div class="sidebar__footer">
+        <a href="/" class="nav-link nav-link--back">
+            &larr; Back to Dashboard
+        </a>
+    </div>
+</aside>
+{{end}}

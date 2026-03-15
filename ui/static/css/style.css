@@ -1745,6 +1745,85 @@ body:has(.ask-dashboard) .ai-drawer {
     text-decoration: underline;
 }
 
+/* Admin sidebar variant */
+.sidebar--admin {
+    background: var(--color-sidebar);
+}
+
+.sidebar__logo--link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.sidebar__logo--link:hover {
+    opacity: 0.9;
+}
+
+.nav-link--back {
+    font-size: 0.813rem;
+    color: var(--color-text-muted);
+    border-top: 1px solid var(--color-sidebar-hover);
+    margin-top: auto;
+}
+
+.nav-link--back:hover {
+    color: #fff;
+}
+
+/* Admin overview grid */
+.admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+}
+
+.admin-card {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.admin-card__icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+    border-radius: 10px;
+    color: var(--color-primary);
+}
+
+.admin-card__icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.admin-card__body h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.admin-card__body p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
 .sidebar__role {
     font-size: 0.688rem;
 }

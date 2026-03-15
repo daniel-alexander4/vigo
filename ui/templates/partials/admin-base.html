@@ -1,0 +1,19 @@
+{{define "admin-base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hobnob Admin - {{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
+    <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
+</head>
+<body>
+    <div class="layout">
+        {{template "admin-nav" .}}
+        <main class="content">
+            {{block "admin-content" .}}{{end}}
+        </main>
+    </div>
+</body>
+</html>
+{{end}}
