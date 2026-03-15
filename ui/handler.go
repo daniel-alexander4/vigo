@@ -474,16 +474,20 @@ type AdminBackupPageData struct {
 }
 
 // docsSectionOrder defines the display order for documentation sections.
+// Follows the user journey: what is it → install → my platform → how it works
+// → AI → operate it → reference → UI guide → examples → migrate.
 var docsSectionOrder = []string{
+	"overview",
 	"getting-started",
+	"platforms",
 	"concepts",
+	"ai",
+	"operations",
 	"executors",
 	"traits",
 	"cli",
 	"api",
-	"operations",
 	"ui",
-	"ai",
 	"examples",
 	"migration",
 }
