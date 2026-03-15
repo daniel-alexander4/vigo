@@ -65,6 +65,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 			}
 			fmt.Printf("Published: %s\n", filePath)
 			recordPublish(operator, res)
+			reloadServer()
 			return nil
 		}
 
@@ -99,6 +100,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		}
 
 		recordPublish(operator, res)
+		reloadServer()
 		return nil
 	},
 }
@@ -281,6 +283,14 @@ func streamPublishSSE(body io.Reader) error {
 		}
 	}
 	return scanner.Err()
+}
+
+// reloadServer tells the server to re-read config from .live/ (best-effort).
+func reloadServer() {
+	client := newAPIClient()
+	if err := client.post("/api/v1/config/reload", nil, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: server reload failed (%v) — restart the server to pick up changes\n", err)
+	}
 }
 
 // recordPublish sends publish metadata to the server for audit (best-effort).

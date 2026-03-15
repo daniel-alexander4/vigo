@@ -296,12 +296,6 @@ func run() error {
 	}
 	configStore.SetBackend(secretsCfg.Backend)
 
-	// Start config file watcher in background.
-	go func() {
-		if err := configStore.Watch(ctx); err != nil && ctx.Err() == nil {
-			slog.Error("config watcher error", "error", err)
-		}
-	}()
 
 	// Parse base interval for compliance stale threshold.
 	baseInterval := 5 * time.Minute // default

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
 	"github.com/hobnob/hobnob/server/publish"
 )
@@ -24,14 +25,15 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 var _ = time.Now // used by format
 
 // ConfigHandler provides REST endpoints for config publish history,
-// versioning, and rollback.
+// versioning, rollback, and reload.
 type ConfigHandler struct {
-	queries *db.Queries
+	queries     *db.Queries
+	configStore *config.ConfigStore
 }
 
 // NewConfigHandler creates a ConfigHandler.
-func NewConfigHandler(queries *db.Queries) *ConfigHandler {
-	return &ConfigHandler{queries: queries}
+func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore) *ConfigHandler {
+	return &ConfigHandler{queries: queries, configStore: configStore}
 }
 
 // RegisterRoutes registers config management endpoints.
@@ -43,6 +45,17 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/config/rollback/{version}", h.Rollback)
 	mux.HandleFunc("POST /api/v1/config/freeze", h.Freeze)
 	mux.HandleFunc("POST /api/v1/config/unfreeze", h.Unfreeze)
+	mux.HandleFunc("POST /api/v1/config/reload", h.ReloadConfig)
+}
+
+// ReloadConfig re-reads all config files from disk. Called by hobnobcli
+// after config publish syncs files to .live/.
+func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
+	if err := h.configStore.Reload(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // ListPublishes returns recent config publishes.

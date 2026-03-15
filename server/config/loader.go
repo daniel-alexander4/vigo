@@ -16,7 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/hobnob/hobnob/server/conditionals"
 	"github.com/hobnob/hobnob/server/metrics"
 	"github.com/hobnob/hobnob/server/secrets"
@@ -278,10 +277,27 @@ func (cs *ConfigStore) ListRoleNames() []string {
 	return names
 }
 
-// Reload re-reads all config files and re-resolves secrets from the provider.
-// Used by the secret rotation watcher to pick up changed values.
+// Reload re-reads all config files from disk and re-resolves secrets.
+// Called by the REST API after config publish and by the secret rotation watcher.
+// On failure, the previous config is preserved and the onReloadFailure callback fires.
 func (cs *ConfigStore) Reload() error {
-	return cs.loadAll()
+	if err := cs.loadAll(); err != nil {
+		var se *SecretErrors
+		var ie *IdempotencyErrors
+		switch {
+		case errors.As(err, &se):
+			slog.Error("config reload failed, keeping previous config\n" + se.Format())
+		case errors.As(err, &ie):
+			slog.Error("config reload failed, keeping previous config\n" + ie.Format())
+		default:
+			slog.Error("config reload failed, keeping previous config", "error", err)
+		}
+		if cs.onReloadFailure != nil {
+			cs.onReloadFailure(err)
+		}
+		return err
+	}
+	return nil
 }
 
 // Version returns the current config version. Incremented on each successful
@@ -546,65 +562,6 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 
 	return trace
-}
-
-// Watch starts fsnotify watchers on the thrall-configs directory and its
-// modules/ and roles/ subdirectories. Config changes are reloaded with
-// ~500ms debounce. Blocks until ctx is cancelled.
-func (cs *ConfigStore) Watch(ctx context.Context) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return fmt.Errorf("creating fsnotify watcher: %w", err)
-	}
-	defer watcher.Close()
-
-	// Watch the thralls, modules, roles, templates, and vars trees recursively.
-	for _, dir := range []string{cs.thrallsDir(), cs.modulesDir(), cs.rolesDir(), cs.templatesDir(), cs.varsDir()} {
-		if err := watchRecursive(watcher, dir); err != nil {
-			return fmt.Errorf("watching %s: %w", dir, err)
-		}
-	}
-
-	var debounceTimer *time.Timer
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return nil
-			}
-			inTemplatesDir := strings.HasPrefix(event.Name, cs.templatesDir()+string(os.PathSeparator))
-			if !isConfigFile(event.Name) && !inTemplatesDir {
-				continue
-			}
-			if debounceTimer != nil {
-				debounceTimer.Stop()
-			}
-			debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
-				if err := cs.loadAll(); err != nil {
-					var se *SecretErrors
-					var ie *IdempotencyErrors
-					switch {
-					case errors.As(err, &se):
-						slog.Error("config reload failed, keeping previous config\n" + se.Format())
-					case errors.As(err, &ie):
-						slog.Error("config reload failed, keeping previous config\n" + ie.Format())
-					default:
-						slog.Error("config reload failed, keeping previous config", "error", err)
-					}
-					if cs.onReloadFailure != nil {
-						cs.onReloadFailure(err)
-					}
-				}
-			})
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return nil
-			}
-			slog.Error("fsnotify error", "error", err)
-		}
-	}
 }
 
 // thrallsDir returns the path to the thralls subdirectory.
@@ -1632,24 +1589,6 @@ func cloneResources(resources []ResourceConfig) []ResourceConfig {
 		}
 	}
 	return cloned
-}
-
-
-// watchRecursive adds dir and all its subdirectories to the watcher.
-// Silently skips directories that don't exist.
-func watchRecursive(watcher *fsnotify.Watcher, dir string) error {
-	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if d.IsDir() {
-			return watcher.Add(path)
-		}
-		return nil
-	})
 }
 
 // walkConfigFiles returns all config file paths under dir, recursively.

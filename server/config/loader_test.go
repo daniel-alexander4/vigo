@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 // mockProvider implements secrets.Provider for testing.
@@ -520,7 +519,7 @@ thralls:
 	}
 }
 
-func TestConfigWatcher(t *testing.T) {
+func TestConfigReload(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
@@ -533,18 +532,12 @@ resources: []
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go store.Watch(ctx)
-	time.Sleep(100 * time.Millisecond)
-
-	// Initially unconfigured
+	// Initially unconfigured.
 	if cfg := store.Get("new.example.com"); cfg.Environment != "" {
-		t.Fatalf("expected empty environment before update, got %q", cfg.Environment)
+		t.Fatalf("expected empty environment before reload, got %q", cfg.Environment)
 	}
 
-	// Write a new client file
+	// Write a new thrall file and reload.
 	writeFile(t, filepath.Join(dir, "thralls", "new-hosts.yaml"), `
 thralls:
   - match: "new.example.com"
@@ -552,18 +545,13 @@ thralls:
     modules: [app]
 `)
 
-	deadline := time.Now().Add(2 * time.Second)
-	var found bool
-	for time.Now().Before(deadline) {
-		cfg := store.Get("new.example.com")
-		if cfg.Environment == "staging" {
-			found = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	if err := store.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
 	}
-	if !found {
-		t.Fatal("config not reloaded within 2 seconds after file write")
+
+	cfg := store.Get("new.example.com")
+	if cfg.Environment != "staging" {
+		t.Fatalf("expected environment=staging after reload, got %q", cfg.Environment)
 	}
 }
 
@@ -586,25 +574,22 @@ thralls:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go store.Watch(ctx)
-	time.Sleep(100 * time.Millisecond)
-
 	if cfg := store.Get("good.example.com"); cfg == nil {
 		t.Fatal("expected good config")
 	}
 
-	// Write invalid YAML
+	// Write invalid YAML and reload.
 	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
 thralls:
   invalid yaml: [[[
 `)
 
-	time.Sleep(700 * time.Millisecond)
+	err = store.Reload()
+	if err == nil {
+		t.Fatal("expected reload error for invalid YAML")
+	}
 
-	// Good config should still be there
+	// Good config should still be there.
 	if cfg := store.Get("good.example.com"); cfg.Environment != "production" {
 		t.Fatal("bad YAML replaced good config")
 	}
