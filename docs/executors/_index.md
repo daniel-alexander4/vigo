@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 59 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 60 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -78,9 +78,9 @@ These executors use Linux-specific tools with no equivalent on other platforms.
 | `selinux` | Manage SELinux file contexts | [selinux](selinux.md) |
 | `systemd_dropin` | Manage systemd unit drop-in override files | [systemd_dropin](systemd_dropin.md) |
 
-## Windows-Only Executors (7)
+## Windows-Only Executors (8)
 
-These executors replace their Unix counterparts on Windows. They are registered under the same `type:` name (e.g., `service`, `package`) so configs are portable across platforms.
+These executors replace their Unix counterparts on Windows or manage Windows-specific resources. Cross-platform types (`service`, `package`, etc.) are registered under the same `type:` name so configs are portable across platforms.
 
 | Type | Description | Doc |
 |------|-------------|-----|
@@ -91,6 +91,7 @@ These executors replace their Unix counterparts on Windows. They are registered 
 | `cron` (Windows) | Manage Windows scheduled tasks | [cron_windows](cron_windows.md) |
 | `hostname` (Windows) | Set the Windows hostname | [hostname_windows](hostname_windows.md) |
 | `timezone` (Windows) | Set the Windows timezone | [timezone_windows](timezone_windows.md) |
+| `registry` | Manage Windows Registry keys and values | [registry_windows](registry_windows.md) |
 
 ## Network Device Executors (11)
 

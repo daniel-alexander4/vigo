@@ -137,6 +137,8 @@ pub mod hostname_windows;
 #[cfg(windows)]
 pub mod package_windows;
 #[cfg(windows)]
+pub mod registry_windows;
+#[cfg(windows)]
 pub mod service_windows;
 #[cfg(windows)]
 pub mod timezone_windows;

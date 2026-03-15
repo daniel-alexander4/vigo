@@ -255,7 +255,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 
 4. **Compliance frameworks.** Chef InSpec provides CIS benchmark libraries. Puppet has compliance modules. Hobnob has compliance status tracking but no pre-built benchmark content.
 
-5. **Windows depth.** Puppet has deep Windows support (registry, DSC, IIS, ACLs, scheduled tasks, chocolatey). Hobnob has 7 Windows executors — functional but shallow.
+5. **Windows depth.** Puppet has deep Windows support (registry, DSC, IIS, ACLs, scheduled tasks, chocolatey). Hobnob has 8 Windows executors (service, package, user, firewall, cron, hostname, timezone, registry) — growing but still narrower than Puppet's Windows module ecosystem.
 
 6. **Agentless option.** Ansible's SSH-based push model means zero agent installation. Useful for one-off tasks, heterogeneous environments, and network devices. Hobnob requires an agent on every managed node.
 
