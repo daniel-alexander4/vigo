@@ -270,6 +270,18 @@ func (h *DatabaseHandler) tableRowCounts() (map[string]int64, error) {
 	for rows.Next() {
 		var name string
 		rows.Scan(&name)
+		// Validate table name is alphanumeric+underscores only (defense in depth —
+		// names come from system catalog but we quote defensively).
+		safe := true
+		for _, c := range name {
+			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+				safe = false
+				break
+			}
+		}
+		if !safe {
+			continue
+		}
 		var count int64
 		h.sqlDB.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", name)).Scan(&count)
 		tables[name] = count

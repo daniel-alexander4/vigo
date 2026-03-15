@@ -206,7 +206,6 @@ type SMTPDigestConfig struct {
 // and default to sensible values when omitted from server.yaml.
 type TuningSection struct {
 	SignatureWindow     string        `yaml:"signature_window"`      // default "5m"
-	ThrallCacheTTL        string        `yaml:"thrall_cache_ttl"`      // default "60s"
 	LastSeenFlush       string        `yaml:"last_seen_flush"`       // default "10s"
 	TraitsPruneInterval string        `yaml:"traits_prune_interval"` // default "5m"
 	MetricsInterval     string        `yaml:"metrics_interval"`      // default "30s"

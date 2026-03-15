@@ -211,7 +211,7 @@ func (h *DoctorHandler) checkSMTP() DoctorCheck {
 	if port == 0 {
 		port = 587
 	}
-	addr := fmt.Sprintf("%s:%d", h.smtpHost, port)
+	addr := net.JoinHostPort(h.smtpHost, fmt.Sprintf("%d", port))
 
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {

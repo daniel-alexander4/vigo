@@ -281,10 +281,10 @@ func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) 
 		srcDump := filepath.Join(tmpDir, "db", "dump.sql")
 		if _, err := os.Stat(srcDump); err == nil {
 			sanitized, pw := sanitizePgDSN(manifest.DBDSN)
-		cmd := exec.Command("psql", "--dbname", sanitized, "-f", srcDump)
-		if pw != "" {
-			cmd.Env = append(os.Environ(), "PGPASSWORD="+pw)
-		}
+			cmd := exec.Command("psql", "--dbname", sanitized, "-f", srcDump)
+			if pw != "" {
+				cmd.Env = append(os.Environ(), "PGPASSWORD="+pw)
+			}
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
