@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/bin/hobnob";
+const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
 const SERVICE_LABEL: &str = "com.hobnob.thrall";
 const PLIST_PATH: &str = "/Library/LaunchDaemons/com.hobnob.thrall.plist";
 
@@ -104,7 +104,7 @@ mod tests {
     fn test_plist_content() {
         let plist = plist_content("hobd.example.com:1530", "/usr/local/etc/hobnob-thrall");
         assert!(plist.contains("com.hobnob.thrall"));
-        assert!(plist.contains("/usr/local/bin/hobnob"));
+        assert!(plist.contains("/usr/local/sbin/hobnob"));
         assert!(plist.contains("hobd.example.com:1530"));
         assert!(plist.contains("KeepAlive"));
     }

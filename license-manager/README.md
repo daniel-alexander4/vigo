@@ -23,7 +23,7 @@ From the hobnob repo:
 ./scripts/install-license-manager.sh
 ```
 
-This builds the binary, copies it to `/usr/local/bin/hobnob-license-manager`, and creates `/srv/hobnob/license-keys/`.
+This builds the binary, copies it to `/usr/local/sbin/hobnob-license-manager`, and creates `/srv/hobnob/license-keys/`.
 
 ### 2. Generate Keys (One-Time)
 

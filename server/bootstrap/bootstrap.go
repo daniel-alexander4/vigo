@@ -133,7 +133,7 @@ echo "Detected platform: ${OS}/${ARCH}"
 echo "Server: ${SERVER_ADDR}"
 
 # Create directories.
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="/usr/local/sbin"
 DATA_DIR="/etc/hobnob-thrall"
 mkdir -p "$DATA_DIR"
 
@@ -163,7 +163,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall
+ExecStart=/usr/local/sbin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall
 Restart=always
 RestartSec=10
 
@@ -186,7 +186,7 @@ elif command -v launchctl > /dev/null 2>&1; then
     <key>Label</key><string>com.hobnob.thrall</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/hobnob</string>
+        <string>/usr/local/sbin/hobnob</string>
         <string>--server</string><string>${GRPC_HOST}:1530</string>
         <string>--data-dir</string><string>/usr/local/etc/hobnob-thrall</string>
     </array>
@@ -201,7 +201,7 @@ elif command -v rcctl > /dev/null 2>&1; then
     # OpenBSD (rcctl)
     cat > /etc/rc.d/hobnob_thrall << 'RCSCRIPT'
 #!/bin/ksh
-daemon="/usr/local/bin/hobnob"
+daemon="/usr/local/sbin/hobnob"
 RCSCRIPT
     echo "daemon_flags=\"--server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall\"" >> /etc/rc.d/hobnob_thrall
     cat >> /etc/rc.d/hobnob_thrall << 'RCSCRIPT'
@@ -228,7 +228,7 @@ elif command -v svccfg > /dev/null 2>&1 && command -v svcadm > /dev/null 2>&1; t
       <service_fmri value="svc:/system/filesystem/local"/>
     </dependency>
     <exec_method type="method" name="start"
-      exec="/usr/local/bin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall &amp;"
+      exec="/usr/local/sbin/hobnob --server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall &amp;"
       timeout_seconds="60">
       <method_context><method_credential user="root" group="root"/></method_context>
     </exec_method>
@@ -257,7 +257,7 @@ elif [ -d /etc/rc.d ] && [ -f /etc/rc.subr ]; then
 . /etc/rc.subr
 name="hobnob_thrall"
 rcvar="\${name}_enable"
-command="/usr/local/bin/hobnob"
+command="/usr/local/sbin/hobnob"
 command_args="--server ${GRPC_HOST}:1530 --data-dir /etc/hobnob-thrall &"
 pidfile="/var/run/\${name}.pid"
 load_rc_config \$name

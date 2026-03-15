@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/bin/hobnob";
+const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
 const SERVICE_NAME: &str = "hobnob-thrall";
 const UNIT_PATH: &str = "/etc/systemd/system/hobnob-thrall.service";
 
@@ -50,7 +50,7 @@ pub async fn install_service(
 
     let grpc_addr = derive_grpc_addr(bootstrap_server, grpc_port);
 
-    // Copy running binary to /usr/local/bin/hobnob.
+    // Copy running binary to /usr/local/sbin/hobnob.
     let src_path = std::env::current_exe().context("resolve executable path")?;
     let src_path = std::fs::canonicalize(&src_path).context("resolve symlinks")?;
     if src_path.to_str() != Some(INSTALL_PATH) {
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn test_unit_file_content() {
         let unit = unit_file("hobd.example.com:1530", "/etc/hobnob-thrall");
-        assert!(unit.contains("ExecStart=/usr/local/bin/hobnob --server hobd.example.com:1530 --data-dir /etc/hobnob-thrall"));
+        assert!(unit.contains("ExecStart=/usr/local/sbin/hobnob --server hobd.example.com:1530 --data-dir /etc/hobnob-thrall"));
         assert!(unit.contains("Restart=always"));
         assert!(unit.contains("WantedBy=multi-user.target"));
     }

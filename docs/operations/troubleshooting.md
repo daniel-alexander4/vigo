@@ -249,7 +249,7 @@ curl -sSf http://<server>:8181/bootstrap | sudo sh
 
 **Symptoms:** `curl: (23) Failure writing output to destination` during bootstrap.
 
-**Cause:** The old agent binary at `/usr/local/bin/hobnob` is locked by a running process. Curl can't overwrite a binary that's currently executing.
+**Cause:** The old agent binary at `/usr/local/sbin/hobnob` is locked by a running process. Curl can't overwrite a binary that's currently executing.
 
 **Fix:**
 
@@ -275,7 +275,7 @@ sudo systemctl daemon-reload
 # 2. Remove agent data and binary
 sudo rm -rf /etc/hobnob-thrall
 sudo rm -rf /var/lib/hobnob
-sudo rm -f /usr/local/bin/hobnob
+sudo rm -f /usr/local/sbin/hobnob
 
 # 3. Re-bootstrap
 curl -sSf http://<server>:8181/bootstrap | sudo sh

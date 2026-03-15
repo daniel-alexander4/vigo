@@ -7,7 +7,7 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 KEY_DIR="/srv/hobnob/license-keys"
 SRV_DIR="/srv/hobnob"
 BIN_SRC="$REPO_DIR/bin/hobnob-license-manager"
-BIN_DST="/usr/local/bin/hobnob-license-manager"
+BIN_DST="/usr/local/sbin/hobnob-license-manager"
 README_SRC="$REPO_DIR/license-manager/README.md"
 README_DST="$SRV_DIR/README.md"
 

@@ -8,14 +8,14 @@ Resources targeting these paths are blocked:
 
 | Path | Protected Component |
 |------|-------------------|
-| `/usr/local/bin/hobnob` | Agent binary |
+| `/usr/local/sbin/hobnob` | Agent binary |
 | `/etc/hobnob-thrall/` | Agent config directory |
 | `/etc/hobnob/` | Agent config directory (alternate) |
 | `/var/lib/hobnob/` | Agent state store |
 | `/etc/systemd/system/hobnob-thrall.service` | Agent service unit |
-| `/usr/local/bin/hobd` | Server binary |
+| `/usr/local/sbin/hobd` | Server binary |
 | `/usr/local/bin/hobnobcli` | CLI binary |
-| `/usr/local/bin/hobnob-license-manager` | License tool binary |
+| `/usr/local/sbin/hobnob-license-manager` | License tool binary |
 | `/srv/hobnob/` | Server config directory |
 | `/etc/systemd/system/hobd.service` | Server service unit |
 
@@ -61,7 +61,7 @@ The `hobnobcli validate` command and the server's config loader check all resour
 
 ```bash
 $ hobnobcli validate
-ERROR: module "cleanup" resource "remove-agent": targets protected path /usr/local/bin/hobnob
+ERROR: module "cleanup" resource "remove-agent": targets protected path /usr/local/sbin/hobnob
 ERROR: module "maintenance" resource "stop-agent": targets protected service hobnob-thrall
 ```
 

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 #[cfg(unix)]
 const PROTECTED_PATHS: &[&str] = &[
     // Agent (Linux)
-    "/usr/local/bin/hobnob",
+    "/usr/local/sbin/hobnob",
     "/etc/hobnob-thrall/",
     "/etc/hobnob/",
     "/var/lib/hobnob/",
@@ -29,9 +29,9 @@ const PROTECTED_PATHS: &[&str] = &[
     // Agent (illumos)
     "/var/svc/manifest/system/hobnob-thrall.xml",
     // Server
-    "/usr/local/bin/hobd",
+    "/usr/local/sbin/hobd",
     "/usr/local/bin/hobnobcli",
-    "/usr/local/bin/hobnob-license-manager",
+    "/usr/local/sbin/hobnob-license-manager",
     "/srv/hobnob/",
     "/etc/systemd/system/hobd.service",
 ];
@@ -82,10 +82,10 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     "kill -9 hobnob",
     "kill -9 hobd",
     // file removal
-    "rm /usr/local/bin/hobnob",
-    "rm /usr/local/bin/hobd",
+    "rm /usr/local/sbin/hobnob",
+    "rm /usr/local/sbin/hobd",
     "rm /usr/local/bin/hobnobcli",
-    "rm /usr/local/bin/hobnob-license-manager",
+    "rm /usr/local/sbin/hobnob-license-manager",
     "rm -rf /etc/hobnob",
     "rm -rf /var/lib/hobnob",
     "rm -rf /srv/hobnob",
@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn file_targeting_agent_binary_blocked() {
-        let p = params(&[("targetpath", "/usr/local/bin/hobnob")]);
+        let p = params(&[("targetpath", "/usr/local/sbin/hobnob")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
         assert!(v.unwrap().reason.contains("protected path"));
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn file_targeting_server_binary_blocked() {
-        let p = params(&[("targetpath", "/usr/local/bin/hobd")]);
+        let p = params(&[("targetpath", "/usr/local/sbin/hobd")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
     }
@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn exec_rm_agent_binary_blocked() {
-        let p = params(&[("command", "rm /usr/local/bin/hobnob")]);
+        let p = params(&[("command", "rm /usr/local/sbin/hobnob")]);
         let v = check_resource("bad-exec", "exec", &p);
         assert!(v.is_some());
     }
@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn path_exact_match() {
-        assert!(is_protected_path("/usr/local/bin/hobnob").is_some());
+        assert!(is_protected_path("/usr/local/sbin/hobnob").is_some());
     }
 
     #[test]
@@ -564,8 +564,8 @@ mod tests {
 
     #[test]
     fn path_similar_name_allowed() {
-        // /usr/local/bin/hobnob-helper should NOT match /usr/local/bin/hobnob
-        assert!(is_protected_path("/usr/local/bin/hobnob-helper").is_none());
+        // /usr/local/sbin/hobnob-helper should NOT match /usr/local/sbin/hobnob
+        assert!(is_protected_path("/usr/local/sbin/hobnob-helper").is_none());
     }
 
     #[test]

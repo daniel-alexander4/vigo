@@ -37,7 +37,7 @@ done
 systemctl daemon-reload
 
 echo "Removing agent binaries (current + legacy)..."
-rm -f /usr/local/bin/hobnob
+rm -f /usr/local/sbin/hobnob
 rm -f /usr/local/bin/isogov-agent
 
 echo "Removing agent data (/etc/hobnob-thrall)..."

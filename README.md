@@ -27,7 +27,7 @@ That's it. The server generates a shell script on the fly that downloads the `ho
 
 #### What the bootstrap curl does
 
-1. Downloads the pre-built `hobnob` binary from the server to `/usr/local/bin/hobnob`
+1. Downloads the pre-built `hobnob` binary from the server to `/usr/local/sbin/hobnob`
 2. Runs `hobnob bootstrap` which generates an ED25519 keypair + ECDSA TLS keypair
 3. Sends a CSR to the server
 4. Server validates the node (trusted pattern + CIDR, or token)

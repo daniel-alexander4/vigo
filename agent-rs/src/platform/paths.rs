@@ -89,7 +89,7 @@ pub fn default_executors_dir() -> PathBuf {
 /// Default binary install path.
 #[cfg(unix)]
 pub fn default_binary_path() -> PathBuf {
-    PathBuf::from("/usr/local/bin/hobnob")
+    PathBuf::from("/usr/local/sbin/hobnob")
 }
 
 #[cfg(windows)]

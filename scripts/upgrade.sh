@@ -60,7 +60,7 @@ esac
 HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 if docker exec hobnob test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" 2>/dev/null; then
-    docker cp "hobnob:/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/bin/hobnob
+    docker cp "hobnob:/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/sbin/hobnob
     echo "Installed agent binary: $HOST_OS/$AGENT_ARCH"
     systemctl restart hobnob-thrall 2>/dev/null || true
 else
@@ -95,7 +95,7 @@ if [ "${1:-}" = "--build" ] && [ -d "$REPO_DIR" ]; then
     # Check server binary build time vs latest source modification.
     NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_GO=${NEWEST_GO%.*}
-    CTR_HOBD=$(docker exec hobnob stat -c '%Y' /usr/local/bin/hobd 2>/dev/null || echo 0)
+    CTR_HOBD=$(docker exec hobnob stat -c '%Y' /usr/local/sbin/hobd 2>/dev/null || echo 0)
     if [ -n "$NEWEST_GO" ] && [ "$NEWEST_GO" -gt "$CTR_HOBD" ]; then
         echo "  STALE  hobd in container (source is newer than binary)"
         STALE=1

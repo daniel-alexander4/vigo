@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/bin/hobnob";
+const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
 const SERVICE_NAME: &str = "hobnob_thrall";
 
 /// Path to the rc.d script.
@@ -130,7 +130,7 @@ mod tests {
     fn test_rc_script() {
         let script = rc_script("hobd.example.com:1530", "/etc/hobnob-thrall");
         assert!(script.contains("hobnob_thrall"));
-        assert!(script.contains("/usr/local/bin/hobnob"));
+        assert!(script.contains("/usr/local/sbin/hobnob"));
         assert!(script.contains("hobd.example.com:1530"));
         assert!(script.contains("PROVIDE: hobnob_thrall"));
     }

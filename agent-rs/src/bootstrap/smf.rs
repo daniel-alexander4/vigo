@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/bin/hobnob";
+const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
 const MANIFEST_PATH: &str = "/var/svc/manifest/system/hobnob-thrall.xml";
 const FMRI: &str = "svc:/system/hobnob-thrall:default";
 
@@ -120,7 +120,7 @@ mod tests {
     fn test_smf_manifest() {
         let manifest = smf_manifest("hobd.example.com:1530", "/etc/hobnob-thrall");
         assert!(manifest.contains("hobnob-thrall"));
-        assert!(manifest.contains("/usr/local/bin/hobnob"));
+        assert!(manifest.contains("/usr/local/sbin/hobnob"));
         assert!(manifest.contains("hobd.example.com:1530"));
         assert!(manifest.contains("service_bundle"));
         assert!(manifest.contains("system/hobnob-thrall"));

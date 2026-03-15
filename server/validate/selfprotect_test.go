@@ -12,7 +12,7 @@ func TestSelfProtect_FileTargetingAgentBinary(t *testing.T) {
 			Name: "overwrite-agent",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/usr/local/bin/hobnob",
+				"targetpath": "/usr/local/sbin/hobnob",
 				"content":    "malicious",
 			},
 		}},
@@ -30,7 +30,7 @@ func TestSelfProtect_FileTargetingServerBinary(t *testing.T) {
 			Name: "overwrite-server",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/usr/local/bin/hobd",
+				"targetpath": "/usr/local/sbin/hobd",
 				"content":    "malicious",
 			},
 		}},
@@ -284,8 +284,8 @@ func TestSelfProtect_PathPrefixNotChild(t *testing.T) {
 }
 
 func TestSelfProtect_PathSimilarBinaryAllowed(t *testing.T) {
-	// /usr/local/bin/hobnob-helper should NOT match /usr/local/bin/hobnob
-	result := matchProtectedPath("/usr/local/bin/hobnob-helper")
+	// /usr/local/sbin/hobnob-helper should NOT match /usr/local/sbin/hobnob
+	result := matchProtectedPath("/usr/local/sbin/hobnob-helper")
 	if result != "" {
 		t.Fatalf("should not match similar binary name, got: %s", result)
 	}

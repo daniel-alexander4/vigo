@@ -12,15 +12,15 @@ import (
 // Mirrors the agent-side list in agent-rs/src/guardrails.rs.
 var protectedPaths = []string{
 	// Agent
-	"/usr/local/bin/hobnob",
+	"/usr/local/sbin/hobnob",
 	"/etc/hobnob-thrall/",
 	"/etc/hobnob/",
 	"/var/lib/hobnob/",
 	"/etc/systemd/system/hobnob-thrall.service",
 	// Server
-	"/usr/local/bin/hobd",
+	"/usr/local/sbin/hobd",
 	"/usr/local/bin/hobnobcli",
-	"/usr/local/bin/hobnob-license-manager",
+	"/usr/local/sbin/hobnob-license-manager",
 	"/srv/hobnob/",
 	"/etc/systemd/system/hobd.service",
 }
