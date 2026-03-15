@@ -191,8 +191,31 @@ pub fn converge(
             }
         }
 
-        let mut result = execute_resource(node, executors, cache, opts.dry_run, &opts.run_id, traits);
+        // watch_secret resources should run on first convergence (no cached
+        // result) so initial secrets like passwords get applied. On subsequent
+        // cycles they skip unless the server sets _secret_triggered=true.
+        let exec_node;
+        let node_ref = if node.params.get("_watch_secret").map(|s| s == "true").unwrap_or(false)
+            && !cache.has_run(&node.name)
+        {
+            let mut params = node.params.clone();
+            params.insert("_triggered".to_string(), "true".to_string());
+            exec_node = ResourceNode {
+                params,
+                ..node.clone()
+            };
+            &exec_node
+        } else {
+            node
+        };
+
+        let mut result = execute_resource(node_ref, executors, cache, opts.dry_run, &opts.run_id, traits);
         result.module_name = node.module_name.clone();
+
+        // Mark resource as seen (for watch_secret first-run detection).
+        if result.error.is_none() && result.action != Action::Skipped {
+            cache.mark_seen(&node.name);
+        }
 
         // Rollback file on error.
         if result.error.is_some() && !opts.dry_run {

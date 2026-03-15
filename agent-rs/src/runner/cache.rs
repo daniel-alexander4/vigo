@@ -20,6 +20,9 @@ struct CacheEntry {
 /// Caches no-op resource results to skip redundant executor calls.
 pub struct ResultCache {
     entries: HashMap<String, CacheEntry>,
+    /// Tracks all resources that have been executed at least once (any type).
+    /// Used by watch_secret to detect first-run resources.
+    seen: std::collections::HashSet<String>,
     max_age: usize,
 }
 
@@ -36,6 +39,7 @@ impl ResultCache {
     pub fn new(max_age: usize) -> Self {
         Self {
             entries: HashMap::new(),
+            seen: std::collections::HashSet::new(),
             max_age: max_age.max(1),
         }
     }
@@ -60,6 +64,17 @@ impl ResultCache {
 
         entry.age += 1;
         Some(entry.result.clone())
+    }
+
+    /// Returns true if a resource has been executed at least once in this
+    /// cache instance's lifetime. Used by watch_secret to detect first run.
+    pub fn has_run(&self, name: &str) -> bool {
+        self.seen.contains(name)
+    }
+
+    /// Mark a resource as having been executed (regardless of cacheability).
+    pub fn mark_seen(&mut self, name: &str) {
+        self.seen.insert(name.to_string());
     }
 
     /// Store a no-op result for future cache hits.
