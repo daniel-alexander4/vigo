@@ -1,0 +1,418 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: LicenseRef-Proprietary
+
+// Hobnob public website — static marketing + documentation browser.
+// Embeds all content at build time for single-binary deployment.
+package main
+
+import (
+	"bufio"
+	"embed"
+	"html/template"
+	"io/fs"
+	"log"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+)
+
+//go:embed static
+var staticFS embed.FS
+
+//go:embed templates
+var templateFS embed.FS
+
+// docsDir is the path to the docs directory. Embedded at build time via -ldflags
+// or read from HOBNOB_DOCS_DIR env var (defaults to ../docs for local dev).
+var docsDir = ""
+
+// contentFiles maps URL slugs to markdown files relative to the docs directory.
+var contentFiles = map[string]string{
+	"overview":        "overview/overview.md",
+	"differentiators": "overview/differentiators.md",
+	"fact-sheet":      "overview/fact-sheet.md",
+	"comparison":      "overview/technical-comparison.md",
+}
+
+// --- Types ---
+
+type pageData struct {
+	Title       string
+	ActiveNav   string
+	Content     template.HTML
+	NavTree     []navSection
+	CurrentPath string
+	Breadcrumbs []crumb
+}
+
+type navSection struct {
+	Title string
+	Path  string
+	Pages []navPage
+}
+
+type navPage struct {
+	Title string
+	Path  string
+	Text  string // plain text for search
+}
+
+type crumb struct {
+	Title string
+	Path  string
+}
+
+// --- Main ---
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	if docsDir == "" {
+		docsDir = os.Getenv("HOBNOB_DOCS_DIR")
+	}
+	if docsDir == "" {
+		docsDir = "../docs"
+	}
+
+	// Parse templates.
+	tmpl, err := template.ParseFS(templateFS, "templates/*.html")
+	if err != nil {
+		log.Fatalf("parsing templates: %v", err)
+	}
+
+	// Content dir for top-level pages (OVERVIEW.md, etc.).
+	contentDir := os.Getenv("HOBNOB_CONTENT_DIR")
+	if contentDir == "" {
+		contentDir = filepath.Join(docsDir, "..")
+	}
+
+	// Build docs nav tree.
+	nav := buildNav(docsDir)
+
+	// Routes.
+	mux := http.NewServeMux()
+
+	// Static assets.
+	staticSub, _ := fs.Sub(staticFS, "static")
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+
+	// Landing page.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		tmpl.ExecuteTemplate(w, "landing.html", pageData{
+			Title:     "Hobnob — Configuration Management",
+			ActiveNav: "home",
+		})
+	})
+
+	// Top-level content pages.
+	for slug, filename := range contentFiles {
+		s, f := slug, filename
+		mux.HandleFunc("/"+s, func(w http.ResponseWriter, r *http.Request) {
+			raw, err := os.ReadFile(filepath.Join(docsDir, f))
+			if err != nil {
+				http.Error(w, "page not found", 404)
+				return
+			}
+			html := renderMarkdown(string(raw))
+			tmpl.ExecuteTemplate(w, "page.html", pageData{
+				Title:     strings.Title(strings.ReplaceAll(s, "-", " ")),
+				ActiveNav: s,
+				Content:   template.HTML(html),
+			})
+		})
+	}
+
+	// Pricing page (extracted from COMMERCIAL-TERMS.md).
+	mux.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
+		raw, err := os.ReadFile(filepath.Join(contentDir, "COMMERCIAL-TERMS.md"))
+		if err != nil {
+			http.Error(w, "page not found", 404)
+			return
+		}
+		html := renderMarkdown(string(raw))
+		tmpl.ExecuteTemplate(w, "page.html", pageData{
+			Title:     "Pricing",
+			ActiveNav: "pricing",
+			Content:   template.HTML(html),
+		})
+	})
+
+	// Docs browser.
+	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := os.ReadFile(filepath.Join(docsDir, "_index.md"))
+		html := rewriteDocsLinks(renderMarkdown(string(raw)), "")
+		tmpl.ExecuteTemplate(w, "docs.html", pageData{
+			Title:     "Documentation",
+			ActiveNav: "docs",
+			Content:   template.HTML(html),
+			NavTree:   nav,
+		})
+	})
+
+	mux.HandleFunc("/docs/", func(w http.ResponseWriter, r *http.Request) {
+		pagePath := strings.TrimPrefix(r.URL.Path, "/docs/")
+		pagePath = strings.TrimSuffix(pagePath, ".md")
+
+		// Serve static assets (SVG, PNG, JSON) directly.
+		ext := filepath.Ext(pagePath)
+		if ext != "" && ext != ".md" {
+			filePath := filepath.Clean(filepath.Join(docsDir, pagePath))
+			if strings.Contains(filePath, "..") {
+				http.Error(w, "invalid path", 400)
+				return
+			}
+			http.ServeFile(w, r, filePath)
+			return
+		}
+
+		// Try as file, then as directory index.
+		var raw []byte
+		var baseDir string
+		mdPath := filepath.Join(docsDir, pagePath+".md")
+		if raw, err = os.ReadFile(mdPath); err != nil {
+			mdPath = filepath.Join(docsDir, pagePath, "_index.md")
+			if raw, err = os.ReadFile(mdPath); err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			baseDir = pagePath
+		} else {
+			baseDir = path.Dir(pagePath)
+		}
+
+		html := rewriteDocsLinks(renderMarkdown(string(raw)), baseDir)
+
+		// Build breadcrumbs.
+		parts := strings.Split(pagePath, "/")
+		var breadcrumbs []crumb
+		currentSection := ""
+		for i, part := range parts {
+			title := strings.ReplaceAll(part, "-", " ")
+			title = strings.ReplaceAll(title, "_", " ")
+			if i == 0 {
+				currentSection = part
+				for _, sec := range nav {
+					if sec.Path == part {
+						title = sec.Title
+						break
+					}
+				}
+			}
+			if i < len(parts)-1 {
+				breadcrumbs = append(breadcrumbs, crumb{Title: title, Path: strings.Join(parts[:i+1], "/")})
+			} else {
+				breadcrumbs = append(breadcrumbs, crumb{Title: title})
+			}
+		}
+
+		tmpl.ExecuteTemplate(w, "docs.html", pageData{
+			Title:       "Docs — " + breadcrumbs[len(breadcrumbs)-1].Title,
+			ActiveNav:   "docs",
+			Content:     template.HTML(html),
+			NavTree:     nav,
+			CurrentPath: pagePath,
+			Breadcrumbs: breadcrumbs,
+		})
+		_ = currentSection
+	})
+
+	log.Printf("hobnob site listening on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, mux))
+}
+
+// --- Markdown ---
+
+func renderMarkdown(md string) string {
+	gm := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.Table))
+	var buf strings.Builder
+	if err := gm.Convert([]byte(md), &buf); err != nil {
+		return "<p>Error rendering markdown</p>"
+	}
+	return buf.String()
+}
+
+// --- Docs nav ---
+
+var sectionOrder = []string{
+	"getting-started", "concepts", "executors", "traits",
+	"cli", "api", "operations", "ui", "ai", "examples", "migration",
+}
+
+func buildNav(docsDir string) []navSection {
+	entries, err := os.ReadDir(docsDir)
+	if err != nil {
+		return nil
+	}
+
+	sectionMap := make(map[string]navSection)
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		sectionPath := entry.Name()
+		sectionTitle := extractTitle(filepath.Join(docsDir, sectionPath, "_index.md"))
+		if sectionTitle == "" {
+			sectionTitle = strings.Title(strings.ReplaceAll(sectionPath, "-", " "))
+		}
+
+		pageFiles, err := os.ReadDir(filepath.Join(docsDir, sectionPath))
+		if err != nil {
+			continue
+		}
+
+		var pages []navPage
+		for _, pf := range pageFiles {
+			if pf.IsDir() || !strings.HasSuffix(pf.Name(), ".md") || pf.Name() == "_index.md" {
+				continue
+			}
+			pageName := strings.TrimSuffix(pf.Name(), ".md")
+			pageTitle := extractTitle(filepath.Join(docsDir, sectionPath, pf.Name()))
+			if pageTitle == "" {
+				pageTitle = strings.ReplaceAll(pageName, "-", " ")
+				pageTitle = strings.ReplaceAll(pageTitle, "_", " ")
+			}
+
+			// Read plain text for search.
+			var plainText string
+			if raw, err := os.ReadFile(filepath.Join(docsDir, sectionPath, pf.Name())); err == nil {
+				plainText = stripMarkdown(string(raw))
+			}
+
+			pages = append(pages, navPage{
+				Title: pageTitle,
+				Path:  sectionPath + "/" + pageName,
+				Text:  plainText,
+			})
+		}
+
+		sort.Slice(pages, func(i, j int) bool { return pages[i].Title < pages[j].Title })
+		sectionMap[sectionPath] = navSection{Title: sectionTitle, Path: sectionPath, Pages: pages}
+	}
+
+	var nav []navSection
+	seen := make(map[string]bool)
+	for _, name := range sectionOrder {
+		if sec, ok := sectionMap[name]; ok {
+			nav = append(nav, sec)
+			seen[name] = true
+		}
+	}
+	for name, sec := range sectionMap {
+		if !seen[name] {
+			nav = append(nav, sec)
+		}
+	}
+	return nav
+}
+
+func extractTitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimPrefix(line, "# ")
+		}
+	}
+	return ""
+}
+
+func stripMarkdown(md string) string {
+	var b strings.Builder
+	inFence := false
+	for _, line := range strings.Split(md, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		for strings.HasPrefix(trimmed, "#") {
+			trimmed = strings.TrimPrefix(trimmed, "#")
+		}
+		trimmed = strings.TrimSpace(trimmed)
+		if len(trimmed) > 0 && trimmed[0] == '|' && !strings.ContainsAny(trimmed, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
+			continue
+		}
+		trimmed = strings.ReplaceAll(trimmed, "|", " ")
+		if trimmed != "" {
+			b.WriteString(trimmed)
+			b.WriteByte(' ')
+		}
+	}
+	text := b.String()
+	text = strings.ReplaceAll(text, "`", "")
+	text = strings.ReplaceAll(text, "**", "")
+	text = strings.ReplaceAll(text, "*", "")
+	fields := strings.Fields(text)
+	return strings.Join(fields, " ")
+}
+
+func rewriteDocsLinks(html string, baseDir string) string {
+	// Simple link rewriter for relative .md links → /docs/ paths.
+	result := html
+	for {
+		i := strings.Index(result, `href="`)
+		if i < 0 {
+			break
+		}
+		start := i + 6
+		end := strings.Index(result[start:], `"`)
+		if end < 0 {
+			break
+		}
+		href := result[start : start+end]
+
+		if href == "" || href[0] == '/' || href[0] == '#' ||
+			strings.Contains(href, "://") || strings.HasPrefix(href, "mailto:") {
+			result = result[:start+end+1] + result[start+end+1:]
+			i = start + end + 1
+			continue
+		}
+
+		anchor := ""
+		if ai := strings.IndexByte(href, '#'); ai >= 0 {
+			anchor = href[ai:]
+			href = href[:ai]
+		}
+
+		if !strings.HasSuffix(href, ".md") && strings.Contains(href, ".") {
+			break
+		}
+
+		resolved := path.Clean(path.Join(baseDir, href))
+		resolved = strings.TrimSuffix(resolved, ".md")
+		resolved = strings.TrimSuffix(resolved, "/_index")
+
+		newHref := "/docs/" + resolved + anchor
+		result = result[:start] + newHref + result[start+end:]
+		break
+	}
+	return result
+}
+
+func init() {
+	// Suppress strings.Title deprecation — good enough for display names.
+}

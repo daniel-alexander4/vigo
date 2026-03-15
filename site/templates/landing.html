@@ -1,0 +1,72 @@
+{{template "base" .}}
+{{define "content"}}
+<section class="hero">
+    <div class="hero__inner">
+        <h1 class="hero__title">Configuration management<br>that gets out of your way.</h1>
+        <p class="hero__subtitle">One agent. Seven operating systems. YAML configs that anyone can read. Continuous convergence with zero database queries on the hot path.</p>
+        <div class="hero__actions">
+            <a href="/docs/getting-started/quickstart" class="btn btn--primary">Get Started</a>
+            <a href="/overview" class="btn btn--secondary">Learn More</a>
+        </div>
+    </div>
+</section>
+
+<section class="features">
+    <div class="features__grid">
+        <div class="feature-card">
+            <h3>One Binary, Seven Platforms</h3>
+            <p>Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Write <code>type: service</code> and the agent dispatches to systemd, launchd, rcctl, SMF, or sc.exe.</p>
+        </div>
+        <div class="feature-card">
+            <h3>74 Built-in Executors</h3>
+            <p>Files, packages, services, users, cron, firewall, Docker, IIS, registry, ACLs, and more. Every executor is idempotent: check before act, change only on drift.</p>
+        </div>
+        <div class="feature-card">
+            <h3>Zero DB on Check-in</h3>
+            <p>The FleetIndex holds all real-time state in memory. Agent check-ins execute with zero database queries. One server handles your entire fleet.</p>
+        </div>
+        <div class="feature-card">
+            <h3>YAML. Not a DSL.</h3>
+            <p>No custom language, no compile step, no parser quirks. A sysadmin unfamiliar with Hobnob can read a config file and understand what it does.</p>
+        </div>
+        <div class="feature-card">
+            <h3>Offline Convergence</h3>
+            <p>Agents cache signed policy bundles in LMDB. When the server is unreachable, convergence continues. Results queue locally and drain on reconnect.</p>
+        </div>
+        <div class="feature-card">
+            <h3>Security by Default</h3>
+            <p>mTLS on all traffic. ED25519 request signing. One-time bcrypt tokens. Secrets never in plaintext. No <code>--no-ssl</code> flag exists.</p>
+        </div>
+    </div>
+</section>
+
+<section class="quickstart">
+    <div class="quickstart__inner">
+        <h2>Bootstrap in 30 Seconds</h2>
+        <div class="code-block">
+            <code>curl -sSf http://server:8181/bootstrap | sudo sh</code>
+        </div>
+        <p>Downloads the agent, generates TLS certificates, enrolls with the server, installs the service. Under management in one command.</p>
+    </div>
+</section>
+
+<section class="platforms">
+    <div class="platforms__inner">
+        <h2>Supported Platforms</h2>
+        <table class="platforms__table">
+            <thead>
+                <tr><th>Platform</th><th>Init System</th><th>Package Manager</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Linux</td><td>systemd</td><td>apt, dnf, yum</td></tr>
+                <tr><td>macOS</td><td>launchd</td><td>Homebrew</td></tr>
+                <tr><td>FreeBSD</td><td>rc.d</td><td>pkg</td></tr>
+                <tr><td>OpenBSD</td><td>rcctl</td><td>pkg_add</td></tr>
+                <tr><td>NetBSD</td><td>rc.d</td><td>pkgin</td></tr>
+                <tr><td>illumos</td><td>SMF</td><td>IPS</td></tr>
+                <tr><td>Windows</td><td>Windows Service</td><td>Chocolatey, winget, Scoop</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{{end}}

@@ -1,0 +1,33 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a href="/" class="site-header__logo">Hobnob</a>
+            <nav class="site-nav">
+                <a href="/overview" class="site-nav__link{{if eq .ActiveNav "overview"}} site-nav__link--active{{end}}">Overview</a>
+                <a href="/differentiators" class="site-nav__link{{if eq .ActiveNav "differentiators"}} site-nav__link--active{{end}}">Why Hobnob</a>
+                <a href="/docs" class="site-nav__link{{if eq .ActiveNav "docs"}} site-nav__link--active{{end}}">Documentation</a>
+                <a href="/pricing" class="site-nav__link{{if eq .ActiveNav "pricing"}} site-nav__link--active{{end}}">Pricing</a>
+                <a href="/fact-sheet" class="site-nav__link{{if eq .ActiveNav "fact-sheet"}} site-nav__link--active{{end}}">Fact Sheet</a>
+            </nav>
+        </div>
+    </header>
+    <main class="site-main">
+        {{template "content" .}}
+    </main>
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <p>Alexander4, LLC &mdash; <a href="mailto:hobnob.licensing@alexander4.org">hobnob.licensing@alexander4.org</a></p>
+        </div>
+    </footer>
+</body>
+</html>
+{{end}}

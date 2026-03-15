@@ -1,0 +1,10 @@
+services:
+  site:
+    build:
+      context: .
+      dockerfile: site/Dockerfile
+    ports:
+      - "8090:8080"
+    environment:
+      - HOBNOB_DOCS_DIR=/docs
+    restart: unless-stopped
