@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,7 +17,7 @@ import (
 func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
-		return nil, fmt.Errorf("parsing YAML: %w", err)
+		return nil, formatYAMLError(data, err)
 	}
 
 	if node.Kind != yaml.DocumentNode || len(node.Content) == 0 {
@@ -197,6 +198,36 @@ func parseOneResource(node *yaml.Node) (ResourceConfig, error) {
 	}
 
 	return res, nil
+}
+
+// formatYAMLError extracts the line number from a YAML parse error and
+// includes the offending line content for easier debugging.
+func formatYAMLError(data []byte, err error) error {
+	msg := err.Error()
+
+	// Extract line number from "yaml: line N: ..."
+	var lineNum int
+	if _, scanErr := fmt.Sscanf(msg, "yaml: line %d:", &lineNum); scanErr == nil && lineNum > 0 {
+		lines := strings.Split(string(data), "\n")
+		if lineNum <= len(lines) {
+			line := lines[lineNum-1]
+			// Show the line with visible whitespace indicators.
+			visible := strings.ReplaceAll(line, "\t", "→TAB")
+			hint := ""
+			if strings.HasPrefix(line, "\t") {
+				hint = " (tabs are not allowed in YAML — use spaces)"
+			} else if lineNum > 1 {
+				// Check if indentation looks wrong relative to context.
+				prev := lines[lineNum-2]
+				if len(line) > 0 && len(prev) > 0 && line[0] == ' ' && prev[0] != ' ' {
+					hint = " (this line is indented but the previous line is not — check alignment)"
+				}
+			}
+			return fmt.Errorf("line %d: %s\n  %d | %s%s", lineNum, strings.TrimPrefix(msg, fmt.Sprintf("yaml: line %d: ", lineNum)), lineNum, visible, hint)
+		}
+	}
+
+	return fmt.Errorf("YAML: %w", err)
 }
 
 // structuralFields are resource keys that should not be set via defaults.

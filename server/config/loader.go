@@ -1276,7 +1276,7 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 		}
 		var def RoleDefinition
 		if err := yaml.Unmarshal(data, &def); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", path, err)
+			return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
 		}
 		if def.Name == "" {
 			return nil, fmt.Errorf("%s: missing required 'name' field", path)
@@ -1320,7 +1320,7 @@ func loadThrallsDir(dir string) ([]ThrallEntry, error) {
 		}
 		var cfg ThrallsConfig
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", path, err)
+			return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
 		}
 		for i, entry := range cfg.Thralls {
 			if entry.Match == "" {
