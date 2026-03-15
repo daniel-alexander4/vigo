@@ -607,6 +607,18 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	pagePath := r.PathValue("path")
 
+	// Serve static assets (SVG, PNG, etc.) directly from the docs directory.
+	ext := filepath.Ext(pagePath)
+	if ext != "" && ext != ".md" {
+		filePath := filepath.Clean(filepath.Join(h.docsDir, pagePath))
+		if strings.Contains(filePath, "..") {
+			http.Error(w, "invalid path", http.StatusBadRequest)
+			return
+		}
+		http.ServeFile(w, r, filePath)
+		return
+	}
+
 	// Strip .md extension — markdown files link to each other with .md
 	// but the docs browser uses extensionless URLs.
 	pagePath = strings.TrimSuffix(pagePath, ".md")
