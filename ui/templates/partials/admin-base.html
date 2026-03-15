@@ -17,7 +17,6 @@
                     <div class="topbar__user">
                         <svg class="topbar__avatar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         <span class="topbar__username">{{if .CurrentUser.DisplayName}}{{.CurrentUser.DisplayName}}{{else}}{{.CurrentUser.Username}}{{end}}</span>
-                        <span class="badge badge--{{.CurrentUser.Role}}">{{.CurrentUser.Role}}</span>
                     </div>
                     <form method="POST" action="/logout" hx-boost="false">
                         <button type="submit" class="topbar__logout">Sign out</button>
