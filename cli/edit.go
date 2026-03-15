@@ -13,10 +13,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// hnbConfigRoot is the base directory for .hnb config files.
+// vi only allows editing files within this tree.
+const hnbConfigRoot = "/srv/hobnob/hnb"
+
 var viCmd = &cobra.Command{
 	Use:   "vi <file.hnb>",
 	Short: "Open a .hnb config file in an editor with YAML validation on save",
 	Long: `Opens a .hnb file in vim with hobnob-aware syntax highlighting.
+
+Files must be within /srv/hobnob/hnb/. Paths can be relative —
+if the file is not found at the given path, it is resolved relative
+to /srv/hobnob/hnb/proposed/.
 
 On save, the file is checked for YAML correctness and idempotency. If
 validation fails, the write is aborted and errors are shown. Use :w! to
@@ -25,19 +33,52 @@ force-save past validation.
 Can also be invoked as 'hnbvi' for convenience.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runEditor(args[0])
+		path, err := resolveHnbPath(args[0])
+		if err != nil {
+			return err
+		}
+		return runEditor(path)
 	},
+}
+
+// resolveHnbPath resolves a file path within the hnb config directory.
+// Accepts absolute paths (must be within /srv/hobnob/hnb/) or relative
+// paths (resolved against /srv/hobnob/hnb/proposed/).
+func resolveHnbPath(input string) (string, error) {
+	var absPath string
+	if filepath.IsAbs(input) {
+		absPath = filepath.Clean(input)
+	} else {
+		// Try the input as-is first (relative to cwd).
+		if _, err := os.Stat(input); err == nil {
+			absPath, _ = filepath.Abs(input)
+		} else {
+			// Resolve relative to proposed/ directory.
+			absPath = filepath.Join(hnbConfigRoot, "proposed", input)
+		}
+	}
+
+	// Resolve symlinks to get the real path.
+	realPath, err := filepath.EvalSymlinks(filepath.Dir(absPath))
+	if err != nil {
+		// Directory doesn't exist yet — use the cleaned path.
+		realPath = filepath.Dir(absPath)
+	}
+	absPath = filepath.Join(realPath, filepath.Base(absPath))
+
+	// Ensure the resolved path is within the allowed root.
+	relPath, err := filepath.Rel(hnbConfigRoot, absPath)
+	if err != nil || relPath == ".." || len(relPath) > 2 && relPath[:3] == "../" {
+		return "", fmt.Errorf("file must be within %s (got %s)", hnbConfigRoot, absPath)
+	}
+
+	return absPath, nil
 }
 
 func init() {
 }
 
-func runEditor(filePath string) error {
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		return fmt.Errorf("resolving path: %w", err)
-	}
-
+func runEditor(absPath string) error {
 	// Create temp directory for vim config files.
 	tmpDir, err := os.MkdirTemp("", "hnbvi-*")
 	if err != nil {

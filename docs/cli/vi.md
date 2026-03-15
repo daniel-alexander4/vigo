@@ -16,6 +16,13 @@ or
 hnbvi <file.hnb>
 ```
 
+Files must be within `/srv/hobnob/hnb/`. Relative paths are resolved against `/srv/hobnob/hnb/proposed/`, so you can use short names:
+
+```bash
+hnbvi modules/nginx.hnb           # opens /srv/hobnob/hnb/proposed/modules/nginx.hnb
+hnbvi thralls/web-servers.hnb     # opens /srv/hobnob/hnb/proposed/thralls/web-servers.hnb
+```
+
 ## Features
 
 ### Syntax highlighting
@@ -56,13 +63,13 @@ The editor is pre-configured with:
 ### Edit a module file
 
 ```bash
-hobnobcli vi hnb/proposed/modules/nginx.hnb
+hnbvi modules/nginx.hnb
 ```
 
-### Using the hnbvi shortcut
+### Edit with full path
 
 ```bash
-hnbvi hnb/proposed/modules/nginx.hnb
+hobnobcli vi /srv/hobnob/hnb/proposed/modules/nginx.hnb
 ```
 
 ## Related
