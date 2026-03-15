@@ -3,7 +3,9 @@ agent-rs/target/
 
 # Host build outputs
 bin/
-dist/
+dist/server/
+dist/cli/
+# dist/agent/ is NOT ignored — pre-built agent binaries are copied into the image
 
 # Git history
 .git/
