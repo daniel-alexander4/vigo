@@ -12,6 +12,12 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `unless` | No | -- | Run the command only if this guard command fails (non-zero exit). |
 | `stdin` | No | -- | Data to pipe to the command's stdin. Mutually exclusive with `secret_file`. |
 | `secret_file` | No | -- | Secret value written to a temporary file (mode 0600). The placeholder `{{secret_file}}` in `command` is replaced with the temp file path. Mutually exclusive with `stdin`. |
+| `cwd` | No | -- | Working directory for command execution. |
+| `user` | No | -- | Run command as a different user (Unix only, via `su`). |
+| `environment` | No | -- | Comma-separated `KEY=VALUE` environment variables. |
+| `returns` | No | `0` | Comma-separated acceptable exit codes (e.g., `0,1,2`). |
+| `refreshonly` | No | `false` | Only execute if triggered by `notify`/`subscribes`. |
+| `logoutput` | No | `true` | When `false`, suppress stdout/stderr in error messages. |
 
 ## States
 

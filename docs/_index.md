@@ -21,7 +21,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Check-in Lifecycle](concepts/check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
 - [Compiled Promises](concepts/compiled-promises.md) — Bundle signing, TTL, offline convergence
 - [Compliance](concepts/compliance.md) — Per-resource to fleet-wide compliance
-- [Secrets](concepts/secrets.md) — Three backends and the secret: prefix
+- [Secrets](concepts/secrets.md) — Two backends and the secret: prefix
 - [Guardrails](concepts/guardrails.md) — Self-protection for agent and server paths
 - [Custom Executors](concepts/custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](concepts/custom-traits.md) — Custom trait collector scripts

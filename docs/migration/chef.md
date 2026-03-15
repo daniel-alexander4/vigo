@@ -123,7 +123,7 @@ http {
 
 ### Hobnob Version
 
-`thrall-configs/modules/nginx.hnb`:
+`hnb/proposed/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -175,7 +175,7 @@ resources:
     enabled: true
 ```
 
-`thrall-configs/roles/webserver.hnb`:
+`hnb/proposed/roles/webserver.hnb`:
 
 ```yaml
 name: webserver
@@ -183,7 +183,7 @@ modules:
   - nginx
 ```
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

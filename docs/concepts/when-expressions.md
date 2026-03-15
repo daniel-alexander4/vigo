@@ -141,7 +141,7 @@ vars:
     trait: os.family
     in: [debian]
   has_enough_ram:
-    trait: memory.total_mb
+    trait: hardware.memory_mb
     gte: 4096
 
 resources:

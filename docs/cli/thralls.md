@@ -125,7 +125,8 @@ hobnobcli thralls traits web-01.example.com
       "family": "debian"
     },
     "memory": {
-      "total_mb": 8192
+      "total": 8589934592,
+      "percent": 62.5
     }
   }
 }

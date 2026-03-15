@@ -15,7 +15,7 @@ curl -sSf http://<server>:8181/bootstrap | sudo sh
 ```
 
 The script:
-1. Detects OS (Linux, macOS, FreeBSD, OpenBSD, NetBSD) and architecture
+1. Detects OS (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos) and architecture
 2. Downloads the correct agent binary from the server
 3. Generates an ED25519 keypair
 4. Calls the server's Register gRPC endpoint
@@ -26,6 +26,7 @@ The script:
    - **macOS:** launchd plist (`com.hobnob.thrall`)
    - **FreeBSD / NetBSD:** rc.d script (`/usr/local/etc/rc.d/hobnob_thrall`)
    - **OpenBSD:** registered via `rcctl`
+   - **illumos:** SMF service manifest (`svc:/system/hobnob-thrall:default`)
 8. Starts the service
 
 ## Enrollment Methods

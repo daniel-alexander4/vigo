@@ -1,11 +1,11 @@
 # Config Format
 
-All Hobnob configuration lives in YAML files with the `.hnb` extension under `thrall-configs/`. The server reloads config when `hobnobcli config publish` syncs files to `.live/`.
+All Hobnob configuration lives in YAML files with the `.hnb` extension under `hnb/proposed/`. The server reloads config when `hobnobcli config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
 ```
-thrall-configs/
+hnb/proposed/
 ├── modules/          # Module definitions
 │   ├── nginx.hnb
 │   ├── postgres.hnb
@@ -13,7 +13,10 @@ thrall-configs/
 ├── roles/            # Role definitions
 │   ├── webserver.hnb
 │   └── database.hnb
-└── nodes.hnb         # Node-to-role/module mappings
+├── thralls/          # Node-to-role/module mappings
+│   └── nodes.hnb
+├── templates/        # Template files for source: references
+└── vars/             # External var files for vars_from
 ```
 
 ## Modules
@@ -125,7 +128,7 @@ thralls:
 | `modules` | no | Additional modules (beyond those from roles) |
 | `vars` | no | Variable overrides (override module defaults) |
 | `environment_overrides` | no | Per-environment variable overrides |
-| `vars_from` | no | External var files to load (relative to thrall-configs/) |
+| `vars_from` | no | External var files to load (relative to hnb/proposed/) |
 
 ## Variable Resolution
 
@@ -206,7 +209,7 @@ vars:
     trait: os.family
     in: [debian, ubuntu]
   has_enough_ram:
-    trait: memory.total_mb
+    trait: hardware.memory_mb
     gte: 4096
 ```
 

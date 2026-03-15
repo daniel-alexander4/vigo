@@ -56,7 +56,7 @@ hobnobcli ask "write a module for nginx with TLS"
 ### Pipe a config file for review
 
 ```bash
-hobnobcli ask < thrall-configs/modules/nginx.hnb
+hobnobcli ask < hnb/proposed/modules/nginx.hnb
 ```
 
 The piped content is automatically prefixed with "Review this configuration:" before being sent to the AI.

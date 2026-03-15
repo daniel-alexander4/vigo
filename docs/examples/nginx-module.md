@@ -4,7 +4,7 @@ A complete nginx module demonstrating the package-config-service pattern with `n
 
 ## Module Definition
 
-`thrall-configs/modules/nginx.hnb`:
+`hnb/proposed/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -66,7 +66,7 @@ resources:
 
 ## Role Assignment
 
-`thrall-configs/roles/webserver.hnb`:
+`hnb/proposed/roles/webserver.hnb`:
 
 ```yaml
 name: webserver
@@ -76,7 +76,7 @@ modules:
 
 ## Node Assignment
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

@@ -18,9 +18,9 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 All examples follow these patterns:
 
-- Modules live in `thrall-configs/modules/`
-- Roles live in `thrall-configs/roles/`
-- Node assignments live in `thrall-configs/nodes.hnb`
+- Modules live in `hnb/proposed/modules/`
+- Roles live in `hnb/proposed/roles/`
+- Node assignments live in `hnb/proposed/thralls/nodes.hnb`
 - Go templates (`{{ }}`) are only used in `content:` attributes
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider

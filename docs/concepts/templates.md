@@ -56,11 +56,11 @@ resources:
     targetpath: /etc/motd
     content: |
       ==========================================
-      Hostname: {{ .Traits.hostname }}
-      OS:       {{ .Traits.os.name }} {{ .Traits.os.version }}
+      Hostname: {{ .Traits.network.hostname }}
+      OS:       {{ .Traits.os.distro }} {{ .Traits.os.version }}
       Arch:     {{ .Traits.os.arch }}
-      CPUs:     {{ .Traits.processors.count }}
-      Memory:   {{ .Traits.memory.total_mb }} MB
+      CPUs:     {{ .Traits.hardware.cpu_count }}
+      Memory:   {{ .Traits.hardware.memory_mb }} MB
       ==========================================
 ```
 
@@ -101,9 +101,9 @@ vars:
 ### Nested Map Access
 
 ```
-{{ .Traits.os.name }}
-{{ .Traits.network.ipv4 }}
-{{ index .Traits.network "interfaces" }}
+{{ .Traits.os.distro }}
+{{ index .Traits.network.ip_addresses 0 }}
+{{ .Traits.network.fqdn }}
 ```
 
 ### Default Values
@@ -162,11 +162,11 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
   type: file
   targetpath: /etc/hobnob-node-info
   content: |
-    hostname={{ .Traits.hostname }}
-    os={{ .Traits.os.name }}
+    hostname={{ .Traits.network.hostname }}
+    os={{ .Traits.os.distro }}
     version={{ .Traits.os.version }}
     arch={{ .Traits.os.arch }}
-    ip={{ .Traits.network.ipv4 }}
+    ip={{ index .Traits.network.ip_addresses 0 }}
     managed_by=hobnob
 ```
 

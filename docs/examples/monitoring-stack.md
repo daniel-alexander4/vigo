@@ -6,7 +6,7 @@ This example sets up Prometheus node_exporter, Prometheus server, and Grafana us
 
 Deployed to every thrall for metrics collection.
 
-`thrall-configs/modules/node-exporter.hnb`:
+`hnb/proposed/modules/node-exporter.hnb`:
 
 ```yaml
 name: node-exporter
@@ -47,7 +47,7 @@ resources:
 
 Deployed to monitoring servers.
 
-`thrall-configs/modules/prometheus.hnb`:
+`hnb/proposed/modules/prometheus.hnb`:
 
 ```yaml
 name: prometheus
@@ -105,7 +105,7 @@ resources:
 
 ## Grafana Module
 
-`thrall-configs/modules/grafana.hnb`:
+`hnb/proposed/modules/grafana.hnb`:
 
 ```yaml
 name: grafana
@@ -164,7 +164,7 @@ resources:
 
 ## Role Definition
 
-`thrall-configs/roles/monitoring.hnb`:
+`hnb/proposed/roles/monitoring.hnb`:
 
 ```yaml
 name: monitoring
@@ -176,7 +176,7 @@ modules:
 
 ## Node Assignment
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

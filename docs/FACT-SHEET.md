@@ -36,7 +36,7 @@ resources:
     type: file
     targetpath: /etc/nginx/nginx.conf
     content: |
-      worker_processes {{ .Traits.processors.count }};
+      worker_processes {{ .Traits.hardware.cpu_count }};
     notify: restart-nginx
 
   - name: restart-nginx
@@ -114,7 +114,7 @@ Every executor is idempotent: check current state, compare against desired state
 
 ## Traits
 
-73 trait collectors discover facts about each machine automatically: OS, hardware, CPU, memory, network, disks, filesystems, packages, uptime, load, virtualization, cloud provider, Docker, SELinux, locale, GPU, certificates, listening ports, and more. Custom trait collectors can be added via external scripts.
+27 built-in trait collectors (with platform-specific implementations across all 7 OS families) discover facts about each machine automatically: OS, hardware, CPU, memory, network, disks, filesystems, packages, uptime, load, virtualization, cloud provider, Docker, SELinux, locale, GPU, certificates, listening ports, and more. Custom trait collectors can be added via external scripts.
 
 Traits are available in templates (`{{ .Traits.os.distro }}`) and conditional expressions (`when: "os_family('debian')"`).
 
@@ -179,10 +179,10 @@ Built-in AI assistant accessible from every page of the web UI:
 | Agent binary | ~5 MB static (Linux amd64) |
 | Agent memory | Minimal — no runtime, no GC |
 | Built-in executors | 59 |
-| Trait collectors | 73 |
+| Trait collectors | 27 (with platform variants) |
 | Supported OS families | 7 |
 | Database | SQLite (embedded, zero-admin) |
-| Test suite | 1,600+ tests (Go + Rust) |
+| Test suite | 1,700+ tests (Go + Rust) |
 | Documentation | 168 pages |
 | External dependencies | Zero (server), Zero (agent) |
 | Check-in DB queries | Zero (FleetIndex) |

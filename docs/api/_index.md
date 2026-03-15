@@ -18,11 +18,11 @@ All gRPC message definitions live in [`proto/hobnob.proto`](../../proto/hobnob.p
 
 **gRPC (agent):** Every request includes an ED25519 signature over the payload and timestamp. The server verifies the signature against the agent's stored public key. The TLS layer provides mutual authentication via client certificates.
 
-**REST (admin):** No authentication by default. The REST API is intended to run on an internal network or behind a reverse proxy that handles auth. All `/api/v1/` endpoints return JSON.
+**REST (admin):** Pluggable authentication with three modes: `none` (default, zero overhead), `oidc` (OpenID Connect SSO), or `isowebauth` (SSH key signing). When auth is enabled, REST endpoints require a session cookie or `Authorization: Bearer` API token (`hbt_` prefix). See [Authentication](../operations/authentication.md) for details. All `/api/v1/` endpoints return JSON.
 
 ## Further Reading
 
-- [gRPC Agent Service](grpc-agent.md) -- the 7-RPC agent service
-- [gRPC Admin Service](grpc-admin.md) -- the 22-RPC admin service
+- [gRPC Agent Service](grpc-agent.md) -- the 6-RPC agent service
+- [gRPC Admin Service](grpc-admin.md) -- the 23-RPC admin service
 - [REST API](rest.md) -- direct REST endpoints (tasks, workflows, query, AI, etc.)
 - [Webhooks](webhooks.md) -- event-driven HTTP callbacks

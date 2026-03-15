@@ -4,7 +4,7 @@ This example uses the `docker_image`, `docker_container`, and `docker_compose` [
 
 ## Module Definition
 
-`thrall-configs/modules/redis.hnb`:
+`hnb/proposed/modules/redis.hnb`:
 
 ```yaml
 name: redis
@@ -32,7 +32,7 @@ resources:
 
 ## Multi-Container Stack
 
-`thrall-configs/modules/app-stack.hnb`:
+`hnb/proposed/modules/app-stack.hnb`:
 
 ```yaml
 name: app-stack
@@ -66,7 +66,7 @@ resources:
 
 ## Role Definition
 
-`thrall-configs/roles/docker-app.hnb`:
+`hnb/proposed/roles/docker-app.hnb`:
 
 ```yaml
 name: docker-app
@@ -77,7 +77,7 @@ modules:
 
 ## Node Assignment
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:
@@ -119,7 +119,7 @@ hobnobcli task run \
 
 For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
 
-`thrall-configs/modules/compose-app.hnb`:
+`hnb/proposed/modules/compose-app.hnb`:
 
 ```yaml
 name: compose-app

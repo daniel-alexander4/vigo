@@ -4,7 +4,7 @@ This walkthrough builds a complete nginx module with package installation, confi
 
 ## Module Structure
 
-A module is a YAML file with a `.hnb` extension in `thrall-configs/modules/`. It contains:
+A module is a YAML file with a `.hnb` extension in `hnb/proposed/modules/`. It contains:
 
 ```yaml
 name: module-name
@@ -18,7 +18,7 @@ resources:
 
 ## Step 1: Create the Module
 
-Create `thrall-configs/modules/nginx.hnb`:
+Create `hnb/proposed/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -71,7 +71,7 @@ This module demonstrates three key patterns:
 
 ## Step 3: Assign to a Thrall
 
-Edit `thrall-configs/nodes.hnb`:
+Edit `hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:
@@ -86,7 +86,7 @@ Node-level `vars` override the module's default `vars`. Here, `nginx_port` becom
 
 ## Step 4: Use Roles for Reuse
 
-For multiple modules, group them into a role. Create `thrall-configs/roles/webserver.hnb`:
+For multiple modules, group them into a role. Create `hnb/proposed/roles/webserver.hnb`:
 
 ```yaml
 name: webserver
@@ -145,9 +145,15 @@ resources:
 
 The agent evaluates `when:` expressions using the thrall's traits. Only the matching resource runs.
 
-## Step 7: Push and Verify
+## Step 7: Publish and Push
 
-Force an immediate check-in:
+Publish the config to make it active:
+
+```bash
+hobnobcli config publish
+```
+
+Then force an immediate check-in:
 
 ```bash
 hobnobcli push --target "web1.example.com"

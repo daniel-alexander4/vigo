@@ -52,7 +52,7 @@ Checks performed in pre-start mode:
 | `secrets_provider` | Initialize the secrets provider |
 | `secret_resolution` | Resolve `secret:` references in config |
 | `tls_certs` | Check cert files exist, parse, and verify expiry |
-| `config_dir` | Verify `thrall-configs/` exists with `modules/`, `roles/`, `thralls/` subdirs |
+| `config_dir` | Verify `hnb/proposed/` exists with `modules/`, `roles/`, `thralls/` subdirs |
 | `config_validation` | Load and validate all `.hnb` module files |
 | `federation` | Validate federation configuration |
 
@@ -67,7 +67,7 @@ hobnobcli doctor --pre-start --config /srv/hobnob/server.yaml
   secrets_provider ..... OK (local)
   secret_resolution .... OK
   tls_certs ............ WARN (expires in 28 days (2026-04-10))
-  config_dir ........... OK (thrall-configs)
+  config_dir ........... OK (hnb/.live)
   config_validation .... OK (12 modules)
   federation ........... OK (standalone)
 

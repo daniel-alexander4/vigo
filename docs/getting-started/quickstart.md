@@ -43,7 +43,7 @@ After enrollment, the thrall appears in the dashboard and begins checking in eve
 
 ## 3. Write a Module
 
-Create a file at `/srv/hobnob/thrall-configs/modules/motd.hnb`:
+Create a file at `/srv/hobnob/hnb/proposed/modules/motd.hnb`:
 
 ```yaml
 name: motd
@@ -54,8 +54,8 @@ resources:
     content: |
       ========================================
       Managed by Hobnob
-      Hostname: {{ .Traits.hostname }}
-      OS: {{ .Traits.os.name }}
+      Hostname: {{ .Traits.network.hostname }}
+      OS: {{ .Traits.os.distro }}
       ========================================
     owner: root
     group: root
@@ -64,7 +64,7 @@ resources:
 
 ## 4. Map the Thrall to the Module
 
-Create or edit `/srv/hobnob/thrall-configs/nodes.hnb`:
+Create or edit `/srv/hobnob/hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:
@@ -74,7 +74,17 @@ thralls:
 
 This assigns the `motd` module to all thralls. The `*` glob matches any hostname.
 
-## 5. Wait for Check-in
+## 5. Publish the Config
+
+Configs in `proposed/` don't take effect until published:
+
+```bash
+hobnobcli config publish
+```
+
+This validates the config, syncs it to the `.live/` directory, and triggers the server to reload.
+
+## 6. Wait for Check-in
 
 The agent checks in every 5 minutes (configurable). On the next check-in:
 
@@ -86,7 +96,7 @@ The agent checks in every 5 minutes (configurable). On the next check-in:
    - If `/etc/motd` already matches → no action (idempotent)
 5. The agent reports the result back to the server
 
-## 6. Force an Immediate Check-in
+## 7. Force an Immediate Check-in
 
 Don't want to wait? Push to the thrall:
 
@@ -100,7 +110,7 @@ Or push to a specific host:
 hobnobcli push --target "web1.example.com"
 ```
 
-## 7. Verify
+## 8. Verify
 
 Check the run result:
 
@@ -115,4 +125,4 @@ Or view it in the web UI at `http://localhost:8181/runs`.
 - [First Module](first-module.md) — Deeper module walkthrough with packages, services, and dependencies
 - [Server Configuration](server-config.md) — Full server.yaml reference
 - [Config Format](../concepts/config-format.md) — Modules, roles, vars, and environment_overrides
-- [Executors](../executors/_index.md) — All 42 resource types
+- [Executors](../executors/_index.md) — All 59 resource types

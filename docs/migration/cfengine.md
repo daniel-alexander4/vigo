@@ -29,7 +29,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | `cf-execd` | Agent systemd service | Agent runs as a daemon with built-in scheduling |
 | `cf-monitord` | Traits | Agent-side monitoring replaced by trait collection |
 | `cf-hub` | FleetIndex + SQLite | Central data aggregation |
-| Masterfiles | `thrall-configs/` | Policy repository |
+| Masterfiles | `hnb/proposed/` | Policy repository |
 | Augments (`def.json`) | `vars` / `environment_overrides` | External variable data |
 | Module protocol | Custom executors | JSON stdin/stdout protocol for extensions |
 | `cf-secret` | `secret:` prefix | Secrets resolved at bundle compile time |
@@ -117,7 +117,7 @@ http {
 
 ### Hobnob Version
 
-`thrall-configs/modules/nginx.hnb`:
+`hnb/proposed/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -169,7 +169,7 @@ resources:
     enabled: true
 ```
 
-`thrall-configs/roles/webserver.hnb`:
+`hnb/proposed/roles/webserver.hnb`:
 
 ```yaml
 name: webserver
@@ -177,7 +177,7 @@ modules:
   - nginx
 ```
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

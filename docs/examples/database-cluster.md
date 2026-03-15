@@ -4,7 +4,7 @@ This example sets up PostgreSQL with managed credentials using `secret:` referen
 
 ## PostgreSQL Module
 
-`thrall-configs/modules/postgresql.hnb`:
+`hnb/proposed/modules/postgresql.hnb`:
 
 ```yaml
 name: postgresql
@@ -75,7 +75,7 @@ resources:
 
 ## Application Database Setup
 
-`thrall-configs/modules/app-database.hnb`:
+`hnb/proposed/modules/app-database.hnb`:
 
 ```yaml
 name: app-database
@@ -110,7 +110,7 @@ resources:
 
 Create a shared variable file for database credentials used across multiple node entries.
 
-`thrall-configs/db-vars.hnb`:
+`hnb/proposed/vars/db-vars.hnb`:
 
 ```yaml
 app_db_name: myapp
@@ -120,7 +120,7 @@ pg_allowed_cidr: "10.0.0.0/8"
 
 ## Role Definition
 
-`thrall-configs/roles/database-server.hnb`:
+`hnb/proposed/roles/database-server.hnb`:
 
 ```yaml
 name: database-server
@@ -131,7 +131,7 @@ modules:
 
 ## Node Assignment
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

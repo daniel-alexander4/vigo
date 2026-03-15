@@ -135,7 +135,7 @@ Traits are available in templates (`{{ .Traits.device.model }}`) and `when:` exp
 ## Example Module
 
 ```yaml
-# thrall-configs/modules/switch-base.hnb
+# hnb/proposed/modules/switch-base.hnb
 name: switch-base
 resources:
   - name: login-banner

@@ -39,11 +39,11 @@ web-04.example.com    ubuntu    offline cached 2026-03-12 18:00
 ### Query memory across Debian hosts
 
 ```bash
-hobnobcli query memory.total_mb --target "os.family=debian"
+hobnobcli query hardware.memory_mb --target "os.family=debian"
 ```
 
 ```
-Query:     memory.total_mb
+Query:     hardware.memory_mb
 Responded: 5  Timed out: 0  Offline: 0
 
 HOSTNAME              VALUE   STATUS

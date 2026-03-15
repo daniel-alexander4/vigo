@@ -56,13 +56,13 @@ The editor is pre-configured with:
 ### Edit a module file
 
 ```bash
-hobnobcli vi thrall-configs/modules/nginx.hnb
+hobnobcli vi hnb/proposed/modules/nginx.hnb
 ```
 
 ### Using the hnbvi shortcut
 
 ```bash
-hnbvi thrall-configs/modules/nginx.hnb
+hnbvi hnb/proposed/modules/nginx.hnb
 ```
 
 ## Related

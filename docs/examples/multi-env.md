@@ -4,7 +4,7 @@ This example shows how to use `environment_overrides` to maintain different vari
 
 ## Module Definition
 
-`thrall-configs/modules/webapp.hnb`:
+`hnb/proposed/modules/webapp.hnb`:
 
 ```yaml
 name: webapp
@@ -41,7 +41,7 @@ resources:
 
 ## Node Assignment with environment_overrides
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

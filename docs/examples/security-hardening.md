@@ -4,7 +4,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 
 ## Firewall Module
 
-`thrall-configs/modules/firewall.hnb`:
+`hnb/proposed/modules/firewall.hnb`:
 
 ```yaml
 name: firewall
@@ -57,7 +57,7 @@ resources:
 
 ## SSH Hardening Module
 
-`thrall-configs/modules/ssh-hardening.hnb`:
+`hnb/proposed/modules/ssh-hardening.hnb`:
 
 ```yaml
 name: ssh-hardening
@@ -96,7 +96,7 @@ resources:
 
 ## Fail2ban Module
 
-`thrall-configs/modules/fail2ban.hnb`:
+`hnb/proposed/modules/fail2ban.hnb`:
 
 ```yaml
 name: fail2ban
@@ -138,7 +138,7 @@ resources:
 
 ## Sudo Module
 
-`thrall-configs/modules/sudo-config.hnb`:
+`hnb/proposed/modules/sudo-config.hnb`:
 
 ```yaml
 name: sudo-config
@@ -166,7 +166,7 @@ resources:
 
 ## Role Definition
 
-`thrall-configs/roles/hardened.hnb`:
+`hnb/proposed/roles/hardened.hnb`:
 
 ```yaml
 name: hardened
@@ -179,7 +179,7 @@ modules:
 
 ## Node Assignment
 
-`thrall-configs/nodes.hnb`:
+`hnb/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:
