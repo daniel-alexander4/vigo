@@ -21,7 +21,7 @@ The UI is built with Go templates and HTMX for partial page updates without full
 
 ### Admin Pages
 
-The following pages are only visible to authenticated admin users. When `auth.method` is `none`, they are accessible to everyone.
+The following pages are only visible to authenticated admin users.
 
 | Page | Path | Description |
 |------|------|-------------|

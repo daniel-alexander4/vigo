@@ -97,7 +97,7 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		hub:          hub,
 		docsDir:      docsDir,
 		enforcer:     enforcer,
-		authEnabled:  authMethod != "" && authMethod != "none",
+		authEnabled:  true,
 		authMethod:   authMethod,
 	}
 

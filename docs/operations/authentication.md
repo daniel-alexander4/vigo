@@ -4,12 +4,11 @@ title: Authentication
 
 # Authentication
 
-Hobnob supports four authentication methods for the web UI and REST API:
+All access to the web UI and REST API requires authentication. Three methods are supported:
 
 | Method | Description | Use Case |
 |--------|-------------|----------|
 | `basic` | Username/password (default) | Most deployments |
-| `none` | Fully open | Development, private networks |
 | `oidc` | OpenID Connect SSO | Enterprise SSO (Keycloak, Okta, Auth0, Google, Azure AD) |
 | `isowebauth` | SSH key-based signing | Sysadmin teams using SSH keys |
 
@@ -19,10 +18,10 @@ Set `auth.method` in `server.yaml`:
 
 ```yaml
 auth:
-  method: basic   # or: none, oidc, isowebauth
+  method: basic   # or: oidc, isowebauth
 ```
 
-When `method` is omitted, basic authentication is enabled by default. Set to `none` to disable authentication entirely.
+When `method` is omitted, basic authentication is enabled by default.
 
 ## Basic (Username/Password)
 
@@ -193,7 +192,6 @@ Two roles are supported:
 | Create/download backups | Yes | No |
 | Create/revoke API tokens | Yes | Yes (own only) |
 
-When `auth.method` is `none`, all users have full access.
 
 ## API Tokens
 

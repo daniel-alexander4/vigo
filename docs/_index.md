@@ -37,7 +37,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 ## Operations
 
 - [Config Publishing](operations/config-publish.md) — Validate, sync, and reload
-- [Authentication](operations/authentication.md) — None, OIDC, isowebauth
+- [Authentication](operations/authentication.md) — Basic, OIDC, isowebauth
 - [Backup & Recovery](operations/backup.md) — Litestream WAL replication
 - [Email Notifications](operations/smtp.md) — SMTP events and digest
 - [Prometheus Metrics](operations/metrics.md) — Metrics reference

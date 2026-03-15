@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package auth provides pluggable authentication for the Hobnob web UI and
-// REST API. Four methods are supported: "basic" (default, username/password
-// with credentials in the secrets store), "none" (fully open), "oidc"
-// (OpenID Connect SSO), and "isowebauth" (SSH key-based signing).
+// REST API. Three methods are supported: "basic" (default, username/password
+// with credentials in the secrets store), "oidc" (OpenID Connect SSO), and
+// "isowebauth" (SSH key-based signing).
 package auth
 
 import (
@@ -16,12 +16,11 @@ import (
 
 // Provider is the interface that authentication methods implement.
 type Provider interface {
-	// Method returns the authentication method name ("none", "oidc", "isowebauth").
+	// Method returns the authentication method name ("basic", "oidc", "isowebauth").
 	Method() string
 
 	// Middleware wraps an http.Handler with authentication checks.
-	// For "none", this is a no-op passthrough. For others, it checks
-	// sessions/tokens and redirects or returns 401 as appropriate.
+	// Checks sessions/tokens and redirects or returns 401 as appropriate.
 	Middleware(next http.Handler) http.Handler
 
 	// RegisterRoutes mounts auth-specific routes (e.g. /login, /logout,
@@ -54,7 +53,7 @@ func ContextWithUser(ctx context.Context, u *User) context.Context {
 }
 
 // UserFromContext extracts the authenticated user from the context.
-// Returns nil if no user is present (unauthenticated request or "none" mode).
+// Returns nil if no user is present (unauthenticated request).
 func UserFromContext(ctx context.Context) *User {
 	u, _ := ctx.Value(userContextKey).(*User)
 	return u
@@ -132,9 +131,3 @@ var loopbackAdmin = &User{
 	Role:     "admin",
 }
 
-// NoneProvider implements Provider with zero overhead — all requests pass through.
-type NoneProvider struct{}
-
-func (NoneProvider) Method() string                          { return "none" }
-func (NoneProvider) Middleware(next http.Handler) http.Handler { return next }
-func (NoneProvider) RegisterRoutes(_ *http.ServeMux)         {}

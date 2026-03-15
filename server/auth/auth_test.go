@@ -5,40 +5,11 @@ package auth
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestNoneProviderMiddleware(t *testing.T) {
-	p := NoneProvider{}
-	assert.Equal(t, "none", p.Method())
-
-	// NoneProvider.Middleware should be a pure passthrough.
-	called := false
-	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	})
-
-	handler := p.Middleware(inner)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/", nil)
-	handler.ServeHTTP(rec, req)
-
-	assert.True(t, called, "inner handler should be called")
-	assert.Equal(t, http.StatusOK, rec.Code)
-}
-
-func TestNoneProviderRegisterRoutes(t *testing.T) {
-	p := NoneProvider{}
-	mux := http.NewServeMux()
-	// Should not panic.
-	p.RegisterRoutes(mux)
-}
 
 func TestIsPublicPath(t *testing.T) {
 	tests := []struct {

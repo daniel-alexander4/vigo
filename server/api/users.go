@@ -69,25 +69,11 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// First-user bootstrap: allow creation without auth when no users exist.
-	if h.authMethod != "none" {
-		count, err := h.store.CountUsers(r.Context())
-		if err != nil {
-			slog.Error("counting users", "error", err)
-			writeJSONError(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		if count > 0 {
-			// Require admin role for subsequent creates.
-			u := auth.UserFromContext(r.Context())
-			if u == nil || !u.IsAdmin() {
-				writeJSONError(w, http.StatusForbidden, "admin role required")
-				return
-			}
-		} else {
-			// First user is always admin.
-			req.Role = "admin"
-		}
+	// Require admin role for user creation.
+	u := auth.UserFromContext(r.Context())
+	if u == nil || !u.IsAdmin() {
+		writeJSONError(w, http.StatusForbidden, "admin role required")
+		return
 	}
 
 	user, err := h.store.Create(r.Context(), db.InsertUserParams{

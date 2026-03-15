@@ -120,7 +120,7 @@ auth:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `method` | `basic` | Authentication method: `basic`, `none`, `oidc`, `isowebauth` |
+| `method` | `basic` | Authentication method: `basic`, `oidc`, `isowebauth` |
 | `oidc.issuer` | — | OIDC provider URL (required for `oidc`) |
 | `oidc.client_id` | — | OIDC client ID (required for `oidc`) |
 | `oidc.client_secret` | — | OIDC client secret (supports `secret:` prefix) |
@@ -128,7 +128,7 @@ auth:
 | `oidc.scopes` | `[openid, profile, email]` | OIDC scopes to request |
 | `isowebauth.namespace` | `hobnob` | Namespace for SSH signature verification |
 
-Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `hobnob/web/auth/<username>`. Accounts are created via `hobnobcli users create` and activated with `hobnobcli users set-password`. Set `method: none` to disable authentication entirely.
+Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `hobnob/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `hobnobcli users set-password --username admin`.
 
 See [Authentication](../operations/authentication.md) for setup details.
 

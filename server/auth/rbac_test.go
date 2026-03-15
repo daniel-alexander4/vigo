@@ -11,23 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRequireAdminNoneMode(t *testing.T) {
-	mw := RequireAdmin("none")
-	called := false
-	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-	})
-
-	handler := mw(inner)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/api/v1/tasks", nil)
-	handler.ServeHTTP(rec, req)
-
-	assert.True(t, called, "should pass through in none mode")
-}
-
 func TestRequireAdminBlocksViewer(t *testing.T) {
-	mw := RequireAdmin("oidc")
+	mw := RequireAdmin("basic")
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -35,7 +20,6 @@ func TestRequireAdminBlocksViewer(t *testing.T) {
 
 	handler := mw(inner)
 
-	// With viewer user.
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/tasks", nil)
 	ctx := ContextWithUser(req.Context(), &User{ID: "1", Role: "viewer"})
@@ -46,7 +30,7 @@ func TestRequireAdminBlocksViewer(t *testing.T) {
 }
 
 func TestRequireAdminAllowsAdmin(t *testing.T) {
-	mw := RequireAdmin("oidc")
+	mw := RequireAdmin("basic")
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -63,7 +47,7 @@ func TestRequireAdminAllowsAdmin(t *testing.T) {
 }
 
 func TestRequireAdminBlocksUnauthenticated(t *testing.T) {
-	mw := RequireAdmin("oidc")
+	mw := RequireAdmin("basic")
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -79,23 +63,8 @@ func TestRequireAdminBlocksUnauthenticated(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
 
-func TestRequireAuthNoneMode(t *testing.T) {
-	mw := RequireAuth("none")
-	called := false
-	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-	})
-
-	handler := mw(inner)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/api/v1/auth/tokens", nil)
-	handler.ServeHTTP(rec, req)
-
-	assert.True(t, called)
-}
-
 func TestRequireAuthBlocksUnauthenticated(t *testing.T) {
-	mw := RequireAuth("oidc")
+	mw := RequireAuth("basic")
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true

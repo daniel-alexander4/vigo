@@ -631,16 +631,14 @@ func run() error {
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 
 	// Seed default admin account on first startup (no password — must be set via CLI).
-	if authMethod != "none" {
-		if count, err := userStore.CountUsers(ctx); err == nil && count == 0 {
-			if _, err := userStore.Create(ctx, db.InsertUserParams{
-				Username: "admin",
-				Role:     "admin",
-			}); err != nil {
-				slog.Warn("failed to seed admin user", "error", err)
-			} else {
-				slog.Info("seeded default admin account (no password — run: hobnobcli users set-password --username admin)")
-			}
+	if count, err := userStore.CountUsers(ctx); err == nil && count == 0 {
+		if _, err := userStore.Create(ctx, db.InsertUserParams{
+			Username: "admin",
+			Role:     "admin",
+		}); err != nil {
+			slog.Warn("failed to seed admin user", "error", err)
+		} else {
+			slog.Info("seeded default admin account (no password — run: hobnobcli users set-password --username admin)")
 		}
 	}
 
@@ -1203,9 +1201,6 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 	}
 
 	switch method {
-	case "none":
-		return hobnobauth.NoneProvider{}, nil
-
 	case "basic":
 		sessions := hobnobauth.NewSessionManager(sqlDB)
 		userStore := hobnobauth.NewUserStore(queries)
@@ -1233,6 +1228,6 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		}, sessions, userStore, tokenStore)
 
 	default:
-		return nil, fmt.Errorf("unknown auth method: %q (must be basic, none, oidc, or isowebauth)", method)
+		return nil, fmt.Errorf("unknown auth method: %q (must be basic, oidc, or isowebauth)", method)
 	}
 }
