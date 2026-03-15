@@ -109,7 +109,7 @@ func TestBuildPolicyBundle_NoCachedHashes_FullModules(t *testing.T) {
 		Modules:      []config.ModuleConfig{mod},
 	}
 
-	bundle, err := buildPolicyBundle(cfg, 1, nil)
+	bundle, err := buildPolicyBundle(cfg, 1, nil, nil)
 	if err != nil {
 		t.Fatalf("buildPolicyBundle: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 	}
 
 	// First build to get the hash.
-	full, err := buildPolicyBundle(cfg, 1, nil)
+	full, err := buildPolicyBundle(cfg, 1, nil, nil)
 	if err != nil {
 		t.Fatalf("buildPolicyBundle: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 	}
 
 	// Second build with cached hashes.
-	delta, err := buildPolicyBundle(cfg, 2, cachedHashes)
+	delta, err := buildPolicyBundle(cfg, 2, cachedHashes, nil)
 	if err != nil {
 		t.Fatalf("buildPolicyBundle delta: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestBuildPolicyBundle_WatchSecretSerialized(t *testing.T) {
 
 	cfg := &config.ThrallConfig{Modules: []config.ModuleConfig{mod}}
 
-	bundle, err := buildPolicyBundle(cfg, 1, nil)
+	bundle, err := buildPolicyBundle(cfg, 1, nil, nil)
 	if err != nil {
 		t.Fatalf("buildPolicyBundle: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestBuildPolicyBundle_CachedHashMismatch_SendsFull(t *testing.T) {
 		"nginx": "stale-hash-from-previous-version",
 	}
 
-	bundle, err := buildPolicyBundle(cfg, 2, cachedHashes)
+	bundle, err := buildPolicyBundle(cfg, 2, cachedHashes, nil)
 	if err != nil {
 		t.Fatalf("buildPolicyBundle: %v", err)
 	}

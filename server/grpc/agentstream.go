@@ -323,6 +323,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		cfg = cloned
 	}
 
+	// Parse inline traits for match var resolution.
+	var traitsMap map[string]any
+	if len(inlineTraits) > 0 {
+		_ = json.Unmarshal(inlineTraits, &traitsMap)
+	}
+
 	// Get or build cached base bundle, then customize stubs.
 	var bundle *pb.PolicyBundle
 	if s.policyCache != nil && pattern != "" && !hasCaseRes {
@@ -333,7 +339,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		bundle = customizeStubs(base, req.GetCachedModuleHashes())
 	} else {
 		var err error
-		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes())
+		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes(), traitsMap)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
@@ -440,7 +446,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	// included in the response so the gateway agent can converge them over SSH.
 	devices := s.configStore.DevicesForGateway(thrall.Hostname)
 	for _, dev := range devices {
-		devBundle, err := buildPolicyBundle(dev.Config, configVersion, nil)
+		devBundle, err := buildPolicyBundle(dev.Config, configVersion, nil, nil)
 		if err != nil {
 			slog.Error("failed to build policy bundle for proxied device",
 				"device", dev.Hostname,

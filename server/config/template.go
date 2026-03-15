@@ -6,7 +6,10 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
+
+	"github.com/hobnob/hobnob/server/conditionals"
 )
 
 // templateContext is the context passed to Go templates when rendering
@@ -34,6 +37,148 @@ func RenderTemplate(tmpl string, traits map[string]any, vars map[string]any) (st
 	}
 	return buf.String(), nil
 }
+
+// ResolveMatchVars evaluates match vars against traits and sets the resolved
+// string values in the vars map. Each match var has a list of when/value branches;
+// the first branch whose when expression evaluates to true wins. If no branch
+// matches, the default value is used (or the var is omitted).
+//
+// Match vars use the same when expression syntax as resource when: fields.
+// Builtin functions (distro, arch, os_family) are evaluated server-side by
+// looking up the corresponding trait values directly.
+//
+// Call this BEFORE RenderVars so that resolved match vars are available as
+// regular string vars for template rendering.
+func ResolveMatchVars(
+	vars map[string]any,
+	varOrder *[]string,
+	matchVars map[string][]MatchBranch,
+	matchVarDefaults map[string]string,
+	traits map[string]any,
+) {
+	if len(matchVars) == 0 {
+		return
+	}
+	for name, branches := range matchVars {
+		var resolved string
+		matched := false
+		for _, b := range branches {
+			if evalMatchWhen(b.When, vars, traits) {
+				resolved = b.Value
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			if def, ok := matchVarDefaults[name]; ok {
+				resolved = def
+			} else {
+				continue // no match, no default — skip this var
+			}
+		}
+		vars[name] = resolved
+		found := false
+		for _, k := range *varOrder {
+			if k == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			*varOrder = append(*varOrder, name)
+		}
+	}
+}
+
+// evalMatchWhen evaluates a when expression for match var resolution.
+// Supports:
+//   - Conditional var references: "is_debian" → looks up in vars
+//   - Builtin functions: distro('ubuntu'), arch('amd64'), os_family('debian')
+//   - Boolean operators: &&, ||, !
+//
+// First tries full server-side evaluation via EvaluateResourceWhen.
+// If that passes through builtins (returns agentWhen != ""), falls back
+// to simple pattern matching against trait values.
+func evalMatchWhen(when string, vars map[string]any, traits map[string]any) bool {
+	// Try the standard evaluator first (handles var-only expressions).
+	include, agentWhen, err := EvaluateResourceWhen(when, vars)
+	if err != nil {
+		return false
+	}
+	// If fully resolved server-side, use that result.
+	if agentWhen == "" {
+		return include
+	}
+
+	// Has builtins — evaluate them against traits directly.
+	// This is a simplified evaluator for the common builtins.
+	return evalBuiltinsServerSide(when, traits)
+}
+
+// evalBuiltinsServerSide evaluates when expressions containing builtin
+// functions by looking up trait values directly. Handles the common cases
+// needed for match vars (distro, arch, os_family, version_ge).
+//
+// Supports && (AND), || (OR), and ! (NOT). For complex expressions with
+// mixed vars and builtins, this may not cover all cases — use simpler
+// expressions in match var when clauses.
+func evalBuiltinsServerSide(when string, traits map[string]any) bool {
+	// Handle && — all parts must be true.
+	if strings.Contains(when, "&&") {
+		parts := strings.Split(when, "&&")
+		for _, part := range parts {
+			if !evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Handle || — any part true is enough.
+	if strings.Contains(when, "||") {
+		parts := strings.Split(when, "||")
+		for _, part := range parts {
+			if evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Handle ! prefix.
+	trimmed := strings.TrimSpace(when)
+	if strings.HasPrefix(trimmed, "!") {
+		return !evalBuiltinsServerSide(strings.TrimPrefix(trimmed, "!"), traits)
+	}
+
+	// Extract function call: name('arg')
+	if idx := strings.Index(trimmed, "("); idx > 0 {
+		funcName := trimmed[:idx]
+		argStr := strings.Trim(trimmed[idx:], "()'\"")
+
+		os, _ := traits["os"].(map[string]any)
+
+		switch funcName {
+		case "distro":
+			distro, _ := os["distro"].(string)
+			return strings.EqualFold(distro, argStr)
+		case "os_family":
+			family, _ := os["family"].(string)
+			return strings.EqualFold(family, argStr)
+		case "arch":
+			arch, _ := os["arch"].(string)
+			return strings.EqualFold(arch, argStr)
+		case "version_ge":
+			version, _ := os["version"].(string)
+			return version >= argStr
+		}
+	}
+
+	return false
+}
+
+// MatchBranch re-exported from conditionals for use in config package.
+type MatchBranch = conditionals.MatchBranch
 
 // RenderVars renders Go template syntax in var values in declaration order.
 // Only string values are rendered; non-string values (int, bool, map, etc.)

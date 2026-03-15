@@ -318,6 +318,8 @@ type ThrallConfig struct {
 	VarOrder        []string                  `yaml:"-"`
 	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	ConditionalVars      []conditionals.ConditionalVar `yaml:"-"`
+	MatchVars            map[string][]conditionals.MatchBranch `yaml:"-"` // string-valued conditional vars
+	MatchVarDefaults     map[string]string                     `yaml:"-"` // default values for match vars
 	// Network device fields — populated for virtual thralls managed via gateway proxy.
 	Gateway    string `yaml:"-"` // hostname of managing gateway thrall
 	DeviceType string `yaml:"-"` // cisco_ios, cisco_nxos, juniper_junos
@@ -383,7 +385,9 @@ type ModuleDefinition struct {
 	Defaults        map[string]any                `yaml:"defaults"`
 	Resources       []ResourceConfig              `yaml:"resources"`
 	Vars            map[string]any                `yaml:"vars"`
-	ConditionalVars []conditionals.ConditionalVar `yaml:"-"`
+	ConditionalVars  []conditionals.ConditionalVar              `yaml:"-"`
+	MatchVars        map[string][]conditionals.MatchBranch      `yaml:"-"`
+	MatchVarDefaults map[string]string                          `yaml:"-"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ModuleDefinition.

@@ -825,15 +825,25 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		moduleNames[i] = ref.Name
 	}
 
-	// Collect conditional vars from modules. Deduplicate by name
+	// Collect conditional vars and match vars from modules. Deduplicate by name
 	// (first definition wins, matching var merge behavior).
 	var condVars []conditionals.ConditionalVar
 	condVarNames := make(map[string]bool)
+	allMatchVars := make(map[string][]conditionals.MatchBranch)
+	allMatchVarDefaults := make(map[string]string)
 	for _, name := range moduleNames {
 		for _, cv := range moduleDefs[name].ConditionalVars {
 			if !condVarNames[cv.Name] {
 				condVarNames[cv.Name] = true
 				condVars = append(condVars, cv)
+			}
+		}
+		for k, branches := range moduleDefs[name].MatchVars {
+			if _, exists := allMatchVars[k]; !exists {
+				allMatchVars[k] = branches
+				if def, ok := moduleDefs[name].MatchVarDefaults[k]; ok {
+					allMatchVarDefaults[k] = def
+				}
 			}
 		}
 	}
@@ -890,6 +900,8 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		VarOrder:        varOrder,
 		EnvironmentOverrides: entry.EnvironmentOverrides,
 		ConditionalVars:      condVars,
+		MatchVars:            allMatchVars,
+		MatchVarDefaults:     allMatchVarDefaults,
 		Gateway:         entry.Gateway,
 		DeviceType:      entry.DeviceType,
 		Credential:      entry.Credential,
@@ -1179,25 +1191,39 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			return nil, fmt.Errorf("duplicate module name %q in %s", def.Name, path)
 		}
 
-		// Separate conditional vars from regular vars.
-		// A conditional var is any map value with a "trait" key or any
-		// known operator key (in, not_in, gt, lt, gte, lte, regex).
-		// Maps with operator keys but no trait are caught as validation
-		// errors by ParseConditionalVar.
+		// Separate conditional vars and match vars from regular vars.
 		var condVars []conditionals.ConditionalVar
+		matchVars := make(map[string][]conditionals.MatchBranch)
+		matchVarDefaults := make(map[string]string)
 		for name, v := range def.Vars {
-			if !conditionals.IsConditionalVar(v) && !conditionals.HasOperatorKey(v) {
+			// Match vars: {match: [{when: "...", value: "..."}, ...]}
+			if conditionals.IsMatchVar(v) {
+				rawMap, _ := v.(map[string]any)
+				branches, defaultVal, err := conditionals.ParseMatchVar(name, rawMap)
+				if err != nil {
+					return nil, fmt.Errorf("module %q: %w", def.Name, err)
+				}
+				matchVars[name] = branches
+				if defaultVal != "" {
+					matchVarDefaults[name] = defaultVal
+				}
+				delete(def.Vars, name)
 				continue
 			}
-			rawMap, _ := v.(map[string]any)
-			cv, err := conditionals.ParseConditionalVar(name, rawMap)
-			if err != nil {
-				return nil, fmt.Errorf("module %q: %w", def.Name, err)
+			// Conditional boolean vars: {trait: "...", in: [...]}
+			if conditionals.IsConditionalVar(v) || conditionals.HasOperatorKey(v) {
+				rawMap, _ := v.(map[string]any)
+				cv, err := conditionals.ParseConditionalVar(name, rawMap)
+				if err != nil {
+					return nil, fmt.Errorf("module %q: %w", def.Name, err)
+				}
+				condVars = append(condVars, cv)
+				delete(def.Vars, name)
 			}
-			condVars = append(condVars, cv)
-			delete(def.Vars, name)
 		}
 		def.ConditionalVars = condVars
+		def.MatchVars = matchVars
+		def.MatchVarDefaults = matchVarDefaults
 
 		// Idempotency validation — collect errors across all modules.
 		findings := validate.ValidateModule(moduleToValidate(def))

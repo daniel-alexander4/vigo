@@ -19,12 +19,19 @@ import (
 // If cachedHashes is non-nil, modules whose content hash matches the agent's
 // cached version are sent as stubs (name + hash only, no resources), saving
 // bandwidth when only a subset of modules changed.
-func buildPolicyBundle(cfg *config.ThrallConfig, version uint64, cachedHashes map[string]string) (*pb.PolicyBundle, error) {
+func buildPolicyBundle(cfg *config.ThrallConfig, version uint64, cachedHashes map[string]string, traits map[string]any) (*pb.PolicyBundle, error) {
 	bundle := &pb.PolicyBundle{
 		PolicyVersion:  version,
 		MatchedPattern: cfg.MatchPattern,
 		Environment:    cfg.Environment,
 		Roles:          cfg.Roles,
+	}
+
+	// Resolve match vars (trait-conditional string vars) into the vars map
+	// before serialization. These use when expressions evaluated server-side
+	// against the thrall's traits.
+	if len(cfg.MatchVars) > 0 && traits != nil {
+		config.ResolveMatchVars(cfg.Vars, &cfg.VarOrder, cfg.MatchVars, cfg.MatchVarDefaults, traits)
 	}
 
 	// Serialize vars as JSON (preserves types: int, string, bool, etc.).

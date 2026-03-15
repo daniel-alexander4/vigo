@@ -46,6 +46,65 @@ func IsConditionalVar(v any) bool {
 	return hasTrait
 }
 
+// MatchBranch is a single when/value pair in a match var.
+type MatchBranch struct {
+	When    string `yaml:"when"`
+	Value   string `yaml:"value"`
+}
+
+// IsMatchVar returns true if v is a map with a "match" key containing a list
+// of when/value branches. This is a string-valued conditional var:
+//
+//	docker_repo:
+//	  match:
+//	    - when: "distro('ubuntu')"
+//	      value: "deb ... ubuntu ..."
+//	    - when: "distro('debian')"
+//	      value: "deb ... debian ..."
+func IsMatchVar(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasMatch := m["match"]
+	return hasMatch
+}
+
+// ParseMatchVar extracts the match branches from a raw YAML value.
+func ParseMatchVar(name string, raw map[string]any) ([]MatchBranch, string, error) {
+	matchVal, ok := raw["match"]
+	if !ok {
+		return nil, "", fmt.Errorf("match var %q: missing 'match' field", name)
+	}
+	list, ok := matchVal.([]any)
+	if !ok {
+		return nil, "", fmt.Errorf("match var %q: 'match' must be a list", name)
+	}
+
+	defaultVal, _ := raw["default"].(string)
+
+	var branches []MatchBranch
+	for i, item := range list {
+		m, ok := item.(map[string]any)
+		if !ok {
+			return nil, "", fmt.Errorf("match var %q branch %d: must be a mapping with 'when' and 'value'", name, i)
+		}
+		when, _ := m["when"].(string)
+		value, _ := m["value"].(string)
+		if when == "" {
+			return nil, "", fmt.Errorf("match var %q branch %d: missing 'when' field", name, i)
+		}
+		if value == "" {
+			return nil, "", fmt.Errorf("match var %q branch %d: missing 'value' field", name, i)
+		}
+		branches = append(branches, MatchBranch{When: when, Value: value})
+	}
+	if len(branches) == 0 {
+		return nil, "", fmt.Errorf("match var %q: 'match' list is empty", name)
+	}
+	return branches, defaultVal, nil
+}
+
 // HasOperatorKey returns true if v is a map containing any known operator key.
 // This catches malformed conditional vars (e.g., missing "trait" field) so they
 // can be reported as validation errors rather than silently treated as regular vars.

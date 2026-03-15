@@ -68,7 +68,7 @@ func (pc *policyCache) GetOrBuild(pattern string, cfg *config.ThrallConfig, vers
 // populated (no stubs). Module content hashes are taken from the
 // pre-computed ContentHash on each ModuleConfig.
 func buildBasePolicyBundle(cfg *config.ThrallConfig, version uint64) (*pb.PolicyBundle, error) {
-	bundle, err := buildPolicyBundle(cfg, version, nil)
+	bundle, err := buildPolicyBundle(cfg, version, nil, nil)
 	if err != nil {
 		return nil, err
 	}
