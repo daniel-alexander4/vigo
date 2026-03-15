@@ -42,6 +42,9 @@ sudo scripts/upgrade.sh --build --cross arm64 freebsd
 
 # All supported platforms
 sudo scripts/upgrade.sh --build --cross all
+
+# Build all platforms and push to GHCR
+sudo scripts/upgrade.sh --build --cross all --push
 ```
 
 #### Available Targets

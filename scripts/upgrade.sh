@@ -10,6 +10,7 @@ set -euo pipefail
 #   sudo scripts/upgrade.sh --build                # build from source and restart (dev)
 #   sudo scripts/upgrade.sh --build --cross        # build + cross-compile agent (linux amd64+arm64)
 #   sudo scripts/upgrade.sh --build --cross arm64  # build + cross-compile specific platform(s)
+#   sudo scripts/upgrade.sh --build --cross all --push  # build all platforms and push to GHCR
 #
 # Cross-compile targets:
 #   amd64      Linux x86_64 (musl static)
@@ -35,11 +36,13 @@ cd "$DATA_DIR"
 
 # Parse flags.
 BUILD=false
+PUSH=false
 CROSS_TARGETS=()
 parsing_cross=false
 for arg in "$@"; do
     case "$arg" in
         --build) BUILD=true; parsing_cross=false ;;
+        --push) PUSH=true; parsing_cross=false ;;
         --cross) parsing_cross=true ;;
         *)
             if $parsing_cross; then
@@ -170,6 +173,12 @@ cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm6
 
     echo "Building image from source..."
     docker build -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
+
+    if $PUSH; then
+        echo "Pushing image to registry..."
+        docker push "$IMAGE"
+        echo "Pushed $IMAGE"
+    fi
 else
     echo "Pulling latest image..."
     docker compose pull hobnob
