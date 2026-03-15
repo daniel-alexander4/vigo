@@ -14,6 +14,7 @@ Manage enrolled thralls (managed nodes). Also available as `hobnobcli nodes`.
 | `tag` | Set tags on a thrall |
 | `untag` | Remove specific tags from a thrall |
 | `maintenance` | Set or clear maintenance mode |
+| `purge` | Delete stale duplicate thralls, keeping only the most recently seen per hostname |
 
 ## Usage
 
@@ -204,6 +205,44 @@ hobnobcli thralls maintenance a1b2c3d4 --until 2026-03-14T06:00:00Z
 
 # Clear maintenance
 hobnobcli thralls maintenance a1b2c3d4 --clear
+```
+
+## purge
+
+Delete stale duplicate thralls. When a machine is rebuilt and re-enrolled with the same hostname, the old entry remains with a different UUID. `purge` finds all hostnames with multiple entries and deletes all but the most recently seen one.
+
+Revoked entries always lose to active ones. Among entries with the same status, the most recent `last_seen` timestamp wins.
+
+```bash
+hobnobcli thralls purge
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--dry-run` | `false` | Preview duplicates without deleting |
+
+### Example
+
+```bash
+# Preview what would be deleted
+hobnobcli thralls purge --dry-run
+
+# Purge stale duplicates (prompts for confirmation)
+hobnobcli thralls purge
+```
+
+```
+ID          HOSTNAME              IP           LAST SEEN         STATUS
+e6ff73f8    raspberry             192.168.1.78 2026-03-15 12:17  active
+a1b2c3d4    raspberry             192.168.1.78 2026-03-14 09:30  revoked
+
+2 duplicate thrall(s) will be deleted.
+Purge these thralls? [y/N] y
+  deleted e6ff73f8 (raspberry)
+  deleted a1b2c3d4 (raspberry)
+Purged 2 stale thrall(s).
 ```
 
 ## Related

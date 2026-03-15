@@ -302,10 +302,119 @@ var thrallsMaintenanceCmd = &cobra.Command{
 	},
 }
 
+var thrallsPurgeCmd = &cobra.Command{
+	Use:   "purge",
+	Short: "Delete stale duplicate thralls, keeping only the most recently seen entry per hostname",
+	Long: `Finds hostnames with multiple enrolled thralls (e.g., machines rebuilt with
+the same name) and deletes all but the most recently seen entry for each.
+
+Use --dry-run to preview what would be deleted without making changes.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+		client := newAPIClient()
+		var resp struct {
+			Thralls []struct {
+				ID         string `json:"id"`
+				Hostname   string `json:"hostname"`
+				IPAddress  string `json:"ipAddress"`
+				EnrolledAt string `json:"enrolledAt"`
+				LastSeen   string `json:"lastSeen"`
+				Revoked    bool   `json:"revoked"`
+			} `json:"thralls"`
+		}
+		if err := client.get("/api/v1/thralls", &resp); err != nil {
+			return err
+		}
+
+		// Group by hostname.
+		type entry struct {
+			ID, Hostname, IPAddress, EnrolledAt, LastSeen string
+			Revoked                                       bool
+		}
+		byHostname := make(map[string][]entry)
+		for _, t := range resp.Thralls {
+			byHostname[t.Hostname] = append(byHostname[t.Hostname], entry{
+				t.ID, t.Hostname, t.IPAddress, t.EnrolledAt, t.LastSeen, t.Revoked,
+			})
+		}
+
+		// For each hostname with >1 entry, keep the most recently seen.
+		// Revoked entries always lose to active ones.
+		var toDelete []entry
+		for _, entries := range byHostname {
+			if len(entries) < 2 {
+				continue
+			}
+			best := 0
+			for i := 1; i < len(entries); i++ {
+				if entries[best].Revoked && !entries[i].Revoked {
+					best = i
+				} else if !entries[best].Revoked && entries[i].Revoked {
+					continue
+				} else if entries[i].LastSeen > entries[best].LastSeen {
+					best = i
+				} else if entries[i].LastSeen == entries[best].LastSeen && entries[i].EnrolledAt > entries[best].EnrolledAt {
+					best = i
+				}
+			}
+			for i, e := range entries {
+				if i != best {
+					toDelete = append(toDelete, e)
+				}
+			}
+		}
+
+		if len(toDelete) == 0 {
+			fmt.Println("No duplicate thralls found.")
+			return nil
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "ID\tHOSTNAME\tIP\tLAST SEEN\tSTATUS")
+		for _, d := range toDelete {
+			status := "active"
+			if d.Revoked {
+				status = "revoked"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+				d.ID, d.Hostname, d.IPAddress, formatTimestamp(d.LastSeen), status)
+		}
+		w.Flush()
+		fmt.Printf("\n%d duplicate thrall(s) will be deleted.\n", len(toDelete))
+
+		if dryRun {
+			fmt.Println("Dry run — no changes made.")
+			return nil
+		}
+
+		if !confirmAction("Purge these thralls?") {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
+		var failures int
+		for _, d := range toDelete {
+			if err := client.delete("/api/v1/thralls/"+d.ID, nil); err != nil {
+				fmt.Fprintf(os.Stderr, "  failed to delete %s (%s): %v\n", d.ID, d.Hostname, err)
+				failures++
+			} else {
+				fmt.Printf("  deleted %s (%s)\n", d.ID, d.Hostname)
+			}
+		}
+		if failures > 0 {
+			return fmt.Errorf("%d deletion(s) failed", failures)
+		}
+		fmt.Printf("Purged %d stale thrall(s).\n", len(toDelete))
+		return nil
+	},
+}
+
 func init() {
 	thrallsMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
 	thrallsMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
+	thrallsPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
 	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd,
 		thrallsTraitsCmd, thrallsTagCmd, thrallsUntagCmd, thrallsMaintenanceCmd,
-		pushCmd, rollbackCmd, previewCmd, packagesCmd)
+		thrallsPurgeCmd, pushCmd, rollbackCmd, previewCmd, packagesCmd)
 }
