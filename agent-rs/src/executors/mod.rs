@@ -129,6 +129,8 @@ pub mod timezone_bsd;
 
 // Windows-native executors.
 #[cfg(windows)]
+pub mod acl_windows;
+#[cfg(windows)]
 pub mod cron_windows;
 #[cfg(windows)]
 pub mod firewall_windows;

@@ -727,6 +727,7 @@ pub fn build_executors_with_snapshots(
         executors.insert("timezone".to_string(), Box::new(timezone_windows::TimezoneWindowsExecutor::new()));
         executors.insert("firewall".to_string(), Box::new(firewall_windows::FirewallWindowsExecutor::new()));
         executors.insert("registry".to_string(), Box::new(registry_windows::RegistryWindowsExecutor::new()));
+        executors.insert("acl".to_string(), Box::new(acl_windows::AclWindowsExecutor::new()));
     }
 
     executors

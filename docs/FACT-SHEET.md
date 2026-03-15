@@ -78,7 +78,7 @@ Platform-specific bootstrap for Windows (PowerShell), macOS (launchd), FreeBSD (
 
 ## Platform Support
 
-One agent binary, seven operating system families, 60 built-in executors.
+One agent binary, seven operating system families, 61 built-in executors.
 
 | Platform | Init System | Package Manager | Fully Supported |
 |----------|-------------|-----------------|:---------------:|
@@ -96,7 +96,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed via gateway proxy o
 
 ## Executors
 
-60 built-in resource types, organized by scope:
+61 built-in resource types, organized by scope:
 
 **System:** package, service, user, group, cron, hostname, timezone, sysctl, firewall, kernel_module, mount, swap, reboot, selinux, alternatives, tmpfile, logrotate, systemd_dropin
 

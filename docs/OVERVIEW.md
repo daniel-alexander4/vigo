@@ -46,7 +46,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 - Self-protection guardrails block any resource that targets the agent binary, server binary, config directory, or service unit. These checks cannot be bypassed.
 - Configuration is YAML only. One format, one directory, one publish command. No API writes, no database config, no UI mutations.
 
-## Executors (60 built-in)
+## Executors (61 built-in)
 
 ### Cross-Platform (24)
 
