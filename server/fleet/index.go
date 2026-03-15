@@ -585,6 +585,27 @@ func (f *FleetIndex) ClearPendingRotatedSecrets(id string) {
 	f.dirty[id] = true
 }
 
+// AppendPendingRotatedSecret adds a secret path to a thrall's pending rotation
+// list and sets force_push. Used by the secrets API to trigger rotation delivery.
+func (f *FleetIndex) AppendPendingRotatedSecret(id, secretPath string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.thralls[id]
+	if !ok {
+		return
+	}
+	// Deduplicate.
+	for _, p := range ts.PendingRotatedSecrets {
+		if p == secretPath {
+			return
+		}
+	}
+	ts.PendingRotatedSecrets = append(ts.PendingRotatedSecrets, secretPath)
+	ts.ForcePush = true
+	f.dirty[id] = true
+}
+
 // SetTags replaces the tags for a thrall and updates the inverted tag index.
 func (f *FleetIndex) SetTags(id string, tags []string) {
 	f.mu.Lock()

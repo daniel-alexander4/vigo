@@ -187,6 +187,13 @@ func runSecretsSet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Printf("  Secret %q stored.\n", key)
+
+	// Notify the server so watch_secret resources trigger on next check-in.
+	client := newAPIClient()
+	if err := client.post("/api/v1/secrets/rotated", map[string]any{"path": key}, nil); err == nil {
+		fmt.Println("  Server notified — affected thralls will apply on next check-in.")
+	}
+
 	return nil
 }
 

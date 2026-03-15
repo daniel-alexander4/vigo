@@ -12,6 +12,7 @@ import (
 
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/publish"
 )
 
@@ -29,11 +30,12 @@ var _ = time.Now // used by format
 type ConfigHandler struct {
 	queries     *db.Queries
 	configStore *config.ConfigStore
+	fleetIndex  *fleet.FleetIndex
 }
 
 // NewConfigHandler creates a ConfigHandler.
-func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore) *ConfigHandler {
-	return &ConfigHandler{queries: queries, configStore: configStore}
+func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex) *ConfigHandler {
+	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex}
 }
 
 // RegisterRoutes registers config management endpoints.
@@ -46,6 +48,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/config/freeze", h.Freeze)
 	mux.HandleFunc("POST /api/v1/config/unfreeze", h.Unfreeze)
 	mux.HandleFunc("POST /api/v1/config/reload", h.ReloadConfig)
+	mux.HandleFunc("POST /api/v1/secrets/rotated", h.SecretRotated)
 }
 
 // ReloadConfig re-reads all config files from disk. Called by hobnobcli
@@ -56,6 +59,50 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// SecretRotated marks a secret as rotated, triggering watch_secret resources
+// on affected thralls at their next check-in. Called by hobnobcli secrets set.
+func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+		writeJSONError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+
+	// Reload config so the new secret value is resolved.
+	_ = h.configStore.Reload()
+
+	// Find thralls referencing this secret via their match patterns.
+	patterns := h.configStore.ThrallsReferencingSecret(req.Path)
+	affected := 0
+
+	for _, pattern := range patterns {
+		// Resolve pattern to actual thrall IDs via FleetIndex (handles globs).
+		if h.fleetIndex != nil {
+			targets := h.fleetIndex.ListByGlob(pattern)
+			for _, t := range targets {
+				_ = h.queries.AppendRotatedSecret(r.Context(), t.ThrallID, req.Path)
+				h.fleetIndex.AppendPendingRotatedSecret(t.ThrallID, req.Path)
+				affected++
+			}
+		} else {
+			// Fallback: exact hostname lookup.
+			thrall, err := h.queries.GetThrallByHostname(r.Context(), pattern)
+			if err != nil || thrall.ID == "" {
+				continue
+			}
+			_ = h.queries.AppendRotatedSecret(r.Context(), thrall.ID, req.Path)
+			affected++
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"path":     req.Path,
+		"affected": affected,
+	})
 }
 
 // ListPublishes returns recent config publishes.

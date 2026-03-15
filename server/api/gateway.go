@@ -73,7 +73,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	configTraceHandler.RegisterRoutes(mux)
 
 	// Mount config publish history, versioning, rollback, and reload.
-	configHandler := NewConfigHandler(queries, configStore)
+	configHandler := NewConfigHandler(queries, configStore, fleetIndex)
 	configHandler.RegisterRoutes(mux)
 
 	// Mount thrall management endpoints (tags, maintenance).
