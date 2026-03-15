@@ -5,7 +5,6 @@ All tuning options live under the `tuning:` section of `server.yaml`. Every fiel
 ```yaml
 tuning:
   signature_window: "5m"
-  thrall_cache_ttl: "60s"
   last_seen_flush: "10s"
   traits_prune_interval: "5m"
   metrics_interval: "30s"
@@ -25,7 +24,6 @@ tuning:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `signature_window` | `5m` | Maximum allowed age difference between the request timestamp and server time for ED25519 signature verification. Wider windows tolerate clock skew; narrower windows improve replay protection. |
-| `thrall_cache_ttl` | `60s` | TTL for cached thrall lookups. With FleetIndex active, this primarily affects any fallback DB lookups. |
 | `last_seen_flush` | `10s` | How often the StateFlusher writes dirty thrall state (last_seen, force_push, rotated secrets) from the FleetIndex to SQLite. Lower values reduce data loss on crash; higher values reduce SQLite write load. |
 | `traits_prune_interval` | `5m` | How often old trait records are pruned from the database. Only the latest trait snapshot per thrall is kept. |
 | `metrics_interval` | `30s` | How often Prometheus gauge metrics (node counts, compliance percentage, database size) are refreshed. Does not affect counters or histograms, which update in real time. |
