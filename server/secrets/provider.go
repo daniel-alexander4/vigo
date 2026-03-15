@@ -8,6 +8,15 @@ package secrets
 
 import "context"
 
+// NullProvider is a no-op secrets provider that returns empty strings for all
+// keys. Used by offline tools (hobnobcli test, hobnobcli validate) that need
+// to load config without resolving secrets.
+type NullProvider struct{}
+
+func (NullProvider) Get(_ context.Context, _ string) (string, error)      { return "", nil }
+func (NullProvider) GetBytes(_ context.Context, _ string) ([]byte, error) { return nil, nil }
+func (NullProvider) Close() error                                          { return nil }
+
 // Provider is the interface all secret backends must satisfy.
 // The rest of the codebase depends only on this interface, never on a
 // concrete implementation.

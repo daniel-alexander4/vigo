@@ -1,0 +1,11 @@
+# Example test: verify that the danlap thrall gets the expected modules.
+# Run with: hobnobcli test --config-dir /srv/hobnob/hnb/proposed
+# Or:       hobnobcli test tests/example.test.hnb
+
+name: danlap gets monitoring role modules
+thrall: danlap
+
+expect:
+  modules:
+    - node-exporter
+    - prometheus

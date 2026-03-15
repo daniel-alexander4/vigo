@@ -29,6 +29,7 @@ When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 | [preview](preview.md) | Dry-run to preview planned changes |
 | [rollback](rollback.md) | Rollback a thrall to a previous state |
 | [validate](validate.md) | Check .hnb files for YAML correctness and idempotency |
+| [test](test.md) | Run config tests against expected outcomes |
 | [inventory](inventory.md) | Query thralls by traits |
 | [license](license.md) | Manage the Hobnob license |
 | [doctor](doctor.md) | Run health checks against the Hobnob server |

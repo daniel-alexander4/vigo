@@ -251,7 +251,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 
 2. **Expressiveness ceiling.** When you need complex logic (dynamic resource generation, cross-node dependency resolution, inheritance hierarchies), Puppet's DSL and Chef's Ruby give you a real programming language. Hobnob's YAML composition handles 90% of cases but hits a wall on the other 10%.
 
-3. **Testing tools.** Puppet has rspec-puppet, PDK, Litmus. Chef has Test Kitchen, ChefSpec, InSpec. Ansible has Molecule. Hobnob has `validate` and `preview` but no unit test framework for configs.
+3. **Testing tools.** Puppet has rspec-puppet, PDK, Litmus. Chef has Test Kitchen, ChefSpec, InSpec. Ansible has Molecule. Hobnob has `validate`, `preview`, and `test` (YAML-based assertions against resolved policy) — functional but less mature than the Ruby/Python test ecosystems.
 
 4. **Compliance frameworks.** Chef InSpec provides CIS benchmark libraries. Puppet has compliance modules. Hobnob has compliance status tracking but no pre-built benchmark content.
 
