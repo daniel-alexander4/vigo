@@ -46,6 +46,14 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Trust local API requests — CLI on the server host gets
+		// implicit admin access (same as PostgreSQL peer auth).
+		if isAPIPath(r.URL.Path) && isLocalRequest(r) {
+			ctx := ContextWithUser(r.Context(), loopbackAdmin)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		// Check API token first.
 		if token := ExtractBearerToken(r.Header.Get("Authorization")); token != "" {
 			user, err := p.tokenStore.ValidateAndResolve(r.Context(), token, p.userStore)

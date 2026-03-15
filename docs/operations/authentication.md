@@ -58,6 +58,12 @@ hobnobcli users set-password --username alice
 hobnobcli users set-password --username admin
 ```
 
+### CLI Access (Localhost Trust)
+
+When the CLI runs on the same host as the server (or Docker host), API requests are automatically trusted with admin privileges — no token needed. This works like PostgreSQL's `peer` authentication: shell access to the server host implies full access.
+
+Localhost (`127.0.0.1`, `::1`) and Docker bridge networks (`172.16.0.0/12`) are trusted. Remote CLI access requires an API token via `hobnobcli auth set-token`.
+
 ## OIDC (OpenID Connect)
 
 OIDC integrates with any OpenID Connect-compliant identity provider.

@@ -9,6 +9,7 @@ package auth
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -99,6 +100,36 @@ func IsPublicPath(path string) bool {
 // isAPIPath returns true if the path is a REST API endpoint (not a UI page).
 func isAPIPath(path string) bool {
 	return strings.HasPrefix(path, "/api/")
+}
+
+// isLocalRequest returns true if the request originates from the server host.
+// Checks for loopback (127.0.0.1, ::1) and Docker bridge networks (172.16-31.x.x).
+// This grants implicit admin access to CLI tools on the server host — if you
+// have shell access, you already have full access to config, secrets, and the
+// database (same model as PostgreSQL peer auth).
+func isLocalRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	// Docker bridge: 172.16.0.0/12 — host requests arrive from the gateway IP
+	// (e.g., 172.17.0.1) when the server runs in a container.
+	_, dockerNet, _ := net.ParseCIDR("172.16.0.0/12")
+	return dockerNet.Contains(ip)
+}
+
+// loopbackAdmin is the synthetic admin user injected for localhost API requests.
+var loopbackAdmin = &User{
+	ID:       "localhost",
+	Username: "localhost",
+	Role:     "admin",
 }
 
 // NoneProvider implements Provider with zero overhead — all requests pass through.
