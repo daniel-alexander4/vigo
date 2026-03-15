@@ -728,6 +728,12 @@ func run() error {
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)
 		}
+		dbDriver := "sqlite"
+		if cfg.Database.Driver == "postgres" {
+			dbDriver = "postgres"
+		}
+		dbHandler := api.NewDatabaseHandler(sqlDB, queries, dbDriver, cfg.Database.DSN)
+		dbHandler.RegisterRoutes(gwMux)
 		authProvider.RegisterRoutes(gwMux)
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
