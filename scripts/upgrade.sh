@@ -161,6 +161,13 @@ cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm6
         echo ""
     fi
 
+    # Touch source files to bust Docker layer cache for proto and Rust source.
+    # Without this, COPY layers may be cached from a prior build even when
+    # file contents have changed (Docker caches by content hash of the COPY
+    # context, but the Rust dependency-caching layer uses a dummy main.rs
+    # that doesn't change, so proto changes can be missed).
+    touch "$REPO_DIR/proto/hobnob.proto" "$REPO_DIR/agent-rs/src/main.rs" 2>/dev/null || true
+
     echo "Building image from source..."
     docker build -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
 else
