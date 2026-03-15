@@ -40,4 +40,5 @@ When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 | [auth](auth.md) | Manage CLI authentication tokens |
 | [audit](audit.md) | View unified audit log |
 | [backup](backup.md) | Create and restore full server backups |
+| [db](db.md) | Inspect and maintain the SQLite database |
 | [vi](vi.md) | Edit a .hnb file with syntax highlighting and validation |
