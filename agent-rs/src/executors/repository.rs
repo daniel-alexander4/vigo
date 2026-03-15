@@ -41,20 +41,30 @@ impl RepoManager for AptRepoManager {
             let key_path = format!("/etc/apt/keyrings/{}.gpg", name);
             let _ = std::fs::create_dir_all("/etc/apt/keyrings");
 
-            // Download key.
-            match self.runner.run("curl", &["-fsSL", key_url, "-o", &key_path]) {
-                Ok(o) if !o.status.success() => {
+            // Download key and dearmor it. APT requires binary (dearmored) keyring format
+            // when referenced via signed-by in sources. The key URL typically returns an
+            // ASCII-armored GPG key that must be converted.
+            let tmp_key = format!("/tmp/hobnob-key-{}.asc", name);
+            let downloaded = match self.runner.run("curl", &["-fsSL", key_url, "-o", &tmp_key]) {
+                Ok(o) if o.status.success() => true,
+                _ => {
                     // Try wget as fallback.
-                    match self.runner.run("wget", &["-qO", &key_path, key_url]) {
-                        Ok(o2) if !o2.status.success() => {
-                            return Err(format!("failed to download GPG key from {}", key_url));
-                        }
-                        Err(e) => return Err(format!("download GPG key: {}", e)),
-                        _ => {}
+                    match self.runner.run("wget", &["-qO", &tmp_key, key_url]) {
+                        Ok(o2) if o2.status.success() => true,
+                        _ => return Err(format!("failed to download GPG key from {}", key_url)),
                     }
                 }
-                Err(e) => return Err(format!("download GPG key: {}", e)),
-                _ => {}
+            };
+            if downloaded {
+                // Dearmor: convert ASCII-armored key to binary GPG format.
+                // If gpg --dearmor fails (key might already be binary), copy as-is.
+                let dearmor = self.runner.run("sh", &["-c",
+                    &format!("gpg --dearmor < '{}' > '{}' 2>/dev/null || cp '{}' '{}'",
+                        tmp_key, key_path, tmp_key, key_path)]);
+                let _ = std::fs::remove_file(&tmp_key);
+                if let Err(e) = dearmor {
+                    return Err(format!("dearmor GPG key: {}", e));
+                }
             }
         }
 
