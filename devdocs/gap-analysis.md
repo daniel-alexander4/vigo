@@ -2,11 +2,11 @@
 
 A comparison of Hobnob against mature configuration management systems (Puppet, Ansible, Chef, SaltStack), identifying remaining gaps for production readiness.
 
-Last updated: 2026-03-14
+Last updated: 2026-03-15
 
 ## Status Summary
 
-**20 original gaps identified. 16 resolved. 4 deferred.**
+**26 gaps identified. 23 resolved. 3 deferred.**
 
 | # | Gap | Severity | Status |
 |---|-----|----------|--------|
@@ -14,7 +14,7 @@ Last updated: 2026-03-14
 | 2 | Maintenance windows / change freeze | Critical | Resolved — per-thrall + global freeze_until |
 | 3 | Config change attribution | Critical | Resolved — publish audit trail with operator, diffs |
 | 4 | Resource execution timeouts | Critical | Resolved — per-resource timeout via runner |
-| 5 | Horizontal scaling | Critical | **Deferred** — federation covers geographic distribution |
+| 5 | Horizontal scaling / HA | Critical | Partially resolved — federation + auto-failover. P2P design doc written |
 | 6 | Config rollback | High | Resolved — timestamped snapshots, version-based rollback |
 | 7 | Node tagging / classification | High | Resolved — tags on thralls, tag-based targeting |
 | 8 | Per-resource rollback beyond files | High | **Deferred** |
@@ -30,14 +30,16 @@ Last updated: 2026-03-14
 | 18 | Multi-node impact analysis | Medium | Resolved — hobnobcli preview with pattern targeting |
 | 19 | Line-level config diff | Medium | Resolved — publish pipeline shows unified diffs |
 | 20 | Phased rollout | Medium | **Deferred** — rolling execution covers batch + health check |
+| 21 | Web UI authentication | High | Resolved — basic auth default, OIDC, isowebauth |
+| 22 | Admin UI for server management | High | Resolved — admin section with 6 pages |
+| 23 | Federation config sync | High | Resolved — hub pushes config to spokes on publish |
+| 24 | Federation auto-failover | High | Resolved — hub auto-drains unhealthy spokes |
+| 25 | Federation spoke→hub reporting | Medium | Resolved — spokes push status via hub_addr |
+| 26 | Backup management via web UI | Medium | Resolved — snapshot creation + browser download |
 
 ---
 
 ## Deferred Gaps
-
-### 5. Horizontal scaling
-
-Single server with in-memory FleetIndex. No distributed locking, no read replicas, no shared state between instances. Federation (hub-spoke) solves geographic distribution but not single-site HA. The [scalability analysis](scalability.md) shows a single server handles 50K-200K thralls comfortably.
 
 ### 8. Per-resource rollback beyond files
 
@@ -53,9 +55,51 @@ Rolling execution supports batch sizing and health checks, but no multi-stage ca
 
 ---
 
-## Resolved Since Initial Analysis
+## Resolved Since Last Update (2026-03-15)
 
-All resolved items were implemented between 2026-03-12 and 2026-03-14.
+### Web UI Authentication (Gap 21)
+
+Default auth method changed from `none` to `basic`. Four pluggable methods: basic (username/password with bcrypt hashes in secrets store), none, OIDC, isowebauth. Sessions backed by SQLite (SCS). API tokens (`hbt_` prefix, bcrypt at rest). Two roles: admin/viewer. Localhost CLI requests trusted with implicit admin access (peer auth model). First-time setup page with CLI instructions.
+
+### Admin UI (Gap 22)
+
+Dedicated admin area with its own layout and sidebar navigation. Six admin pages:
+- **Users** — account CRUD, role management
+- **Enrollment** — approved pattern management
+- **Tokens** — bootstrap token generation, API token CRUD
+- **Webhooks** — webhook endpoint management
+- **Health** — system diagnostics (database, TLS, secrets, license, config, stale thralls)
+- **Backup** — status display, on-demand snapshot creation, browser download
+
+Top bar with user identity and pill-shaped logout button across all pages.
+
+### Federation Config Sync (Gap 23)
+
+Hub automatically pushes `.live/` config directory to all spokes on config publish. Uses `SyncConfig` gRPC RPC with tar.gz payload. Best-effort per spoke — partial failures logged but don't block publish. Path traversal protection on archive extraction.
+
+### Federation Auto-Failover (Gap 24)
+
+Background goroutine on hub periodically probes spoke health (default 30s). After configurable consecutive failures (default 3 = 90s), automatically drains all thralls to other healthy spokes based on hostname pattern matching. Spokes marked healthy again on recovery. Configurable via `federation.auto_failover` in server.yaml.
+
+### Federation Spoke Reporting (Gap 25)
+
+Spokes proactively push compliance metrics to hub via `ReportSpokeStatus` gRPC RPC (every 30s). Uses the previously unused `hub_addr` config field. Hub merges self-reports with probe results — if a spoke is unreachable but has a recent report, last-known compliance data is preserved. Graceful degradation: spoke operates normally if hub unreachable.
+
+### Backup via Web UI (Gap 26)
+
+Two new REST endpoints: `POST /api/v1/backup/snapshot` (create archive) and `GET /api/v1/backup/download` (stream tar.gz to browser). Admin-only. Includes database, config, secrets, TLS certs, and server.yaml. Restore remains CLI-only (requires server restart).
+
+### Additional Improvements
+
+- **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (hobnob, hobd, hobnob-license-manager). CLI stays at `/usr/local/bin/hobnobcli`.
+- **Package timeout**: default increased from 60s to 300s for package and repository executors (arm64/low-powered hardware was timing out during apt installs).
+- **P2P federation architecture document**: design doc for future peer-to-peer federation eliminating hub as SPOF. Covers git-based config, peer discovery, leader election. Not implemented — hub-spoke sufficient for current use.
+
+---
+
+## Resolved Prior to 2026-03-15
+
+All items below were implemented between 2026-03-12 and 2026-03-14.
 
 **Critical (4/5 resolved):**
 - Rate limiting: token-bucket interceptor, per-thrall + global, configurable in server.yaml
@@ -81,29 +125,23 @@ All resolved items were implemented between 2026-03-12 and 2026-03-14.
 
 ---
 
-## Lower Priority (Unchanged)
+## Lower Priority (Remaining)
 
-### UI and CLI
+### UI
 
-- No UI bulk actions (select multiple thralls for bulk operations)
+- No bulk actions (select multiple thralls for bulk operations)
 - No web-based config editor (operators edit .hnb files on disk)
 - No topology visualization (no visual DAG for depends_on/notify relationships)
 - No real-time event stream (HTMX auto-refresh, no SSE/WebSocket)
 
 ### Agent
 
-- No systemd unit creation executor (service manages existing units; creating requires file + service)
 - No package pinning/hold (version specification works, no apt hold / yum versionlock)
 - No agent health self-check (no detection of stuck convergence)
-
-### Documentation
-
-- ~~No migration guides~~ — Resolved: 5 guides (Puppet, Ansible, Chef, Salt, CFEngine)
-- ~~No scaling guide~~ — Resolved: [Scalability Analysis](scalability.md)
-- No chaos or resilience tests
 
 ### Testing
 
 - No E2E integration tests (cross-binary harness exists but no full workflow tests)
 - No UI tests (no browser automation)
 - No load tests (benchmarks exist but no documented large-scale scenario)
+- No chaos or resilience tests
