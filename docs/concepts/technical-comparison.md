@@ -155,7 +155,14 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 | **Salt** | 10,000+ nodes per master (documented) | ZeroMQ pub/sub, state compilation on master | Python — moderate memory |
 | **CFEngine** | 50,000+ nodes per hub (documented, proven) | Minimal server — agents pull flat policy files, no compilation | C — minimal overhead |
 
-*Hobnob's figures are from benchmark extrapolation with zero production deployments. Conservative estimate based on measured FleetIndex operations (~3,300 check-ins/sec single-core cache hit at ~300µs each). See [Scalability Analysis](../../devdocs/scalability.md) for methodology.
+*Hobnob's figures are theoretical — zero production deployments exist. The 50K-200K range is deliberately conservative. The benchmarks suggest much higher raw capacity:
+
+- FleetIndex operations measure ~3,300 check-ins/sec on a **single core** at ~300µs per cache-hit check-in
+- A 4-core server at that rate handles ~10,000 check-ins/sec, which serves **3 million thralls** at a 5-minute check-in interval
+- Per-thrall memory is ~388 bytes — 100K thralls uses ~40 MB of RAM
+- SQLite write batching (10s flush interval) is the first bottleneck, hitting limits around 50K-100K thralls
+
+The conservative 50K-200K estimate accounts for: real-world GC pauses under sustained load, policy cache misses after config changes (10-50ms each vs 300µs cache hit), network I/O contention, SQLite WAL checkpoint stalls, trait batch processing overhead, and the general principle that benchmarks on empty data structures don't predict production behavior. The upper bound (200K) assumes PostgreSQL for the write path and Go runtime tuning (`GOGC`, `GOMEMLIMIT`). See [Scalability Analysis](../../devdocs/scalability.md) for full methodology and benchmark data.
 
 ### Scaling architecture
 
