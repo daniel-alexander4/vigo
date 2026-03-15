@@ -4,8 +4,13 @@
         <div class="docs-nav__header">
             <a href="/docs" class="docs-nav__title">Documentation</a>
         </div>
+        <div class="docs-nav__search">
+            <input type="text" id="docs-search" class="docs-nav__search-input" placeholder="Search docs..." autocomplete="off" spellcheck="false">
+        </div>
+        <div id="docs-search-results" class="docs-nav__search-results" style="display:none"></div>
+        <div id="docs-nav-tree">
         {{range .NavTree}}
-        <div class="docs-nav__section">
+        <div class="docs-nav__section" data-section="{{.Path}}">
             <a href="/docs/{{.Path}}" class="docs-nav__section-title{{if eq $.CurrentSection .Path}} docs-nav__section-title--active{{end}}">{{.Title}}</a>
             {{if eq $.CurrentSection .Path}}
             <div class="docs-nav__pages">
@@ -16,6 +21,7 @@
             {{end}}
         </div>
         {{end}}
+        </div>
     </aside>
     <article class="docs-content">
         {{if .Breadcrumbs}}
@@ -32,4 +38,55 @@
         </div>
     </article>
 </div>
+<script>
+(function() {
+    var pages = [
+        {{range .NavTree}}{{range .Pages}}{t:{{.Title}},p:{{.Path}}},
+        {{end}}{{end}}
+    ];
+    var input = document.getElementById('docs-search');
+    var results = document.getElementById('docs-search-results');
+    var tree = document.getElementById('docs-nav-tree');
+    if (!input) return;
+
+    input.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        if (!q) {
+            results.style.display = 'none';
+            tree.style.display = '';
+            return;
+        }
+        tree.style.display = 'none';
+        results.style.display = '';
+        var html = '';
+        var terms = q.split(/\s+/);
+        for (var i = 0; i < pages.length; i++) {
+            var title = pages[i].t.toLowerCase();
+            var path = pages[i].p.toLowerCase();
+            var match = true;
+            for (var j = 0; j < terms.length; j++) {
+                if (title.indexOf(terms[j]) === -1 && path.indexOf(terms[j]) === -1) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                var section = pages[i].p.split('/')[0].replace(/-/g, ' ');
+                html += '<a href="/docs/' + pages[i].p + '" class="docs-nav__search-hit">' +
+                    '<span class="docs-nav__search-hit-title">' + pages[i].t + '</span>' +
+                    '<span class="docs-nav__search-hit-section">' + section + '</span></a>';
+            }
+        }
+        results.innerHTML = html || '<div class="docs-nav__no-results">No pages found</div>';
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            this.value = '';
+            this.dispatchEvent(new Event('input'));
+            this.blur();
+        }
+    });
+})();
+</script>
 {{end}}
