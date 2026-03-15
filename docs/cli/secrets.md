@@ -57,6 +57,7 @@ hobnobcli secrets set hobnob/db/dsn --from-file /tmp/dsn.txt
 
 ```
   Secret "hobnob/db/dsn" stored.
+  Server notified — affected thralls will apply on next check-in.
 ```
 
 #### Interactive prompt (echo disabled)
@@ -68,6 +69,7 @@ hobnobcli secrets set hobnob/db/password
 ```
 Enter secret value:
   Secret "hobnob/db/password" stored.
+  Server notified — affected thralls will apply on next check-in.
 ```
 
 #### Store from stdin pipe

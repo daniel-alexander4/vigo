@@ -96,7 +96,7 @@ This is equivalent to `app-config` having `notify: [app-service]`.
 
 ## watch_secret
 
-Watches secret paths for rotation. When the server detects a secret has been rotated, resources subscribing to that secret path are re-applied:
+Watches secret paths for rotation. When a secret is changed via `hobnobcli secrets set` (or detected by the isopass watcher), resources with matching `watch_secret` paths are re-applied on the next check-in:
 
 ```yaml
 resources:
@@ -109,8 +109,8 @@ resources:
     notify: [app-service]
 ```
 
-When the secret at `hobnob/db/dsn` is rotated:
-1. The watcher detects the version change
+When the secret at `hobnob/db/dsn` is changed:
+1. `hobnobcli secrets set` notifies the server
 2. The config file is re-rendered with the new secret value
 3. The service is restarted via notify
 

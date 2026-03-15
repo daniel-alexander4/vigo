@@ -64,7 +64,27 @@ ERROR server failed error="loading server config: resolving secret 'hobnob/db/ds
 
 ## Secret Rotation
 
-With the isopass backend, the server polls for version changes:
+### Local backend
+
+When you change a secret with the CLI, rotation is automatic:
+
+```bash
+hobnobcli secrets set hobnob/grafana/admin-password "newpass"
+  Secret "hobnob/grafana/admin-password" stored.
+  Server notified — affected thralls will apply on next check-in.
+```
+
+The CLI writes the encrypted file and notifies the server. The server:
+1. Reloads config to resolve the new value
+2. Finds thralls whose configs reference the secret
+3. Queues `_secret_triggered=true` for resources with `watch_secret: ["path"]`
+4. Sets force-push on affected thralls
+
+On the next check-in, watch_secret resources re-execute with the new value.
+
+### Isopass backend
+
+The server polls isopass for version changes:
 
 ```yaml
 watcher:
@@ -72,11 +92,7 @@ watcher:
   poll_interval: "5m"
 ```
 
-When a secret is rotated:
-1. Watcher detects the version change
-2. Server re-resolves the secret value
-3. Resources with `watch_secret: ["path"]` are force-pushed to affected thralls
-4. Webhook event fired + SMTP notification sent
+When a version change is detected, the same rotation flow triggers automatically.
 
 ## Secrets in Modules
 

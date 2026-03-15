@@ -561,6 +561,31 @@ Set a global config publish freeze.
 
 Remove the config publish freeze.
 
+### POST /api/v1/config/reload
+
+Re-read all config files from disk. Called automatically by `hobnobcli config publish`.
+
+### POST /api/v1/secrets/rotated
+
+Notify the server that a secret has been changed. Triggers `watch_secret` resources on affected thralls at their next check-in. Called automatically by `hobnobcli secrets set`.
+
+**Request body:**
+
+```json
+{
+  "path": "hobnob/grafana/admin-password"
+}
+```
+
+**Response:**
+
+```json
+{
+  "path": "hobnob/grafana/admin-password",
+  "affected": 2
+}
+```
+
 ---
 
 ## Thrall Tags
