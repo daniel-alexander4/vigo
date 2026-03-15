@@ -160,6 +160,61 @@ body {
     text-decoration: underline;
 }
 
+/* === Top Bar === */
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 0 20px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.topbar__right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.topbar__user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.topbar__username {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.topbar__role {
+    font-size: 11px;
+}
+
+.topbar__logout {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    text-decoration: none;
+    line-height: 1;
+}
+
+.topbar__logout:hover {
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+    background: var(--color-danger-bg);
+}
+
 /* === Content === */
 .content {
     grid-column: 2;
@@ -1710,39 +1765,11 @@ body:has(.ask-dashboard) .ai-drawer {
     color: var(--color-primary);
 }
 
-/* === Sidebar Footer (Auth) === */
+/* === Sidebar Footer === */
 .sidebar__footer {
-    padding: 0.75rem 1rem;
-    border-top: 1px solid var(--color-border);
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--color-sidebar-hover);
     margin-top: auto;
-}
-
-.sidebar__user {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.sidebar__username {
-    font-size: 0.813rem;
-    font-weight: 500;
-    color: var(--color-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.sidebar__username-link {
-    text-decoration: none;
-    color: inherit;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.sidebar__username-link:hover .sidebar__username {
-    text-decoration: underline;
 }
 
 /* Admin sidebar variant */

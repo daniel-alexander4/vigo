@@ -11,6 +11,19 @@
     <div class="layout">
         {{template "nav" .}}
         <main class="content">
+            {{if .AuthEnabled}}{{if .CurrentUser}}
+            <header class="topbar">
+                <div class="topbar__right">
+                    <div class="topbar__user">
+                        <span class="topbar__username">{{if .CurrentUser.DisplayName}}{{.CurrentUser.DisplayName}}{{else}}{{.CurrentUser.Username}}{{end}}</span>
+                        <span class="topbar__role badge badge--{{.CurrentUser.Role}}">{{.CurrentUser.Role}}</span>
+                    </div>
+                    <form method="POST" action="/logout" hx-boost="false">
+                        <button type="submit" class="topbar__logout">Sign out</button>
+                    </form>
+                </div>
+            </header>
+            {{end}}{{end}}
             {{if .LicenseWarning}}
             <div class="license-banner">
                 <span class="license-banner__text">{{.LicenseWarning}}</span>
