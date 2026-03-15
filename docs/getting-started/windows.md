@@ -1,6 +1,6 @@
 # Windows Support
 
-Hobnob fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 19 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
+Hobnob fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 22 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
 
 ## Bootstrap
 
@@ -523,6 +523,98 @@ Manage Windows Update and WSUS configuration via registry policies.
 **Auto-update modes:** `enabled` (auto-install), `disabled`, `notify` (notify before download), `download` (download only), `scheduled` (install on schedule).
 
 See [windows_update executor](../executors/windows_update.md) for full reference.
+
+### windows_defender
+
+Manage Windows Defender exclusions, real-time protection, and scheduled scan settings.
+
+```yaml
+- name: defender-exclusions
+  type: windows_defender
+  exclusion_path: "C:\\App,D:\\Database\\Data"
+  exclusion_process: "sqlservr.exe"
+  exclusion_extension: ".mdf,.ldf"
+
+- name: defender-realtime
+  type: windows_defender
+  real_time_protection: "true"
+
+- name: defender-scan
+  type: windows_defender
+  scan_schedule_day: "0"
+  scan_schedule_time: "02:00"
+
+- name: remove-exclusions
+  type: windows_defender
+  exclusion_path: "C:\\OldApp"
+  state: absent
+```
+
+**Scan schedule days:** `0` = daily, `1` = Sunday, `2` = Monday, ..., `7` = Saturday.
+
+See [windows_defender executor](../executors/windows_defender.md) for full reference.
+
+### smb_share
+
+Manage SMB file shares with granular access control for users and groups.
+
+```yaml
+- name: data-share
+  type: smb_share
+  share: Data
+  path: "D:\\Shares\\Data"
+  description: "Shared data directory"
+  full_access: "BUILTIN\\Administrators"
+  read_access: "DOMAIN\\DataReaders"
+  change_access: "DOMAIN\\DataWriters"
+
+- name: public-share
+  type: smb_share
+  share: Public
+  path: "D:\\Shares\\Public"
+  read_access: Everyone
+  no_access: "BUILTIN\\Guests"
+
+- name: remove-share
+  type: smb_share
+  share: OldData
+  state: absent
+```
+
+**Access levels:** `full_access` (full control), `change_access` (read + write), `read_access` (read only), `no_access` (deny). All accept comma-separated users/groups.
+
+See [smb_share executor](../executors/smb_share.md) for full reference.
+
+### service_recovery_windows
+
+Manage per-service failure recovery actions -- what happens when a Windows service crashes.
+
+```yaml
+- name: myapp-recovery
+  type: service_recovery_windows
+  service: MyAppService
+  first_failure: restart
+  restart_delay: "30000"
+
+- name: critical-recovery
+  type: service_recovery_windows
+  service: CriticalService
+  first_failure: restart
+  second_failure: restart
+  subsequent_failure: reboot
+  reset_period: "3600"
+
+- name: diag-on-failure
+  type: service_recovery_windows
+  service: SQLServer
+  first_failure: run
+  command: "C:\\Scripts\\diagnose-db.bat"
+  second_failure: restart
+```
+
+**Failure actions:** `restart` (restart the service), `run` (execute a command), `reboot` (reboot the machine), `none` (take no action). The `run` action requires the `command` parameter.
+
+See [service_recovery_windows executor](../executors/service_recovery_windows.md) for full reference.
 
 ## Windows Trait Collectors
 

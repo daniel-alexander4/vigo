@@ -165,6 +165,12 @@ pub mod windows_env;
 #[cfg(windows)]
 pub mod windows_feature;
 #[cfg(windows)]
+pub mod service_recovery_windows;
+#[cfg(windows)]
+pub mod smb_share;
+#[cfg(windows)]
+pub mod windows_defender;
+#[cfg(windows)]
 pub mod windows_update;
 
 #[cfg(test)]

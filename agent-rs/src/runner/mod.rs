@@ -738,6 +738,9 @@ pub fn build_executors_with_snapshots(
         executors.insert("domain_membership".to_string(), Box::new(domain_membership::DomainMembershipExecutor::new()));
         executors.insert("local_security_policy".to_string(), Box::new(local_security_policy::LocalSecurityPolicyExecutor::new()));
         executors.insert("windows_update".to_string(), Box::new(windows_update::WindowsUpdateExecutor::new()));
+        executors.insert("windows_defender".to_string(), Box::new(windows_defender::WindowsDefenderExecutor::new()));
+        executors.insert("smb_share".to_string(), Box::new(smb_share::SmbShareExecutor::new()));
+        executors.insert("service_recovery_windows".to_string(), Box::new(service_recovery_windows::ServiceRecoveryWindowsExecutor::new()));
     }
 
     executors

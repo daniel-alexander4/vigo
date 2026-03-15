@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 71 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 74 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -78,7 +78,7 @@ These executors use Linux-specific tools with no equivalent on other platforms.
 | `selinux` | Manage SELinux file contexts | [selinux](selinux.md) |
 | `systemd_dropin` | Manage systemd unit drop-in override files | [systemd_dropin](systemd_dropin.md) |
 
-## Windows-Only Executors (19)
+## Windows-Only Executors (22)
 
 These executors replace their Unix counterparts on Windows or manage Windows-specific resources. Cross-platform types (`service`, `package`, etc.) are registered under the same `type:` name so configs are portable across platforms.
 
@@ -103,6 +103,9 @@ These executors replace their Unix counterparts on Windows or manage Windows-spe
 | `domain_membership` | Manage Active Directory domain join/leave | [domain_membership](domain_membership.md) |
 | `local_security_policy` | Manage local security policies via secedit | [local_security_policy](local_security_policy.md) |
 | `windows_update` | Manage Windows Update / WSUS configuration | [windows_update](windows_update.md) |
+| `windows_defender` | Manage Windows Defender exclusions, real-time protection, and scan schedule | [windows_defender](windows_defender.md) |
+| `smb_share` | Manage SMB file shares with access control | [smb_share](smb_share.md) |
+| `service_recovery_windows` | Manage per-service failure recovery actions | [service_recovery_windows](service_recovery_windows.md) |
 
 ## Network Device Executors (11)
 
