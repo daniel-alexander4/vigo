@@ -80,7 +80,6 @@ var publicPaths = map[string]bool{
 	"/api/v1/bootstrap":   true,
 	"/api/v1/config/reload":  true,
 	"/api/v1/secrets/rotated": true,
-	"/api/v1/doctor":         true,
 }
 
 // IsPublicPath returns true if the given URL path should be accessible
