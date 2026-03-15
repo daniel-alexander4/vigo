@@ -224,3 +224,48 @@ At this scale, consider federation (hub-spoke) to distribute load across multipl
 | Check-in DB queries | 0 | 5-10 per catalog compile |
 | Agent binary size | 3.9 MB | ~150 MB (Ruby runtime) |
 | Infrastructure at 50K nodes | 1 server | 4-6 compile masters + HA PuppetDB + load balancer |
+
+## Methodology and Assumptions
+
+### How these numbers were derived
+
+**Memory estimates** are calculated from Go struct sizes in `server/fleet/index.go`. Each `ThrallState` struct has known fields (strings, time.Time, maps, slices) whose sizes are determined by Go's memory layout. Map overhead uses Go's internal bucket structure (~8 bytes per entry for simple sets, more for string-keyed maps). The per-thrall estimate of ~388 bytes assumes:
+- Hostname: ~20 bytes average (e.g., `web01.dc1.example.com`)
+- UUID: 36 bytes
+- IP: ~15 bytes
+- PubkeyPEM: ~100 bytes (base64-encoded ED25519)
+- 3 traits indexed per thrall (typical: os.family, os.distro, arch)
+- Empty pending rotated secrets and tags lists
+
+Fleet size projections multiply per-thrall cost linearly. Go map overhead grows sub-linearly due to bucket amortization, so actual memory at 1M thralls may be 10-15% less than the linear projection.
+
+**Benchmark numbers** are from `go test -bench` on a 16-thread AMD Ryzen 7 5700U (2026-03-14). The FleetIndex benchmarks populate 10,000 thralls before measuring. Each benchmark runs until the Go test framework achieves statistical stability (minimum 1 second of iterations). Numbers represent **uncontended single-goroutine performance** — real-world throughput with concurrent access and RWMutex contention will be lower.
+
+Specific benchmark commands:
+```
+go test ./server/fleet/... -bench=. -benchmem -count=1
+go test ./server/grpc/... -bench=. -benchmem -count=1
+```
+
+**Per-check-in cost** splits into two parts:
+- *In-process hot path* (~12 µs): sum of measured benchmark operations that execute per check-in (signature verify + FleetIndex lookup + policy cache hit + MarkSeen). This is what the code does, measured in isolation.
+- *End-to-end overhead* (~200-400 µs): estimated from published gRPC/TLS performance characteristics. TLS record decrypt/encrypt is typically 30-80 µs per message on modern CPUs. Proto marshal/unmarshal scales with message size (CheckInRequest ~2 KB ≈ 5-10 µs, PolicyBundle 5-50 KB ≈ 10-50 µs). Go scheduler overhead is estimated at 10-50 µs per goroutine based on published Go runtime benchmarks.
+
+**Throughput projections** divide 1 second by the per-check-in cost, then multiply by core count with a 0.8x scaling factor (accounting for lock contention and shared-resource overhead). The "thralls at 5-min interval" column divides throughput by the check-in rate: at 5-minute intervals with 20% jitter, each thrall checks in once per 240-360 seconds (average 300 seconds).
+
+Example: 4 cores × 3,300 ops/sec × 0.8 = ~10,000 check-ins/sec. At 1 check-in per 300 seconds per thrall: 10,000 × 300 = 3,000,000 thralls theoretical maximum. The conservative estimate (50K-200K) applies a further 15-30x safety factor for GC pauses, cache misses, config compilation, network variability, and the reality that benchmarks never predict production.
+
+**SQLite throughput** is based on published SQLite WAL-mode benchmarks on NVMe SSD. Actual performance varies with disk type, write amplification, and concurrent readers. The "50,000 thrall bottleneck" estimate assumes 10-second flush intervals with 500-ID batches: at 50,000 thralls, each flush writes ~1,600 dirty entries (50,000 / 300 sec × 10 sec) in 3-4 batches, which approaches 1 second of SQLite write lock time.
+
+**Network bandwidth** uses measured proto message sizes from the gRPC wire format. "Mostly no-change" outbound assumes 90% of check-ins return a `no_change` response (~100 bytes) because the policy fingerprint hasn't changed.
+
+**Puppet comparison** figures are from published Puppet Enterprise sizing guides (2024) and community benchmarks. JVM heap estimates assume PuppetServer (2-4 GB), PuppetDB (2-4 GB), and PostgreSQL (2-4 GB shared buffers). Compile master count at 50K nodes is based on Puppet's recommendation of ~4,000 nodes per compile master.
+
+### What these numbers do NOT account for
+
+- **Real network latency.** Benchmarks run in-process or on localhost. WAN latency, packet loss, and TCP congestion between agents and server are not modeled.
+- **Config complexity.** Policy cache miss cost (10-50 ms) depends on how many modules, resources, templates, and `when:` expressions a thrall's config contains. A thrall with 500 resources will be slower to compile than one with 10.
+- **Trait volume.** The 3-traits-per-thrall assumption is conservative. Thralls reporting 20+ traits (e.g., full package list, all network interfaces) will increase FleetIndex memory and trait flush batch sizes.
+- **Concurrent admin queries.** ListByGlob is O(N) and takes 3 ms at 10K thralls. At 1M thralls, a single glob query would take ~300 ms and hold a read lock. Frequent admin queries could compete with check-in reads.
+- **GC pause distribution.** Go's GC pauses are typically under 1 ms but can spike under memory pressure. At 200 MB+ FleetIndex, GC scans take longer. The `gogc` and `memory_limit` tuning knobs mitigate this but don't eliminate it.
+- **Disk I/O contention.** SQLite flush, Litestream WAL replication, and run result writes all compete for disk I/O. On spinning disks or shared storage, throughput will be significantly lower than SSD benchmarks.
