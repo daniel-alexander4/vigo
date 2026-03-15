@@ -664,11 +664,11 @@ func stripMarkdown(md string) string {
 	}
 
 	// Strip inline code backticks, bold, italic markers.
+	// Preserve underscores — they're meaningful in technical identifiers
+	// (stream_edit, os_family, etc.).
 	text = strings.ReplaceAll(text, "`", "")
 	text = strings.ReplaceAll(text, "**", "")
-	text = strings.ReplaceAll(text, "__", "")
 	text = strings.ReplaceAll(text, "*", "")
-	text = strings.ReplaceAll(text, "_", " ")
 
 	// Collapse whitespace.
 	fields := strings.Fields(text)
