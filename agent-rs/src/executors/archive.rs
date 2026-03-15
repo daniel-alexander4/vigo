@@ -108,7 +108,17 @@ impl Executor for ArchiveExecutor {
             return result;
         }
 
-        let filename = url.rsplit('/').next().unwrap_or("download");
+        let raw_filename = url.rsplit('/').next().unwrap_or("download");
+        // Sanitize filename: reject path traversal and absolute paths.
+        let filename = std::path::Path::new(raw_filename)
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("download");
+        if filename.contains("..") || filename.starts_with('/') || filename.is_empty() {
+            result.error = Some(format!("unsafe filename in URL: {}", raw_filename));
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
         let download_path = format!("{}/{}", tmp_dir, filename);
 
         // Download.

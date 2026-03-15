@@ -138,9 +138,10 @@ pub async fn apply(
         #[cfg(unix)]
         {
             let args: Vec<std::ffi::CString> = std::env::args()
-                .map(|a| std::ffi::CString::new(a).unwrap())
-                .collect();
-            let binary = std::ffi::CString::new(current_binary).unwrap();
+                .map(|a| std::ffi::CString::new(a).map_err(|e| anyhow::anyhow!("invalid arg for CString: {}", e)))
+                .collect::<Result<Vec<_>, _>>()?;
+            let binary = std::ffi::CString::new(current_binary)
+                .map_err(|e| anyhow::anyhow!("invalid binary path for CString: {}", e))?;
             nix::unistd::execv(&binary, &args).context("exec new binary")?;
         }
         #[cfg(windows)]

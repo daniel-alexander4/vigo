@@ -72,7 +72,7 @@ impl Executor for NetworkSyslogExecutor {
                             .await?;
                         current.stdout.contains(&format!("host {}", syslog_host))
                     }
-                    _ => unreachable!(),
+                    _ => return Err(anyhow::anyhow!("unsupported device_type: {}", device_type)),
                 };
 
                 let needs_change = match state.as_str() {
@@ -135,7 +135,7 @@ impl Executor for NetworkSyslogExecutor {
                             "exit".to_string(),
                         ]
                     }
-                    _ => unreachable!(),
+                    _ => return Err(anyhow::anyhow!("unsupported device_type/state combo: {}/{}", device_type, state)),
                 };
 
                 let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();

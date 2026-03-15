@@ -66,7 +66,7 @@ impl Executor for NetworkSnmpExecutor {
                         "show running-config | include snmp-server community".to_string()
                     }
                     "juniper_junos" => "show configuration snmp".to_string(),
-                    _ => unreachable!(),
+                    _ => return Err(anyhow::anyhow!("unsupported device_type: {}", device_type)),
                 };
 
                 let current = session.exec(&check_command, timeout).await?;
@@ -132,7 +132,7 @@ impl Executor for NetworkSnmpExecutor {
                             "exit".to_string(),
                         ]
                     }
-                    _ => unreachable!(),
+                    _ => return Err(anyhow::anyhow!("unsupported device_type/state combo: {}/{}", device_type, state)),
                 };
 
                 let cmd_refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();

@@ -52,14 +52,14 @@ impl Executor for SelinuxExecutor {
                 } else if let Some(t) = se_type {
                     apply_type_context(path, t, dry_run, &mut result)
                 } else {
-                    unreachable!()
+                    Err("selinux executor: either context or type param is required".to_string())
                 }
             }
             "absent" => {
                 if let Some(t) = se_type.or(context) {
                     remove_fcontext(path, t, dry_run, &mut result)
                 } else {
-                    unreachable!()
+                    Err("selinux executor: either context or type param is required for absent state".to_string())
                 }
             }
             other => Err(format!(

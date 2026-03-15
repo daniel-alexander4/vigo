@@ -99,7 +99,7 @@ fn apt_get_with_retry(args: &[&str], desc: &str) -> Result<(), String> {
         return Err(format!("apt-get {} failed: {}", desc, stderr));
     }
 
-    unreachable!()
+    Err(format!("apt-get {} failed after {} retries (dpkg lock contention)", desc, MAX_RETRIES))
 }
 
 impl PackageManager for AptManager {
