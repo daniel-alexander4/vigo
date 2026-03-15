@@ -17,5 +17,5 @@ ENV HOBNOB_DOCS_DIR=/docs
 ENV HOBNOB_CONTENT_DIR=/content
 WORKDIR /content
 
-EXPOSE 8080
+EXPOSE 443
 CMD ["hobnob-site"]

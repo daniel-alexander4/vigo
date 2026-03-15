@@ -7,16 +7,24 @@ package main
 
 import (
 	"bufio"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"embed"
+	"encoding/pem"
 	"html/template"
 	"io/fs"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -73,7 +81,7 @@ type crumb struct {
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "443"
 	}
 
 	if docsDir == "" {
@@ -229,8 +237,58 @@ func main() {
 		_ = currentSection
 	})
 
-	log.Printf("hobnob site listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	// Generate self-signed TLS cert for local HTTPS.
+	tlsCert, tlsKey, err := generateSelfSignedCert()
+	if err != nil {
+		log.Fatalf("generating TLS cert: %v", err)
+	}
+
+	log.Printf("hobnob site listening on https://localhost:%s", port)
+	log.Fatal(http.ListenAndServeTLS(":"+port, tlsCert, tlsKey, mux))
+}
+
+// generateSelfSignedCert creates a self-signed TLS certificate and key
+// in temp files, valid for localhost. Returns paths to cert and key files.
+func generateSelfSignedCert() (certPath, keyPath string, err error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{Organization: []string{"Hobnob Dev"}},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"localhost"},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return "", "", err
+	}
+
+	certFile, err := os.CreateTemp("", "hobnob-site-cert-*.pem")
+	if err != nil {
+		return "", "", err
+	}
+	pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	certFile.Close()
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return "", "", err
+	}
+	keyFile, err := os.CreateTemp("", "hobnob-site-key-*.pem")
+	if err != nil {
+		return "", "", err
+	}
+	pem.Encode(keyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	keyFile.Close()
+
+	return certFile.Name(), keyFile.Name(), nil
 }
 
 // --- Markdown ---
