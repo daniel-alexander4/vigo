@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 550 220" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f9fa"/>
+      <stop offset="100%" stop-color="#edf2f7"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48bb78"/>
+      <stop offset="100%" stop-color="#38a169"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6c948"/>
+      <stop offset="100%" stop-color="#e6a817"/>
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9f7aea"/>
+      <stop offset="100%" stop-color="#805ad5"/>
+    </linearGradient>
+    <marker id="arrowRight" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#805ad5"/>
+    </marker>
+    <marker id="arrowLeft" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 10 0 L 0 5 L 10 10 z" fill="#38a169"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="550" height="220" rx="8" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="275" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#2d3748">Custom Executor JSON Protocol</text>
+
+  <!-- ===== AGENT BOX (left) ===== -->
+  <rect x="20" y="40" width="160" height="120" rx="12" fill="#fff" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="20" y="40" width="160" height="28" rx="12" fill="url(#greenGrad)"/>
+  <rect x="20" y="58" width="160" height="10" fill="url(#greenGrad)"/>
+  <text x="100" y="59" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Hobnob Agent</text>
+
+  <text x="34" y="86" font-size="8.5" font-weight="600" fill="#2d3748">Resource definition:</text>
+  <text x="34" y="100" font-size="8" fill="#4a5568" font-family="monospace">type: custom</text>
+  <text x="34" y="112" font-size="8" fill="#4a5568" font-family="monospace">executor: my-check</text>
+  <text x="34" y="124" font-size="8" fill="#4a5568" font-family="monospace">params:</text>
+  <text x="34" y="136" font-size="8" fill="#4a5568" font-family="monospace">  threshold: 90</text>
+  <text x="34" y="148" font-size="8" fill="#4a5568" font-family="monospace">  action: restart</text>
+
+  <!-- ===== EXTERNAL SCRIPT BOX (right) ===== -->
+  <rect x="370" y="40" width="160" height="120" rx="12" fill="#fff" stroke="#e6a817" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="370" y="40" width="160" height="28" rx="12" fill="url(#orangeGrad)"/>
+  <rect x="370" y="58" width="160" height="10" fill="url(#orangeGrad)"/>
+  <text x="450" y="59" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">External Script</text>
+
+  <text x="384" y="84" font-size="8" fill="#718096" font-family="monospace">#!/bin/bash</text>
+  <text x="384" y="98" font-size="8" fill="#4a5568" font-family="monospace">read -r input</text>
+  <text x="384" y="112" font-size="8" fill="#4a5568" font-family="monospace"># parse JSON</text>
+  <text x="384" y="126" font-size="8" fill="#4a5568" font-family="monospace"># check / apply</text>
+  <text x="384" y="140" font-size="8" fill="#4a5568" font-family="monospace"># emit result</text>
+  <text x="384" y="154" font-size="8" fill="#4a5568" font-family="monospace">echo "$json"</text>
+
+  <!-- ===== ARROW RIGHT: JSON stdin ===== -->
+  <line x1="180" y1="78" x2="370" y2="78" stroke="#805ad5" stroke-width="1.8" marker-end="url(#arrowRight)"/>
+  <rect x="210" y="64" width="130" height="30" rx="6" fill="#f0e6ff" stroke="#805ad5" stroke-width="0.8"/>
+  <text x="275" y="76" text-anchor="middle" font-size="7" font-weight="600" fill="#553c9a">stdin (JSON)</text>
+  <text x="275" y="88" text-anchor="middle" font-size="7" fill="#805ad5" font-family="monospace">type, name, params, dry_run</text>
+
+  <!-- ===== ARROW LEFT: JSON stdout ===== -->
+  <line x1="370" y1="130" x2="180" y2="130" stroke="#38a169" stroke-width="1.8" marker-end="url(#arrowLeft)"/>
+  <rect x="210" y="118" width="130" height="26" rx="6" fill="#f0fff4" stroke="#38a169" stroke-width="0.8"/>
+  <text x="275" y="129" text-anchor="middle" font-size="7" font-weight="600" fill="#276749">stdout (JSON)</text>
+  <text x="275" y="140" text-anchor="middle" font-size="7" fill="#38a169" font-family="monospace">action, changed, error</text>
+
+  <!-- ===== NOTE at bottom ===== -->
+  <rect x="80" y="178" width="390" height="30" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1" filter="url(#shadow)"/>
+  <text x="275" y="197" text-anchor="middle" font-size="8.5">
+    <tspan fill="#4a5568">Scripts in </tspan>
+    <tspan font-family="monospace" font-weight="600" fill="#805ad5">custom-executors/</tspan>
+    <tspan fill="#4a5568"> directory, discovered automatically</tspan>
+  </text>
+</svg>

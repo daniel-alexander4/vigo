@@ -157,15 +157,7 @@ Conditional vars (those with a `trait:` field) are resolved by the server and su
 
 When expressions are evaluated in two phases:
 
-```
-Server (check-in time)              Agent (apply time)
-┌──────────────────────┐           ┌──────────────────────┐
-│ 1. Substitute vars   │           │ 3. Evaluate builtins │
-│    is_debian → true  │──────────>│    file_exists(...)  │
-│ 2. Short-circuit if  │           │    process_running() │
-│    fully resolved    │           │    os_family(...)    │
-└──────────────────────┘           └──────────────────────┘
-```
+![When Expression Evaluation](img/when-evaluation.svg)
 
 If the expression is fully resolved after variable substitution (e.g., `true && true`), the server can filter the resource before sending it to the agent.
 

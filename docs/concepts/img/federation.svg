@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2.5" flood-opacity="0.13"/>
+    </filter>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f9fa"/>
+      <stop offset="100%" stop-color="#edf2f7"/>
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4299e1"/>
+      <stop offset="100%" stop-color="#3182ce"/>
+    </linearGradient>
+    <linearGradient id="blueLightGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#bee3f8"/>
+      <stop offset="100%" stop-color="#90cdf4"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48bb78"/>
+      <stop offset="100%" stop-color="#38a169"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6c948"/>
+      <stop offset="100%" stop-color="#e6a817"/>
+    </linearGradient>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3182ce"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#38a169"/>
+    </marker>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="400" rx="8" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="350" y="24" text-anchor="middle" font-size="14" font-weight="700" fill="#2d3748">Hub-Spoke Federation Architecture</text>
+
+  <!-- ===== HUB SERVER (top center) ===== -->
+  <rect x="170" y="40" width="360" height="90" rx="12" fill="#fff" stroke="#3182ce" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="170" y="40" width="360" height="30" rx="12" fill="url(#blueGrad)"/>
+  <rect x="170" y="58" width="360" height="12" fill="url(#blueGrad)"/>
+  <text x="350" y="60" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Hub Server</text>
+
+  <!-- Hub services -->
+  <rect x="186" y="82" width="60" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="216" y="97" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Web UI</text>
+
+  <rect x="256" y="82" width="68" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="290" y="97" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Webhooks</text>
+
+  <rect x="334" y="82" width="70" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="369" y="97" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Bootstrap</text>
+
+  <rect x="414" y="82" width="70" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="449" y="97" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Admin API</text>
+
+  <!-- ===== ARROWS HUB <-> SPOKES ===== -->
+
+  <!-- Hub to Spoke DC1 -->
+  <line x1="280" y1="130" x2="170" y2="180" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+  <line x1="170" y1="178" x2="278" y2="129" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrowBlue)" stroke-dasharray="5,3"/>
+
+  <!-- Hub to Spoke DC2 -->
+  <line x1="420" y1="130" x2="530" y2="180" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+  <line x1="530" y1="178" x2="422" y2="129" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrowBlue)" stroke-dasharray="5,3"/>
+
+  <!-- Labels on arrows -->
+  <rect x="155" y="144" width="88" height="16" rx="3" fill="#edf2f7" opacity="0.9"/>
+  <text x="199" y="155" text-anchor="middle" font-size="7" font-weight="500" fill="#3182ce">Query fan-out</text>
+
+  <rect x="456" y="144" width="100" height="16" rx="3" fill="#edf2f7" opacity="0.9"/>
+  <text x="506" y="155" text-anchor="middle" font-size="7" font-weight="500" fill="#3182ce">Enrollment routing</text>
+
+  <!-- ===== SPOKE DC1 (bottom-left) ===== -->
+  <rect x="30" y="180" width="270" height="80" rx="12" fill="#fff" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="30" y="180" width="270" height="26" rx="12" fill="url(#blueGrad)"/>
+  <rect x="30" y="196" width="270" height="10" fill="url(#blueGrad)"/>
+  <text x="165" y="198" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Spoke -- DC1 (us-east)</text>
+
+  <!-- DC1 services -->
+  <rect x="44" y="218" width="82" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="85" y="233" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">gRPC Agent</text>
+
+  <rect x="136" y="218" width="78" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="175" y="233" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Compliance</text>
+
+  <rect x="224" y="218" width="62" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="255" y="233" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Metrics</text>
+
+  <!-- ===== SPOKE DC2 (bottom-right) ===== -->
+  <rect x="400" y="180" width="270" height="80" rx="12" fill="#fff" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="400" y="180" width="270" height="26" rx="12" fill="url(#blueGrad)"/>
+  <rect x="400" y="196" width="270" height="10" fill="url(#blueGrad)"/>
+  <text x="535" y="198" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Spoke -- DC2 (eu-west)</text>
+
+  <!-- DC2 services -->
+  <rect x="414" y="218" width="82" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="455" y="233" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">gRPC Agent</text>
+
+  <rect x="506" y="218" width="78" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="545" y="233" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Compliance</text>
+
+  <rect x="594" y="218" width="62" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="625" y="233" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Metrics</text>
+
+  <!-- ===== THRALLS DC1 ===== -->
+  <line x1="85" y1="260" x2="85" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <line x1="165" y1="260" x2="165" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <line x1="245" y1="260" x2="245" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+  <text x="165" y="280" text-anchor="middle" font-size="7" fill="#38a169">check-in</text>
+
+  <!-- Thrall boxes DC1 -->
+  <rect x="42" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="72" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">web-01</text>
+  <text x="72" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
+
+  <rect x="122" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="152" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">web-02</text>
+  <text x="152" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
+
+  <rect x="202" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="232" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">db-01</text>
+  <text x="232" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
+
+  <!-- ===== THRALLS DC2 ===== -->
+  <line x1="455" y1="260" x2="455" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <line x1="535" y1="260" x2="535" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <line x1="615" y1="260" x2="615" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+  <text x="535" y="280" text-anchor="middle" font-size="7" fill="#38a169">check-in</text>
+
+  <!-- Thrall boxes DC2 -->
+  <rect x="412" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="442" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">web-03</text>
+  <text x="442" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
+
+  <rect x="502" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="532" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">web-04</text>
+  <text x="532" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
+
+  <rect x="582" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="612" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">db-02</text>
+  <text x="612" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
+
+  <!-- ===== LEGEND ===== -->
+  <rect x="170" y="338" width="360" height="50" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1" filter="url(#shadow)"/>
+
+  <!-- Legend: solid line -->
+  <line x1="186" y1="354" x2="214" y2="354" stroke="#3182ce" stroke-width="1.5"/>
+  <text x="220" y="358" font-size="8" fill="#4a5568">Admin query fan-out</text>
+
+  <!-- Legend: dashed line -->
+  <line x1="186" y1="372" x2="214" y2="372" stroke="#3182ce" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="220" y="376" font-size="8" fill="#4a5568">Aggregated response</text>
+
+  <!-- Legend: green -->
+  <line x1="370" y1="354" x2="398" y2="354" stroke="#38a169" stroke-width="1.5"/>
+  <text x="404" y="358" font-size="8" fill="#4a5568">Agent check-in (mTLS)</text>
+
+  <!-- Legend: per-spoke -->
+  <rect x="370" y="366" width="12" height="12" rx="3" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
+  <text x="388" y="376" font-size="8" fill="#4a5568">Per-spoke compliance</text>
+</svg>

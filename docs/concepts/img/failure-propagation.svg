@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 550 280" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fc8181"/>
+      <stop offset="100%" stop-color="#e53e3e"/>
+    </linearGradient>
+    <linearGradient id="graySkip" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#cbd5e0"/>
+      <stop offset="100%" stop-color="#a0aec0"/>
+    </linearGradient>
+    <linearGradient id="greenOk" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#48bb78"/>
+      <stop offset="100%" stop-color="#38a169"/>
+    </linearGradient>
+    <filter id="ds" x="-4%" y="-4%" width="108%" height="116%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arRed" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#e53e3e"/>
+    </marker>
+    <marker id="arGray" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#a0aec0"/>
+    </marker>
+    <marker id="arGrn" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#38a169"/>
+    </marker>
+  </defs>
+
+  <rect width="550" height="280" fill="#f8f9fa" rx="4"/>
+
+  <!-- Title -->
+  <text x="275" y="24" text-anchor="middle" font-size="14" font-weight="600" fill="#2d3748">DAG Failure Propagation</text>
+
+  <!-- Resource A (FAILED) -->
+  <rect x="30" y="60" width="130" height="52" rx="8" fill="url(#redGrad)" filter="url(#ds)"/>
+  <text x="95" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Resource A</text>
+  <text x="95" y="97" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">FAILED</text>
+
+  <!-- Resource B (SKIPPED) -->
+  <rect x="210" y="45" width="140" height="52" rx="8" fill="url(#graySkip)" filter="url(#ds)"/>
+  <text x="280" y="67" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Resource B</text>
+  <text x="280" y="82" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">SKIPPED</text>
+
+  <!-- Resource C (SKIPPED) -->
+  <rect x="395" y="45" width="140" height="52" rx="8" fill="url(#graySkip)" filter="url(#ds)"/>
+  <text x="465" y="67" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Resource C</text>
+  <text x="465" y="82" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">SKIPPED</text>
+
+  <!-- Resource D (INDEPENDENT - OK) -->
+  <rect x="210" y="135" width="140" height="52" rx="8" fill="url(#greenOk)" filter="url(#ds)"/>
+  <text x="280" y="157" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Resource D</text>
+  <text x="280" y="172" text-anchor="middle" font-size="9" fill="#fff" opacity="0.9">OK (independent)</text>
+
+  <!-- Arrow A -> B -->
+  <line x1="160" y1="78" x2="206" y2="71" stroke="#e53e3e" stroke-width="2" marker-end="url(#arRed)"/>
+
+  <!-- Arrow B -> C -->
+  <line x1="350" y1="71" x2="391" y2="71" stroke="#a0aec0" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arGray)"/>
+
+  <!-- dependency failed labels -->
+  <rect x="212" y="99" width="100" height="16" rx="3" fill="#fed7d7"/>
+  <text x="262" y="110" text-anchor="middle" font-size="8" fill="#c53030" font-weight="600">dependency failed</text>
+
+  <rect x="402" y="99" width="100" height="16" rx="3" fill="#fed7d7"/>
+  <text x="452" y="110" text-anchor="middle" font-size="8" fill="#c53030" font-weight="600">dependency failed</text>
+
+  <!-- D has no dependency line - it's independent -->
+  <!-- Arrow showing D executes normally -->
+  <line x1="95" y1="112" x2="95" y2="155" stroke="#38a169" stroke-width="1.5" stroke-dasharray="3,4" opacity="0"/>
+  <rect x="128" y="195" width="110" height="16" rx="3" fill="#c6f6d5"/>
+  <text x="183" y="206" text-anchor="middle" font-size="8" fill="#276749" font-weight="600">executes normally</text>
+
+  <!-- Legend -->
+  <rect x="25" y="236" width="14" height="14" rx="3" fill="url(#redGrad)"/>
+  <text x="45" y="248" font-size="9" fill="#4a5568">Failed</text>
+
+  <rect x="110" y="236" width="14" height="14" rx="3" fill="url(#graySkip)"/>
+  <text x="130" y="248" font-size="9" fill="#4a5568">Skipped (dependency failed)</text>
+
+  <rect x="310" y="236" width="14" height="14" rx="3" fill="url(#greenOk)"/>
+  <text x="330" y="248" font-size="9" fill="#4a5568">Executed successfully (no dependency on failed resource)</text>
+
+  <!-- Explanation -->
+  <text x="275" y="270" text-anchor="middle" font-size="9" fill="#718096" font-style="italic">Failure cascades through depends_on chains but does not affect independent resources</text>
+</svg>

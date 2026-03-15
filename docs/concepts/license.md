@@ -41,20 +41,7 @@ Every Hobnob server starts with a built-in free license:
 
 When the thrall count exceeds the license limit, enforcement proceeds through three stages over 30 days:
 
-```
-Day 0                Day 15               Day 30
-│                    │                    │
-│  ┌──────────────┐  │  ┌──────────────┐ │  ┌──────────────┐
-│  │   GRACE      │  │  │  ENROLLMENT  │ │  │   SERVICE    │
-│  │              │  │  │  BLOCK       │ │  │   STOP       │
-│  │ Check-in     │  │  │              │ │  │              │
-│  │ warning on   │  │  │ New thralls  │ │  │ Server shuts │
-│  │ every check-in│  │  │ can't enroll │ │  │ down         │
-│  │              │  │  │              │ │  │              │
-│  │ Existing     │  │  │ Existing     │ │  │              │
-│  │ thralls OK   │  │  │ thralls OK   │ │  │              │
-│  └──────────────┘  │  └──────────────┘ │  └──────────────┘
-```
+![License Enforcement Timeline](img/license-enforcement.svg)
 
 ### Stage 1: Grace (days 0–15)
 

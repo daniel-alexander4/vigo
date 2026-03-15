@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 250" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f6ad55"/>
+      <stop offset="100%" stop-color="#e6a817"/>
+    </linearGradient>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="116%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <rect width="500" height="250" fill="#f8f9fa" rx="4"/>
+
+  <!-- Title -->
+  <text x="250" y="28" text-anchor="middle" font-size="14" font-weight="600" fill="#2d3748">Resource Dependency Graph: nginx module</text>
+
+  <!-- nginx-package box -->
+  <rect x="30" y="95" width="130" height="56" rx="8" fill="url(#orangeGrad)" filter="url(#shadow)"/>
+  <text x="95" y="118" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">nginx-package</text>
+  <text x="95" y="134" text-anchor="middle" font-size="9" fill="#fff" opacity="0.85">type: package</text>
+
+  <!-- nginx-config box -->
+  <rect x="190" y="95" width="130" height="56" rx="8" fill="url(#orangeGrad)" filter="url(#shadow)"/>
+  <text x="255" y="118" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">nginx-config</text>
+  <text x="255" y="134" text-anchor="middle" font-size="9" fill="#fff" opacity="0.85">type: file</text>
+
+  <!-- nginx-service box -->
+  <rect x="345" y="95" width="130" height="56" rx="8" fill="url(#orangeGrad)" filter="url(#shadow)"/>
+  <text x="410" y="118" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">nginx-service</text>
+  <text x="410" y="134" text-anchor="middle" font-size="9" fill="#fff" opacity="0.85">type: service</text>
+
+  <!-- depends_on arrow: nginx-config depends_on nginx-package -->
+  <line x1="160" y1="123" x2="186" y2="123" stroke="#38a169" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <defs>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#38a169"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#3182ce"/>
+    </marker>
+  </defs>
+
+  <!-- depends_on label -->
+  <text x="173" y="114" text-anchor="middle" font-size="8" fill="#38a169" font-weight="600">depends_on</text>
+
+  <!-- notify dashed arrow: nginx-config notifies nginx-service -->
+  <line x1="320" y1="110" x2="341" y2="110" stroke="#3182ce" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrowBlue)"/>
+  <text x="330" y="102" text-anchor="middle" font-size="8" fill="#3182ce" font-weight="600">notify</text>
+
+  <!-- subscribes label below -->
+  <path d="M 380,151 L 380,175 Q 380,185 370,185 L 285,185 Q 275,185 275,175 L 275,155" stroke="#3182ce" stroke-width="1.5" stroke-dasharray="4,3" fill="none" marker-end="url(#arrowBlueUp)"/>
+  <defs>
+    <marker id="arrowBlueUp" markerWidth="8" markerHeight="6" refX="4" refY="0" orient="auto">
+      <path d="M0,6 L4,0 L8,6" fill="#3182ce"/>
+    </marker>
+  </defs>
+  <text x="327" y="198" text-anchor="middle" font-size="8" fill="#3182ce" font-weight="600">subscribes (triggers on change)</text>
+
+  <!-- Legend -->
+  <line x1="30" y1="232" x2="52" y2="232" stroke="#38a169" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="58" y="235" font-size="9" fill="#4a5568">depends_on (ordering)</text>
+  <line x1="190" y1="232" x2="212" y2="232" stroke="#3182ce" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrowBlue)"/>
+  <text x="218" y="235" font-size="9" fill="#4a5568">notify / subscribes (trigger)</text>
+</svg>

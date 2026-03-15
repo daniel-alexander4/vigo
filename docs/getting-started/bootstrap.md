@@ -4,37 +4,7 @@ Bootstrap is the process by which a new machine becomes a managed thrall. The se
 
 ## How It Works
 
-```
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│   Admin      │         │   Server     │         │   New Thrall  │
-│              │         │  (hobd)      │         │              │
-└──────┬───────┘         └──────┬───────┘         └──────┬───────┘
-       │                        │                        │
-       │  1. (optional)         │                        │
-       │  hobnobcli tokens      │                        │
-       │  generate --pattern    │                        │
-       │  "*.web.*"             │                        │
-       │ ──────────────────────>│                        │
-       │                        │                        │
-       │                        │  2. curl bootstrap     │
-       │                        │<───────────────────────│
-       │                        │                        │
-       │                        │  3. Return shell script│
-       │                        │  + agent binary        │
-       │                        │───────────────────────>│
-       │                        │                        │
-       │                        │  4. Register RPC       │
-       │                        │  (hostname, IP, pubkey,│
-       │                        │   token)               │
-       │                        │<───────────────────────│
-       │                        │                        │
-       │                        │  5. Return UUID +      │
-       │                        │  signed client cert    │
-       │                        │───────────────────────>│
-       │                        │                        │
-       │                        │  6. Start check-in loop│
-       │                        │<───────────────────────│
-```
+![Bootstrap Enrollment Flow](img/bootstrap-flow.svg)
 
 ## Bootstrap Script
 

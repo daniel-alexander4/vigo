@@ -67,20 +67,7 @@ This module demonstrates three key patterns:
 
 **Templates** — The `content:` attribute uses Go template syntax. `{{ .Vars.nginx_port }}` is replaced with the value of the `nginx_port` variable at check-in time.
 
-```
-┌─────────────────┐
-│  nginx-package   │
-└────────┬────────┘
-         │ depends_on
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-┌────────┐  ┌────────────┐
-│ config  │  │  service    │
-└────┬───┘  └─────▲──────┘
-     │            │
-     └── notify ──┘
-```
+![Resource Dependency Graph](img/resource-dag.svg)
 
 ## Step 3: Assign to a Thrall
 

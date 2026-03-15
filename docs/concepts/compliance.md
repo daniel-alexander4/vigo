@@ -14,41 +14,7 @@ Compliance status reflects whether a thrall is in its desired state. It's comput
 
 ## Computation
 
-```
-                    ┌─────────────────┐
-                    │  Last check-in  │
-                    │  > 2× interval? │
-                    └────────┬────────┘
-                        yes  │  no
-                        ▼    │
-                    ┌────────┐  │
-                    │ STALE  │  │
-                    └────────┘  ▼
-                    ┌─────────────────┐
-                    │  Has run data?  │
-                    └────────┬────────┘
-                         no  │  yes
-                         ▼   │
-                    ┌────────┐  │
-                    │UNKNOWN │  │
-                    └────────┘  ▼
-                    ┌─────────────────┐
-                    │  Any failures?  │
-                    └────────┬────────┘
-                        yes  │  no
-                        ▼    │
-                    ┌────────┐  │
-                    │FAILING │  │
-                    └────────┘  ▼
-                    ┌─────────────────┐
-                    │  Any changes?   │
-                    └────────┬────────┘
-                        yes  │  no
-                        ▼    ▼
-                    ┌────────┐ ┌───────────┐
-                    │DRIFTED │ │COMPLIANT  │
-                    └────────┘ └───────────┘
-```
+![Compliance Status Decision Tree](img/compliance-states.svg)
 
 ## Fleet-Wide Compliance
 

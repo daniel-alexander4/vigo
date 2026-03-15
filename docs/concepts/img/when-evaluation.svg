@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 250" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="blueServer" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4299e1"/>
+      <stop offset="100%" stop-color="#3182ce"/>
+    </linearGradient>
+    <linearGradient id="greenAgent" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#48bb78"/>
+      <stop offset="100%" stop-color="#38a169"/>
+    </linearGradient>
+    <filter id="dsh" x="-3%" y="-3%" width="106%" height="112%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arFlow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <path d="M0,0 L10,3.5 L0,7" fill="#805ad5"/>
+    </marker>
+  </defs>
+
+  <rect width="650" height="250" fill="#f8f9fa" rx="4"/>
+
+  <!-- Title -->
+  <text x="325" y="24" text-anchor="middle" font-size="14" font-weight="600" fill="#2d3748">Two-Phase when: Expression Evaluation</text>
+
+  <!-- Phase 1: Server -->
+  <rect x="20" y="42" width="270" height="168" rx="10" fill="url(#blueServer)" filter="url(#dsh)"/>
+  <text x="155" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Phase 1: Server</text>
+  <text x="155" y="78" text-anchor="middle" font-size="9" fill="#fff" opacity="0.8">Evaluated during check-in policy build</text>
+
+  <!-- Server items -->
+  <rect x="32" y="90" width="246" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="42" y="104" font-size="9" fill="#fff">Variable substitution from node vars</text>
+
+  <rect x="32" y="116" width="246" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="42" y="130" font-size="9" fill="#fff">Static expressions: environment == "production"</text>
+
+  <rect x="32" y="142" width="246" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="42" y="156" font-size="9" fill="#fff">Boolean logic: &amp;&amp;, ||, !, parentheses</text>
+
+  <rect x="32" y="168" width="246" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="42" y="182" font-size="9" fill="#fff">Resources filtered out before transmission</text>
+
+  <!-- Arrow between phases -->
+  <line x1="294" y1="126" x2="354" y2="126" stroke="#805ad5" stroke-width="2.5" marker-end="url(#arFlow)"/>
+  <text x="324" y="118" text-anchor="middle" font-size="8" fill="#805ad5" font-weight="700">gRPC</text>
+  <text x="324" y="138" text-anchor="middle" font-size="7" fill="#805ad5">remaining</text>
+  <text x="324" y="148" text-anchor="middle" font-size="7" fill="#805ad5">expressions</text>
+
+  <!-- Phase 2: Agent -->
+  <rect x="358" y="42" width="275" height="168" rx="10" fill="url(#greenAgent)" filter="url(#dsh)"/>
+  <text x="495" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Phase 2: Agent</text>
+  <text x="495" y="78" text-anchor="middle" font-size="9" fill="#fff" opacity="0.8">Evaluated locally before resource execution</text>
+
+  <!-- Agent items -->
+  <rect x="370" y="90" width="251" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="380" y="104" font-size="9" fill="#fff">os_family("debian"), os_family("redhat")</text>
+
+  <rect x="370" y="116" width="251" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="380" y="130" font-size="9" fill="#fff">process_running("nginx"), flag_set("selinux")</text>
+
+  <rect x="370" y="142" width="251" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="380" y="156" font-size="9" fill="#fff">file_exists("/etc/ssl/certs/custom.pem")</text>
+
+  <rect x="370" y="168" width="251" height="20" rx="4" fill="rgba(255,255,255,0.15)"/>
+  <text x="380" y="182" font-size="9" fill="#fff">is_container, has_enough_ram, in_group("wheel")</text>
+
+  <!-- Bottom note -->
+  <text x="325" y="234" text-anchor="middle" font-size="9" fill="#718096" font-style="italic">Expressions resolved server-side are removed before sending to the agent. Builtin functions require local trait data.</text>
+</svg>

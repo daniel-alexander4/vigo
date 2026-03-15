@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 350" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f9fa"/>
+      <stop offset="100%" stop-color="#edf2f7"/>
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4299e1"/>
+      <stop offset="100%" stop-color="#3182ce"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48bb78"/>
+      <stop offset="100%" stop-color="#38a169"/>
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9f7aea"/>
+      <stop offset="100%" stop-color="#805ad5"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6c948"/>
+      <stop offset="100%" stop-color="#e6a817"/>
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fc8181"/>
+      <stop offset="100%" stop-color="#e53e3e"/>
+    </linearGradient>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3182ce"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#38a169"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e6a817"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#805ad5"/>
+    </marker>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="350" rx="8" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="350" y="24" text-anchor="middle" font-size="14" font-weight="700" fill="#2d3748">Compiled Promises / Bundle Flow</text>
+
+  <!-- ===== SERVER ONLINE PATH (top) ===== -->
+  <text x="350" y="50" text-anchor="middle" font-size="10" font-weight="600" fill="#38a169">Server Online Path</text>
+
+  <!-- Step 1: Compile Policy -->
+  <rect x="30" y="62" width="120" height="50" rx="10" fill="url(#blueGrad)" filter="url(#shadow)"/>
+  <text x="90" y="83" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Compile</text>
+  <text x="90" y="96" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Policy</text>
+  <text x="90" y="122" text-anchor="middle" font-size="7" fill="#718096">Server</text>
+
+  <!-- Arrow 1->2 -->
+  <line x1="150" y1="87" x2="178" y2="87" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- Step 2: Sign -->
+  <rect x="178" y="62" width="110" height="50" rx="10" fill="url(#purpleGrad)" filter="url(#shadow)"/>
+  <text x="233" y="83" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Sign Bundle</text>
+  <text x="233" y="96" text-anchor="middle" font-size="8" fill="#e9d8fd">ED25519</text>
+
+  <!-- Arrow 2->3 -->
+  <line x1="288" y1="87" x2="318" y2="87" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arrowPurple)"/>
+  <text x="303" y="80" text-anchor="middle" font-size="7" fill="#805ad5">gRPC</text>
+
+  <!-- Step 3: Verify -->
+  <rect x="318" y="62" width="110" height="50" rx="10" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="373" y="83" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Verify</text>
+  <text x="373" y="96" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Signature</text>
+  <text x="373" y="122" text-anchor="middle" font-size="7" fill="#718096">Agent</text>
+
+  <!-- Arrow 3->4 -->
+  <line x1="428" y1="87" x2="458" y2="87" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+  <!-- Step 4: Cache + Apply -->
+  <rect x="458" y="62" width="110" height="50" rx="10" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="513" y="80" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Cache in LMDB</text>
+  <text x="513" y="93" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">+ Apply</text>
+  <text x="513" y="105" text-anchor="middle" font-size="8" fill="#c6f6d5">Resources</text>
+
+  <!-- Arrow 4->5 -->
+  <line x1="568" y1="87" x2="598" y2="87" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+  <!-- Step 5: Report -->
+  <rect x="598" y="62" width="82" height="50" rx="10" fill="url(#blueGrad)" filter="url(#shadow)"/>
+  <text x="639" y="83" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Report</text>
+  <text x="639" y="96" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Results</text>
+
+  <!-- ===== DIVIDER ===== -->
+  <line x1="30" y1="145" x2="670" y2="145" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="6,3"/>
+
+  <!-- ===== SERVER OFFLINE PATH (bottom) ===== -->
+  <text x="350" y="168" text-anchor="middle" font-size="10" font-weight="600" fill="#e53e3e">Server Offline Fallback</text>
+
+  <!-- Offline trigger -->
+  <rect x="30" y="182" width="120" height="50" rx="10" fill="url(#redGrad)" filter="url(#shadow)"/>
+  <text x="90" y="200" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Server</text>
+  <text x="90" y="213" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Unreachable</text>
+
+  <!-- Arrow to cached bundle -->
+  <line x1="150" y1="207" x2="178" y2="207" stroke="#e6a817" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+
+  <!-- Use cached bundle -->
+  <rect x="178" y="182" width="130" height="50" rx="10" fill="url(#orangeGrad)" filter="url(#shadow)"/>
+  <text x="243" y="200" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Use Cached</text>
+  <text x="243" y="213" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Bundle</text>
+  <text x="243" y="242" text-anchor="middle" font-size="7" fill="#718096">From LMDB store</text>
+
+  <!-- Arrow to apply -->
+  <line x1="308" y1="207" x2="338" y2="207" stroke="#e6a817" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+
+  <!-- Apply resources -->
+  <rect x="338" y="182" width="110" height="50" rx="10" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="393" y="200" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Apply</text>
+  <text x="393" y="213" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Resources</text>
+
+  <!-- Arrow to queue -->
+  <line x1="448" y1="207" x2="478" y2="207" stroke="#e6a817" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+
+  <!-- Queue results in LMDB -->
+  <rect x="478" y="182" width="120" height="50" rx="10" fill="url(#purpleGrad)" filter="url(#shadow)"/>
+  <text x="538" y="200" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Queue Results</text>
+  <text x="538" y="213" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">in LMDB</text>
+
+  <!-- ===== RECONNECT PATH ===== -->
+  <line x1="30" y1="258" x2="670" y2="258" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="6,3"/>
+
+  <text x="350" y="280" text-anchor="middle" font-size="10" font-weight="600" fill="#3182ce">Server Returns</text>
+
+  <!-- Drain pending -->
+  <rect x="140" y="292" width="150" height="42" rx="10" fill="url(#orangeGrad)" filter="url(#shadow)"/>
+  <text x="215" y="310" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Drain Pending</text>
+  <text x="215" y="323" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Results from LMDB</text>
+
+  <!-- Arrow -->
+  <line x1="290" y1="313" x2="340" y2="313" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- Report to server -->
+  <rect x="340" y="292" width="110" height="42" rx="10" fill="url(#blueGrad)" filter="url(#shadow)"/>
+  <text x="395" y="310" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Report to</text>
+  <text x="395" y="323" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Server</text>
+
+  <!-- Arrow -->
+  <line x1="450" y1="313" x2="500" y2="313" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+  <!-- Resume normal -->
+  <rect x="500" y="292" width="110" height="42" rx="10" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="555" y="310" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Resume</text>
+  <text x="555" y="323" text-anchor="middle" font-size="9" font-weight="600" fill="#fff">Normal Flow</text>
+</svg>

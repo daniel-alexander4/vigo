@@ -4,33 +4,7 @@ Compiled promises are signed policy bundles that allow agents to converge locall
 
 ## How It Works
 
-```
-Server                              Agent
-  │                                   │
-  │  1. Build policy for thrall       │
-  │  2. Sign with ED25519 key         │
-  │  3. Set TTL (bundle_max_age)      │
-  │                                   │
-  │  CheckIn response:                │
-  │  modules + signature + TTL        │
-  │──────────────────────────────────>│
-  │                                   │  4. Verify signature
-  │                                   │  5. accept_bundle() → LMDB
-  │                                   │  6. Apply resources
-  │                                   │
-  │         ... server goes down ...  │
-  │                                   │
-  │                   X               │  7. Check-in fails
-  │                                   │  8. Load cached bundle from LMDB
-  │                                   │  9. Verify TTL not expired
-  │                                   │  10. converge_local()
-  │                                   │  11. Queue results in LMDB
-  │                                   │
-  │      ... server comes back ...    │
-  │                                   │
-  │  Drain pending results            │
-  │<──────────────────────────────────│
-```
+![Compiled Promises Flow](img/compiled-promises.svg)
 
 ## Bundle Signing
 

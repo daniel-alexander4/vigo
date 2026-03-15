@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 350" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f9fa"/>
+      <stop offset="100%" stop-color="#edf2f7"/>
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4299e1"/>
+      <stop offset="100%" stop-color="#3182ce"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#48bb78"/>
+      <stop offset="100%" stop-color="#38a169"/>
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fc8181"/>
+      <stop offset="100%" stop-color="#e53e3e"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6c948"/>
+      <stop offset="100%" stop-color="#e6a817"/>
+    </linearGradient>
+    <linearGradient id="grayGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a0aec0"/>
+      <stop offset="100%" stop-color="#718096"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="350" rx="8" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="250" y="28" text-anchor="middle" font-size="14" font-weight="700" fill="#2d3748">Compliance Status Decision Tree</text>
+
+  <!-- Start node -->
+  <rect x="185" y="42" width="130" height="32" rx="16" fill="url(#blueGrad)" filter="url(#shadow)"/>
+  <text x="250" y="63" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Last check-in?</text>
+
+  <!-- Arrow down from start -->
+  <line x1="250" y1="74" x2="250" y2="92" stroke="#718096" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+
+  <!-- Decision 1: stale check -->
+  <polygon points="250,92 330,122 250,152 170,122" fill="#fff" stroke="#718096" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="250" y="119" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">&gt; 2x interval</text>
+  <text x="250" y="131" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">ago?</text>
+
+  <!-- Yes arrow right to STALE -->
+  <line x1="330" y1="122" x2="390" y2="122" stroke="#718096" stroke-width="1.5"/>
+  <text x="355" y="115" text-anchor="middle" font-size="8" fill="#718096">yes</text>
+  <rect x="390" y="106" width="90" height="32" rx="8" fill="url(#grayGrad)" filter="url(#shadow)"/>
+  <text x="435" y="126" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">STALE</text>
+
+  <!-- No arrow down -->
+  <line x1="250" y1="152" x2="250" y2="170" stroke="#718096" stroke-width="1.5"/>
+  <text x="258" y="164" font-size="8" fill="#718096">no</text>
+
+  <!-- Decision 2: run data check -->
+  <polygon points="250,170 330,196 250,222 170,196" fill="#fff" stroke="#718096" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="250" y="196" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">Has run data?</text>
+
+  <!-- No arrow right to UNKNOWN -->
+  <line x1="330" y1="196" x2="390" y2="196" stroke="#718096" stroke-width="1.5"/>
+  <text x="355" y="189" text-anchor="middle" font-size="8" fill="#718096">no</text>
+  <rect x="390" y="180" width="90" height="32" rx="8" fill="url(#grayGrad)" filter="url(#shadow)"/>
+  <text x="435" y="200" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">UNKNOWN</text>
+
+  <!-- Yes arrow down -->
+  <line x1="250" y1="222" x2="250" y2="238" stroke="#718096" stroke-width="1.5"/>
+  <text x="258" y="233" font-size="8" fill="#718096">yes</text>
+
+  <!-- Decision 3: errors check -->
+  <polygon points="250,238 322,260 250,282 178,260" fill="#fff" stroke="#718096" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="250" y="263" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">Has errors?</text>
+
+  <!-- Yes arrow right to FAILING -->
+  <line x1="322" y1="260" x2="390" y2="260" stroke="#718096" stroke-width="1.5"/>
+  <text x="351" y="253" text-anchor="middle" font-size="8" fill="#718096">yes</text>
+  <rect x="390" y="244" width="90" height="32" rx="8" fill="url(#redGrad)" filter="url(#shadow)"/>
+  <text x="435" y="264" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">FAILING</text>
+
+  <!-- No arrow down -->
+  <line x1="250" y1="282" x2="250" y2="298" stroke="#718096" stroke-width="1.5"/>
+  <text x="258" y="293" font-size="8" fill="#718096">no</text>
+
+  <!-- Decision 4: drift check — final split into two outcomes -->
+  <polygon points="250,298 318,316 250,334 182,316" fill="#fff" stroke="#718096" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="250" y="319" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">Has changes?</text>
+
+  <!-- Yes arrow left to DRIFTED -->
+  <line x1="182" y1="316" x2="110" y2="316" stroke="#718096" stroke-width="1.5"/>
+  <text x="150" y="309" text-anchor="middle" font-size="8" fill="#718096">yes</text>
+  <rect x="16" y="300" width="94" height="32" rx="8" fill="url(#orangeGrad)" filter="url(#shadow)"/>
+  <text x="63" y="320" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">DRIFTED</text>
+
+  <!-- No arrow right to COMPLIANT -->
+  <line x1="318" y1="316" x2="390" y2="316" stroke="#718096" stroke-width="1.5"/>
+  <text x="349" y="309" text-anchor="middle" font-size="8" fill="#718096">no</text>
+  <rect x="390" y="300" width="94" height="32" rx="8" fill="url(#greenGrad)" filter="url(#shadow)"/>
+  <text x="437" y="320" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">COMPLIANT</text>
+
+  <!-- Subtitle labels -->
+  <text x="63" y="342" text-anchor="middle" font-size="7" fill="#718096">drift corrected</text>
+  <text x="437" y="342" text-anchor="middle" font-size="7" fill="#718096">no changes, no errors</text>
+
+  <!-- Arrowhead marker -->
+  <defs>
+    <marker id="arrowGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#718096"/>
+    </marker>
+  </defs>
+</svg>

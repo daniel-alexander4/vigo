@@ -4,20 +4,7 @@ Custom executors let you extend Hobnob with your own resource types. They commun
 
 ## How It Works
 
-```
-Agent                          Custom Script
-  │                              │
-  │  Execute script with JSON    │
-  │  on stdin                    │
-  │─────────────────────────────>│
-  │                              │
-  │                              │  Read JSON input
-  │                              │  Check current state
-  │                              │  Apply if needed
-  │                              │
-  │  JSON result on stdout       │
-  │<─────────────────────────────│
-```
+![Custom Executor Protocol](img/custom-executor.svg)
 
 ## Resource Definition
 

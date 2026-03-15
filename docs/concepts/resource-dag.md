@@ -72,15 +72,7 @@ Key behavior:
 - Multiple resources can notify the same target — it's only re-applied once per run
 - The notified resource must also be defined in the same module
 
-```
-┌──────────────┐    change     ┌──────────────┐
-│ nginx-config │──── notify ──>│nginx-service  │
-│ (file)       │               │(restart)      │
-└──────────────┘               └──────────────┘
-         │                            ▲
-         │ no change                  │
-         └── skip notify ─────── (not restarted)
-```
+![Notify Trigger](img/notify-trigger.svg)
 
 ## subscribes
 
@@ -158,17 +150,7 @@ Error: `circular dependency detected: a → b → a`
 
 ## Failure Propagation
 
-```
-┌───┐     ┌───┐     ┌───┐
-│ A │────>│ B │────>│ C │
-└───┘     └───┘     └───┘
-            │
-            ▼ (A fails)
-          SKIPPED
-            │
-            ▼
-          C SKIPPED
-```
+![Failure Propagation](img/failure-propagation.svg)
 
 When a resource fails:
 1. All resources that `depends_on` the failed resource are skipped

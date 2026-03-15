@@ -51,20 +51,7 @@ The `token_file` is read at startup. The file should be owned by root with mode 
 
 ## Secret Resolution Flow
 
-```
-server.yaml                  Secrets Provider
-┌─────────────────┐         ┌──────────────────┐
-│ dsn: "secret:   │────────>│ local: read file  │
-│   hobnob/db/dsn"│         │   + AES-GCM decrypt│
-└─────────────────┘         │                    │
-                            │ isopass: HTTP GET  │
-                            │   /v1/secrets/path │
-                            └────────┬───────────┘
-                                     │
-                                     ▼
-                            Resolved plaintext value
-                            (held in memory only)
-```
+![Secret Resolution Flow](img/secret-resolution.svg)
 
 ## Fail-Fast
 

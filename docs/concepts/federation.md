@@ -6,30 +6,7 @@ Federation enables hub-spoke scaling for large fleets. A hub server aggregates d
 
 ## Architecture
 
-```
-                    ┌──────────────────────────┐
-                    │         Hub Server        │
-                    │                            │
-                    │  Web UI + CLI + Webhooks   │
-                    │  Bootstrap + License       │
-                    │  Admin Query Fan-out       │
-                    └──────┬──────────┬─────────┘
-                           │          │
-                    gRPC   │          │   gRPC
-                           │          │
-              ┌────────────┴──┐  ┌────┴────────────┐
-              │  Spoke DC1     │  │  Spoke DC2       │
-              │                │  │                  │
-              │  Agent check-in│  │  Agent check-in  │
-              │  Result storage│  │  Result storage  │
-              │  Trait storage │  │  Trait storage   │
-              └───────┬────────┘  └───────┬──────────┘
-                      │                    │
-              ┌───────┴───────┐    ┌──────┴────────┐
-              │  Thralls      │    │  Thralls       │
-              │  *.dc1.*      │    │  *.dc2.*       │
-              └───────────────┘    └────────────────┘
-```
+![Federation Architecture](img/federation.svg)
 
 ## Roles
 

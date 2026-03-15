@@ -4,37 +4,7 @@ The agent check-in is the core data flow in Hobnob. Every 5 minutes (configurabl
 
 ## Pull Loop
 
-```
-Agent                                     Server
-  │                                         │
-  │  ┌─── Loop every interval ────────┐    │
-  │  │                                 │    │
-  │  │  1. Collect traits              │    │
-  │  │  2. Compute state fingerprint   │    │
-  │  │                                 │    │
-  │  │  CheckIn(uuid, traits,          │    │
-  │  │          fingerprint)           │    │
-  │  │─────────────────────────────────────>│
-  │  │                                 │    │ 3. Verify signature
-  │  │                                 │    │ 4. Update FleetIndex
-  │  │                                 │    │ 5. Match hostname → config
-  │  │                                 │    │ 6. Resolve modules + vars
-  │  │                                 │    │ 7. Compare fingerprint
-  │  │  Response: modules[]            │    │
-  │  │  (or "no change" if match)      │    │
-  │  │<─────────────────────────────────────│
-  │  │                                 │    │
-  │  │  8. Build resource DAG          │    │
-  │  │  9. Execute in topo order       │    │
-  │  │  10. Collect results            │    │
-  │  │                                 │    │
-  │  │  ReportResult(run_id, results[])│    │
-  │  │─────────────────────────────────────>│
-  │  │                                 │    │ 11. Store run
-  │  │                                 │    │ 12. Update compliance
-  │  │                                 │    │ 13. Fire webhooks
-  │  └─────────────────────────────────┘    │
-```
+![Check-in Lifecycle](img/checkin-lifecycle.svg)
 
 ## Step by Step
 
@@ -119,29 +89,7 @@ With default settings, an agent checks in every 5m ± 20% jitter (4m–6m). A th
 
 Agents default to stateless unary polling (CheckIn RPC). When the server needs to dispatch work (tasks, queries, workflows) to a polling agent, it sets `stream_requested = true` on the next CheckInResponse. The agent opens a bidirectional stream, receives the work, and closes the stream when released.
 
-```
-Agent                                     Server
-  │                                         │
-  │  CheckIn (unary polling)                │
-  │─────────────────────────────────────────>│
-  │                                         │ task dispatched to this agent
-  │  CheckInResponse (stream_requested)     │
-  │<─────────────────────────────────────────│
-  │                                         │
-  │  AgentStream (promoted)                 │
-  │<════════════════════════════════════════>│
-  │                                         │
-  │  TaskDispatch (delivered on connect)    │
-  │<─────────────────────────────────────────│
-  │                                         │
-  │  TaskResult                             │
-  │─────────────────────────────────────────>│
-  │                                         │
-  │  StreamRelease (work complete)          │
-  │<─────────────────────────────────────────│
-  │                                         │
-  │  (stream closes, resume polling)        │
-```
+![Adaptive Stream Promotion](img/stream-promotion.svg)
 
 This eliminates the ~230 KiB/connection memory overhead of persistent streams. Agents that are idle (no dispatched work) consume near-zero server memory.
 
@@ -154,24 +102,7 @@ This eliminates the ~230 KiB/connection memory overhead of persistent streams. A
 
 When the bidirectional stream is active, the agent uses delta events instead of full request/response RPCs:
 
-```
-Agent                          Server
-  │                              │
-  │  AgentStream (active)        │
-  │<════════════════════════════>│
-  │                              │
-  │  DeltaEvent: RunCompleted    │
-  │─────────────────────────────>│
-  │                              │
-  │  DeltaEvent: TraitsDelta     │
-  │─────────────────────────────>│
-  │                              │
-  │  DeltaEvent: HeartbeatDelta  │
-  │─────────────────────────────>│
-  │                              │
-  │  DeltaAck                    │
-  │<─────────────────────────────│
-```
+![Delta Streaming](img/delta-streaming.svg)
 
 Delta streaming reduces per-check-in overhead by sending only what changed.
 
