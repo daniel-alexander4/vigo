@@ -125,4 +125,4 @@ Or view it in the web UI at `http://localhost:8181/runs`.
 - [First Module](first-module.md) — Deeper module walkthrough with packages, services, and dependencies
 - [Server Configuration](server-config.md) — Full server.yaml reference
 - [Config Format](../concepts/config-format.md) — Modules, roles, vars, and environment_overrides
-- [Executors](../executors/_index.md) — All 59 resource types
+- [Executors](../executors/_index.md) — All 71 resource types
