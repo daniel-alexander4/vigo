@@ -97,6 +97,9 @@ func ParseMatchVar(name string, raw map[string]any) ([]MatchBranch, string, erro
 		if value == "" {
 			return nil, "", fmt.Errorf("match var %q branch %d: missing 'value' field", name, i)
 		}
+		if strings.Contains(value, "\n") {
+			return nil, "", fmt.Errorf("match var %q branch %d: value contains newlines (paste error? value must be a single line)", name, i)
+		}
 		branches = append(branches, MatchBranch{When: when, Value: value})
 	}
 	if len(branches) == 0 {
