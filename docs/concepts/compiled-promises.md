@@ -63,12 +63,7 @@ When the server is unreachable:
 
 The agent attempts to renew its bundle at 80% of the TTL. With the default 24h TTL:
 
-```
-0h        19.2h      24h
-│──────────│──────────│
-│  Normal  │ Renewal  │ Expired
-│  check-in│ window   │ (stop converging)
-```
+![Bundle TTL Renewal](img/bundle-ttl.svg)
 
 This ensures the bundle stays fresh even with brief server outages.
 
