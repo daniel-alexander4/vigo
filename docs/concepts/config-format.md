@@ -1,6 +1,6 @@
 # Config Format
 
-All Hobnob configuration lives in YAML files with the `.hnb` extension under `thrall-configs/`. The server watches this directory for changes and hot-reloads automatically.
+All Hobnob configuration lives in YAML files with the `.hnb` extension under `thrall-configs/`. The server reloads config when `hobnobcli config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
@@ -230,11 +230,11 @@ Every resource has these common fields:
 
 Plus type-specific attributes (see [Executors](../executors/_index.md)).
 
-## Hot Reload
+## Config Reload
 
-The server watches `thrall-configs/` with fsnotify. When any `.hnb` file changes:
-1. The entire config tree is re-parsed
-2. Module definitions, role definitions, and node mappings are rebuilt
+After `hobnobcli config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:
+1. Re-parses the entire config tree
+2. Rebuilds module definitions, role definitions, and node mappings
 3. The next agent check-in gets the updated config
 
 No server restart needed. Config parse errors are logged and trigger an SMTP notification if configured.

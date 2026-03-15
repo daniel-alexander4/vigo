@@ -168,7 +168,7 @@ Built-in AI assistant accessible from every page of the web UI:
 - **Config validation and preview.** Validate configs before publishing. Preview what would change for any node without applying.
 - **Config rollback.** Revert to any previous published config with one command.
 - **Backup and restore.** Point-in-time server snapshots via CLI. Optional Litestream WAL replication for continuous backup.
-- **Hot reload.** The server watches the config directory and reloads automatically on changes. No restart required.
+- **Live reload.** `config publish` validates, syncs, and reloads the server in one command. No restart required.
 - **License management.** Built-in free tier (25 nodes). Gradual enforcement: 15-day grace, 15-day enrollment block, then service stop. Existing nodes are never locked out.
 
 ## Numbers

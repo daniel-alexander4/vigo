@@ -8,7 +8,7 @@ The `hobd` server daemon is the central control plane for Hobnob. It serves gRPC
 - **gRPC over mTLS (port 1530)** -- agent check-ins, result reporting, traits collection
 - **REST API + web UI (port 8181)** -- admin CLI (`hobnobcli`), browser dashboard
 - **SQLite** backend (WAL mode) with golang-migrate migrations
-- **Config hot-reload** via fsnotify on modules/, roles/, nodes/, and templates/ directories
+- **Config reload** triggered by `config publish` via REST endpoint
 - **Prometheus metrics** at `GET /metrics`
 - **Secrets** resolved through pluggable backend (local or isopass)
 
@@ -118,7 +118,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 |---------|---------|
 | `server/grpc/` | gRPC service implementations + ED25519 signature verification interceptor. Agent RPCs: Register, CheckIn, ReportResult, ReportTraits. Admin RPCs: ForcePush, DryRun, Rollback. TLS 1.3 minimum, mTLS required. |
 | `server/api/` | REST gateway + web UI (HTMX SPA) + bootstrap handler for agent enrollment |
-| `server/config/` | YAML config loader with secret resolution, fsnotify hot-reload, Go template rendering. See [config/README.md](config/README.md). |
+| `server/config/` | YAML config loader with secret resolution, publish-triggered reload, Go template rendering. See [config/README.md](config/README.md). |
 | `server/db/` | SQLite query layer, ThrallCache (60s TTL), LastSeenBatcher (10s flush) |
 | `server/registry/` | Thrall enrollment: hostname pattern matching, bcrypt token validation, revocation |
 | `server/secrets/` | Provider interface: `LocalProvider` (default, file-based) + `IsopassProvider` (prod) |
@@ -139,7 +139,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 2. Initialize secrets provider (local or isopass)
 3. Load full server config with secret resolution (second pass)
 4. Open SQLite database, run migrations
-5. Initialize ConfigStore -- load modules, roles, nodes; start fsnotify watcher
+5. Initialize ConfigStore -- load modules, roles, nodes
 6. Start LastSeenBatcher (flushes every 10s)
 7. Start secret rotation watcher (if enabled)
 8. Start gRPC server with mTLS on configured port

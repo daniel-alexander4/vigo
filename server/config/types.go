@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package config handles loading, watching, and resolving per-thrall
-// configuration from YAML files on disk. It integrates with the secrets
-// provider to resolve "secret:" prefixes and supports hot-reload via fsnotify.
+// Package config handles loading and resolving per-thrall configuration
+// from YAML files on disk. It integrates with the secrets provider to
+// resolve "secret:" prefixes and supports publish-triggered reload.
 package config
 
 import (

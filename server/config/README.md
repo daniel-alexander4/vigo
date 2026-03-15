@@ -1,6 +1,6 @@
 # server/config -- Configuration Loader
 
-The config system loads module, role, and node definitions from YAML files (`.hnb`), resolves secrets, renders Go templates, and watches for changes via fsnotify.
+The config system loads module, role, and node definitions from YAML files (`.hnb`), resolves secrets, and renders Go templates. Reload is triggered by config publish via the REST endpoint.
 
 ## Summary
 
@@ -8,10 +8,10 @@ The config system loads module, role, and node definitions from YAML files (`.hn
 - YAML syntax with `.hnb` file extension (`.yaml` and `.yml` also accepted)
 - Secret references resolved at load time (`secret:` prefix)
 - Go template syntax with `.Traits` and `.Vars` namespaces
-- Hot-reload: fsnotify watches config directories, bumps policy version on change
+- Reload: triggered by `POST /api/v1/config/reload`, bumps policy version on change
 - First-match-wins for node mapping
 - Recursive directory loading via `filepath.WalkDir`
-- Idempotency validation at load time (bypass with `--dangerous`)
+- Idempotency validation at load time (bypass individual resources with `skip_validation: true`)
 
 ## Config Hierarchy
 
@@ -278,10 +278,10 @@ resources:
 
 Block-level `when` is AND-composed with each child resource's individual `when` (if any).
 
-## Hot-Reload
+## Config Reload
 
-- fsnotify watches `modules/`, `roles/`, `nodes/`, and `templates/` directories recursively
-- File changes trigger a full re-parse after a 500ms debounce window
+- `hobnobcli config publish` calls `POST /api/v1/config/reload` after syncing files
+- The server re-parses all config files and rebuilds the in-memory store
 - Policy version is incremented on each successful reload
 - On parse failure, the previous valid config is retained and an error is logged
 - Agents detect the version change on their next check-in and receive updated policy

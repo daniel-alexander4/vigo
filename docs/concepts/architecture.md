@@ -11,7 +11,7 @@ Hobnob has three binaries, two network ports, and a filesystem-only config path.
 The central server written in Go. It:
 - Accepts agent check-ins via gRPC over mTLS (port 1530)
 - Serves the REST API, web UI, metrics, and bootstrap endpoint (port 8181)
-- Reads YAML config from disk with hot-reload via fsnotify
+- Reads YAML config from disk, reloads on publish via REST endpoint
 - Stores state in SQLite (default) or PostgreSQL
 - Resolves secrets through a pluggable backend (local, isopass)
 
@@ -53,7 +53,7 @@ The admin CLI written in Go. It:
 | Subsystem | Package | Purpose |
 |-----------|---------|---------|
 | FleetIndex | `server/fleet/` | In-memory thrall index, zero DB on check-in hot path |
-| ConfigStore | `server/config/` | YAML loader with fsnotify hot-reload |
+| ConfigStore | `server/config/` | YAML loader with publish-triggered reload |
 | RunStore | `server/db/` | Run history (DBRunStore or MemRunStore) |
 | BundleSigner | `server/grpc/` | ED25519 signing for compiled promises |
 | Registry | `server/registry/` | Enrollment: pattern match + token validation |

@@ -73,7 +73,7 @@
 
   <rect x="610" y="220" width="130" height="50" rx="8" fill="#fff" stroke="#90cdf4" stroke-width="1"/>
   <text x="675" y="242" text-anchor="middle" font-weight="600" fill="#2a69ac" font-size="12">YAML Config</text>
-  <text x="675" y="258" text-anchor="middle" font-size="10" fill="#888">fsnotify reload</text>
+  <text x="675" y="258" text-anchor="middle" font-size="10" fill="#888">publish reload</text>
 
   <!-- Server internal: extras row -->
   <rect x="320" y="285" width="100" height="35" rx="6" fill="#f0f7ff" stroke="#90cdf4" stroke-width="1"/>

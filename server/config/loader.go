@@ -181,7 +181,7 @@ type resolvedEntry struct {
 // ConfigStore loads, watches, and provides per-thrall configuration.
 // The base dir contains thralls/, modules/, and roles/ subdirectories with
 // .hnb/.yaml config files. Secret references are resolved via a
-// secrets.Provider. Hot-reload via fsnotify.
+// secrets.Provider. Reload triggered by config publish via REST endpoint.
 type ConfigStore struct {
 	mu            sync.RWMutex
 	entries       []resolvedEntry

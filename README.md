@@ -167,7 +167,7 @@ name: webserver
 modules: [nginx, certbot]
 ```
 
-The server watches `thrall-configs/` and hot-reloads automatically. On the next check-in, the agent converges to the desired state.
+The `config publish` command validates, syncs, and reloads the server. On the next check-in, the agent converges to the desired state.
 
 ### 8. Verify convergence
 
@@ -245,7 +245,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 - **Server (hobd)** — gRPC endpoint for agents, REST API + web UI for operators, built-in CA for bootstrap CSR signing
 - **Agent (hobnob)** — daemon on each managed node, pulls config, converges idempotently
 - **hobnobcli** — admin CLI, talks to server REST API
-- **Config** — `.hnb` files (YAML syntax) on disk, hot-reloaded on change
+- **Config** — `.hnb` files (YAML syntax) on disk, reloaded on publish
 - **hnbvi** — vim-based editor with syntax highlighting and idempotency validation on save
 
 ## Bootstrap enrollment

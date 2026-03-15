@@ -48,7 +48,7 @@ hobnobcli config publish --skip-url-check
 2. Loads all `.hnb` files from `proposed/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and thrall entries cross-reference each other.
 3. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
 4. If validation passes and `--dry-run` is not set, atomically syncs `modules/`, `roles/`, `thralls/`, `templates/`, and `vars/` to `.live/`
-5. The server's fsnotify watcher picks up the changes and reloads
+5. The CLI calls `POST /api/v1/config/reload` to trigger a server-side config reload
 6. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`
 
 ## Atomic Sync

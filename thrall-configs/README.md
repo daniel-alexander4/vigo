@@ -6,7 +6,7 @@ Configuration files that define the desired state of managed thralls. These YAML
 
 - YAML syntax with `.hnb` file extension
 - Three layers: modules (reusable resource sets), roles (module groups), thralls (hostname-to-role mapping)
-- Single source of truth: edit files, server auto-reloads via fsnotify
+- Single source of truth: edit files, publish to reload the server
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Secret references use `secret:` prefix, resolved at server load time
 
