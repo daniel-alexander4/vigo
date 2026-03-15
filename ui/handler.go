@@ -403,6 +403,7 @@ type DocsNavSection struct {
 type DocsNavPage struct {
 	Title string
 	Path  string // e.g. "getting-started/installation"
+	Text  string // plain-text content for full-text search (stripped markdown)
 }
 
 // DocsCrumb represents a breadcrumb entry.
@@ -533,9 +534,16 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 				pageTitle = strings.ReplaceAll(pageTitle, "_", " ")
 			}
 
+			// Read file content for full-text search index.
+			var plainText string
+			if raw, err := os.ReadFile(filepath.Join(docsDir, sectionPath, pf.Name())); err == nil {
+				plainText = stripMarkdown(string(raw))
+			}
+
 			pages = append(pages, DocsNavPage{
 				Title: pageTitle,
 				Path:  sectionPath + "/" + pageName,
+				Text:  plainText,
 			})
 		}
 
@@ -584,6 +592,87 @@ func extractMDTitle(path string) string {
 		}
 	}
 	return ""
+}
+
+// stripMarkdown removes markdown syntax to produce plain text for search indexing.
+// Strips headings (#), links, images, code fences, HTML tags, bold/italic markers,
+// and collapses whitespace. Not a full parser — good enough for search.
+func stripMarkdown(md string) string {
+	var b strings.Builder
+	inCodeFence := false
+	for _, line := range strings.Split(md, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip YAML frontmatter.
+		if trimmed == "---" {
+			continue
+		}
+
+		// Toggle code fences — skip fenced content.
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeFence = !inCodeFence
+			continue
+		}
+		if inCodeFence {
+			continue
+		}
+
+		// Strip heading markers.
+		for strings.HasPrefix(trimmed, "#") {
+			trimmed = strings.TrimPrefix(trimmed, "#")
+		}
+		trimmed = strings.TrimSpace(trimmed)
+
+		// Skip pure table separator lines (|---|---|).
+		if len(trimmed) > 0 && trimmed[0] == '|' && !strings.ContainsAny(trimmed, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
+			continue
+		}
+
+		// Strip table pipes.
+		trimmed = strings.ReplaceAll(trimmed, "|", " ")
+
+		if trimmed != "" {
+			b.WriteString(trimmed)
+			b.WriteByte(' ')
+		}
+	}
+
+	text := b.String()
+
+	// Strip markdown link/image syntax: [text](url) → text, ![alt](url) → alt
+	for {
+		i := strings.Index(text, "](")
+		if i < 0 {
+			break
+		}
+		// Find opening bracket.
+		start := strings.LastIndex(text[:i], "[")
+		if start < 0 {
+			break
+		}
+		// Find closing paren.
+		end := strings.Index(text[i:], ")")
+		if end < 0 {
+			break
+		}
+		linkText := text[start+1 : i]
+		// Strip leading ! for images.
+		if start > 0 && text[start-1] == '!' {
+			start--
+		}
+		text = text[:start] + linkText + text[i+end+1:]
+	}
+
+	// Strip inline code backticks, bold, italic markers.
+	text = strings.ReplaceAll(text, "`", "")
+	text = strings.ReplaceAll(text, "**", "")
+	text = strings.ReplaceAll(text, "__", "")
+	text = strings.ReplaceAll(text, "*", "")
+	text = strings.ReplaceAll(text, "_", " ")
+
+	// Collapse whitespace.
+	fields := strings.Fields(text)
+	return strings.Join(fields, " ")
 }
 
 // docsLinkRe matches href attributes in rendered HTML.
