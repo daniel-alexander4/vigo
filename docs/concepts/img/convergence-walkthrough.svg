@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1080" font-family="Inter, system-ui, sans-serif" font-size="12">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 Z" fill="#3182ce"/>
+    </marker>
+    <marker id="arrGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 Z" fill="#38a169"/>
+    </marker>
+    <marker id="arrOrange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 Z" fill="#dd6b20"/>
+    </marker>
+    <marker id="arrBack" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto">
+      <path d="M 8 0 L 0 4 L 8 8 Z" fill="#3182ce"/>
+    </marker>
+    <marker id="arrBackGreen" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto">
+      <path d="M 8 0 L 0 4 L 8 8 Z" fill="#38a169"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="1080" fill="#f8f9fa" rx="8"/>
+  <text x="480" y="30" text-anchor="middle" font-size="18" font-weight="700" fill="#1a202c">Convergence Walkthrough — Adding an Nginx Module</text>
+
+  <!-- Column headers -->
+  <rect x="40" y="50" width="140" height="36" rx="8" fill="#f0e6ff" stroke="#805ad5" stroke-width="1.5"/>
+  <text x="110" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#553c9a">Operator</text>
+
+  <rect x="260" y="50" width="140" height="36" rx="8" fill="#e8f4fd" stroke="#3182ce" stroke-width="1.5"/>
+  <text x="330" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#1a56a0">Server (hobd)</text>
+
+  <rect x="500" y="50" width="180" height="36" rx="8" fill="#e8fce8" stroke="#38a169" stroke-width="1.5"/>
+  <text x="590" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#276749">Thrall (web-01)</text>
+
+  <rect x="780" y="50" width="140" height="36" rx="8" fill="#fef3e2" stroke="#dd6b20" stroke-width="1.5"/>
+  <text x="850" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#9c4221">Internet</text>
+
+  <!-- Lifelines -->
+  <line x1="110" y1="86" x2="110" y2="1050" stroke="#805ad5" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <line x1="330" y1="86" x2="330" y2="1050" stroke="#3182ce" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <line x1="590" y1="86" x2="590" y2="1050" stroke="#38a169" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <line x1="850" y1="86" x2="850" y2="1050" stroke="#dd6b20" stroke-width="1.5" stroke-dasharray="6,4"/>
+
+  <!-- ═══ PHASE 1: Publish ═══ -->
+  <rect x="20" y="108" width="920" height="18" rx="4" fill="#805ad5" opacity="0.1"/>
+  <text x="30" y="121" font-size="11" font-weight="700" fill="#805ad5">PHASE 1 — Config Publish</text>
+  <text x="930" y="121" text-anchor="end" font-size="11" fill="#805ad5">&lt; 1 second</text>
+
+  <!-- Operator edits file -->
+  <rect x="45" y="135" width="130" height="30" rx="6" fill="#fff" stroke="#805ad5" stroke-width="1"/>
+  <text x="110" y="152" text-anchor="middle" font-size="11" fill="#553c9a">Edit nginx.hnb</text>
+
+  <!-- Publish arrow -->
+  <line x1="115" y1="175" x2="325" y2="175" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="220" y="170" text-anchor="middle" font-size="10" fill="#805ad5">hobnobcli config publish</text>
+
+  <!-- Server validates -->
+  <rect x="345" y="180" width="130" height="55" rx="6" fill="#fff" stroke="#90cdf4" stroke-width="1"/>
+  <text x="410" y="196" text-anchor="middle" font-size="10" fill="#1a56a0">Validate YAML (5ms)</text>
+  <text x="410" y="210" text-anchor="middle" font-size="10" fill="#1a56a0">Sync to .live/</text>
+  <text x="410" y="224" text-anchor="middle" font-size="10" fill="#1a56a0">Reload config (10ms)</text>
+
+  <!-- Response -->
+  <line x1="325" y1="245" x2="115" y2="245" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arrBack)"/>
+  <text x="220" y="240" text-anchor="middle" font-size="10" fill="#805ad5">"published 1 file"</text>
+
+  <!-- ═══ PHASE 2: Wait ═══ -->
+  <rect x="20" y="270" width="920" height="18" rx="4" fill="#718096" opacity="0.1"/>
+  <text x="30" y="283" font-size="11" font-weight="700" fill="#718096">PHASE 2 — Wait for Check-in</text>
+  <text x="930" y="283" text-anchor="end" font-size="11" fill="#718096">0–5 minutes</text>
+
+  <rect x="525" y="298" width="130" height="26" rx="6" fill="#fff" stroke="#38a169" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="590" y="315" text-anchor="middle" font-size="10" fill="#718096">Polling interval...</text>
+
+  <!-- ═══ PHASE 3: Check-in ═══ -->
+  <rect x="20" y="340" width="920" height="18" rx="4" fill="#3182ce" opacity="0.1"/>
+  <text x="30" y="353" font-size="11" font-weight="700" fill="#3182ce">PHASE 3 — Check-in &amp; Policy Transfer</text>
+  <text x="930" y="353" text-anchor="end" font-size="11" fill="#3182ce">&lt; 50 ms</text>
+
+  <!-- CheckIn request -->
+  <line x1="585" y1="375" x2="335" y2="375" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrBack)"/>
+  <rect x="370" y="362" width="200" height="18" rx="4" fill="#ebf5ff" stroke="#90cdf4" stroke-width="0.5"/>
+  <text x="470" y="375" text-anchor="middle" font-size="10" fill="#1a56a0">CheckIn (UUID + traits + fingerprint)</text>
+
+  <!-- Server resolves -->
+  <rect x="345" y="390" width="145" height="70" rx="6" fill="#fff" stroke="#90cdf4" stroke-width="1"/>
+  <text x="417" y="405" text-anchor="middle" font-size="10" fill="#1a56a0">Match hostname (300ns)</text>
+  <text x="417" y="419" text-anchor="middle" font-size="10" fill="#1a56a0">Resolve roles (1µs)</text>
+  <text x="417" y="433" text-anchor="middle" font-size="10" fill="#1a56a0">Render templates (1ms)</text>
+  <text x="417" y="447" text-anchor="middle" font-size="10" fill="#1a56a0">Sign bundle (10µs)</text>
+
+  <!-- Policy bundle response -->
+  <line x1="335" y1="475" x2="585" y2="475" stroke="#3182ce" stroke-width="2" marker-end="url(#arrGreen)"/>
+  <rect x="370" y="462" width="200" height="18" rx="4" fill="#e8fce8" stroke="#9ae6b4" stroke-width="0.5"/>
+  <text x="470" y="475" text-anchor="middle" font-size="10" fill="#276749">PolicyBundle (5–20 KB)</text>
+
+  <!-- Verify + cache -->
+  <rect x="525" y="488" width="130" height="30" rx="6" fill="#fff" stroke="#9ae6b4" stroke-width="1"/>
+  <text x="590" y="500" text-anchor="middle" font-size="10" fill="#276749">Verify signature</text>
+  <text x="590" y="512" text-anchor="middle" font-size="10" fill="#276749">Cache in LMDB</text>
+
+  <!-- ═══ PHASE 4: Execute ═══ -->
+  <rect x="20" y="535" width="920" height="18" rx="4" fill="#38a169" opacity="0.1"/>
+  <text x="30" y="548" font-size="11" font-weight="700" fill="#38a169">PHASE 4 — Resource Execution</text>
+  <text x="930" y="548" text-anchor="end" font-size="11" fill="#38a169">~25 seconds</text>
+
+  <!-- Resource 1: package -->
+  <rect x="505" y="565" width="170" height="30" rx="6" fill="#fff" stroke="#38a169" stroke-width="1.5"/>
+  <text x="590" y="578" text-anchor="middle" font-size="11" font-weight="600" fill="#276749">1. Install nginx</text>
+  <text x="590" y="590" text-anchor="middle" font-size="9" fill="#718096">type: package</text>
+
+  <!-- Package download — thrall to internet! -->
+  <line x1="595" y1="600" x2="845" y2="600" stroke="#dd6b20" stroke-width="2" marker-end="url(#arrOrange)"/>
+  <text x="720" y="595" text-anchor="middle" font-size="10" fill="#dd6b20">apt-get install nginx</text>
+
+  <line x1="845" y1="620" x2="595" y2="620" stroke="#dd6b20" stroke-width="2" marker-end="url(#arrBackGreen)"/>
+  <text x="720" y="635" text-anchor="middle" font-size="10" fill="#dd6b20">Download .deb (~30 MB, ~15s)</text>
+
+  <!-- Highlight box: no server involvement -->
+  <rect x="700" y="643" width="230" height="20" rx="4" fill="#fef3e2"/>
+  <text x="815" y="657" text-anchor="middle" font-size="9" font-weight="600" font-style="italic" fill="#9c4221">Server is NOT involved in this traffic</text>
+
+  <!-- Resource 2: file -->
+  <rect x="505" y="675" width="170" height="30" rx="6" fill="#fff" stroke="#38a169" stroke-width="1.5"/>
+  <text x="590" y="688" text-anchor="middle" font-size="11" font-weight="600" fill="#276749">2. Write nginx.conf</text>
+  <text x="590" y="700" text-anchor="middle" font-size="9" fill="#718096">type: file — local only (~1ms)</text>
+
+  <!-- Resource 3: service -->
+  <rect x="505" y="720" width="170" height="30" rx="6" fill="#fff" stroke="#38a169" stroke-width="1.5"/>
+  <text x="590" y="733" text-anchor="middle" font-size="11" font-weight="600" fill="#276749">3. Restart nginx</text>
+  <text x="590" y="745" text-anchor="middle" font-size="9" fill="#718096">type: service — triggered by notify (~2s)</text>
+
+  <!-- ═══ PHASE 5: Report ═══ -->
+  <rect x="20" y="770" width="920" height="18" rx="4" fill="#3182ce" opacity="0.1"/>
+  <text x="30" y="783" font-size="11" font-weight="700" fill="#3182ce">PHASE 5 — Report Results</text>
+  <text x="930" y="783" text-anchor="end" font-size="11" fill="#3182ce">&lt; 5 ms</text>
+
+  <line x1="585" y1="800" x2="335" y2="800" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrBack)"/>
+  <rect x="370" y="787" width="200" height="18" rx="4" fill="#ebf5ff" stroke="#90cdf4" stroke-width="0.5"/>
+  <text x="470" y="800" text-anchor="middle" font-size="10" fill="#1a56a0">ReportResult (3 resources changed)</text>
+
+  <rect x="275" y="815" width="110" height="26" rx="6" fill="#fff" stroke="#90cdf4" stroke-width="1"/>
+  <text x="330" y="828" text-anchor="middle" font-size="10" fill="#1a56a0">Store results</text>
+  <text x="330" y="838" text-anchor="middle" font-size="9" fill="#718096">Status: drifted</text>
+
+  <!-- ═══ PHASE 6: Next check-in ═══ -->
+  <rect x="20" y="860" width="920" height="18" rx="4" fill="#38a169" opacity="0.1"/>
+  <text x="30" y="873" font-size="11" font-weight="700" fill="#38a169">PHASE 6 — Subsequent Check-in (no change)</text>
+  <text x="930" y="873" text-anchor="end" font-size="11" fill="#38a169">&lt; 50 ms total</text>
+
+  <line x1="585" y1="895" x2="335" y2="895" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrBack)"/>
+  <text x="470" y="890" text-anchor="middle" font-size="10" fill="#1a56a0">CheckIn (fingerprint matches)</text>
+
+  <line x1="335" y1="915" x2="585" y2="915" stroke="#3182ce" stroke-width="1" marker-end="url(#arrGreen)"/>
+  <text x="470" y="910" text-anchor="middle" font-size="10" fill="#718096">no_change (~100 bytes)</text>
+
+  <!-- Thrall checks locally -->
+  <rect x="525" y="925" width="130" height="42" rx="6" fill="#fff" stroke="#9ae6b4" stroke-width="1"/>
+  <text x="590" y="940" text-anchor="middle" font-size="10" fill="#276749">nginx pkg: present ✓</text>
+  <text x="590" y="953" text-anchor="middle" font-size="10" fill="#276749">nginx.conf: SHA ✓</text>
+  <text x="590" y="966" text-anchor="middle" font-size="10" fill="#276749">nginx svc: running ✓</text>
+
+  <line x1="585" y1="980" x2="335" y2="980" stroke="#3182ce" stroke-width="1.5" marker-end="url(#arrBack)"/>
+  <text x="470" y="975" text-anchor="middle" font-size="10" fill="#1a56a0">ReportResult (0 changed, 0 failed)</text>
+
+  <rect x="275" y="990" width="110" height="20" rx="6" fill="#e8fce8" stroke="#38a169" stroke-width="1.5"/>
+  <text x="330" y="1004" text-anchor="middle" font-size="10" font-weight="700" fill="#276749">Compliant ✓</text>
+
+  <!-- Legend -->
+  <rect x="30" y="1025" width="900" height="42" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="50" y1="1046" x2="90" y2="1046" stroke="#3182ce" stroke-width="2"/>
+  <text x="95" y="1050" font-size="10" fill="#4a5568">Thrall ↔ Server (gRPC/mTLS)</text>
+
+  <line x1="280" y1="1046" x2="320" y2="1046" stroke="#dd6b20" stroke-width="2"/>
+  <text x="325" y="1050" font-size="10" fill="#4a5568">Thrall → Internet (direct, no server)</text>
+
+  <rect x="555" y="1038" width="12" height="12" rx="3" fill="#fff" stroke="#9ae6b4" stroke-width="1"/>
+  <text x="572" y="1050" font-size="10" fill="#4a5568">Local operation (never leaves thrall)</text>
+
+  <rect x="770" y="1038" width="12" height="12" rx="3" fill="#805ad5" opacity="0.15"/>
+  <text x="787" y="1050" font-size="10" fill="#4a5568">Operator action</text>
+</svg>

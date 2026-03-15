@@ -8,6 +8,9 @@ You add an nginx module that installs a package, writes a config file, and start
 
 ## Timeline
 
+![Convergence Walkthrough](img/convergence-walkthrough.svg)
+
+<!--
 ```
 Operator workstation                Hobnob server              Thrall (web-01)                  Internet
         |                                |                           |                              |
@@ -82,6 +85,7 @@ Operator workstation                Hobnob server              Thrall (web-01)  
         |                                |    0 changed, 0 failed   |                              |
         |                                | compliance: compliant ✓  |                              |
 ```
+-->
 
 ## Traffic Flow
 
