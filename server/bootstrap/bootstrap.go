@@ -161,6 +161,9 @@ if [ -d "$DATA_DIR" ]; then
 fi
 mkdir -p "$DATA_DIR"
 
+# Remove stale binary at old install path (moved from /usr/local/bin to /usr/local/sbin).
+rm -f /usr/local/bin/hobnob
+
 # Download agent binary (always replaces existing).
 echo "Downloading agent binary..."
 curl -sSf "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/hobnob"

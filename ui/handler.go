@@ -170,9 +170,14 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// License page
 	mux.HandleFunc("GET /license", h.License)
 
-	// Admin users page (only when auth is enabled)
+	// Admin pages (only when auth is enabled)
 	if h.authEnabled {
 		mux.HandleFunc("GET /admin/users", h.AdminUsers)
+		mux.HandleFunc("GET /admin/approved", h.AdminApproved)
+		mux.HandleFunc("GET /admin/tokens", h.AdminTokens)
+		mux.HandleFunc("GET /admin/webhooks", h.AdminWebhooks)
+		mux.HandleFunc("GET /admin/doctor", h.AdminDoctor)
+		mux.HandleFunc("GET /admin/backup", h.AdminBackup)
 	}
 }
 
@@ -429,6 +434,35 @@ type AdminUserRow struct {
 	Email       string
 	Role        string
 	CreatedAt   time.Time
+}
+
+// AdminApprovedPageData holds data for the admin approved patterns page.
+type AdminApprovedPageData struct {
+	PageData
+}
+
+// AdminTokensPageData holds data for the admin tokens page.
+type AdminTokensPageData struct {
+	PageData
+	ServerAddr string
+}
+
+// AdminWebhooksPageData holds data for the admin webhooks page.
+type AdminWebhooksPageData struct {
+	PageData
+}
+
+// AdminDoctorPageData holds data for the admin doctor page.
+type AdminDoctorPageData struct {
+	PageData
+}
+
+// AdminBackupPageData holds data for the admin backup page.
+type AdminBackupPageData struct {
+	PageData
+	BackupURL    string
+	SyncInterval string
+	Retention    string
 }
 
 // docsSectionOrder defines the display order for documentation sections.
@@ -2071,6 +2105,80 @@ func (h *Handler) AdminUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "admin-users", data)
+}
+
+// requireAdmin checks that the current user is an authenticated admin.
+// Returns false (and writes a 403) if not authorized.
+func (h *Handler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	if h.authEnabled {
+		u := auth.UserFromContext(r.Context())
+		if u == nil || !u.IsAdmin() {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return false
+		}
+	}
+	return true
+}
+
+// AdminApproved renders the admin approved enrollment patterns page.
+func (h *Handler) AdminApproved(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	data := AdminApprovedPageData{
+		PageData: PageData{Title: "Approved Patterns", ActiveNav: "admin-approved"},
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "admin-approved", data)
+}
+
+// AdminTokens renders the admin tokens management page.
+func (h *Handler) AdminTokens(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	data := AdminTokensPageData{
+		PageData:   PageData{Title: "Tokens", ActiveNav: "admin-tokens"},
+		ServerAddr: h.serverAddr,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "admin-tokens", data)
+}
+
+// AdminWebhooks renders the admin webhooks management page.
+func (h *Handler) AdminWebhooks(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	data := AdminWebhooksPageData{
+		PageData: PageData{Title: "Webhooks", ActiveNav: "admin-webhooks"},
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "admin-webhooks", data)
+}
+
+// AdminDoctor renders the admin health check page.
+func (h *Handler) AdminDoctor(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	data := AdminDoctorPageData{
+		PageData: PageData{Title: "Health Check", ActiveNav: "admin-doctor"},
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "admin-doctor", data)
+}
+
+// AdminBackup renders the admin backup management page.
+func (h *Handler) AdminBackup(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	data := AdminBackupPageData{
+		PageData: PageData{Title: "Backup", ActiveNav: "admin-backup"},
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "admin-backup", data)
 }
 
 // License renders the license status page.

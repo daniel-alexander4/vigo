@@ -619,6 +619,10 @@ func run() error {
 	usersHandler := api.NewUsersHandler(userStore, authMethod)
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 
+	// Backup API handler.
+	serverRoot := filepath.Dir(configFile)
+	backupHandler := api.NewBackupHandler(configFile, serverRoot, dbDriver, cfg.Database.DSN, version, authMethod)
+
 	// Load workflow definitions and create engine.
 	workflowEngine := workflows.NewEngine(queries, agentSvc)
 	if err := workflowEngine.Load(workflowsDir); err != nil {
@@ -671,6 +675,7 @@ func run() error {
 		exportHandler.RegisterRoutes(mux)
 		usersHandler.RegisterRoutes(mux)
 		tokensHandler.RegisterRoutes(mux)
+		backupHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
 		}
@@ -725,12 +730,9 @@ func run() error {
 		exportHandler.RegisterRoutes(gwMux)
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
+		backupHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)
-		}
-		dbDriver := "sqlite"
-		if cfg.Database.Driver == "postgres" {
-			dbDriver = "postgres"
 		}
 		dbHandler := api.NewDatabaseHandler(sqlDB, queries, dbDriver, cfg.Database.DSN)
 		dbHandler.RegisterRoutes(gwMux)

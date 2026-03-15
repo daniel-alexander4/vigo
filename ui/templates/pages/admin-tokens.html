@@ -1,0 +1,163 @@
+{{template "base" .}}
+
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Tokens</h1>
+</div>
+
+<div class="card">
+    <div class="card__header">
+        <h2>Generate Bootstrap Token</h2>
+    </div>
+    <div class="card__body">
+        <p>Generate a one-time enrollment token for agent bootstrap.</p>
+        <button class="btn btn--primary" onclick="generateBootstrapToken()">Generate Token</button>
+        <div id="bootstrap-result" style="display:none" class="mt-4">
+            <pre><code id="bootstrap-command"></code></pre>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card__header">
+        <h2>API Tokens</h2>
+    </div>
+    <div class="card__body">
+        <form id="create-token-form" hx-boost="false" onsubmit="return createAPIToken(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="token-name">Name</label>
+                    <input type="text" id="token-name" name="name" required class="form-input" placeholder="ci-deploy">
+                </div>
+                <div class="form-group">
+                    <label for="token-expires">Expires In</label>
+                    <input type="text" id="token-expires" name="expires_in" class="form-input" placeholder="720h">
+                </div>
+            </div>
+            <button type="submit" class="btn btn--primary">Create Token</button>
+        </form>
+        <div id="token-result" style="display:none" class="mt-4">
+            <div class="badge badge--drifted">Copy this token now -- it will not be shown again</div>
+            <pre><code id="token-plaintext"></code></pre>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card__header">
+        <h2>Existing API Tokens</h2>
+    </div>
+    <div class="card__body">
+        <table class="table" id="tokens-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Created</th>
+                    <th>Expires</th>
+                    <th>Last Used</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="tokens-body">
+                <tr>
+                    <td colspan="5" class="text-center text-muted">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function formatDate(s) {
+    if (!s) return '';
+    var d = new Date(s);
+    return d.toISOString().slice(0, 10);
+}
+
+function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+}
+
+function loadTokens() {
+    fetch('/api/v1/auth/tokens')
+        .then(function(resp) { return resp.json(); })
+        .then(function(tokens) {
+            tokens = tokens || [];
+            var tbody = document.getElementById('tokens-body');
+            if (tokens.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No API tokens yet.</td></tr>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < tokens.length; i++) {
+                var t = tokens[i];
+                html += '<tr id="token-' + t.id + '">' +
+                    '<td>' + escapeHtml(t.name || '') + '</td>' +
+                    '<td>' + formatDate(t.created_at) + '</td>' +
+                    '<td>' + (t.expires_at ? formatDate(t.expires_at) : 'never') + '</td>' +
+                    '<td>' + (t.last_used_at ? formatDate(t.last_used_at) : 'never') + '</td>' +
+                    '<td><button class="btn btn--text btn--small btn--danger" data-token-id="' + t.id + '" onclick="deleteToken(this)">Delete</button></td>' +
+                    '</tr>';
+            }
+            tbody.innerHTML = html;
+        })
+        .catch(function() {
+            document.getElementById('tokens-body').innerHTML =
+                '<tr><td colspan="5" class="text-center text-muted">Failed to load tokens.</td></tr>';
+        });
+}
+
+async function generateBootstrapToken() {
+    var resp = await fetch('/api/v1/tokens', { method: 'POST' });
+    if (resp.ok) {
+        var data = await resp.json();
+        var cmd = 'curl -fsSL http://{{.ServerAddr}}/bootstrap | HOBNOB_TOKEN=' + data.token + ' bash';
+        document.getElementById('bootstrap-command').textContent = cmd;
+        document.getElementById('bootstrap-result').style.display = 'block';
+    } else {
+        var data = await resp.json().catch(function() { return {}; });
+        alert(data.error || data.message || 'Failed to generate token');
+    }
+}
+
+async function createAPIToken(e) {
+    e.preventDefault();
+    var form = e.target;
+    var body = { name: form.name.value };
+    if (form.expires_in.value) {
+        body.expires_in = form.expires_in.value;
+    }
+    var resp = await fetch('/api/v1/auth/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (resp.ok) {
+        var data = await resp.json();
+        document.getElementById('token-plaintext').textContent = data.token;
+        document.getElementById('token-result').style.display = 'block';
+        form.reset();
+        loadTokens();
+    } else {
+        var data = await resp.json().catch(function() { return {}; });
+        alert(data.error || data.message || 'Failed to create token');
+    }
+}
+
+async function deleteToken(btn) {
+    var id = btn.dataset.tokenId;
+    if (!confirm('Delete this API token?')) return;
+    var resp = await fetch('/api/v1/auth/tokens/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (resp.ok) {
+        document.getElementById('token-' + id).remove();
+    } else {
+        var data = await resp.json().catch(function() { return {}; });
+        alert(data.error || data.message || 'Failed to delete token');
+    }
+}
+
+loadTokens();
+</script>
+{{end}}

@@ -184,8 +184,11 @@ Two roles are supported:
 | Dispatch tasks | Yes | No |
 | Run workflows | Yes | No |
 | Execute queries | Yes | No |
+| Manage enrollment patterns | Yes | No |
 | Manage webhooks | Yes | No |
 | Manage users | Yes | No |
+| Run health checks | Yes | No |
+| Create/download backups | Yes | No |
 | Create/revoke API tokens | Yes | Yes (own only) |
 
 When `auth.method` is `none`, all users have full access.

@@ -170,6 +170,16 @@ hobnob-backup-2026-03-13T14:30:00Z.tar.gz
 └── server.yaml
 ```
 
+### Web UI
+
+The **Admin > Backup** page provides a visual overview of backup configuration and manual controls:
+
+- **Backup status** — shows whether Litestream replication is configured and running.
+- **Create Snapshot** — triggers an on-demand backup via `POST /api/v1/backup/snapshot`. Equivalent to `hobnobcli backup create`.
+- **Download Backup** — downloads the latest snapshot as a `.tar.gz` archive via `GET /api/v1/backup/download`.
+
+Both actions require admin authentication. Restore remains CLI-only (`hobnobcli backup restore`) because it requires stopping the server first.
+
 ### Scheduled Snapshots
 
 Use cron for periodic snapshots. Litestream handles continuous replication; manual snapshots are for explicit recovery points. See [Disaster Recovery](disaster-recovery.md) for full server failure recovery procedures.

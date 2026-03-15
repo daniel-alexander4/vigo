@@ -779,6 +779,32 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 | `enrolled_at` | string | RFC 3339 enrollment time |
 | `uptime` | int | System uptime in seconds |
 
+---
+
+## Backup
+
+### POST /api/v1/backup/snapshot
+
+Create an on-demand backup snapshot. Requires admin authentication.
+
+**Response (201 Created):**
+
+```json
+{
+  "path": "/backup/hobnob-20260315T140000Z.tar.gz",
+  "size": 4218924,
+  "created_at": "2026-03-15T14:00:00Z"
+}
+```
+
+### GET /api/v1/backup/download
+
+Download the latest backup archive as a `.tar.gz` file. Requires admin authentication.
+
+**Response:** Binary stream with `Content-Type: application/gzip` and `Content-Disposition: attachment; filename="hobnob-backup.tar.gz"`.
+
+---
+
 ### GET /api/v1/export/oscal
 
 Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `findings` array is currently empty; future versions will map Hobnob compliance data to OSCAL control findings.
