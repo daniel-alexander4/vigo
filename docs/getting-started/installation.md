@@ -77,37 +77,6 @@ docker compose up -d
 
 Your config, database, secrets, and TLS certs persist in `/srv/hobnob/` across upgrades.
 
-### Upgrading from Source
-
-For development builds, use the upgrade script:
-
-```bash
-# Build server image from source and restart
-sudo scripts/upgrade.sh --build
-
-# Also cross-compile agent binaries (linux amd64 + arm64)
-sudo scripts/upgrade.sh --build --cross
-
-# Cross-compile a specific platform
-sudo scripts/upgrade.sh --build --cross arm64
-
-# Cross-compile all supported platforms
-sudo scripts/upgrade.sh --build --cross all
-```
-
-Available cross-compile targets:
-
-| Target | Platform | Method |
-|--------|----------|--------|
-| `amd64` | Linux x86_64 | musl static (in Docker) |
-| `arm64` | Linux aarch64 | musl static (in Docker) |
-| `freebsd` | FreeBSD x86_64 | cross container |
-| `windows` | Windows x86_64 | cross container |
-| `darwin` | macOS x86_64 + arm64 | requires osxcross |
-| `all` | All of the above | |
-
-The upgrade script stops containers, builds fresh binaries, rebuilds the Docker image, restarts, copies the host CLI and agent binary, and runs a freshness check. No local Rust toolchain is required — cross-compilation runs inside Docker containers.
-
 ## CLI
 
 The container automatically installs `hobnobcli` and `hnbvi` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
