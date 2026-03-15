@@ -131,6 +131,26 @@ touch /var/lib/hobnob/flags/beta-features
   when: "port_listening(8080)"
 ```
 
+## Trigger Guard: changed
+
+The special keyword `changed` in a `when:` expression makes a resource only execute when triggered by `notify`, `subscribes`, or `watch_secret`. It is skipped on normal check-ins.
+
+```yaml
+- name: restart-app
+  type: exec
+  command: "systemctl restart myapp"
+  subscribes: [app-config]
+  when: "changed"
+```
+
+`changed` can be combined with other expressions:
+
+```yaml
+when: "changed && os_family('debian')"
+```
+
+This is the standard way to create a resource that only runs in reaction to another resource changing, similar to Puppet's `refreshonly` or Ansible's handler model.
+
 ## Variables in When
 
 When expressions can reference variables that resolve to boolean names. The server resolves variable names at check-in time:

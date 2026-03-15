@@ -222,6 +222,24 @@ resources:
 
 Each script reads stdin and writes to stdout. Non-zero exit fails the resource. See [file executor: stream_edit](../executors/file.md#stream-edit) for full reference.
 
+## timeout
+
+Every resource has an implicit execution timeout. If the executor doesn't complete within the limit, the resource fails with "execution timed out." Override per-resource with the `timeout` parameter (seconds):
+
+```yaml
+- name: install-large-package
+  type: package
+  package: texlive-full
+  timeout: 600    # 10 minutes
+```
+
+Default timeouts by resource type:
+
+| Type | Default |
+|------|---------|
+| `exec`, `archive`, `custom`, `package`, `repository` | 300s (5 min) |
+| All others (`file`, `service`, `user`, etc.) | 60s |
+
 ## Related
 
 - [Config Format](config-format.md) — Module and variable structure

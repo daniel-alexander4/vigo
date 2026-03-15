@@ -293,9 +293,27 @@ fn execute_resource(
     run_id: &str,
     traits: &serde_json::Value,
 ) -> ResourceResult {
+    // "when: changed" — only run when triggered by notify/subscribes/watch_secret.
+    // Can be combined with other expressions: "when: changed && os_family('debian')"
+    let triggered = node.params.get("_triggered").map(|s| s == "true").unwrap_or(false);
+    if node.when.contains("changed") && !triggered {
+        return ResourceResult {
+            module_name: String::new(),
+            resource_type: node.resource_type.clone(),
+            resource_name: node.name.clone(),
+            action: Action::Skipped,
+            changed: false,
+            error: None,
+            duration_ms: 0,
+            ..Default::default()
+        };
+    }
+
     // Check when expression (agent-side builtins).
-    if !node.when.is_empty() {
-        match crate::policy::when::parse(&node.when) {
+    // Strip "changed" (already handled above) so the parser doesn't choke on it.
+    let when_expr = node.when.replace("changed", "true");
+    if !when_expr.is_empty() && when_expr != "true" {
+        match crate::policy::when::parse(&when_expr) {
             Ok(expr) => {
                 // Evaluate with builtin function resolver and no var substitution
                 // (vars already resolved by eval_bundle).
@@ -422,7 +440,7 @@ fn execute_resource(
 
     // Determine execution timeout.
     let default_timeout: u64 = match node.resource_type.as_str() {
-        "exec" | "archive" | "custom" => 300,
+        "exec" | "archive" | "custom" | "package" | "repository" => 300,
         _ => 60,
     };
     let timeout_secs: u64 = node
@@ -1913,5 +1931,40 @@ mod tests {
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results.len(), 1);
         assert!(results[0].error.is_none());
+    }
+
+    #[test]
+    fn when_changed_skips_untriggered_resource() {
+        let mut cache = ResultCache::new(5);
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("exec".to_string(), Box::new(MockExecutor {
+            action: Action::Created,
+            changed: true,
+        }));
+
+        // A resource with when: "changed" and no trigger should be skipped.
+        let modules = vec![Module {
+            name: "app".to_string(),
+            resource_type: String::new(),
+            resources: vec![Resource {
+                name: "set-password".to_string(),
+                r#type: "exec".to_string(),
+                params: {
+                    let mut p = HashMap::new();
+                    p.insert("name".to_string(), "set-password".to_string());
+                    p.insert("command".to_string(), "reset-password".to_string());
+                    p
+                },
+                when: "changed".to_string(),
+            }],
+            depends_on: vec![],
+            notify: vec![],
+            subscribes: vec![],
+        }];
+
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into() };
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].action, Action::Skipped, "when: changed should skip when not triggered");
     }
 }

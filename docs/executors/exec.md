@@ -16,7 +16,6 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `user` | No | -- | Run command as a different user (Unix only, via `su`). |
 | `environment` | No | -- | Comma-separated `KEY=VALUE` environment variables. |
 | `returns` | No | `0` | Comma-separated acceptable exit codes (e.g., `0,1,2`). |
-| `refreshonly` | No | `false` | Only execute if triggered by `notify`/`subscribes`. |
 | `logoutput` | No | `true` | When `false`, suppress stdout/stderr in error messages. |
 
 ## States
@@ -104,8 +103,24 @@ resources:
 
 Cross-platform. Commands are executed via `sh -c` on Unix and `cmd /C` on Windows.
 
+### Trigger-only execution
+
+Use `when: "changed"` to only run the command when triggered by `notify`, `subscribes`, or `watch_secret`:
+
+```yaml
+resources:
+  - name: Set Grafana admin password
+    type: exec
+    command: grafana-cli admin reset-admin-password --password-from-stdin
+    stdin: "secret:grafana/admin-password"
+    watch_secret: ["grafana/admin-password"]
+    when: "changed"
+```
+
+The command is skipped on normal check-ins and only runs when the watched secret is rotated or when another resource triggers it via notify. `when: "changed"` can be combined with other expressions: `when: "changed && os_family('debian')"`.
+
 ## Notes
 
 - The `stdin` and `secret_file` parameters are mutually exclusive. Using both is an error.
 - `secret_file` creates a temporary file with mode 0600, writes the secret, replaces `{{secret_file}}` in the command, runs the command, then deletes the file. The secret never appears in command arguments or logs.
-- If no guard is provided, the command always runs (always returns `changed: true`).
+- If no guard is provided and no `when: "changed"` is set, the command always runs (always returns `changed: true`).

@@ -13,7 +13,7 @@
 //! - `user`: run command as a different user via `su` (Unix only, and guards)
 //! - `environment`: comma-separated `KEY=VALUE` env vars, prepended via `env` (and guards)
 //! - `returns`: comma-separated acceptable exit codes (default: `"0"`)
-//! - `refreshonly`: when `"true"`, only execute if triggered by notify/subscribes
+//! - Use `when: "changed"` on the resource to only execute when triggered by notify/subscribes/watch_secret
 //! - `logoutput`: when `"false"`, suppress stdout/stderr from error messages
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
@@ -221,23 +221,8 @@ fn execute_exec(
         }
     }
 
-    // Phase 2A: refreshonly — only execute when triggered.
-    let refreshonly = params
-        .get("refreshonly")
-        .map(|s| s == "true")
-        .unwrap_or(false);
-
-    // Skip all guards when triggered by notify/subscribes.
+    // Skip all guards when triggered by notify/subscribes/watch_secret.
     let triggered = params.get("_triggered").map(|s| s == "true").unwrap_or(false);
-
-    if refreshonly {
-        if !triggered {
-            result.action = Action::Skipped;
-            result.changed = false;
-            return Ok(());
-        }
-        // When refreshonly and triggered, skip ALL guards and run the command.
-    }
 
     // Exec resources with subscribes but no guards only run when triggered.
     let has_guards = params.contains_key("creates")
@@ -258,8 +243,8 @@ fn execute_exec(
         return Ok(());
     }
 
-    // Evaluate guards (skipped when triggered or refreshonly+triggered).
-    if !triggered && !refreshonly {
+    // Evaluate guards (skipped when triggered).
+    if !triggered {
         // Guard 1: creates — skip if file exists.
         if let Some(creates) = params.get("creates") {
             if !creates.is_empty() && Path::new(creates).exists() {
@@ -823,73 +808,6 @@ mod tests {
 
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("invalid exit code"));
-    }
-
-    // ---- Phase 2A tests ----
-
-    #[test]
-    fn refreshonly_skips_when_not_triggered() {
-        let exec = ExecExecutor::new();
-        let result = exec.execute(
-            &make_params(&[
-                ("command", "echo hello"),
-                ("refreshonly", "true"),
-            ]),
-            false,
-        );
-
-        assert_eq!(result.action, Action::Skipped);
-        assert!(!result.changed);
-        assert!(result.error.is_none());
-    }
-
-    #[test]
-    fn refreshonly_runs_when_triggered() {
-        let mock = MockRunner::new(vec![ok_output("done")]);
-
-        let exec = ExecExecutor {
-            runner: Box::new(mock),
-        };
-        let result = exec.execute(
-            &make_params(&[
-                ("command", "systemctl restart app"),
-                ("refreshonly", "true"),
-                ("_triggered", "true"),
-            ]),
-            false,
-        );
-
-        assert_eq!(result.action, Action::Created);
-        assert!(result.changed);
-        assert!(result.error.is_none());
-    }
-
-    #[test]
-    fn refreshonly_skips_guards_when_triggered() {
-        // With refreshonly + triggered, guards should be skipped entirely.
-        // Provide an unless guard that would normally cause a skip.
-        let mock = MockRunner::new(vec![ok_output("done")]);
-        let calls = mock.calls.clone();
-
-        let exec = ExecExecutor {
-            runner: Box::new(mock),
-        };
-        let result = exec.execute(
-            &make_params(&[
-                ("command", "echo hello"),
-                ("refreshonly", "true"),
-                ("_triggered", "true"),
-                ("unless", "true"),  // would normally skip
-            ]),
-            false,
-        );
-
-        assert_eq!(result.action, Action::Created);
-        assert!(result.changed);
-
-        // Only one call (the main command), guard was skipped.
-        let calls = calls.lock().unwrap();
-        assert_eq!(calls.len(), 1);
     }
 
     // ---- Phase 3A tests ----
