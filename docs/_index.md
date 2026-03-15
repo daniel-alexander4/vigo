@@ -4,7 +4,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 
 ## Getting Started
 
-- [Installation](getting-started/installation.md) — Install the server, CLI, and agent
+- [Installation](getting-started/installation.md) — Docker setup, first boot, directory layout
 - [Quickstart](getting-started/quickstart.md) — 10-minute first-thrall walkthrough
 - [Bootstrap](getting-started/bootstrap.md) — Agent enrollment flow
 - [First Module](getting-started/first-module.md) — Write your first .hnb module
@@ -22,32 +22,38 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Compiled Promises](concepts/compiled-promises.md) — Bundle signing, TTL, offline convergence
 - [Compliance](concepts/compliance.md) — Per-resource to fleet-wide compliance
 - [Secrets](concepts/secrets.md) — Three backends and the secret: prefix
-- [Federation](concepts/federation.md) — Hub-spoke scaling
-- [License](concepts/license.md) — Free tier and enforcement stages
 - [Guardrails](concepts/guardrails.md) — Self-protection for agent and server paths
 - [Custom Executors](concepts/custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](concepts/custom-traits.md) — Custom trait collector scripts
 
 ## Reference
 
-- [Executors](executors/_index.md) — All 59 resource executors
-- [Trait Collectors](traits/_index.md) — All 27 trait collectors
+- [Executors](executors/_index.md) — All resource executors
+- [Trait Collectors](traits/_index.md) — All trait collectors
 - [CLI Reference](cli/_index.md) — hobnobcli commands
 - [API Reference](api/_index.md) — gRPC and REST APIs
 
 ## Operations
 
+- [Config Publishing](operations/config-publish.md) — Validate, sync, and reload
+- [Authentication](operations/authentication.md) — None, OIDC, isowebauth
 - [Backup & Recovery](operations/backup.md) — Litestream WAL replication
 - [Email Notifications](operations/smtp.md) — SMTP events and digest
 - [Prometheus Metrics](operations/metrics.md) — Metrics reference
 - [Database](operations/database.md) — SQLite, Postgres, schema, retention
 - [FleetIndex](operations/fleet-index.md) — In-memory index internals
-- [Tuning](operations/tuning.md) — Tuning parameters reference
-- [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
-- [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting on check-in RPCs
+- [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting
 - [Maintenance Windows](operations/maintenance-windows.md) — Per-thrall and global change freeze
 - [Drift Alerting](operations/drift-alerting.md) — Fleet compliance threshold monitoring
 - [Audit Log](operations/audit.md) — Unified audit trail
+- [Compliance Export](operations/compliance-export.md) — SIEM, CMDB, OSCAL feeds
+- [Tuning](operations/tuning.md) — Tuning parameters reference
+- [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
+
+## Scaling
+
+- [Federation](concepts/federation.md) — Hub-spoke scaling
+- [License](concepts/license.md) — Free tier, pricing, and enforcement stages
 
 ## Web UI
 
@@ -65,7 +71,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 ## AI Assistant
 
 - [Providers](ai/providers.md) — Ollama, Claude, OpenAI
-- [Tools](ai/tools.md) — 14 LLM tools reference
+- [Tools](ai/tools.md) — LLM tools reference
 - [Context Modes](ai/context-modes.md) — tools, prefetch, auto
 
 ## Examples
@@ -81,8 +87,8 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 ## Migration
 
 - [Overview](migration/_index.md) — Comparison table and guide index
-- [From Puppet](migration/puppet.md) — Closest conceptual match (pull-based, catalog, resources, Facter)
-- [From Ansible](migration/ansible.md) — Push-to-pull shift, Jinja2 to Go templates, handlers to notify
-- [From Chef](migration/chef.md) — Ruby DSL to YAML, 15 attribute levels to 3, cookbooks to modules
+- [From Puppet](migration/puppet.md) — Pull-based, catalog, resources, Facter
+- [From Ansible](migration/ansible.md) — Push-to-pull shift, handlers to notify
+- [From Chef](migration/chef.md) — Ruby DSL to YAML, cookbooks to modules
 - [From Salt](migration/salt.md) — Both YAML, Pillar to vars, Grains to Traits
-- [From CFEngine](migration/cfengine.md) — Promise theory heritage, classes to when:, bundles to modules
+- [From CFEngine](migration/cfengine.md) — Promise theory, classes to when:
