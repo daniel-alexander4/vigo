@@ -150,6 +150,11 @@ Examples:
 			return nil
 		}
 
+		if !confirmAction("Restore from this backup? Current data will be overwritten.") {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		fmt.Printf("\nRestoring to: %s\n", targetDir)
 		if dbOnly {
 			fmt.Println("  Mode: database only")

@@ -86,6 +86,11 @@ var webhooksDeleteCmd = &cobra.Command{
 	Short: "Unregister a webhook endpoint so it stops receiving events",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if !confirmAction("Delete this webhook endpoint?") {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		client := newAPIClient()
 		if err := client.delete("/api/v1/webhooks/"+args[0], nil); err != nil {
 			return err

@@ -36,6 +36,11 @@ var configRollbackCmd = &cobra.Command{
 		}
 
 		version := args[0]
+		if !confirmAction("Roll back config to this version? This affects all thralls.") {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		if err := client.post("/api/v1/config/rollback/"+version, nil, nil); err != nil {
 			return err
 		}

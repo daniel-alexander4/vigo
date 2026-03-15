@@ -114,6 +114,11 @@ var thrallsRevokeCmd = &cobra.Command{
 	Short: "Block a thrall from checking in and receiving policy updates",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if !confirmAction("Revoke this thrall? It will be blocked from checking in.") {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		client := newAPIClient()
 		if err := client.post("/api/v1/thralls/"+args[0]+"/revoke", nil, nil); err != nil {
 			return err
@@ -128,6 +133,11 @@ var thrallsDeleteCmd = &cobra.Command{
 	Short: "Permanently remove a thrall, its run history, and traits from the server",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if !confirmAction("Delete this thrall and all its history? This cannot be undone.") {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		client := newAPIClient()
 		if err := client.delete("/api/v1/thralls/"+args[0], nil); err != nil {
 			return err

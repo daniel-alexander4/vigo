@@ -4,6 +4,9 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 )
@@ -26,4 +29,13 @@ func formatTimestamp(ts string) string {
 	}
 	// Return raw if unparseable, trimming any trailing Zs
 	return strings.TrimSpace(ts)
+}
+
+// confirmAction prompts the user for confirmation before a destructive operation.
+// Returns true if the user types "y" or "yes". Skips the prompt if --force is set.
+func confirmAction(msg string) bool {
+	fmt.Printf("%s [y/N] ", msg)
+	reader := bufio.NewReader(os.Stdin)
+	answer, _ := reader.ReadString('\n')
+	return strings.TrimSpace(strings.ToLower(answer)) == "y" || strings.TrimSpace(strings.ToLower(answer)) == "yes"
 }

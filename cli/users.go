@@ -121,6 +121,11 @@ var usersDeleteCmd = &cobra.Command{
 			return fmt.Errorf("user %q not found", userUsername)
 		}
 
+		if !confirmAction(fmt.Sprintf("Delete user %q? This cannot be undone.", userUsername)) {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		if err := client.delete("/api/v1/users/"+userID, nil); err != nil {
 			return err
 		}

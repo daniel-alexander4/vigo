@@ -347,6 +347,11 @@ func runFederationSpokePush(cmd *cobra.Command, args []string) error {
 }
 
 func runFederationReassign(cmd *cobra.Command, args []string) error {
+	if !confirmAction("Reassign this thrall to a different spoke?") {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
 	client := newAPIClient()
 	thrallID := args[0]
 	fromSpoke, _ := cmd.Flags().GetString("from")
@@ -376,6 +381,11 @@ func runFederationReassign(cmd *cobra.Command, args []string) error {
 }
 
 func runFederationDrain(cmd *cobra.Command, args []string) error {
+	if !confirmAction("Drain all thralls from this spoke? They will be migrated to other spokes.") {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
 	client := newAPIClient()
 	spokeID := args[0]
 	toSpoke, _ := cmd.Flags().GetString("to")

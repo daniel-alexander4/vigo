@@ -213,6 +213,11 @@ func runSecretsGet(cmd *cobra.Command, args []string) error {
 }
 
 func runSecretsDelete(cmd *cobra.Command, args []string) error {
+	if !confirmAction(fmt.Sprintf("Delete secret %q? This cannot be undone.", args[0])) {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
 	provider, err := newLocalProvider(cmd)
 	if err != nil {
 		return err

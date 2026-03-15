@@ -29,6 +29,11 @@ var configFreezeCmd = &cobra.Command{
 			return fmt.Errorf("invalid --until value: must be RFC3339 timestamp or duration (e.g., 24h)")
 		}
 
+		if !confirmAction(fmt.Sprintf("Freeze config publishes until %s?", freezeUntil.Format(time.RFC3339))) {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		client := newAPIClient()
 		req := map[string]string{"freeze_until": freezeUntil.Format(time.RFC3339)}
 		if err := client.post("/api/v1/config/freeze", req, nil); err != nil {

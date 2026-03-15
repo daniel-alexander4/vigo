@@ -106,10 +106,7 @@ on large databases. The server remains available during VACUUM.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
 		if !force {
-			fmt.Print("This will rewrite the entire database file. Continue? [y/N] ")
-			reader := bufio.NewReader(os.Stdin)
-			answer, _ := reader.ReadString('\n')
-			if strings.TrimSpace(strings.ToLower(answer)) != "y" {
+			if !confirmAction("This will rewrite the entire database file. Continue?") {
 				fmt.Println("Cancelled.")
 				return nil
 			}
@@ -219,6 +216,7 @@ tokens, users, audit history. This action cannot be undone.`,
 				return nil
 			}
 		}
+
 
 		// Get database path from server stats.
 		client := newAPIClient()

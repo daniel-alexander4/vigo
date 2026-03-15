@@ -24,6 +24,11 @@ var rollbackCmd = &cobra.Command{
 			return fmt.Errorf("specify only one of --run or --file, not both")
 		}
 
+		if !confirmAction("Roll back this thrall's file resources to the previous state?") {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+
 		client := newAPIClient()
 		body := map[string]string{
 			"thrall_id": args[0],

@@ -22,6 +22,13 @@ var pushCmd = &cobra.Command{
 			thrallID = args[0]
 		}
 
+		if all {
+			if !confirmAction("Force check-in for ALL thralls?") {
+				fmt.Println("Cancelled.")
+				return nil
+			}
+		}
+
 		client := newAPIClient()
 		var resp struct {
 			ThrallsNotified int32 `json:"thrallsNotified"`
