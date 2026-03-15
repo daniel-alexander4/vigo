@@ -1,0 +1,13 @@
+{{define "docs-base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hobnob Docs - {{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
+</head>
+<body>
+    {{block "docs-page" .}}{{end}}
+</body>
+</html>
+{{end}}

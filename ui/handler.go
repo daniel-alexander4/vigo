@@ -733,7 +733,7 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 		NavTree:  h.docsNav,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "docs", data)
+	h.renderer.RenderDocs(w, "docs", data)
 }
 
 // DocsPage renders an individual docs page from disk.
@@ -823,7 +823,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		CurrentSection: currentSection,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "docs", data)
+	h.renderer.RenderDocs(w, "docs", data)
 }
 
 // setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.

@@ -1325,13 +1325,12 @@ body {
     margin-right: 4px;
 }
 
-/* === Docs Layout === */
+/* === Docs Layout (standalone page, no dashboard chrome) === */
 .docs-layout {
     display: grid;
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 280px 1fr;
     gap: 0;
-    min-height: calc(100vh - 64px);
-    margin: -32px -40px;
+    min-height: 100vh;
 }
 
 .docs-nav {
@@ -1348,6 +1347,9 @@ body {
     padding: 0 20px 16px;
     border-bottom: 1px solid var(--color-border);
     margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .docs-nav__title {
@@ -1358,6 +1360,16 @@ body {
 }
 
 .docs-nav__title:hover {
+    color: var(--color-brand);
+}
+
+.docs-nav__back {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    text-decoration: none;
+}
+
+.docs-nav__back:hover {
     color: var(--color-brand);
 }
 

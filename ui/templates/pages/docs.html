@@ -1,8 +1,11 @@
-{{define "page-content"}}
+{{template "docs-base" .}}
+
+{{define "docs-page"}}
 <div class="docs-layout">
     <aside class="docs-nav">
         <div class="docs-nav__header">
             <a href="/docs" class="docs-nav__title">Documentation</a>
+            <a href="/" class="docs-nav__back">&larr; Dashboard</a>
         </div>
         <div class="docs-nav__search">
             <input type="text" id="docs-search" class="docs-nav__search-input" placeholder="Search docs..." autocomplete="off" spellcheck="false">
