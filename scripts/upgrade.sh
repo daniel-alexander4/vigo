@@ -45,10 +45,12 @@ echo ""
 echo "Waiting for server..."
 timeout 60 docker compose logs -f hobnob 2>&1 | grep -m1 "server ready" || true
 
-# Update host CLI binaries from the new container.
-echo "Updating host CLI..."
+# Update host binaries from the new container.
+echo "Updating host binaries..."
 docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
 ln -sf hobnobcli /usr/local/bin/hnbvi
+docker cp hobnob:/dist/agent/linux/amd64/hobnob /usr/local/bin/hobnob
+systemctl restart hobnob-thrall 2>/dev/null || true
 
 echo ""
 docker compose ps
