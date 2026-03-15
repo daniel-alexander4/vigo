@@ -8,6 +8,7 @@ Core concepts that explain how Hobnob works.
 - [Resource Language](resource-language.md) — defaults, foreach, case/match, conditional_block
 - [When Expressions](when-expressions.md) — Boolean logic and 15 builtin functions
 - [Templates](templates.md) — Go templates in content: attributes
+- [Convergence Walkthrough](convergence-walkthrough.md) — End-to-end example with timing and traffic flow
 - [Check-in Lifecycle](check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
 - [Compiled Promises](compiled-promises.md) — Bundle signing, TTL, offline convergence
 - [Compliance](compliance.md) — Per-resource to fleet-wide compliance

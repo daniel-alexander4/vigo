@@ -18,6 +18,7 @@ Hobnob is a configuration management system. Agents on managed nodes (thralls) p
 - [Resource Language](concepts/resource-language.md) — defaults, foreach, case/match, conditional_block
 - [When Expressions](concepts/when-expressions.md) — Boolean logic and 15 builtin functions
 - [Templates](concepts/templates.md) — Go templates in content: attributes
+- [Convergence Walkthrough](concepts/convergence-walkthrough.md) — End-to-end example with timing and traffic flow
 - [Check-in Lifecycle](concepts/check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
 - [Compiled Promises](concepts/compiled-promises.md) — Bundle signing, TTL, offline convergence
 - [Compliance](concepts/compliance.md) — Per-resource to fleet-wide compliance
