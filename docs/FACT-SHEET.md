@@ -78,7 +78,7 @@ Platform-specific bootstrap for Windows (PowerShell), macOS (launchd), FreeBSD (
 
 ## Platform Support
 
-One agent binary, seven operating system families, 71 built-in executors.
+One agent binary, seven operating system families, 74 built-in executors.
 
 | Platform | Init System | Package Manager | Fully Supported |
 |----------|-------------|-----------------|:---------------:|
@@ -96,7 +96,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed via gateway proxy o
 
 ## Executors
 
-71 built-in resource types, organized by scope:
+74 built-in resource types, organized by scope:
 
 **System:** package, service, user, group, cron, hostname, timezone, sysctl, firewall, kernel_module, mount, swap, reboot, selinux, alternatives, tmpfile, logrotate, systemd_dropin
 
@@ -108,7 +108,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed via gateway proxy o
 
 **Language packages:** pip, gem, npm
 
-**Windows:** registry, acl, windows_feature, windows_env, reboot_windows, powershell, iis_site, iis_app_pool, certificate_windows, domain_membership, local_security_policy, windows_update
+**Windows:** registry, acl, windows_feature, windows_env, reboot_windows, powershell, iis_site, iis_app_pool, certificate_windows, domain_membership, local_security_policy, windows_update, windows_defender, smb_share, service_recovery_windows
 
 **Network devices:** network_config, cisco_vlan, cisco_interface, cisco_acl, junos_interface, network_ntp, network_syslog, network_snmp, network_user, network_banner
 
@@ -180,7 +180,7 @@ Built-in AI assistant accessible from every page of the web UI:
 | Server binary | Single Go binary |
 | Agent binary | ~5 MB static (Linux amd64) |
 | Agent memory | Minimal — no runtime, no GC |
-| Built-in executors | 71 |
+| Built-in executors | 74 |
 | Trait collectors | 27 (with platform variants) |
 | Supported OS families | 7 |
 | Database | SQLite (embedded, zero-admin) |

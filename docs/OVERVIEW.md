@@ -46,7 +46,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 - Self-protection guardrails block any resource that targets the agent binary, server binary, config directory, or service unit. These checks cannot be bypassed.
 - Configuration is YAML only. One format, one directory, one publish command. No API writes, no database config, no UI mutations.
 
-## Executors (71 built-in)
+## Executors (74 built-in)
 
 ### Cross-Platform (24)
 
@@ -62,11 +62,13 @@ Each dispatches to the platform-native backend automatically. Write `type: servi
 
 tmpfile, logrotate, alternatives, selinux, systemd_dropin
 
-### Windows-Only (19)
+### Windows-Only (22)
 
-**System:** service, package, user, firewall, cron, hostname, timezone, registry, acl, windows_feature, windows_env, reboot_windows, powershell, local_security_policy, domain_membership, windows_update, certificate_windows
+**System:** service, package, user, firewall, cron, hostname, timezone, registry, acl, windows_feature, windows_env, reboot_windows, powershell, local_security_policy, domain_membership, windows_update, certificate_windows, windows_defender, service_recovery_windows
 
 **IIS:** iis_site, iis_app_pool
+
+**Network:** smb_share
 
 ### Network Device (11)
 
