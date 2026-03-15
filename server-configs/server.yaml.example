@@ -160,12 +160,16 @@ watcher:
 #     - id: dc2
 #       addr: "spoke2.example.com:1530"
 #       patterns: ["*.dc2.*"]
+#   auto_failover:
+#     enabled: true                              # auto-drain unhealthy spokes
+#     threshold: 3                               # consecutive failures before drain
+#     interval: "30s"                            # health check interval
 #
 # --- Spoke: handles agent check-ins only ---
 # federation:
 #   role: spoke
 #   spoke_id: "dc1"
-#   hub_addr: "hub.example.com:1530"
+#   hub_addr: "hub.example.com:1530"            # enables spoke→hub status reporting
 
 
 # ── AI Assistant ──────────────────────────────────────────────────────────

@@ -224,6 +224,13 @@ func (f *FleetIndex) ComplianceSummary() ComplianceCounters {
 	return f.compliance
 }
 
+// ComplianceCounts returns the compliance breakdown as flat values.
+// Satisfies the federation.ComplianceSource interface.
+func (f *FleetIndex) ComplianceCounts() (total, compliant, drifted, failing, stale, unknown int) {
+	c := f.ComplianceSummary()
+	return c.Total, c.Compliant, c.Drifted, c.Failing, c.Stale, c.Unknown
+}
+
 // SnapshotCompliance records a compliance snapshot for the sparkline.
 func (f *FleetIndex) SnapshotCompliance() {
 	f.mu.RLock()

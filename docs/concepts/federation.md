@@ -79,13 +79,45 @@ Merge results
 Return to CLI
 ```
 
+## Config Sync
+
+When `hobnobcli config publish` runs on the hub, the config is automatically pushed to all spokes. The hub creates a tar.gz of the `.live/` directory and sends it via the `SyncConfig` RPC. Spokes extract the archive, overwrite their local `.live/` directory, and reload. This is best-effort — if a spoke is unreachable, it's skipped and logged.
+
 ## Spoke Health
 
-The hub monitors spoke health via periodic gRPC health checks. The web UI shows:
+The hub monitors spoke health via periodic gRPC probes. Spokes can also push their status to the hub if `hub_addr` is configured. The web UI shows:
 - Spoke status (online/offline)
 - Per-spoke compliance breakdown
 - Per-spoke latency metrics
 - Thrall count per spoke
+
+### Spoke Status Reporting
+
+Spokes can proactively report their status to the hub:
+
+```yaml
+federation:
+  role: spoke
+  spoke_id: "dc1"
+  hub_addr: "hub.example.com:1530"  # enables spoke→hub reporting
+```
+
+The spoke sends compliance metrics to the hub every 30 seconds. If the hub is unreachable, the spoke continues operating normally.
+
+### Auto-Failover
+
+The hub can automatically drain unhealthy spokes:
+
+```yaml
+federation:
+  role: hub
+  auto_failover:
+    enabled: true
+    threshold: 3      # consecutive failures before drain (default 3)
+    interval: "30s"   # health check interval (default 30s)
+```
+
+When a spoke fails `threshold` consecutive health checks (default: 3 failures = 90 seconds), the hub automatically drains all its thralls to other spokes based on hostname pattern matching. When the spoke recovers, it's marked healthy again and can accept new thralls.
 
 ## Thrall Reassignment
 

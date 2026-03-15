@@ -31,10 +31,20 @@ const (
 // FederationSection configures hub-spoke federation. Omit entirely
 // (or set role: standalone) for single-server deployments.
 type FederationSection struct {
-	Role    FederationRole `yaml:"role"`     // standalone (default), hub, spoke
-	SpokeID string         `yaml:"spoke_id"` // required for spoke mode
-	HubAddr string         `yaml:"hub_addr"` // hub gRPC address (for future spoke→hub communication)
-	Spokes  []SpokeEntry   `yaml:"spokes"`   // hub-only: spoke definitions
+	Role         FederationRole     `yaml:"role"`          // standalone (default), hub, spoke
+	SpokeID      string             `yaml:"spoke_id"`      // required for spoke mode
+	HubAddr      string             `yaml:"hub_addr"`      // hub gRPC address (for spoke→hub status reporting)
+	Spokes       []SpokeEntry       `yaml:"spokes"`        // hub-only: spoke definitions
+	AutoFailover AutoFailoverConfig `yaml:"auto_failover"` // hub-only: automatic spoke failover
+}
+
+// AutoFailoverConfig controls automatic spoke failover on the hub.
+// When enabled, the hub periodically probes spoke health and drains
+// spokes that fail consecutively.
+type AutoFailoverConfig struct {
+	Enabled   bool   `yaml:"enabled"`   // default false
+	Threshold int    `yaml:"threshold"` // consecutive failures before drain (default 3)
+	Interval  string `yaml:"interval"`  // check interval (default "30s")
 }
 
 // SpokeEntry defines a spoke server the hub aggregates from.

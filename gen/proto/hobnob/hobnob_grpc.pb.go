@@ -347,6 +347,8 @@ const (
 	HobnobAdmin_PromoteEnv_FullMethodName            = "/hobnob.v1.HobnobAdmin/PromoteEnv"
 	HobnobAdmin_EnrollThrall_FullMethodName          = "/hobnob.v1.HobnobAdmin/EnrollThrall"
 	HobnobAdmin_SetReassignment_FullMethodName       = "/hobnob.v1.HobnobAdmin/SetReassignment"
+	HobnobAdmin_SyncConfig_FullMethodName            = "/hobnob.v1.HobnobAdmin/SyncConfig"
+	HobnobAdmin_ReportSpokeStatus_FullMethodName     = "/hobnob.v1.HobnobAdmin/ReportSpokeStatus"
 )
 
 // HobnobAdminClient is the client API for HobnobAdmin service.
@@ -402,6 +404,12 @@ type HobnobAdminClient interface {
 	// SetReassignment marks a thrall for reassignment to a different spoke.
 	// Called hub→spoke to set reassign_addr/reassign_id on the thrall.
 	SetReassignment(ctx context.Context, in *SetReassignmentRequest, opts ...grpc.CallOption) (*SetReassignmentResponse, error)
+	// SyncConfig pushes the hub's live config to a spoke as a tar.gz archive.
+	// Called hub→spoke after config publish to keep spokes in sync.
+	SyncConfig(ctx context.Context, in *SyncConfigRequest, opts ...grpc.CallOption) (*SyncConfigResponse, error)
+	// ReportSpokeStatus receives periodic status reports from spokes.
+	// Called spoke→hub to push health/compliance metrics proactively.
+	ReportSpokeStatus(ctx context.Context, in *SpokeStatusReport, opts ...grpc.CallOption) (*SpokeStatusAck, error)
 }
 
 type hobnobAdminClient struct {
@@ -642,6 +650,26 @@ func (c *hobnobAdminClient) SetReassignment(ctx context.Context, in *SetReassign
 	return out, nil
 }
 
+func (c *hobnobAdminClient) SyncConfig(ctx context.Context, in *SyncConfigRequest, opts ...grpc.CallOption) (*SyncConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SyncConfigResponse)
+	err := c.cc.Invoke(ctx, HobnobAdmin_SyncConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hobnobAdminClient) ReportSpokeStatus(ctx context.Context, in *SpokeStatusReport, opts ...grpc.CallOption) (*SpokeStatusAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SpokeStatusAck)
+	err := c.cc.Invoke(ctx, HobnobAdmin_ReportSpokeStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HobnobAdminServer is the server API for HobnobAdmin service.
 // All implementations must embed UnimplementedHobnobAdminServer
 // for forward compatibility.
@@ -695,6 +723,12 @@ type HobnobAdminServer interface {
 	// SetReassignment marks a thrall for reassignment to a different spoke.
 	// Called hub→spoke to set reassign_addr/reassign_id on the thrall.
 	SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error)
+	// SyncConfig pushes the hub's live config to a spoke as a tar.gz archive.
+	// Called hub→spoke after config publish to keep spokes in sync.
+	SyncConfig(context.Context, *SyncConfigRequest) (*SyncConfigResponse, error)
+	// ReportSpokeStatus receives periodic status reports from spokes.
+	// Called spoke→hub to push health/compliance metrics proactively.
+	ReportSpokeStatus(context.Context, *SpokeStatusReport) (*SpokeStatusAck, error)
 	mustEmbedUnimplementedHobnobAdminServer()
 }
 
@@ -773,6 +807,12 @@ func (UnimplementedHobnobAdminServer) EnrollThrall(context.Context, *EnrollThral
 }
 func (UnimplementedHobnobAdminServer) SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetReassignment not implemented")
+}
+func (UnimplementedHobnobAdminServer) SyncConfig(context.Context, *SyncConfigRequest) (*SyncConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncConfig not implemented")
+}
+func (UnimplementedHobnobAdminServer) ReportSpokeStatus(context.Context, *SpokeStatusReport) (*SpokeStatusAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportSpokeStatus not implemented")
 }
 func (UnimplementedHobnobAdminServer) mustEmbedUnimplementedHobnobAdminServer() {}
 func (UnimplementedHobnobAdminServer) testEmbeddedByValue()                     {}
@@ -1209,6 +1249,42 @@ func _HobnobAdmin_SetReassignment_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HobnobAdmin_SyncConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HobnobAdminServer).SyncConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HobnobAdmin_SyncConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HobnobAdminServer).SyncConfig(ctx, req.(*SyncConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HobnobAdmin_ReportSpokeStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SpokeStatusReport)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HobnobAdminServer).ReportSpokeStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HobnobAdmin_ReportSpokeStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HobnobAdminServer).ReportSpokeStatus(ctx, req.(*SpokeStatusReport))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HobnobAdmin_ServiceDesc is the grpc.ServiceDesc for HobnobAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1307,6 +1383,14 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetReassignment",
 			Handler:    _HobnobAdmin_SetReassignment_Handler,
+		},
+		{
+			MethodName: "SyncConfig",
+			Handler:    _HobnobAdmin_SyncConfig_Handler,
+		},
+		{
+			MethodName: "ReportSpokeStatus",
+			Handler:    _HobnobAdmin_ReportSpokeStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

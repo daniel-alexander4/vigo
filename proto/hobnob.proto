@@ -202,6 +202,14 @@ service HobnobAdmin {
   // SetReassignment marks a thrall for reassignment to a different spoke.
   // Called hub→spoke to set reassign_addr/reassign_id on the thrall.
   rpc SetReassignment(SetReassignmentRequest) returns (SetReassignmentResponse);
+
+  // SyncConfig pushes the hub's live config to a spoke as a tar.gz archive.
+  // Called hub→spoke after config publish to keep spokes in sync.
+  rpc SyncConfig(SyncConfigRequest) returns (SyncConfigResponse);
+
+  // ReportSpokeStatus receives periodic status reports from spokes.
+  // Called spoke→hub to push health/compliance metrics proactively.
+  rpc ReportSpokeStatus(SpokeStatusReport) returns (SpokeStatusAck);
 }
 
 // =============================================================================
@@ -838,3 +846,30 @@ message DrainSpokeResponse {
   int32 failed = 2;
   repeated string errors = 3;
 }
+
+// =============================================================================
+// Config sync messages (hub→spoke)
+// =============================================================================
+
+message SyncConfigRequest {
+  bytes config_archive = 1;  // tar.gz of the .live/ config directory
+}
+
+message SyncConfigResponse {}
+
+// =============================================================================
+// Spoke status reporting messages (spoke→hub)
+// =============================================================================
+
+message SpokeStatusReport {
+  string spoke_id = 1;
+  int32 thrall_count = 2;
+  int32 compliant = 3;
+  int32 drifted = 4;
+  int32 failing = 5;
+  int32 stale = 6;
+  int32 unknown = 7;
+  float compliance_pct = 8;
+}
+
+message SpokeStatusAck {}

@@ -398,6 +398,17 @@ func run() error {
 		}
 		defer hub.Close()
 		slog.Info("federation hub initialized", "spokes", hub.SpokeCount())
+
+		// Start auto-failover if enabled.
+		if cfg.Federation.AutoFailover.Enabled {
+			foThreshold := cfg.Federation.AutoFailover.Threshold
+			if foThreshold <= 0 {
+				foThreshold = 3
+			}
+			foInterval := parseDuration(cfg.Federation.AutoFailover.Interval, 30*time.Second)
+			failover := federation.NewFailover(hub, foThreshold, foInterval)
+			go failover.Run(ctx)
+		}
 	}
 
 	// Load task definitions.
@@ -751,6 +762,20 @@ func run() error {
 	}()
 
 	if role == config.RoleSpoke {
+		// Start spoke status reporter if hub address is configured.
+		if cfg.Federation.HubAddr != "" {
+			reporter := federation.NewReporter(
+				cfg.Federation.SpokeID,
+				cfg.Federation.HubAddr,
+				cfg.Server.TLS.CertFile,
+				cfg.Server.TLS.KeyFile,
+				cfg.Server.TLS.CAFile,
+				fleetIndex,
+				30*time.Second,
+			)
+			go reporter.Run(ctx)
+		}
+
 		slog.Info("spoke ready",
 			"spoke_id", cfg.Federation.SpokeID,
 			"grpc", cfg.Server.GRPCListen,

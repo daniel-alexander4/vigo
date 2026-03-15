@@ -7,10 +7,15 @@
 package federation
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -26,7 +31,9 @@ import (
 
 // Hub manages gRPC connections to spoke servers and fans out admin queries.
 type Hub struct {
-	spokes []spokeConn
+	spokes       []spokeConn
+	spokeReports map[string]*pb.SpokeStatusReport // latest spoke self-reports, protected by mu
+	mu           sync.RWMutex
 }
 
 type spokeConn struct {
@@ -44,7 +51,10 @@ func NewHub(ctx context.Context, spokes []config.SpokeEntry, certFile, keyFile, 
 		return nil, fmt.Errorf("building spoke TLS credentials: %w", err)
 	}
 
-	h := &Hub{spokes: make([]spokeConn, 0, len(spokes))}
+	h := &Hub{
+		spokes:       make([]spokeConn, 0, len(spokes)),
+		spokeReports: make(map[string]*pb.SpokeStatusReport),
+	}
 
 	for _, s := range spokes {
 		conn, err := grpc.DialContext(ctx, s.Addr,
@@ -320,6 +330,8 @@ type probeResult struct {
 
 // SpokeStatuses probes each spoke's health by calling GetComplianceSummary
 // with a short timeout and returns the results with compliance breakdown and latency.
+// If a spoke is unreachable but has a recent self-report, the report data is
+// used but the spoke is still marked unhealthy.
 func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
 		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -348,6 +360,18 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 				metrics.FederationSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
 			}
 			metrics.FederationSpokeUp.WithLabelValues(sc.id).Set(0)
+
+			// If probe failed but we have a self-report from the spoke,
+			// populate compliance data so dashboards are not blank.
+			if report := h.getSpokeReport(sc.id); report != nil {
+				statuses[i].ThrallCount = report.ThrallCount
+				statuses[i].Compliant = report.Compliant
+				statuses[i].Drifted = report.Drifted
+				statuses[i].Failing = report.Failing
+				statuses[i].Stale = report.Stale
+				statuses[i].Unknown = report.Unknown
+				statuses[i].CompliancePct = report.CompliancePct
+			}
 		} else {
 			pr := r.value.(*probeResult)
 			statuses[i].Healthy = true
@@ -364,6 +388,21 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 		}
 	}
 	return statuses
+}
+
+// RecordSpokeReport stores a spoke's self-reported status. Called by the
+// ReportSpokeStatus gRPC handler on the hub.
+func (h *Hub) RecordSpokeReport(report *pb.SpokeStatusReport) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.spokeReports[report.SpokeId] = report
+}
+
+// getSpokeReport returns the latest self-report for a spoke, or nil.
+func (h *Hub) getSpokeReport(spokeID string) *pb.SpokeStatusReport {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.spokeReports[spokeID]
 }
 
 // fanOutResult holds the response from one spoke.
@@ -519,6 +558,102 @@ func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*D
 
 	slog.Info("spoke drained", "spoke_id", spokeID, "moved", result.Moved, "failed", result.Failed)
 	return result, nil
+}
+
+// SyncConfigToSpokes creates a tar.gz archive of the config directory and
+// pushes it to all spokes via the SyncConfig RPC. Best-effort: logs failures
+// but returns nil on partial success. Only returns an error if the archive
+// cannot be created at all.
+func (h *Hub) SyncConfigToSpokes(ctx context.Context, configDir string) error {
+	archive, err := createConfigArchive(configDir)
+	if err != nil {
+		return fmt.Errorf("creating config archive: %w", err)
+	}
+
+	slog.Info("syncing config to spokes", "archive_bytes", len(archive), "spokes", len(h.spokes))
+
+	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
+		spokeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		return sc.admin.SyncConfig(spokeCtx, &pb.SyncConfigRequest{
+			ConfigArchive: archive,
+		})
+	})
+
+	for _, r := range results {
+		if r.err != nil {
+			slog.Warn("config sync to spoke failed", "spoke_id", r.spokeID, "error", r.err)
+		} else {
+			slog.Info("config synced to spoke", "spoke_id", r.spokeID)
+		}
+	}
+
+	return nil
+}
+
+// createConfigArchive creates a tar.gz archive of the given directory in memory.
+// Files are archived with paths relative to the directory root.
+func createConfigArchive(dir string) ([]byte, error) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		// Skip the root directory itself.
+		if rel == "." {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		// Use forward-slash relative paths in the archive.
+		header.Name = filepath.ToSlash(rel)
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if _, err := io.Copy(tw, f); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	if err := gw.Close(); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 // buildClientTLS creates TLS credentials for the hub's connections to spokes.

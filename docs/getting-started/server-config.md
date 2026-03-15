@@ -158,11 +158,14 @@ federation:
 |--------|---------|-------------|
 | `role` | `standalone` | Server role: `standalone`, `hub`, or `spoke` |
 | `spoke_id` | — | Unique spoke identifier (required for spoke mode) |
-| `hub_addr` | — | Hub gRPC address (optional, for future spoke→hub communication) |
+| `hub_addr` | — | Hub gRPC address (spoke→hub status reporting) |
 | `spokes` | — | Hub-only: list of spoke definitions |
 | `spokes[].id` | — | Unique spoke identifier |
 | `spokes[].addr` | — | Spoke gRPC address (host:port) |
 | `spokes[].patterns` | — | Hostname globs routed to this spoke |
+| `auto_failover.enabled` | `false` | Hub-only: auto-drain unhealthy spokes |
+| `auto_failover.threshold` | `3` | Consecutive failures before drain |
+| `auto_failover.interval` | `30s` | Health check interval |
 
 Federation requires a paid license — the server will refuse to start in hub or spoke mode on the built-in free license. See [Federation](../concepts/federation.md) for details.
 

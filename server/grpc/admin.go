@@ -4,14 +4,21 @@
 package grpc
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -730,6 +737,134 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 		PromotionId: promo.ID,
 		Diff:        diff,
 	}, nil
+}
+
+// ---------- SyncConfig ----------
+
+func (s *AdminService) SyncConfig(ctx context.Context, req *pb.SyncConfigRequest) (*pb.SyncConfigResponse, error) {
+	if len(req.ConfigArchive) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "config_archive is required")
+	}
+
+	configDir := s.configStore.Dir()
+	if configDir == "" {
+		return nil, status.Errorf(codes.FailedPrecondition, "config directory not configured")
+	}
+
+	// Extract the tar.gz archive to the config directory.
+	if err := extractConfigArchive(req.ConfigArchive, configDir); err != nil {
+		return nil, status.Errorf(codes.Internal, "extracting config archive: %v", err)
+	}
+
+	// Reload config to pick up the new files.
+	if err := s.configStore.Reload(); err != nil {
+		slog.Error("config reload after sync failed", "error", err)
+		return nil, status.Errorf(codes.Internal, "config reload failed: %v", err)
+	}
+
+	slog.Info("config synced from hub", "config_dir", configDir)
+	return &pb.SyncConfigResponse{}, nil
+}
+
+// extractConfigArchive extracts a tar.gz archive into the target directory.
+// It clears the target directory first to ensure a clean sync, then extracts
+// all files from the archive. Path traversal is validated to prevent writes
+// outside the target directory.
+func extractConfigArchive(archive []byte, targetDir string) error {
+	// Resolve target to absolute path for traversal checks.
+	absTarget, err := filepath.Abs(targetDir)
+	if err != nil {
+		return fmt.Errorf("resolving target dir: %w", err)
+	}
+
+	// Clear the target directory contents (but keep the directory itself).
+	entries, err := os.ReadDir(absTarget)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading target dir: %w", err)
+	}
+	for _, e := range entries {
+		if err := os.RemoveAll(filepath.Join(absTarget, e.Name())); err != nil {
+			return fmt.Errorf("clearing target dir: %w", err)
+		}
+	}
+
+	gr, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		return fmt.Errorf("opening gzip: %w", err)
+	}
+	defer gr.Close()
+
+	tr := tar.NewReader(gr)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("reading tar: %w", err)
+		}
+
+		// Validate path: no absolute paths, no ".." traversal.
+		clean := filepath.Clean(header.Name)
+		if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
+			return fmt.Errorf("path traversal detected: %s", header.Name)
+		}
+
+		dest := filepath.Join(absTarget, clean)
+		// Double-check the resolved path is within the target directory.
+		if !strings.HasPrefix(dest, absTarget+string(filepath.Separator)) && dest != absTarget {
+			return fmt.Errorf("path traversal detected: %s resolves outside target", header.Name)
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(dest, 0o750); err != nil {
+				return fmt.Errorf("creating dir %s: %w", clean, err)
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+				return fmt.Errorf("creating parent dir for %s: %w", clean, err)
+			}
+			f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0o640|0o400)
+			if err != nil {
+				return fmt.Errorf("creating file %s: %w", clean, err)
+			}
+			// Limit extraction size to prevent zip bombs (64 MiB per file).
+			if _, err := io.Copy(f, io.LimitReader(tr, 64<<20)); err != nil {
+				f.Close()
+				return fmt.Errorf("writing file %s: %w", clean, err)
+			}
+			f.Close()
+		default:
+			// Skip symlinks, hard links, etc. for security.
+			continue
+		}
+	}
+
+	return nil
+}
+
+// ---------- ReportSpokeStatus ----------
+
+func (s *AdminService) ReportSpokeStatus(ctx context.Context, req *pb.SpokeStatusReport) (*pb.SpokeStatusAck, error) {
+	if req.SpokeId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "spoke_id is required")
+	}
+
+	// Only the hub stores spoke reports.
+	if s.hub == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "server is not a hub")
+	}
+
+	s.hub.RecordSpokeReport(req)
+
+	slog.Debug("received spoke status report",
+		"spoke_id", req.SpokeId,
+		"thrall_count", req.ThrallCount,
+		"compliant", req.Compliant,
+	)
+
+	return &pb.SpokeStatusAck{}, nil
 }
 
 // ---------- Helpers ----------

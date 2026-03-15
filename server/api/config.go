@@ -4,7 +4,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,17 +27,24 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 var _ = time.Now // used by format
 
+// configSyncer is implemented by federation.Hub to push config to spokes.
+// Defined as an interface to avoid an import cycle.
+type configSyncer interface {
+	SyncConfigToSpokes(ctx context.Context, configDir string) error
+}
+
 // ConfigHandler provides REST endpoints for config publish history,
 // versioning, rollback, and reload.
 type ConfigHandler struct {
 	queries     *db.Queries
 	configStore *config.ConfigStore
 	fleetIndex  *fleet.FleetIndex
+	hub         configSyncer // nil unless hub mode
 }
 
 // NewConfigHandler creates a ConfigHandler.
-func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex) *ConfigHandler {
-	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex}
+func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex, hub configSyncer) *ConfigHandler {
+	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex, hub: hub}
 }
 
 // RegisterRoutes registers config management endpoints.
@@ -52,12 +61,24 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // ReloadConfig re-reads all config files from disk. Called by hobnobcli
-// after config publish syncs files to .live/.
+// after config publish syncs files to .live/. In hub mode, also pushes the
+// config to all spokes via gRPC (best-effort — spoke failures are logged
+// but do not fail the reload).
 func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	if err := h.configStore.Reload(); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
 		return
 	}
+
+	// In hub mode, push config to all spokes after successful local reload.
+	if h.hub != nil {
+		configDir := h.configStore.Dir()
+		if err := h.hub.SyncConfigToSpokes(r.Context(), configDir); err != nil {
+			slog.Error("config sync to spokes failed", "error", err)
+			// Best-effort: don't fail the reload response.
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
