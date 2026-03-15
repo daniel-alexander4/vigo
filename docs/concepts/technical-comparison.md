@@ -140,7 +140,7 @@ Hobnob has 73 built-in executors covering the core system administration needs. 
 
 ### Package management depth
 
-Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, yum, dnf, brew, chocolatey, pip, gem, npm, etc.), version pinning, holding, purging, install options, and source packages. Hobnob's package executor handles 8 package managers (apt, yum, dnf, apk, brew, pkg, chocolatey, IPS) with install/remove/version specification and `allow_downgrade` for safe version changes. The gap is narrower than it appears — Hobnob covers the common operations but lacks `apt-mark hold` / `yum versionlock` equivalents, source package installs, and the long tail of provider-specific flags (e.g., `--enablerepo`, `install_options`).
+Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, yum, dnf, brew, chocolatey, pip, gem, npm, etc.), version pinning, holding, purging, install options, and source packages. Hobnob's package executor handles 8 package managers (apt, yum, dnf, apk, brew, pkg, chocolatey, IPS) with install/remove, exact version pinning, and `allow_downgrade` for safe version changes. Setting `version: "1.4.9-1"` ensures that exact version is installed on every convergence — if the package drifts (manual upgrade, `apt upgrade`), the agent corrects it within the next check-in interval. This is functionally equivalent to `apt-mark hold` for CM-managed systems, since the agent continuously enforces the desired version. The remaining gaps are source package installs and the long tail of provider-specific flags (e.g., `--enablerepo`, `install_options`).
 
 ## Scalability
 

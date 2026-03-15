@@ -136,7 +136,6 @@ All items below were implemented between 2026-03-12 and 2026-03-14.
 
 ### Agent
 
-- No package pinning/hold (version specification works, no apt hold / yum versionlock)
 - No agent health self-check (no detection of stuck convergence)
 
 ### Testing
