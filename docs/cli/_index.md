@@ -36,6 +36,8 @@ When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
 | [config](config.md) | Config inspection, publish history, rollback, and freeze |
 | [secrets](secrets.md) | Manage local encrypted secrets |
+| [users](users.md) | Manage web UI and API user accounts |
+| [auth](auth.md) | Manage CLI authentication tokens |
 | [audit](audit.md) | View unified audit log |
 | [backup](backup.md) | Create and restore full server backups |
 | [vi](vi.md) | Edit a .hnb file with syntax highlighting and validation |

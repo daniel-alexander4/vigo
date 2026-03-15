@@ -111,6 +111,27 @@ bootstrap:
 | `trusted_enrollment[].pattern` | — | Hostname glob pattern |
 | `trusted_enrollment[].cidrs` | — | Source CIDR allowlist |
 
+### auth
+
+```yaml
+auth:
+  method: basic
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `method` | `basic` | Authentication method: `basic`, `none`, `oidc`, `isowebauth` |
+| `oidc.issuer` | — | OIDC provider URL (required for `oidc`) |
+| `oidc.client_id` | — | OIDC client ID (required for `oidc`) |
+| `oidc.client_secret` | — | OIDC client secret (supports `secret:` prefix) |
+| `oidc.redirect_url` | — | OAuth callback URL (e.g., `http://hobnob:8181/auth/callback`) |
+| `oidc.scopes` | `[openid, profile, email]` | OIDC scopes to request |
+| `isowebauth.namespace` | `hobnob` | Namespace for SSH signature verification |
+
+Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `hobnob/web/auth/<username>`. Accounts are created via `hobnobcli users create` and activated with `hobnobcli users set-password`. Set `method: none` to disable authentication entirely.
+
+See [Authentication](../operations/authentication.md) for setup details.
+
 ### watcher
 
 ```yaml
