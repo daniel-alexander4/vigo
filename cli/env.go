@@ -56,5 +56,5 @@ var envPromoteCmd = &cobra.Command{
 func init() {
 	envPromoteCmd.Flags().String("from", "", "Source environment tier")
 	envPromoteCmd.Flags().String("to", "", "Target environment tier")
-	envCmd.AddCommand(envPromoteCmd)
+	configCmd.AddCommand(envPromoteCmd)
 }

@@ -179,4 +179,5 @@ func dedup(findings []validate.Finding) []validate.Finding {
 }
 
 func init() {
+	configCmd.AddCommand(validateCmd)
 }

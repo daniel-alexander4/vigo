@@ -296,5 +296,6 @@ func init() {
 	thrallsMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
 	thrallsMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
 	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd,
-		thrallsTraitsCmd, thrallsTagCmd, thrallsUntagCmd, thrallsMaintenanceCmd)
+		thrallsTraitsCmd, thrallsTagCmd, thrallsUntagCmd, thrallsMaintenanceCmd,
+		pushCmd, rollbackCmd, previewCmd)
 }
