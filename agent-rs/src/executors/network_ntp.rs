@@ -34,7 +34,11 @@ struct NtpDialect {
 
 fn ntp_dialect(device_type: &str) -> Option<NtpDialect> {
     match device_type {
-        "cisco_ios" | "cisco_nxos" => Some(NtpDialect {
+        "cisco_ios" | "cisco_nxos" | "arista_eos" => Some(NtpDialect {
+            check_command: "show running-config | include ntp server",
+            prompt_pattern: "#",
+        }),
+        "cisco_iosxr" => Some(NtpDialect {
             check_command: "show running-config | include ntp server",
             prompt_pattern: "#",
         }),
@@ -49,7 +53,7 @@ fn ntp_dialect(device_type: &str) -> Option<NtpDialect> {
 /// Returns true if the NTP server is present in the check output.
 fn ntp_server_present(device_type: &str, output: &str, server: &str) -> bool {
     match device_type {
-        "cisco_ios" | "cisco_nxos" => {
+        "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => {
             let needle = format!("ntp server {}", server);
             output.lines().any(|line| line.trim().contains(&needle))
         }
@@ -64,7 +68,7 @@ fn ntp_server_present(device_type: &str, output: &str, server: &str) -> bool {
 /// Builds the config push commands for a given device type, server, and state.
 fn build_ntp_commands(device_type: &str, server: &str, state: &str) -> Vec<String> {
     match device_type {
-        "cisco_ios" | "cisco_nxos" => {
+        "cisco_ios" | "cisco_nxos" | "arista_eos" => {
             let ntp_line = if state == "absent" {
                 format!("no ntp server {}", server)
             } else {
@@ -75,6 +79,19 @@ fn build_ntp_commands(device_type: &str, server: &str, state: &str) -> Vec<Strin
                 ntp_line,
                 "end".to_string(),
                 "write memory".to_string(),
+            ]
+        }
+        "cisco_iosxr" => {
+            let ntp_line = if state == "absent" {
+                format!("no ntp server {}", server)
+            } else {
+                format!("ntp server {}", server)
+            };
+            vec![
+                "configure terminal".to_string(),
+                ntp_line,
+                "commit".to_string(),
+                "end".to_string(),
             ]
         }
         "juniper_junos" => {
@@ -180,8 +197,22 @@ mod tests {
     }
 
     #[test]
+    fn test_ntp_dialect_arista_eos() {
+        let d = ntp_dialect("arista_eos").unwrap();
+        assert_eq!(d.check_command, "show running-config | include ntp server");
+        assert_eq!(d.prompt_pattern, "#");
+    }
+
+    #[test]
+    fn test_ntp_dialect_iosxr() {
+        let d = ntp_dialect("cisco_iosxr").unwrap();
+        assert_eq!(d.check_command, "show running-config | include ntp server");
+        assert_eq!(d.prompt_pattern, "#");
+    }
+
+    #[test]
     fn test_ntp_dialect_unknown() {
-        assert!(ntp_dialect("arista_eos").is_none());
+        assert!(ntp_dialect("unknown_vendor").is_none());
     }
 
     #[test]
@@ -196,6 +227,20 @@ mod tests {
         let output = "server 10.0.0.1;\nserver 10.0.0.2;\n";
         assert!(ntp_server_present("juniper_junos", output, "10.0.0.1"));
         assert!(!ntp_server_present("juniper_junos", output, "10.0.0.3"));
+    }
+
+    #[test]
+    fn test_ntp_server_present_arista_eos() {
+        let output = "ntp server 10.0.0.1\nntp server 10.0.0.2\n";
+        assert!(ntp_server_present("arista_eos", output, "10.0.0.1"));
+        assert!(!ntp_server_present("arista_eos", output, "10.0.0.3"));
+    }
+
+    #[test]
+    fn test_ntp_server_present_iosxr() {
+        let output = "ntp server 10.0.0.1\n";
+        assert!(ntp_server_present("cisco_iosxr", output, "10.0.0.1"));
+        assert!(!ntp_server_present("cisco_iosxr", output, "10.0.0.3"));
     }
 
     #[test]
@@ -239,6 +284,50 @@ mod tests {
             "delete system ntp server 10.0.0.1",
             "commit",
             "exit",
+        ]);
+    }
+
+    #[test]
+    fn test_build_ntp_commands_arista_eos_present() {
+        let cmds = build_ntp_commands("arista_eos", "10.0.0.1", "present");
+        assert_eq!(cmds, vec![
+            "configure terminal",
+            "ntp server 10.0.0.1",
+            "end",
+            "write memory",
+        ]);
+    }
+
+    #[test]
+    fn test_build_ntp_commands_arista_eos_absent() {
+        let cmds = build_ntp_commands("arista_eos", "10.0.0.1", "absent");
+        assert_eq!(cmds, vec![
+            "configure terminal",
+            "no ntp server 10.0.0.1",
+            "end",
+            "write memory",
+        ]);
+    }
+
+    #[test]
+    fn test_build_ntp_commands_iosxr_present() {
+        let cmds = build_ntp_commands("cisco_iosxr", "10.0.0.1", "present");
+        assert_eq!(cmds, vec![
+            "configure terminal",
+            "ntp server 10.0.0.1",
+            "commit",
+            "end",
+        ]);
+    }
+
+    #[test]
+    fn test_build_ntp_commands_iosxr_absent() {
+        let cmds = build_ntp_commands("cisco_iosxr", "10.0.0.1", "absent");
+        assert_eq!(cmds, vec![
+            "configure terminal",
+            "no ntp server 10.0.0.1",
+            "commit",
+            "end",
         ]);
     }
 

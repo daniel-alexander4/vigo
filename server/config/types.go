@@ -485,6 +485,8 @@ var ValidDeviceTypes = map[string]bool{
 	"cisco_ios":      true,
 	"cisco_nxos":     true,
 	"juniper_junos":  true,
+	"arista_eos":     true,
+	"cisco_iosxr":    true,
 }
 
 // ThrallEntry is a single entry in thralls.hnb. It has a custom UnmarshalYAML

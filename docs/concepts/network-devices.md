@@ -1,6 +1,6 @@
 # Network Device Management
 
-Hobnob manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as first-class fleet members with compliance status, traits, and run history -- managed through a **gateway proxy** pattern over SSH.
+Hobnob manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as first-class fleet members with compliance status, traits, and run history -- managed through a **gateway proxy** pattern over SSH. Five device types are supported: Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.
 
 ## Architecture
 
@@ -72,7 +72,7 @@ thralls:
 - `device_type` and `gateway` must be set together
 - `gateway` must reference an existing thrall that is **not** itself a device
 - `credential` must use the `secret:` prefix
-- `device_type` must be one of: `cisco_ios`, `cisco_nxos`, `juniper_junos`
+- `device_type` must be one of: `cisco_ios`, `cisco_nxos`, `cisco_iosxr`, `arista_eos`, `juniper_junos`
 
 ## Supported Device Types
 
@@ -80,6 +80,8 @@ thralls:
 |-------------|----------|-------------|-----------------|
 | `cisco_ios` | Cisco IOS/IOS-XE | CLI (configure terminal) | 15.x, 16.x, 17.x |
 | `cisco_nxos` | Cisco NX-OS | CLI (configure terminal) | 9.x, 10.x |
+| `cisco_iosxr` | Cisco IOS-XR | CLI (configure terminal/commit) | 7.x, 24.x |
+| `arista_eos` | Arista EOS | CLI (configure terminal) | 4.28+, 4.30+ |
 | `juniper_junos` | Juniper Junos | CLI (configure/commit) | 20.x, 21.x, 22.x |
 
 ## SSH Authentication
@@ -100,7 +102,7 @@ Two transport-level executors handle arbitrary device operations:
 | [`ssh_exec`](../executors/ssh_exec.md) | Run commands on devices (analog of `exec`) |
 | [`network_config`](../executors/network_config.md) | Declarative config-block management |
 
-Nine device-specific executors provide structured, idempotent management:
+Fourteen device-specific executors provide structured, idempotent management:
 
 | Executor | Description |
 |----------|-------------|
@@ -113,6 +115,11 @@ Nine device-specific executors provide structured, idempotent management:
 | [`network_snmp`](../executors/network_snmp.md) | Cross-platform SNMP community config |
 | [`network_user`](../executors/network_user.md) | Cross-platform local user management |
 | [`network_banner`](../executors/network_banner.md) | Cross-platform login/MOTD banners |
+| [`network_interface`](../executors/network_interface.md) | Cross-platform interface state and description |
+| [`network_vlan`](../executors/network_vlan.md) | Cross-platform VLAN management |
+| [`network_acl`](../executors/network_acl.md) | Cross-platform access control list entries |
+| [`network_static_route`](../executors/network_static_route.md) | Cross-platform static route management |
+| [`network_dns`](../executors/network_dns.md) | Cross-platform DNS server and domain config |
 
 ## Device Traits
 

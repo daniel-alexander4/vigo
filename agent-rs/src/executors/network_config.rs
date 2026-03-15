@@ -53,6 +53,20 @@ fn dialect(device_type: &str) -> Option<DeviceDialect> {
             negate_prefix: "no ",
             prompt_pattern: "#",
         }),
+        "arista_eos" => Some(DeviceDialect {
+            enter_config: "configure terminal",
+            exit_config: "end",
+            save_command: "write memory",
+            negate_prefix: "no ",
+            prompt_pattern: "#",
+        }),
+        "cisco_iosxr" => Some(DeviceDialect {
+            enter_config: "configure terminal",
+            exit_config: "commit",
+            save_command: "end",
+            negate_prefix: "no ",
+            prompt_pattern: "#",
+        }),
         "juniper_junos" => Some(DeviceDialect {
             enter_config: "configure",
             exit_config: "commit",
@@ -187,8 +201,27 @@ mod tests {
     }
 
     #[test]
+    fn test_dialect_arista_eos() {
+        let d = dialect("arista_eos").unwrap();
+        assert_eq!(d.enter_config, "configure terminal");
+        assert_eq!(d.save_command, "write memory");
+        assert_eq!(d.negate_prefix, "no ");
+        assert_eq!(d.prompt_pattern, "#");
+    }
+
+    #[test]
+    fn test_dialect_cisco_iosxr() {
+        let d = dialect("cisco_iosxr").unwrap();
+        assert_eq!(d.enter_config, "configure terminal");
+        assert_eq!(d.exit_config, "commit");
+        assert_eq!(d.save_command, "end");
+        assert_eq!(d.negate_prefix, "no ");
+        assert_eq!(d.prompt_pattern, "#");
+    }
+
+    #[test]
     fn test_dialect_unknown() {
-        assert!(dialect("arista_eos").is_none());
+        assert!(dialect("unknown_vendor").is_none());
     }
 
     #[test]

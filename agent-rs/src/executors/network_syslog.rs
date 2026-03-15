@@ -50,7 +50,7 @@ impl Executor for NetworkSyslogExecutor {
 
         // Validate device_type early.
         let prompt_pattern = match device_type.as_str() {
-            "cisco_ios" | "cisco_nxos" => "#",
+            "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => "#",
             "juniper_junos" => ">",
             _ => return result.with_error(format!("unsupported device_type: {}", device_type)),
         };
@@ -60,7 +60,7 @@ impl Executor for NetworkSyslogExecutor {
             Box::pin(async move {
                 // Check current syslog configuration.
                 let is_configured = match device_type.as_str() {
-                    "cisco_ios" | "cisco_nxos" => {
+                    "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => {
                         let current = session
                             .exec("show running-config | include logging host", timeout)
                             .await?;
@@ -91,7 +91,7 @@ impl Executor for NetworkSyslogExecutor {
 
                 // Build and execute config commands.
                 let commands: Vec<String> = match (device_type.as_str(), state.as_str()) {
-                    ("cisco_ios" | "cisco_nxos", "present") => {
+                    ("cisco_ios" | "cisco_nxos" | "arista_eos", "present") => {
                         let mut cmds = vec![
                             "configure terminal".to_string(),
                         ];
@@ -107,12 +107,36 @@ impl Executor for NetworkSyslogExecutor {
                         cmds.push("write memory".to_string());
                         cmds
                     }
-                    ("cisco_ios" | "cisco_nxos", "absent") => {
+                    ("cisco_ios" | "cisco_nxos" | "arista_eos", "absent") => {
                         vec![
                             "configure terminal".to_string(),
                             format!("no logging host {}", syslog_host),
                             "end".to_string(),
                             "write memory".to_string(),
+                        ]
+                    }
+                    ("cisco_iosxr", "present") => {
+                        let mut cmds = vec![
+                            "configure terminal".to_string(),
+                        ];
+                        if let Some(ref sp) = syslog_port {
+                            cmds.push(format!("logging host {} port {}", syslog_host, sp));
+                        } else {
+                            cmds.push(format!("logging host {}", syslog_host));
+                        }
+                        if let Some(ref fac) = facility {
+                            cmds.push(format!("logging facility {}", fac));
+                        }
+                        cmds.push("commit".to_string());
+                        cmds.push("end".to_string());
+                        cmds
+                    }
+                    ("cisco_iosxr", "absent") => {
+                        vec![
+                            "configure terminal".to_string(),
+                            format!("no logging host {}", syslog_host),
+                            "commit".to_string(),
+                            "end".to_string(),
                         ]
                     }
                     ("juniper_junos", "present") => {

@@ -30,7 +30,7 @@ impl NetworkBannerExecutor {
 /// Returns the prompt pattern used for interactive exec on each device type.
 fn prompt_pattern(device_type: &str) -> Option<&'static str> {
     match device_type {
-        "cisco_ios" | "cisco_nxos" => Some("#"),
+        "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => Some("#"),
         "juniper_junos" => Some(">"),
         _ => None,
     }
@@ -39,7 +39,7 @@ fn prompt_pattern(device_type: &str) -> Option<&'static str> {
 /// Build the check command to inspect current banner state.
 fn check_command(device_type: &str, banner_type: &str) -> String {
     match device_type {
-        "cisco_ios" | "cisco_nxos" => format!("show banner {}", banner_type),
+        "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => format!("show banner {}", banner_type),
         "juniper_junos" => "show configuration system login".to_string(),
         _ => String::new(),
     }
@@ -48,7 +48,7 @@ fn check_command(device_type: &str, banner_type: &str) -> String {
 /// Determine whether the banner text is already present in the device output.
 fn banner_present(device_type: &str, banner_type: &str, output: &str, text: &str) -> bool {
     match device_type {
-        "cisco_ios" | "cisco_nxos" => output.contains(text),
+        "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => output.contains(text),
         "juniper_junos" => {
             // Junos uses "message" for login banners, "announcement" for motd.
             let keyword = match banner_type {
@@ -71,19 +71,31 @@ fn build_commands(
     let mut commands = Vec::new();
 
     match device_type {
-        "cisco_ios" | "cisco_nxos" => {
+        "cisco_ios" | "cisco_nxos" | "arista_eos" => {
             commands.push("configure terminal".to_string());
             match state {
                 "absent" => {
                     commands.push(format!("no banner {}", banner_type));
                 }
                 _ => {
-                    // Use ^ as the delimiter for Cisco banner text.
                     commands.push(format!("banner {} ^{}^", banner_type, text));
                 }
             }
             commands.push("end".to_string());
             commands.push("write memory".to_string());
+        }
+        "cisco_iosxr" => {
+            commands.push("configure terminal".to_string());
+            match state {
+                "absent" => {
+                    commands.push(format!("no banner {}", banner_type));
+                }
+                _ => {
+                    commands.push(format!("banner {} ^{}^", banner_type, text));
+                }
+            }
+            commands.push("commit".to_string());
+            commands.push("end".to_string());
         }
         "juniper_junos" => {
             let junos_keyword = match banner_type {
@@ -233,8 +245,18 @@ mod tests {
     }
 
     #[test]
+    fn test_prompt_pattern_arista_eos() {
+        assert_eq!(prompt_pattern("arista_eos"), Some("#"));
+    }
+
+    #[test]
+    fn test_prompt_pattern_iosxr() {
+        assert_eq!(prompt_pattern("cisco_iosxr"), Some("#"));
+    }
+
+    #[test]
     fn test_prompt_pattern_unknown() {
-        assert!(prompt_pattern("arista_eos").is_none());
+        assert!(prompt_pattern("unknown_vendor").is_none());
     }
 
     #[test]
@@ -334,6 +356,39 @@ mod tests {
             "delete system login announcement",
             "commit",
             "exit",
+        ]);
+    }
+
+    #[test]
+    fn test_build_commands_arista_eos_present() {
+        let cmds = build_commands("arista_eos", "login", "Authorized only", "present");
+        assert_eq!(cmds, vec![
+            "configure terminal",
+            "banner login ^Authorized only^",
+            "end",
+            "write memory",
+        ]);
+    }
+
+    #[test]
+    fn test_build_commands_iosxr_present() {
+        let cmds = build_commands("cisco_iosxr", "login", "Authorized only", "present");
+        assert_eq!(cmds, vec![
+            "configure terminal",
+            "banner login ^Authorized only^",
+            "commit",
+            "end",
+        ]);
+    }
+
+    #[test]
+    fn test_build_commands_iosxr_absent() {
+        let cmds = build_commands("cisco_iosxr", "motd", "text", "absent");
+        assert_eq!(cmds, vec![
+            "configure terminal",
+            "no banner motd",
+            "commit",
+            "end",
         ]);
     }
 }

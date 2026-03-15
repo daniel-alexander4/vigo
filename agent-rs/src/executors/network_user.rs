@@ -49,7 +49,7 @@ impl Executor for NetworkUserExecutor {
         let timeout = DEFAULT_TIMEOUT;
 
         let (check_command, prompt_pattern) = match device_type.as_str() {
-            "cisco_ios" | "cisco_nxos" => (
+            "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => (
                 "show running-config | section username".to_string(),
                 "#",
             ),
@@ -76,7 +76,7 @@ impl Executor for NetworkUserExecutor {
                 let current_output = current.stdout;
 
                 let user_exists = match device_type.as_str() {
-                    "cisco_ios" | "cisco_nxos" => {
+                    "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => {
                         current_output.contains(&format!("username {}", device_username))
                     }
                     "juniper_junos" => {
@@ -101,7 +101,7 @@ impl Executor for NetworkUserExecutor {
 
                 // Build config commands based on device type and desired state.
                 let commands: Vec<String> = match (device_type.as_str(), state.as_str()) {
-                    ("cisco_ios" | "cisco_nxos", "present") => {
+                    ("cisco_ios" | "cisco_nxos" | "arista_eos", "present") => {
                         let priv_level = privilege.as_deref().unwrap_or("15");
                         let mut cmds = vec![
                             "configure terminal".to_string(),
@@ -121,12 +121,40 @@ impl Executor for NetworkUserExecutor {
                         cmds.push("write memory".to_string());
                         cmds
                     }
-                    ("cisco_ios" | "cisco_nxos", "absent") => {
+                    ("cisco_ios" | "cisco_nxos" | "arista_eos", "absent") => {
                         vec![
                             "configure terminal".to_string(),
                             format!("no username {}", device_username),
                             "end".to_string(),
                             "write memory".to_string(),
+                        ]
+                    }
+                    ("cisco_iosxr", "present") => {
+                        let priv_level = privilege.as_deref().unwrap_or("15");
+                        let mut cmds = vec![
+                            "configure terminal".to_string(),
+                        ];
+                        if let Some(ref sec) = secret {
+                            cmds.push(format!(
+                                "username {} privilege {} secret {}",
+                                device_username, priv_level, sec
+                            ));
+                        } else {
+                            cmds.push(format!(
+                                "username {} privilege {}",
+                                device_username, priv_level
+                            ));
+                        }
+                        cmds.push("commit".to_string());
+                        cmds.push("end".to_string());
+                        cmds
+                    }
+                    ("cisco_iosxr", "absent") => {
+                        vec![
+                            "configure terminal".to_string(),
+                            format!("no username {}", device_username),
+                            "commit".to_string(),
+                            "end".to_string(),
                         ]
                     }
                     ("juniper_junos", "present") => {

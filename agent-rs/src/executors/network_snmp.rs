@@ -52,7 +52,7 @@ impl Executor for NetworkSnmpExecutor {
         let timeout = DEFAULT_TIMEOUT;
 
         let prompt_pattern = match device_type.as_str() {
-            "cisco_ios" | "cisco_nxos" => "#",
+            "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => "#",
             "juniper_junos" => ">",
             _ => return result.with_error(format!("unsupported device_type: {}", device_type)),
         };
@@ -62,7 +62,7 @@ impl Executor for NetworkSnmpExecutor {
             Box::pin(async move {
                 // Check current SNMP configuration.
                 let check_command = match device_type.as_str() {
-                    "cisco_ios" | "cisco_nxos" => {
+                    "cisco_ios" | "cisco_nxos" | "arista_eos" | "cisco_iosxr" => {
                         "show running-config | include snmp-server community".to_string()
                     }
                     "juniper_junos" => "show configuration snmp".to_string(),
@@ -90,27 +90,48 @@ impl Executor for NetworkSnmpExecutor {
 
                 // Build config commands based on device type and desired state.
                 let commands: Vec<String> = match (device_type.as_str(), state.as_str()) {
-                    ("cisco_ios" | "cisco_nxos", "present") => {
+                    ("cisco_ios" | "cisco_nxos" | "arista_eos", "present") => {
                         let mut snmp_cmd =
                             format!("snmp-server community {} {}", community, permission);
                         if let Some(ref acl_name) = acl {
                             snmp_cmd.push(' ');
                             snmp_cmd.push_str(acl_name);
                         }
-                        let cmds = vec![
+                        vec![
                             "configure terminal".to_string(),
                             snmp_cmd,
                             "end".to_string(),
                             "write memory".to_string(),
-                        ];
-                        cmds
+                        ]
                     }
-                    ("cisco_ios" | "cisco_nxos", "absent") => {
+                    ("cisco_ios" | "cisco_nxos" | "arista_eos", "absent") => {
                         vec![
                             "configure terminal".to_string(),
                             format!("no snmp-server community {}", community),
                             "end".to_string(),
                             "write memory".to_string(),
+                        ]
+                    }
+                    ("cisco_iosxr", "present") => {
+                        let mut snmp_cmd =
+                            format!("snmp-server community {} {}", community, permission);
+                        if let Some(ref acl_name) = acl {
+                            snmp_cmd.push(' ');
+                            snmp_cmd.push_str(acl_name);
+                        }
+                        vec![
+                            "configure terminal".to_string(),
+                            snmp_cmd,
+                            "commit".to_string(),
+                            "end".to_string(),
+                        ]
+                    }
+                    ("cisco_iosxr", "absent") => {
+                        vec![
+                            "configure terminal".to_string(),
+                            format!("no snmp-server community {}", community),
+                            "commit".to_string(),
+                            "end".to_string(),
                         ]
                     }
                     ("juniper_junos", "present") => {

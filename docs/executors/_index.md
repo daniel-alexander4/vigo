@@ -1,6 +1,6 @@
 # Executor Reference
 
-Hobnob ships 74 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Hobnob ships 79 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -107,9 +107,9 @@ These executors replace their Unix counterparts on Windows or manage Windows-spe
 | `smb_share` | Manage SMB file shares with access control | [smb_share](smb_share.md) |
 | `service_recovery_windows` | Manage per-service failure recovery actions | [service_recovery_windows](service_recovery_windows.md) |
 
-## Network Device Executors (11)
+## Network Device Executors (16)
 
-These executors manage network devices (switches, routers) over SSH via the [gateway proxy](../concepts/network-devices.md) pattern. They run on the gateway thrall and connect to the target device. SSH connection parameters are auto-injected.
+These executors manage network devices (switches, routers) over SSH via the [gateway proxy](../concepts/network-devices.md) pattern. They run on the gateway thrall and connect to the target device. SSH connection parameters are auto-injected. Supported device types: `cisco_ios`, `cisco_nxos`, `cisco_iosxr`, `arista_eos`, `juniper_junos`.
 
 ### Transport Executors (2)
 
@@ -132,15 +132,20 @@ These executors manage network devices (switches, routers) over SSH via the [gat
 |------|-------------|-----|
 | `junos_interface` | Manage Junos interface config | [junos_interface](junos_interface.md) |
 
-### Cross-Platform Network Executors (5)
+### Cross-Platform Network Executors (10)
 
-| Type | Description | Cisco | Junos | Doc |
-|------|-------------|:-----:|:-----:|-----|
-| `network_ntp` | NTP server config | Yes | Yes | [network_ntp](network_ntp.md) |
-| `network_syslog` | Syslog server config | Yes | Yes | [network_syslog](network_syslog.md) |
-| `network_snmp` | SNMP community config | Yes | Yes | [network_snmp](network_snmp.md) |
-| `network_user` | Local user management | Yes | Yes | [network_user](network_user.md) |
-| `network_banner` | Login/MOTD banners | Yes | Yes | [network_banner](network_banner.md) |
+| Type | Description | Cisco IOS | NX-OS | IOS-XR | EOS | Junos | Doc |
+|------|-------------|:---------:|:-----:|:------:|:---:|:-----:|-----|
+| `network_ntp` | NTP server config | Yes | Yes | -- | -- | Yes | [network_ntp](network_ntp.md) |
+| `network_syslog` | Syslog server config | Yes | Yes | -- | -- | Yes | [network_syslog](network_syslog.md) |
+| `network_snmp` | SNMP community config | Yes | Yes | -- | -- | Yes | [network_snmp](network_snmp.md) |
+| `network_user` | Local user management | Yes | Yes | -- | -- | Yes | [network_user](network_user.md) |
+| `network_banner` | Login/MOTD banners | Yes | Yes | -- | -- | Yes | [network_banner](network_banner.md) |
+| `network_interface` | Interface state and description | Yes | Yes | Yes | Yes | Yes | [network_interface](network_interface.md) |
+| `network_vlan` | VLAN management | Yes | Yes | Yes | Yes | Yes | [network_vlan](network_vlan.md) |
+| `network_acl` | Access control list entries | Yes | Yes | Yes | Yes | Yes | [network_acl](network_acl.md) |
+| `network_static_route` | Static route management | Yes | Yes | Yes | Yes | Yes | [network_static_route](network_static_route.md) |
+| `network_dns` | DNS server and domain config | Yes | Yes | Yes | Yes | Yes | [network_dns](network_dns.md) |
 
 ## Common Patterns
 

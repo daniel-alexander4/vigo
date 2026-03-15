@@ -550,6 +550,11 @@ pub fn build_executors_with_snapshots(
     executors.insert("network_snmp".to_string(), Box::new(network_snmp::NetworkSnmpExecutor::new()));
     executors.insert("network_user".to_string(), Box::new(network_user::NetworkUserExecutor::new()));
     executors.insert("network_banner".to_string(), Box::new(network_banner::NetworkBannerExecutor::new()));
+    executors.insert("network_interface".to_string(), Box::new(network_interface::NetworkInterfaceExecutor::new()));
+    executors.insert("network_vlan".to_string(), Box::new(network_vlan::NetworkVlanExecutor::new()));
+    executors.insert("network_acl".to_string(), Box::new(network_acl::NetworkAclExecutor::new()));
+    executors.insert("network_static_route".to_string(), Box::new(network_static_route::NetworkStaticRouteExecutor::new()));
+    executors.insert("network_dns".to_string(), Box::new(network_dns::NetworkDnsExecutor::new()));
 
     // Linux-only executors.
     #[cfg(target_os = "linux")]
