@@ -20,9 +20,15 @@
     --color-muted-bg: #f7fafc;
     --color-border: #e2e8f0;
     --color-card-bg: #ffffff;
+    --color-card: #ffffff;
+    --color-surface: #ffffff;
     --color-card-shadow: rgba(0, 0, 0, 0.06);
     --color-brand: #4299e1;
     --color-brand-light: #63b3ed;
+    --color-primary: #4299e1;
+    --color-primary-bg: #ebf8ff;
+    --color-accent: #667eea;
+    --color-accent-bg: #eef2ff;
     --radius: 6px;
     --radius-lg: 8px;
     --shadow-sm: 0 1px 3px var(--color-card-shadow);
@@ -179,17 +185,22 @@ body {
 .topbar__user {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+}
+
+.topbar__avatar {
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-muted);
+    background: var(--color-muted-bg);
+    border-radius: 50%;
+    padding: 4px;
 }
 
 .topbar__username {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-text);
-}
-
-.topbar__role {
-    font-size: 11px;
 }
 
 .topbar__logout {
@@ -1867,11 +1878,11 @@ body:has(.ask-dashboard) .ai-drawer {
 
 /* Auth badges */
 .badge--admin {
-    background: var(--color-primary);
-    color: #fff;
+    background: var(--color-accent-bg);
+    color: var(--color-accent);
 }
 
 .badge--viewer {
-    background: var(--color-border);
+    background: var(--color-muted-bg);
     color: var(--color-text-muted);
 }
