@@ -91,11 +91,18 @@ func main() {
 		docsDir = "../docs"
 	}
 
-	// Parse templates.
-	tmpl, err := template.ParseFS(templateFS, "templates/*.html")
-	if err != nil {
-		log.Fatalf("parsing templates: %v", err)
+	// Parse templates. Each page template includes base.html for the layout.
+	// We parse each page separately to avoid {{define "content"}} conflicts.
+	parsePage := func(name string) *template.Template {
+		t, err := template.ParseFS(templateFS, "templates/base.html", "templates/"+name)
+		if err != nil {
+			log.Fatalf("parsing template %s: %v", name, err)
+		}
+		return t
 	}
+	landingTmpl := parsePage("landing.html")
+	pageTmpl := parsePage("page.html")
+	docsTmpl := parsePage("docs.html")
 
 	// Content dir for top-level pages (OVERVIEW.md, etc.).
 	contentDir := os.Getenv("HOBNOB_CONTENT_DIR")
@@ -119,7 +126,7 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
-		tmpl.ExecuteTemplate(w, "landing.html", pageData{
+		landingTmpl.ExecuteTemplate(w, "base", pageData{
 			Title:     "Hobnob — Configuration Management",
 			ActiveNav: "home",
 		})
@@ -135,7 +142,7 @@ func main() {
 				return
 			}
 			html := renderMarkdown(string(raw))
-			tmpl.ExecuteTemplate(w, "page.html", pageData{
+			pageTmpl.ExecuteTemplate(w, "base", pageData{
 				Title:     strings.Title(strings.ReplaceAll(s, "-", " ")),
 				ActiveNav: s,
 				Content:   template.HTML(html),
@@ -151,7 +158,7 @@ func main() {
 			return
 		}
 		html := renderMarkdown(string(raw))
-		tmpl.ExecuteTemplate(w, "page.html", pageData{
+		pageTmpl.ExecuteTemplate(w, "base", pageData{
 			Title:     "Pricing",
 			ActiveNav: "pricing",
 			Content:   template.HTML(html),
@@ -162,7 +169,7 @@ func main() {
 	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := os.ReadFile(filepath.Join(docsDir, "_index.md"))
 		html := rewriteDocsLinks(renderMarkdown(string(raw)), "")
-		tmpl.ExecuteTemplate(w, "docs.html", pageData{
+		docsTmpl.ExecuteTemplate(w, "base", pageData{
 			Title:     "Documentation",
 			ActiveNav: "docs",
 			Content:   template.HTML(html),
@@ -188,6 +195,7 @@ func main() {
 
 		// Try as file, then as directory index.
 		var raw []byte
+		var err error
 		var baseDir string
 		mdPath := filepath.Join(docsDir, pagePath+".md")
 		if raw, err = os.ReadFile(mdPath); err != nil {
@@ -226,7 +234,7 @@ func main() {
 			}
 		}
 
-		tmpl.ExecuteTemplate(w, "docs.html", pageData{
+		docsTmpl.ExecuteTemplate(w, "base", pageData{
 			Title:       "Docs — " + breadcrumbs[len(breadcrumbs)-1].Title,
 			ActiveNav:   "docs",
 			Content:     template.HTML(html),

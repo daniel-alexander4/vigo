@@ -135,9 +135,94 @@ body {
     overflow-x: auto;
 }
 
+/* --- Hero note --- */
+
+.hero__note { font-size: 13px; color: var(--color-muted); margin-top: 12px; }
+
+/* --- Comparison table --- */
+
+.comparison { padding: 64px 24px; background: var(--color-surface); }
+.comparison__inner { max-width: var(--max-width); margin: 0 auto; }
+.comparison__inner h2 { text-align: center; margin-bottom: 24px; font-size: 28px; }
+.comparison__table-wrapper { overflow-x: auto; }
+
+.comparison__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.comparison__table th {
+    padding: 10px 16px;
+    text-align: center;
+    font-weight: 600;
+    border-bottom: 2px solid var(--color-border);
+}
+
+.comparison__table td {
+    padding: 8px 16px;
+    text-align: center;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.comparison__label { text-align: left !important; font-weight: 500; }
+
+.comparison__highlight {
+    background: rgba(37, 99, 235, 0.04);
+}
+
+th.comparison__highlight {
+    color: var(--color-brand);
+    font-size: 16px;
+}
+
+/* --- Advantages --- */
+
+.advantages { padding: 64px 24px; max-width: var(--max-width); margin: 0 auto; }
+
+.advantages__inner {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+}
+
+.advantage { text-align: center; }
+.advantage__icon { font-size: 32px; margin-bottom: 8px; }
+.advantage h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+
+.advantage__stat {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--color-brand);
+    margin-bottom: 8px;
+}
+
+.advantage p:last-child { font-size: 14px; color: var(--color-muted); line-height: 1.5; }
+
+/* --- Quickstart extras --- */
+
+.quickstart__platforms { font-size: 13px; color: var(--color-muted); margin-top: 8px; }
+.quickstart__platforms code { font-family: var(--font-mono); font-size: 12px; background: var(--color-code-bg); padding: 2px 5px; border-radius: 3px; }
+
+/* --- Resilience --- */
+
+.resilience { padding: 48px 24px; background: var(--color-surface); text-align: center; }
+.resilience__inner { max-width: 640px; margin: 0 auto; }
+.resilience__inner h2 { font-size: 24px; margin-bottom: 12px; }
+.resilience__inner p { font-size: 15px; color: var(--color-muted); line-height: 1.6; }
+
+/* --- CTA --- */
+
+.cta { padding: 64px 24px; text-align: center; }
+.cta__inner { max-width: 500px; margin: 0 auto; }
+.cta__inner h2 { font-size: 28px; margin-bottom: 8px; }
+.cta__inner p { font-size: 16px; color: var(--color-muted); margin-bottom: 20px; }
+
 /* --- Platforms --- */
 
-.platforms { padding: 48px 24px; max-width: 700px; margin: 0 auto; }
+.platforms { padding: 48px 24px; max-width: 900px; margin: 0 auto; }
+.platforms__desc { text-align: center; color: var(--color-muted); font-size: 15px; margin-bottom: 24px; }
+.platforms__desc code { font-family: var(--font-mono); font-size: 13px; background: var(--color-code-bg); padding: 2px 5px; border-radius: 3px; }
 .platforms__inner h2 { text-align: center; margin-bottom: 24px; font-size: 24px; }
 
 .platforms__table {
@@ -305,7 +390,12 @@ body {
 
 @media (max-width: 768px) {
     .features__grid { grid-template-columns: 1fr; }
+    .advantages__inner { grid-template-columns: 1fr; }
     .hero__title { font-size: 28px; }
+    .hero__subtitle { font-size: 16px; }
+    .advantage__stat { font-size: 18px; }
     .docs-layout { flex-direction: column; }
     .docs-nav { width: 100%; min-width: unset; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--color-border); }
+    .comparison__table { font-size: 12px; }
+    .comparison__table th, .comparison__table td { padding: 6px 8px; }
 }
