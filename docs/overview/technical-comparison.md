@@ -309,7 +309,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - When you value **simplicity** — YAML configs anyone can read, one server, one binary, one publish command
 - When you value **security** — mTLS everywhere, ED25519 per-request signing, secrets never in plaintext, no insecure mode
 - When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds, no external database or runtime dependencies
-- When you value **performance** — 50K+ nodes on a single server, ~300 µs check-ins, zero DB on the hot path
+- When you value **performance** — ~300 µs check-ins, zero database queries on the hot path, 3,300 check-ins per second on a single core
 - When you need **scalability** — 50,000+ nodes on a single server, no compile masters, no database clusters, no worker pools
 - When **agent footprint** matters — 5 MB static binary for edge, IoT, containers, and resource-constrained hosts
 - When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments
