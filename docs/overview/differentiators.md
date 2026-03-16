@@ -50,7 +50,7 @@ What Hobnob does in the areas of safety, reliability, and simplicity that other 
 
 - **First-match-wins node assignment.** Nodes match against patterns in file order. The first match wins. There are no inheritance chains, no classification rules, no hierarchy to debug.
 
-- **Bootstrap is one command.** `curl -sSf https://server:8443/bootstrap | sudo sh` downloads the binary, generates TLS certificates via CSR signing, registers with the server, installs the system service, and verifies connectivity. Under management in seconds.
+- **Bootstrap is one command.** `curl -sSfk https://server:8443/bootstrap | sudo sh` downloads the binary, generates TLS certificates via CSR signing, registers with the server, installs the system service, and verifies connectivity. Under management in seconds.
 
 - **Reload with no restart.** `hobnobcli config publish` validates, syncs, and triggers the server to reload — all in one command. No process restart, no HUP signal.
 

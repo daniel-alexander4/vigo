@@ -181,10 +181,10 @@
     <div class="quickstart__inner">
         <h2>Agents enrolled in 30 seconds</h2>
         <div class="code-block">
-            <code>curl -sSf http://server:8443/bootstrap | sudo sh</code>
+            <code>curl -sSfk https://server:8443/bootstrap | sudo sh</code>
         </div>
         <p>Downloads the 5 MB agent binary. Generates TLS certificates. Enrolls with the server. Installs the system service. Verifies connectivity.</p>
-        <p class="quickstart__platforms">Works on Linux, macOS, FreeBSD, OpenBSD, NetBSD, and illumos.<br>Windows: <code>irm http://server:8443/bootstrap?os=windows | iex</code></p>
+        <p class="quickstart__platforms">Works on Linux, macOS, FreeBSD, OpenBSD, NetBSD, and illumos.<br>Windows: <code>irm https://server:8443/bootstrap?os=windows | iex</code></p>
     </div>
 </section>
 

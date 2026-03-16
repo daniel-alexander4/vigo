@@ -30,7 +30,7 @@ The server starts on `localhost:8443` (REST/UI) and `localhost:1530` (gRPC). TLS
 On the machine you want to manage:
 
 ```bash
-curl -sSf https://<server-ip>:8443/bootstrap | sudo sh
+curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script:

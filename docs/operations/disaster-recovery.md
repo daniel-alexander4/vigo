@@ -120,7 +120,7 @@ If both the server and all backups are lost:
 4. Start the server — it will initialize an empty database
 5. **Agents must re-enroll**: generate new tokens, add approved patterns, then either:
    - Wait for agents to retry (they will eventually hit the server, fail auth, and need bootstrapping)
-   - SSH to each node and re-run: `curl -sSf https://<server>:8443/bootstrap | sudo sh`
+   - SSH to each node and re-run: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`
 
 ## Verification After Restore
 
@@ -128,7 +128,7 @@ After restoring, verify the server is healthy:
 
 ```bash
 # Check server is running
-curl -s https://localhost:8443/api/v1/health
+curl -sk https://localhost:8443/api/v1/health
 
 # Verify enrolled thralls are visible
 hobnobcli nodes

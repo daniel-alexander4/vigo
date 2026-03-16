@@ -18,7 +18,7 @@ Architecture: x86_64 (amd64) only.
 ## Bootstrap
 
 ```sh
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script detects illumos via `uname -s` returning `SunOS`, downloads the agent binary, and installs an SMF service.

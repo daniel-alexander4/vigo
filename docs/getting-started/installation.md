@@ -48,7 +48,7 @@ The server starts on ports **1530** (gRPC, agent check-in) and **8181** (REST AP
 
 ```bash
 docker compose ps                    # container running
-curl -s https://localhost:8443/healthz # health check
+curl -sk https://localhost:8443/healthz # health check
 hobnobcli doctor                     # full diagnostic
 ```
 
@@ -99,7 +99,7 @@ The agent runs on managed machines (thralls). It supports Linux, macOS, FreeBSD,
 ### Linux
 
 ```bash
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 Downloads the agent binary, generates a keypair, registers with the server, and installs a systemd service (`hobnob-thrall`).
@@ -107,7 +107,7 @@ Downloads the agent binary, generates a keypair, registers with the server, and 
 ### macOS
 
 ```bash
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 Detects macOS and installs a launchd plist (`com.hobnob.thrall`).
@@ -115,7 +115,7 @@ Detects macOS and installs a launchd plist (`com.hobnob.thrall`).
 ### FreeBSD / NetBSD
 
 ```bash
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 Installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
@@ -123,7 +123,7 @@ Installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
 ### OpenBSD
 
 ```bash
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 Registers the service via `rcctl` and enables it at boot.
@@ -131,7 +131,7 @@ Registers the service via `rcctl` and enables it at boot.
 ### illumos
 
 ```bash
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 Imports an SMF service manifest and enables it via `svcadm`.

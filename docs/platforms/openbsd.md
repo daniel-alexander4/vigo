@@ -9,7 +9,7 @@ Hobnob supports OpenBSD with native integration for rcctl service management and
 ## Bootstrap
 
 ```sh
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 If `curl` is not installed (it is not in the OpenBSD base system), use `ftp` instead:

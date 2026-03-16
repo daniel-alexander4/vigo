@@ -9,7 +9,7 @@ Hobnob supports NetBSD with native integration for rc.d services and pkgin packa
 ## Bootstrap
 
 ```sh
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script detects NetBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/hobnob`, and installs an rc.d service script.

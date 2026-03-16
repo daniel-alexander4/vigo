@@ -312,7 +312,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `hobnobcli task run` or `hobnobcli query run` — these dispatch through the agent stream.
 
-8. **Agent must be installed first.** Ansible needs only SSH. Hobnob requires bootstrapping the agent binary on each node. Use `curl -sSf https://<server>:8443/bootstrap | sudo sh` for automated enrollment.
+8. **Agent must be installed first.** Ansible needs only SSH. Hobnob requires bootstrapping the agent binary on each node. Use `curl -sSfk https://<server>:8443/bootstrap | sudo sh` for automated enrollment.
 
 ## Related
 

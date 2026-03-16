@@ -11,8 +11,10 @@ Bootstrap is the process by which a new machine becomes a managed thrall. The se
 The server serves a shell script at `GET /bootstrap`:
 
 ```bash
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
+
+The `-k` flag allows curl to connect to the server's self-signed TLS certificate. Once the agent is enrolled, all subsequent communication uses mTLS with the CA certificate received during bootstrap. If your server uses a trusted certificate (e.g., from Let's Encrypt), you can omit `-k`.
 
 The script:
 1. Detects OS (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos) and architecture
@@ -68,7 +70,7 @@ hobnobcli tokens generate --pattern "web3.example.com"
 Pass the token to the bootstrap script:
 
 ```bash
-curl -sSf https://<server>:8443/bootstrap | sudo sh -s -- --token <token>
+curl -sSfk https://<server>:8443/bootstrap | sudo sh -s -- --token <token>
 ```
 
 Tokens are:

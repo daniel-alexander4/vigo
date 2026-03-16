@@ -21,7 +21,7 @@ The `hobd` server daemon is the central control plane for Hobnob. It serves gRPC
 docker compose up -d
 
 # Bootstrap a node (trusted enrollment configured in server.yaml)
-curl -sSf https://hobd.example.com:8443/bootstrap | sudo sh
+curl -sSfk https://hobd.example.com:8443/bootstrap | sudo sh
 ```
 
 ### Option B -- Direct
@@ -172,7 +172,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 
 ```bash
 # On the managed thrall (server has trusted_enrollment configured)
-curl -sSf https://hobd.example.com:8443/bootstrap | sudo sh
+curl -sSfk https://hobd.example.com:8443/bootstrap | sudo sh
 ```
 
 ### Bootstrap with a token (when trusted enrollment is not configured)

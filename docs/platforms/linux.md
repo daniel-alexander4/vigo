@@ -24,7 +24,7 @@ The musl static binary means no glibc dependency -- it works on any Linux kernel
 ## Bootstrap
 
 ```sh
-curl -sSf https://<server>:8443/bootstrap | sudo sh
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script detects the architecture, downloads the agent binary to `/usr/local/sbin/hobnob`, generates ED25519 keys, enrolls with the server using the one-time token, and installs a systemd service unit.
