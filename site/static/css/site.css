@@ -45,11 +45,13 @@ body {
 }
 
 .site-header__logo {
-    font-size: 20px;
-    font-weight: 800;
-    color: var(--color-brand);
+    display: flex;
+    align-items: center;
     text-decoration: none;
-    letter-spacing: -0.5px;
+}
+
+.site-header__logo-img {
+    height: 30px;
 }
 
 .site-nav { display: flex; gap: 4px; }

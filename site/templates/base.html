@@ -5,12 +5,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{.Title}}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/icon.svg">
     <link rel="stylesheet" href="/static/css/site.css">
 </head>
 <body>
     <header class="site-header">
         <div class="site-header__inner">
-            <a href="/" class="site-header__logo">Hobnob</a>
+            <a href="/" class="site-header__logo"><img src="/static/img/logo.svg" alt="Hobnob" class="site-header__logo-img"></a>
             <nav class="site-nav">
                 <a href="/overview" class="site-nav__link{{if eq .ActiveNav "overview"}} site-nav__link--active{{end}}">Overview</a>
                 <a href="/differentiators" class="site-nav__link{{if eq .ActiveNav "differentiators"}} site-nav__link--active{{end}}">Why Hobnob</a>
