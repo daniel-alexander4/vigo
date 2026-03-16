@@ -3,13 +3,45 @@
 <section class="page-hero">
     <div class="page-hero__inner">
         <h1>Why Hobnob</h1>
-        <p>What Hobnob does in safety, reliability, and simplicity that other configuration management systems do not.</p>
+        <p>Simplicity, security, reliability, scalability, and price &mdash; where Hobnob is different from every other configuration management system.</p>
     </div>
 </section>
 
 <section class="diff-section">
     <div class="diff-section__inner">
-        <h2 class="diff-section__title">&#128274; Safety</h2>
+        <h2 class="diff-section__title">&#128196; Simplicity</h2>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>One server at any scale</h4>
+                <p>No compile masters, no worker pools, no database clusters, no load balancers. One process, one SQLite file, one config directory. The architecture does not change whether you manage 10 nodes or 100,000.</p>
+            </div>
+            <div class="diff-card">
+                <h4>~5 MB static agent binary</h4>
+                <p>No Ruby, no Python, no JVM, no package manager ecosystem on managed nodes. Copy the binary, run it. Zero runtime dependencies.</p>
+            </div>
+            <div class="diff-card">
+                <h4>One config format, one config path</h4>
+                <p>There is exactly one way to configure Hobnob: edit YAML files and publish. No API writes, no database config, no UI mutations. One source of truth, one format, one tool.</p>
+            </div>
+            <div class="diff-card">
+                <h4>No DSL</h4>
+                <p>The configuration language is YAML. Go templates appear only inside <code>content:</code> attributes. No custom language to learn, no compiler, no parser quirks.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Bootstrap is one command</h4>
+                <p><code>curl | sudo sh</code> downloads the binary, generates TLS certificates, registers with the server, installs the service, and verifies connectivity. Under management in 30 seconds.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Seven OS families from one codebase</h4>
+                <p>Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows. Write <code>type: service</code> and it dispatches to systemd, launchctl, rc.d, rcctl, SMF, or sc.exe.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section diff-section--alt">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128274; Security</h2>
         <div class="diff-grid">
             <div class="diff-card">
                 <h4>Per-request ED25519 signatures</h4>
@@ -39,7 +71,7 @@
     </div>
 </section>
 
-<section class="diff-section diff-section--alt">
+<section class="diff-section">
     <div class="diff-section__inner">
         <h2 class="diff-section__title">&#9889; Reliability</h2>
         <div class="diff-grid">
@@ -71,33 +103,65 @@
     </div>
 </section>
 
-<section class="diff-section">
+<section class="diff-section diff-section--alt">
     <div class="diff-section__inner">
-        <h2 class="diff-section__title">&#128196; Simplicity</h2>
+        <h2 class="diff-section__title">&#128200; Scalability</h2>
         <div class="diff-grid">
             <div class="diff-card">
-                <h4>One server at any scale</h4>
-                <p>No compile masters, no worker pools, no database clusters, no load balancers. One process, one SQLite file, one config directory. The architecture does not change whether you manage 10 nodes or 100,000.</p>
+                <h4>50,000&ndash;200,000 nodes per server</h4>
+                <p>On a single 4-core, 8 GB machine. No compile masters, no worker pools, no database clusters. Puppet needs a new compile master every 4,000 nodes. Hobnob needs nothing.</p>
             </div>
             <div class="diff-card">
-                <h4>~5 MB static agent binary</h4>
-                <p>No Ruby, no Python, no JVM, no package manager ecosystem on managed nodes. Copy the binary, run it. Zero runtime dependencies.</p>
+                <h4>~300 &micro;s check-in latency</h4>
+                <p>Cache-hit check-ins complete in microseconds, not milliseconds. No catalog compilation, no Ruby interpretation, no database round-trips. 3,300 check-ins per second on a single core.</p>
             </div>
             <div class="diff-card">
-                <h4>One config format, one config path</h4>
-                <p>There is exactly one way to configure Hobnob: edit YAML files and publish. No API writes, no database config, no UI mutations. One source of truth, one format, one tool.</p>
+                <h4>~50 MB RAM at 10,000 nodes</h4>
+                <p>The in-memory FleetIndex stores only what it needs. Puppet Server requires 8&ndash;16 GB for the same fleet. Chef requires 4&ndash;8 GB. Hobnob runs on a Raspberry Pi.</p>
             </div>
             <div class="diff-card">
-                <h4>No DSL</h4>
-                <p>The configuration language is YAML. Go templates appear only inside <code>content:</code> attributes. No custom language to learn, no compiler, no parser quirks.</p>
+                <h4>No external database</h4>
+                <p>SQLite in WAL mode. No PostgreSQL cluster to provision, tune, backup, upgrade, or keep alive at 3 AM. The database is a single file you can copy with <code>cp</code>.</p>
             </div>
             <div class="diff-card">
-                <h4>Bootstrap is one command</h4>
-                <p><code>curl | sudo sh</code> downloads the binary, generates TLS certificates, registers with the server, installs the service, and verifies connectivity. Under management in 30 seconds.</p>
+                <h4>Delta streaming protocol</h4>
+                <p>After the initial check-in, agents send only what changed &mdash; traits deltas, run completions, heartbeats. No redundant full-state transfers on every cycle.</p>
             </div>
             <div class="diff-card">
-                <h4>Seven OS families from one codebase</h4>
-                <p>Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows. Write <code>type: service</code> and it dispatches to systemd, launchctl, rc.d, rcctl, SMF, or sc.exe.</p>
+                <h4>Hub-spoke spanner for multi-region</h4>
+                <p>When one server is not enough, spanner fans out enrollment, queries, and tasks across spoke servers. Each spoke manages its own fleet. The hub aggregates results. No shared database.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128176; Price</h2>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>Free for 25 nodes. Forever.</h4>
+                <p>No time limit, no credit card, no feature gates. Every capability &mdash; orchestration, workflows, queries, webhooks, compliance export, AI assistant &mdash; is included at every tier.</p>
+            </div>
+            <div class="diff-card">
+                <h4>No enterprise-only features</h4>
+                <p>There is no "Enterprise Edition" with critical features held back. RBAC, OIDC, API tokens, compliance export, spanner &mdash; all included. The free tier is the full product.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Infrastructure cost: near zero</h4>
+                <p>One process, one SQLite file, ~50 MB RAM at 10,000 nodes. No PostgreSQL cluster, no Redis, no message queue, no compile master fleet. The server that runs your monitoring can run Hobnob too.</p>
+            </div>
+            <div class="diff-card">
+                <h4>No per-node agent licensing</h4>
+                <p>The agent binary is freely distributable. You pay for the server-side node count, not per agent install. Decommission and re-enroll without license churn.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Simple per-node pricing</h4>
+                <p>$84/node/year at 26 nodes, dropping to $64/node/year at scale. Volume discounts are automatic. No sales calls required until 5,000+ nodes.</p>
+            </div>
+            <div class="diff-card">
+                <h4>No operational overhead tax</h4>
+                <p>Puppet requires dedicated infrastructure teams. Ansible requires jump hosts and SSH key management. Chef requires cookbook pipelines. Hobnob requires one YAML directory and one publish command.</p>
             </div>
         </div>
     </div>
