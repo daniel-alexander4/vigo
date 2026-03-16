@@ -54,7 +54,7 @@ Salt's check-in is lightweight (ZeroMQ message) but state compilation happens on
 
 CFEngine's agent evaluates promises locally from cached policy — the server interaction is minimal (just policy distribution).
 
-**Verdict:** Hobnob and CFEngine have the lightest server-side check-in paths. Puppet's is the heaviest. This matters at scale — Hobnob's design target is 50K-200K thralls on a single server.
+**Verdict:** Hobnob and CFEngine have the lightest agent-side check-in paths. Puppet's is the heaviest. On the server side, Hobnob's FleetIndex keeps fleet state in ~388 bytes per node (in-process memory), while CFEngine Enterprise's reporting hub requires ~8 MB per node in PostgreSQL. Hobnob's design target is 50K-200K thralls on a single commodity server.
 
 ### Agent resource consumption
 
@@ -155,7 +155,7 @@ All estimates assume the same hardware (4 vCPU, 8 GB RAM, SSD storage) running o
 | **Chef** | ~3,000-5,000 | PostgreSQL + cookbook serving | RAM — 8 GB is Chef Server's bare minimum |
 | **Ansible** | ~300-500 | SSH fork parallelism (~50 forks × 30s per host) | RAM + time — can't push to 500 hosts in 5 minutes |
 | **Salt** | ~5,000-8,000 | Python state compilation on master | CPU — Python GIL limits concurrency |
-| **CFEngine** | ~50,000+ (proven) | Disk I/O on policy serving | Almost nothing — C binary, flat file serving |
+| **CFEngine** | ~1,000 (Enterprise) | PostgreSQL reporting hub (8 MB per node) | RAM — Enterprise hub needs 8 MB/node for reporting DB |
 
 #### How the math works
 
@@ -169,7 +169,7 @@ All estimates assume the same hardware (4 vCPU, 8 GB RAM, SSD storage) running o
 
 **Salt:** Salt Master uses ZeroMQ (efficient), but state compilation is Python (single-threaded per minion). Documentation suggests 5,000 minions per master as a baseline. On 4 vCPU with 8 GB, the Python GIL and state compilation overhead limit throughput.
 
-**CFEngine:** The C hub serves flat policy files with minimal computation. Memory overhead is ~1-5 KB per host. 50,000 hosts uses ~250 MB. The bottleneck is disk I/O reading policy files, easily handled by SSD. CFEngine has documented deployments at this scale.
+**CFEngine:** The C agent is extremely lightweight, but CFEngine Enterprise runs a PostgreSQL-backed reporting hub that requires ~8 MB per bootstrapped node (per CFEngine documentation). On 8 GB: ~1,000 nodes. At 5,000 nodes, CFEngine recommends 40 GB RAM. The 50,000+ node deployments cited in CFEngine marketing require dedicated hardware (400+ GB RAM for the hub). The community edition without the reporting hub is lighter, but lacks the dashboards and compliance reporting that Enterprise provides. The C agent's policy evaluation remains efficient — the bottleneck is entirely the server-side reporting database.
 
 *Hobnob figures are theoretical — zero production deployments exist. See [Scalability Analysis](../../devdocs/scalability.md) for benchmark methodology.
 
@@ -181,9 +181,9 @@ All estimates assume the same hardware (4 vCPU, 8 GB RAM, SSD storage) running o
 | Puppet | ~4.5 GB (JRuby + PuppetDB) | ~80 KB | 800 MB | 4 GB | Barely — 0 headroom at 50K |
 | Chef | ~4 GB (Erlang + PostgreSQL) | ~30 KB | 300 MB | 1.5 GB | Yes at 10K, tight at 50K |
 | Salt | ~2 GB (Python + ZeroMQ) | ~20 KB | 200 MB | 1 GB | Yes |
-| CFEngine | ~100 MB (C binary) | ~3 KB | 30 MB | 150 MB | Yes — 7.5 GB free |
+| CFEngine | ~500 MB (C + PostgreSQL) | ~8 MB | 80 GB | 400 GB | No — needs 80 GB at 10K |
 
-Hobnob and CFEngine use less than 3% of available RAM at 50K nodes. Puppet uses over 100%.
+Hobnob is the only tool that fits 50K nodes in 8 GB RAM. CFEngine's agent is light but its Enterprise hub needs 8 MB per node for PostgreSQL reporting. Puppet and CFEngine Enterprise both exceed 8 GB well before 10K nodes.
 
 ### Check-in cost comparison
 
@@ -193,7 +193,7 @@ Hobnob and CFEngine use less than 3% of available RAM at 50K nodes. Puppet uses 
 | Puppet | 1-2s (catalog compile) | 3-5 PuppetDB queries | Ruby: parse manifests → resolve Hiera → query exported resources → build catalog graph → serialize |
 | Chef | ~100ms (cookbook serve) | 2-3 PostgreSQL queries | Resolve run list → serve cookbook files → update node object |
 | Salt | ~20ms (state compile) | Cache lookup | Python: compile state tree → resolve pillar → serialize |
-| CFEngine | ~1ms (policy serve) | None | Serve flat policy files from disk |
+| CFEngine | ~1ms (policy serve) + reporting ingestion | PostgreSQL INSERT (Enterprise) | Serve flat policy files + ingest run report into PostgreSQL |
 
 Over a 5-minute window with 10,000 nodes checking in (~33/sec):
 
@@ -205,7 +205,7 @@ Over a 5-minute window with 10,000 nodes checking in (~33/sec):
 | Salt | ~66% (33 × 20ms = 660ms/sec) | Yes |
 | CFEngine | ~3% (33 × 1ms = 33ms/sec) | Yes — 97% idle |
 
-At 10,000 nodes, Puppet physically cannot keep up on 4 cores — it needs more than 4 seconds of CPU time per second of wall time. Every other tool handles it comfortably. Hobnob and CFEngine are essentially idle.
+At 10,000 nodes, Puppet physically cannot keep up on 4 cores — it needs more than 4 seconds of CPU time per second of wall time. CFEngine's policy serving is efficient but the Enterprise reporting hub would need 80 GB RAM for 10K nodes, so it wouldn't be running on this hardware. Hobnob handles 10K nodes at 1% CPU with 4 MB of fleet memory.
 
 ### Scaling architecture
 
@@ -295,4 +295,4 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - **Ansible:** Agentless requirement, cloud provisioning, ad-hoc tasks across heterogeneous infrastructure
 - **Chef:** Application-centric infrastructure (Habitat), Ruby shop with existing Chef investment
 - **Salt:** Event-driven infrastructure, real-time remote execution at scale, reactor system
-- **CFEngine:** Extreme scale (100K+ nodes), minimal resource footprint with proven C agent, promise theory purity
+- **CFEngine:** Minimal agent footprint (~3 MB C binary), promise theory purity, proven at scale with dedicated hub hardware (8 MB/node RAM for Enterprise reporting)
