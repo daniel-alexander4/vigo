@@ -113,28 +113,28 @@ All six tools enforce idempotency — check current state, act only if drift is 
 
 ### Resource type coverage
 
-| Resource type | Hobnob | Puppet | Chef | Ansible | Salt |
-|---|---|---|---|---|---|
-| File (content, permissions, owner) | Yes | Yes | Yes | Yes | Yes |
-| Package (install, remove, version) | Yes | Yes (20+ providers) | Yes | Yes | Yes |
-| Service (start, stop, enable) | Yes | Yes | Yes | Yes | Yes |
-| User/Group | Yes | Yes | Yes | Yes | Yes |
-| Cron | Yes | Yes | Yes | Yes | Yes |
-| Repository (apt, yum) | Yes | Yes | Yes | Yes | Yes |
-| Archive (download, extract) | Yes | Via puppet-archive | Yes | Yes | Yes |
-| Exec (command, guards) | Yes | Yes | Yes | Yes | Yes |
-| Mount | Yes | Yes | Yes | Yes | Yes |
-| SELinux contexts | Yes | Yes | Yes | Yes | Yes |
-| Firewall (iptables, pf) | Yes (pf) | Via puppetlabs-firewall | No (use exec) | Yes | No (use exec) |
-| Systemd dropin | Yes | Yes | Yes | Partial | No |
-| File line editing | Via stream_edit | Via file_line/augeas | Via line cookbook | lineinfile/blockinfile | file.line |
-| Windows registry | Yes | Yes | Yes | Yes | Yes |
-| Windows service | Yes | Yes | Yes | Yes | Yes |
-| Network devices | Yes (SSH transport) | Via device modules | No | Yes (network modules) | Via proxy minions |
-| Kubernetes resources | No | Via puppetlabs-kubernetes | No (use Habitat) | Yes (k8s modules) | No |
-| Cloud resources | No | Via cloud modules | No | Yes (300+ cloud modules) | Via cloud modules |
-| LVM/RAID | No | Yes | No | Yes | No |
-| Docker containers | No | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng |
+| Resource type | Hobnob | Puppet | Chef | Ansible | Salt | CFEngine |
+|---|---|---|---|---|---|---|
+| File (content, permissions, owner) | Yes | Yes | Yes | Yes | Yes | Yes |
+| Package (install, remove, version) | Yes | Yes (20+ providers) | Yes | Yes | Yes | Yes |
+| Service (start, stop, enable) | Yes | Yes | Yes | Yes | Yes | Yes |
+| User/Group | Yes | Yes | Yes | Yes | Yes | Yes |
+| Cron | Yes | Yes | Yes | Yes | Yes | Yes |
+| Repository (apt, yum) | Yes | Yes | Yes | Yes | Yes | Via commands promises |
+| Archive (download, extract) | Yes | Via puppet-archive | Yes | Yes | Yes | Via commands promises |
+| Exec (command, guards) | Yes | Yes | Yes | Yes | Yes | Yes (commands promises) |
+| Mount | Yes | Yes | Yes | Yes | Yes | Yes (storage promises) |
+| SELinux contexts | Yes | Yes | Yes | Yes | Yes | No |
+| Firewall (iptables, pf) | Yes (pf) | Via puppetlabs-firewall | No (use exec) | Yes | No (use exec) | No |
+| Systemd dropin | Yes | Yes | Yes | Partial | No | No |
+| File line editing | Via stream_edit | Via file_line/augeas | Via line cookbook | lineinfile/blockinfile | file.line | Yes (edit_line bundles) |
+| Windows registry | Yes | Yes | Yes | Yes | Yes | No |
+| Windows service | Yes | Yes | Yes | Yes | Yes | Yes (basic) |
+| Network devices | Yes (SSH transport) | Via device modules | No | Yes (network modules) | Via proxy minions | No |
+| Kubernetes resources | No | Via puppetlabs-kubernetes | No (use Habitat) | Yes (k8s modules) | No | No |
+| Cloud resources | No | Via cloud modules | No | Yes (300+ cloud modules) | Via cloud modules | No |
+| LVM/RAID | No | Yes | No | Yes | No | No |
+| Docker containers | No | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng | No |
 
 Hobnob has 98 built-in executors covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Hobnob's custom executor JSON protocol allows extending coverage without modifying the agent binary.
 
