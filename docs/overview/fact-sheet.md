@@ -78,7 +78,7 @@ Platform-specific bootstrap for Windows (PowerShell), macOS (launchd), FreeBSD (
 
 ## Platform Support
 
-One agent binary, seven operating system families, 74 built-in executors.
+One agent binary, seven operating system families, 98 built-in executors.
 
 | Platform | Init System | Package Manager | Fully Supported |
 |----------|-------------|-----------------|:---------------:|
@@ -92,11 +92,11 @@ One agent binary, seven operating system families, 74 built-in executors.
 
 The same `.hnb` config works across all platforms. Write `type: service` and the agent dispatches to the correct backend — systemd on Linux, launchctl on macOS, rcctl on OpenBSD, sc.exe on Windows. No platform-specific configs required.
 
-Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed via gateway proxy over SSH with 11 dedicated executors.
+Network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos) are managed via gateway proxy over SSH with 16 dedicated executors.
 
 ## Executors
 
-74 built-in resource types, organized by scope:
+98 built-in resource types, organized by scope:
 
 **System:** package, service, user, group, cron, hostname, timezone, sysctl, firewall, kernel_module, mount, swap, reboot, selinux, alternatives, tmpfile, logrotate, systemd_dropin
 
@@ -108,9 +108,9 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed via gateway proxy o
 
 **Language packages:** pip, gem, npm
 
-**Windows:** registry, acl, windows_feature, windows_env, reboot_windows, powershell, iis_site, iis_app_pool, certificate_windows, domain_membership, local_security_policy, windows_update, windows_defender, smb_share, service_recovery_windows
+**Windows (22):** service, package, user, firewall, cron, hostname, timezone, registry, acl, windows_feature, windows_env, reboot, powershell, iis_site, iis_app_pool, certificate, domain_membership, local_security_policy, windows_update, windows_defender, smb_share, service_recovery
 
-**Network devices:** network_config, cisco_vlan, cisco_interface, cisco_acl, junos_interface, network_ntp, network_syslog, network_snmp, network_user, network_banner
+**Network devices (16):** ssh_exec, network_config, network_interface, network_vlan, network_acl, network_static_route, network_dns, network_ntp, network_syslog, network_snmp, network_user, network_banner, cisco_vlan, cisco_interface, cisco_acl, junos_interface
 
 Every executor is idempotent: check current state, compare against desired state, act only on drift.
 
@@ -179,12 +179,31 @@ Built-in AI assistant accessible from every page of the web UI:
 |--------|-------|
 | Server binary | Single Go binary |
 | Agent binary | ~5 MB static (Linux amd64) |
-| Agent memory | Minimal — no runtime, no GC |
-| Built-in executors | 74 |
-| Trait collectors | 27 (with platform variants) |
-| Supported OS families | 7 |
-| Database | SQLite (embedded, zero-admin) |
-| Test suite | 1,700+ tests (Go + Rust) |
-| Documentation | 168 pages |
+| Agent memory | ~8 MB RSS idle |
+| Built-in executors | 98 |
+| Trait collectors | 28 (with platform variants across 7 OS families) |
+| Supported platforms | 7 OS families + 5 network device types |
+| Database | SQLite (embedded, zero-admin) or PostgreSQL |
+| Test suite | 1,900+ tests (961 Go + 942 Rust) |
 | External dependencies | Zero (server), Zero (agent) |
 | Check-in DB queries | Zero (FleetIndex) |
+| Fleet memory per node | ~388 bytes |
+
+## How It Compares
+
+The following estimates are based on vendor-documented requirements where available and internal benchmarks for Hobnob. All figures assume the same reference hardware: **4 vCPU, 8 GB RAM, SSD, 5-minute check-in interval.** Hobnob has no production deployments — its figures are theoretical projections from measured benchmarks. See the [Technical Comparison](technical-comparison.md) for detailed methodology and vendor source links.
+
+| | Hobnob | Puppet PE | Chef Infra | Ansible AAP | Salt | CFEngine Enterprise |
+|---|---|---|---|---|---|---|
+| **Estimated nodes on 4v/8G** | 50K-200K* | 100-500 | 2K-4K | 200-400 | 1.2K-5K | ~1,000 |
+| **Server language** | Go | Ruby/JRuby | Ruby/Erlang | Python | Python | C + PostgreSQL |
+| **Agent language** | Rust | Ruby | Ruby | None (SSH) | Python | C |
+| **Agent binary size** | ~5 MB | ~200 MB | ~100 MB | 0 (agentless) | ~50 MB | ~3 MB |
+| **Fleet memory/node** | 388 bytes | ~80 KB | ~30 KB | ~100 MB/fork | varies | ~8 MB |
+| **Check-in model** | Agent pull (gRPC) | Agent pull (HTTPS) | Agent pull (HTTPS) | Controller push (SSH) | Agent pull+push (ZMQ) | Agent pull (custom) |
+| **Config language** | YAML | Puppet DSL | Ruby DSL | YAML + Jinja2 | YAML + Jinja2 | Promise DSL |
+| **Transport security** | mTLS + ED25519 | HTTPS + client certs | HTTPS + API tokens | SSH | ZeroMQ + AES | Custom TLS |
+
+*Hobnob's capacity estimate is theoretical — derived from internal FleetIndex benchmarks (~300µs per check-in, ~388 bytes per node) with conservative adjustments for real-world overhead. SQLite write batching is the first bottleneck (~50K); PostgreSQL extends capacity to ~200K. See [Scalability Analysis](../../devdocs/scalability.md) for benchmark data.
+
+**Why the range varies:** Each tool's architecture determines its bottleneck on this hardware. Puppet's catalog compilation requires more CPU and RAM than 4v/8G provides (PE docs specify 10 GB minimum for 100 nodes). CFEngine Enterprise's PostgreSQL reporting hub requires ~8 MB per node (CFEngine docs). Ansible's push model is limited by SSH fork parallelism. Hobnob's in-memory FleetIndex and zero-DB check-in path minimize both CPU and RAM per node.
