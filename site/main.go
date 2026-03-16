@@ -449,46 +449,59 @@ func stripMarkdown(md string) string {
 }
 
 func rewriteDocsLinks(html string, baseDir string) string {
-	// Simple link rewriter for relative .md links → /docs/ paths.
-	result := html
+	// Rewrite relative .md links in rendered HTML to /docs/ absolute paths.
+	var b strings.Builder
+	remaining := html
 	for {
-		i := strings.Index(result, `href="`)
+		i := strings.Index(remaining, `href="`)
 		if i < 0 {
+			b.WriteString(remaining)
 			break
 		}
-		start := i + 6
-		end := strings.Index(result[start:], `"`)
-		if end < 0 {
-			break
-		}
-		href := result[start : start+end]
+		// Write everything up to and including href="
+		b.WriteString(remaining[:i+6])
+		remaining = remaining[i+6:]
 
+		// Find the closing quote.
+		end := strings.Index(remaining, `"`)
+		if end < 0 {
+			b.WriteString(remaining)
+			break
+		}
+		href := remaining[:end]
+
+		// Skip absolute URLs, anchors, mailto, etc.
 		if href == "" || href[0] == '/' || href[0] == '#' ||
 			strings.Contains(href, "://") || strings.HasPrefix(href, "mailto:") {
-			result = result[:start+end+1] + result[start+end+1:]
-			i = start + end + 1
+			b.WriteString(href)
+			remaining = remaining[end:]
 			continue
 		}
 
+		// Split anchor from path.
 		anchor := ""
-		if ai := strings.IndexByte(href, '#'); ai >= 0 {
-			anchor = href[ai:]
-			href = href[:ai]
+		hrefPath := href
+		if ai := strings.IndexByte(hrefPath, '#'); ai >= 0 {
+			anchor = hrefPath[ai:]
+			hrefPath = hrefPath[:ai]
 		}
 
-		if !strings.HasSuffix(href, ".md") && strings.Contains(href, ".") {
-			break
+		// Only rewrite .md links or extensionless links (internal docs).
+		if !strings.HasSuffix(hrefPath, ".md") && strings.Contains(hrefPath, ".") {
+			b.WriteString(href)
+			remaining = remaining[end:]
+			continue
 		}
 
-		resolved := path.Clean(path.Join(baseDir, href))
+		// Resolve relative path against the current doc's directory.
+		resolved := path.Clean(path.Join(baseDir, hrefPath))
 		resolved = strings.TrimSuffix(resolved, ".md")
 		resolved = strings.TrimSuffix(resolved, "/_index")
 
-		newHref := "/docs/" + resolved + anchor
-		result = result[:start] + newHref + result[start+end:]
-		break
+		b.WriteString("/docs/" + resolved + anchor)
+		remaining = remaining[end:]
 	}
-	return result
+	return b.String()
 }
 
 func init() {
