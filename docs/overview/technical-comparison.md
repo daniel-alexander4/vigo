@@ -271,47 +271,15 @@ Hobnob and CFEngine have the fastest bootstrap. Puppet's certificate signing wor
 
 The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no web UI — their dashboards are part of the commercial/enterprise products. Hobnob's web UI, compliance tracking, and admin section are included in the base product.
 
-## What Hobnob Does Better
-
-1. **Binary footprint.** 5 MB static binary vs 50-200 MB for Ruby/Python-based agents. Deploys anywhere — IoT, edge, containers, embedded systems.
-
-2. **Transport security.** Per-request ED25519 signatures on top of mTLS. No other CM tool signs individual payloads.
-
-3. **Secrets architecture.** First-class `secret:` resolver that never lets secrets touch config files, databases, logs, or wire payloads. Cleaner than Hiera-eyaml, data bags, vault, or pillars.
-
-4. **Check-in performance.** Zero-DB hot path. O(1) thrall lookup via in-memory FleetIndex. Designed for 50K+ thralls on a single server.
-
-5. **Offline resilience.** Signed bundles with TTL, local convergence, results queue with drain-on-reconnect. Most complete offline story of any agent-based CM tool.
-
-6. **Config readability.** Any sysadmin can read a `.hnb` file without learning a DSL. Not true of Puppet manifests, Chef recipes, or CFEngine promises.
-
-7. **Bootstrap speed.** Single curl command → enrolled and converging in 30 seconds. No package manager, no runtime dependencies.
-
-## What Others Do Better
-
-1. **Ecosystem.** Puppet Forge has 6000+ modules. Ansible Galaxy has 30K+ roles. Hobnob has 98 built-in executors and zero community modules. For common infrastructure (Kubernetes, cloud providers, databases), you'll write modules from scratch.
-
-2. **Expressiveness ceiling.** When you need complex logic (dynamic resource generation, cross-node dependency resolution, inheritance hierarchies), Puppet's DSL and Chef's Ruby give you a real programming language. Hobnob's YAML composition handles 90% of cases but hits a wall on the other 10%.
-
-3. **Testing tools.** Puppet has rspec-puppet, PDK, Litmus. Chef has Test Kitchen, ChefSpec, InSpec. Ansible has Molecule. Hobnob has `validate`, `preview`, and `test` (YAML-based assertions against resolved policy) — functional but less mature than the Ruby/Python test ecosystems.
-
-4. **Compliance frameworks.** Chef InSpec provides CIS benchmark libraries. Puppet has compliance modules. Hobnob has compliance status tracking but no pre-built benchmark content.
-
-5. **Windows depth.** Puppet has deep Windows support built up over a decade of modules. Hobnob now has 22 Windows executors covering services, packages, users, firewall, scheduled tasks, hostname, timezone, registry, ACLs, Windows Features, IIS (sites + app pools), certificates, environment variables, domain membership, local security policy, Windows Update, PowerShell scripts, reboots, Windows Defender, SMB shares, and service recovery actions. The core Windows surface area is well covered; Puppet's advantage is in the long tail of community-contributed modules.
-
-6. **Agentless option.** Ansible's SSH-based push model means zero agent installation. Useful for one-off tasks, heterogeneous environments, and network devices. Hobnob requires an agent on every managed node.
-
-7. **Battle-testing.** Puppet has 15+ years of production use at 40K+ organizations. Every edge case in file permissions, package manager quirks, and OS-specific behavior has been found and fixed. Hobnob has zero production deployments. The 1,900+ tests catch a lot, but real-world deployment finds things tests don't.
-
 ## When to Choose Hobnob
 
 - **Free for up to 25 nodes** — all features, no time limit, no credit card
-- When you value **simplicity** — YAML configs anyone can read, one server, one binary, one publish command
-- When you value **security** — mTLS everywhere, ED25519 per-request signing, secrets never in plaintext, no insecure mode
-- When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds, no external database or runtime dependencies
+- When you value **simplicity** — YAML configs anyone can read, one server, one binary, one publish command. No DSL to learn — not true of Puppet manifests, Chef recipes, or CFEngine promises
+- When you value **security** — mTLS everywhere, ED25519 per-request signing on every payload (no other CM tool does this), and a first-class `secret:` resolver that never lets secrets touch config files, databases, logs, or wire payloads
+- When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds with a single curl command. No package manager, no runtime dependencies, no external database
 - When you value **performance** — ~300 µs check-ins, zero database queries on the hot path, 3,300 check-ins per second on a single core
 - When you need **scalability** — 50,000+ nodes on a single server, no compile masters, no database clusters, no worker pools
-- When **agent footprint** matters — 5 MB static binary for edge, IoT, containers, and resource-constrained hosts
-- When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments
+- When **agent footprint** matters — 5 MB static binary vs 50–200 MB for Ruby/Python-based agents. Deploys anywhere — edge, IoT, containers, resource-constrained hosts
+- When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments. Most complete offline story of any agent-based CM tool
 - When **total cost of ownership** matters — less than half the TCO of Puppet at 1,000 nodes, with infrastructure and staffing costs near zero
 
