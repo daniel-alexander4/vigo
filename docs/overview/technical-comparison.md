@@ -144,68 +144,53 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 ## Scalability
 
-### Apples-to-apples: 4 vCPU, 8 GB RAM, 5-minute check-in
+> **Note on methodology:** All tools are compared on the same reference hardware: 4 vCPU, 8 GB RAM, SSD storage, 5-minute check-in interval. Vendor-documented requirements are cited where available. Hobnob's figures are theoretical estimates derived from internal benchmarks — no production deployments exist. These comparisons are intended to illustrate architectural differences, not to make absolute performance claims. Real-world results depend on configuration complexity, network conditions, and workload patterns.
 
-All estimates assume the same hardware (4 vCPU, 8 GB RAM, SSD storage) running one server process with a 5-minute agent check-in interval.
+### Vendor-documented requirements
 
-| | Nodes on this hardware | Bottleneck | What runs out first |
-|---|---|---|---|
-| **Hobnob** | **50K-200K (theoretical*)** | SQLite write batching (50K) or PostgreSQL connections (200K) | Neither CPU nor RAM — I/O on the write path |
-| **Puppet** | ~1,000-2,000 | JRuby catalog compilation (1-2s per node × 4 threads) | CPU — Ruby interpretation saturates all 4 cores |
-| **Chef** | ~3,000-5,000 | PostgreSQL + cookbook serving | RAM — 8 GB is Chef Server's bare minimum |
-| **Ansible** | ~300-500 | SSH fork parallelism (~50 forks × 30s per host) | RAM + time — can't push to 500 hosts in 5 minutes |
-| **Salt** | ~5,000-8,000 | Python state compilation on master | CPU — Python GIL limits concurrency |
-| **CFEngine** | ~1,000 (Enterprise) | PostgreSQL reporting hub (8 MB per node) | RAM — Enterprise hub needs 8 MB/node for reporting DB |
-
-#### How the math works
-
-**Hobnob:** FleetIndex lookup is ~300µs per check-in (cache hit). At 4 cores, throughput is ~10,000 check-ins/sec. A 5-minute interval means 300 seconds to process all check-ins: 10,000 × 300 = 3,000,000 theoretical throughput. RAM for 200K thralls: ~78 MB (200K × 388 bytes). The actual bottleneck is SQLite — flushing 50K+ dirty records every 10 seconds exceeds comfortable write latency. Switching to PostgreSQL pushes the ceiling to ~200K. The conservative 50K-200K range also accounts for GC pauses, policy cache misses (10-50ms each after config changes), network I/O, and the principle that benchmarks don't predict production.
-
-**Puppet:** 8 GB must hold JRuby heap (2-3 GB for 4 instances), PuppetDB's PostgreSQL (2 GB), and the OS (500 MB). That leaves little headroom. Each catalog compilation takes 1-2 seconds of CPU time (Ruby interpreting manifests, querying Hiera, building the resource graph). With 4 JRuby instances: 2-4 compilations/sec. Over 5 minutes: 3 × 300 = 900 nodes (at ~1.5s average). Puppet PE documentation recommends dedicated compile masters at 4,000 nodes, but that assumes 16+ GB RAM with a separate PuppetDB server.
-
-**Chef:** Chef Infra Server's minimum documented requirement is 4 GB RAM. On 8 GB with PostgreSQL, Bookshelf (cookbook object store), and the Erlang front-end, you're at minimum spec. Chef's check-in is lighter than Puppet's (serving pre-built cookbooks, not compiling), so throughput is higher per-core, but RAM is the constraint.
-
-**Ansible:** Push model doesn't map directly to check-in intervals. To converge every 5 minutes, you need `ansible-pull` with cron or Tower/AWX scheduling. Each fork consumes ~100 MB Python process. On 8 GB with 50 forks and 30s average playbook runtime: 50 × (300s / 30s) = 500 hosts per 5-minute cycle. More hosts require Tower clustering.
-
-**Salt:** Salt Master uses ZeroMQ (efficient), but state compilation is Python (single-threaded per minion). Documentation suggests 5,000 minions per master as a baseline. On 4 vCPU with 8 GB, the Python GIL and state compilation overhead limit throughput.
-
-**CFEngine:** The C agent is extremely lightweight, but CFEngine Enterprise runs a PostgreSQL-backed reporting hub that requires ~8 MB per bootstrapped node (per CFEngine documentation). On 8 GB: ~1,000 nodes. At 5,000 nodes, CFEngine recommends 40 GB RAM. The 50,000+ node deployments cited in CFEngine marketing require dedicated hardware (400+ GB RAM for the hub). The community edition without the reporting hub is lighter, but lacks the dashboards and compliance reporting that Enterprise provides. The C agent's policy evaluation remains efficient — the bottleneck is entirely the server-side reporting database.
-
-*Hobnob figures are theoretical — zero production deployments exist. See [Scalability Analysis](../../devdocs/scalability.md) for benchmark methodology.
-
-### Memory budget on 8 GB
-
-| | Server base | Per-node cost | 10K nodes | 50K nodes | Fits in 8 GB? |
-|---|---|---|---|---|---|
-| Hobnob | ~200 MB (Go + SQLite) | 388 bytes | 4 MB | 20 MB | Yes — 7.5 GB free |
-| Puppet | ~4.5 GB (JRuby + PuppetDB) | ~80 KB | 800 MB | 4 GB | Barely — 0 headroom at 50K |
-| Chef | ~4 GB (Erlang + PostgreSQL) | ~30 KB | 300 MB | 1.5 GB | Yes at 10K, tight at 50K |
-| Salt | ~2 GB (Python + ZeroMQ) | ~20 KB | 200 MB | 1 GB | Yes |
-| CFEngine | ~500 MB (C + PostgreSQL) | ~8 MB | 80 GB | 400 GB | No — needs 80 GB at 10K |
-
-Hobnob is the only tool that fits 50K nodes in 8 GB RAM. CFEngine's agent is light but its Enterprise hub needs 8 MB per node for PostgreSQL reporting. Puppet and CFEngine Enterprise both exceed 8 GB well before 10K nodes.
-
-### Check-in cost comparison
-
-| | Per-check-in server cost | DB ops on check-in | What happens per check-in |
-|---|---|---|---|
-| Hobnob | ~300 µs (cache hit) | Zero | In-memory FleetIndex lookup + pre-built policy cache copy |
-| Puppet | 1-2s (catalog compile) | 3-5 PuppetDB queries | Ruby: parse manifests → resolve Hiera → query exported resources → build catalog graph → serialize |
-| Chef | ~100ms (cookbook serve) | 2-3 PostgreSQL queries | Resolve run list → serve cookbook files → update node object |
-| Salt | ~20ms (state compile) | Cache lookup | Python: compile state tree → resolve pillar → serialize |
-| CFEngine | ~1ms (policy serve) + reporting ingestion | PostgreSQL INSERT (Enterprise) | Serve flat policy files + ingest run report into PostgreSQL |
-
-Over a 5-minute window with 10,000 nodes checking in (~33/sec):
-
-| | Server CPU usage | Can it keep up? |
+| | Documented capacity at vendor-recommended hardware | Vendor source |
 |---|---|---|
-| Hobnob | ~1% (33 × 300µs = 10ms/sec) | Yes — 99% idle |
-| Puppet | ~400% (33 × 1.5s = 49.5s of CPU per second of wall time) | No — needs 12+ cores or compile masters |
-| Chef | ~33% (33 × 100ms = 3.3s/sec) | Yes — but tight |
-| Salt | ~66% (33 × 20ms = 660ms/sec) | Yes |
-| CFEngine | ~3% (33 × 1ms = 33ms/sec) | Yes — 97% idle |
+| **Puppet** | Up to 2,500 nodes on standard architecture (12 cores, 24 GB RAM). Large architecture (2,500-20,000) requires 16 cores, 32 GB primary + dedicated compilers (6 cores, 12 GB each, adding 1,500-3,000 nodes each). Extra-large (20,000+) adds a dedicated PE-PostgreSQL node (16 cores, 128 GB). | [PE 2025 Hardware Requirements](https://www.puppet.com/docs/pe/2025.0/hardware_requirements.html) |
+| **Chef** | Minimum 4 GB RAM (under 33 client runs/min). Disk allocation of ~2 MB per node. Chef Infra Server is deprecated (EOL November 2026), replaced by Chef 360 Platform. | [Chef System Requirements](https://docs.chef.io/chef_system_requirements/) |
+| **Ansible** | ~1 GB per 10 forks + 2 GB base. 4 forks per CPU core baseline. 400 forks requires ~42 GB RAM. Each fork ~100 MB. | [AAP 2.5 System Requirements](https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.5/html/rpm_installation/platform-system-requirements) |
+| **Salt** | 5,000-50,000 minions per master depending on hardware. 8 GB and 8 cores sufficient for ~1,200 minions. Documentation notes 50,000 minions possible on 64-bit OS without modification. | [Salt at Scale](https://docs.saltproject.io/en/latest/topics/tutorials/intro_scale.html) |
+| **CFEngine** | Minimum 8 MB RAM per bootstrapped agent on the Enterprise hub. 5,000 hosts requires 40 GB RAM, 500 GB disk. Community edition without reporting hub is lighter. | [CFEngine 3.26 Installation](https://docs.cfengine.com/docs/3.26/getting-started-installation-general-installation-installation-enterprise.html) |
+| **Hobnob** | No vendor-documented capacity (no production deployments). Internal benchmarks: ~388 bytes per thrall in FleetIndex, ~300µs per check-in on cache hit, ~10,000 check-ins/sec on 4 cores. Conservative estimate: 50K-200K thralls. | [Scalability Analysis](../../devdocs/scalability.md) |
 
-At 10,000 nodes, Puppet physically cannot keep up on 4 cores — it needs more than 4 seconds of CPU time per second of wall time. CFEngine's policy serving is efficient but the Enterprise reporting hub would need 80 GB RAM for 10K nodes, so it wouldn't be running on this hardware. Hobnob handles 10K nodes at 1% CPU with 4 MB of fleet memory.
+### Estimated capacity on reference hardware (4 vCPU, 8 GB RAM, 5-min check-in)
+
+| | Estimated nodes | Primary constraint | Notes |
+|---|---|---|---|
+| **Hobnob** | 50K-200K* | SQLite write batching (50K); PostgreSQL extends to 200K | *Theoretical. FleetIndex uses ~388 bytes/node. 200K nodes = ~78 MB fleet memory. |
+| **Puppet** | ~100-500 | Below vendor minimum. PE requires 10 GB RAM for 100 nodes, 24 GB for 2,500. | 8 GB is below the documented minimum for any production tier. |
+| **Chef** | ~2,000-4,000 | 8 GB meets minimum (4 GB base + node overhead at ~2 MB disk/node). | Chef's check-in is cookbook serving, lighter than catalog compilation. |
+| **Ansible** | ~200-400 | ~50 concurrent forks at 100 MB each. Push model: 50 forks × 5 min / 30s = ~500 hosts/cycle. | Requires Tower/AWX for scheduled convergence. |
+| **Salt** | ~1,200-5,000 | Salt docs indicate 8 GB + 8 cores handles ~1,200 minions. ZeroMQ transport is efficient. | Python state compilation is the CPU bottleneck. |
+| **CFEngine** | ~1,000 | Enterprise hub: 8 MB/node × 1,000 = 8 GB. Community edition without reporting DB handles more. | Enterprise reporting requires PostgreSQL; community edition serves flat policy files only. |
+
+*Hobnob's estimate is based on benchmark extrapolation, not production measurements. The conservative range accounts for GC pauses, policy cache misses after config changes (10-50ms vs 300µs cache hit), network I/O contention, and SQLite WAL checkpoint overhead. See [Scalability Analysis](../../devdocs/scalability.md) for methodology.
+
+### Server memory per node
+
+| | Per-node server memory | Source |
+|---|---|---|
+| Hobnob | ~388 bytes | FleetIndex struct size (measured) |
+| Puppet | Varies by facts/catalog size | PuppetDB stores full fact sets + catalogs in PostgreSQL |
+| Chef | ~2 MB disk per node | Chef docs: "allocate 2 MB for each node" |
+| Ansible | ~100 MB per concurrent fork | Red Hat docs: "1 GB per 10 forks" |
+| Salt | Varies by pillar/state complexity | No per-node figure documented |
+| CFEngine | ~8 MB per node (Enterprise hub) | CFEngine docs: "not lower than 8MB per bootstrapped agent" |
+
+### Check-in characteristics
+
+| | What happens per check-in | Server-side computation |
+|---|---|---|
+| Hobnob | In-memory FleetIndex lookup, pre-built policy cache copy, async batched DB writes | Minimal — ~300µs per check-in (benchmarked, cache hit) |
+| Puppet | Parse manifests, resolve Hiera data, query PuppetDB, compile catalog graph, serialize | Significant — Ruby/JRuby interpretation, multiple DB queries |
+| Chef | Resolve run list, serve cookbook files, update node object | Moderate — cookbook file serving + PostgreSQL writes |
+| Ansible | (Push model — no agent check-in. Controller compiles and pushes via SSH.) | N/A for check-in; compilation happens on the controller |
+| Salt | Compile state tree, resolve pillar data, serialize | Moderate — Python state compilation per minion |
+| CFEngine | Serve flat policy files; Enterprise hub ingests run reports | Minimal for policy serving; moderate for report ingestion |
 
 ### Scaling architecture
 
@@ -217,8 +202,6 @@ At 10,000 nodes, Puppet physically cannot keep up on 4 cores — it needs more t
 | Ansible | Tower/AWX clusters | Via HA proxy | Via SCM (git) | N/A (push model) |
 | Salt | Multi-master (syndic) | Manual failover | Via gitfs | Via top.sls targeting |
 | CFEngine | Hub-spoke (Mission Portal) | Manual | Via policy hub push | Via `classes` |
-
-Hobnob's spanner is simpler to configure than Puppet's compile master infrastructure or Salt's syndic topology. The auto-failover and config sync features are unusual — most CM tools require manual intervention when a spoke/compile-master goes down.
 
 ## Operational Characteristics
 
