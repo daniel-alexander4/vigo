@@ -157,11 +157,21 @@
 
 <section class="quickstart">
     <div class="quickstart__inner">
-        <h2>Under management in one command</h2>
+        <h2>Server up and running with one command</h2>
+        <div class="code-block">
+            <code>docker run -d --name hobnob -p 8181:8181 -p 1530:1530 -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest</code>
+        </div>
+        <p>That's it. TLS certificates, database, secrets, and example configs are auto-generated on first start. Open <code>http://localhost:8181</code> to see the dashboard.</p>
+    </div>
+</section>
+
+<section class="quickstart quickstart--alt">
+    <div class="quickstart__inner">
+        <h2>Agents enrolled in 30 seconds</h2>
         <div class="code-block">
             <code>curl -sSf http://server:8181/bootstrap | sudo sh</code>
         </div>
-        <p>Downloads the 5 MB agent binary. Generates TLS certificates. Enrolls with the server. Installs the system service. Verifies connectivity. Done in 30 seconds.</p>
+        <p>Downloads the 5 MB agent binary. Generates TLS certificates. Enrolls with the server. Installs the system service. Verifies connectivity.</p>
         <p class="quickstart__platforms">Works on Linux, macOS, FreeBSD, OpenBSD, NetBSD, and illumos.<br>Windows: <code>irm http://server:8181/bootstrap?os=windows | iex</code></p>
     </div>
 </section>

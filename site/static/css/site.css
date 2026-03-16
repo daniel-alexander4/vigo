@@ -199,6 +199,8 @@ th.comparison__highlight {
 
 .advantage p:last-child { font-size: 14px; color: var(--color-muted); line-height: 1.5; }
 
+.quickstart--alt { background: var(--color-bg); }
+
 /* --- Quickstart extras --- */
 
 .quickstart__platforms { font-size: 13px; color: var(--color-muted); margin-top: 8px; }
