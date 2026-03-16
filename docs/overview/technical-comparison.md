@@ -233,8 +233,6 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 ### Reading the TCO tables
 
-**Hobnob is priced at 75% of Puppet Enterprise.** Hobnob's entry-tier pricing ($84/node/year) is deliberately set at 75% of Puppet Enterprise Standard's commonly cited ~$112/node/year list price. This anchoring is the basis for Hobnob's pricing at every tier. At 1,000 nodes, Hobnob's total TCO (~$117K) is less than half of Puppet's (~$284K) because Hobnob's infrastructure and staffing costs are a fraction of what DSL-based tools require.
-
 **&dagger; Puppet pricing note.** Puppet does not publish current per-node pricing — the ~$112/node/year figure is based on Puppet Enterprise Standard list pricing that was widely cited in industry analyses and partner price sheets prior to Puppet's acquisition by Perforce in 2022. Actual Puppet pricing may vary by contract. Puppet also offers Premium (~$199/node) and volume discounts. Contact Puppet for current quotes.
 
 **Agent fleet overhead is real money at scale.** At 10,000 nodes, the 200 MB Puppet agent consumes 2 TB of aggregate RAM across the fleet. At cloud memory prices, that's ~$120K/year in RAM that could be used for application workloads. Hobnob's 8 MB agent and CFEngine's 5 MB agent are an order of magnitude cheaper on the managed nodes.
@@ -317,10 +315,3 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - Large fleets where check-in performance is critical
 - Air-gapped or unreliable network environments needing offline convergence
 
-## When to Choose Something Else
-
-- **Puppet:** Deep Windows management, established compliance frameworks, massive module ecosystem
-- **Ansible:** Agentless requirement, cloud provisioning, ad-hoc tasks across heterogeneous infrastructure
-- **Chef:** Application-centric infrastructure (Habitat), Ruby shop with existing Chef investment
-- **Salt:** Event-driven infrastructure, real-time remote execution at scale, reactor system
-- **CFEngine:** Minimal agent footprint (~3 MB C binary), promise theory purity, proven at scale with dedicated hub hardware (8 MB/node RAM for Enterprise reporting)
