@@ -1,6 +1,8 @@
 # Technical Comparison
 
-An honest comparison of Hobnob against five established configuration management systems: Puppet, CFEngine, Chef, Ansible, and SaltStack. This evaluates architecture, security, performance, expressiveness, and operational characteristics.
+A factual comparison of Hobnob against five established configuration management systems: Puppet, CFEngine, Chef, Ansible, and SaltStack — covering architecture, security, performance, expressiveness, scalability, and operational characteristics.
+
+Where capacity and performance are compared, all tools are evaluated against the same reference hardware: **4 vCPU, 8 GB RAM, SSD storage, with a 5-minute agent check-in interval.** Vendor-documented requirements are cited where available. Hobnob has no production deployments — its figures are theoretical estimates derived from internal benchmarks and should be read as projections, not measured results.
 
 ## Architecture at a Glance
 
