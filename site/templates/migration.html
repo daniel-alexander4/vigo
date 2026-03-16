@@ -1,0 +1,143 @@
+{{template "base" .}}
+{{define "content"}}
+<section class="page-hero">
+    <div class="page-hero__inner">
+        <h1>Migration Guides</h1>
+        <p>Moving from Puppet, Ansible, Chef, Salt, or CFEngine? These guides map the concepts you already know to their Hobnob equivalents.</p>
+    </div>
+</section>
+
+<section class="migration-compare">
+    <div class="migration-compare__inner">
+        <h2>Concept mapping</h2>
+        <div class="comparison__table-wrapper">
+        <table class="comparison__table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Puppet</th>
+                    <th>Ansible</th>
+                    <th>Chef</th>
+                    <th>Salt</th>
+                    <th>CFEngine</th>
+                    <th class="comparison__highlight">Hobnob</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="comparison__label">Config language</td>
+                    <td>Puppet DSL</td>
+                    <td>YAML + Jinja2</td>
+                    <td>Ruby DSL</td>
+                    <td>YAML + Jinja2</td>
+                    <td>CFEngine DSL</td>
+                    <td class="comparison__highlight"><strong>YAML (.hnb)</strong></td>
+                </tr>
+                <tr>
+                    <td class="comparison__label">Data lookup</td>
+                    <td>Hiera</td>
+                    <td>host/group vars</td>
+                    <td>Attributes</td>
+                    <td>Pillar</td>
+                    <td>augments</td>
+                    <td class="comparison__highlight"><strong>vars / environment_overrides</strong></td>
+                </tr>
+                <tr>
+                    <td class="comparison__label">System facts</td>
+                    <td>Facter</td>
+                    <td>Facts</td>
+                    <td>Ohai</td>
+                    <td>Grains</td>
+                    <td>hard classes</td>
+                    <td class="comparison__highlight"><strong>Traits</strong></td>
+                </tr>
+                <tr>
+                    <td class="comparison__label">Reusable unit</td>
+                    <td>Class / Module</td>
+                    <td>Role</td>
+                    <td>Cookbook</td>
+                    <td>Formula</td>
+                    <td>Bundle</td>
+                    <td class="comparison__highlight"><strong>Module</strong></td>
+                </tr>
+                <tr>
+                    <td class="comparison__label">Node classification</td>
+                    <td>site.pp / ENC</td>
+                    <td>Inventory</td>
+                    <td>Run list</td>
+                    <td>top.sls</td>
+                    <td>promises.cf</td>
+                    <td class="comparison__highlight"><strong>nodes.hnb (first-match)</strong></td>
+                </tr>
+                <tr>
+                    <td class="comparison__label">Agent model</td>
+                    <td>Pull (30 min)</td>
+                    <td>Push (SSH)</td>
+                    <td>Pull (30 min)</td>
+                    <td>Push / Pull</td>
+                    <td>Pull (5 min)</td>
+                    <td class="comparison__highlight"><strong>Pull (configurable)</strong></td>
+                </tr>
+                <tr>
+                    <td class="comparison__label">Secrets</td>
+                    <td>hiera-eyaml</td>
+                    <td>Vault</td>
+                    <td>Data Bags</td>
+                    <td>GPG pillar</td>
+                    <td>cf-secret</td>
+                    <td class="comparison__highlight"><strong>secret: prefix</strong></td>
+                </tr>
+                <tr>
+                    <td class="comparison__label">Ordering</td>
+                    <td>require/before</td>
+                    <td>task order</td>
+                    <td>notifies</td>
+                    <td>requisites</td>
+                    <td>normal order</td>
+                    <td class="comparison__highlight"><strong>depends_on / before DAG</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</section>
+
+<section class="migration-guides">
+    <div class="migration-guides__inner">
+        <h2>Choose your starting point</h2>
+        <div class="migration-guides__grid">
+            <a href="/docs/migration/puppet" class="migration-card">
+                <h3>From Puppet</h3>
+                <p>Closest conceptual match. Pull-based, catalog compilation, resources, Facter &rarr; Traits. Manifests &rarr; YAML modules.</p>
+            </a>
+            <a href="/docs/migration/ansible" class="migration-card">
+                <h3>From Ansible</h3>
+                <p>Push-to-pull shift. Playbooks &rarr; modules + roles. Jinja2 &rarr; Go templates. Handlers &rarr; notify/subscribes.</p>
+            </a>
+            <a href="/docs/migration/chef" class="migration-card">
+                <h3>From Chef</h3>
+                <p>Ruby DSL &rarr; YAML. 15 attribute levels &rarr; 3. Cookbooks &rarr; modules. Run list &rarr; roles.</p>
+            </a>
+            <a href="/docs/migration/salt" class="migration-card">
+                <h3>From Salt</h3>
+                <p>Both YAML-based. Pillar &rarr; vars. Grains &rarr; Traits. top.sls &rarr; nodes.hnb. Reactors &rarr; webhooks.</p>
+            </a>
+            <a href="/docs/migration/cfengine" class="migration-card">
+                <h3>From CFEngine</h3>
+                <p>Promise theory heritage. Classes &rarr; when: expressions. Bundles &rarr; modules. Augments &rarr; vars.</p>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="cta">
+    <div class="cta__inner">
+        <h2>Ready to switch?</h2>
+        <p>Free for 25 nodes. Try it alongside your existing CM.</p>
+        <div class="hero__actions">
+            <a href="/docs/getting-started/installation" class="btn btn--primary">Install Hobnob</a>
+            <a href="/docs" class="btn btn--secondary">Read the Docs</a>
+        </div>
+    </div>
+</section>
+{{end}}

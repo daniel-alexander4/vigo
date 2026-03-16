@@ -41,11 +41,11 @@ var templateFS embed.FS
 var docsDir = ""
 
 // contentFiles maps URL slugs to markdown files relative to the docs directory.
+// Pages with custom templates (differentiators, pricing, migration) are not in this map.
 var contentFiles = map[string]string{
-	"overview":        "overview/overview.md",
-	"differentiators": "overview/differentiators.md",
-	"fact-sheet":      "overview/fact-sheet.md",
-	"comparison":      "overview/technical-comparison.md",
+	"overview":   "overview/overview.md",
+	"fact-sheet": "overview/fact-sheet.md",
+	"comparison": "overview/technical-comparison.md",
 }
 
 // --- Types ---
@@ -102,7 +102,9 @@ func main() {
 	}
 	landingTmpl := parsePage("landing.html")
 	pageTmpl := parsePage("page.html")
+	diffTmpl := parsePage("differentiators.html")
 	pricingTmpl := parsePage("pricing.html")
+	migrationTmpl := parsePage("migration.html")
 	docsTmpl := parsePage("docs.html")
 
 	// Content dir for top-level pages (OVERVIEW.md, etc.).
@@ -151,11 +153,27 @@ func main() {
 		})
 	}
 
+	// Why Hobnob — custom template with styled differentiator cards.
+	mux.HandleFunc("/differentiators", func(w http.ResponseWriter, r *http.Request) {
+		diffTmpl.ExecuteTemplate(w, "base", pageData{
+			Title:     "Why Hobnob",
+			ActiveNav: "differentiators",
+		})
+	})
+
 	// Pricing page — custom template with cards and support table.
 	mux.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
 		pricingTmpl.ExecuteTemplate(w, "base", pageData{
 			Title:     "Pricing",
 			ActiveNav: "pricing",
+		})
+	})
+
+	// Migration guides landing page.
+	mux.HandleFunc("/migration", func(w http.ResponseWriter, r *http.Request) {
+		migrationTmpl.ExecuteTemplate(w, "base", pageData{
+			Title:     "Migration Guides",
+			ActiveNav: "migration",
 		})
 	})
 

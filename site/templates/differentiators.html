@@ -1,0 +1,116 @@
+{{template "base" .}}
+{{define "content"}}
+<section class="page-hero">
+    <div class="page-hero__inner">
+        <h1>Why Hobnob</h1>
+        <p>What Hobnob does in safety, reliability, and simplicity that other configuration management systems do not.</p>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128274; Safety</h2>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>Per-request ED25519 signatures</h4>
+                <p>Every agent request is individually signed and verified against stored public keys. Not just TLS &mdash; actual cryptographic proof of identity on every API call. Replay and impersonation require the private key, not just a valid certificate.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Secrets are never materialized</h4>
+                <p>The <code>secret:</code> prefix resolves at config load through a pluggable provider and is stripped before transmission. Secrets never appear in YAML files, environment variables, logs, database rows, gRPC payloads, or run result reports.</p>
+            </div>
+            <div class="diff-card">
+                <h4>No plaintext mode</h4>
+                <p>mTLS is the only transport. There is no <code>--no-ssl</code> flag, no plaintext fallback, no "development mode" that skips encryption. The insecure path does not exist in the codebase.</p>
+            </div>
+            <div class="diff-card">
+                <h4>One-time enrollment tokens</h4>
+                <p>Tokens are bcrypt-hashed at rest and bound to hostname glob patterns. A token that matches <code>*.web.prod</code> cannot enroll a machine named <code>db01.staging</code>. Used once, then permanently invalidated.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Self-protection guardrails</h4>
+                <p>The validation pipeline blocks any resource that targets the agent binary, server binary, config directory, or service unit. Even <code>--dangerous</code> mode cannot bypass these checks. The system cannot be used to break itself.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Source-available agent</h4>
+                <p>The code that runs as root on your machines is readable and auditable under the Elastic License 2.0. You do not have to trust a proprietary binary with root access on every machine in your fleet.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section diff-section--alt">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#9889; Reliability</h2>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>Signed policy bundles with offline convergence</h4>
+                <p>The server signs bundles with ED25519. The agent verifies, caches in LMDB, and continues converging indefinitely if the server disappears. Pending results queue and drain on reconnect.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Adaptive stream promotion</h4>
+                <p>Agents default to lightweight stateless polling. Persistent streams are promoted only when the server has work to dispatch, then released. Idle agents consume zero stream resources.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Evaluation resilience</h4>
+                <p>A template render error or a <code>when:</code> parse error in one resource skips that resource and continues with the rest of the convergence run. A single bad resource does not abort the entire policy.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Zero database operations on the hot path</h4>
+                <p>The FleetIndex is a fully in-memory index with async dirty-set flushing. An agent check-in &mdash; lookup, policy compilation, and response &mdash; touches zero database queries.</p>
+            </div>
+            <div class="diff-card">
+                <h4>The agent never exits on transient failures</h4>
+                <p>Server unreachable, TLS handshake failure, malformed response, policy evaluation crash &mdash; all handled with backoff and retry. The agent binary, once started, runs until explicitly stopped.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Reload with graceful fallback</h4>
+                <p>Config publish validates, syncs, and reloads. If the new config fails validation, the server keeps the previous working config. No downtime, no partial state.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128196; Simplicity</h2>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>One server at any scale</h4>
+                <p>No compile masters, no worker pools, no database clusters, no load balancers. One process, one SQLite file, one config directory. The architecture does not change whether you manage 10 nodes or 100,000.</p>
+            </div>
+            <div class="diff-card">
+                <h4>~5 MB static agent binary</h4>
+                <p>No Ruby, no Python, no JVM, no package manager ecosystem on managed nodes. Copy the binary, run it. Zero runtime dependencies.</p>
+            </div>
+            <div class="diff-card">
+                <h4>One config format, one config path</h4>
+                <p>There is exactly one way to configure Hobnob: edit YAML files and publish. No API writes, no database config, no UI mutations. One source of truth, one format, one tool.</p>
+            </div>
+            <div class="diff-card">
+                <h4>No DSL</h4>
+                <p>The configuration language is YAML. Go templates appear only inside <code>content:</code> attributes. No custom language to learn, no compiler, no parser quirks.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Bootstrap is one command</h4>
+                <p><code>curl | sudo sh</code> downloads the binary, generates TLS certificates, registers with the server, installs the service, and verifies connectivity. Under management in 30 seconds.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Seven OS families from one codebase</h4>
+                <p>Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows. Write <code>type: service</code> and it dispatches to systemd, launchctl, rc.d, rcctl, SMF, or sc.exe.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta">
+    <div class="cta__inner">
+        <h2>See how it compares</h2>
+        <p>Detailed head-to-head analysis against Puppet, Ansible, Chef, Salt, and CFEngine.</p>
+        <div class="hero__actions">
+            <a href="/comparison" class="btn btn--primary">Technical Comparison</a>
+            <a href="/migration" class="btn btn--secondary">Migration Guides</a>
+        </div>
+    </div>
+</section>
+{{end}}

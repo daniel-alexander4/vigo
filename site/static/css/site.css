@@ -250,6 +250,63 @@ th.comparison__highlight {
 .page-hero h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
 .page-hero p { font-size: 16px; color: var(--color-muted); }
 
+/* --- Differentiators --- */
+
+.diff-section { padding: 48px 24px; }
+.diff-section--alt { background: var(--color-surface); }
+.diff-section__inner { max-width: var(--max-width); margin: 0 auto; }
+.diff-section__title { font-size: 24px; font-weight: 800; margin-bottom: 24px; text-align: center; }
+
+.diff-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.diff-card {
+    padding: 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-bg);
+}
+
+.diff-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.diff-card p { font-size: 13px; color: var(--color-muted); line-height: 1.5; }
+.diff-card code { font-family: var(--font-mono); font-size: 12px; background: var(--color-code-bg); padding: 1px 4px; border-radius: 3px; }
+
+/* --- Migration --- */
+
+.migration-compare { padding: 48px 24px; background: var(--color-surface); }
+.migration-compare__inner { max-width: var(--max-width); margin: 0 auto; }
+.migration-compare__inner h2 { text-align: center; font-size: 24px; margin-bottom: 24px; }
+
+.migration-guides { padding: 48px 24px; }
+.migration-guides__inner { max-width: var(--max-width); margin: 0 auto; }
+.migration-guides__inner h2 { text-align: center; font-size: 24px; margin-bottom: 24px; }
+
+.migration-guides__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.migration-card {
+    display: block;
+    padding: 24px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    text-decoration: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.migration-card:hover {
+    border-color: var(--color-brand);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
+}
+
+.migration-card h3 { font-size: 16px; font-weight: 700; color: var(--color-text); margin-bottom: 6px; }
+.migration-card p { font-size: 13px; color: var(--color-muted); line-height: 1.5; }
+
 /* --- Page content --- */
 
 .page-content { max-width: 800px; margin: 0 auto; padding: 48px 24px; }
@@ -547,4 +604,6 @@ th.comparison__highlight {
     .comparison__table th, .comparison__table td { padding: 6px 8px; }
     .pricing__cards { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
     .pricing-faq__grid { grid-template-columns: 1fr; }
+    .diff-grid { grid-template-columns: 1fr; }
+    .migration-guides__grid { grid-template-columns: 1fr; }
 }
