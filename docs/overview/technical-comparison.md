@@ -265,10 +265,13 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 
 ## When to Choose Hobnob
 
+- **Free for up to 25 nodes** — all features, no time limit, no credit card
+- When you value **simplicity** — YAML configs anyone can read, one server, one binary, one publish command
+- When you value **security** — mTLS everywhere, ED25519 per-request signing, secrets never in plaintext, no insecure mode
+- When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds, no external database or runtime dependencies
+- When you value **performance** — 50K+ nodes on a single server, ~300 µs check-ins, zero DB on the hot path
 - Greenfield deployments where ecosystem depth isn't needed
 - Environments where agent footprint matters (edge, IoT, containers)
-- Security-conscious organizations that want strong transport auth and secrets handling
-- Teams that value config readability over DSL power
 - Large fleets where check-in performance is critical
 - Air-gapped or unreliable network environments needing offline convergence
 
