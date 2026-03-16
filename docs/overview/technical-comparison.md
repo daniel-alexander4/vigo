@@ -310,7 +310,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - When you value **security** — mTLS everywhere, ED25519 per-request signing, secrets never in plaintext, no insecure mode
 - When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds, no external database or runtime dependencies
 - When you value **performance** — 50K+ nodes on a single server, ~300 µs check-ins, zero DB on the hot path
-- When you're starting **greenfield** — no legacy modules to port, no existing Puppet/Chef investment to protect
+- When you're **starting fresh** — no legacy modules to port, no existing Puppet/Chef investment to protect
 - When **agent footprint** matters — 5 MB static binary for edge, IoT, containers, and resource-constrained hosts
 - When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments
 - When **total cost of ownership** matters — less than half the TCO of Puppet at 1,000 nodes, with infrastructure and staffing costs near zero
