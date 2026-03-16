@@ -91,6 +91,31 @@ body {
     color: #fff;
 }
 
+.sidebar__logo-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.sidebar__logo-link:hover {
+    opacity: 0.9;
+}
+
+.sidebar__logo-img {
+    height: 28px;
+}
+
+.sidebar__icon-img {
+    height: 22px;
+    margin-right: 8px;
+}
+
+.sidebar__brand-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+}
+
 .sidebar__nav {
     padding: 12px 0;
     display: flex;

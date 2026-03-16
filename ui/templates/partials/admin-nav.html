@@ -1,7 +1,10 @@
 {{define "admin-nav"}}
 <aside class="sidebar sidebar--admin">
     <div class="sidebar__brand">
-        <a href="/admin" class="sidebar__logo sidebar__logo--link">Admin</a>
+        <a href="/admin" class="sidebar__logo-link">
+            <img src="/static/img/icon.svg" alt="Admin" class="sidebar__icon-img">
+            <span class="sidebar__brand-text">Admin</span>
+        </a>
     </div>
     <nav class="sidebar__nav">
         <a href="/admin" class="nav-link{{if eq .ActiveNav "admin"}} nav-link--active{{end}}">

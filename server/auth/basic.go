@@ -225,7 +225,7 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
 <body>
     <div class="login-container">
         <div class="login-card">
-            <h1 class="login-title">Hobnob</h1>
+            <img src="/static/img/logo.svg" alt="Hobnob" style="height:36px;margin-bottom:0.5rem">
             <p class="login-subtitle">Sign in to continue</p>`))
 	if errMsg != "" {
 		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + html.EscapeString(errMsg) + `</p>`))
@@ -265,7 +265,7 @@ func serveSetupPage(w http.ResponseWriter) {
 <body>
     <div class="login-container">
         <div class="login-card" style="max-width:480px">
-            <h1 class="login-title">Hobnob</h1>
+            <img src="/static/img/logo.svg" alt="Hobnob" style="height:36px;margin-bottom:0.5rem">
             <p class="login-subtitle">Set Admin Password</p>
             <p style="color:#6c757d;text-align:center;margin-bottom:1.5rem;font-size:0.9rem">
                 An <strong>admin</strong> account has been created. Set its password to sign in.

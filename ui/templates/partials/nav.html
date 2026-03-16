@@ -1,7 +1,9 @@
 {{define "nav"}}
 <aside class="sidebar">
     <div class="sidebar__brand">
-        <span class="sidebar__logo">Hobnob</span>
+        <a href="/" class="sidebar__logo-link">
+            <img src="/static/img/logo-dark.svg" alt="Hobnob" class="sidebar__logo-img">
+        </a>
     </div>
     <nav class="sidebar__nav">
         <a href="/" class="nav-link{{if eq .ActiveNav "dashboard"}} nav-link--active{{end}}">

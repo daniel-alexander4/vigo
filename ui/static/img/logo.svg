@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
+  <!-- Node V icon: V letter shape with dots at endpoints -->
+  <!-- Top-left envoy dot -->
+  <circle cx="8" cy="8" r="4.5" fill="#667eea"/>
+  <!-- Top-right envoy dot -->
+  <circle cx="38" cy="8" r="4.5" fill="#667eea"/>
+  <!-- Lines from envoy dots to server dot -->
+  <line x1="8" y1="12.5" x2="23" y2="48" stroke="#667eea" stroke-width="3" stroke-linecap="round"/>
+  <line x1="38" y1="12.5" x2="23" y2="48" stroke="#667eea" stroke-width="3" stroke-linecap="round"/>
+  <!-- Bottom server dot (larger) -->
+  <circle cx="23" cy="50" r="6" fill="#667eea"/>
+  <!-- Wordmark: "vigo" in Ubuntu font -->
+  <text x="52" y="46" font-family="Ubuntu, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="40" font-weight="500" letter-spacing="-0.5">
+    <tspan fill="#667eea">v</tspan><tspan fill="#2d3748">igo</tspan>
+  </text>
+</svg>

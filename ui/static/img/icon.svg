@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Node V icon: two envoy dots at top, server dot at bottom -->
+  <!-- Top-left envoy dot -->
+  <circle cx="12" cy="10" r="5.5" fill="#667eea"/>
+  <!-- Top-right envoy dot -->
+  <circle cx="52" cy="10" r="5.5" fill="#667eea"/>
+  <!-- Lines from envoy dots to server dot -->
+  <line x1="12" y1="15.5" x2="32" y2="50" stroke="#667eea" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="52" y1="15.5" x2="32" y2="50" stroke="#667eea" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Bottom server dot (larger) -->
+  <circle cx="32" cy="53" r="7.5" fill="#667eea"/>
+</svg>
