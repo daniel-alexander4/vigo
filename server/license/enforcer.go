@@ -69,6 +69,7 @@ type Enforcer struct {
 	license      *License
 	licenseDir   string
 	graceDir     string
+	caFile       string // TLS CA cert path for fingerprint computation
 	counter      ThrallCounter
 	shutdownFn   ShutdownFunc
 	stage        Stage
@@ -80,10 +81,12 @@ type Enforcer struct {
 // NewEnforcer creates an enforcer that scans licenseDir for valid .lic files.
 // It validates the license immediately and returns an error if no valid
 // license is found or the license is at Stage 3 (service stop).
-func NewEnforcer(licenseDir, graceDir string, counter ThrallCounter, shutdownFn ShutdownFunc) (*Enforcer, error) {
+// caFile is the path to the TLS CA cert (used for machine fingerprint validation).
+func NewEnforcer(licenseDir, graceDir, caFile string, counter ThrallCounter, shutdownFn ShutdownFunc) (*Enforcer, error) {
 	e := &Enforcer{
 		licenseDir: licenseDir,
 		graceDir:   graceDir,
+		caFile:     caFile,
 		counter:    counter,
 		shutdownFn: shutdownFn,
 	}
@@ -200,6 +203,29 @@ func (e *Enforcer) loadAndCheckLocked() error {
 
 	slog.Info("license loaded", "path", path)
 	e.license = lic
+
+	// Validate machine fingerprint for paid licenses.
+	// Free tier (no fingerprint) is always accepted.
+	if lic.Payload.Fingerprint != "" {
+		actual, fpErr := MachineFingerprint(e.caFile)
+		if fpErr != nil {
+			slog.Warn("license fingerprint check: could not compute machine fingerprint", "error", fpErr)
+		} else if actual != lic.Payload.Fingerprint {
+			slog.Warn("license fingerprint mismatch — license is bound to a different machine",
+				"expected", lic.Payload.Fingerprint[:12]+"...",
+				"actual", actual[:12]+"...",
+			)
+			e.violation = "license fingerprint mismatch — this license is bound to a different machine. Contact support for a new license."
+			e.stage = StageGrace
+			if e.graceStart == nil {
+				now := time.Now()
+				e.graceStart = &now
+				writeGraceStart(e.graceDir, now)
+			}
+			return nil
+		}
+	}
+
 	return e.evaluateLocked()
 }
 

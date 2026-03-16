@@ -25,6 +25,7 @@ type Payload struct {
 	LicenseID    string `json:"license_id"`
 	Tier         string `json:"tier"` // "free", "standard", "growth", "enterprise"
 	MaxThralls   int    `json:"max_thralls"`
+	Fingerprint  string `json:"fingerprint,omitempty"` // machine fingerprint (empty = unbound, e.g. free tier)
 	IssuedAt     string `json:"issued_at"`
 	ExpiresAt    string `json:"expires_at"`
 	Version      int    `json:"version"`

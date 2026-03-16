@@ -46,7 +46,7 @@ func TestEnforcerCompliant(t *testing.T) {
 	shutdownCalled := false
 	shutdown := func() { shutdownCalled = true }
 
-	e, err := NewEnforcer(dir, dir, counter, shutdown)
+	e, err := NewEnforcer(dir, dir, "", counter, shutdown)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestEnforcerExpired(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
-	e, err := NewEnforcer(dir, dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, "", counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestEnforcerOverLimit(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil } // 10 > 5
 
-	e, err := NewEnforcer(dir, dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, "", counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
 
-	e, err := NewEnforcer(dir, dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, "", counter, func() {})
 	if err != nil {
 		t.Fatalf("expected free license fallback, got error: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestEnforcerNoLicenseAndNoKey(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 0, nil }
 
-	_, err := NewEnforcer(dir, dir, counter, func() {})
+	_, err := NewEnforcer(dir, dir, "", counter, func() {})
 	if err == nil {
 		t.Fatal("expected error when no key and no license file")
 	}
@@ -201,7 +201,7 @@ func TestEnforcerReload(t *testing.T) {
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
-	e, err := NewEnforcer(dir, dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, "", counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestEnforcerTimeline(t *testing.T) {
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
 	// Day 0 — grace period.
-	e, err := NewEnforcer(dir, graceDir, counter, func() {})
+	e, err := NewEnforcer(dir, graceDir, "", counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestCheckInWarning(t *testing.T) {
 
 	// Compliant — no warning.
 	compliantCounter := func(ctx context.Context) (int, error) { return 3, nil }
-	e, err := NewEnforcer(dir, dir, compliantCounter, func() {})
+	e, err := NewEnforcer(dir, dir, "", compliantCounter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestCheckInWarning(t *testing.T) {
 	overCounter := func(ctx context.Context) (int, error) { return 10, nil }
 	dir2 := t.TempDir()
 	writeLic(t, dir2, payload, priv)
-	e2, err := NewEnforcer(dir2, dir2, overCounter, func() {})
+	e2, err := NewEnforcer(dir2, dir2, "", overCounter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +378,7 @@ func TestIsFreeLicense(t *testing.T) {
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
-	e, err := NewEnforcer(dir, dir, counter, func() {})
+	e, err := NewEnforcer(dir, dir, "", counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +402,7 @@ func TestIsFreeLicense(t *testing.T) {
 		Version:      1,
 	}, priv)
 
-	e2, err := NewEnforcer(dir2, dir2, counter, func() {})
+	e2, err := NewEnforcer(dir2, dir2, "", counter, func() {})
 	if err != nil {
 		t.Fatal(err)
 	}

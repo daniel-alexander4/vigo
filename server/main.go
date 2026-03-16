@@ -241,7 +241,7 @@ func run() error {
 		return count, nil
 	}
 
-	enforcer, err := license.NewEnforcer(licenseDir, licenseGraceDir, thrallCounter, func() { cancel() })
+	enforcer, err := license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile, thrallCounter, func() { cancel() })
 	if err != nil {
 		return fmt.Errorf("license: %w", err)
 	}

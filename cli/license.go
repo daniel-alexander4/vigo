@@ -48,9 +48,31 @@ func init() {
 	cliLicenseInstallCmd.Flags().StringVar(&licenseInstallFile, "file", "", "Path to the .lic file (required)")
 	cliLicenseInstallCmd.MarkFlagRequired("file")
 
+	cliLicenseFingerprintCmd.Flags().String("ca-file", "/srv/hobnob/tls/ca", "Path to TLS CA certificate")
+
 	cliLicenseCmd.AddCommand(cliLicenseInstallCmd)
 	cliLicenseCmd.AddCommand(cliLicenseStatusCmd)
 	cliLicenseCmd.AddCommand(cliLicenseInspectCmd)
+	cliLicenseCmd.AddCommand(cliLicenseFingerprintCmd)
+}
+
+var cliLicenseFingerprintCmd = &cobra.Command{
+	Use:   "fingerprint",
+	Short: "Display this server's machine fingerprint for license binding",
+	Long: `Compute and display the machine fingerprint used to bind paid licenses
+to this server. Send this fingerprint when requesting a new license.
+
+The fingerprint is SHA256(machine-id + primary-MAC + CA-cert-fingerprint).
+It changes on OS reinstall, primary NIC replacement, or CA cert regeneration.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		caFile, _ := cmd.Flags().GetString("ca-file")
+		fp, err := license.MachineFingerprint(caFile)
+		if err != nil {
+			return fmt.Errorf("computing fingerprint: %w", err)
+		}
+		fmt.Println(fp)
+		return nil
+	},
 }
 
 func runLicenseInstall(cmd *cobra.Command, args []string) error {

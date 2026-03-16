@@ -25,12 +25,13 @@ var licenseCmd = &cobra.Command{
 
 // Flags for license create.
 var (
-	createCustomer   string
-	createCustomerID string
-	createTier       string
-	createMaxThralls int
-	createExpires    string
-	createOut        string
+	createCustomer    string
+	createCustomerID  string
+	createTier        string
+	createMaxThralls  int
+	createExpires     string
+	createOut         string
+	createFingerprint string
 )
 
 var licenseCreateCmd = &cobra.Command{
@@ -94,6 +95,7 @@ func init() {
 	licenseCreateCmd.Flags().IntVar(&createMaxThralls, "max-thralls", 0, "Maximum thrall count (required)")
 	licenseCreateCmd.Flags().StringVar(&createExpires, "expires", "", "Expiry date YYYY-MM-DD (required)")
 	licenseCreateCmd.Flags().StringVar(&createOut, "out", "", "Output file path (required)")
+	licenseCreateCmd.Flags().StringVar(&createFingerprint, "fingerprint", "", "Machine fingerprint to bind license to (from hobnobcli license fingerprint)")
 	licenseCreateCmd.MarkFlagRequired("customer")
 	licenseCreateCmd.MarkFlagRequired("customer-id")
 	licenseCreateCmd.MarkFlagRequired("tier")
@@ -165,6 +167,7 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 		LicenseID:    licenseID,
 		Tier:         createTier,
 		MaxThralls:   createMaxThralls,
+		Fingerprint:  createFingerprint,
 		IssuedAt:     issuedAt,
 		ExpiresAt:    createExpires,
 		Version:      1,
