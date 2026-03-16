@@ -167,6 +167,9 @@ body {
 
 .comparison__label { text-align: left !important; font-weight: 500; }
 
+.comparison__baseline { font-size: 13px; color: var(--color-muted); text-align: center; margin-bottom: 20px; line-height: 1.5; }
+.comparison__baseline a { color: var(--color-brand); text-decoration: none; }
+.comparison__baseline a:hover { text-decoration: underline; }
 .comparison__footnote { font-size: 12px; color: var(--color-muted); margin-top: 12px; text-align: center; }
 .comparison__footnote a { color: var(--color-brand); text-decoration: none; }
 .comparison__footnote a:hover { text-decoration: underline; }

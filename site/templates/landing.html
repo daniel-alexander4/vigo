@@ -15,6 +15,7 @@
 <section class="comparison">
     <div class="comparison__inner">
         <h2>How Hobnob compares</h2>
+        <p class="comparison__baseline">All figures based on a single server with <strong>4 vCPU, 8 GB RAM, SSD, 5-minute check-in interval</strong>. Vendor-documented requirements where available. Hobnob figures are theoretical (benchmark-derived). <a href="/comparison">Full methodology &rarr;</a></p>
         <div class="comparison__table-wrapper">
         <table class="comparison__table">
             <thead>
@@ -39,13 +40,13 @@
                     <td>1&ndash;2</td>
                 </tr>
                 <tr>
-                    <td class="comparison__label">Nodes per server</td>
-                    <td class="comparison__highlight"><strong>50,000+</strong></td>
-                    <td>4,000</td>
-                    <td>N/A</td>
-                    <td>10,000</td>
-                    <td>10,000</td>
-                    <td>1,000*</td>
+                    <td class="comparison__label">Nodes on 4v/8G</td>
+                    <td class="comparison__highlight"><strong>50K&ndash;200K*</strong></td>
+                    <td>100&ndash;500</td>
+                    <td>200&ndash;400</td>
+                    <td>2K&ndash;4K</td>
+                    <td>1.2K&ndash;5K</td>
+                    <td>~1,000**</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">Check-in latency</td>
@@ -121,7 +122,7 @@
                 </tr>
             </tbody>
         </table>
-        <p class="comparison__footnote">* CFEngine Enterprise requires ~8 MB/node for its PostgreSQL reporting hub. Community edition is lighter but lacks dashboards and compliance reporting. <a href="/comparison">Full comparison &rarr;</a></p>
+        <p class="comparison__footnote">* Hobnob figures are theoretical &mdash; derived from internal benchmarks, not production deployments. ** CFEngine Enterprise requires ~8 MB/node for its PostgreSQL reporting hub (CFEngine docs). Puppet PE requires 10&ndash;24 GB RAM for 100&ndash;2,500 nodes (PE 2025 docs). <a href="/comparison">Full comparison with sources &rarr;</a></p>
         </div>
     </div>
 </section>
@@ -197,12 +198,12 @@
                 <tr><th>Platform</th><th>Init System</th><th>Package Manager</th><th>Executors</th></tr>
             </thead>
             <tbody>
-                <tr><td>Linux</td><td>systemd</td><td>apt, dnf, yum</td><td>36 cross-platform + 5 Linux-only</td></tr>
-                <tr><td>macOS</td><td>launchd</td><td>Homebrew</td><td>36 cross-platform + BSD/macOS</td></tr>
-                <tr><td>FreeBSD</td><td>rc.d</td><td>pkg</td><td>36 cross-platform + BSD</td></tr>
-                <tr><td>OpenBSD</td><td>rcctl</td><td>pkg_add</td><td>36 cross-platform + BSD</td></tr>
-                <tr><td>NetBSD</td><td>rc.d</td><td>pkgin</td><td>36 cross-platform + BSD</td></tr>
-                <tr><td>illumos</td><td>SMF</td><td>IPS</td><td>36 cross-platform + 2 illumos</td></tr>
+                <tr><td>Linux</td><td>systemd</td><td>apt, dnf, yum</td><td>43 cross-platform + Linux-specific</td></tr>
+                <tr><td>macOS</td><td>launchd</td><td>Homebrew</td><td>43 cross-platform + 5 macOS + 6 shared BSD</td></tr>
+                <tr><td>FreeBSD</td><td>rc.d</td><td>pkg</td><td>43 cross-platform + 4 FreeBSD + 6 shared BSD</td></tr>
+                <tr><td>OpenBSD</td><td>rcctl</td><td>pkg_add</td><td>43 cross-platform + 1 OpenBSD + 6 shared BSD</td></tr>
+                <tr><td>NetBSD</td><td>rc.d</td><td>pkgin</td><td>43 cross-platform + 6 shared BSD</td></tr>
+                <tr><td>illumos</td><td>SMF</td><td>IPS</td><td>43 cross-platform + 2 illumos</td></tr>
                 <tr><td>Windows</td><td>Windows Service</td><td>Chocolatey, winget, Scoop</td><td>22 Windows-specific</td></tr>
                 <tr><td>Network Devices</td><td>&mdash;</td><td>&mdash;</td><td>16 SSH-based (Cisco, Arista, Juniper)</td></tr>
             </tbody>
