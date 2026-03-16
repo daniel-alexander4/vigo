@@ -25,6 +25,7 @@
                     <th>Ansible</th>
                     <th>Chef</th>
                     <th>Salt</th>
+                    <th>CFEngine</th>
                 </tr>
             </thead>
             <tbody>
@@ -35,6 +36,7 @@
                     <td>1+</td>
                     <td>3+</td>
                     <td>2+</td>
+                    <td>1&ndash;2</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">Nodes per server</td>
@@ -43,6 +45,7 @@
                     <td>N/A</td>
                     <td>10,000</td>
                     <td>10,000</td>
+                    <td>1,000*</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">Check-in latency</td>
@@ -50,6 +53,7 @@
                     <td>100+ ms</td>
                     <td>N/A (push)</td>
                     <td>50+ ms</td>
+                    <td>~1 ms</td>
                     <td>~1 ms</td>
                 </tr>
                 <tr>
@@ -59,6 +63,7 @@
                     <td>N/A</td>
                     <td>3&ndash;5</td>
                     <td>0</td>
+                    <td>1 (Enterprise)</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">Server RAM at 10K nodes</td>
@@ -67,6 +72,7 @@
                     <td>N/A</td>
                     <td>4&ndash;8 GB</td>
                     <td>2&ndash;4 GB</td>
+                    <td>80 GB*</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">Agent binary</td>
@@ -75,6 +81,7 @@
                     <td>None</td>
                     <td>~100 MB</td>
                     <td>~50 MB</td>
+                    <td>~3 MB</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">Config language</td>
@@ -83,6 +90,7 @@
                     <td>YAML + Jinja2</td>
                     <td>Ruby DSL</td>
                     <td>YAML + Jinja2</td>
+                    <td>Promise DSL</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">External database</td>
@@ -91,6 +99,7 @@
                     <td>None</td>
                     <td>PostgreSQL</td>
                     <td>None</td>
+                    <td>PostgreSQL (Enterprise)</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">Bootstrap time</td>
@@ -99,6 +108,7 @@
                     <td>0 (SSH)</td>
                     <td>5&ndash;10 minutes</td>
                     <td>2&ndash;5 minutes</td>
+                    <td>~1 minute</td>
                 </tr>
                 <tr>
                     <td class="comparison__label">OS platforms</td>
@@ -107,9 +117,11 @@
                     <td>Any (SSH)</td>
                     <td>3</td>
                     <td>3</td>
+                    <td>4</td>
                 </tr>
             </tbody>
         </table>
+        <p class="comparison__footnote">* CFEngine Enterprise requires ~8 MB/node for its PostgreSQL reporting hub. Community edition is lighter but lacks dashboards and compliance reporting. <a href="/comparison">Full comparison &rarr;</a></p>
         </div>
     </div>
 </section>
