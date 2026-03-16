@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="none">
+  <!-- Expanded Node V: 5 envoy dots converging to 1 server dot -->
+  <!-- Envoy dots across the top -->
+  <circle cx="10" cy="10" r="5" fill="#667eea"/>
+  <circle cx="32" cy="10" r="5" fill="#667eea"/>
+  <circle cx="60" cy="10" r="5" fill="#667eea"/>
+  <circle cx="88" cy="10" r="5" fill="#667eea"/>
+  <circle cx="110" cy="10" r="5" fill="#667eea"/>
+  <!-- Lines from envoy dots to server -->
+  <line x1="10" y1="15" x2="60" y2="65" stroke="#667eea" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <line x1="32" y1="15" x2="60" y2="65" stroke="#667eea" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="60" y1="15" x2="60" y2="65" stroke="#667eea" stroke-width="3" stroke-linecap="round"/>
+  <line x1="88" y1="15" x2="60" y2="65" stroke="#667eea" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="110" y1="15" x2="60" y2="65" stroke="#667eea" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <!-- Server dot (larger) -->
+  <circle cx="60" cy="68" r="8" fill="#667eea"/>
+</svg>
