@@ -1,12 +1,12 @@
 # server -- hobd
 
-The `hobd` server daemon is the central control plane for Hobnob. It serves gRPC (port 1530) for agent communication and REST/UI (port 8181) for administration.
+The `hobd` server daemon is the central control plane for Hobnob. It serves gRPC (port 1530) for agent communication and REST/UI (port 8443) for administration.
 
 ## Summary
 
 - **Binary name:** `hobd`
 - **gRPC over mTLS (port 1530)** -- agent check-ins, result reporting, traits collection
-- **REST API + web UI (port 8181)** -- admin CLI (`hobnobcli`), browser dashboard
+- **REST API + web UI (port 8443)** -- admin CLI (`hobnobcli`), browser dashboard
 - **SQLite** backend (WAL mode) with golang-migrate migrations
 - **Config reload** triggered by `config publish` via REST endpoint
 - **Prometheus metrics** at `GET /metrics`
@@ -21,7 +21,7 @@ The `hobd` server daemon is the central control plane for Hobnob. It serves gRPC
 docker compose up -d
 
 # Bootstrap a node (trusted enrollment configured in server.yaml)
-curl -sSf http://hobd.example.com:8181/bootstrap | sudo sh
+curl -sSf https://hobd.example.com:8443/bootstrap | sudo sh
 ```
 
 ### Option B -- Direct
@@ -55,7 +55,7 @@ make certs
 ```yaml
 server:
   grpc_listen: "0.0.0.0:1530"
-  api_listen: "0.0.0.0:8181"
+  api_listen: "0.0.0.0:8443"
   tls:
     cert_file: "tls/cert"
     key_file: "tls/key"
@@ -172,7 +172,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 
 ```bash
 # On the managed thrall (server has trusted_enrollment configured)
-curl -sSf http://hobd.example.com:8181/bootstrap | sudo sh
+curl -sSf https://hobd.example.com:8443/bootstrap | sudo sh
 ```
 
 ### Bootstrap with a token (when trusted enrollment is not configured)
@@ -184,7 +184,7 @@ curl -sSf http://hobd.example.com:8181/bootstrap | sudo sh
 ./bin/hobnobcli approved add "web-01.example.com" --token abc123...
 
 # On the managed thrall
-sudo hobnob bootstrap --server http://hobd.example.com:8181 --token abc123...
+sudo hobnob bootstrap --server https://hobd.example.com:8443 --token abc123...
 ```
 
 ### Force a thrall to re-converge immediately

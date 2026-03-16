@@ -19,12 +19,12 @@ Navigate to `/ask` in the Hobnob web UI. Type a question and the assistant will 
 
 ```bash
 # Synchronous response
-curl -X POST http://server:8181/api/v1/ask \
+curl -X POST https://server:8443/api/v1/ask \
   -H 'Content-Type: application/json' \
   -d '{"question": "Why is web-01.example.com failing?"}'
 
 # Streaming response
-curl -X POST http://server:8181/api/v1/ask \
+curl -X POST https://server:8443/api/v1/ask \
   -H 'Content-Type: application/json' \
   -H 'Accept: text/event-stream' \
   -d '{"question": "Show me the fleet compliance status"}'

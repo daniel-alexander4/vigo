@@ -38,7 +38,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "http://localhost:8181",
+	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "https://localhost:8443",
 		"Base URL for the Hobnob REST API")
 
 	rootCmd.AddCommand(

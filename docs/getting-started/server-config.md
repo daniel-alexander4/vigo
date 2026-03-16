@@ -41,7 +41,7 @@ Listener addresses and TLS configuration.
 ```yaml
 server:
   grpc_listen: ":1530"
-  api_listen: ":8181"
+  api_listen: ":8443"
   tls:
     cert_file: "tls/cert"
     key_file: "tls/key"
@@ -55,7 +55,7 @@ server:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `grpc_listen` | `:1530` | gRPC listen address (agent communication, mTLS) |
-| `api_listen` | `:8181` | REST API + web UI + metrics listen address |
+| `api_listen` | `:8443` | REST API + web UI + metrics listen address |
 | `tls.cert_file` | — | Server TLS certificate path |
 | `tls.key_file` | — | Server TLS private key path |
 | `tls.ca_file` | — | CA certificate for mTLS verification |
@@ -124,7 +124,7 @@ auth:
 | `oidc.issuer` | — | OIDC provider URL (required for `oidc`) |
 | `oidc.client_id` | — | OIDC client ID (required for `oidc`) |
 | `oidc.client_secret` | — | OIDC client secret (supports `secret:` prefix) |
-| `oidc.redirect_url` | — | OAuth callback URL (e.g., `http://hobnob:8181/auth/callback`) |
+| `oidc.redirect_url` | — | OAuth callback URL (e.g., `http://hobnob:8443/auth/callback`) |
 | `oidc.scopes` | `[openid, profile, email]` | OIDC scopes to request |
 | `isowebauth.namespace` | `hobnob` | Namespace for SSH signature verification |
 

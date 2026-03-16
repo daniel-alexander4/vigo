@@ -69,7 +69,7 @@ Every connection is authenticated and encrypted. There are no optional security 
 One command enrolls a machine:
 
 ```bash
-curl -sSf http://server:8181/bootstrap | sudo sh
+curl -sSf https://server:8443/bootstrap | sudo sh
 ```
 
 This downloads the agent binary, generates TLS certificates via CSR signing, registers with the server, installs the system service, and verifies connectivity. The machine is under management in seconds.

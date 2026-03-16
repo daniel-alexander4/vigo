@@ -324,7 +324,7 @@ func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Derive the server address from the request if the configured address
-	// is just a port (e.g. ":8181"). The thrall needs a full URL to curl from.
+	// is just a port (e.g. ":8443"). The thrall needs a full URL to curl from.
 	serverAddr := h.serverAddr
 	if strings.HasPrefix(serverAddr, ":") {
 		// Derive from request Host header, but only use the hostname portion

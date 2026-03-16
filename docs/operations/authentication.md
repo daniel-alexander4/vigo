@@ -59,7 +59,7 @@ When the CLI runs on the same host as the server (or Docker host), API requests 
 
 Localhost (`127.0.0.1`, `::1`) and Docker bridge networks (`172.16.0.0/12`) are trusted. Remote CLI access requires an API token via `hobnobcli auth set-token`.
 
-**Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Hobnob is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8181` from an untrusted network — the proxy's requests would be trusted as local.
+**Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Hobnob is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8443` from an untrusted network — the proxy's requests would be trusted as local.
 
 ## OIDC (OpenID Connect)
 
@@ -74,7 +74,7 @@ auth:
     issuer: "https://accounts.google.com"
     client_id: "your-client-id"
     client_secret: "secret:hobnob/auth/oidc_client_secret"
-    redirect_url: "https://hobnob.example.com:8181/auth/callback"
+    redirect_url: "https://hobnob.example.com:8443/auth/callback"
     scopes: [openid, profile, email]
 ```
 
@@ -86,7 +86,7 @@ oidc:
   issuer: "https://keycloak.example.com/realms/hobnob"
   client_id: "hobnob"
   client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8181/auth/callback"
+  redirect_url: "https://hobnob.example.com:8443/auth/callback"
 ```
 
 **Okta:**
@@ -95,7 +95,7 @@ oidc:
   issuer: "https://your-org.okta.com"
   client_id: "0oaXXXXXXXXXXXXX"
   client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8181/auth/callback"
+  redirect_url: "https://hobnob.example.com:8443/auth/callback"
 ```
 
 **Google:**
@@ -104,7 +104,7 @@ oidc:
   issuer: "https://accounts.google.com"
   client_id: "xxxx.apps.googleusercontent.com"
   client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8181/auth/callback"
+  redirect_url: "https://hobnob.example.com:8443/auth/callback"
 ```
 
 **Azure AD:**
@@ -113,7 +113,7 @@ oidc:
   issuer: "https://login.microsoftonline.com/{tenant-id}/v2.0"
   client_id: "your-app-id"
   client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8181/auth/callback"
+  redirect_url: "https://hobnob.example.com:8443/auth/callback"
 ```
 
 ### First-User Bootstrap
@@ -209,13 +209,13 @@ hobnobcli auth set-token $(curl -s -X POST \
   -H "Authorization: Bearer $EXISTING_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "ci-deploy", "expires_in": "720h"}' \
-  https://hobnob.example.com:8181/api/v1/auth/tokens | jq -r .token)
+  https://hobnob.example.com:8443/api/v1/auth/tokens | jq -r .token)
 ```
 
 Or via the REST API directly:
 
 ```bash
-curl -X POST https://hobnob.example.com:8181/api/v1/auth/tokens \
+curl -X POST https://hobnob.example.com:8443/api/v1/auth/tokens \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "my-token", "expires_in": "720h"}'

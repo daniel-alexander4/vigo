@@ -8,7 +8,7 @@ When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--server` | `http://localhost:8181` | Base URL for the Hobnob REST API |
+| `--server` | `https://localhost:8443` | Base URL for the Hobnob REST API |
 
 ## Commands
 

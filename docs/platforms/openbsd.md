@@ -9,13 +9,13 @@ Hobnob supports OpenBSD with native integration for rcctl service management and
 ## Bootstrap
 
 ```sh
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 If `curl` is not installed (it is not in the OpenBSD base system), use `ftp` instead:
 
 ```sh
-ftp -o - http://<server>:8181/bootstrap | sudo sh
+ftp -o - https://<server>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script detects OpenBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/hobnob`, and registers the service via `rcctl`.

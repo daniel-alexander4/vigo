@@ -7,7 +7,7 @@ Hobnob fully supports Windows as a managed platform. The Rust agent runs as a na
 Install the agent on a Windows machine with a one-line PowerShell command:
 
 ```powershell
-irm http://<server>:8181/bootstrap?os=windows | iex
+irm https://<server>:8443/bootstrap?os=windows | iex
 ```
 
 This downloads the agent binary, generates keys, enrolls with the server, and registers a Windows Service that starts automatically on boot. The service is configured with failure recovery (restart after 60 seconds, up to 3 retries).
@@ -16,7 +16,7 @@ This downloads the agent binary, generates keys, enrolls with the server, and re
 
 ```powershell
 # Download agent binary
-Invoke-WebRequest -Uri "http://<server>:8181/api/v1/agent/download/windows/amd64" -OutFile "C:\Program Files\hobnob\hobnob.exe"
+Invoke-WebRequest -Uri "https://<server>:8443/api/v1/agent/download/windows/amd64" -OutFile "C:\Program Files\hobnob\hobnob.exe"
 
 # Register as Windows Service
 sc.exe create hobnob-thrall binPath= "\"C:\Program Files\hobnob\hobnob.exe\" --server <server>:1530 --data-dir C:\ProgramData\hobnob" start= auto

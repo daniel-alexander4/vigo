@@ -41,7 +41,7 @@ See [Metrics](metrics.md) for the full list.
 
 ### Bootstrap Fails with "Connection refused"
 
-**Symptoms:** `curl: (7) Failed to connect to <server> port 8181: Connection refused` immediately after starting the server.
+**Symptoms:** `curl: (7) Failed to connect to <server> port 8443: Connection refused` immediately after starting the server.
 
 **Cause:** The server takes 30–60 seconds to start — it compiles TLS certs on first run, runs database migrations, loads configs, and rehydrates the FleetIndex. The bootstrap endpoint is not available until the server logs `server ready`.
 
@@ -52,7 +52,7 @@ See [Metrics](metrics.md) for the full list.
 docker compose logs -f hobnob | grep -m1 "server ready"
 
 # Then bootstrap
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 ### Agent Won't Connect
@@ -242,7 +242,7 @@ Re-bootstrap thralls so they pick up the new CA:
 
 ```bash
 sudo systemctl stop hobnob-thrall
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 ### Bootstrap Fails with "Failure writing output"
@@ -258,7 +258,7 @@ curl -sSf http://<server>:8181/bootstrap | sudo sh
 sudo systemctl stop hobnob-thrall
 
 # Then re-run bootstrap
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 ### Resetting a Thrall
@@ -278,14 +278,14 @@ sudo rm -rf /var/lib/hobnob
 sudo rm -f /usr/local/sbin/hobnob
 
 # 3. Re-bootstrap
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 Or use the reset script:
 
 ```bash
 sudo scripts/reset-thrall.sh
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 The thrall will re-enroll with a new UUID and keypair. The old thrall entry on the server becomes orphaned — revoke it with:

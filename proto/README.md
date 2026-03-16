@@ -34,7 +34,7 @@ Agent-facing service. All RPCs (except Register) require ED25519 signature verif
 | ReportTraits | ReportTraitsRequest | ReportTraitsResponse | Submit collected traits |
 | DownloadCustomTrait | DownloadCustomTraitRequest | DownloadCustomTraitResponse | Fetch custom trait executable |
 
-### HobnobAdmin (gRPC + REST, port 8181)
+### HobnobAdmin (gRPC + REST, port 8443)
 
 Admin-facing service with grpc-gateway REST annotations.
 

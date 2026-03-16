@@ -16,7 +16,7 @@ hobnobcli webhooks add \
 Or via REST:
 
 ```bash
-curl -X POST http://server:8181/api/v1/webhooks \
+curl -X POST https://server:8443/api/v1/webhooks \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://ops.example.com/hooks/hobnob",

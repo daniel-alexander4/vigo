@@ -68,6 +68,6 @@ COPY docs/ /seed/docs/
 
 COPY entrypoint.sh /entrypoint.sh
 
-EXPOSE 1530 8181
+EXPOSE 1530 8443
 
 ENTRYPOINT ["/entrypoint.sh"]

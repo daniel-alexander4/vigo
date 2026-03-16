@@ -1,6 +1,6 @@
 # Web UI
 
-Hobnob includes an HTMX-based web dashboard available at `http://server:8181`. The UI provides real-time visibility into fleet health, compliance status, convergence runs, orchestration tasks, and spanner topology.
+Hobnob includes an HTMX-based web dashboard available at `https://server:8443`. The UI provides real-time visibility into fleet health, compliance status, convergence runs, orchestration tasks, and spanner topology.
 
 The UI is built with Go templates and HTMX for partial page updates without full reloads. Most data tables auto-refresh every 30 seconds.
 

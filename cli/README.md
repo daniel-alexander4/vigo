@@ -3,9 +3,9 @@
 Admin CLI for the Hobnob configuration management system. Communicates with the server's REST API to manage enrollment, nodes, runs, and operational queries.
 
 - **Binary:** `hobnobcli` (symlink `hnbvi` for config editing)
-- **Transport:** REST API (default: `http://localhost:8181`)
+- **Transport:** REST API (default: `https://localhost:8443`)
 - **All operations are read-only or administrative** -- never writes config files
-- **Global flag:** `--server <url>` (default: `http://localhost:8181`)
+- **Global flag:** `--server <url>` (default: `https://localhost:8443`)
 
 ## Quickstart
 
@@ -14,7 +14,7 @@ Admin CLI for the Hobnob configuration management system. Communicates with the 
 make build
 
 # Point at your server
-export HOBNOB_SERVER=http://hobd.example.com:8181
+export HOBNOB_SERVER=https://hobd.example.com:8443
 # Or use --server flag on every command
 
 # List thralls

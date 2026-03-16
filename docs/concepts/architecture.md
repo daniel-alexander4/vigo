@@ -10,7 +10,7 @@ Hobnob has three binaries, two network ports, and a filesystem-only config path.
 
 The central server written in Go. It:
 - Accepts agent check-ins via gRPC over mTLS (port 1530)
-- Serves the REST API, web UI, metrics, and bootstrap endpoint (port 8181)
+- Serves the REST API, web UI, metrics, and bootstrap endpoint (port 8443)
 - Reads YAML config from disk, reloads on publish via REST endpoint
 - Stores state in SQLite (default) or PostgreSQL
 - Resolves secrets through a pluggable backend (local, isopass)

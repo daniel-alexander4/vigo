@@ -32,7 +32,7 @@ func TestBootstrapScript_ReturnsShellScript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server.example.com:8181", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap?token=mytoken123", nil)
 	w := httptest.NewRecorder()
@@ -52,7 +52,7 @@ func TestBootstrapScript_ReturnsShellScript(t *testing.T) {
 	if !strings.HasPrefix(script, "#!/bin/sh") && !strings.HasPrefix(script, "#!/usr/bin/env sh") {
 		t.Error("bootstrap script should start with a shebang line")
 	}
-	if !strings.Contains(script, "server.example.com:8181") {
+	if !strings.Contains(script, "server.example.com:8443") {
 		t.Error("bootstrap script should contain server address")
 	}
 }
@@ -64,7 +64,7 @@ func TestBootstrapScript_ContainsTokenAndServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server.example.com:8181", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap?token=secret-token-42", nil)
 	w := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestBootstrapScript_ContainsTokenAndServer(t *testing.T) {
 	if !strings.Contains(script, "secret-token-42") {
 		t.Error("bootstrap script should contain the provided token")
 	}
-	if !strings.Contains(script, "server.example.com:8181") {
+	if !strings.Contains(script, "server.example.com:8443") {
 		t.Error("bootstrap script should contain the server address")
 	}
 }
@@ -88,7 +88,7 @@ func TestBootstrapScript_SingleQuotesInterpolatedValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server.example.com:8181", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap?token=test-token", nil)
 	w := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestBootstrapScript_SingleQuotesInterpolatedValues(t *testing.T) {
 	if !strings.Contains(script, "'test-token'") {
 		t.Error("token should be single-quoted in bootstrap script")
 	}
-	if !strings.Contains(script, "'https://server.example.com:8181'") {
+	if !strings.Contains(script, "'https://server.example.com:8443'") {
 		t.Error("server address should be single-quoted in bootstrap script")
 	}
 }
@@ -113,7 +113,7 @@ func TestBootstrapScript_WorksWithoutToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8181", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap", nil)
 	w := httptest.NewRecorder()
@@ -141,7 +141,7 @@ func TestAgentLatest_ReturnsVersionJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8181", "", agentDir, "1.2.3")
+	h := NewHandler("https://server:8443", "", agentDir, "1.2.3")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent/latest?os=linux&arch=amd64", nil)
 	w := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestAgentDownload_ServesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8181", "", agentDir, "1.0.0")
+	h := NewHandler("https://server:8443", "", agentDir, "1.0.0")
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -206,7 +206,7 @@ func TestAgentDownload_ServesFile(t *testing.T) {
 
 func TestAgentDownload_Returns404_WhenBinaryMissing(t *testing.T) {
 	dir := t.TempDir()
-	h := NewHandler("https://server:8181", "", filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", "", filepath.Join(dir, "agents"), "1.0.0")
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -221,7 +221,7 @@ func TestAgentDownload_Returns404_WhenBinaryMissing(t *testing.T) {
 }
 
 func TestBootstrapRegister_ReturnsServiceUnavailable_WithoutCA(t *testing.T) {
-	h := NewHandler("https://server:8181", "", "", "1.0.0")
+	h := NewHandler("https://server:8443", "", "", "1.0.0")
 	// No CA or registry configured.
 
 	mux := http.NewServeMux()
@@ -319,7 +319,7 @@ func newTestHandlerWithCA(t *testing.T, dir string) *Handler {
 		t.Fatalf("load test CA: %v", err)
 	}
 
-	h := NewHandler("https://server:8181", certPath, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", certPath, filepath.Join(dir, "agents"), "1.0.0")
 	h.SetCA(authority)
 	h.SetTrustedPatterns([]config.TrustedEnrollment{})
 	return h
@@ -339,7 +339,7 @@ func generateTestCSR(t *testing.T, hostname string) []byte {
 
 func TestAgentDownload_RejectsInvalidOsArch(t *testing.T) {
 	dir := t.TempDir()
-	h := NewHandler("https://server:8181", "", filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", "", filepath.Join(dir, "agents"), "1.0.0")
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)

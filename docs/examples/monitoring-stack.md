@@ -85,7 +85,7 @@ resources:
 
         - job_name: hobnob
           static_configs:
-            - targets: ['{{ .Vars.hobnob_server }}:8181']
+            - targets: ['{{ .Vars.hobnob_server }}:8443']
     notify:
       - prometheus-service
 

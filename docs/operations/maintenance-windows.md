@@ -20,11 +20,11 @@ hobnobcli thralls maintenance <id> --clear
 
 ```bash
 # Set maintenance
-curl -X PUT http://server:8181/api/v1/thralls/<id>/maintenance \
+curl -X PUT https://server:8443/api/v1/thralls/<id>/maintenance \
   -d '{"until": "2026-03-14T06:00:00Z"}'
 
 # Clear maintenance
-curl -X DELETE http://server:8181/api/v1/thralls/<id>/maintenance
+curl -X DELETE https://server:8443/api/v1/thralls/<id>/maintenance
 ```
 
 Maintenance windows expire automatically when the `until` timestamp passes.
@@ -50,11 +50,11 @@ hobnobcli config unfreeze
 
 ```bash
 # Freeze
-curl -X POST http://server:8181/api/v1/config/freeze \
+curl -X POST https://server:8443/api/v1/config/freeze \
   -d '{"freeze_until": "2026-03-14T06:00:00Z"}'
 
 # Unfreeze
-curl -X POST http://server:8181/api/v1/config/unfreeze
+curl -X POST https://server:8443/api/v1/config/unfreeze
 ```
 
 While frozen, `hobnobcli config publish` returns an error with the freeze expiry time.

@@ -18,19 +18,19 @@ Or with a single `docker run` (no compose):
 ```bash
 sudo mkdir -p /srv/hobnob
 docker run -d --name hobnob \
-  -p 8181:8181 -p 1530:1530 \
+  -p 8181:8443 -p 1530:1530 \
   -v /srv/hobnob:/srv/hobnob \
   ghcr.io/daniel-alexander4/hobnob:latest
 ```
 
-The server starts on `localhost:8181` (REST/UI) and `localhost:1530` (gRPC). TLS certificates, `server.yaml`, `.env`, and example configs are auto-generated on first start. Open `http://localhost:8181` to see the dashboard.
+The server starts on `localhost:8443` (REST/UI) and `localhost:1530` (gRPC). TLS certificates, `server.yaml`, `.env`, and example configs are auto-generated on first start. Open `https://localhost:8443` to see the dashboard.
 
 ## 2. Enroll a Thrall
 
 On the machine you want to manage:
 
 ```bash
-curl -sSf http://<server-ip>:8181/bootstrap | sudo sh
+curl -sSf https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script:
@@ -118,7 +118,7 @@ Check the run result:
 hobnobcli runs list --limit 5
 ```
 
-Or view it in the web UI at `http://localhost:8181/runs`.
+Or view it in the web UI at `https://localhost:8443/runs`.
 
 ## What's Next
 

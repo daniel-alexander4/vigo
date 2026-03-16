@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile.server
     ports:
       - "1530:1530"
-      - "8181:8181"
+      - "8443:8443"
     volumes:
       - /srv/hobnob:/srv/hobnob
       - /usr/local/bin:/host-bin

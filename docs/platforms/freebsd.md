@@ -9,7 +9,7 @@ Hobnob supports FreeBSD with native integration for rc.d services, the `pw` user
 ## Bootstrap
 
 ```sh
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script detects FreeBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/hobnob`, and installs an rc.d service script.

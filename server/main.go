@@ -767,8 +767,8 @@ func run() error {
 	}
 
 	go func() {
-		slog.Info("REST gateway starting", "addr", cfg.Server.APIListen)
-		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		slog.Info("REST gateway starting", "addr", cfg.Server.APIListen, "tls", true)
+		if err := httpSrv.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
 			slog.Error("REST gateway error", "error", err)
 		}
 	}()

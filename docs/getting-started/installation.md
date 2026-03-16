@@ -42,13 +42,13 @@ cd /srv/hobnob
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8181** (REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli users create --username admin --role admin` and set a password with `hobnobcli users set-password --username admin`, then sign in at `http://localhost:8181/login`.
+The server starts on ports **1530** (gRPC, agent check-in) and **8181** (REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli users create --username admin --role admin` and set a password with `hobnobcli users set-password --username admin`, then sign in at `https://localhost:8443/login`.
 
 ### 3. Verify
 
 ```bash
 docker compose ps                    # container running
-curl -s http://localhost:8181/healthz # health check
+curl -s https://localhost:8443/healthz # health check
 hobnobcli doctor                     # full diagnostic
 ```
 
@@ -86,10 +86,10 @@ docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
 ln -sf hobnobcli /usr/local/bin/hnbvi
 ```
 
-The CLI auto-detects the server at `http://localhost:8181`. For remote servers:
+The CLI auto-detects the server at `https://localhost:8443`. For remote servers:
 
 ```bash
-export HOBNOB_SERVER="http://hobnob-server:8181"
+export HOBNOB_SERVER="http://hobnob-server:8443"
 ```
 
 ## Agent
@@ -99,7 +99,7 @@ The agent runs on managed machines (thralls). It supports Linux, macOS, FreeBSD,
 ### Linux
 
 ```bash
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 Downloads the agent binary, generates a keypair, registers with the server, and installs a systemd service (`hobnob-thrall`).
@@ -107,7 +107,7 @@ Downloads the agent binary, generates a keypair, registers with the server, and 
 ### macOS
 
 ```bash
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 Detects macOS and installs a launchd plist (`com.hobnob.thrall`).
@@ -115,7 +115,7 @@ Detects macOS and installs a launchd plist (`com.hobnob.thrall`).
 ### FreeBSD / NetBSD
 
 ```bash
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 Installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
@@ -123,7 +123,7 @@ Installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
 ### OpenBSD
 
 ```bash
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 Registers the service via `rcctl` and enables it at boot.
@@ -131,7 +131,7 @@ Registers the service via `rcctl` and enables it at boot.
 ### illumos
 
 ```bash
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 Imports an SMF service manifest and enables it via `svcadm`.
@@ -139,7 +139,7 @@ Imports an SMF service manifest and enables it via `svcadm`.
 ### Windows
 
 ```powershell
-irm http://<server>:8181/bootstrap?os=windows | iex
+irm https://<server>:8443/bootstrap?os=windows | iex
 ```
 
 Downloads the agent, registers with the server, and installs a Windows service.

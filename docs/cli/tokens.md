@@ -32,7 +32,7 @@ hobnobcli tokens generate
 Token: abc123def456
 
 Bootstrap command:
-  curl -fsSL http://localhost:8181/bootstrap | HOBNOB_TOKEN=abc123def456 bash
+  curl -fsSL https://localhost:8443/bootstrap | HOBNOB_TOKEN=abc123def456 bash
 ```
 
 ## Related

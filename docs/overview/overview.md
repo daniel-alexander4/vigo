@@ -12,7 +12,7 @@ Hobnob is a pull-based configuration management system. Agents on managed nodes 
 
 | Binary | Language | Role |
 |--------|----------|------|
-| `hobd` | Go | Server — gRPC (port 1530) + REST API/Web UI (port 8181) |
+| `hobd` | Go | Server — gRPC (port 1530) + REST API/Web UI (port 8443) |
 | `hobnob` | Rust | Agent — runs on each managed node |
 | `hobnobcli` | Go | Admin CLI — enrollment, config management, orchestration |
 
@@ -212,7 +212,7 @@ Support covers configuration guidance, bug triage, and upgrade assistance. Custo
 ## Requirements
 
 - **Server**: Linux host with Docker, or Go 1.25+ for source builds. Ports 1530 (gRPC) and 8181 (REST/UI).
-- **Agent**: no runtime dependencies. ~5 MB static binary. Bootstrap: `curl -sSf http://server:8181/bootstrap | sudo sh`
+- **Agent**: no runtime dependencies. ~5 MB static binary. Bootstrap: `curl -sSf https://server:8443/bootstrap | sudo sh`
 - **Database**: SQLite (embedded, zero admin). Optional PostgreSQL support.
 
 ## Contact

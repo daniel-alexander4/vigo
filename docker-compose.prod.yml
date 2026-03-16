@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
     ports:
       - "1530:1530"   # gRPC (agent check-in)
-      - "8181:8181"   # REST API + Web UI
+      - "8443:8443"   # REST API + Web UI (HTTPS)
     env_file:
       - /srv/hobnob/.env
     volumes:

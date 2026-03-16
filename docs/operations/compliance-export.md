@@ -87,7 +87,7 @@ curl -k https://splunk:8088/services/collector \
 filebeat.inputs:
   - type: httpjson
     interval: 5m
-    request.url: "http://hobnob-server:8181/api/v1/export/siem?since={{.cursor.timestamp}}"
+    request.url: "http://hobnob-server:8443/api/v1/export/siem?since={{.cursor.timestamp}}"
     cursor:
       timestamp:
         value: "{{.last_event.timestamp}}"

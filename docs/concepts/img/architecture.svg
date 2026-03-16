@@ -33,7 +33,7 @@
   <!-- Arrow: CLI → Server -->
   <line x1="230" y1="95" x2="298" y2="95" stroke="#e6a817" stroke-width="2" marker-end="url(#arrowOrange)"/>
   <text x="264" y="88" text-anchor="middle" font-size="10" fill="#7b5e00">REST</text>
-  <text x="264" y="100" text-anchor="middle" font-size="10" fill="#7b5e00">:8181</text>
+  <text x="264" y="100" text-anchor="middle" font-size="10" fill="#7b5e00">:8443</text>
 
   <!-- Server Box -->
   <rect x="300" y="50" width="470" height="320" rx="12" fill="url(#serverGrad)" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
@@ -47,12 +47,12 @@
   <!-- Server internal: REST API -->
   <rect x="465" y="90" width="130" height="55" rx="8" fill="#fff" stroke="#3182ce" stroke-width="1"/>
   <text x="530" y="112" text-anchor="middle" font-weight="600" fill="#1a56a0">REST API</text>
-  <text x="530" y="127" text-anchor="middle" font-size="11" fill="#666">:8181</text>
+  <text x="530" y="127" text-anchor="middle" font-size="11" fill="#666">:8443</text>
 
   <!-- Server internal: Web UI -->
   <rect x="610" y="90" width="130" height="55" rx="8" fill="#fff" stroke="#3182ce" stroke-width="1"/>
   <text x="675" y="112" text-anchor="middle" font-weight="600" fill="#1a56a0">Web UI</text>
-  <text x="675" y="127" text-anchor="middle" font-size="11" fill="#666">HTMX :8181</text>
+  <text x="675" y="127" text-anchor="middle" font-size="11" fill="#666">HTMX :8443</text>
 
   <!-- Server internal: middle tier -->
   <rect x="320" y="160" width="420" height="45" rx="8" fill="#ebf5ff" stroke="#90cdf4" stroke-width="1"/>

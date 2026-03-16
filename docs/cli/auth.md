@@ -10,7 +10,7 @@ Trusted source addresses: `127.0.0.1`, `::1`, and Docker bridge networks (`172.1
 
 ## Remote Access
 
-When pointing the CLI at a remote server (`--server http://remote:8181`), an API token is required:
+When pointing the CLI at a remote server (`--server http://remote:8443`), an API token is required:
 
 ```bash
 # Generate a token from the web UI admin panel or via local CLI

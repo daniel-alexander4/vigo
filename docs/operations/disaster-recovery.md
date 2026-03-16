@@ -120,7 +120,7 @@ If both the server and all backups are lost:
 4. Start the server — it will initialize an empty database
 5. **Agents must re-enroll**: generate new tokens, add approved patterns, then either:
    - Wait for agents to retry (they will eventually hit the server, fail auth, and need bootstrapping)
-   - SSH to each node and re-run: `curl -sSf http://<server>:8181/bootstrap | sudo sh`
+   - SSH to each node and re-run: `curl -sSf https://<server>:8443/bootstrap | sudo sh`
 
 ## Verification After Restore
 
@@ -128,7 +128,7 @@ After restoring, verify the server is healthy:
 
 ```bash
 # Check server is running
-curl -s http://localhost:8181/api/v1/health
+curl -s https://localhost:8443/api/v1/health
 
 # Verify enrolled thralls are visible
 hobnobcli nodes
@@ -141,7 +141,7 @@ hobnobcli nodes | grep -c compliant
 hobnobcli push web-01.example.com
 
 # Check the dashboard
-open http://<server-ip>:8181/
+open https://<server-ip>:8443/
 ```
 
 If thralls show as "stale" after restore, that's expected — they'll transition back to compliant/drifted after their next check-in.

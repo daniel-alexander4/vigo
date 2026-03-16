@@ -11,7 +11,7 @@ Bootstrap is the process by which a new machine becomes a managed thrall. The se
 The server serves a shell script at `GET /bootstrap`:
 
 ```bash
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 The script:
@@ -35,7 +35,7 @@ The script:
 For Windows, use the PowerShell bootstrap:
 
 ```powershell
-irm http://<server>:8181/bootstrap?os=windows | iex
+irm https://<server>:8443/bootstrap?os=windows | iex
 ```
 
 The PowerShell script performs the same steps but installs a Windows Service via `sc.exe` with automatic restart on failure. See [Windows Support](windows.md) for details.
@@ -68,7 +68,7 @@ hobnobcli tokens generate --pattern "web3.example.com"
 Pass the token to the bootstrap script:
 
 ```bash
-curl -sSf http://<server>:8181/bootstrap | sudo sh -s -- --token <token>
+curl -sSf https://<server>:8443/bootstrap | sudo sh -s -- --token <token>
 ```
 
 Tokens are:

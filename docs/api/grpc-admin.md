@@ -1,6 +1,6 @@
 # gRPC Admin Service
 
-The `HobnobAdmin` service provides administrative operations. It runs on port 8181 via grpc-gateway, which translates REST requests into gRPC calls. The CLI (`hobnobcli`) and web UI communicate through these endpoints.
+The `HobnobAdmin` service provides administrative operations. It runs on port 8443 via grpc-gateway, which translates REST requests into gRPC calls. The CLI (`hobnobcli`) and web UI communicate through these endpoints.
 
 Proto definition: `proto/hobnob.proto`, service `HobnobAdmin`.
 

@@ -19,7 +19,7 @@ Architectures: **Intel (x86_64)** and **Apple Silicon (aarch64)**.
 ## Bootstrap
 
 ```sh
-curl -sSf http://<server>:8181/bootstrap | sudo sh
+curl -sSf https://<server>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script detects macOS via `uname -s`, downloads the agent binary, generates ED25519 keys, enrolls with the server, and installs a launchd service.
@@ -28,7 +28,7 @@ The bootstrap script detects macOS via `uname -s`, downloads the agent binary, g
 
 ```sh
 # Download agent binary
-curl -o /usr/local/sbin/hobnob http://<server>:8181/api/v1/agent/download/darwin/arm64
+curl -o /usr/local/sbin/hobnob https://<server>:8443/api/v1/agent/download/darwin/arm64
 chmod +x /usr/local/sbin/hobnob
 
 # Enroll and start

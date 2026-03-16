@@ -118,7 +118,7 @@ Add the Hobnob server as a scrape target in `prometheus.yml`:
 scrape_configs:
   - job_name: hobnob
     static_configs:
-      - targets: ['hobnob-server:8181']
+      - targets: ['hobnob-server:8443']
     metrics_path: /metrics
     scrape_interval: 30s
 ```
