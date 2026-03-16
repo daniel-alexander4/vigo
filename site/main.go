@@ -102,6 +102,7 @@ func main() {
 	}
 	landingTmpl := parsePage("landing.html")
 	pageTmpl := parsePage("page.html")
+	pricingTmpl := parsePage("pricing.html")
 	docsTmpl := parsePage("docs.html")
 
 	// Content dir for top-level pages (OVERVIEW.md, etc.).
@@ -150,18 +151,11 @@ func main() {
 		})
 	}
 
-	// Pricing page (extracted from COMMERCIAL-TERMS.md).
+	// Pricing page — custom template with cards and support table.
 	mux.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
-		raw, err := os.ReadFile(filepath.Join(contentDir, "COMMERCIAL-TERMS.md"))
-		if err != nil {
-			http.Error(w, "page not found", 404)
-			return
-		}
-		html := renderMarkdown(string(raw))
-		pageTmpl.ExecuteTemplate(w, "base", pageData{
+		pricingTmpl.ExecuteTemplate(w, "base", pageData{
 			Title:     "Pricing",
 			ActiveNav: "pricing",
-			Content:   template.HTML(html),
 		})
 	})
 

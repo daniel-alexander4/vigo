@@ -1,5 +1,10 @@
 {{template "base" .}}
 {{define "content"}}
+<section class="page-hero">
+    <div class="page-hero__inner">
+        <h1>{{.Title}}</h1>
+    </div>
+</section>
 <article class="page-content">
     <div class="page-content__body markdown-body">
         {{.Content}}

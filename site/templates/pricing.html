@@ -1,0 +1,160 @@
+{{template "base" .}}
+{{define "content"}}
+<section class="page-hero">
+    <div class="page-hero__inner">
+        <h1>Simple, transparent pricing</h1>
+        <p>All features included at every tier. No enterprise-only add-ons. Support level scales with your license.</p>
+    </div>
+</section>
+
+<section class="pricing">
+    <div class="pricing__inner">
+        <div class="pricing__cards">
+            <div class="pricing__card pricing__card--free">
+                <h3>Community</h3>
+                <div class="pricing__price">Free</div>
+                <div class="pricing__nodes">1 &ndash; 25 nodes</div>
+                <ul class="pricing__features">
+                    <li>All features included</li>
+                    <li>No time limit</li>
+                    <li>No credit card</li>
+                    <li>Community support (GitHub Issues)</li>
+                </ul>
+                <a href="/docs/getting-started/installation" class="btn btn--secondary">Get Started</a>
+            </div>
+            <div class="pricing__card">
+                <h3>Starter</h3>
+                <div class="pricing__price">$84<span>/node/year</span></div>
+                <div class="pricing__nodes">26 &ndash; 250 nodes</div>
+                <ul class="pricing__features">
+                    <li>All features included</li>
+                    <li>Standard support</li>
+                    <li>2 business day response</li>
+                    <li>Email support</li>
+                </ul>
+            </div>
+            <div class="pricing__card">
+                <h3>Growth</h3>
+                <div class="pricing__price">$74<span>/node/year</span></div>
+                <div class="pricing__nodes">251 &ndash; 1,000 nodes</div>
+                <ul class="pricing__features">
+                    <li>All features included</li>
+                    <li>Standard support</li>
+                    <li>2 business day response</li>
+                    <li>Email support</li>
+                </ul>
+            </div>
+            <div class="pricing__card pricing__card--popular">
+                <div class="pricing__badge">Most popular</div>
+                <h3>Business</h3>
+                <div class="pricing__price">$64<span>/node/year</span></div>
+                <div class="pricing__nodes">1,001 &ndash; 5,000 nodes</div>
+                <ul class="pricing__features">
+                    <li>All features included</li>
+                    <li>Priority support</li>
+                    <li>1 business day response</li>
+                    <li>Email + direct channel</li>
+                </ul>
+            </div>
+            <div class="pricing__card">
+                <h3>Enterprise</h3>
+                <div class="pricing__price">$54<span>/node/year</span></div>
+                <div class="pricing__nodes">5,001 &ndash; 25,000 nodes</div>
+                <ul class="pricing__features">
+                    <li>All features included</li>
+                    <li>Dedicated support</li>
+                    <li>4 hour response SLA</li>
+                    <li>Email + direct + scheduled calls</li>
+                </ul>
+            </div>
+            <div class="pricing__card">
+                <h3>Scale</h3>
+                <div class="pricing__price">$41<span>/node/year</span></div>
+                <div class="pricing__nodes">25,001 &ndash; 100,000 nodes</div>
+                <ul class="pricing__features">
+                    <li>All features included</li>
+                    <li>Dedicated support</li>
+                    <li>4 hour response SLA</li>
+                    <li>Email + direct + scheduled calls</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="support-detail">
+    <div class="support-detail__inner">
+        <h2>Support is included with your license</h2>
+        <p class="support-detail__subtitle">No separate support contract. Your tier determines your support level automatically.</p>
+        <table class="support-detail__table">
+            <thead>
+                <tr><th>Level</th><th>Included With</th><th>Response Time</th><th>Channels</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Community</td><td>Free tier (1&ndash;25 nodes)</td><td>Best effort</td><td>GitHub Issues</td></tr>
+                <tr><td>Standard</td><td>Starter, Growth</td><td>2 business days</td><td>Email</td></tr>
+                <tr><td>Priority</td><td>Business</td><td>1 business day</td><td>Email + direct</td></tr>
+                <tr><td>Dedicated</td><td>Enterprise, Scale, Unlimited</td><td>4 business hours</td><td>Email + direct + scheduled calls</td></tr>
+            </tbody>
+        </table>
+        <p class="support-detail__note">Support covers configuration guidance, bug triage, and upgrade assistance. Custom development and platform porting are available as separate engagements.</p>
+    </div>
+</section>
+
+<section class="loyalty">
+    <div class="loyalty__inner">
+        <h2>Loyalty discount</h2>
+        <p class="loyalty__subtitle">Long-term customers pay less every year. After year 5, your rate decreases automatically.</p>
+        <table class="loyalty__table">
+            <thead>
+                <tr><th>Year</th><th>Discount</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>1 &ndash; 5</td><td>0%</td></tr>
+                <tr><td>6</td><td>10%</td></tr>
+                <tr><td>7</td><td>20%</td></tr>
+                <tr><td>8</td><td>30%</td></tr>
+                <tr><td>9</td><td>35%</td></tr>
+                <tr><td>10</td><td>40%</td></tr>
+                <tr><td>11+</td><td>45%</td></tr>
+                <tr><td>Floor</td><td>50% (your rate never drops below half)</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="pricing-faq">
+    <div class="pricing-faq__inner">
+        <h2>How it works</h2>
+        <div class="pricing-faq__grid">
+            <div class="pricing-faq__item">
+                <h4>Cumulative tiers</h4>
+                <p>Each band prices only the nodes in that band. A 2,500-node fleet pays $84 for the first 225, $74 for the next 750, and $64 for the remaining 1,500. Crossing a tier boundary never spikes the bill.</p>
+            </div>
+            <div class="pricing-faq__item">
+                <h4>All features, every tier</h4>
+                <p>Spanner federation, AI assistant, compliance export, RBAC, all 98 executors. A license unlocks a node count &mdash; nothing else changes.</p>
+            </div>
+            <div class="pricing-faq__item">
+                <h4>Grace period</h4>
+                <p>If you exceed your node limit: 15 days of warnings, then 15 days where only new enrollments are blocked, then shutdown. Existing nodes are never locked out.</p>
+            </div>
+            <div class="pricing-faq__item">
+                <h4>Source-available agent</h4>
+                <p>The code that runs as root on your machines is readable and auditable under the Elastic License 2.0.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta">
+    <div class="cta__inner">
+        <h2>Start free. Scale when ready.</h2>
+        <p>25 nodes, all features, no time limit.</p>
+        <div class="hero__actions">
+            <a href="/docs/getting-started/installation" class="btn btn--primary">Install Hobnob</a>
+            <a href="mailto:hobnob.licensing@alexander4.org" class="btn btn--secondary">Contact Sales</a>
+        </div>
+    </div>
+</section>
+{{end}}

@@ -243,9 +243,156 @@ th.comparison__highlight {
     border-bottom: 1px solid var(--color-border);
 }
 
+/* --- Page hero --- */
+
+.page-hero { background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); padding: 48px 24px; text-align: center; }
+.page-hero__inner { max-width: 640px; margin: 0 auto; }
+.page-hero h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+.page-hero p { font-size: 16px; color: var(--color-muted); }
+
 /* --- Page content --- */
 
 .page-content { max-width: 800px; margin: 0 auto; padding: 48px 24px; }
+
+/* --- Pricing cards --- */
+
+.pricing { padding: 48px 24px; }
+.pricing__inner { max-width: var(--max-width); margin: 0 auto; }
+
+.pricing__cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.pricing__card {
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+    position: relative;
+    background: var(--color-bg);
+}
+
+.pricing__card--free { background: var(--color-surface); }
+
+.pricing__card--popular {
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 1px var(--color-brand);
+}
+
+.pricing__badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-brand);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 12px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pricing__card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.pricing__price { font-size: 28px; font-weight: 800; color: var(--color-brand); }
+.pricing__price span { font-size: 13px; font-weight: 400; color: var(--color-muted); }
+.pricing__nodes { font-size: 13px; color: var(--color-muted); margin-bottom: 16px; }
+
+.pricing__features {
+    list-style: none;
+    text-align: left;
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+.pricing__features li {
+    padding: 4px 0;
+    padding-left: 20px;
+    position: relative;
+}
+
+.pricing__features li::before {
+    content: "\2713";
+    position: absolute;
+    left: 0;
+    color: #38a169;
+    font-weight: 700;
+}
+
+/* --- Support detail --- */
+
+.support-detail { padding: 48px 24px; background: var(--color-surface); }
+.support-detail__inner { max-width: 800px; margin: 0 auto; }
+.support-detail__inner h2 { text-align: center; font-size: 24px; margin-bottom: 4px; }
+.support-detail__subtitle { text-align: center; color: var(--color-muted); font-size: 15px; margin-bottom: 24px; }
+
+.support-detail__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.support-detail__table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--color-border);
+    font-weight: 600;
+}
+
+.support-detail__table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.support-detail__note {
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--color-muted);
+    text-align: center;
+}
+
+/* --- Loyalty --- */
+
+.loyalty { padding: 48px 24px; }
+.loyalty__inner { max-width: 500px; margin: 0 auto; }
+.loyalty__inner h2 { text-align: center; font-size: 24px; margin-bottom: 4px; }
+.loyalty__subtitle { text-align: center; color: var(--color-muted); font-size: 15px; margin-bottom: 24px; }
+
+.loyalty__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.loyalty__table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--color-border);
+    font-weight: 600;
+}
+
+.loyalty__table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* --- Pricing FAQ --- */
+
+.pricing-faq { padding: 48px 24px; background: var(--color-surface); }
+.pricing-faq__inner { max-width: var(--max-width); margin: 0 auto; }
+.pricing-faq__inner h2 { text-align: center; font-size: 24px; margin-bottom: 24px; }
+
+.pricing-faq__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+}
+
+.pricing-faq__item h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.pricing-faq__item p { font-size: 14px; color: var(--color-muted); line-height: 1.5; }
 
 /* --- Markdown body --- */
 
@@ -398,4 +545,6 @@ th.comparison__highlight {
     .docs-nav { width: 100%; min-width: unset; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--color-border); }
     .comparison__table { font-size: 12px; }
     .comparison__table th, .comparison__table td { padding: 6px 8px; }
+    .pricing__cards { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
+    .pricing-faq__grid { grid-template-columns: 1fr; }
 }
