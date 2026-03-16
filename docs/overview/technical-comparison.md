@@ -213,27 +213,29 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 | Cost component | Hobnob | Puppet | Chef | Ansible | Salt | CFEngine |
 |---|---|---|---|---|---|---|
-| **License** | ~$77K | Not published | Not published | Not published | Open source or not published | Community free; Enterprise not published |
+| **License** | ~$77K | ~$112K (est. ~$112/node)&dagger; | Not published | Not published | Open source or not published | Community free; Enterprise not published |
 | **Server infrastructure** | 1 server (4 vCPU, 8 GB) ~$1.2K | Primary (12 cores, 24 GB) + PuppetDB ~$6K | Chef Server + PostgreSQL ~$4.8K | Controller + Tower/AWX ~$2.4K | Salt master (8 cores, 8 GB) ~$2.4K | Enterprise hub (8+ GB) ~$2.4K |
 | **External database** | None (SQLite) $0 | PostgreSQL (PuppetDB) ~$3.6K | PostgreSQL ~$3.6K | PostgreSQL (Tower) ~$2.4K | Optional $0–2.4K | PostgreSQL (Enterprise) ~$3.6K |
 | **Agent fleet overhead** | 1,000 × 8 MB = 8 GB ~$0.5K | 1,000 × 200 MB = 200 GB ~$12K | 1,000 × 150 MB = 150 GB ~$9K | No agent $0 | 1,000 × 80 MB = 80 GB ~$4.8K | 1,000 × 5 MB = 5 GB ~$0.3K |
 | **Dedicated staffing** | Part-time sysadmin (~0.1 FTE) ~$15K | Puppet specialist (~0.5 FTE) ~$75K | Chef specialist (~0.5 FTE) ~$75K | Ansible engineer (~0.3 FTE) ~$45K | Salt engineer (~0.3 FTE) ~$45K | CFEngine engineer (~0.25 FTE) ~$38K |
-| **Estimated total** | **~$94K** | ~$97K + license | ~$92K + license | ~$50K + license | ~$52K + license | ~$44K + license |
+| **Estimated total** | **~$94K** | **~$209K** | ~$92K + license | ~$50K + license | ~$52K + license | ~$44K + license |
 
 ### TCO at 10,000 nodes (annual estimate)
 
 | Cost component | Hobnob | Puppet | Chef | Ansible | Salt | CFEngine |
 |---|---|---|---|---|---|---|
-| **License** | ~$700K | Not published | Not published | Not published | Open source or not published | Community free; Enterprise not published |
+| **License** | ~$700K | ~$1.12M (est. ~$112/node)&dagger; | Not published | Not published | Open source or not published | Community free; Enterprise not published |
 | **Server infrastructure** | 1 server (4 vCPU, 8 GB) ~$1.2K | Primary + 3–4 compile masters (6 cores, 12 GB each) + PuppetDB ~$24K | Chef Server cluster + PostgreSQL HA ~$18K | Controller cluster + Automation Hub ~$9.6K | 2–3 Salt masters (syndic) ~$7.2K | Enterprise hub (80+ GB) ~$12K |
 | **External database** | None (SQLite) $0 | PostgreSQL HA (PuppetDB) ~$12K | PostgreSQL HA ~$12K | PostgreSQL HA (Tower) ~$8.4K | Optional $0–8.4K | PostgreSQL (80+ GB for reporting) ~$12K |
 | **Agent fleet overhead** | 10,000 × 8 MB = 80 GB ~$4.8K | 10,000 × 200 MB = 2 TB ~$120K | 10,000 × 150 MB = 1.5 TB ~$90K | No agent $0 | 10,000 × 80 MB = 800 GB ~$48K | 10,000 × 5 MB = 50 GB ~$3K |
 | **Dedicated staffing** | Part-time sysadmin (~0.25 FTE) ~$38K | 1.5 FTE Puppet engineers ~$225K | 1.5 FTE Chef engineers ~$225K | 1 FTE Ansible engineer ~$150K | 1 FTE Salt engineer ~$150K | 0.5 FTE CFEngine engineer ~$75K |
-| **Estimated total** | **~$744K** | ~$381K + license | ~$345K + license | ~$168K + license | ~$205K + license | ~$102K + license |
+| **Estimated total** | **~$744K** | **~$1.50M** | ~$345K + license | ~$168K + license | ~$205K + license | ~$102K + license |
 
 ### Reading the TCO tables
 
-**License costs dominate Hobnob's TCO.** At 1,000 nodes, Hobnob's infrastructure + staffing cost is ~$17K — the remaining ~$77K is license. For tools with unpublished pricing, the infrastructure + staffing column is the comparable figure. If Puppet's license is in the commonly cited $100–120/node range, Puppet's total at 1,000 nodes would be ~$197–217K vs. Hobnob's ~$94K.
+**Hobnob is priced at 75% of Puppet Enterprise.** Hobnob's entry-tier pricing ($84/node/year) is deliberately set at 75% of Puppet Enterprise Standard's commonly cited ~$112/node/year list price. This anchoring is the basis for Hobnob's pricing at every tier. At 1,000 nodes, Hobnob's total TCO (~$94K) is less than half of Puppet's (~$209K) because Hobnob's infrastructure and staffing costs are near zero.
+
+**&dagger; Puppet pricing note.** Puppet does not publish current per-node pricing — the ~$112/node/year figure is based on Puppet Enterprise Standard list pricing that was widely cited in industry analyses and partner price sheets prior to Puppet's acquisition by Perforce in 2022. Actual Puppet pricing may vary by contract. Puppet also offers Premium (~$199/node) and volume discounts. Contact Puppet for current quotes.
 
 **Agent fleet overhead is real money at scale.** At 10,000 nodes, the 200 MB Puppet agent consumes 2 TB of aggregate RAM across the fleet. At cloud memory prices, that's ~$120K/year in RAM that could be used for application workloads. Hobnob's 8 MB agent and CFEngine's 5 MB agent are an order of magnitude cheaper on the managed nodes.
 
@@ -241,7 +243,7 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 **What's not included:** Network bandwidth, training costs, migration effort, downtime risk, security incident costs, and the opportunity cost of engineer time spent on CM infrastructure instead of product work.
 
-**Where figures are unavailable:** Puppet, Chef, Ansible (Red Hat AAP), Salt (VMware), and CFEngine Enterprise do not publish per-node pricing. Their license costs could range from $0 (open-source editions) to $50–200/node/year (enterprise editions). Contact vendors for current quotes. The "Estimated total" rows for these tools show infrastructure + staffing only — add their license to get true TCO.
+**Where figures are unavailable:** Chef, Ansible (Red Hat AAP), Salt (VMware), and CFEngine Enterprise do not publish per-node pricing. Their license costs could range from $0 (open-source editions) to $50–200/node/year (enterprise editions). Contact vendors for current quotes. The "Estimated total" rows for these tools show infrastructure + staffing only — add their license to get true TCO.
 
 ## Operational Characteristics
 
