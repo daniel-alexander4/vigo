@@ -100,6 +100,43 @@ Suggested alerts:
 - `hobnob_license_thralls_used / hobnob_license_thralls_max > 0.9` — approaching node limit
 - `hobnob_license_days_remaining < 30` — license expiring soon
 
+## Machine Fingerprint Binding
+
+Paid licenses are bound to a specific server via a machine fingerprint. This prevents a single license from being used on multiple servers simultaneously.
+
+**Fingerprint formula:** `SHA256(machine-id + primary MAC + CA cert fingerprint)`
+
+The three inputs are:
+- `/etc/machine-id` (or platform equivalent)
+- Primary network interface MAC address
+- SHA256 fingerprint of the server's CA certificate (`tls/ca`)
+
+### Free tier
+
+Free tier licenses (25 thralls) are **not** fingerprint-bound and work on any machine.
+
+### Fingerprint mismatch
+
+If a paid license's fingerprint does not match the server it is installed on, the server enters the grace period (15 days). The customer must obtain a new license bound to the correct fingerprint before grace expires.
+
+Common causes of fingerprint mismatch:
+- VM migration to a different host
+- Hardware replacement (new NIC / new machine-id)
+- CA certificate regeneration
+
+### Getting your fingerprint
+
+```bash
+hobnobcli license fingerprint
+```
+
+Output:
+```
+Machine fingerprint: a1b2c3d4e5f6...
+```
+
+Send this value when requesting a paid license. See [CLI reference](../cli/license.md) for flags.
+
 ## License Reload
 
 Reload the license without restarting the server:

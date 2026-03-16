@@ -136,7 +136,29 @@ hobnob-license-manager license create \
 | `--customer-id` | Unique customer identifier (required) |
 | `--max-thralls` | Maximum number of managed machines (required) |
 | `--expires` | License expiry date, YYYY-MM-DD (required) |
+| `--fingerprint` | Machine fingerprint to bind the license to (optional — omit for unbound) |
 | `--out` | Output file path (required) |
+
+#### Machine-Bound Licenses
+
+Paid licenses can be bound to a specific server via the `--fingerprint` flag. The customer provides their machine fingerprint, and the license will only be valid on that machine.
+
+```bash
+# Customer sends their fingerprint:
+hobnobcli license fingerprint
+# → a1b2c3d4e5f6...
+
+# You create a bound license:
+hobnob-license-manager license create \
+  --fingerprint a1b2c3d4e5f6... \
+  --customer="Acme Corp" \
+  --customer-id="acme-001" \
+  --max-thralls=500 \
+  --expires="2027-06-01" \
+  --out=acme-corp.lic
+```
+
+If the customer migrates to new hardware or regenerates their CA certificate, the fingerprint changes. They must run `hobnobcli license fingerprint` again and request a new license. The old license enters the grace period (15 days) on the new machine.
 
 #### `license renew`
 

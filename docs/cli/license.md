@@ -9,6 +9,7 @@ Manage the Hobnob license, including installation, status checking, and offline 
 | `install` | Install a license file on this server |
 | `status` | Show license status from the running server |
 | `inspect` | Decode and display a license file (offline, no server needed) |
+| `fingerprint` | Display the machine fingerprint for license binding |
 
 ## Usage
 
@@ -120,6 +121,37 @@ Raw payload:
     "tier": "enterprise",
     ...
   }
+```
+
+## fingerprint
+
+Display the SHA256 machine fingerprint used for paid license binding. The fingerprint is computed from the machine ID, primary MAC address, and CA certificate fingerprint.
+
+```bash
+hobnobcli license fingerprint
+```
+
+### Flags
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--ca-file` | | `/srv/hobnob/tls/ca` | Path to the CA certificate file |
+
+### Example
+
+```bash
+hobnobcli license fingerprint
+```
+
+```
+Machine fingerprint: a1b2c3d4e5f6...
+```
+
+Send this fingerprint when requesting a paid license. Free tier licenses do not require a fingerprint.
+
+```bash
+# Use a custom CA file path
+hobnobcli license fingerprint --ca-file /etc/hobnob/tls/ca
 ```
 
 ## Related
