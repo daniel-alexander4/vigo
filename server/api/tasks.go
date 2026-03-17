@@ -23,8 +23,14 @@ type TaskDispatcher interface {
 
 // TasksHandler serves the REST endpoints for ad-hoc task dispatch and status.
 type TasksHandler struct {
-	queries    *db.Queries
-	dispatcher TaskDispatcher
+	queries     *db.Queries
+	dispatcher  TaskDispatcher
+	auditWriter auditRecorder
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *TasksHandler) SetAuditWriter(w auditRecorder) {
+	h.auditWriter = w
 }
 
 // NewTasksHandler creates a TasksHandler with database access and task dispatch.
@@ -86,6 +92,12 @@ func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	// Record tamper-evident audit event (skip dry runs).
+	if result.Status != "dry_run" {
+		recordAudit(r.Context(), h.auditWriter, "task.dispatch", req.Operator,
+			req.Command+" on "+req.Target, "")
 	}
 
 	w.Header().Set("Content-Type", "application/json")

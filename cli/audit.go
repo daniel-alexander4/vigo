@@ -66,12 +66,39 @@ var auditListCmd = &cobra.Command{
 	},
 }
 
+var auditVerifyCmd = &cobra.Command{
+	Use:   "verify",
+	Short: "Verify the integrity of the tamper-evident audit chain",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+
+		var resp struct {
+			Valid       bool   `json:"valid"`
+			EntryCount  int64  `json:"entry_count"`
+			FirstBroken int64  `json:"first_broken"`
+			Error       string `json:"error"`
+		}
+		if err := client.get("/api/v1/audit/verify", &resp); err != nil {
+			return err
+		}
+
+		if resp.Valid {
+			fmt.Printf("Audit chain: valid (%d entries)\n", resp.EntryCount)
+		} else {
+			fmt.Printf("Audit chain: BROKEN at entry #%d -- %s\n", resp.FirstBroken, resp.Error)
+			os.Exit(1)
+		}
+		return nil
+	},
+}
+
 func init() {
 	auditListCmd.Flags().String("since", "", "time filter (duration like 24h or RFC3339)")
 	auditListCmd.Flags().String("operator", "", "filter by operator")
-	auditListCmd.Flags().String("type", "", "filter by event type (config_publish, task_run, workflow_run)")
+	auditListCmd.Flags().String("type", "", "filter by event type (config_publish, task_run, workflow_run, audit_entry)")
 	auditListCmd.Flags().Int("limit", 50, "maximum events to return")
 
 	auditCmd.AddCommand(auditListCmd)
+	auditCmd.AddCommand(auditVerifyCmd)
 	rootCmd.AddCommand(auditCmd)
 }

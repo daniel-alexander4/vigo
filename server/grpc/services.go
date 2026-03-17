@@ -4,6 +4,8 @@
 package grpc
 
 import (
+	"context"
+	"log/slog"
 	"time"
 
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
@@ -18,6 +20,11 @@ import (
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 )
+
+// auditRecorder is the interface for the tamper-evident audit writer.
+type auditRecorder interface {
+	Record(ctx context.Context, eventType, actor, summary, payload string) error
+}
 
 // AgentService implements the HobnobAgent gRPC service.
 type AgentService struct {
@@ -47,6 +54,12 @@ type AgentService struct {
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
 	jitterPercent    int32             // jitter percentage sent to agents
 	fallbackServers  []string          // peer server addresses returned to agents on registration
+	auditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (s *AgentService) SetAuditWriter(w auditRecorder) {
+	s.auditWriter = w
 }
 
 // isRecentlyActive returns true if the thrall has checked in within 2× the check-in interval.
@@ -66,6 +79,16 @@ func (s *AgentService) isRecentlyActive(thrallID string) bool {
 	return time.Since(ts.LastSeen) <= staleThreshold
 }
 
+// recordAudit is a nil-safe helper that records an audit event.
+func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary, payload string) {
+	if w == nil {
+		return
+	}
+	if err := w.Record(ctx, eventType, actor, summary, payload); err != nil {
+		slog.Error("audit record failed", "type", eventType, "error", err)
+	}
+}
+
 // AdminService implements the HobnobAdmin gRPC service.
 type AdminService struct {
 	pb.UnimplementedHobnobAdminServer
@@ -77,6 +100,12 @@ type AdminService struct {
 	hub           *spanner.Hub   // non-nil when role=hub; aggregates from spokes
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending thrall reassignments (spoke side)
+	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (s *AdminService) SetAuditWriter(w auditRecorder) {
+	s.auditWriter = w
 }
 
 // formatDuration formats a time.Duration as a Go-style string (e.g. "5m0s").

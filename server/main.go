@@ -32,6 +32,7 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	hobnobai "github.com/hobnob/hobnob/server/ai"
 	"github.com/hobnob/hobnob/server/api"
+	"github.com/hobnob/hobnob/server/audit"
 	hobnobauth "github.com/hobnob/hobnob/server/auth"
 	"github.com/hobnob/hobnob/server/backup"
 	"github.com/hobnob/hobnob/server/bootstrap"
@@ -230,6 +231,9 @@ func run() error {
 		dbtx = &db.PgDBTX{DB: sqlDB}
 	}
 	queries := db.New(dbtx)
+
+	// Initialize tamper-evident audit writer.
+	auditWriter := audit.NewWriter(queries)
 
 	// Load and validate license.
 	thrallCounter := func(ctx context.Context) (int, error) {
@@ -474,6 +478,7 @@ func run() error {
 		BundleSigner:        bundleSigner,
 		BundleMaxAge:        bundleMaxAge,
 		FallbackServers:     fallbackServers,
+		AuditWriter:         auditWriter,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
@@ -492,6 +497,7 @@ func run() error {
 				slog.Error("peer-triggered config reload failed", "error", err)
 			}
 		})
+		peerSvc.SetAuditWriter(auditWriter)
 
 		// Build TLS config for peer-to-peer communication (used by both roles
 		// for split-brain resolution and primary push).
@@ -677,6 +683,7 @@ func run() error {
 
 	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
 	tasksHandler := api.NewTasksHandler(queries, agentSvc)
+	tasksHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
 	peerHandler := api.NewPeerHandler(peerSvc)
@@ -797,7 +804,7 @@ func run() error {
 			}
 		}
 
-		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, peerSvc, gwOpts...)
+		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, peerSvc, auditWriter, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}

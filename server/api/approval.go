@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -29,6 +30,7 @@ type ApprovalHandler struct {
 	hub               configSyncer
 	fleetIndex        *fleet.FleetIndex
 	complianceMonitor *publish.ComplianceMonitor
+	auditWriter       auditRecorder
 }
 
 // NewApprovalHandler creates an ApprovalHandler.
@@ -41,6 +43,11 @@ func NewApprovalHandler(queries *db.Queries, configStore *config.ConfigStore, pu
 		fleetIndex:        fleetIndex,
 		complianceMonitor: complianceMonitor,
 	}
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *ApprovalHandler) SetAuditWriter(w auditRecorder) {
+	h.auditWriter = w
 }
 
 // RegisterRoutes registers the change approval endpoints.
@@ -159,6 +166,10 @@ func (h *ApprovalHandler) ApproveChange(w http.ResponseWriter, r *http.Request) 
 		"approved_by", approvedBy,
 	)
 
+	// Record tamper-evident audit event.
+	recordAudit(r.Context(), h.auditWriter, "config.approve", approvedBy,
+		fmt.Sprintf("approved change #%d from %s", id, change.RequestedBy), "")
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":       "approved",
 		"change_id":    id,
@@ -208,6 +219,14 @@ func (h *ApprovalHandler) RejectChange(w http.ResponseWriter, r *http.Request) {
 		"rejected_by", approvedBy,
 		"reason", req.Reason,
 	)
+
+	// Record tamper-evident audit event.
+	reason := req.Reason
+	if reason == "" {
+		reason = "no reason given"
+	}
+	recordAudit(r.Context(), h.auditWriter, "config.reject", approvedBy,
+		fmt.Sprintf("rejected change #%d: %s", id, reason), "")
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "rejected",

@@ -5,11 +5,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/hobnob/hobnob/server/audit"
 	"github.com/hobnob/hobnob/server/db"
 )
 
@@ -26,6 +28,7 @@ func NewAuditHandler(queries *db.Queries) *AuditHandler {
 // RegisterRoutes registers audit endpoints.
 func (h *AuditHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/audit", h.ListAuditEvents)
+	mux.HandleFunc("GET /api/v1/audit/verify", h.VerifyChain)
 }
 
 type auditEvent struct {
@@ -57,6 +60,28 @@ func (h *AuditHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var events []auditEvent
+
+	// Tamper-evident audit entries (hash-chained).
+	if typeFilter == "" || typeFilter == "audit_entry" {
+		entries, err := h.queries.ListAuditEntries(r.Context(), int64(limit))
+		if err == nil {
+			for _, e := range entries {
+				if !sinceTime.IsZero() && e.Timestamp.Before(sinceTime) {
+					continue
+				}
+				if operatorFilter != "" && e.Actor != operatorFilter {
+					continue
+				}
+				events = append(events, auditEvent{
+					ID:        fmt.Sprintf("ae-%d", e.ID),
+					Type:      e.EventType,
+					Operator:  e.Actor,
+					Timestamp: e.Timestamp.Format(time.RFC3339),
+					Summary:   e.Summary,
+				})
+			}
+		}
+	}
 
 	// Config publishes.
 	if typeFilter == "" || typeFilter == "config_publish" {
@@ -137,4 +162,14 @@ func (h *AuditHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+}
+
+// VerifyChain walks the tamper-evident hash chain and returns its integrity status.
+func (h *AuditHandler) VerifyChain(w http.ResponseWriter, r *http.Request) {
+	result, err := audit.Verify(r.Context(), h.queries)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "verification failed: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

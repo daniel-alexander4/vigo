@@ -124,6 +124,10 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		"node_id", thrallID,
 	)
 
+	// Record tamper-evident audit event.
+	recordAudit(ctx, s.auditWriter, "thrall.enroll", "system",
+		req.GetHostname()+" enrolled as "+thrallID, "")
+
 	// Dispatch thrall.enrolled webhook event.
 	if s.dispatcher != nil {
 		s.dispatcher.Dispatch(ctx, "thrall.enrolled", webhook.EventPayload{

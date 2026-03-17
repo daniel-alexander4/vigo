@@ -18,6 +18,11 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// auditRecorder is the interface for the tamper-evident audit writer.
+type auditRecorder interface {
+	Record(ctx context.Context, eventType, actor, summary, payload string) error
+}
+
 // Service implements the HobnobPeer gRPC service.
 // On a primary, it accepts SyncStream connections (but won't receive pushes — primary pushes outbound).
 // On a peer, it receives file changes from the primary and writes them to disk.
@@ -27,6 +32,7 @@ type Service struct {
 	serverRoot     string
 	primaryAddr    string
 	onConfigChange func()
+	auditWriter    auditRecorder
 
 	mu            sync.RWMutex
 	role          string
@@ -38,6 +44,11 @@ type Service struct {
 	// resolution during Promote. If empty, promotion proceeds unconditionally.
 	peerAddrs []string
 	tlsConfig *tls.Config
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (s *Service) SetAuditWriter(w auditRecorder) {
+	s.auditWriter = w
 }
 
 // NewService creates a new peer service. role is "primary" or "peer".
@@ -214,6 +225,14 @@ func (s *Service) Promote(ctx context.Context, _ *pb.PeerPromoteRequest) (*pb.Pe
 	s.mu.Unlock()
 
 	slog.Info("peer promoted to primary", "old_role", oldRole)
+
+	// Record tamper-evident audit event.
+	if s.auditWriter != nil {
+		if err := s.auditWriter.Record(ctx, "peer.promote", "system",
+			fmt.Sprintf("promoted to primary (was %s)", oldRole), ""); err != nil {
+			slog.Error("audit record failed", "type", "peer.promote", "error", err)
+		}
+	}
 
 	return &pb.PeerPromoteResponse{
 		Success: true,

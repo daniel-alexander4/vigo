@@ -84,6 +84,7 @@ type ServerConfig struct {
 	BundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	RateLimit        config.RateLimitSection // rate limiting config
 	FallbackServers  []string          // peer server addresses returned to agents on registration
+	AuditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -189,6 +190,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		baseInterval:     cfg.Interval,
 		jitterPercent:    cfg.JitterPercent,
 		fallbackServers:  cfg.FallbackServers,
+		auditWriter:      cfg.AuditWriter,
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {
@@ -206,6 +208,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		hub:           cfg.Hub,
 		fleetIndex:    cfg.FleetIndex,
 		reassignStore: reassignStore,
+		auditWriter:   cfg.AuditWriter,
 	}
 	pb.RegisterHobnobAdminServer(srv, adminSvc)
 

@@ -270,3 +270,17 @@ CREATE TABLE IF NOT EXISTS config_changes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_config_changes_status ON config_changes (status);
+
+CREATE TABLE IF NOT EXISTS audit_entries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    prev_hash   TEXT NOT NULL DEFAULT '',
+    hash        TEXT NOT NULL,
+    timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
+    event_type  TEXT NOT NULL,
+    actor       TEXT NOT NULL DEFAULT '',
+    summary     TEXT NOT NULL DEFAULT '',
+    payload     TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_entries_timestamp ON audit_entries (timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_entries_event_type ON audit_entries (event_type);

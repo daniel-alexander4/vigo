@@ -28,6 +28,17 @@ type ApprovedPattern struct {
 	UsedBy    sql.NullString `json:"used_by"`
 }
 
+type AuditEntry struct {
+	ID        int64     `json:"id"`
+	PrevHash  string    `json:"prev_hash"`
+	Hash      string    `json:"hash"`
+	Timestamp time.Time `json:"timestamp"`
+	EventType string    `json:"event_type"`
+	Actor     string    `json:"actor"`
+	Summary   string    `json:"summary"`
+	Payload   string    `json:"payload"`
+}
+
 type ComplianceHistory struct {
 	ID         string `json:"id"`
 	RecordedAt string `json:"recorded_at"`

@@ -162,6 +162,9 @@ func (s *AdminService) RevokeThrall(ctx context.Context, req *pb.RevokeThrallReq
 
 	slog.Warn("thrall revoked", "thrall_id", req.Id)
 
+	// Record tamper-evident audit event.
+	recordAudit(ctx, s.auditWriter, "thrall.revoke", "admin", req.Id+" revoked", "")
+
 	return &pb.RevokeThrallResponse{}, nil
 }
 

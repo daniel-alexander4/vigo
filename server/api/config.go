@@ -33,6 +33,23 @@ type configSyncer interface {
 	SyncConfigToSpokes(ctx context.Context, configDir string) error
 }
 
+// auditRecorder is the interface for the tamper-evident audit writer.
+// Using an interface lets callers pass nil safely and avoids tight coupling.
+type auditRecorder interface {
+	Record(ctx context.Context, eventType, actor, summary, payload string) error
+}
+
+// recordAudit is a nil-safe helper that records an audit event. If w is nil
+// (audit not configured), it's a no-op.
+func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary, payload string) {
+	if w == nil {
+		return
+	}
+	if err := w.Record(ctx, eventType, actor, summary, payload); err != nil {
+		slog.Error("audit record failed", "type", eventType, "error", err)
+	}
+}
+
 // ConfigHandler provides REST endpoints for config publish history,
 // versioning, rollback, and reload.
 type ConfigHandler struct {
@@ -42,6 +59,7 @@ type ConfigHandler struct {
 	hub                configSyncer // nil unless hub mode
 	complianceMonitor  *publish.ComplianceMonitor
 	publishCfg         config.PublishSection
+	auditWriter        auditRecorder // nil-safe tamper-evident audit writer
 }
 
 // NewConfigHandler creates a ConfigHandler.
@@ -55,6 +73,11 @@ func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, flee
 func (h *ConfigHandler) SetComplianceMonitor(monitor *publish.ComplianceMonitor, cfg config.PublishSection) {
 	h.complianceMonitor = monitor
 	h.publishCfg = cfg
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *ConfigHandler) SetAuditWriter(w auditRecorder) {
+	h.auditWriter = w
 }
 
 // RegisterRoutes registers config management endpoints.
@@ -110,6 +133,9 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		h.complianceMonitor.Start(h.publishCfg.ComplianceThreshold, window)
 	}
+
+	// Record tamper-evident audit event.
+	recordAudit(r.Context(), h.auditWriter, "config.reload", usernameFromRequest(r), "config reloaded", "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
