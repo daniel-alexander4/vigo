@@ -168,7 +168,7 @@ hash -r 2>/dev/null || true
 
 # Download agent binary (always replaces existing).
 echo "Downloading agent binary..."
-curl -sSf "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/hobnob"
+curl -sSfk "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/hobnob"
 chmod +x "${INSTALL_DIR}/hobnob"
 
 # Bootstrap the agent (generates keys, CSR, registers with server, receives certs).
@@ -333,7 +333,7 @@ func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
-		serverAddr = "http://" + host + h.serverAddr
+		serverAddr = "https://" + host + h.serverAddr
 	}
 
 	data := bootstrapData{
