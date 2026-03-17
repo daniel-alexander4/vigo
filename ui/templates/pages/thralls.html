@@ -17,8 +17,7 @@
      id="thralls-table-container"
      hx-get="/ui/fragments/thralls-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
      hx-trigger="every 30s"
-     hx-swap="innerHTML"
-     hx-target="#thralls-table-body">
+     hx-swap="innerHTML">
     {{template "thralls-table" .}}
 </div>
 {{end}}
