@@ -13,7 +13,7 @@
 //! - `protocol`: "http" (default) or "https"
 //! - `host_header`: Host header for the binding (optional, e.g., "app.example.com")
 //! - `app_pool`: Application pool name (optional, defaults to site name)
-//! - `ssl_cert_hash`: Certificate thumbprint for HTTPS bindings (required when protocol=https)
+//! - `ssl_cert_thumbprint`: Certificate thumbprint for HTTPS bindings (required when protocol=https)
 //!
 //! Prerequisites: IIS-WebServer feature must be installed. Use `windows_feature`
 //! executor with `depends_on` to ensure it.
@@ -75,7 +75,7 @@ impl Executor for IisSiteExecutor {
         let protocol = params.get("protocol").map(|s| s.as_str()).unwrap_or("http");
         let host_header = params.get("host_header").cloned().unwrap_or_default();
         let app_pool = params.get("app_pool").cloned().unwrap_or_else(|| site.clone());
-        let ssl_cert_hash = params.get("ssl_cert_hash").cloned().unwrap_or_default();
+        let ssl_cert_thumbprint = params.get("ssl_cert_thumbprint").cloned().unwrap_or_default();
 
         let mut result = ResourceResult::new("iis_site", &site);
 
@@ -94,9 +94,9 @@ impl Executor for IisSiteExecutor {
             return result;
         }
 
-        if protocol == "https" && ssl_cert_hash.is_empty() {
+        if protocol == "https" && ssl_cert_thumbprint.is_empty() {
             result.error = Some(
-                "iis_site executor: ssl_cert_hash is required when protocol=https".to_string(),
+                "iis_site executor: ssl_cert_thumbprint is required when protocol=https".to_string(),
             );
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
@@ -180,7 +180,7 @@ impl Executor for IisSiteExecutor {
                                 site.replace('\'', "''"),
                                 port,
                                 port,
-                                ssl_cert_hash,
+                                ssl_cert_thumbprint,
                                 port,
                             );
                             if let Err(e) = Self::ps(&https_script) {
@@ -268,6 +268,6 @@ mod tests {
         params.insert("physical_path".to_string(), "C:\\web".to_string());
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("ssl_cert_hash is required"));
+        assert!(result.error.unwrap().contains("ssl_cert_thumbprint is required"));
     }
 }

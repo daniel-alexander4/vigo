@@ -373,7 +373,7 @@ Manage IIS websites with bindings, application pools, and SSL certificates.
   physical_path: "C:\\inetpub\\wwwroot\\secureapp"
   port: "443"
   protocol: https
-  ssl_cert_hash: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
+  ssl_cert_thumbprint: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
   host_header: app.example.com
 
 - name: remove-old-site

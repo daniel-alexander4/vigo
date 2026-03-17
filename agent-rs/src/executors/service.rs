@@ -118,10 +118,10 @@ impl ServiceExecutor {
         }
 
         if let Some(cmd) = state_cmd {
-            // Check for custom restart_cmd / reload_cmd overrides.
+            // Check for custom restart_command / reload_command overrides.
             let custom_cmd = match cmd {
-                "restart" => params.get("restart_cmd"),
-                "reload" => params.get("reload_cmd"),
+                "restart" => params.get("restart_command"),
+                "reload" => params.get("reload_command"),
                 _ => None,
             };
 
@@ -129,7 +129,7 @@ impl ServiceExecutor {
                 let parts: Vec<&str> = custom.split_whitespace().collect();
                 if parts.is_empty() {
                     result.error = Some(format!(
-                        "service executor: empty {}_cmd",
+                        "service executor: empty {}_command",
                         cmd
                     ));
                     return result;
@@ -387,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn restart_cmd_overrides_systemctl() {
+    fn restart_command_overrides_systemctl() {
         let mock = MockRunner::new(vec![
             ok_output("ActiveState=active\nUnitFileState=enabled\n"),
             ok_output(""), // custom restart command
@@ -400,7 +400,7 @@ mod tests {
             &make_params(&[
                 ("service", "nginx"),
                 ("state", "restarted"),
-                ("restart_cmd", "nginx -s reload"),
+                ("restart_command", "nginx -s reload"),
             ]),
             false,
         );
@@ -416,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn reload_cmd_overrides_systemctl() {
+    fn reload_command_overrides_systemctl() {
         let mock = MockRunner::new(vec![
             ok_output("ActiveState=active\nUnitFileState=enabled\n"),
             ok_output(""), // custom reload command
@@ -429,7 +429,7 @@ mod tests {
             &make_params(&[
                 ("service", "nginx"),
                 ("state", "reloaded"),
-                ("reload_cmd", "/usr/sbin/nginx -s reload"),
+                ("reload_command", "/usr/sbin/nginx -s reload"),
             ]),
             false,
         );

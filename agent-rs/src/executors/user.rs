@@ -105,8 +105,8 @@ impl UserExecutor {
                 }
             }
         }
-        let managehome = params.get("managehome").map(|s| s != "false").unwrap_or(true);
-        if !system && managehome {
+        let manage_home = params.get("manage_home").map(|s| s != "false").unwrap_or(true);
+        if !system && manage_home {
             args.push("-m".into()); // create home dir
         }
         args.push(name.into());
@@ -561,8 +561,8 @@ impl Executor for UserExecutor {
                     result.action = Action::Deleted;
                     result.changed = true;
                     if !dry_run {
-                        let managehome = params.get("managehome").map(|s| s != "false").unwrap_or(true);
-                        let userdel_args: Vec<&str> = if managehome {
+                        let manage_home = params.get("manage_home").map(|s| s != "false").unwrap_or(true);
+                        let userdel_args: Vec<&str> = if manage_home {
                             vec!["-r", &name]
                         } else {
                             vec![&name]
@@ -818,7 +818,7 @@ mod tests {
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "userdel");
-        // Default managehome is true, so -r flag is included.
+        // Default manage_home is true, so -r flag is included.
         assert_eq!(calls[0].1, vec!["-r", "deploy"]);
     }
 
@@ -853,7 +853,7 @@ mod tests {
     }
 
     #[test]
-    fn managehome_false_skips_m_flag() {
+    fn manage_home_false_skips_m_flag() {
         let dir = tempfile::TempDir::new().unwrap();
         let passwd = dir.path().join("passwd");
         let shadow = dir.path().join("shadow");
@@ -872,7 +872,7 @@ mod tests {
             &make_params(&[
                 ("username", "deploy"),
                 ("state", "present"),
-                ("managehome", "false"),
+                ("manage_home", "false"),
             ]),
             false,
         );
@@ -884,13 +884,13 @@ mod tests {
         assert_eq!(calls[0].0, "useradd");
         assert!(
             !calls[0].1.contains(&"-m".to_string()),
-            "useradd should not contain -m when managehome is false, got: {:?}",
+            "useradd should not contain -m when manage_home is false, got: {:?}",
             calls[0].1
         );
     }
 
     #[test]
-    fn managehome_true_removes_home_on_delete() {
+    fn manage_home_true_removes_home_on_delete() {
         let dir = tempfile::TempDir::new().unwrap();
         let passwd = dir.path().join("passwd");
         let shadow = dir.path().join("shadow");
@@ -914,12 +914,12 @@ mod tests {
             shadow_path: shadow.to_str().unwrap().to_string(),
         };
 
-        // Explicit managehome: "true" (also the default).
+        // Explicit manage_home: "true" (also the default).
         let result = exec.execute(
             &make_params(&[
                 ("username", "deploy"),
                 ("state", "absent"),
-                ("managehome", "true"),
+                ("manage_home", "true"),
             ]),
             false,
         );
@@ -934,7 +934,7 @@ mod tests {
     }
 
     #[test]
-    fn managehome_false_plain_userdel() {
+    fn manage_home_false_plain_userdel() {
         let dir = tempfile::TempDir::new().unwrap();
         let passwd = dir.path().join("passwd");
         let shadow = dir.path().join("shadow");
@@ -961,7 +961,7 @@ mod tests {
             &make_params(&[
                 ("username", "deploy"),
                 ("state", "absent"),
-                ("managehome", "false"),
+                ("manage_home", "false"),
             ]),
             false,
         );
@@ -971,7 +971,7 @@ mod tests {
 
         let calls = calls.lock().unwrap();
         assert_eq!(calls[0].0, "userdel");
-        // No -r flag when managehome is false.
+        // No -r flag when manage_home is false.
         assert_eq!(calls[0].1, vec!["deploy"]);
     }
 

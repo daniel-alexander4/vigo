@@ -13,7 +13,7 @@ Manages IIS websites idempotently via the PowerShell WebAdministration module. C
 | `protocol` | No | `http` | `http` or `https`. |
 | `host_header` | No | -- | Host header for the binding (e.g., `app.example.com`). |
 | `app_pool` | No | site name | Application pool to assign. Defaults to the site name. Auto-created if it does not exist. |
-| `ssl_cert_hash` | Conditional | -- | Certificate thumbprint for HTTPS bindings. Required when `protocol=https`. |
+| `ssl_cert_thumbprint` | Conditional | -- | Certificate thumbprint for HTTPS bindings. Required when `protocol=https`. |
 
 ## States
 
@@ -53,7 +53,7 @@ resources:
     physical_path: "C:\\inetpub\\wwwroot\\secureapp"
     port: "443"
     protocol: https
-    ssl_cert_hash: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
+    ssl_cert_thumbprint: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
     host_header: app.example.com
 ```
 

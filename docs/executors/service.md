@@ -9,8 +9,8 @@ Manages systemd services -- start, stop, restart, reload, and enable/disable at 
 | `service` | Yes | -- | Service unit name (e.g., `nginx`). |
 | `state` | No | `running` | Desired state: `running`, `stopped`, `restarted`, or `reloaded`. |
 | `enabled` | No | -- | Boot-time enable: `true` to enable, `false` to disable. Empty means do not change. |
-| `restart_cmd` | No | -- | Custom command to run instead of `systemctl restart` when `state: restarted`. |
-| `reload_cmd` | No | -- | Custom command to run instead of `systemctl reload` when `state: reloaded`. |
+| `restart_command` | No | -- | Custom command to run instead of `systemctl restart` when `state: restarted`. |
+| `reload_command` | No | -- | Custom command to run instead of `systemctl reload` when `state: reloaded`. |
 
 ## States
 
@@ -73,7 +73,7 @@ resources:
     type: service
     service: nginx
     state: restarted
-    restart_cmd: "nginx -s reload"
+    restart_command: "nginx -s reload"
 ```
 
 ### With when
