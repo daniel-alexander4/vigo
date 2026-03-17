@@ -570,7 +570,9 @@ message RevokeApprovedPatternRequest {
 
 message RevokeApprovedPatternResponse {}
 
-message ListThrallsRequest {}
+message ListThrallsRequest {
+  bool include_revoked = 1; // if true, include revoked thralls in the response
+}
 
 message ListThrallsResponse {
   repeated Thrall thralls = 1;

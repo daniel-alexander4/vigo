@@ -33,7 +33,11 @@ var thrallsListCmd = &cobra.Command{
 				Revoked    bool   `json:"revoked"`
 			} `json:"thralls"`
 		}
-		if err := client.get("/api/v1/thralls", &resp); err != nil {
+		endpoint := "/api/v1/thralls"
+		if all, _ := cmd.Flags().GetBool("all"); all {
+			endpoint += "?includeRevoked=true"
+		}
+		if err := client.get(endpoint, &resp); err != nil {
 			return err
 		}
 
@@ -323,7 +327,7 @@ Use --dry-run to preview what would be deleted without making changes.`,
 				Revoked    bool   `json:"revoked"`
 			} `json:"thralls"`
 		}
-		if err := client.get("/api/v1/thralls", &resp); err != nil {
+		if err := client.get("/api/v1/thralls?includeRevoked=true", &resp); err != nil {
 			return err
 		}
 
@@ -411,6 +415,7 @@ Use --dry-run to preview what would be deleted without making changes.`,
 }
 
 func init() {
+	thrallsListCmd.Flags().Bool("all", false, "include revoked thralls")
 	thrallsMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
 	thrallsMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
 	thrallsPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")

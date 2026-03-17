@@ -102,7 +102,7 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 
 // ---------- Thralls ----------
 
-func (s *AdminService) ListThralls(ctx context.Context, _ *pb.ListThrallsRequest) (*pb.ListThrallsResponse, error) {
+func (s *AdminService) ListThralls(ctx context.Context, req *pb.ListThrallsRequest) (*pb.ListThrallsResponse, error) {
 	// Hub mode: aggregate from all spokes.
 	if s.hub != nil {
 		thralls, err := s.hub.AggregateListThralls(ctx)
@@ -112,7 +112,13 @@ func (s *AdminService) ListThralls(ctx context.Context, _ *pb.ListThrallsRequest
 		return &pb.ListThrallsResponse{Thralls: thralls}, nil
 	}
 
-	thralls, err := s.queries.ListThralls(ctx)
+	var thralls []db.Thrall
+	var err error
+	if req.GetIncludeRevoked() {
+		thralls, err = s.queries.ListThralls(ctx)
+	} else {
+		thralls, err = s.queries.ListActiveThralls(ctx)
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing thralls: %v", err)
 	}

@@ -23,6 +23,12 @@ SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, re
 FROM thralls
 ORDER BY enrolled_at DESC;
 
+-- name: ListActiveThralls :many
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+FROM thralls
+WHERE revoked = 0
+ORDER BY enrolled_at DESC;
+
 -- name: RevokeThrall :exec
 UPDATE thralls
 SET revoked = true, revoked_at = datetime('now')

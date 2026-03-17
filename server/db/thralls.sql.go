@@ -152,6 +152,49 @@ func (q *Queries) GetThrallByID(ctx context.Context, id string) (Thrall, error) 
 	return i, err
 }
 
+const listActiveThralls = `-- name: ListActiveThralls :many
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+FROM thralls
+WHERE revoked = 0
+ORDER BY enrolled_at DESC
+`
+
+func (q *Queries) ListActiveThralls(ctx context.Context) ([]Thrall, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveThralls)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Thrall{}
+	for rows.Next() {
+		var i Thrall
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hostname,
+			&i.IpAddress,
+			&i.PubkeyPem,
+			&i.EnrolledAt,
+			&i.LastSeen,
+			&i.Revoked,
+			&i.RevokedAt,
+			&i.ForcePush,
+			&i.PendingRotatedSecrets,
+			&i.Tags,
+			&i.MaintenanceUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listThralls = `-- name: ListThralls :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls

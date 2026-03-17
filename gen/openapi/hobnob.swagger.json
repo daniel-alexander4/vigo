@@ -337,6 +337,15 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "includeRevoked",
+            "description": "if true, include revoked thralls in the response",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
         "tags": [
           "HobnobAdmin"
         ]

@@ -3149,9 +3149,10 @@ func (*RevokeApprovedPatternResponse) Descriptor() ([]byte, []int) {
 }
 
 type ListThrallsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IncludeRevoked bool                   `protobuf:"varint,1,opt,name=include_revoked,json=includeRevoked,proto3" json:"include_revoked,omitempty"` // if true, include revoked thralls in the response
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ListThrallsRequest) Reset() {
@@ -3182,6 +3183,13 @@ func (x *ListThrallsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListThrallsRequest.ProtoReflect.Descriptor instead.
 func (*ListThrallsRequest) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ListThrallsRequest) GetIncludeRevoked() bool {
+	if x != nil {
+		return x.IncludeRevoked
+	}
+	return false
 }
 
 type ListThrallsResponse struct {
@@ -6336,8 +6344,9 @@ const file_hobnob_proto_rawDesc = "" +
 	"\aused_by\x18\x05 \x01(\tR\x06usedBy\".\n" +
 	"\x1cRevokeApprovedPatternRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x1f\n" +
-	"\x1dRevokeApprovedPatternResponse\"\x14\n" +
-	"\x12ListThrallsRequest\"B\n" +
+	"\x1dRevokeApprovedPatternResponse\"=\n" +
+	"\x12ListThrallsRequest\x12'\n" +
+	"\x0finclude_revoked\x18\x01 \x01(\bR\x0eincludeRevoked\"B\n" +
 	"\x13ListThrallsResponse\x12+\n" +
 	"\athralls\x18\x01 \x03(\v2\x11.hobnob.v1.ThrallR\athralls\"\xd6\x02\n" +
 	"\x06Thrall\x12\x0e\n" +
