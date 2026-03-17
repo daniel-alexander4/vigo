@@ -15,6 +15,7 @@ Manage enrolled thralls (managed nodes). Also available as `hobnobcli nodes`.
 | `untag` | Remove specific tags from a thrall |
 | `maintenance` | Set or clear maintenance mode |
 | `purge` | Delete stale duplicate thralls, keeping only the most recently seen per hostname |
+| `rebootstrap` | Re-bootstrap thralls by SSHing in and running the bootstrap script |
 
 ## Usage
 
@@ -244,6 +245,30 @@ Purge these thralls? [y/N] y
   deleted a1b2c3d4 (raspberry)
 Purged 2 stale thrall(s).
 ```
+
+## rebootstrap
+
+Re-bootstrap one or more thralls by SSHing into each machine and running the server's bootstrap script. This downloads the latest agent binary, re-enrolls with `--force`, and restarts the service.
+
+```bash
+# Re-bootstrap specific thralls
+hobnobcli thralls rebootstrap plex raspberry
+
+# Re-bootstrap all active thralls
+hobnobcli thralls rebootstrap --all
+
+# Preview without acting
+hobnobcli thralls rebootstrap --all --dry-run
+
+# Use a different SSH user (default: root)
+hobnobcli thralls rebootstrap plex --user admin
+```
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Re-bootstrap every active thrall |
+| `--dry-run` | Show targets without acting |
+| `--user` | SSH user (default: `root`) |
 
 ## Related
 
