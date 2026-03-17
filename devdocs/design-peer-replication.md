@@ -306,12 +306,39 @@ spanner:
 
 **Total: ~3 weeks**
 
-## Open Questions
+## Design Decisions
 
-1. **Should the peer serve a read-only dashboard?** It has synced config but no FleetIndex data until agents check in. The dashboard would show config/modules but no thrall status. Could show "this is a standby server — no fleet data until promoted" banner.
+### 1. Peer serves a read-only dashboard
 
-2. **Should audit log entries be synced?** Currently not replicated. If tamper-evident audit trail is built first (pending #9), it could be synced as an append-only stream between peers.
+Yes. The peer shows the dashboard with whatever data it has. Synced config (modules, roles, thrall mappings) is immediately available. Fleet status fills in as agents check in. A banner at the top reads: "Standby server — fleet data is partial until promoted."
 
-3. **Should the peer accept check-ins before promotion?** If agents fail over to a peer that's still in peer mode, should it accept check-ins (building FleetIndex) or reject them until promoted? Accepting would give faster recovery but means two servers have partial fleet state simultaneously.
+A blank page is worse than a partial page. The config browser alone is valuable for troubleshooting during an outage.
 
-4. **Certificate rotation:** If TLS certs are rotated on the primary, the sync pushes new certs to peers. But agents connected to the peer are using mTLS with the old certs. Need a graceful cert rotation that doesn't break existing connections.
+### 2. Audit log entries are NOT synced (for now)
+
+The current audit log isn't tamper-evident (pending #9), so syncing it is just replicating mutable data — not meaningfully safer than losing it. Build the tamper-evident audit trail first, then add it as an append-only stream in the peer sync.
+
+For now, audit history is lost on failover. The synced config files and agent-side LMDB results queue provide enough forensic data to reconstruct what happened.
+
+### 3. Peer accepts check-ins before promotion
+
+Yes. This is the key insight that makes the "no SQLite replication" approach work.
+
+If the peer rejects check-ins until promoted, then after promotion there's a cold-start period where the FleetIndex is empty and the dashboard is useless. If the peer accepts check-ins while in peer mode, its FleetIndex is already warm when promotion happens — near-instant recovery.
+
+The risk of two servers with partial fleet state is fine in practice: agents have a primary preference and only fail over after 3 consecutive failures. During normal operation, 100% of check-ins go to the primary. The peer's FleetIndex stays empty. During a primary outage, agents fail over and the peer starts building state organically. There's no conflict because the primary is dead.
+
+The only edge case is a network partition where both servers are reachable by different subsets of agents. This is the same split-brain scenario that promotion handles — higher config version wins, and agents converge to one server when the partition heals.
+
+### 4. Certificate rotation uses hot-swap, not listener restart
+
+When the peer receives new TLS certs via sync:
+
+1. Write the new certs to disk
+2. Keep the existing TLS listener running with the old certs
+3. Swap the active certificate using Go's `tls.Config` `GetCertificate` / `GetConfigForClient` callbacks — no listener restart needed
+4. New connections use the new certs immediately
+5. Existing connections continue with the old certs until they naturally close (keepalive timeout, check-in cycle)
+6. Agents reconnect automatically on their next check-in cycle — they already handle connection drops with backoff
+
+No agent disruption. No listener restart. No window of unavailability.
