@@ -176,23 +176,22 @@ Split-license model:
 
 All features are included at every tier. No enterprise-only features, no gated add-ons.
 
-### Pricing (per node, per year, cumulative tiers)
+### Pricing (per node, per year)
 
-| Tier | Nodes | Per Node / Year |
-|------|-------|-----------------|
-| Community | 1 – 25 | Free |
-| Starter | 26 – 250 | $84 |
-| Growth | 251 – 1,000 | $74 |
-| Business | 1,001 – 5,000 | $64 |
-| Enterprise | 5,001 – 25,000 | $54 |
-| Scale | 25,001 – 100,000 | $41 |
-| Unlimited | 100,001+ | $31 |
+| Tier | Nodes | Per Node / Year | Support Level |
+|------|-------|-----------------|---------------|
+| Community | 1 – 25 | Free | Community |
+| Starter | 26 – 250 | $84 | Standard |
+| Growth | 251 – 1,000 | $77 | Standard |
+| Business | 1,001 – 5,000 | $70 | Priority |
+| Enterprise | 5,001 – 25,000 | $62 | Dedicated |
+| Scale | 25,001 – 100,000 | $49 | Dedicated |
 
-Billed annually. Cumulative tiers — each band prices only the nodes in that band.
+Billed annually. Your node count determines your tier; that rate applies to all your nodes.
 
 ### Loyalty Discount
 
-After year 5 of continuous renewal, per-node rates decrease automatically: 10% at year 6, increasing annually to a floor of 50% at year 11+. The discount applies across all tiers.
+After year 5 of continuous renewal, per-node rates decrease linearly from 100% to a floor of 75% at year 12+. The discount applies across all tiers.
 
 ### License Enforcement
 

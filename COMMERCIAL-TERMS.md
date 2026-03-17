@@ -18,45 +18,43 @@ count — nothing else changes.
 
 ## Pricing
 
-Pricing is per managed node, per year, set at 75% of Puppet Enterprise
-list price at every tier. Tiers are cumulative — each band prices only
-the nodes in that band, so crossing a tier boundary never spikes the bill.
+Pricing is per managed node, per year. Your node count determines your
+tier, and that tier's per-node rate applies to all your nodes.
 
-| Tier        | Nodes          | Per Node / Year | Example Annual Price          |
-|-------------|----------------|-----------------|-------------------------------|
-| Community   | 1 – 25         | $0              | $0                            |
-| Starter     | 26 – 250       | $84             | 100 nodes = $6,300            |
-| Growth      | 251 – 1,000    | $74             | 500 nodes = $37,400           |
-| Business    | 1,001 – 5,000  | $64             | 2,500 nodes = $170,400        |
-| Enterprise  | 5,001 – 25,000 | $54             | 10,000 nodes = $600,400       |
-| Scale       | 25,001 – 100,000 | $41           | 50,000 nodes = $2,435,400     |
-| Unlimited   | 100,001+       | $31             | Contact us                    |
+| Tier        | Nodes            | Per Node / Year | Support Level |
+|-------------|------------------|-----------------|---------------|
+| Community   | 1 – 25           | Free            | Community     |
+| Starter     | 26 – 250         | $84             | Standard      |
+| Growth      | 251 – 1,000      | $77             | Standard      |
+| Business    | 1,001 – 5,000    | $70             | Priority      |
+| Enterprise  | 5,001 – 25,000   | $62             | Dedicated     |
+| Scale       | 25,001 – 100,000 | $49             | Dedicated     |
 
-Example: a 2,500-node fleet pays (225 × $84) + (750 × $74) + (1,500 × $64) = $18,900 + $55,500 + $96,000 = **$170,400/year**.
+Example: a 500-node fleet pays 500 × $77 = **$38,500/year**.
 
 Billed annually. Licenses are non-refundable once issued.
 
 ## Loyalty Discount
 
 Long-term customers pay less every year. After year 5, your rate
-decreases automatically:
+decreases linearly from 100% to 75% over seven years:
 
-| Year  | Discount | 1K-node customer pays |
-|-------|----------|-----------------------|
-| 1 – 5 | 0%      | $74,400               |
-| 6     | 10%     | $66,960               |
-| 7     | 20%     | $59,520               |
-| 8     | 30%     | $52,080               |
-| 9     | 35%     | $48,360               |
-| 10    | 40%     | $44,640               |
-| 11+   | 45%     | $40,920               |
-| Floor | 50%     | $37,200               |
+| Year  | You Pay | 1K-node Growth customer pays |
+|-------|---------|------------------------------|
+| 1 – 5 | 100%   | $77,000                      |
+| 6     | 96%    | $73,920                      |
+| 7     | 93%    | $71,610                      |
+| 8     | 89%    | $68,530                      |
+| 9     | 86%    | $66,220                      |
+| 10    | 82%    | $63,140                      |
+| 11    | 79%    | $60,830                      |
+| 12+   | 75%    | $57,750                      |
 
 The discount applies to the per-node rate at every tier. The floor is
-50% — your rate will never drop below half the list price. The loyalty
-clock starts from the date of your first paid license and is tied to your
-organization, not a specific license term. Continuous renewal is required;
-a lapse of more than 90 days resets the loyalty clock.
+75% — your rate will never drop below three-quarters of the list price.
+The loyalty clock starts from the date of your first paid license and is
+tied to your organization, not a specific license term. Continuous
+renewal is required; a lapse of more than 90 days resets the loyalty clock.
 
 ## What You Get
 
@@ -123,5 +121,5 @@ compliant status at any time — the grace clock resets immediately.
 
 Email: hobnob.licensing@alexander4.org
 
-All commercial inquiries, custom terms, and Unlimited tier requests
-should be directed to this address.
+All commercial inquiries and custom terms should be directed to this
+address.
