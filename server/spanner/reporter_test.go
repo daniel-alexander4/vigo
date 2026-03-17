@@ -290,8 +290,9 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 				if received.Unknown != 2 {
 					t.Errorf("Unknown = %d, want 2", received.Unknown)
 				}
-				if received.CompliancePct < 79.9 || received.CompliancePct > 80.1 {
-					t.Errorf("CompliancePct = %f, want ~80.0", received.CompliancePct)
+				// 80 compliant / (100 total - 3 stale) = 82.47%
+				if received.CompliancePct < 82.0 || received.CompliancePct > 83.0 {
+					t.Errorf("CompliancePct = %f, want ~82.5 (stale excluded from denominator)", received.CompliancePct)
 				}
 				return
 			}

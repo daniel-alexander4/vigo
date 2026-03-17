@@ -284,9 +284,9 @@ func TestHub_AggregateComplianceSummary(t *testing.T) {
 	if resp.Stale != 1 {
 		t.Errorf("stale = %d, want 1", resp.Stale)
 	}
-	// 12/15 = 80%
-	if resp.CompliancePct < 79.9 || resp.CompliancePct > 80.1 {
-		t.Errorf("compliance_pct = %f, want ~80", resp.CompliancePct)
+	// 12/(15-1 stale) = 85.7%
+	if resp.CompliancePct < 85.0 || resp.CompliancePct > 86.5 {
+		t.Errorf("compliance_pct = %f, want ~85.7 (stale excluded)", resp.CompliancePct)
 	}
 }
 

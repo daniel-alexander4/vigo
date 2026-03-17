@@ -242,9 +242,11 @@ func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.Tran
 func (r *Reporter) report(ctx context.Context, client pb.HobnobAdminClient) bool {
 	total, compliant, drifted, failing, stale, unknown := r.compliance.ComplianceCounts()
 
+	// Stale thralls excluded from compliance percentage.
+	activeTotal := total - stale
 	var compliancePct float32
-	if total > 0 {
-		compliancePct = float32(compliant) / float32(total) * 100
+	if activeTotal > 0 {
+		compliancePct = float32(compliant) / float32(activeTotal) * 100
 	}
 
 	req := &pb.SpokeStatusReport{

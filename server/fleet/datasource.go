@@ -128,9 +128,12 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 	summary := ds.fleet.ComplianceSummary()
 	total := int64(summary.Total)
 
+	// Stale thralls are excluded from the compliance percentage — they represent
+	// powered-off or decommissioned nodes, not health problems.
+	activeTotal := total - int64(summary.Stale)
 	compPct := float64(0)
-	if total > 0 {
-		compPct = float64(summary.Compliant) / float64(total) * 100
+	if activeTotal > 0 {
+		compPct = float64(summary.Compliant) / float64(activeTotal) * 100
 	}
 
 	// Gather non-compliant thralls.
@@ -157,8 +160,9 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 	if len(snapshots) > 0 {
 		sparkData = make([]float64, 0, len(snapshots))
 		for _, s := range snapshots {
-			if s.Counters.Total > 0 {
-				sparkData = append(sparkData, float64(s.Counters.Compliant)/float64(s.Counters.Total)*100)
+			active := s.Counters.Total - s.Counters.Stale
+			if active > 0 {
+				sparkData = append(sparkData, float64(s.Counters.Compliant)/float64(active)*100)
 			}
 		}
 	} else {
@@ -170,8 +174,9 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		sparkData = make([]float64, 0, len(history))
 		for i := len(history) - 1; i >= 0; i-- {
 			h := history[i]
-			if h.Total > 0 {
-				sparkData = append(sparkData, float64(h.Compliant)/float64(h.Total)*100)
+			active := h.Total - h.Stale
+			if active > 0 {
+				sparkData = append(sparkData, float64(h.Compliant)/float64(active)*100)
 			}
 		}
 	}

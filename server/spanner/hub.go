@@ -145,8 +145,11 @@ func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetCompliance
 		spokeCount++
 	}
 
-	if agg.Total > 0 {
-		agg.CompliancePct = float32(agg.Compliant) / float32(agg.Total) * 100
+	// Stale thralls excluded from compliance percentage — they represent
+	// powered-off or decommissioned nodes, not health problems.
+	activeTotal := agg.Total - agg.Stale
+	if activeTotal > 0 {
+		agg.CompliancePct = float32(agg.Compliant) / float32(activeTotal) * 100
 	}
 
 	return agg, nil

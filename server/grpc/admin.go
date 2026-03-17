@@ -520,9 +520,12 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 
 	total := int32(len(thralls))
 
+	// Stale thralls excluded from compliance percentage — they represent
+	// powered-off or decommissioned nodes, not health problems.
+	activeTotal := total - counts["stale"]
 	var pct float32
-	if total > 0 {
-		pct = float32(counts["compliant"]) / float32(total) * 100
+	if activeTotal > 0 {
+		pct = float32(counts["compliant"]) / float32(activeTotal) * 100
 	}
 
 	return &pb.GetComplianceSummaryResponse{
