@@ -26,8 +26,9 @@ import (
 	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/config"
 	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/license"
+	"github.com/hobnob/hobnob/server/peer"
+	"github.com/hobnob/hobnob/server/spanner"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -61,6 +62,7 @@ type Handler struct {
 	docsDir      string
 	docsNav      []DocsNavSection
 	enforcer     *license.Enforcer
+	peerSvc      *peer.Service
 	authEnabled  bool
 	authMethod   string
 }
@@ -106,6 +108,12 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 	}
 
 	return h, nil
+}
+
+// SetPeerService sets the peer replication service for the admin peers page.
+// Call after NewHandler when peer replication is configured.
+func (h *Handler) SetPeerService(svc *peer.Service) {
+	h.peerSvc = svc
 }
 
 // securityHeaders wraps a handler to add standard security response headers.
@@ -181,6 +189,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /admin/webhooks", h.AdminWebhooks)
 		mux.HandleFunc("GET /admin/doctor", h.AdminDoctor)
 		mux.HandleFunc("GET /admin/backup", h.AdminBackup)
+		if h.peerSvc != nil {
+			mux.HandleFunc("GET /admin/peers", h.AdminPeers)
+		}
 	}
 }
 
@@ -193,6 +204,7 @@ type PageData struct {
 	Version           string
 	AIEnabled         bool
 	SpannerEnabled bool
+	PeerEnabled    bool
 	AuthEnabled       bool
 	AuthMethod        string
 	CurrentUser       *AuthUser
@@ -454,6 +466,7 @@ type AdminUserRow struct {
 type AdminOverviewPageData struct {
 	PageData
 	UserCount int64
+	PeerRole  string
 }
 
 // AdminApprovedPageData holds data for the admin approved patterns page.
@@ -483,6 +496,16 @@ type AdminBackupPageData struct {
 	BackupURL    string
 	SyncInterval string
 	Retention    string
+}
+
+// AdminPeersPageData holds data for the admin peers page.
+type AdminPeersPageData struct {
+	PageData
+	Role          string
+	PrimaryAddr   string
+	LastSyncTime  string
+	FilesSynced   int64
+	ConfigVersion uint64
 }
 
 // docsSectionOrder defines the display order for documentation sections.
@@ -843,6 +866,7 @@ func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	pd.AIEnabled = h.assistant != nil
 	pd.SpannerEnabled = h.hub != nil
+	pd.PeerEnabled = h.peerSvc != nil
 	pd.AuthEnabled = h.authEnabled
 	pd.AuthMethod = h.authMethod
 
@@ -2273,8 +2297,38 @@ func (h *Handler) Admin(w http.ResponseWriter, r *http.Request) {
 		PageData:  PageData{Title: "Administration", ActiveNav: "admin"},
 		UserCount: userCount,
 	}
+	if h.peerSvc != nil {
+		data.PeerRole = h.peerSvc.Role()
+	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderAdmin(w, "admin", data)
+}
+
+// AdminPeers renders the admin peer replication status page.
+func (h *Handler) AdminPeers(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+
+	data := AdminPeersPageData{
+		PageData: PageData{Title: "Peer Replication", ActiveNav: "admin-peers"},
+	}
+
+	if h.peerSvc != nil {
+		resp, err := h.peerSvc.Status(r.Context(), nil)
+		if err == nil {
+			data.Role = resp.Role
+			data.PrimaryAddr = resp.PrimaryAddr
+			data.FilesSynced = resp.FilesSynced
+			data.ConfigVersion = resp.ConfigVersion
+			if resp.LastSyncUnix > 0 {
+				data.LastSyncTime = time.Unix(resp.LastSyncUnix, 0).UTC().Format(time.RFC3339)
+			}
+		}
+	}
+
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.RenderAdmin(w, "admin-peers", data)
 }
 
 // AdminApproved renders the admin approved enrollment patterns page.

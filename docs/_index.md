@@ -78,6 +78,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [Drift Alerting](operations/drift-alerting.md) — Fleet compliance threshold monitoring
 - [Audit Log](operations/audit.md) — Unified audit trail
 - [Compliance Export](operations/compliance-export.md) — SIEM, CMDB, OSCAL feeds
+- [Peer Replication](operations/peer-replication.md) — Primary/peer file sync and automatic failover
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
 - [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
 

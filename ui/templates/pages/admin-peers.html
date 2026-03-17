@@ -1,0 +1,49 @@
+{{template "admin-base" .}}
+
+{{define "admin-content"}}
+<div class="page-header">
+    <h1>Peer Replication</h1>
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h3>Status</h3>
+        <table class="detail-table">
+            <tr>
+                <td class="detail-table__label">Role</td>
+                <td>
+                    {{if eq .Role "primary"}}
+                    <span class="badge badge--success">primary</span>
+                    {{else}}
+                    <span class="badge badge--warning">peer</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{if .PrimaryAddr}}
+            <tr>
+                <td class="detail-table__label">Primary</td>
+                <td>{{.PrimaryAddr}}</td>
+            </tr>
+            {{end}}
+            <tr>
+                <td class="detail-table__label">Config Version</td>
+                <td>{{.ConfigVersion}}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="detail-card">
+        <h3>Sync</h3>
+        <table class="detail-table">
+            <tr>
+                <td class="detail-table__label">Last Sync</td>
+                <td>{{if .LastSyncTime}}{{.LastSyncTime}}{{else}}never{{end}}</td>
+            </tr>
+            <tr>
+                <td class="detail-table__label">Files Synced</td>
+                <td>{{.FilesSynced}}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+{{end}}

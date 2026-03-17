@@ -28,6 +28,11 @@
         <a href="/admin/backup" class="nav-link{{if eq .ActiveNav "admin-backup"}} nav-link--active{{end}}">
             Backup
         </a>
+        {{if .PeerEnabled}}
+        <a href="/admin/peers" class="nav-link{{if eq .ActiveNav "admin-peers"}} nav-link--active{{end}}">
+            Peers
+        </a>
+        {{end}}
     </nav>
     <div class="sidebar__footer">
         <a href="/" class="nav-link nav-link--back">

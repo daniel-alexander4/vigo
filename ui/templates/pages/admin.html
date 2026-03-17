@@ -72,5 +72,18 @@
             <p>Snapshots and downloads</p>
         </div>
     </a>
+    {{if .PeerEnabled}}
+    <a href="/admin/peers" class="admin-card">
+        <div class="admin-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="9" height="9" rx="1"/><rect x="13" y="13" width="9" height="9" rx="1"/><path d="M7.5 11v2.5a2 2 0 0 0 2 2H13"/><path d="M16.5 13v-2.5a2 2 0 0 0-2-2H11"/>
+            </svg>
+        </div>
+        <div class="admin-card__body">
+            <h3>Peers</h3>
+            <p>{{.PeerRole}} — peer replication</p>
+        </div>
+    </a>
+    {{end}}
 </div>
 {{end}}
