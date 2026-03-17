@@ -6,6 +6,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -95,7 +96,9 @@ func (h *AuditHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				var changed []string
-				_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
+				if err := json.Unmarshal([]byte(p.ChangedFiles), &changed); err != nil {
+					slog.Warn("malformed changed_files JSON in config publish", "id", p.ID, "error", err)
+				}
 				events = append(events, auditEvent{
 					ID:        p.ID,
 					Type:      "config_publish",

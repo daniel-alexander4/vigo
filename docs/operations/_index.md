@@ -21,4 +21,5 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Audit Log](audit.md) -- Unified audit trail for config, tasks, and workflows
 - [Tamper-Evident Audit Trail](tamper-evident-audit.md) -- SHA-256 hash chain for tamper detection
 - [Peer Replication](peer-replication.md) -- Primary/peer file sync and automatic failover
+- [Regression Tests](regression-tests.md) -- Automated tests for doc drift, missing docs, ignored errors
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics

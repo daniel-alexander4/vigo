@@ -353,7 +353,9 @@ func (ds *DataSource) ThrallFactsData(thrallID string) (ui.ThrallFactsFragmentDa
 		ctx := context.Background()
 		cf, err := ds.queries.GetLatestThrallTraits(ctx, thrallID)
 		if err == nil {
-			_ = json.Unmarshal([]byte(cf.Traits), &facts)
+			if err := json.Unmarshal([]byte(cf.Traits), &facts); err != nil {
+				slog.Warn("malformed traits JSON", "thrall_id", thrallID, "error", err)
+			}
 		}
 	}
 	return ui.ThrallFactsFragmentData{Facts: facts}, nil

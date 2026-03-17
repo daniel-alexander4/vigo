@@ -73,7 +73,9 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		// Parse pending rotated secrets.
 		var pendingSecrets []string
 		if t.PendingRotatedSecrets != "" && t.PendingRotatedSecrets != "[]" {
-			_ = json.Unmarshal([]byte(t.PendingRotatedSecrets), &pendingSecrets)
+			if err := json.Unmarshal([]byte(t.PendingRotatedSecrets), &pendingSecrets); err != nil {
+				slog.Warn("malformed pending_rotated_secrets JSON", "thrall_id", t.ID, "error", err)
+			}
 		}
 
 		// Parse traits into flattened map.

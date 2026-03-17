@@ -210,8 +210,12 @@ func (h *ConfigHandler) ListPublishes(w http.ResponseWriter, r *http.Request) {
 	result := make([]publishEntry, 0, len(publishes))
 	for _, p := range publishes {
 		var changed, removed []string
-		_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
-		_ = json.Unmarshal([]byte(p.RemovedFiles), &removed)
+		if err := json.Unmarshal([]byte(p.ChangedFiles), &changed); err != nil {
+			slog.Warn("malformed changed_files JSON", "publish_id", p.ID, "error", err)
+		}
+		if err := json.Unmarshal([]byte(p.RemovedFiles), &removed); err != nil {
+			slog.Warn("malformed removed_files JSON", "publish_id", p.ID, "error", err)
+		}
 		result = append(result, publishEntry{
 			ID:           p.ID,
 			Operator:     p.Operator,
@@ -234,8 +238,12 @@ func (h *ConfigHandler) GetPublish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var changed, removed []string
-	_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
-	_ = json.Unmarshal([]byte(p.RemovedFiles), &removed)
+	if err := json.Unmarshal([]byte(p.ChangedFiles), &changed); err != nil {
+		slog.Warn("malformed changed_files JSON", "publish_id", p.ID, "error", err)
+	}
+	if err := json.Unmarshal([]byte(p.RemovedFiles), &removed); err != nil {
+		slog.Warn("malformed removed_files JSON", "publish_id", p.ID, "error", err)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"publish": map[string]any{

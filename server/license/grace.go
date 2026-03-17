@@ -5,6 +5,7 @@ package license
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,11 +45,15 @@ func writeGraceStart(dir string, t time.Time) {
 	}
 
 	content := t.Format(time.RFC3339)
-	_ = os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		slog.Error("failed to write grace start file", "path", path, "error", err)
+	}
 }
 
 // clearGraceStart removes the grace start file when returning to compliant.
 func clearGraceStart(dir string) {
 	path := filepath.Join(dir, graceStartFile)
-	_ = os.Remove(path)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		slog.Error("failed to remove grace start file", "path", path, "error", err)
+	}
 }

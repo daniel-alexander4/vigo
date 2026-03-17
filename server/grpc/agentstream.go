@@ -321,7 +321,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	if hasCaseRes {
 		var traits map[string]any
 		if len(inlineTraits) > 0 {
-			_ = json.Unmarshal(inlineTraits, &traits)
+			if err := json.Unmarshal(inlineTraits, &traits); err != nil {
+				slog.Warn("malformed inline traits JSON", "thrall", thrall.Hostname, "error", err)
+			}
 		}
 		if traits == nil {
 			traits = make(map[string]any)
@@ -341,7 +343,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	// Parse inline traits for match var resolution.
 	var traitsMap map[string]any
 	if len(inlineTraits) > 0 {
-		_ = json.Unmarshal(inlineTraits, &traitsMap)
+		if err := json.Unmarshal(inlineTraits, &traitsMap); err != nil {
+			slog.Warn("malformed inline traits JSON for match vars", "thrall", thrall.Hostname, "error", err)
+		}
 	}
 
 	// Get or build cached base bundle, then customize stubs.
