@@ -168,46 +168,6 @@ resources:
 
 Hub-spoke topology for multi-site deployments. The hub routes enrollment to the nearest spoke by hostname pattern. Admin queries fan out from hub to all spokes. Per-spoke compliance breakdown and latency metrics. Thrall reassignment between spokes with zero re-enrollment. Spoke drain for maintenance.
 
-## Licensing
-
-Split-license model:
-- **Agent**: source-available under the Elastic License 2.0. Readable and auditable.
-- **Server and CLI**: proprietary. Distributed as compiled binaries and container images.
-
-All features are included at every tier. No enterprise-only features, no gated add-ons.
-
-### Pricing (per node, per year)
-
-| Tier | Nodes | Per Node / Year | Support Level |
-|------|-------|-----------------|---------------|
-| Community | 1 – 25 | Free | Community |
-| Starter | 26 – 250 | $144 | Standard |
-| Growth | 251 – 1,000 | $132 | Standard |
-| Business | 1,001 – 5,000 | $120 | Priority |
-| Enterprise | 5,001 – 25,000 | $108 | Dedicated |
-| Scale | 25,001 – 100,000 | $84 | Dedicated |
-
-Billed annually. Your node count determines your tier; that rate applies to all your nodes.
-
-### Loyalty Discount
-
-After year 5 of continuous renewal, per-node rates decrease linearly from 100% to a floor of 75% at year 12+. The discount applies across all tiers.
-
-### License Enforcement
-
-If node count exceeds the license limit: 15-day grace period (warnings only) followed by 15-day enrollment block (existing nodes unaffected, new enrollments rejected), then server shutdown. Existing nodes are never locked out. Returning to compliance resets the grace clock immediately.
-
-## Support
-
-| Level | Included With | Response Time | Channel |
-|-------|---------------|---------------|---------|
-| Community | Community tier | Best effort | GitHub Issues |
-| Standard | Starter, Growth | 2 business days | Email |
-| Priority | Business+ | 1 business day | Email + direct |
-| Dedicated | Enterprise+ | 4 business hours | Email + direct + scheduled calls |
-
-Support covers configuration guidance, bug triage, and upgrade assistance. Custom development is available as a separate engagement.
-
 ## Requirements
 
 - **Server**: Linux host with Docker, or Go 1.25+ for source builds. Ports 1530 (gRPC) and 8443 (REST/UI).

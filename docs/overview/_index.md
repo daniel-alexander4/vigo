@@ -8,4 +8,3 @@ Hobnob is a distributed state enforcement engine for managing fleets of servers 
 | [Fact Sheet](fact-sheet.md) | Quick reference of capabilities |
 | [Differentiators](differentiators.md) | What makes Hobnob different |
 | [Technical Comparison](technical-comparison.md) | Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine |
-| [License](license.md) | Licensing model and tiers |

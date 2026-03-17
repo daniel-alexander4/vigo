@@ -16,7 +16,6 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
 | [Query](query.md) | `/query` | Live trait queries |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
-| [License](license.md) | `/license` | License status, usage, and enforcement |
 | [Security](security.md) | `/thralls/{id}` | Thrall detail and security info |
 
 ### Admin Pages

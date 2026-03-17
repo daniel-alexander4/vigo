@@ -14,7 +14,7 @@ Core concepts that explain how Hobnob works.
 - [Compliance](compliance.md) — Per-resource to fleet-wide compliance
 - [Secrets](secrets.md) — Two backends and the secret: prefix
 - [Spanner](spanner.md) — Hub-spoke scaling
-- [License](license.md) — Free tier and enforcement stages
+
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
 - [Custom Executors](custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](custom-traits.md) — Custom trait collector scripts
