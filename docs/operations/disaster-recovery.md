@@ -29,6 +29,37 @@ Agents are designed to survive server unavailability indefinitely:
 
 **The only scenario requiring re-enrollment** is if the database is lost without a backup (thrall records gone) or if agent state files at `/var/lib/hobnob/state/` are deleted.
 
+## Disk Failure Walkthrough
+
+This section walks through the most common disaster scenario: the disk on your server dies.
+
+**Moment of failure.** The disk dies. The hobd container stops. gRPC and REST endpoints go dark.
+
+**What happens to the thralls.** Nothing bad. Every agent has a cached signed policy bundle in LMDB (`/var/lib/hobnob/state/`). They continue converging on their normal check-in interval. Check-in fails, the agent logs a warning, applies exponential backoff on retries, and keeps enforcing cached policy. Run results and trait updates queue locally in the LMDB pending queue. No thrall stops enforcing state.
+
+**What you've lost.** Dashboard visibility, the ability to publish config changes, new thrall enrollment, task dispatch, and trait reporting. No thrall loses compliance.
+
+**Recovery.**
+
+1. **Provision a new server.** Spin up a new VM or container host. Seconds if cloud, minutes if bare metal.
+
+2. **Restore `/srv/hobnob`.** This is where your backup strategy determines recovery time:
+
+   | Backup method | Recovery time | Data loss window |
+   |---|---|---|
+   | Cloud volume snapshot (hourly) | ~1-2 min (attach snapshot) | Up to 1 hour of config changes |
+   | Litestream + filesystem backup | ~1-2 min | Seconds for DB, depends on config backup frequency |
+   | rsync/Borg/restic to remote (hourly) | ~2-5 min | Up to 1 hour |
+   | Full VM snapshot | ~1-2 min (boot from snapshot) | Since last snapshot |
+
+3. **Start the container.** `docker run` with the restored `/srv/hobnob` volume mount. hobd starts, loads config, rehydrates FleetIndex from SQLite. Takes seconds, even at 10,000 thralls.
+
+4. **Thralls reconnect.** Agents in exponential backoff retry within seconds to minutes. On successful check-in, pending results drain from the LMDB queue. FleetIndex populates with fresh timestamps. The dashboard comes alive.
+
+**Total recovery time: 5-15 minutes.** Most of that is provisioning the new server and restoring the volume. hobd startup itself is seconds.
+
+**The gap to watch.** Litestream only covers the SQLite database. Config files (`hnb/`), secrets, TLS certs, and `server.yaml` need a separate filesystem backup. If your last filesystem backup was an hour ago and you published config changes 10 minutes before the disk died, those changes are lost. Keep `hnb/proposed/` in git to eliminate this risk.
+
 ## Recovery Procedures
 
 ### Scenario 1: Full Server Restore from Manual Backup

@@ -188,3 +188,34 @@ Use cron for periodic snapshots. Litestream handles continuous replication; manu
 # Daily backup at 2 AM, retain 7 days
 0 2 * * * /usr/local/bin/hobnobcli backup create /backup/hobnob-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'hobnob-*.tar.gz' -mtime +7 -delete
 ```
+
+## Filesystem Backup Recommendations
+
+Litestream covers the SQLite database, but `/srv/hobnob` contains more than just the database. Config files, secrets, TLS certs, and `server.yaml` also need protection. This is standard sysadmin practice — Hobnob does not manage its own filesystem backups.
+
+### What to back up
+
+| Path | Contents | Criticality |
+|------|----------|-------------|
+| `hnb/proposed/` | Modules, roles, thrall mappings, vars | High — your entire policy |
+| `secrets/` | AES-256-GCM encrypted files + `.master.key` | Critical — unrecoverable without master key |
+| `tls/` | CA cert/key, server cert/key | High — agents authenticate against these |
+| `server.yaml` | Server configuration | Medium — can be recreated |
+| `db/hobnob.db` | SQLite database | Covered by Litestream if configured |
+
+### Recommended approach
+
+1. **Keep `hnb/proposed/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
+
+2. **Back up `/srv/hobnob` to a remote location.** Use whatever your organization already uses — rsync, Borg, restic, Veeam, cloud volume snapshots. A simple hourly rsync to a remote host is sufficient:
+
+   ```bash
+   # Hourly rsync of /srv/hobnob to remote backup host
+   0 * * * * rsync -a --delete /srv/hobnob/ backup-host:/backup/hobnob/
+   ```
+
+3. **Configure Litestream for near-zero database RPO.** Filesystem backups are hourly at best. Litestream replicates SQLite WAL changes within seconds.
+
+4. **Protect the master key separately.** `secrets/.master.key` is the single most critical file. Store a copy in a password manager, HSM, or separate secure location. Without it, all encrypted secrets are unrecoverable.
+
+5. **Test restores periodically.** See [Disaster Recovery](disaster-recovery.md) for the full restore walkthrough.
