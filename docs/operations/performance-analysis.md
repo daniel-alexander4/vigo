@@ -2,6 +2,8 @@
 
 This document analyzes Hobnob server performance under 1-minute check-in intervals on modest hardware. All numbers reference benchmarked values from the codebase or are derived from measured operations.
 
+See also: [30-second intervals](performance-30s.md) | [15-second intervals](performance-15s.md)
+
 ## Hardware Assumptions
 
 - 4 vCPU (modern x86_64, e.g., Hetzner CPX21, DigitalOcean c-4)
