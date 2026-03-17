@@ -1623,7 +1623,7 @@ type PushRow struct {
 // PushPageData holds data for the push list page.
 type PushPageData struct {
 	PageData
-	PushRuns     []PushRow
+	Pushes       []PushRow
 	StatusFilter string
 	PushCount    int
 }
@@ -1734,7 +1734,7 @@ func (h *Handler) Push(w http.ResponseWriter, r *http.Request) {
 
 	data := PushPageData{
 		PageData:     PageData{Title: "Push", ActiveNav: "push"},
-		PushRuns:     rows,
+		Pushes:       rows,
 		StatusFilter: statusFilter,
 		PushCount:    len(rows),
 	}

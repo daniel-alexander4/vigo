@@ -4,7 +4,7 @@
 <div class="docs-layout">
     <aside class="docs-nav">
         <div class="docs-nav__header">
-            <a href="/docs" class="docs-nav__title"><img src="/static/img/logo.svg" alt="Hobnob" style="height:22px;vertical-align:middle;margin-right:6px">Docs</a>
+            <a href="/docs" class="docs-nav__title"><img src="/static/img/logo.svg" alt="Hobnob" style="height:22px;vertical-align:middle;margin-right:6px">Documentation</a>
             <a href="/" class="docs-nav__back">&larr; Dashboard</a>
         </div>
         <div class="docs-nav__search">
@@ -29,7 +29,7 @@
     <article class="docs-content">
         {{if .Breadcrumbs}}
         <nav class="docs-breadcrumbs">
-            <a href="/docs">Docs</a>
+            <a href="/docs">Documentation</a>
             {{range .Breadcrumbs}}
             <span class="docs-breadcrumbs__sep">/</span>
             {{if .Path}}<a href="/docs/{{.Path}}">{{.Title}}</a>{{else}}<span>{{.Title}}</span>{{end}}

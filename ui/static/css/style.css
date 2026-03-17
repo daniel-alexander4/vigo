@@ -110,6 +110,10 @@ body {
     margin-right: 8px;
 }
 
+.sidebar__back {
+    padding: 0 24px 12px;
+}
+
 .sidebar__brand-text {
     font-size: 16px;
     font-weight: 600;

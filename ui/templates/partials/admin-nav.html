@@ -2,9 +2,12 @@
 <aside class="sidebar sidebar--admin">
     <div class="sidebar__brand">
         <a href="/admin" class="sidebar__logo-link">
-            <img src="/static/img/icon.svg" alt="Admin" class="sidebar__icon-img">
+            <img src="/static/img/logo.svg" alt="Hobnob" style="height:22px;vertical-align:middle;margin-right:6px">
             <span class="sidebar__brand-text">Admin</span>
         </a>
+    </div>
+    <div class="sidebar__back">
+        <a href="/" class="docs-nav__back">&larr; Dashboard</a>
     </div>
     <nav class="sidebar__nav">
         <a href="/admin" class="nav-link{{if eq .ActiveNav "admin"}} nav-link--active{{end}}">
@@ -34,10 +37,5 @@
         </a>
         {{end}}
     </nav>
-    <div class="sidebar__footer">
-        <a href="/" class="nav-link nav-link--back">
-            &larr; Back to Dashboard
-        </a>
-    </div>
 </aside>
 {{end}}
