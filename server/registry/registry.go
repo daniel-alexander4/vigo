@@ -28,6 +28,7 @@ var (
 	ErrThrallRevoked       = errors.New("thrall is revoked")
 	ErrThrallNotFound      = errors.New("thrall not found")
 	ErrHostnameRevoked   = errors.New("hostname belongs to a revoked thrall and cannot re-enroll")
+	ErrHostnameInUse     = errors.New("an active thrall with this hostname already exists (use force to replace)")
 )
 
 // Registry manages thrall enrollment: approved pattern creation, agent
@@ -72,14 +73,9 @@ func (r *Registry) AddApprovedPattern(ctx context.Context, pattern, token string
 // approved patterns using glob matching, verifies the token via bcrypt, creates
 // a thrall record, marks the pattern as used, and returns the thrall UUID string.
 //
-// The flow is:
-//  1. Validate inputs
-//  2. Check ENRL-07: reject if hostname belongs to a revoked thrall
-//  3. Fetch all unused approved patterns
-//  4. Filter by glob match on hostname OR IP (avoid bcrypt on non-matching patterns)
-//  5. For glob-matched patterns, compare token via bcrypt
-//  6. On match: create thrall, mark pattern used, return thrall UUID
-func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token string) (string, error) {
+// If force is true and an active thrall with the same hostname exists, the old
+// thrall is revoked first. If force is false, registration is rejected.
+func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token string, force bool) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")
 	}
@@ -90,11 +86,11 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 		return "", fmt.Errorf("token must not be empty")
 	}
 
-	// ENRL-07: Check if hostname belongs to a revoked thrall.
-	existing, err := r.queries.GetThrallByHostname(ctx, hostname)
-	if err == nil && existing.Revoked != 0 {
-		return "", ErrHostnameRevoked
+	revokedID, err := r.checkHostnameConflict(ctx, hostname, force)
+	if err != nil {
+		return "", err
 	}
+	_ = revokedID
 
 	// Fetch all unused approved patterns.
 	patterns, err := r.queries.ListUnusedApprovedPatterns(ctx)
@@ -153,7 +149,7 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 // and source IP against trusted enrollment patterns. If the thrall's hostname
 // matches a trusted pattern and its IP falls within an allowed CIDR, it is
 // enrolled without a one-time token.
-func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM string, trustedPatterns []config.TrustedEnrollment, peerIP string) (string, error) {
+func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM string, trustedPatterns []config.TrustedEnrollment, peerIP string, force bool) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")
 	}
@@ -161,11 +157,11 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 		return "", fmt.Errorf("public key must not be empty")
 	}
 
-	// ENRL-07: Check if hostname belongs to a revoked thrall.
-	existing, err := r.queries.GetThrallByHostname(ctx, hostname)
-	if err == nil && existing.Revoked != 0 {
-		return "", ErrHostnameRevoked
+	revokedID, err := r.checkHostnameConflict(ctx, hostname, force)
+	if err != nil {
+		return "", err
 	}
+	_ = revokedID
 
 	for _, tp := range trustedPatterns {
 		hostnameMatch, _ := filepath.Match(tp.Pattern, hostname)
@@ -232,17 +228,19 @@ func (r *Registry) RevokeThrall(ctx context.Context, thrallID string) error {
 	return nil
 }
 
-// ValidateThrall checks if a thrall exists and is not revoked. Returns an error
-// if the thrall is revoked or does not exist.
 // CreateThrall creates a thrall record directly without token validation.
 // Used by EnrollThrall (hub→spoke enrollment routing) where the hub has
 // already validated the enrollment token.
-func (r *Registry) CreateThrall(ctx context.Context, hostname, ip, pubkeyPEM string) (string, error) {
+func (r *Registry) CreateThrall(ctx context.Context, hostname, ip, pubkeyPEM string, force bool) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")
 	}
 	if pubkeyPEM == "" {
 		return "", fmt.Errorf("public key must not be empty")
+	}
+
+	if _, err := r.checkHostnameConflict(ctx, hostname, force); err != nil {
+		return "", err
 	}
 
 	thrall, err := r.queries.CreateThrall(ctx, db.CreateThrallParams{
@@ -255,6 +253,35 @@ func (r *Registry) CreateThrall(ctx context.Context, hostname, ip, pubkeyPEM str
 	}
 
 	return thrall.ID, nil
+}
+
+// checkHostnameConflict checks if a hostname is already in use by an active or
+// revoked thrall. If force is true and an active thrall exists, it is revoked
+// first. Returns the revoked thrall's ID (empty if none was revoked).
+func (r *Registry) checkHostnameConflict(ctx context.Context, hostname string, force bool) (string, error) {
+	existing, err := r.queries.GetActiveThrallByHostname(ctx, hostname)
+	if err == nil {
+		// Active thrall exists with this hostname.
+		if !force {
+			return "", ErrHostnameInUse
+		}
+		// Force: revoke the old thrall first.
+		if err := r.queries.RevokeThrall(ctx, existing.ID); err != nil {
+			return "", fmt.Errorf("revoking existing thrall %s: %w", existing.ID, err)
+		}
+		return existing.ID, nil
+	}
+
+	// Check for revoked thrall (ENRL-07).
+	existing2, err := r.queries.GetThrallByHostname(ctx, hostname)
+	if err == nil && existing2.Revoked != 0 {
+		if !force {
+			return "", ErrHostnameRevoked
+		}
+		// Force overrides ENRL-07.
+	}
+
+	return "", nil
 }
 
 func (r *Registry) ValidateThrall(ctx context.Context, thrallID string) error {

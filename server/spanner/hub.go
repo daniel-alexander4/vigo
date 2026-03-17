@@ -221,7 +221,7 @@ func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
 
 // EnrollOnSpoke creates a thrall record on the target spoke via the EnrollThrall
 // admin RPC. Returns the thrall UUID assigned by the spoke.
-func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress, pubkeyPEM string) (string, error) {
+func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress, pubkeyPEM string, force bool) (string, error) {
 	// Find the spoke connection by address.
 	var target *spokeConn
 	for i := range h.spokes {
@@ -238,6 +238,7 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 		Hostname:  hostname,
 		IpAddress: ipAddress,
 		PubkeyPem: pubkeyPEM,
+		Force:     force,
 	})
 	if err != nil {
 		return "", fmt.Errorf("enroll on spoke %s: %w", target.id, err)
@@ -462,7 +463,7 @@ func (h *Hub) ReassignThrall(ctx context.Context, thrallID, fromSpokeID, toSpoke
 	thrall := resp.Thrall
 
 	// Enroll on target spoke.
-	newID, err := h.EnrollOnSpoke(ctx, to.addr, thrall.Hostname, thrall.IpAddress, "")
+	newID, err := h.EnrollOnSpoke(ctx, to.addr, thrall.Hostname, thrall.IpAddress, "", true)
 	if err != nil {
 		return nil, fmt.Errorf("enrolling on target spoke: %w", err)
 	}

@@ -6,6 +6,7 @@ package registry_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -144,7 +145,7 @@ func TestGlobMatchHostname(t *testing.T) {
 	}
 
 	// Should match
-	clientID, err := reg.Register(ctx, "web01.prod.example.com", "10.0.1.5", "ssh-ed25519-pubkey-pem", token)
+	clientID, err := reg.Register(ctx, "web01.prod.example.com", "10.0.1.5", "ssh-ed25519-pubkey-pem", token, false)
 	if err != nil {
 		t.Fatalf("Register should succeed for matching hostname: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestGlobMatchHostname(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
-	_, err = reg.Register(ctx, "web01.prod.example.com", "10.0.2.5", "ssh-ed25519-pubkey-pem-2", "another-token")
+	_, err = reg.Register(ctx, "web01.prod.example.com", "10.0.2.5", "ssh-ed25519-pubkey-pem-2", "another-token", false)
 	if err == nil {
 		t.Fatal("Register should fail: hostname does not match *.staging.example.com pattern")
 	}
@@ -174,7 +175,7 @@ func TestGlobMatchIP(t *testing.T) {
 	}
 
 	// Should match IP
-	clientID, err := reg.Register(ctx, "some-host", "10.0.1.5", "ssh-ed25519-pubkey-pem", token)
+	clientID, err := reg.Register(ctx, "some-host", "10.0.1.5", "ssh-ed25519-pubkey-pem", token, false)
 	if err != nil {
 		t.Fatalf("Register should succeed for matching IP: %v", err)
 	}
@@ -193,7 +194,7 @@ func TestRegisterSuccess(t *testing.T) {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	clientID, err := reg.Register(ctx, "app01.web.example.com", "192.168.1.10", "ed25519-pubkey", token)
+	clientID, err := reg.Register(ctx, "app01.web.example.com", "192.168.1.10", "ed25519-pubkey", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
@@ -231,7 +232,7 @@ func TestRegisterTokenBcrypt(t *testing.T) {
 	}
 
 	// Register with correct token (bcrypt comparison, not plaintext)
-	clientID, err := reg.Register(ctx, "node1.secure.example.com", "10.0.0.1", "pubkey1", token)
+	clientID, err := reg.Register(ctx, "node1.secure.example.com", "10.0.0.1", "pubkey1", token, false)
 	if err != nil {
 		t.Fatalf("Register with correct token should succeed: %v", err)
 	}
@@ -244,7 +245,7 @@ func TestRegisterTokenBcrypt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
-	_, err = reg.Register(ctx, "node2.secure.example.com", "10.0.0.2", "pubkey2", "wrong-token")
+	_, err = reg.Register(ctx, "node2.secure.example.com", "10.0.0.2", "pubkey2", "wrong-token", false)
 	if err == nil {
 		t.Fatal("Register with wrong token should fail even if pattern matches")
 	}
@@ -260,7 +261,7 @@ func TestRegisterTokenMarkedUsed(t *testing.T) {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	clientID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-web01", token)
+	clientID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-web01", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
@@ -299,13 +300,13 @@ func TestRegisterTokenAlreadyUsed(t *testing.T) {
 	}
 
 	// First registration should succeed
-	_, err = reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token)
+	_, err = reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token, false)
 	if err != nil {
 		t.Fatalf("First Register failed: %v", err)
 	}
 
 	// Second registration with same token should fail (one-time use)
-	_, err = reg.Register(ctx, "web02.example.com", "10.0.1.2", "pubkey-2", token)
+	_, err = reg.Register(ctx, "web02.example.com", "10.0.1.2", "pubkey-2", token, false)
 	if err == nil {
 		t.Fatal("second registration with same token should fail (one-time token)")
 	}
@@ -322,7 +323,7 @@ func TestRegisterNoMatchingPattern(t *testing.T) {
 	}
 
 	// Try to register with a hostname that doesn't match any pattern
-	_, err = reg.Register(ctx, "rogue-host.evil.com", "192.168.0.1", "bad-pubkey", "token123")
+	_, err = reg.Register(ctx, "rogue-host.evil.com", "192.168.0.1", "bad-pubkey", "token123", false)
 	if err == nil {
 		t.Fatal("Register should fail when hostname matches no pattern")
 	}
@@ -338,7 +339,7 @@ func TestRegisterWrongToken(t *testing.T) {
 	}
 
 	// Correct hostname pattern, wrong token
-	_, err = reg.Register(ctx, "app01.web.example.com", "10.0.1.1", "pubkey", "wrong-token")
+	_, err = reg.Register(ctx, "app01.web.example.com", "10.0.1.1", "pubkey", "wrong-token", false)
 	if err == nil {
 		t.Fatal("Register should fail with wrong token even if pattern matches")
 	}
@@ -355,7 +356,7 @@ func TestRevokeThrall(t *testing.T) {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
@@ -390,7 +391,7 @@ func TestRevokedNodeCheckIn(t *testing.T) {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
@@ -419,7 +420,7 @@ func TestRevokedCannotReenroll(t *testing.T) {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
@@ -437,7 +438,7 @@ func TestRevokedCannotReenroll(t *testing.T) {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	_, err = reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-2", token2)
+	_, err = reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-2", token2, false)
 	if err == nil {
 		t.Fatal("Register should fail for hostname of a revoked thrall (ENRL-07)")
 	}
@@ -463,7 +464,7 @@ func TestValidateNodeActive(t *testing.T) {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token)
+	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
@@ -490,7 +491,7 @@ func TestRegisterMultiplePatternsFirstMatch(t *testing.T) {
 	}
 
 	// Register with hostname matching first pattern
-	clientID, err := reg.Register(ctx, "web01.prod.example.com", "192.168.1.1", "pubkey", "prod-token")
+	clientID, err := reg.Register(ctx, "web01.prod.example.com", "192.168.1.1", "pubkey", "prod-token", false)
 	if err != nil {
 		t.Fatalf("Register should succeed with matching hostname pattern: %v", err)
 	}
@@ -510,7 +511,7 @@ func TestGlobMatchIPNotMatch(t *testing.T) {
 	}
 
 	// IP 10.0.2.5 should NOT match 10.0.1.*
-	_, err = reg.Register(ctx, "some-host", "10.0.2.5", "pubkey", token)
+	_, err = reg.Register(ctx, "some-host", "10.0.2.5", "pubkey", token, false)
 	if err == nil {
 		t.Fatal("Register should fail when neither hostname nor IP matches pattern")
 	}
@@ -538,19 +539,19 @@ func TestRegisterErrorMessages(t *testing.T) {
 	ctx := context.Background()
 
 	// Empty hostname
-	_, err := reg.Register(ctx, "", "10.0.1.1", "pubkey", "token")
+	_, err := reg.Register(ctx, "", "10.0.1.1", "pubkey", "token", false)
 	if err == nil {
 		t.Fatal("Register should fail with empty hostname")
 	}
 
 	// Empty token
-	_, err = reg.Register(ctx, "host.example.com", "10.0.1.1", "pubkey", "")
+	_, err = reg.Register(ctx, "host.example.com", "10.0.1.1", "pubkey", "", false)
 	if err == nil {
 		t.Fatal("Register should fail with empty token")
 	}
 
 	// Empty pubkey
-	_, err = reg.Register(ctx, "host.example.com", "10.0.1.1", "", "token")
+	_, err = reg.Register(ctx, "host.example.com", "10.0.1.1", "", "token", false)
 	if err == nil {
 		t.Fatal("Register should fail with empty pubkey")
 	}
@@ -564,7 +565,7 @@ func TestTrustedRegisterSuccess(t *testing.T) {
 		{Pattern: "*.web.example.com", CIDRs: []string{"10.0.1.0/24"}},
 	}
 
-	thrallID, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.100")
+	thrallID, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.100", false)
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed: %v", err)
 	}
@@ -582,7 +583,7 @@ func TestTrustedRegisterCIDRReject(t *testing.T) {
 	}
 
 	// Peer IP outside allowed CIDR.
-	_, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "192.168.1.100")
+	_, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "192.168.1.100", false)
 	if err == nil {
 		t.Fatal("TrustedRegister should reject when peer IP is outside CIDR")
 	}
@@ -597,7 +598,7 @@ func TestTrustedRegisterNoCIDRsAllowsAny(t *testing.T) {
 		{Pattern: "*.open.example.com"},
 	}
 
-	thrallID, err := reg.TrustedRegister(ctx, "app01.open.example.com", "anywhere", "ed25519-pubkey", patterns, "203.0.113.50")
+	thrallID, err := reg.TrustedRegister(ctx, "app01.open.example.com", "anywhere", "ed25519-pubkey", patterns, "203.0.113.50", false)
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed with no CIDR restriction: %v", err)
 	}
@@ -614,7 +615,7 @@ func TestTrustedRegisterNoMatch(t *testing.T) {
 		{Pattern: "*.web.example.com", CIDRs: []string{"10.0.0.0/8"}},
 	}
 
-	_, err := reg.TrustedRegister(ctx, "rogue-host.evil.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.5")
+	_, err := reg.TrustedRegister(ctx, "rogue-host.evil.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.5", false)
 	if err == nil {
 		t.Fatal("TrustedRegister should reject when hostname doesn't match pattern")
 	}
@@ -629,7 +630,7 @@ func TestTrustedRegisterRevokedHostname(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	thrallID, err := reg.Register(ctx, "revoked.example.com", "10.0.1.1", "pk1", "tok")
+	thrallID, err := reg.Register(ctx, "revoked.example.com", "10.0.1.1", "pk1", "tok", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -641,7 +642,7 @@ func TestTrustedRegisterRevokedHostname(t *testing.T) {
 	patterns := []config.TrustedEnrollment{
 		{Pattern: "*.example.com"},
 	}
-	_, err = reg.TrustedRegister(ctx, "revoked.example.com", "10.0.1.1", "pk2", patterns, "10.0.1.1")
+	_, err = reg.TrustedRegister(ctx, "revoked.example.com", "10.0.1.1", "pk2", patterns, "10.0.1.1", false)
 	if err == nil {
 		t.Fatal("TrustedRegister should reject revoked hostname")
 	}
@@ -692,19 +693,19 @@ func TestRegisterEmptyInputs(t *testing.T) {
 	ctx := context.Background()
 
 	// Empty hostname.
-	_, err := reg.Register(ctx, "", "10.0.0.1", "pubkey", "token")
+	_, err := reg.Register(ctx, "", "10.0.0.1", "pubkey", "token", false)
 	if err == nil {
 		t.Error("expected error for empty hostname")
 	}
 
 	// Empty pubkey.
-	_, err = reg.Register(ctx, "host.example.com", "10.0.0.1", "", "token")
+	_, err = reg.Register(ctx, "host.example.com", "10.0.0.1", "", "token", false)
 	if err == nil {
 		t.Error("expected error for empty pubkey")
 	}
 
 	// Empty token.
-	_, err = reg.Register(ctx, "host.example.com", "10.0.0.1", "pubkey", "")
+	_, err = reg.Register(ctx, "host.example.com", "10.0.0.1", "pubkey", "", false)
 	if err == nil {
 		t.Error("expected error for empty token")
 	}
@@ -719,7 +720,7 @@ func TestMatchesCIDR(t *testing.T) {
 	ctx := context.Background()
 
 	// Match: 10.x.x.x
-	id, err := reg.TrustedRegister(ctx, "a.example.com", "10.0.0.1", "pk1", patterns, "10.0.0.50")
+	id, err := reg.TrustedRegister(ctx, "a.example.com", "10.0.0.1", "pk1", patterns, "10.0.0.50", false)
 	if err != nil {
 		t.Fatalf("expected match for 10.x: %v", err)
 	}
@@ -728,13 +729,13 @@ func TestMatchesCIDR(t *testing.T) {
 	}
 
 	// Match: 172.16.x.x
-	id, err = reg.TrustedRegister(ctx, "b.example.com", "172.16.0.1", "pk2", patterns, "172.16.5.5")
+	id, err = reg.TrustedRegister(ctx, "b.example.com", "172.16.0.1", "pk2", patterns, "172.16.5.5", false)
 	if err != nil {
 		t.Fatalf("expected match for 172.16.x: %v", err)
 	}
 
 	// No match: 192.168.x.x
-	_, err = reg.TrustedRegister(ctx, "c.example.com", "192.168.1.1", "pk3", patterns, "192.168.1.100")
+	_, err = reg.TrustedRegister(ctx, "c.example.com", "192.168.1.1", "pk3", patterns, "192.168.1.100", false)
 	if err == nil {
 		t.Fatal("expected rejection for 192.168.x outside CIDR")
 	}
@@ -743,7 +744,7 @@ func TestMatchesCIDR(t *testing.T) {
 	badPatterns := []config.TrustedEnrollment{
 		{Pattern: "*.example.com", CIDRs: []string{"not-a-cidr"}},
 	}
-	_, err = reg.TrustedRegister(ctx, "d.example.com", "10.0.0.1", "pk4", badPatterns, "10.0.0.1")
+	_, err = reg.TrustedRegister(ctx, "d.example.com", "10.0.0.1", "pk4", badPatterns, "10.0.0.1", false)
 	if err == nil {
 		t.Fatal("expected rejection with invalid CIDR")
 	}
@@ -763,7 +764,7 @@ func TestCreateThrallDirect(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	id, err := reg.CreateThrall(ctx, "direct.example.com", "10.0.0.1", "ed25519-pubkey")
+	id, err := reg.CreateThrall(ctx, "direct.example.com", "10.0.0.1", "ed25519-pubkey", false)
 	if err != nil {
 		t.Fatalf("CreateThrall: %v", err)
 	}
@@ -778,5 +779,186 @@ func TestCreateThrallDirect(t *testing.T) {
 	}
 	if thrall.Hostname != "direct.example.com" {
 		t.Errorf("hostname = %q, want direct.example.com", thrall.Hostname)
+	}
+}
+
+func TestRegisterDuplicateHostnameRejected(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Register a thrall with token-based flow.
+	token1 := "dup-token-1"
+	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	_, err = reg.Register(ctx, "dup.example.com", "10.0.0.1", "pubkey-1", token1, false)
+	if err != nil {
+		t.Fatalf("first Register: %v", err)
+	}
+
+	// Attempt to register another thrall with the same hostname (different pubkey, new pattern+token).
+	token2 := "dup-token-2"
+	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token2)
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	_, err = reg.Register(ctx, "dup.example.com", "10.0.0.2", "pubkey-2", token2, false)
+	if !errors.Is(err, registry.ErrHostnameInUse) {
+		t.Fatalf("expected ErrHostnameInUse, got: %v", err)
+	}
+}
+
+func TestRegisterDuplicateHostnameForce(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Register the first thrall.
+	token1 := "force-token-1"
+	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	oldID, err := reg.Register(ctx, "force.example.com", "10.0.0.1", "pubkey-old", token1, false)
+	if err != nil {
+		t.Fatalf("first Register: %v", err)
+	}
+
+	// Force-register with the same hostname.
+	token2 := "force-token-2"
+	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token2)
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	newID, err := reg.Register(ctx, "force.example.com", "10.0.0.2", "pubkey-new", token2, true)
+	if err != nil {
+		t.Fatalf("force Register: %v", err)
+	}
+	if newID == oldID {
+		t.Fatal("expected new thrall to have a different ID from the old one")
+	}
+
+	// Verify the old thrall is revoked.
+	oldThrall, err := db.New(testDB).GetThrallByID(ctx, oldID)
+	if err != nil {
+		t.Fatalf("GetThrallByID (old): %v", err)
+	}
+	if oldThrall.Revoked == 0 {
+		t.Error("expected old thrall to be revoked after force registration")
+	}
+}
+
+func TestRegisterForceRevokedHostname(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Register and then revoke a thrall.
+	token1 := "revoke-force-token-1"
+	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	thrallID, err := reg.Register(ctx, "revforce.example.com", "10.0.0.1", "pubkey-1", token1, false)
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
+		t.Fatalf("RevokeThrall: %v", err)
+	}
+
+	// Without force, re-enrolling a revoked hostname fails (ENRL-07).
+	token2 := "revoke-force-token-2"
+	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token2)
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	_, err = reg.Register(ctx, "revforce.example.com", "10.0.0.2", "pubkey-2", token2, false)
+	if err == nil {
+		t.Fatal("expected error re-enrolling revoked hostname without force")
+	}
+
+	// With force, re-enrolling should succeed (force overrides ENRL-07).
+	token3 := "revoke-force-token-3"
+	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token3)
+	if err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	newID, err := reg.Register(ctx, "revforce.example.com", "10.0.0.3", "pubkey-3", token3, true)
+	if err != nil {
+		t.Fatalf("force Register over revoked hostname should succeed: %v", err)
+	}
+	if newID == "" {
+		t.Fatal("expected non-empty thrall ID")
+	}
+}
+
+func TestTrustedRegisterDuplicateHostnameRejected(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.example.com", CIDRs: []string{"10.0.0.0/8"}},
+	}
+
+	// Register first thrall via trusted enrollment.
+	_, err := reg.TrustedRegister(ctx, "trusted-dup.example.com", "10.0.0.1", "pubkey-1", patterns, "10.0.0.50", false)
+	if err != nil {
+		t.Fatalf("first TrustedRegister: %v", err)
+	}
+
+	// Second registration with same hostname should be rejected.
+	_, err = reg.TrustedRegister(ctx, "trusted-dup.example.com", "10.0.0.2", "pubkey-2", patterns, "10.0.0.51", false)
+	if !errors.Is(err, registry.ErrHostnameInUse) {
+		t.Fatalf("expected ErrHostnameInUse, got: %v", err)
+	}
+}
+
+func TestTrustedRegisterDuplicateHostnameForce(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.example.com", CIDRs: []string{"10.0.0.0/8"}},
+	}
+
+	// Register first thrall.
+	oldID, err := reg.TrustedRegister(ctx, "trusted-force.example.com", "10.0.0.1", "pubkey-old", patterns, "10.0.0.50", false)
+	if err != nil {
+		t.Fatalf("first TrustedRegister: %v", err)
+	}
+
+	// Force-register with same hostname.
+	newID, err := reg.TrustedRegister(ctx, "trusted-force.example.com", "10.0.0.2", "pubkey-new", patterns, "10.0.0.51", true)
+	if err != nil {
+		t.Fatalf("force TrustedRegister: %v", err)
+	}
+	if newID == oldID {
+		t.Fatal("expected new thrall to have a different ID from the old one")
+	}
+
+	// Verify old thrall is revoked.
+	oldThrall, err := db.New(testDB).GetThrallByID(ctx, oldID)
+	if err != nil {
+		t.Fatalf("GetThrallByID (old): %v", err)
+	}
+	if oldThrall.Revoked == 0 {
+		t.Error("expected old thrall to be revoked after force trusted registration")
+	}
+}
+
+func TestCreateThrallDuplicateHostnameRejected(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	// Create first thrall directly.
+	_, err := reg.CreateThrall(ctx, "create-dup.example.com", "10.0.0.1", "pubkey-1", false)
+	if err != nil {
+		t.Fatalf("first CreateThrall: %v", err)
+	}
+
+	// Second CreateThrall with same hostname should be rejected.
+	_, err = reg.CreateThrall(ctx, "create-dup.example.com", "10.0.0.2", "pubkey-2", false)
+	if !errors.Is(err, registry.ErrHostnameInUse) {
+		t.Fatalf("expected ErrHostnameInUse, got: %v", err)
 	}
 }

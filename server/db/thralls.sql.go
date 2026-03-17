@@ -74,6 +74,32 @@ func (q *Queries) DeleteThrall(ctx context.Context, id string) error {
 	return err
 }
 
+const getActiveThrallByHostname = `-- name: GetActiveThrallByHostname :one
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+FROM thralls
+WHERE hostname = ? AND revoked = 0
+`
+
+func (q *Queries) GetActiveThrallByHostname(ctx context.Context, hostname string) (Thrall, error) {
+	row := q.db.QueryRowContext(ctx, getActiveThrallByHostname, hostname)
+	var i Thrall
+	err := row.Scan(
+		&i.ID,
+		&i.Hostname,
+		&i.IpAddress,
+		&i.PubkeyPem,
+		&i.EnrolledAt,
+		&i.LastSeen,
+		&i.Revoked,
+		&i.RevokedAt,
+		&i.ForcePush,
+		&i.PendingRotatedSecrets,
+		&i.Tags,
+		&i.MaintenanceUntil,
+	)
+	return i, err
+}
+
 const getThrallByHostname = `-- name: GetThrallByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls

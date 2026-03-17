@@ -48,7 +48,7 @@ func (s *AdminService) EnrollThrall(ctx context.Context, req *pb.EnrollThrallReq
 		return nil, status.Error(codes.InvalidArgument, "hostname and pubkey_pem are required")
 	}
 
-	thrallID, err := s.registry.CreateThrall(ctx, hostname, ipAddress, pubkeyPEM)
+	thrallID, err := s.registry.CreateThrall(ctx, hostname, ipAddress, pubkeyPEM, req.GetForce())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating thrall: %v", err)
 	}

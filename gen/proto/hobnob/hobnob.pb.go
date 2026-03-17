@@ -29,6 +29,7 @@ type RegisterRequest struct {
 	IpAddress     string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	PubkeyPem     string                 `protobuf:"bytes,3,opt,name=pubkey_pem,json=pubkeyPem,proto3" json:"pubkey_pem,omitempty"`
 	Token         string                 `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
+	Force         bool                   `protobuf:"varint,5,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active thrall with same hostname and re-enroll
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,6 +90,13 @@ func (x *RegisterRequest) GetToken() string {
 		return x.Token
 	}
 	return ""
+}
+
+func (x *RegisterRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 type RegisterResponse struct {
@@ -5405,6 +5413,7 @@ type EnrollThrallRequest struct {
 	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	IpAddress     string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	PubkeyPem     string                 `protobuf:"bytes,3,opt,name=pubkey_pem,json=pubkeyPem,proto3" json:"pubkey_pem,omitempty"`
+	Force         bool                   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active thrall with same hostname and re-enroll
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5458,6 +5467,13 @@ func (x *EnrollThrallRequest) GetPubkeyPem() string {
 		return x.PubkeyPem
 	}
 	return ""
+}
+
+func (x *EnrollThrallRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 type EnrollThrallResponse struct {
@@ -6044,14 +6060,15 @@ var File_hobnob_proto protoreflect.FileDescriptor
 
 const file_hobnob_proto_rawDesc = "" +
 	"\n" +
-	"\fhobnob.proto\x12\thobnob.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/api/annotations.proto\"\x81\x01\n" +
+	"\fhobnob.proto\x12\thobnob.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/api/annotations.proto\"\x97\x01\n" +
 	"\x0fRegisterRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1d\n" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
-	"\x05token\x18\x04 \x01(\tR\x05token\"\xae\x01\n" +
+	"\x05token\x18\x04 \x01(\tR\x05token\x12\x14\n" +
+	"\x05force\x18\x05 \x01(\bR\x05force\"\xae\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1b\n" +
 	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x12\x18\n" +
@@ -6455,13 +6472,14 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04diff\x18\x02 \x03(\v2'.hobnob.v1.PromoteEnvResponse.DiffEntryR\x04diff\x1a7\n" +
 	"\tDiffEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"o\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x85\x01\n" +
 	"\x13EnrollThrallRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1d\n" +
 	"\n" +
-	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\"3\n" +
+	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
+	"\x05force\x18\x04 \x01(\bR\x05force\"3\n" +
 	"\x14EnrollThrallResponse\x12\x1b\n" +
 	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\"z\n" +
 	"\x16SetReassignmentRequest\x12\x1b\n" +

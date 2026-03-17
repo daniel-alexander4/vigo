@@ -147,12 +147,14 @@ impl Client {
         ip_addr: &str,
         pubkey_pem: &str,
         token: &str,
+        force: bool,
     ) -> Result<RegisterResponse> {
         let req = RegisterRequest {
             hostname: hostname.to_string(),
             ip_address: ip_addr.to_string(),
             pubkey_pem: pubkey_pem.to_string(),
             token: token.to_string(),
+            force,
         };
 
         let resp = self

@@ -365,6 +365,7 @@ type bootstrapRegisterRequest struct {
 	PubkeyPEM string `json:"pubkey_pem"`
 	CSRPEM    string `json:"csr_pem"`
 	Token     string `json:"token,omitempty"`
+	Force     bool   `json:"force,omitempty"`
 }
 
 // bootstrapRegisterResponse is the JSON response for POST /api/v1/bootstrap/register.
@@ -409,14 +410,14 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 
 	if req.Token != "" {
 		// Token-based enrollment (existing flow).
-		thrallID, err = h.registry.Register(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, req.Token)
+		thrallID, err = h.registry.Register(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, req.Token, req.Force)
 	} else {
 		// Trusted enrollment (no token — validate hostname+CIDR).
 		if len(h.trustedPatterns) == 0 {
 			http.Error(w, "no token provided and no trusted enrollment patterns configured", http.StatusForbidden)
 			return
 		}
-		thrallID, err = h.registry.TrustedRegister(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, h.trustedPatterns, peerIP)
+		thrallID, err = h.registry.TrustedRegister(r.Context(), req.Hostname, req.IPAddress, req.PubkeyPEM, h.trustedPatterns, peerIP, req.Force)
 	}
 
 	if err != nil {

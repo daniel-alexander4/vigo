@@ -298,7 +298,7 @@ func TestCheckInRevoked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestCheckInSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,7 +415,7 @@ func TestCheckInBadSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,7 +610,7 @@ func TestCheckInStaleTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "stale1.test.example.com", "10.0.1.10", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "stale1.test.example.com", "10.0.1.10", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,7 +666,7 @@ func TestCheckInFutureTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "future1.test.example.com", "10.0.1.11", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "future1.test.example.com", "10.0.1.11", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -722,7 +722,7 @@ func TestCheckInTimestampBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "boundary1.test.example.com", "10.0.1.12", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "boundary1.test.example.com", "10.0.1.12", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -795,7 +795,7 @@ func TestCheckInTamperedSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "tampered1.test.example.com", "10.0.1.13", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "tampered1.test.example.com", "10.0.1.13", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -851,7 +851,7 @@ func TestCheckInTruncatedSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "truncated1.test.example.com", "10.0.1.14", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "truncated1.test.example.com", "10.0.1.14", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -907,7 +907,7 @@ func TestCheckInMissingTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "missingts1.test.example.com", "10.0.1.15", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "missingts1.test.example.com", "10.0.1.15", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1075,7 +1075,7 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "revokeafter1.test.example.com", "10.0.1.17", pubPEM, token)
+	thrallID, err := reg.Register(ctx, "revokeafter1.test.example.com", "10.0.1.17", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,11 +40,19 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}
 	}
 
+	// If force-replacing, revoke the old thrall in FleetIndex first.
+	if req.GetForce() && s.fleetIndex != nil {
+		if oldID := s.fleetIndex.GetByHostname(req.GetHostname()); oldID != "" {
+			s.fleetIndex.SetRevoked(oldID, true)
+		}
+	}
+
 	thrallID, err := s.registry.Register(ctx,
 		req.GetHostname(),
 		req.GetIpAddress(),
 		req.GetPubkeyPem(),
 		req.GetToken(),
+		req.GetForce(),
 	)
 	if err != nil {
 		slog.Warn("registration failed",
@@ -61,6 +69,11 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		case errors.Is(err, registry.ErrHostnameRevoked):
 			return nil, status.Error(codes.PermissionDenied,
 				"hostname belongs to a revoked thrall and cannot re-enroll")
+		case errors.Is(err, registry.ErrHostnameInUse):
+			return &pb.RegisterResponse{
+				Success: false,
+				Message: "an active thrall with this hostname already exists; use --force to replace",
+			}, nil
 		default:
 			return nil, status.Errorf(codes.Internal, "registration failed: %v", err)
 		}
@@ -72,7 +85,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	if s.hub != nil {
 		addr, matched := s.hub.RouteHostname(req.GetHostname())
 		if matched {
-			spokeThrallID, enrollErr := s.hub.EnrollOnSpoke(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem())
+			spokeThrallID, enrollErr := s.hub.EnrollOnSpoke(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
 			if enrollErr != nil {
 				slog.Error("spoke enrollment failed, thrall registered on hub only",
 					"hostname", req.GetHostname(),

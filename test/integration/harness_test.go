@@ -232,7 +232,7 @@ func enrollAgent(t *testing.T, env *testEnv, dataDir, pubPEM, hostname, token st
 		t.Fatal(err)
 	}
 
-	thrallID, err := env.Registry.Register(ctx, hostname, "127.0.0.1", pubPEM, token)
+	thrallID, err := env.Registry.Register(ctx, hostname, "127.0.0.1", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}

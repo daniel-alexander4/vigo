@@ -13,6 +13,11 @@ SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, re
 FROM thralls
 WHERE hostname = ?;
 
+-- name: GetActiveThrallByHostname :one
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+FROM thralls
+WHERE hostname = ? AND revoked = 0;
+
 -- name: ListThralls :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
 FROM thralls

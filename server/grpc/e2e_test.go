@@ -111,7 +111,7 @@ func registerThrall(t *testing.T, addr, hostname, token string) (string, ed25519
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, hostname, "10.0.0.1", pubPEM, token)
+	thrallID, err := reg.Register(ctx, hostname, "10.0.0.1", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}

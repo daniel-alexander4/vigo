@@ -113,6 +113,19 @@ bootstrap:
 
 ## Troubleshooting
 
+**"An active thrall with this hostname already exists":**
+- A thrall with the same hostname is already enrolled. If the machine was reimaged or its identity files were lost, use `--force` on re-registration to revoke the old thrall and re-enroll:
+
+```bash
+hobnob register --token <token> --force
+```
+
+Or during bootstrap:
+
+```bash
+curl -sSfk https://<server>:8443/bootstrap | sudo sh -s -- --token <token> --force
+```
+
 **Agent fails to register:**
 - Check that the server's gRPC port (1530) is reachable from the thrall
 - Verify the token hasn't already been used

@@ -18,6 +18,7 @@ Enrolls a new agent with the server.
 | `ip_address` | string | Agent's IP address |
 | `pubkey_pem` | string | ED25519 public key in PEM format |
 | `token` | string | One-time enrollment token (plaintext; server validates against bcrypt hash) |
+| `force` | bool | If true, revoke any existing active thrall with the same hostname and re-enroll |
 
 **Response: `RegisterResponse`**
 
@@ -30,6 +31,8 @@ Enrolls a new agent with the server.
 | `server_pubkey_pem` | string | Server's ED25519 public key for bundle signature verification |
 
 **Auth:** Token-based. The hostname must match an approved pattern, and the token must match the bcrypt hash stored for that pattern.
+
+**Hostname uniqueness:** Registration is rejected if an active (non-revoked) thrall with the same hostname already exists. Set `force: true` to revoke the old thrall and re-enroll. This also overrides the ENRL-07 revoked-hostname block.
 
 ---
 

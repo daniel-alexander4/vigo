@@ -14,6 +14,8 @@ pub struct RegisterRequest {
     pub csr_pem: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub force: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,10 +91,12 @@ mod tests {
             pubkey_pem: "-----BEGIN PUBLIC KEY-----\nfoo\n-----END PUBLIC KEY-----\n".into(),
             csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nbar\n-----END CERTIFICATE REQUEST-----\n".into(),
             token: Some("tok123".into()),
+            force: false,
         };
         let json = serde_json::to_value(&req).unwrap();
         assert_eq!(json["hostname"], "web01");
         assert_eq!(json["token"], "tok123");
+        assert!(json.get("force").is_none(), "force=false should be omitted");
     }
 
     #[test]
@@ -103,9 +107,25 @@ mod tests {
             pubkey_pem: "pub".into(),
             csr_pem: "csr".into(),
             token: None,
+            force: false,
         };
         let json = serde_json::to_value(&req).unwrap();
         assert!(json.get("token").is_none());
+        assert!(json.get("force").is_none());
+    }
+
+    #[test]
+    fn test_register_request_force() {
+        let req = RegisterRequest {
+            hostname: "web01".into(),
+            ip_address: "10.0.0.1".into(),
+            pubkey_pem: "pub".into(),
+            csr_pem: "csr".into(),
+            token: Some("tok".into()),
+            force: true,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["force"], true);
     }
 
     #[test]
