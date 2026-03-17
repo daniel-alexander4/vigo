@@ -672,6 +672,10 @@ Returns the OpenAPI specification as JSON.
 | GET | `/bootstrap` | Agent bootstrap script |
 | GET | `/bootstrap/agent/{os}/{arch}` | Agent binary download |
 | GET | `/bootstrap/ca.pem` | CA certificate download |
+| GET | `/api/v1/agent/latest` | Agent version, SHA256 checksum, and ED25519 signature (`?os=&arch=`) |
+| GET | `/api/v1/agent/download/{os}/{arch}` | Agent binary download |
+| GET | `/api/v1/agent/signing-key` | ED25519 signing public key (hex) |
+| POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing |
 
 ---
 

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -82,4 +83,21 @@ func BinaryPath(agentDir, goos, goarch string) string {
 		name = "hobnob.exe"
 	}
 	return filepath.Join(agentDir, goos, goarch, name)
+}
+
+// ReadSigFile reads an ED25519 .sig file and returns the hex-encoded signature
+// (line 1) and hex-encoded public key (line 2). Returns an error if the file
+// doesn't exist or has an invalid format.
+func ReadSigFile(sigPath string) (signature, pubKey string, err error) {
+	data, err := os.ReadFile(sigPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	lines := strings.SplitN(strings.TrimSpace(string(data)), "\n", 3)
+	if len(lines) < 2 {
+		return "", "", fmt.Errorf("sig file must contain signature and public key (hex, one per line)")
+	}
+
+	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1]), nil
 }

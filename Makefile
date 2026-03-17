@@ -1,5 +1,6 @@
 .PHONY: build build-agent test test-agent lint lint-agent dist dist-agent \
        dist-agent-windows dist-agent-macos dist-agent-freebsd dist-agent-illumos \
+       dist-sign dist-sign-agent \
        proto certs migrate sqlc up down logs clean
 
 VERSION ?= dev
@@ -63,13 +64,22 @@ dist-obfuscated: dist-agent
 # Sign distribution binaries with ED25519 key for tamper detection.
 # Usage: make dist-sign SIGN_KEY=/path/to/signing.key
 SIGN_KEY ?= signing.key
-dist-sign:
+dist-sign: dist-sign-agent
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
 	@for bin in dist/server/linux/amd64/hobd dist/cli/linux/amd64/hobnobcli; do \
 		if [ -f "$$bin" ]; then \
 			go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
 			echo "signed $$bin"; \
 		fi; \
+	done
+
+# Sign agent distribution binaries with ED25519 key.
+# Usage: make dist-sign-agent SIGN_KEY=/path/to/signing.key
+dist-sign-agent:
+	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
+	@find dist/agent -type f \( -name 'hobnob' -o -name 'hobnob.exe' \) 2>/dev/null | while read bin; do \
+		go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
+		echo "signed $$bin"; \
 	done
 
 # Cross-compile Rust agent to static musl binaries.

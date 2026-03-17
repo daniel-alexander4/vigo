@@ -20,17 +20,18 @@ The script:
 1. Detects OS (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos) and architecture
 2. Stops any existing hobnob-thrall service and removes previous enrollment data for a clean start
 3. Downloads the correct agent binary from the server (always replaces existing)
-4. Generates an ED25519 keypair
-5. Calls the server's bootstrap registration endpoint
-6. Receives a client UUID and signed TLS certificate
-7. Writes agent config to `/etc/hobnob-thrall/config`
-8. Installs the appropriate service for the platform:
+4. Verifies the SHA256 checksum of the downloaded binary (aborts on mismatch)
+5. Generates an ED25519 keypair
+6. Calls the server's bootstrap registration endpoint
+7. Receives a client UUID and signed TLS certificate
+8. Writes agent config to `/etc/hobnob-thrall/config`
+9. Installs the appropriate service for the platform:
    - **Linux:** systemd unit (`hobnob-thrall.service`)
    - **macOS:** launchd plist (`com.hobnob.thrall`)
    - **FreeBSD / NetBSD:** rc.d script (`/usr/local/etc/rc.d/hobnob_thrall`)
    - **OpenBSD:** registered via `rcctl`
    - **illumos:** SMF service manifest (`svc:/system/hobnob-thrall:default`)
-9. Starts the service
+10. Starts the service
 
 ### Windows Bootstrap
 
@@ -101,6 +102,14 @@ Certificate validity is configurable:
 bootstrap:
   cert_validity: "8760h"  # 1 year (default)
 ```
+
+## Binary Integrity
+
+The bootstrap script verifies the SHA256 checksum of the downloaded agent binary before proceeding with enrollment. After downloading the binary, it fetches the expected checksum from the server's `/api/v1/agent/latest` endpoint and compares it against the locally computed digest. If the checksums do not match, the script removes the binary and aborts with an error.
+
+On Unix systems, the script uses `sha256sum`, `shasum -a 256`, or `digest -a sha256` (whichever is available). On Windows, the PowerShell script uses `Get-FileHash`.
+
+For distribution builds, agent binaries can also be signed with an ED25519 key (`make dist-sign-agent`). The signature and public key are served via the `/api/v1/agent/latest` (signature field) and `/api/v1/agent/signing-key` endpoints for the agent's self-update verification path.
 
 ## Security
 
