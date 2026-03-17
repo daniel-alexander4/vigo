@@ -146,6 +146,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
+	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/thralls-table", h.ThrallsTable)
 	mux.HandleFunc("GET /ui/fragments/thrall-runs/{id}", h.ThrallRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/thrall-facts/{id}", h.ThrallFactsFragment)
@@ -893,6 +894,12 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DashboardFleet(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-fleet", data)
+}
+
+// DashboardActivity renders the recent activity table fragment for HTMX polling.
+func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
+	data := h.dataSource.DashboardData(h.baseInterval)
+	h.renderer.RenderFragment(w, "dashboard", "dashboard-activity", data)
 }
 
 // Compliance renders the compliance overview page.

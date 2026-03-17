@@ -21,36 +21,44 @@
 </div>
 {{end}}
 
-{{if .RecentRuns}}
-<div class="table-container">
-    <h3>Recent Activity</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Run</th>
-                <th>Host</th>
-                <th>Status</th>
-                <th>Modules</th>
-                <th>Changed</th>
-                <th>Failed</th>
-                <th>Time</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .RecentRuns}}
-            <tr>
-                <td class="mono">{{truncUUID .ID}}</td>
-                <td>{{.Hostname}}</td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
-                <td>{{.ModuleCount}}</td>
-                <td>{{.ChangedCount}}</td>
-                <td>{{.FailedCount}}</td>
-                <td class="text-muted">{{formatTime .StartedAt}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+<div class="table-container"
+     id="recent-activity"
+     hx-get="/ui/fragments/dashboard-activity"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "dashboard-activity" .}}
 </div>
+{{end}}
+
+{{define "dashboard-activity"}}
+{{if .RecentRuns}}
+<h3>Recent Activity</h3>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Run</th>
+            <th>Host</th>
+            <th>Status</th>
+            <th>Modules</th>
+            <th>Changed</th>
+            <th>Failed</th>
+            <th>Time</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .RecentRuns}}
+        <tr>
+            <td class="mono">{{truncUUID .ID}}</td>
+            <td>{{.Hostname}}</td>
+            <td>{{template "status-badge" dict "Status" .Status}}</td>
+            <td>{{.ModuleCount}}</td>
+            <td>{{.ChangedCount}}</td>
+            <td>{{.FailedCount}}</td>
+            <td class="text-muted">{{formatTime .StartedAt}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
 {{end}}
 {{end}}
 
