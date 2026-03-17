@@ -1389,9 +1389,6 @@ body {
     padding: 0 20px 16px;
     border-bottom: 1px solid var(--color-border);
     margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
 }
 
 .docs-nav__title {
