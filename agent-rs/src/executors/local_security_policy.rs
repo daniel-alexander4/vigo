@@ -6,7 +6,7 @@
 //! via `secedit`.
 //!
 //! Parameters:
-//! - `policy` (required): Policy name. Supported categories:
+//! - `policy_name` (required): Policy name. Supported categories:
 //!   - Password policies: "MinimumPasswordLength", "MaximumPasswordAge",
 //!     "MinimumPasswordAge", "PasswordComplexity", "PasswordHistorySize"
 //!   - Account lockout: "LockoutBadCount", "LockoutDuration", "ResetLockoutCount"
@@ -142,7 +142,7 @@ Revision=1
 impl Executor for LocalSecurityPolicyExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let policy = params.get("policy").cloned().unwrap_or_default();
+        let policy = params.get("policy_name").cloned().unwrap_or_default();
         let value = params.get("value").cloned().unwrap_or_default();
 
         let display = format!("{}={}", policy, value);
@@ -150,7 +150,7 @@ impl Executor for LocalSecurityPolicyExecutor {
 
         if policy.is_empty() {
             result.error = Some(
-                "local_security_policy executor: policy param is required".to_string(),
+                "local_security_policy executor: policy_name param is required".to_string(),
             );
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
@@ -211,19 +211,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn missing_policy_param() {
+    fn missing_policy_name_param() {
         let exec = LocalSecurityPolicyExecutor::new();
         let params = HashMap::new();
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("policy param is required"));
+        assert!(result.error.unwrap().contains("policy_name param is required"));
     }
 
     #[test]
     fn missing_value_param() {
         let exec = LocalSecurityPolicyExecutor::new();
         let mut params = HashMap::new();
-        params.insert("policy".to_string(), "MinimumPasswordLength".to_string());
+        params.insert("policy_name".to_string(), "MinimumPasswordLength".to_string());
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("value param is required"));
@@ -233,7 +233,7 @@ mod tests {
     fn unknown_policy() {
         let exec = LocalSecurityPolicyExecutor::new();
         let mut params = HashMap::new();
-        params.insert("policy".to_string(), "BogusPolicy".to_string());
+        params.insert("policy_name".to_string(), "BogusPolicy".to_string());
         params.insert("value".to_string(), "42".to_string());
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());

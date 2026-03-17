@@ -25,7 +25,7 @@ impl Executor for RebootExecutor {
         let mut result = ResourceResult::new("reboot", "system");
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
-        let delay = params.get("delay").map(|s| s.as_str()).unwrap_or("0");
+        let delay = params.get("delay_seconds").map(|s| s.as_str()).unwrap_or("0");
         let message = params
             .get("message")
             .map(|s| s.as_str())
@@ -147,7 +147,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("state", "present"), ("delay", "5"), ("message", "maintenance")]),
+            &make_params(&[("state", "present"), ("delay_seconds", "5"), ("message", "maintenance")]),
             false,
         );
         assert_eq!(result.action, Action::Updated);

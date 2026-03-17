@@ -8,11 +8,11 @@
 //! Parameters:
 //! - `wsus_server`: WSUS server URL (e.g., "https://wsus.example.com:8531").
 //!   Empty = use Microsoft Update.
-//! - `auto_update`: "enabled" (default), "disabled", "notify", "download", "scheduled"
+//! - `auto_update_enabled`: "enabled" (default), "disabled", "notify", "download", "scheduled"
 //! - `scheduled_day`: Day for scheduled installs (0=every day, 1=Sunday...7=Saturday).
-//!   Only used when auto_update=scheduled.
+//!   Only used when auto_update_enabled=scheduled.
 //! - `scheduled_time`: Hour for scheduled installs (0-23). Only used when
-//!   auto_update=scheduled.
+//!   auto_update_enabled=scheduled.
 //! - `state`: "present" (default) or "absent" (removes WSUS config, reverts to
 //!   Microsoft Update)
 //!
@@ -52,7 +52,7 @@ impl WindowsUpdateExecutor {
         }
     }
 
-    /// Map auto_update param to AUOptions registry value.
+    /// Map auto_update_enabled param to AUOptions registry value.
     fn au_options(auto_update: &str) -> Option<u32> {
         match auto_update {
             "notify" => Some(2),
@@ -264,7 +264,7 @@ impl Executor for WindowsUpdateExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let wsus_server = params.get("wsus_server").cloned().unwrap_or_default();
-        let auto_update = params.get("auto_update").map(|s| s.as_str()).unwrap_or("enabled");
+        let auto_update = params.get("auto_update_enabled").map(|s| s.as_str()).unwrap_or("enabled");
         let scheduled_day = params.get("scheduled_day").cloned().unwrap_or_default();
         let scheduled_time = params.get("scheduled_time").cloned().unwrap_or_default();
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
@@ -272,7 +272,7 @@ impl Executor for WindowsUpdateExecutor {
         let display = if !wsus_server.is_empty() {
             format!("WSUS:{}", wsus_server)
         } else {
-            format!("auto_update={}", auto_update)
+            format!("auto_update_enabled={}", auto_update)
         };
         let mut result = ResourceResult::new("windows_update", &display);
 
@@ -290,7 +290,7 @@ impl Executor for WindowsUpdateExecutor {
             "enabled" | "disabled" | "notify" | "download" | "scheduled"
         ) {
             result.error = Some(format!(
-                "windows_update executor: unknown auto_update {:?} (must be enabled, disabled, notify, download, or scheduled)",
+                "windows_update executor: unknown auto_update_enabled {:?} (must be enabled, disabled, notify, download, or scheduled)",
                 auto_update
             ));
             result.duration_ms = start.elapsed().as_millis() as i32;
@@ -361,13 +361,13 @@ mod tests {
     }
 
     #[test]
-    fn invalid_auto_update() {
+    fn invalid_auto_update_enabled() {
         let exec = WindowsUpdateExecutor::new();
         let mut params = HashMap::new();
-        params.insert("auto_update".to_string(), "bogus".to_string());
+        params.insert("auto_update_enabled".to_string(), "bogus".to_string());
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("unknown auto_update"));
+        assert!(result.error.unwrap().contains("unknown auto_update_enabled"));
     }
 
     #[test]

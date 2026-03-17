@@ -7,15 +7,15 @@
 //!
 //! Parameters:
 //! - `thumbprint`: Certificate thumbprint (for check/remove operations)
-//! - `source`: Path to certificate file (.pfx, .cer, .crt). Required for import.
+//! - `source_path`: Path to certificate file (.pfx, .cer, .crt). Required for import.
 //! - `password`: PFX password (optional, for .pfx files)
 //! - `store`: Certificate store location, default "Cert:\\LocalMachine\\My"
 //!   (other common: "Cert:\\LocalMachine\\Root", "Cert:\\LocalMachine\\CA")
 //! - `state`: "present" (default) or "absent"
 //! - `exportable`: "true"/"false" (default "false") — make private key exportable on import
 //!
-//! When `source` is provided without `thumbprint`, import the cert and report the
-//! thumbprint. When `thumbprint` is provided without source, just verify existence.
+//! When `source_path` is provided without `thumbprint`, import the cert and report the
+//! thumbprint. When `thumbprint` is provided without source_path, just verify existence.
 
 use super::{Action, Executor, ResourceResult, run_command};
 use std::collections::HashMap;
@@ -66,7 +66,7 @@ impl Executor for CertificateWindowsExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let thumbprint = params.get("thumbprint").cloned().unwrap_or_default();
-        let source = params.get("source").cloned().unwrap_or_default();
+        let source = params.get("source_path").cloned().unwrap_or_default();
         let password = params.get("password").cloned().unwrap_or_default();
         let store = params
             .get("store")
@@ -86,7 +86,7 @@ impl Executor for CertificateWindowsExecutor {
 
         if thumbprint.is_empty() && source.is_empty() {
             result.error = Some(
-                "certificate_windows executor: either thumbprint or source param is required"
+                "certificate_windows executor: either thumbprint or source_path param is required"
                     .to_string(),
             );
             result.duration_ms = start.elapsed().as_millis() as i32;
@@ -109,9 +109,9 @@ impl Executor for CertificateWindowsExecutor {
                     if Self::cert_exists(&store, &thumbprint) {
                         result.action = Action::None;
                     } else {
-                        // Cannot import without source — just report missing.
+                        // Cannot import without source_path — just report missing.
                         result.error = Some(format!(
-                            "certificate_windows: certificate {} not found in {} (no source to import from)",
+                            "certificate_windows: certificate {} not found in {} (no source_path to import from)",
                             thumbprint, store
                         ));
                     }
@@ -218,7 +218,7 @@ mod tests {
         assert!(result
             .error
             .unwrap()
-            .contains("either thumbprint or source param is required"));
+            .contains("either thumbprint or source_path param is required"));
     }
 
     #[test]
@@ -236,7 +236,7 @@ mod tests {
     fn absent_requires_thumbprint() {
         let exec = CertificateWindowsExecutor::new();
         let mut params = HashMap::new();
-        params.insert("source".to_string(), "C:\\certs\\app.pfx".to_string());
+        params.insert("source_path".to_string(), "C:\\certs\\app.pfx".to_string());
         params.insert("state".to_string(), "absent".to_string());
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());

@@ -12,7 +12,7 @@
 //!   Can be "user@domain" or "DOMAIN\\user".
 //! - `password`: Domain admin password (required for present)
 //! - `ou_path`: Organizational Unit path (optional, e.g., "OU=Servers,DC=example,DC=com")
-//! - `restart`: "true"/"false" (default "true") — restart after join/leave
+//! - `restart_after_join`: "true"/"false" (default "true") — restart after join/leave
 
 use super::{Action, Executor, ResourceResult, run_command};
 use std::collections::HashMap;
@@ -62,7 +62,7 @@ impl Executor for DomainMembershipExecutor {
         let username = params.get("username").cloned().unwrap_or_default();
         let password = params.get("password").cloned().unwrap_or_default();
         let ou_path = params.get("ou_path").cloned().unwrap_or_default();
-        let restart = params.get("restart").map(|s| s.as_str()).unwrap_or("true") == "true";
+        let restart = params.get("restart_after_join").map(|s| s.as_str()).unwrap_or("true") == "true";
 
         let mut result = ResourceResult::new("domain_membership", &domain);
 

@@ -6,7 +6,7 @@ Manages local security policies idempotently via the Windows `secedit` tool. Enf
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `policy` | Yes | -- | Policy name (see supported policies below). |
+| `policy_name` | Yes | -- | Policy name (see supported policies below). |
 | `value` | Yes | -- | Policy value (integer or string depending on policy). |
 
 ## Supported Policies
@@ -55,7 +55,7 @@ The executor reads the current policy value via `secedit /export` before acting:
 resources:
   - name: min-password-length
     type: local_security_policy
-    policy: MinimumPasswordLength
+    policy_name: MinimumPasswordLength
     value: "12"
 ```
 
@@ -65,17 +65,17 @@ resources:
 resources:
   - name: lockout-threshold
     type: local_security_policy
-    policy: LockoutBadCount
+    policy_name: LockoutBadCount
     value: "5"
 
   - name: lockout-duration
     type: local_security_policy
-    policy: LockoutDuration
+    policy_name: LockoutDuration
     value: "30"
 
   - name: lockout-reset
     type: local_security_policy
-    policy: ResetLockoutCount
+    policy_name: ResetLockoutCount
     value: "15"
 ```
 
@@ -85,17 +85,17 @@ resources:
 resources:
   - name: audit-logon
     type: local_security_policy
-    policy: AuditLogonEvents
+    policy_name: AuditLogonEvents
     value: "3"
 
   - name: audit-policy-change
     type: local_security_policy
-    policy: AuditPolicyChange
+    policy_name: AuditPolicyChange
     value: "3"
 
   - name: audit-account-mgmt
     type: local_security_policy
-    policy: AuditAccountManage
+    policy_name: AuditAccountManage
     value: "3"
 ```
 
@@ -105,27 +105,27 @@ resources:
 resources:
   - name: password-length
     type: local_security_policy
-    policy: MinimumPasswordLength
+    policy_name: MinimumPasswordLength
     value: "14"
 
   - name: password-age
     type: local_security_policy
-    policy: MaximumPasswordAge
+    policy_name: MaximumPasswordAge
     value: "60"
 
   - name: password-min-age
     type: local_security_policy
-    policy: MinimumPasswordAge
+    policy_name: MinimumPasswordAge
     value: "1"
 
   - name: password-complexity
     type: local_security_policy
-    policy: PasswordComplexity
+    policy_name: PasswordComplexity
     value: "1"
 
   - name: password-history
     type: local_security_policy
-    policy: PasswordHistorySize
+    policy_name: PasswordHistorySize
     value: "24"
 ```
 

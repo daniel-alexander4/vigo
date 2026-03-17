@@ -7,9 +7,9 @@ Manages Windows Update and WSUS (Windows Server Update Services) configuration i
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `wsus_server` | No | -- | WSUS server URL (e.g., `https://wsus.example.com:8531`). Empty = use Microsoft Update. |
-| `auto_update` | No | `enabled` | Auto-update mode: `enabled`, `disabled`, `notify`, `download`, or `scheduled`. |
-| `scheduled_day` | No | -- | Day for scheduled installs. `0` = every day, `1` = Sunday through `7` = Saturday. Only used when `auto_update=scheduled`. |
-| `scheduled_time` | No | -- | Hour for scheduled installs (0-23). Only used when `auto_update=scheduled`. |
+| `auto_update_enabled` | No | `enabled` | Auto-update mode: `enabled`, `disabled`, `notify`, `download`, or `scheduled`. |
+| `scheduled_day` | No | -- | Day for scheduled installs. `0` = every day, `1` = Sunday through `7` = Saturday. Only used when `auto_update_enabled=scheduled`. |
+| `scheduled_time` | No | -- | Hour for scheduled installs (0-23). Only used when `auto_update_enabled=scheduled`. |
 | `state` | No | `present` | `present` to apply configuration, `absent` to remove WSUS policy (reverts to Microsoft Update). |
 
 ## Auto-Update Modes
@@ -46,7 +46,7 @@ resources:
   - name: configure-wsus
     type: windows_update
     wsus_server: "https://wsus.corp.example.com:8531"
-    auto_update: enabled
+    auto_update_enabled: enabled
 ```
 
 ### Scheduled updates on Sundays at 3 AM
@@ -55,7 +55,7 @@ resources:
 resources:
   - name: scheduled-updates
     type: windows_update
-    auto_update: scheduled
+    auto_update_enabled: scheduled
     scheduled_day: "1"
     scheduled_time: "3"
 ```
@@ -66,7 +66,7 @@ resources:
 resources:
   - name: disable-auto-update
     type: windows_update
-    auto_update: disabled
+    auto_update_enabled: disabled
 ```
 
 ### WSUS with download-only (notify before install)
@@ -76,7 +76,7 @@ resources:
   - name: wsus-download-only
     type: windows_update
     wsus_server: "https://wsus.corp.example.com:8531"
-    auto_update: download
+    auto_update_enabled: download
 ```
 
 ### Remove WSUS policy (revert to Microsoft Update)
@@ -97,5 +97,5 @@ Windows only. Requires administrator privileges for registry writes under `HKLM:
 - The executor manages the Group Policy registry keys for Windows Update. On domain-joined machines, Active Directory Group Policy may override these settings.
 - When `wsus_server` is set, both `WUServer` and `WUStatusServer` are configured to the same URL, and `UseWUServer` is enabled.
 - When `wsus_server` is empty (or omitted), `UseWUServer` is set to `0`, directing the machine to use Microsoft Update.
-- The `scheduled_day` and `scheduled_time` parameters are only applied when `auto_update=scheduled`. They are ignored for other modes.
+- The `scheduled_day` and `scheduled_time` parameters are only applied when `auto_update_enabled=scheduled`. They are ignored for other modes.
 - Changes take effect on the next Windows Update check cycle. No reboot is required, but you may need to restart the Windows Update service (`wuauserv`) for immediate effect.

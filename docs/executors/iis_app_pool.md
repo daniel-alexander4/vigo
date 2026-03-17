@@ -13,8 +13,8 @@ Manages IIS application pools idempotently via the PowerShell WebAdministration 
 | `identity_type` | No | `ApplicationPoolIdentity` | Process identity. One of: `ApplicationPoolIdentity`, `LocalSystem`, `LocalService`, `NetworkService`, `SpecificUser`. |
 | `username` | Conditional | -- | Username when `identity_type=SpecificUser`. Required with `SpecificUser`. |
 | `password` | Conditional | -- | Password when `identity_type=SpecificUser`. Required with `SpecificUser`. Use `secret:` prefix. |
-| `idle_timeout` | No | `20` | Minutes before idle shutdown. `0` disables the timeout. |
-| `recycle_interval` | No | `1740` | Minutes between periodic recycling (1740 = 29 hours). `0` disables periodic recycling. |
+| `idle_timeout_minutes` | No | `20` | Minutes before idle shutdown. `0` disables the timeout. |
+| `recycle_interval_minutes` | No | `1740` | Minutes between periodic recycling (1740 = 29 hours). `0` disables periodic recycling. |
 
 ## States
 
@@ -51,7 +51,7 @@ resources:
     type: iis_app_pool
     app_pool: StaticContentPool
     runtime_version: ""
-    idle_timeout: "0"
+    idle_timeout_minutes: "0"
 ```
 
 ### Pool with custom identity
@@ -65,7 +65,7 @@ resources:
     identity_type: SpecificUser
     username: "DOMAIN\\svc-api"
     password: "secret:hobnob/iis/api-pool-password"
-    recycle_interval: "0"
+    recycle_interval_minutes: "0"
 ```
 
 ### Pool running as NetworkService with Classic pipeline
@@ -98,5 +98,5 @@ Windows only. Requires the IIS-WebServer feature to be installed. Use the [`wind
 
 - The WebAdministration PowerShell module is imported automatically on each invocation.
 - When `identity_type=SpecificUser`, both `username` and `password` are required. Use the `secret:` prefix to avoid plaintext passwords in config.
-- The default `recycle_interval` of 1740 minutes (29 hours) is the IIS default. This avoids recycling at the same time every day. Set to `0` for long-lived pools that should not recycle.
+- The default `recycle_interval_minutes` of 1740 minutes (29 hours) is the IIS default. This avoids recycling at the same time every day. Set to `0` for long-lived pools that should not recycle.
 - For simple sites where you do not need fine-grained pool control, the [`iis_site`](iis_site.md) executor auto-creates a pool using the site name.

@@ -14,8 +14,8 @@
 //!   "LocalService", "NetworkService", "SpecificUser"
 //! - `username`: Username when identity_type=SpecificUser
 //! - `password`: Password when identity_type=SpecificUser
-//! - `idle_timeout`: Minutes before idle shutdown (default "20", "0" = no timeout)
-//! - `recycle_interval`: Minutes between periodic recycling (default "1740" = 29h, "0" = no recycle)
+//! - `idle_timeout_minutes`: Minutes before idle shutdown (default "20", "0" = no timeout)
+//! - `recycle_interval_minutes`: Minutes between periodic recycling (default "1740" = 29h, "0" = no recycle)
 //!
 //! Prerequisites: IIS-WebServer feature must be installed.
 
@@ -88,8 +88,8 @@ impl Executor for IisAppPoolExecutor {
         let identity_type = params.get("identity_type").map(|s| s.as_str()).unwrap_or("ApplicationPoolIdentity");
         let username = params.get("username").cloned().unwrap_or_default();
         let password = params.get("password").cloned().unwrap_or_default();
-        let idle_timeout = params.get("idle_timeout").cloned().unwrap_or_else(|| "20".to_string());
-        let recycle_interval = params.get("recycle_interval").cloned().unwrap_or_else(|| "1740".to_string());
+        let idle_timeout = params.get("idle_timeout_minutes").cloned().unwrap_or_else(|| "20".to_string());
+        let recycle_interval = params.get("recycle_interval_minutes").cloned().unwrap_or_else(|| "1740".to_string());
 
         let mut result = ResourceResult::new("iis_app_pool", &pool);
 
