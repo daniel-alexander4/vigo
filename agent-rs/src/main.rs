@@ -58,6 +58,7 @@ enum Commands {
         force: bool,
     },
     Version,
+    Status,
     Traits {
         collectors: Vec<String>,
     },
@@ -159,6 +160,7 @@ fn parse_args() -> Result<Cli> {
     if let Some(cmd) = positional.first() {
         cli.command = Some(match cmd.as_str() {
             "version" => Commands::Version,
+            "status" => Commands::Status,
             "run" => {
                 let mut module = None;
                 let mut dry_run = false;
@@ -257,6 +259,7 @@ COMMANDS:
     register    Register with the server (--token <TOKEN> [--force])
     bootstrap   Bootstrap agent (--server <URL> [--token <TOKEN>] [--install-service] [--force])
     version     Print agent version
+    status      Show agent state (config, cached policy, pending results)
     traits      Print collected traits as JSON [COLLECTORS...]
 
 With no command, runs as a daemon.
@@ -744,6 +747,178 @@ async fn install_platform_service(
     bail!("service installation is not supported on this platform")
 }
 
+/// Show local agent state: config, cached policy, pending results.
+/// Reads only from local files and the LMDB state store — no server communication.
+fn run_status(cli: &Cli) -> Result<()> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    // Load config.
+    let cfg = config::load(&cli.data_dir);
+
+    // Thrall ID.
+    let thrall_id = match load_thrall_id(&cli.data_dir) {
+        Ok(id) => id,
+        Err(_) => "(not registered)".to_string(),
+    };
+
+    // Server address.
+    let server = cfg.get("server").cloned().unwrap_or_else(|| cli.server.clone());
+
+    // Fallback servers.
+    let fallbacks = config::parse_fallback_servers(&cfg);
+    let fallback_str = if fallbacks.is_empty() {
+        "none".to_string()
+    } else {
+        fallbacks.join(", ")
+    };
+
+    // Spoke address.
+    let spoke = load_spoke_addr(&cli.data_dir);
+
+    let data_dir = cli.data_dir.display();
+    let state_dir = platform::paths::default_state_dir();
+
+    println!("Thrall ID:        {}", thrall_id);
+    println!("Server:           {}", server);
+    if !spoke.is_empty() {
+        println!("Spoke:            {}", spoke);
+    }
+    println!("Fallback servers: {}", fallback_str);
+    println!("Data directory:   {}", data_dir);
+    println!("State store:      {}", state_dir.display());
+
+    // Server pubkey from file.
+    let server_pubkey = load_server_pubkey(&cli.data_dir);
+    let pubkey_status = if server_pubkey.is_empty() { "absent" } else { "present" };
+
+    // Open state store (read-only). Root-owned LMDB files enforce access control.
+    let store = match state::StateStore::open(&state_dir) {
+        Ok(s) => s,
+        Err(e) => {
+            println!();
+            println!("Policy:           (state store unavailable: {})", e);
+            println!("Traits:           (state store unavailable)");
+            println!("Pending results:  (state store unavailable)");
+            println!("Server pubkey:    {}", pubkey_status);
+            return Ok(());
+        }
+    };
+
+    let rtxn = store.read_txn()?;
+
+    // Policy bundle.
+    println!();
+    match store.policy.load(&rtxn) {
+        Ok(Some((version, bundle))) => {
+            let mod_count = bundle.modules.len();
+            let mod_names: Vec<&str> = bundle.modules.iter().map(|m| m.name.as_str()).collect();
+            let resource_count: usize = bundle.modules.iter().map(|m| m.resources.len()).sum();
+
+            println!("Policy:");
+            println!("  Cached:         yes");
+            println!("  Version:        {}", version);
+            if !bundle.matched_pattern.is_empty() {
+                println!("  Match:          {}", bundle.matched_pattern);
+            }
+            if !bundle.environment.is_empty() {
+                println!("  Environment:    {}", bundle.environment);
+            }
+            if !bundle.roles.is_empty() {
+                println!("  Roles:          {}", bundle.roles.join(", "));
+            }
+            println!("  Modules:        {} ({})", mod_count, mod_names.join(", "));
+            println!("  Resources:      {}", resource_count);
+
+            // Bundle max age.
+            if bundle.max_age_seconds > 0 {
+                println!("  Max age:        {}s", bundle.max_age_seconds);
+            } else {
+                println!("  Max age:        unlimited");
+            }
+
+            // List resources by module (type: name only, no secrets).
+            for m in &bundle.modules {
+                if m.resources.is_empty() {
+                    continue;
+                }
+                println!("  [{}]", m.name);
+                for r in &m.resources {
+                    println!("    {}: {}", r.r#type, r.name);
+                }
+            }
+        }
+        Ok(None) => {
+            println!("Policy:");
+            println!("  Cached:         no");
+        }
+        Err(e) => {
+            println!("Policy:           (error reading: {})", e);
+        }
+    }
+
+    // Traits cache.
+    println!();
+    match store.traits.load_any(&rtxn) {
+        Ok(Some(traits_bytes)) => {
+            let collector_count = match serde_json::from_slice::<serde_json::Value>(&traits_bytes) {
+                Ok(serde_json::Value::Object(map)) => map.len(),
+                _ => 0,
+            };
+            let ts = store.traits.load_timestamp(&rtxn).unwrap_or(None);
+            let age_str = match ts {
+                Some(ts_secs) => {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    format_duration(now.saturating_sub(ts_secs))
+                }
+                None => "unknown".to_string(),
+            };
+            println!("Traits:");
+            println!("  Cached:         yes");
+            println!("  Collectors:     {}", collector_count);
+            println!("  Cache age:      {}", age_str);
+        }
+        Ok(None) => {
+            println!("Traits:");
+            println!("  Cached:         no");
+        }
+        Err(e) => {
+            println!("Traits:           (error reading: {})", e);
+        }
+    }
+
+    // Pending results.
+    println!();
+    match store.pending.len(&rtxn) {
+        Ok(count) => println!("Pending results:  {}", count),
+        Err(e) => println!("Pending results:  (error reading: {})", e),
+    }
+
+    // Server pubkey.
+    println!("Server pubkey:    {}", pubkey_status);
+
+    Ok(())
+}
+
+/// Format seconds into a human-readable duration string.
+fn format_duration(secs: u64) -> String {
+    if secs < 60 {
+        format!("{}s", secs)
+    } else if secs < 3600 {
+        format!("{}m {}s", secs / 60, secs % 60)
+    } else if secs < 86400 {
+        let h = secs / 3600;
+        let m = (secs % 3600) / 60;
+        format!("{}h {}m", h, m)
+    } else {
+        let d = secs / 86400;
+        let h = (secs % 86400) / 3600;
+        format!("{}d {}h", d, h)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Install the default TLS crypto provider before any TLS operations.
@@ -762,6 +937,10 @@ async fn main() -> Result<()> {
         Some(Commands::Version) => {
             println!("{}", VERSION);
             Ok(())
+        }
+
+        Some(Commands::Status) => {
+            run_status(&cli)
         }
 
         Some(Commands::Register { token, force }) => {

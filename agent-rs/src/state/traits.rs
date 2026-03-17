@@ -77,6 +77,19 @@ impl TraitsCache {
         }
     }
 
+    /// Load the traits cache timestamp as Unix seconds.
+    /// Returns None if no traits have been cached.
+    pub fn load_timestamp(&self, rtxn: &RoTxn<'_>) -> Result<Option<u64>> {
+        match self.db.get(rtxn, TIMESTAMP_KEY)? {
+            Some(b) if b.len() == 8 => {
+                let mut arr = [0u8; 8];
+                arr.copy_from_slice(b);
+                Ok(Some(u64::from_le_bytes(arr)))
+            }
+            _ => Ok(None),
+        }
+    }
+
     /// Store custom trait script entries (name → sha256).
     /// Replaces all previously stored scripts.
     pub fn store_scripts(
