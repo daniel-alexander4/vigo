@@ -750,6 +750,125 @@ Clear the maintenance window.
 
 ---
 
+## Thrall Compliance
+
+### GET /api/v1/thralls/{id}/compliance
+
+Returns the current compliance status for a thrall.
+
+**Response:**
+
+```json
+{
+  "thrall_id": "a1b2c3d4",
+  "hostname": "web-01.example.com",
+  "status": "compliant",
+  "last_run_at": "2026-03-16T10:00:00Z"
+}
+```
+
+---
+
+## Thrall Force Update
+
+### POST /api/v1/thralls/{id}/update
+
+Force an immediate check-in for a specific thrall. The thrall will receive the update at its next poll cycle.
+
+### POST /api/v1/thralls/update
+
+Force an immediate check-in for all thralls.
+
+---
+
+## Users
+
+User account management. Requires admin authentication (except first-user bootstrap).
+
+### GET /api/v1/users
+
+List all user accounts. Admin only.
+
+**Response:**
+
+```json
+{
+  "users": [
+    {
+      "id": "u1",
+      "username": "admin",
+      "role": "admin",
+      "auth_method": "basic",
+      "created_at": "2026-03-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+### POST /api/v1/users
+
+Create a new user account. The first user created is automatically assigned the admin role regardless of the request.
+
+**Request body:**
+
+```json
+{
+  "username": "ops-lead",
+  "password": "...",
+  "role": "admin"
+}
+```
+
+### PUT /api/v1/users/{id}
+
+Update a user account (role, password). Admin only.
+
+### DELETE /api/v1/users/{id}
+
+Delete a user account. Admin only. Cannot delete the last admin.
+
+---
+
+## API Tokens
+
+Create and manage API tokens for programmatic access. Tokens use the `hbt_` prefix.
+
+### POST /api/v1/auth/tokens
+
+Create a new API token. Requires authentication.
+
+**Request body:**
+
+```json
+{
+  "name": "ci-pipeline",
+  "expires_in": "720h"
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": "tok-abc123",
+  "name": "ci-pipeline",
+  "token": "hbt_...",
+  "expires_at": "2026-04-15T10:00:00Z"
+}
+```
+
+The plaintext token is only returned once at creation time.
+
+### GET /api/v1/auth/tokens
+
+List API tokens for the authenticated user. Token values are not returned.
+
+### DELETE /api/v1/auth/tokens/{id}
+
+Revoke an API token.
+
+---
+
 ## Preview
 
 ### GET /api/v1/preview

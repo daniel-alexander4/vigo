@@ -13,6 +13,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 - [Monitoring Stack](monitoring-stack.md) -- Prometheus, node_exporter, and Grafana
 - [Database Cluster](database-cluster.md) -- PostgreSQL with `secret:` references
 - [Kubernetes Nodes](kubernetes-nodes.md) -- OS-level k8s node config with rolling drain-and-reboot workflow
+- [Brown Noise Generator](brownnoise.md) -- Docker container with PulseAudio passthrough using `exec` resources
 
 ## Conventions
 

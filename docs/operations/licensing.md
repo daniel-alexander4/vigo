@@ -1,0 +1,53 @@
+# Licensing
+
+Hobnob uses a built-in licensing system with a free tier and paid tiers. Licenses govern maximum thrall counts and feature access.
+
+## Tiers
+
+| Tier | Max Thralls | Spanner | Support |
+|------|-------------|---------|---------|
+| Free | 25 | No | Community |
+| Standard | 100 | No | Email |
+| Growth | 500 | Yes | Priority |
+| Enterprise | Unlimited | Yes | Dedicated |
+
+## Machine Fingerprint Binding
+
+Paid licenses are bound to a specific server installation. The fingerprint is a SHA-256 hash of three components:
+
+1. **Machine ID** — `/etc/machine-id` (Linux) or equivalent
+2. **Primary MAC address** — first non-loopback network interface
+3. **CA certificate fingerprint** — SHA-256 of the TLS CA cert
+
+This prevents license sharing across servers. If you migrate to a new machine, you will need a new license.
+
+Generate your server's fingerprint:
+
+```bash
+hobnobcli license fingerprint
+```
+
+## Enforcement Stages
+
+When a license violation is detected (e.g., thrall count exceeds the license limit, license expired, or fingerprint mismatch), enforcement proceeds through three stages:
+
+1. **Grace Period (days 1-15)** — Full functionality. Warning logged on every check-in. Grace clock resets immediately when returning to compliance.
+2. **Enrollment Block (days 16-30)** — New thrall enrollments are rejected. Existing thralls continue to function normally and are never locked out.
+3. **Service Stop (day 31+)** — Server refuses to start.
+
+## CLI Commands
+
+```bash
+hobnobcli license status          # View current license status
+hobnobcli license install <file>  # Install a license file
+hobnobcli license inspect [file]  # Inspect a license file without installing
+hobnobcli license fingerprint     # Display machine fingerprint
+```
+
+## API
+
+```
+GET /api/v1/license
+```
+
+Returns current license status including stage, tier, thrall counts, and expiration. See [REST API](../api/rest.md#license).
