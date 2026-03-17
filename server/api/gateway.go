@@ -92,6 +92,11 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	configHandler.RegisterRoutes(mux)
 
+	// Mount change approval endpoints (always registered — the approval
+	// handler is the entry point when approval_required is true).
+	approvalHandler := NewApprovalHandler(queries, configStore, publishCfg, cfgSyncer, fleetIndex, configHandler.complianceMonitor)
+	approvalHandler.RegisterRoutes(mux)
+
 	// Mount thrall management endpoints (tags, maintenance).
 	thrallsHandler := NewThrallsHandler(queries, fleetIndex)
 	thrallsHandler.RegisterRoutes(mux)

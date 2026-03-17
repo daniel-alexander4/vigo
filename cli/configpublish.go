@@ -66,7 +66,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 			}
 			fmt.Printf("Published: %s\n", filePath)
 			recordPublish(operator, res)
-			reloadServer()
+			reloadServer(res.DiffSummary)
 			return nil
 		}
 
@@ -101,7 +101,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		}
 
 		recordPublish(operator, res)
-		reloadServer()
+		reloadServer(res.DiffSummary)
 		return nil
 	},
 }
@@ -292,11 +292,42 @@ func streamPublishSSE(body io.Reader) error {
 }
 
 // reloadServer tells the server to re-read config from .live/ (best-effort).
-func reloadServer() {
+// When the server returns 403 (approval required), it submits a pending change
+// request and prints the change ID with approval instructions.
+func reloadServer(diffSummary string) {
 	client := newAPIClient()
-	if err := client.post("/api/v1/config/reload", nil, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: server reload failed (%v) — restart the server to pick up changes\n", err)
+	err := client.post("/api/v1/config/reload", nil, nil)
+	if err == nil {
+		return
 	}
+
+	// Check if the error indicates approval is required (403).
+	if strings.Contains(err.Error(), "403") {
+		submitPendingChange(client, diffSummary)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "warning: server reload failed (%v) — restart the server to pick up changes\n", err)
+}
+
+// submitPendingChange creates a pending config change request when approval
+// is required. Prints the change ID and instructions for approval.
+func submitPendingChange(client *apiClient, diffSummary string) {
+	var resp struct {
+		ID          int64  `json:"id"`
+		Status      string `json:"status"`
+		RequestedBy string `json:"requested_by"`
+		ExpiresAt   string `json:"expires_at"`
+	}
+	body := map[string]string{
+		"diff_summary": diffSummary,
+	}
+	if err := client.post("/api/v1/config/changes", body, &resp); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to submit change for approval (%v)\n", err)
+		return
+	}
+	fmt.Printf("\nApproval required — change %d submitted (expires %s).\n", resp.ID, formatTimestamp(resp.ExpiresAt))
+	fmt.Printf("A different user must approve it:\n")
+	fmt.Printf("  hobnobcli config approve %d\n", resp.ID)
 }
 
 // recordPublish sends publish metadata to the server for audit (best-effort).

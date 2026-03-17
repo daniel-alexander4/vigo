@@ -13,6 +13,7 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [FleetIndex](fleet-index.md) -- In-memory index for zero-DB check-in performance
 - [Tuning Parameters](tuning.md) -- All configurable tuning knobs
 - [Config Publish Pipeline](config-publish.md) -- Staging validation before live config sync
+- [Change Approval](change-approval.md) -- Two-person rule for config changes
 - [Blast Radius Limits](blast-radius.md) -- Auto-rollback on compliance drop after config publish
 - [Rate Limiting](rate-limiting.md) -- Token-bucket rate limiting on check-in RPCs
 - [Maintenance Windows](maintenance-windows.md) -- Per-thrall and global change freeze

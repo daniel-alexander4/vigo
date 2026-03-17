@@ -831,6 +831,12 @@ func run() error {
 		}
 	}()
 
+	// Start change approval expiry loop (expires pending changes past their timeout).
+	if cfg.Publish.ApprovalRequired {
+		go api.StartExpiryLoop(ctx, queries)
+		slog.Info("change approval workflow enabled", "timeout", stringOrDefault(cfg.Publish.ApprovalTimeout, "24h"))
+	}
+
 	if role == config.RoleSpoke {
 		// Start spoke status reporter if hub address is configured.
 		if cfg.Spanner.HubAddr != "" {

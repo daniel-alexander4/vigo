@@ -31,6 +31,12 @@
                 <a href="/license" class="license-banner__link">View license</a>
             </div>
             {{end}}
+            {{if gt .PendingChanges 0}}
+            <div class="license-banner">
+                <span class="license-banner__text">{{.PendingChanges}} config change{{if gt .PendingChanges 1}}s{{end}} pending approval</span>
+                <a href="/admin/users" class="license-banner__link">Review</a>
+            </div>
+            {{end}}
             {{block "page-content" .}}{{end}}
         </main>
     </div>

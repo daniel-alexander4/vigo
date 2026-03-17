@@ -156,6 +156,8 @@ type ExportSection struct {
 type PublishSection struct {
 	ComplianceThreshold int    `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
 	RollbackWindow      string `yaml:"rollback_window"`      // duration to watch after reload (default "5m")
+	ApprovalRequired    bool   `yaml:"approval_required"`    // require two-person approval before config reload (default false)
+	ApprovalTimeout     string `yaml:"approval_timeout"`     // how long pending changes stay valid (default "24h")
 }
 
 // PeersSection configures peer replication for server redundancy.

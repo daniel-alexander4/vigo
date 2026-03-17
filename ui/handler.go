@@ -209,6 +209,7 @@ type PageData struct {
 	AuthMethod        string
 	CurrentUser       *AuthUser
 	LicenseWarning    string // non-empty when license is near or over limits
+	PendingChanges    int    // count of pending config changes awaiting approval
 }
 
 // LicensePageData holds data for the license status page.
@@ -880,6 +881,13 @@ func (h *Handler) setCommon(pd *PageData) {
 				pd.LicenseWarning = fmt.Sprintf("License usage at %d/%d nodes (%d%%) — approaching limit",
 					s.ActiveThralls, s.MaxThralls, s.ActiveThralls*100/s.MaxThralls)
 			}
+		}
+	}
+
+	// Check for pending config changes (best-effort).
+	if h.queries != nil {
+		if pending, err := h.queries.ListPendingConfigChanges(context.Background()); err == nil {
+			pd.PendingChanges = len(pending)
 		}
 	}
 }

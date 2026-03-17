@@ -256,3 +256,17 @@ CREATE TABLE IF NOT EXISTS config_publishes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_config_publishes_published_at ON config_publishes (published_at);
+
+CREATE TABLE IF NOT EXISTS config_changes (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'expired')),
+    requested_by  TEXT NOT NULL,
+    approved_by   TEXT,
+    requested_at  DATETIME NOT NULL DEFAULT (datetime('now')),
+    resolved_at   DATETIME,
+    expires_at    DATETIME NOT NULL,
+    diff_summary  TEXT NOT NULL DEFAULT '',
+    reject_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_config_changes_status ON config_changes (status);

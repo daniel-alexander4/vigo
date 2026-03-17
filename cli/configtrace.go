@@ -12,7 +12,7 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Publish, inspect, freeze, and rollback .hnb configuration",
+	Short: "Publish, inspect, freeze, approve, and rollback .hnb configuration",
 }
 
 var configTraceCmd = &cobra.Command{

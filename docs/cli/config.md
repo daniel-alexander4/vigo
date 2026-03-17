@@ -10,6 +10,9 @@ Config inspection commands.
 | `config publish` | Validate and publish config from proposed to live |
 | `config history` | View config publish history |
 | `config rollback` | Rollback to a previous config version |
+| `config pending` | List config changes awaiting approval |
+| `config approve` | Approve a pending config change |
+| `config reject` | Reject a pending config change |
 | `config freeze` | Freeze config publishes until a specified time |
 | `config unfreeze` | Remove the config publish freeze |
 
@@ -157,6 +160,58 @@ Available versions:
 
 $ hobnobcli config rollback 20260312T091500Z
 Rolled back to version 20260312T091500Z
+```
+
+## config pending
+
+List config changes awaiting approval. Only relevant when `publish.approval_required` is enabled in `server.yaml`.
+
+```bash
+hobnobcli config pending
+```
+
+### Example
+
+```
+$ hobnobcli config pending
+ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
+42  pending  alice         2026-03-16 14:30   2026-03-17 14:30
+```
+
+## config approve
+
+Approve a pending config change and trigger a config reload. The approver must be a different user than the requester (two-person rule).
+
+```bash
+hobnobcli config approve <id>
+```
+
+### Example
+
+```
+$ hobnobcli config approve 42
+Change 42 approved by bob (requested by alice) — config reloaded.
+```
+
+## config reject
+
+Reject a pending config change with an optional reason.
+
+```bash
+hobnobcli config reject <id> [--reason <text>]
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--reason` | (none) | Reason for rejection |
+
+### Example
+
+```
+$ hobnobcli config reject 42 --reason "not ready for production"
+Change 42 rejected.
 ```
 
 ## config freeze
