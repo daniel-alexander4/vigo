@@ -92,7 +92,7 @@ checkin:
 
 ```yaml
 database:
-  retention: "90d"         # auto-prune runs/tasks/workflows older than this
+  retention: "90d"         # auto-prune runs/pushes/workflows older than this
 ```
 
 ### Secret Watcher

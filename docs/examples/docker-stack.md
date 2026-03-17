@@ -105,10 +105,10 @@ To deploy a new version across your fleet in batches:
 hobnobcli push --target "*.app.example.com"
 ```
 
-Or use a task for more control:
+Or use a push for more control:
 
 ```bash
-hobnobcli task run \
+hobnobcli push run \
   --command "docker pull myregistry.example.com/webapp:v2.2.0" \
   --target "*.app.example.com" \
   --batch-size 25% \

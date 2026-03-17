@@ -1,31 +1,31 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/tasks">Tasks</a> &rsaquo; {{truncUUID .Task.ID}}
+        <a href="/push">Pushes</a> &rsaquo; {{truncUUID .Push.ID}}
     </div>
-    <h1>Task {{truncUUID .Task.ID}}</h1>
+    <h1>Push {{truncUUID .Push.ID}}</h1>
     <p>
-        {{template "status-badge" dict "Status" .Task.Status}}
-        &middot; Target: <code>{{.Task.Target}}</code>
-        &middot; {{.Task.Operator}}
-        &middot; {{formatTime .Task.CreatedAt}}
+        {{template "status-badge" dict "Status" .Push.Status}}
+        &middot; Target: <code>{{.Push.Target}}</code>
+        &middot; {{.Push.Operator}}
+        &middot; {{formatTime .Push.CreatedAt}}
     </p>
 </div>
 
 <div class="stat-cards mb-2">
     <div class="stat-card stat-card--brand">
-        <div class="stat-card__value">{{.Task.TotalTargets}}</div>
+        <div class="stat-card__value">{{.Push.TotalTargets}}</div>
         <div class="stat-card__label">Targets</div>
     </div>
-    {{if .Task.BatchSize}}
+    {{if .Push.BatchSize}}
     <div class="stat-card stat-card--info">
-        <div class="stat-card__value">{{.Task.BatchSize}}</div>
+        <div class="stat-card__value">{{.Push.BatchSize}}</div>
         <div class="stat-card__label">Batch Size</div>
     </div>
     {{end}}
-    {{if .Task.MaxFailures}}
+    {{if .Push.MaxFailures}}
     <div class="stat-card stat-card--warning">
-        <div class="stat-card__value">{{.Task.MaxFailures}}</div>
+        <div class="stat-card__value">{{.Push.MaxFailures}}</div>
         <div class="stat-card__label">Max Failures</div>
     </div>
     {{end}}
@@ -33,10 +33,10 @@
 
 <div class="detail-section mb-2">
     <h3>Command</h3>
-    <pre class="code-block">{{.Task.Command}}</pre>
+    <pre class="code-block">{{.Push.Command}}</pre>
 </div>
 
-<div class="table-container"{{if .IsRunning}} hx-get="/tasks/{{.Task.ID}}" hx-trigger="every 3s" hx-select=".table-container" hx-swap="outerHTML"{{end}}>
+<div class="table-container"{{if .IsRunning}} hx-get="/push/{{.Push.ID}}" hx-trigger="every 3s" hx-select=".table-container" hx-swap="outerHTML"{{end}}>
     <h3>Per-Thrall Results</h3>
     <table class="table">
         <thead>

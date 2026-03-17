@@ -354,7 +354,7 @@ Run commands across your network fleet:
 
 ```bash
 # Show version on all Cisco switches
-hobnobcli task run --target "*.example.com" --command "show version" \
+hobnobcli push run --target "*.example.com" --command "show version" \
   --device-type cisco_ios
 
 # Check interface status on a specific device

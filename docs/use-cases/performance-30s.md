@@ -147,7 +147,7 @@ Options:
 
 ### Streaming vs. Polling at 30 Seconds
 
-At 30-second polling, the latency for ad-hoc tasks is "up to 30 seconds" (average 15 seconds). For most operational workflows, this is fast enough. Streaming is only worth enabling if you need sub-second task dispatch or if the fleet runs frequent live queries.
+At 30-second polling, the latency for ad-hoc pushes is "up to 30 seconds" (average 15 seconds). For most operational workflows, this is fast enough. Streaming is only worth enabling if you need sub-second push dispatch or if the fleet runs frequent live queries.
 
 ## Bottleneck Hierarchy (30-Second Intervals)
 

@@ -143,5 +143,5 @@ Workflow w1a2b3c4: aborted
 
 ## Related
 
-- [task](task.md) -- dispatch individual ad-hoc tasks
+- [push](push.md) -- dispatch individual ad-hoc pushes
 - [runs](runs.md) -- view convergence run history

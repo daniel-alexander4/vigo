@@ -2,7 +2,7 @@
 
 Distributed state enforcement for servers, network devices, and workstations. Agents on managed nodes pull desired state from a central server via gRPC over mTLS, apply idempotent changes, and report results back.
 
-73 built-in resource types. 27 trait collectors. 7 operating systems (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows). Orchestration (ad-hoc tasks, workflows, rolling execution, live queries). Pluggable authentication (basic, OIDC, SSH key signing). Hub-spoke scaling via spanner. AI assistant. Web dashboard.
+73 built-in resource types. 27 trait collectors. 7 operating systems (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows). Orchestration (ad-hoc pushes, workflows, rolling execution, live queries). Pluggable authentication (basic, OIDC, SSH key signing). Hub-spoke scaling via spanner. AI assistant. Web dashboard.
 
 ## Quickstart
 
@@ -209,13 +209,13 @@ Supports `&&`, `||`, `!`, parentheses, builtin functions (`os_family()`, `is_con
 
 ## Orchestration
 
-### Ad-hoc tasks
+### Ad-hoc pushes
 
 Dispatch commands to targeted nodes in real-time:
 
 ```bash
-hobnobcli task run restart-nginx --target "*.web.example.com"
-hobnobcli task status <run-id>
+hobnobcli push run restart-nginx --target "*.web.example.com"
+hobnobcli push status <run-id>
 ```
 
 ### Workflows
@@ -296,7 +296,7 @@ Config files use `.hnb` extension (YAML syntax). First match wins in `nodes.hnb`
 23 subcommands:
 
 ```
-approved    thralls     runs        task        query       vi
+approved    thralls     runs        push        query       vi
 inventory   license     doctor      spanner     ask         workflow
 secrets     export      auth        users       webhooks    tokens
 config      backup      db          test        server
@@ -308,7 +308,7 @@ HTMX-based UI at `https://<server>:8443/`:
 
 - Fleet overview with compliance sparklines
 - Node drill-down (traits, run history, compliance status)
-- Task and workflow management with live status
+- Push and workflow management with live status
 - Live query results
 - Config publish history and audit trail
 - Spanner spoke drill-down

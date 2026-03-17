@@ -30,7 +30,7 @@ The Rust agent that runs on each managed machine (thrall). It:
 The admin CLI written in Go. It:
 - Talks to the server's REST API
 - Manages enrollment, tokens, approved patterns
-- Dispatches ad-hoc tasks and live queries
+- Dispatches ad-hoc pushes and live queries
 - Runs workflows
 - Views runs, compliance, thralls, packages, inventory
 

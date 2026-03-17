@@ -26,9 +26,8 @@ When invoked as `hnbvi`, `hobnobcli` behaves as `hobnobcli vi <args>`.
 | [approved](approved.md) | Manage approved enrollment patterns |
 | [thralls](thralls.md) | Manage enrolled thralls (alias: `nodes`) |
 | [tokens](tokens.md) | Manage enrollment tokens |
-| [push](push.md) | Trigger an immediate check-in for thralls |
 | [runs](runs.md) | View run history |
-| [task](task.md) | Dispatch and monitor ad-hoc commands on thralls |
+| [push](push.md) | Dispatch and monitor ad-hoc commands on thralls |
 | [query](query.md) | Query trait values from targeted thralls |
 | [workflow](workflow.md) | Run and monitor multi-step workflows |
 | [packages](packages.md) | Query package audit information |

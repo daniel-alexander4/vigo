@@ -62,8 +62,8 @@ The database schema is defined in `migrations/000001_initial_schema.up.sql`. Key
 
 | Table | Description |
 |-------|-------------|
-| `task_runs` | Ad-hoc task dispatch records. Status: pending/running/complete/failed/cancelled |
-| `task_run_targets` | Per-target results for task runs. Status: pending/dispatched/complete/failed/timeout/offline/rejected/skipped |
+| `push_runs` | Ad-hoc push dispatch records. Status: pending/running/complete/failed/cancelled |
+| `push_run_targets` | Per-target results for push runs. Status: pending/dispatched/complete/failed/timeout/offline/rejected/skipped |
 | `workflow_runs` | Workflow execution records. Status: pending/running/complete/failed/aborted |
 | `workflow_step_results` | Per-step results within workflows |
 
@@ -75,7 +75,7 @@ The database schema is defined in `migrations/000001_initial_schema.up.sql`. Key
 
 ## Retention Pruning
 
-Configure automatic pruning of old run/task/workflow records:
+Configure automatic pruning of old run/push/workflow records:
 
 ```yaml
 database:
@@ -86,7 +86,7 @@ Accepted formats: `90d` (days), `2160h` (hours). When empty, no pruning occurs.
 
 Pruning removes:
 - Old runs and their results
-- Old task runs and their target results
+- Old push runs and their target results
 - Old workflow runs and their step results
 - Old compliance history snapshots
 
@@ -106,8 +106,8 @@ The schema includes indexes for common query patterns:
 - `idx_runs_thrall_id` -- listing runs for a specific thrall
 - `idx_run_results_run_id` -- fetching results for a specific run
 - `idx_thrall_traits_thrall_id_collected` -- latest traits lookup
-- `idx_task_runs_status`, `idx_task_runs_created_at` -- task listing/filtering
-- `idx_task_run_targets_task_run_id`, `idx_task_run_targets_thrall_id` -- target result lookups
+- `idx_push_runs_status`, `idx_push_runs_created_at` -- push listing/filtering
+- `idx_push_run_targets_push_run_id`, `idx_push_run_targets_thrall_id` -- target result lookups
 - `idx_workflow_runs_status` -- workflow listing
 - `idx_workflow_step_results_workflow` -- step result lookups
 

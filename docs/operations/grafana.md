@@ -62,7 +62,7 @@ Pre-built Grafana dashboards for monitoring Hobnob via Prometheus.
 | Panel | Type | Metric |
 |-------|------|--------|
 | Enrollments | Time series by status | `rate(hobnob_enrollments_total[1h]) * 60` |
-| Task Runs | Time series by status | `rate(hobnob_task_runs_total[5m]) * 60` |
+| Push Runs | Time series by status | `rate(hobnob_push_runs_total[5m]) * 60` |
 | Workflow Runs | Time series by status | `rate(hobnob_workflow_runs_total[5m]) * 60` |
 | Signature Verification Failures | Stat (green/red) | `hobnob_sig_verify_failed_total` |
 

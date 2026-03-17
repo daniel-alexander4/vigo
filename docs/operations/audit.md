@@ -1,6 +1,6 @@
 # Audit Log
 
-Hobnob provides a unified audit view across config publishes, task runs, and workflow executions.
+Hobnob provides a unified audit view across config publishes, push runs, and workflow executions.
 
 ## Querying
 
@@ -29,14 +29,14 @@ The Audit page (`/audit`) shows a filterable table of events with auto-refresh.
 
 ## Tamper-Evident Trail
 
-Security-sensitive events (config changes, enrollment, revocation, task dispatch) are also recorded in a [tamper-evident hash chain](tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `hobnobcli audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
+Security-sensitive events (config changes, enrollment, revocation, push dispatch) are also recorded in a [tamper-evident hash chain](tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `hobnobcli audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
 
 ## Event Types
 
 | Type | Source | Description |
 |------|--------|-------------|
 | `config_publish` | `config_publishes` table | Config publish with operator, files, and diff |
-| `task_run` | `task_runs` table | Ad-hoc command dispatch |
+| `push_run` | `push_runs` table | Ad-hoc command dispatch |
 | `workflow_run` | `workflow_runs` table | Multi-step workflow execution |
 
 ## Config Publish Attribution

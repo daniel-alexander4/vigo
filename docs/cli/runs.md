@@ -82,4 +82,4 @@ nginx       service    nginx              restart   true     -
 ## Related
 
 - [thralls](thralls.md) -- manage enrolled thralls
-- [task](task.md) -- dispatch ad-hoc tasks
+- [push](push.md) -- dispatch ad-hoc pushes

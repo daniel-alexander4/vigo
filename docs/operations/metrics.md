@@ -49,7 +49,7 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `hobnob_task_runs_total` | Counter | `status` | Completed task runs by final status (complete, failed) |
+| `hobnob_push_runs_total` | Counter | `status` | Completed push runs by final status (complete, failed) |
 | `hobnob_workflow_runs_total` | Counter | `status` | Completed workflow runs by final status (complete, failed) |
 
 ### Webhooks
@@ -176,8 +176,8 @@ scrape_configs:
 
 ### Orchestration
 
-- **Task throughput**: `rate(hobnob_task_runs_total[5m])`
-- **Task failure rate**: `rate(hobnob_task_runs_total{status="failed"}[5m])`
+- **Push throughput**: `rate(hobnob_push_runs_total[5m])`
+- **Push failure rate**: `rate(hobnob_push_runs_total{status="failed"}[5m])`
 - **Workflow success rate**: `rate(hobnob_workflow_runs_total{status="complete"}[5m]) / rate(hobnob_workflow_runs_total[5m])`
 
 ### Webhooks

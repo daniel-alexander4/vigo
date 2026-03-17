@@ -20,7 +20,7 @@ What Hobnob does in the areas of safety, reliability, and simplicity that other 
 
 - **Gradual license enforcement that never locks out existing nodes.** If you exceed your license, you get 15 days of warnings, then 15 days where only new enrollments are blocked, then shutdown. At no point are already-managed machines cut off from convergence.
 
-- **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, task dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. `hobnobcli audit verify` or the web UI validates the entire chain in seconds. Meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, and SOX requirements. No other CM tool provides cryptographic tamper evidence on its audit trail.
+- **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, push dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. `hobnobcli audit verify` or the web UI validates the entire chain in seconds. Meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, and SOX requirements. No other CM tool provides cryptographic tamper evidence on its audit trail.
 
 - **Two-person change approval.** When enabled, config publish creates a pending change that a different admin must approve. The approver cannot be the same user as the publisher. Pending changes expire after a configurable timeout. Satisfies SOX segregation of duties and FDA change control requirements.
 

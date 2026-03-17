@@ -98,7 +98,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [Thralls](ui/thralls.md) — Managed node list and detail
 - [Compliance](ui/compliance.md) — Compliance gauge and breakdown
 - [Runs](ui/runs.md) — Convergence run history
-- [Tasks](ui/tasks.md) — Ad-hoc task execution
+- [Pushes](ui/push.md) — Ad-hoc push execution
 - [Workflows](ui/workflows.md) — Multi-step orchestration
 - [Query](ui/query.md) — Live fleet queries
 - [Spanner](ui/spanner.md) — Hub-spoke dashboard

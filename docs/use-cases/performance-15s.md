@@ -155,7 +155,7 @@ At 15-second intervals, 10,000+ thralls generates 667+ RPS sustained. Options:
 
 ### When Streaming Beats 15-Second Polling
 
-At 15-second polling, the average latency for an ad-hoc task dispatch is 7.5 seconds. If that's too slow — for incident response automation, rolling deployments, or live queries where sub-second matters — switch affected thralls to streaming. Adaptive stream promotion already handles this: the server sets `stream_requested=true` when it has work, and the thrall opens a stream on its next poll. The 15-second interval then becomes the worst-case promotion latency.
+At 15-second polling, the average latency for an ad-hoc push dispatch is 7.5 seconds. If that's too slow — for incident response automation, rolling deployments, or live queries where sub-second matters — switch affected thralls to streaming. Adaptive stream promotion already handles this: the server sets `stream_requested=true` when it has work, and the thrall opens a stream on its next poll. The 15-second interval then becomes the worst-case promotion latency.
 
 For fleets where every thrall needs sub-second dispatch at all times, persistent streaming (not polling) is the right model — but it costs 64 KiB per connection in gRPC buffers for idle streams.
 

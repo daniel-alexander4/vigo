@@ -77,7 +77,7 @@ database:
 |--------|---------|-------------|
 | `dsn` | — | SQLite file path or Postgres connection string (supports `secret:` prefix) |
 | `driver` | `sqlite` | Database driver: `sqlite` or `postgres` |
-| `retention` | — | Auto-prune runs/tasks/workflows older than this (e.g., `90d`, `2160h`). Empty = no pruning |
+| `retention` | — | Auto-prune runs/pushes/workflows older than this (e.g., `90d`, `2160h`). Empty = no pruning |
 
 ### checkin
 
@@ -329,20 +329,20 @@ When `approval_required` is enabled, `hobnobcli config publish` no longer applie
 
 If `compliance_threshold` is set, the server monitors fleet compliance for `rollback_window` after a config reload. If compliance drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 
-### tasks
+### push
 
-Controls task dispatch behavior.
+Controls push dispatch behavior.
 
 ```yaml
-tasks:
+push:
   require_definition: true
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `require_definition` | `false` | When true, only named task definitions (from the `tasks/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
+| `require_definition` | `false` | When true, only named push definitions (from the `push/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
 
-When enabled, `POST /api/v1/tasks` requires a `taskName` field referencing a predefined task definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved task definitions.
+When enabled, `POST /api/v1/push` requires a `pushName` field referencing a predefined push definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved push definitions.
 
 ## Environment Variables
 
@@ -363,7 +363,7 @@ paths:
   migrations: "migrations"
   custom_traits: "custom-traits"
   docs: "docs"
-  tasks: "tasks"
+  push: "push"
   workflows: "workflows"
   agent_dist: "dist/agent"
   license_dir: "/srv/hobnob/license"

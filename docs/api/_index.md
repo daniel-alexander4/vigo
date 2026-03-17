@@ -3,7 +3,7 @@
 Hobnob exposes two API surfaces:
 
 - **gRPC (port 1530)** -- Agent-to-server communication. All traffic uses mutual TLS (mTLS) with ED25519 signature verification on every request. Defined as the `HobnobAgent` and `HobnobAdmin` services in `proto/hobnob.proto`.
-- **REST (port 8443)** -- Admin and CLI communication. Plain HTTP designed for internal networks or placement behind a reverse proxy. Includes both grpc-gateway proxied endpoints (under `/api/v1/`) and direct REST handlers for traits, inventory, tasks, workflows, query, AI, doctor, license, and spanner.
+- **REST (port 8443)** -- Admin and CLI communication. Plain HTTP designed for internal networks or placement behind a reverse proxy. Includes both grpc-gateway proxied endpoints (under `/api/v1/`) and direct REST handlers for traits, inventory, pushes, workflows, query, AI, doctor, license, and spanner.
 
 ## Proto File
 
@@ -24,5 +24,5 @@ All gRPC message definitions live in [`proto/hobnob.proto`](../../proto/hobnob.p
 
 - [gRPC Agent Service](grpc-agent.md) -- the 6-RPC agent service
 - [gRPC Admin Service](grpc-admin.md) -- the 23-RPC admin service
-- [REST API](rest.md) -- direct REST endpoints (tasks, workflows, query, AI, etc.)
+- [REST API](rest.md) -- direct REST endpoints (pushes, workflows, query, AI, etc.)
 - [Webhooks](webhooks.md) -- event-driven HTTP callbacks

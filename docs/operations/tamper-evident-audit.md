@@ -38,7 +38,7 @@ Because each hash incorporates the previous entry's hash, modifying or deleting 
 | `config.reject` | Two-person approval rejected | "rejected by admin2" |
 | `thrall.enroll` | New agent enrolls via bootstrap | "web1.example.com enrolled" |
 | `thrall.revoke` | Admin revokes an agent | "web1.example.com revoked" |
-| `task.dispatch` | Ad-hoc task dispatched | "uptime on *.web.*" |
+| `push.dispatch` | Ad-hoc push dispatched | "uptime on *.web.*" |
 | `peer.promote` | Peer promoted to primary | "peer2 promoted" |
 
 The audit trail is always on. There is no configuration to disable it.
@@ -131,4 +131,4 @@ If you need to prune old entries while preserving chain integrity, export the en
 
 ## Relationship to the Audit Log
 
-The [Audit Log](audit.md) page provides a unified view of all auditable events (config publishes, task runs, workflow runs). The tamper-evident trail is a subset of these events -- specifically, the security-sensitive operations that are hash-chained in the `audit_entries` table. The unified audit view combines hash-chained entries with non-chained operational records (task runs, workflow runs) from their respective tables.
+The [Audit Log](audit.md) page provides a unified view of all auditable events (config publishes, push runs, workflow runs). The tamper-evident trail is a subset of these events -- specifically, the security-sensitive operations that are hash-chained in the `audit_entries` table. The unified audit view combines hash-chained entries with non-chained operational records (push runs, workflow runs) from their respective tables.

@@ -37,7 +37,7 @@ This section walks through the most common disaster scenario: the disk on your s
 
 **What happens to the thralls.** Nothing bad. Every agent has a cached signed policy bundle in LMDB (`/var/lib/hobnob/state/`). They continue converging on their normal check-in interval. Check-in fails, the agent logs a warning, applies exponential backoff on retries, and keeps enforcing cached policy. Run results and trait updates queue locally in the LMDB pending queue. No thrall stops enforcing state.
 
-**What you've lost.** Dashboard visibility, the ability to publish config changes, new thrall enrollment, task dispatch, and trait reporting. No thrall loses compliance.
+**What you've lost.** Dashboard visibility, the ability to publish config changes, new thrall enrollment, push dispatch, and trait reporting. No thrall loses compliance.
 
 **Recovery.**
 

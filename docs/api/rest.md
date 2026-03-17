@@ -4,11 +4,11 @@ In addition to the grpc-gateway proxy (which exposes all `HobnobAdmin` RPCs unde
 
 All endpoints return JSON and accept JSON request bodies. Errors use the format `{"message": "..."}`.
 
-## Tasks
+## Pushes
 
 Ad-hoc command dispatch to connected agents.
 
-### POST /api/v1/tasks
+### POST /api/v1/push
 
 Dispatch a command to matching thralls.
 
@@ -24,23 +24,23 @@ Dispatch a command to matching thralls.
   "maxFailures": "3",
   "healthCheck": "curl -sf http://localhost/health",
   "dryRun": false,
-  "taskName": "",
+  "pushName": "",
   "params": {}
 }
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `command` | Yes (or `taskName`) | Shell command to execute |
-| `target` | Yes (or `taskName`) | Hostname glob or trait filter (e.g., `*.web.*`, `os.family=debian`) |
-| `operator` | No | Who initiated the task (default: `api`) |
+| `command` | Yes (or `pushName`) | Shell command to execute |
+| `target` | Yes (or `pushName`) | Hostname glob or trait filter (e.g., `*.web.*`, `os.family=debian`) |
+| `operator` | No | Who initiated the push (default: `api`) |
 | `timeout` | No | Max seconds per target (default: 60) |
 | `batchSize` | No | Rolling execution batch size (e.g., `25%`, `5`) |
 | `maxFailures` | No | Abort after this many failures (e.g., `3`, `10%`) |
 | `healthCheck` | No | Command to run between batches |
 | `dryRun` | No | If true, return matched targets without executing |
-| `taskName` | No | Name of a reusable task definition from `tasks/*.yaml` |
-| `params` | No | Parameter overrides for named tasks |
+| `pushName` | No | Name of a reusable push definition from `push/*.yaml` |
+| `params` | No | Parameter overrides for named pushes |
 
 **Response (201 Created):**
 
@@ -55,9 +55,9 @@ Dispatch a command to matching thralls.
 }
 ```
 
-### GET /api/v1/tasks
+### GET /api/v1/push
 
-List recent task runs.
+List recent push runs.
 
 **Query parameters:**
 
@@ -69,7 +69,7 @@ List recent task runs.
 
 ```json
 {
-  "tasks": [
+  "pushes": [
     {
       "id": "abc123",
       "command": "uptime",
@@ -84,15 +84,15 @@ List recent task runs.
 }
 ```
 
-### GET /api/v1/tasks/{id}
+### GET /api/v1/push/{id}
 
-Get a task run with per-target results.
+Get a push run with per-target results.
 
 **Response:**
 
 ```json
 {
-  "task": {
+  "push": {
     "id": "abc123",
     "command": "uptime",
     "target": "*.web.*",
@@ -120,7 +120,7 @@ Get a task run with per-target results.
 
 ## Workflows
 
-Multi-step task orchestration with conditional branching.
+Multi-step push orchestration with conditional branching.
 
 ### POST /api/v1/workflows
 
@@ -461,7 +461,7 @@ If no entry matches, `matched` is `false` and other fields are omitted.
 
 ### GET /api/v1/audit
 
-Unified audit log across config publishes, task runs, and workflows.
+Unified audit log across config publishes, push runs, and workflows.
 
 **Query parameters:**
 
@@ -469,7 +469,7 @@ Unified audit log across config publishes, task runs, and workflows.
 |-----------|---------|-------------|
 | `since` | — | Time filter: duration (`24h`) or RFC3339 timestamp |
 | `operator` | — | Filter by operator name |
-| `type` | — | Event type: `config_publish`, `task_run`, `workflow_run` |
+| `type` | — | Event type: `config_publish`, `push_run`, `workflow_run` |
 | `limit` | `50` | Maximum events (max 200) |
 
 **Response:**

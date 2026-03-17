@@ -28,7 +28,7 @@ Salt requires Python on both master and minion. Hobnob's server is Go (hobd) and
 | Requisite (`listen`) | `notify` | Trigger downstream resources |
 | Jinja2 in states | Go template in `content:` only | Hobnob does not render templates in YAML structure |
 | `salt-call --local` | Offline convergence | Agent uses cached bundle when server is unreachable |
-| `salt-run` | `hobnobcli task run` | Orchestration on the server side |
+| `salt-run` | `hobnobcli push run` | Orchestration on the server side |
 | Salt event bus | Agent stream | Persistent gRPC stream for real-time dispatch |
 | `salt-cloud` | No equivalent | Hobnob does not provision infrastructure |
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |

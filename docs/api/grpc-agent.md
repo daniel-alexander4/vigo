@@ -158,8 +158,8 @@ Opens a bidirectional stream between agent and server. Agents default to unary p
 | `check_in` | CheckInRequest on stream open |
 | `report_result` | Run results |
 | `report_traits` | Trait updates |
-| `task_result` | Ad-hoc task execution results |
-| `task_ack` | Acknowledgement of task dispatch |
+| `push_result` | Ad-hoc push execution results |
+| `push_ack` | Acknowledgement of push dispatch |
 | `query_response` | Response to live trait queries |
 | `delta` | DeltaEvent (lightweight state change report) |
 
