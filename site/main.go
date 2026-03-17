@@ -325,7 +325,7 @@ func renderMarkdown(md string) string {
 // --- Docs nav ---
 
 var sectionOrder = []string{
-	"getting-started", "concepts", "executors", "traits",
+	"getting-started", "concepts", "use-cases", "executors", "traits",
 	"cli", "api", "operations", "ui", "ai", "examples", "migration",
 }
 

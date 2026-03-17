@@ -1,4 +1,10 @@
-# Performance (Theoretical)
+# Use Cases & Performance
+
+## Use Cases
+
+- [Core Use Cases](use-cases.md) — Configuration management, security enforcement, network automation, incident response, observability — tiered by recommended check-in interval
+
+## Performance (Theoretical)
 
 Scaling projections on 4 vCPU / 8 GB / SSD hardware at different check-in intervals. These are theoretical projections based on benchmarked per-request costs from the codebase, not measured end-to-end under production load. Actual performance will vary with hardware, network conditions, policy complexity, and fleet composition.
 
