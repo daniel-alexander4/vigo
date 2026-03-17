@@ -8,7 +8,7 @@
 //! Parameters:
 //! - `when_pending`: "true" (default) — only reboot if a reboot is pending
 //! - `message`: Optional message shown to users before reboot
-//! - `delay_seconds`: Seconds to wait before reboot (default "60")
+//! - `delay_secs`: Seconds to wait before reboot (default "60")
 //!
 //! Checks these registry keys for pending reboot state:
 //! - `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending`
@@ -16,7 +16,7 @@
 //! - `HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager` → `PendingFileRenameOperations`
 //!
 //! If `when_pending` is true and no reboot is pending, the resource is skipped.
-//! Otherwise: `shutdown.exe /r /t <delay_seconds> /c "<message>"`.
+//! Otherwise: `shutdown.exe /r /t <delay_secs> /c "<message>"`.
 
 use super::{Action, Executor, ResourceResult, run_command};
 use std::collections::HashMap;
@@ -66,18 +66,18 @@ impl Executor for RebootWindowsExecutor {
             .get("message")
             .cloned()
             .unwrap_or_else(|| "Hobnob: scheduled reboot".to_string());
-        let delay_seconds = params
-            .get("delay_seconds")
+        let delay_secs = params
+            .get("delay_secs")
             .cloned()
             .unwrap_or_else(|| "60".to_string());
 
         let mut result = ResourceResult::new("reboot_windows", "reboot");
 
-        // Validate delay_seconds is a number.
-        if delay_seconds.parse::<u32>().is_err() {
+        // Validate delay_secs is a number.
+        if delay_secs.parse::<u32>().is_err() {
             result.error = Some(format!(
-                "reboot_windows executor: delay_seconds must be a positive integer, got {:?}",
-                delay_seconds
+                "reboot_windows executor: delay_secs must be a positive integer, got {:?}",
+                delay_secs
             ));
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
@@ -101,7 +101,7 @@ impl Executor for RebootWindowsExecutor {
             return result;
         }
 
-        let mut args = vec!["/r", "/t", &delay_seconds, "/c", &message];
+        let mut args = vec!["/r", "/t", &delay_secs, "/c", &message];
         // Force close running applications.
         args.push("/f");
 
@@ -131,14 +131,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn invalid_delay_seconds() {
+    fn invalid_delay_secs() {
         let exec = RebootWindowsExecutor::new();
         let mut params = HashMap::new();
-        params.insert("delay_seconds".to_string(), "abc".to_string());
+        params.insert("delay_secs".to_string(), "abc".to_string());
         params.insert("when_pending".to_string(), "false".to_string());
         let result = exec.execute(&params, true);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("delay_seconds must be a positive integer"));
+        assert!(result.error.unwrap().contains("delay_secs must be a positive integer"));
     }
 
     #[test]

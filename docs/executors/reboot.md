@@ -7,7 +7,7 @@ Triggers or cancels system reboots. Supports delayed reboots and conditional reb
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `state` | No | `present` | `present` to trigger a reboot, `absent` to cancel a pending reboot. |
-| `delay_seconds` | No | `0` | Delay in minutes before the reboot (passed to `shutdown -r +N`). |
+| `delay_secs` | No | `0` | Delay in minutes before the reboot (passed to `shutdown -r +N`). |
 | `message` | No | `System reboot triggered by Hobnob` | Message displayed to logged-in users. |
 | `reboot_required_file` | No | -- | Path to a sentinel file. If set, the reboot only triggers when this file exists. Commonly `/var/run/reboot-required` on Debian/Ubuntu. |
 
@@ -37,7 +37,7 @@ resources:
 resources:
   - name: Scheduled maintenance reboot
     type: reboot
-    delay_seconds: "5"
+    delay_secs: "5"
     message: "System rebooting for maintenance in 5 minutes"
 ```
 
@@ -71,6 +71,6 @@ Cross-platform. Uses `shutdown -r` on Linux/macOS.
 
 ## Notes
 
-- The reboot command is `shutdown -r +<delay_seconds> <message>`.
+- The reboot command is `shutdown -r +<delay_secs> <message>`.
 - Cancel uses `shutdown -c`. If no reboot is pending, the command may fail, but this is treated as a successful no-op.
 - Use `reboot_required_file` to make reboots conditional -- only reboot when the OS indicates it is needed (e.g., after kernel or library updates).
