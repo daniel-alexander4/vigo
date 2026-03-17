@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hobnob/hobnob/server/ai"
+	"github.com/hobnob/hobnob/server/audit"
 	"github.com/hobnob/hobnob/server/auth"
 	"github.com/hobnob/hobnob/server/compliance"
 	"github.com/hobnob/hobnob/server/config"
@@ -150,6 +151,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflows", h.Workflows)
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
 	mux.HandleFunc("GET /query", h.Query)
+	mux.HandleFunc("GET /audit", h.Audit)
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
@@ -1691,6 +1693,27 @@ type QueryPageData struct {
 	PageData
 }
 
+// AuditPageData holds data for the audit log page.
+type AuditPageData struct {
+	PageData
+	Events      []AuditEventRow
+	TypeFilter  string
+	QueryString string
+	// Chain verification status (populated on page load).
+	ChainValid  bool
+	EntryCount  int64
+	FirstBroken int64
+	ChainError  string
+}
+
+// AuditEventRow is a single event displayed in the audit table.
+type AuditEventRow struct {
+	Timestamp string
+	Type      string
+	Operator  string
+	Summary   string
+}
+
 // Tasks renders the task history page.
 func (h *Handler) Tasks(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
@@ -1861,6 +1884,116 @@ func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "query", data)
+}
+
+// Audit renders the audit log page with chain verification status.
+func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	typeFilter := r.URL.Query().Get("type")
+
+	// Build query string for HTMX auto-refresh.
+	qs := ""
+	if typeFilter != "" {
+		qs = "type=" + typeFilter
+	}
+
+	// Fetch audit entries from all sources (same logic as API).
+	var events []AuditEventRow
+
+	// Tamper-evident audit entries (hash-chained).
+	if typeFilter == "" || typeFilter == "audit_entry" {
+		entries, err := h.queries.ListAuditEntries(ctx, 100)
+		if err != nil {
+			slog.Error("failed to list audit entries", "error", err)
+		}
+		for _, e := range entries {
+			events = append(events, AuditEventRow{
+				Timestamp: e.Timestamp.Format(time.RFC3339),
+				Type:      e.EventType,
+				Operator:  e.Actor,
+				Summary:   e.Summary,
+			})
+		}
+	}
+
+	// Config publishes.
+	if typeFilter == "" || typeFilter == "config_publish" {
+		publishes, err := h.queries.ListConfigPublishes(ctx, 100)
+		if err == nil {
+			for _, p := range publishes {
+				var changed []string
+				_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
+				events = append(events, AuditEventRow{
+					Timestamp: p.PublishedAt.Format(time.RFC3339),
+					Type:      "config_publish",
+					Operator:  p.Operator,
+					Summary:   fmt.Sprintf("%d files changed", len(changed)),
+				})
+			}
+		}
+	}
+
+	// Task runs.
+	if typeFilter == "" || typeFilter == "task_run" {
+		taskRuns, err := h.queries.ListTaskRuns(ctx, 100)
+		if err == nil {
+			for _, tr := range taskRuns {
+				events = append(events, AuditEventRow{
+					Timestamp: tr.CreatedAt.Format(time.RFC3339),
+					Type:      "task_run",
+					Operator:  tr.Operator,
+					Summary:   tr.Command + " on " + tr.TargetGlob,
+				})
+			}
+		}
+	}
+
+	// Workflow runs.
+	if typeFilter == "" || typeFilter == "workflow_run" {
+		workflowRuns, err := h.queries.ListWorkflowRuns(ctx, 100)
+		if err == nil {
+			for _, wr := range workflowRuns {
+				events = append(events, AuditEventRow{
+					Timestamp: wr.CreatedAt.Format(time.RFC3339),
+					Type:      "workflow_run",
+					Operator:  wr.Operator,
+					Summary:   wr.WorkflowName + " (" + wr.Status + ")",
+				})
+			}
+		}
+	}
+
+	// Sort by timestamp descending.
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].Timestamp > events[j].Timestamp
+	})
+
+	// Verify chain integrity on page load.
+	var chainValid bool
+	var entryCount, firstBroken int64
+	var chainError string
+	result, err := audit.Verify(ctx, h.queries)
+	if err != nil {
+		chainError = err.Error()
+	} else {
+		chainValid = result.Valid
+		entryCount = result.EntryCount
+		firstBroken = result.FirstBroken
+		chainError = result.Error
+	}
+
+	data := AuditPageData{
+		PageData:    PageData{Title: "Audit Log", ActiveNav: "audit"},
+		Events:      events,
+		TypeFilter:  typeFilter,
+		QueryString: qs,
+		ChainValid:  chainValid,
+		EntryCount:  entryCount,
+		FirstBroken: firstBroken,
+		ChainError:  chainError,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "audit", data)
 }
 
 // taskRowFromDB converts a DB TaskRun to a TaskRow.

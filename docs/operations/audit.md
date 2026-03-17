@@ -27,6 +27,10 @@ GET /api/v1/audit?since=24h&operator=admin&type=config_publish&limit=50
 
 The Audit page (`/audit`) shows a filterable table of events with auto-refresh.
 
+## Tamper-Evident Trail
+
+Security-sensitive events (config changes, enrollment, revocation, task dispatch) are also recorded in a [tamper-evident hash chain](tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `hobnobcli audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
+
 ## Event Types
 
 | Type | Source | Description |

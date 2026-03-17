@@ -1185,6 +1185,19 @@ body {
 .badge--dispatched { background: #dbeafe; color: #1e40af; }
 .badge--aborting { background: #fef3c7; color: #92400e; }
 
+/* === Audit chain verification === */
+.chain-verification {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+.chain-status { display: flex; align-items: center; gap: 8px; }
+.ml-1 { margin-left: 8px; }
+
 /* === Output blocks for task stdout/stderr === */
 .output-block {
     background: var(--color-bg);

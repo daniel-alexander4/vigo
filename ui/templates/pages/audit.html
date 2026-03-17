@@ -4,6 +4,26 @@
     <p>{{len .Events}} recent events</p>
 </div>
 
+<div class="chain-verification mb-2">
+    <div id="chain-status" class="chain-status">
+        {{if .ChainValid}}
+        <span class="badge badge--success">Chain valid ({{.EntryCount}} entries)</span>
+        {{else if eq .EntryCount 0}}
+        <span class="badge badge--unknown">No audit entries</span>
+        {{else}}
+        <span class="badge badge--failure">CHAIN BROKEN at entry #{{.FirstBroken}}</span>
+        {{if .ChainError}}<span class="text-muted ml-1">{{.ChainError}}</span>{{end}}
+        {{end}}
+    </div>
+    <button class="btn btn--sm"
+            hx-get="/api/v1/audit/verify"
+            hx-target="#chain-verify-result"
+            hx-swap="innerHTML">
+        Verify Chain
+    </button>
+    <span id="chain-verify-result"></span>
+</div>
+
 <div class="filter-bar mb-2">
     <a href="/audit" class="btn btn--sm{{if eq .TypeFilter ""}} btn--primary{{end}}">All</a>
     <a href="/audit?type=config_publish" class="btn btn--sm{{if eq .TypeFilter "config_publish"}} btn--primary{{end}}">Config</a>
