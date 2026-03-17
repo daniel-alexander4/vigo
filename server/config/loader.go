@@ -185,7 +185,7 @@ type resolvedEntry struct {
 type ConfigStore struct {
 	mu            sync.RWMutex
 	entries       []resolvedEntry
-	index         patternIndex                 // accelerated hostname lookup
+	index         *patternIndex                // accelerated hostname lookup
 	rawModules    map[string]*ModuleDefinition // unresolved, for secret ref scanning
 	thrallEntries []ThrallEntry                // original entries for tracing
 	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing

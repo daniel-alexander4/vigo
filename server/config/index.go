@@ -34,8 +34,8 @@ func isGlobPattern(pattern string) bool {
 }
 
 // buildPatternIndex constructs an index from the resolved entries.
-func buildPatternIndex(entries []resolvedEntry) patternIndex {
-	idx := patternIndex{
+func buildPatternIndex(entries []resolvedEntry) *patternIndex {
+	idx := &patternIndex{
 		exact:     make(map[string]int, len(entries)),
 		globCache: make(map[string]int),
 	}

@@ -7,6 +7,7 @@ View the unified audit log across config publishes, task runs, and workflow exec
 | Command | Description |
 |---------|-------------|
 | `audit list` | List recent audit events |
+| `audit verify` | Verify audit log hash chain integrity |
 
 ## audit list
 
@@ -40,4 +41,26 @@ TIMESTAMP              TYPE              OPERATOR  SUMMARY
 2026-03-13 14:30:00    config_publish    admin     3 files changed
 2026-03-13 12:00:00    task_run          admin     uptime on *.web.*
 2026-03-13 10:00:00    workflow_run      admin     deploy-app (complete)
+```
+
+## audit verify
+
+Verify the SHA-256 hash chain integrity of the audit log.
+
+```bash
+hobnobcli audit verify
+```
+
+### Example
+
+```bash
+$ hobnobcli audit verify
+Audit chain: valid (1,234 entries)
+```
+
+If the chain is broken:
+
+```bash
+$ hobnobcli audit verify
+Audit chain: BROKEN at entry #567 — hash mismatch at entry 567: expected a1b2c3d4... got e5f6a7b8...
 ```

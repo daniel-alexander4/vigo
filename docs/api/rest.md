@@ -488,6 +488,32 @@ Unified audit log across config publishes, task runs, and workflows.
 }
 ```
 
+### GET /api/v1/audit/verify
+
+Verifies the SHA-256 hash chain integrity of the audit log.
+
+**Response:**
+
+```json
+{
+  "valid": true,
+  "entry_count": 1234,
+  "first_broken": null,
+  "error": ""
+}
+```
+
+If the chain is broken:
+
+```json
+{
+  "valid": false,
+  "entry_count": 1234,
+  "first_broken": 567,
+  "error": "hash mismatch at entry 567: expected a1b2c3d4... got e5f6a7b8..."
+}
+```
+
 ---
 
 ## Config Publishes
@@ -902,6 +928,15 @@ Create an on-demand backup snapshot. Requires admin authentication.
 Download the latest backup archive as a `.tar.gz` file. Requires admin authentication.
 
 **Response:** Binary stream with `Content-Type: application/gzip` and `Content-Disposition: attachment; filename="hobnob-backup.tar.gz"`.
+
+---
+
+## Peer Replication
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/peer/status` | Returns peer role, primary address, last sync time, files synced, config version. Returns 404 if peer replication not configured. |
+| POST | `/api/v1/peer/promote` | Promotes the server to primary. Returns 404 if not configured. Split-brain resolved by config version. |
 
 ---
 
