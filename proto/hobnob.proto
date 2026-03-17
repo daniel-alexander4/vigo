@@ -35,7 +35,7 @@ service HobnobAgent {
 }
 
 // =============================================================================
-// Admin-facing service (gRPC + grpc-gateway REST, port 8181)
+// Admin-facing service (gRPC + grpc-gateway REST, port 8443)
 // =============================================================================
 
 service HobnobAdmin {
@@ -221,6 +221,7 @@ message RegisterRequest {
   string ip_address = 2;
   string pubkey_pem = 3;
   string token = 4;
+  bool force = 5; // revoke existing active thrall with same hostname and re-enroll
 }
 
 message RegisterResponse {
@@ -807,6 +808,7 @@ message EnrollThrallRequest {
   string hostname = 1;
   string ip_address = 2;
   string pubkey_pem = 3;
+  bool force = 4; // revoke existing active thrall with same hostname and re-enroll
 }
 
 message EnrollThrallResponse {

@@ -16,7 +16,7 @@ const SERVICE_DISPLAY: &str = "Hobnob Configuration Management Agent";
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 ///
-/// "http://hobd.example.com:8181" + "1530" → "hobd.example.com:1530"
+/// "http://hobd.example.com:8443" + "1530" → "hobd.example.com:1530"
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
     let mut host = bootstrap_server;
     host = host.strip_prefix("http://").unwrap_or(host);

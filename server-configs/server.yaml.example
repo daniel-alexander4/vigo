@@ -14,7 +14,7 @@
 
 server:
   grpc_listen: ":1530"
-  api_listen: ":8181"
+  api_listen: ":8443"
   tls:
     cert_file: "tls/cert"
     key_file: "tls/key"
@@ -88,7 +88,7 @@ bootstrap:
 #     issuer: "https://accounts.google.com"
 #     client_id: "your-client-id"
 #     client_secret: "secret:hobnob/auth/oidc_client_secret"
-#     redirect_url: "http://localhost:8181/auth/callback"
+#     redirect_url: "https://localhost:8443/auth/callback"
 #     scopes: [openid, profile, email]
 #
 # --- Isowebauth (SSH key signing) ---

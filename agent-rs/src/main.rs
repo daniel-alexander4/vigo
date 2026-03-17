@@ -47,12 +47,14 @@ enum Commands {
     },
     Register {
         token: String,
+        force: bool,
     },
     Bootstrap {
         server: String,
         token: Option<String>,
         install_service: bool,
         grpc_port: String,
+        force: bool,
     },
     Version,
     Traits {
@@ -68,7 +70,7 @@ fn parse_args() -> Result<Cli> {
         cert_file: None,
         key_file: None,
         log_level: "info".into(),
-        api_addr: "http://localhost:8181".into(),
+        api_addr: "https://localhost:8443".into(),
         executors_dir: platform::paths::default_executors_dir().to_string_lossy().into(),
         snapshot_dir: platform::paths::default_snapshot_dir().to_string_lossy().into(),
         snapshot_retention: 5,
@@ -172,21 +174,24 @@ fn parse_args() -> Result<Cli> {
             }
             "register" => {
                 let mut token = None;
+                let mut force = false;
                 let mut j = 1;
                 while j < positional.len() {
                     match positional[j].as_str() {
                         "--token" => { j += 1; token = Some(positional.get(j).cloned().context("--token requires a value")?); }
+                        "--force" => { force = true; }
                         _ => bail!("unknown register flag: {}", positional[j]),
                     }
                     j += 1;
                 }
-                Commands::Register { token: token.context("register requires --token")? }
+                Commands::Register { token: token.context("register requires --token")?, force }
             }
             "bootstrap" => {
                 let mut server = None;
                 let mut token = None;
                 let mut install_service = false;
                 let mut grpc_port = "1530".to_string();
+                let mut force = false;
                 let mut j = 1;
                 while j < positional.len() {
                     match positional[j].as_str() {
@@ -194,6 +199,7 @@ fn parse_args() -> Result<Cli> {
                         "--token" => { j += 1; token = Some(positional.get(j).cloned().context("--token requires a value")?); }
                         "--install-service" => { install_service = true; }
                         "--grpc-port" => { j += 1; grpc_port = positional.get(j).cloned().context("--grpc-port requires a value")?; }
+                        "--force" => { force = true; }
                         _ => bail!("unknown bootstrap flag: {}", positional[j]),
                     }
                     j += 1;
@@ -203,6 +209,7 @@ fn parse_args() -> Result<Cli> {
                     token,
                     install_service,
                     grpc_port,
+                    force,
                 }
             }
             "traits" => {
@@ -235,7 +242,7 @@ FLAGS:
     --cert-file <PATH>            Client certificate file
     --key-file <PATH>             Client key file
     --log-level <LEVEL>           Log level [default: info]
-    --api-addr <URL>              Server REST API address [default: http://localhost:8181]
+    --api-addr <URL>              Server REST API address [default: https://localhost:8443]
     --executors-dir <PATH>        Custom executor scripts [default: {}]
     --snapshot-dir <PATH>         File snapshots directory [default: {}]
     --snapshot-retention <N>      Max snapshots per file [default: 5]
@@ -246,8 +253,8 @@ FLAGS:
 
 COMMANDS:
     run         Run a single convergence cycle and exit
-    register    Register with the server (--token <TOKEN>)
-    bootstrap   Bootstrap agent (--server <URL> [--token <TOKEN>] [--install-service])
+    register    Register with the server (--token <TOKEN> [--force])
+    bootstrap   Bootstrap agent (--server <URL> [--token <TOKEN>] [--install-service] [--force])
     version     Print agent version
     traits      Print collected traits as JSON [COLLECTORS...]
 
@@ -738,7 +745,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Register { token }) => {
+        Some(Commands::Register { token, force }) => {
             let (pub_key, priv_key) = auth::keypair::load_or_generate(&cli.data_dir)?;
             let pub_pem = auth::keypair::public_key_pem(&pub_key)?;
 
@@ -761,7 +768,7 @@ async fn main() -> Result<()> {
             )
             .await?;
 
-            let resp = client.register(&hostname, &ip_addr, &pub_pem, token).await?;
+            let resp = client.register(&hostname, &ip_addr, &pub_pem, token, *force).await?;
 
             if !resp.success {
                 anyhow::bail!(
@@ -850,6 +857,7 @@ async fn main() -> Result<()> {
             token,
             install_service,
             grpc_port,
+            force,
         }) => {
             // Load or generate ED25519 keypair (for request signing).
             let (pub_key, _) = auth::keypair::load_or_generate(&cli.data_dir)?;
@@ -878,6 +886,7 @@ async fn main() -> Result<()> {
                 pubkey_pem: pub_pem,
                 csr_pem,
                 token: token.clone(),
+                force: *force,
             };
             let resp = bootstrap::client::register(bootstrap_server, &req).await?;
 

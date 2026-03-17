@@ -42,7 +42,7 @@ cd /srv/hobnob
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8181** (REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli users create --username admin --role admin` and set a password with `hobnobcli users set-password --username admin`, then sign in at `https://localhost:8443/login`.
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli users create --username admin --role admin` and set a password with `hobnobcli users set-password --username admin`, then sign in at `https://localhost:8443/login`.
 
 ### 3. Verify
 
@@ -151,7 +151,7 @@ See [Bootstrap](bootstrap.md) for details on the enrollment flow, token-based au
 | Port | Protocol | Purpose |
 |------|----------|---------|
 | 1530 | gRPC (mTLS) | Agent check-in, result reporting, streaming |
-| 8181 | HTTP | REST API, web UI, metrics, bootstrap |
+| 8443 | HTTPS | REST API, web UI, metrics, bootstrap |
 
 ## Agent directory layout
 

@@ -5,10 +5,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -19,15 +21,29 @@ type apiClient struct {
 }
 
 func newAPIClient() *apiClient {
+	hc := &http.Client{Timeout: 30 * time.Second}
+	if isLocalhost(serverURL) {
+		hc.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
 	c := &apiClient{
-		baseURL: serverURL,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		baseURL:    serverURL,
+		httpClient: hc,
 	}
 	// Load auth token from config file if present.
 	c.authToken = loadAuthToken()
 	return c
+}
+
+// isLocalhost returns true if the URL points to a loopback address.
+func isLocalhost(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 func (c *apiClient) get(path string, result any) error {

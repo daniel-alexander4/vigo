@@ -18,7 +18,7 @@ Or with a single `docker run` (no compose):
 ```bash
 sudo mkdir -p /srv/hobnob
 docker run -d --name hobnob \
-  -p 8181:8443 -p 1530:1530 \
+  -p 8443:8443 -p 1530:1530 \
   -v /srv/hobnob:/srv/hobnob \
   ghcr.io/daniel-alexander4/hobnob:latest
 ```

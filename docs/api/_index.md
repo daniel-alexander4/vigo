@@ -12,7 +12,7 @@ All gRPC message definitions live in [`proto/hobnob.proto`](../../proto/hobnob.p
 | Service | Port | Transport | Purpose |
 |---------|------|-----------|---------|
 | `HobnobAgent` | 1530 | gRPC over mTLS | Agent enrollment, check-in, result reporting, streaming |
-| `HobnobAdmin` | 8181 | gRPC-gateway REST | Admin operations via CLI and UI |
+| `HobnobAdmin` | 8443 | gRPC-gateway REST (HTTPS) | Admin operations via CLI and UI |
 
 ## Authentication
 

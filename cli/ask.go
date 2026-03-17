@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -99,6 +100,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	client := &http.Client{Timeout: 5 * time.Minute}
+	if isLocalhost(serverURL) {
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)

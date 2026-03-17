@@ -12,10 +12,10 @@ Server-rendered web UI built with HTMX. Provides a dashboard, node management, r
 
 ## Quickstart
 
-The UI is served on the REST API port (default 8181). Start the server and open:
+The UI is served on the REST API port (default 8443). Start the server and open:
 
 ```
-http://localhost:8181/
+https://localhost:8443/
 ```
 
 No separate build step is needed -- all assets are compiled into the `hobd` binary.

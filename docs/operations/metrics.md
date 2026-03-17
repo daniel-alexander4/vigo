@@ -1,6 +1,6 @@
 # Prometheus Metrics
 
-The Hobnob server exposes Prometheus metrics at `GET /metrics` on the REST port (default 8181).
+The Hobnob server exposes Prometheus metrics at `GET /metrics` on the REST port (default 8443).
 
 ## Available Metrics
 

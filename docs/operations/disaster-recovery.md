@@ -54,7 +54,7 @@ The server will:
 1. Load secrets using the restored `.master.key`
 2. Open the restored database, run any pending migrations
 3. Rebuild the FleetIndex from the database (all thralls, traits, compliance status)
-4. Start accepting agent check-ins on ports 1530 (gRPC) and 8181 (REST)
+4. Start accepting agent check-ins on ports 1530 (gRPC) and 8443 (REST)
 
 Agents will reconnect automatically within their backoff window (at most 5 minutes after the server becomes reachable).
 

@@ -13,14 +13,14 @@ cd /srv/hobnob
 docker compose up -d
 ```
 
-The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs. The second starts the server. Dashboard at `http://localhost:8181/`.
+The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs. The second starts the server. Dashboard at `https://localhost:8443/`.
 
 ### 2. Bootstrap managed nodes
 
 On each node you want to manage, run:
 
 ```bash
-curl -sSf http://<server-ip>:8181/bootstrap | sudo sh
+curl -sSf https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
 That's it. The server generates a shell script on the fly that downloads the `hobnob` agent binary for the node's OS/arch, enrolls it, and starts it as a systemd service. No Go, no source code, no package manager needed on the node.
@@ -61,7 +61,7 @@ hobnobcli tokens generate
 hobnobcli approved add "web-01.example.com" --token <TOKEN>
 
 # On the node:
-curl -sSf "http://<server-ip>:8181/bootstrap?token=<TOKEN>" | sudo sh
+curl -sSf "https://<server-ip>:8443/bootstrap?token=<TOKEN>" | sudo sh
 ```
 
 #### Factory reset a node
@@ -182,7 +182,7 @@ hobnobcli runs list
 hobnobcli nodes show web01.example.com
 ```
 
-Or open the web dashboard at `http://<server-ip>:8181/`.
+Or open the web dashboard at `https://<server-ip>:8443/`.
 
 ## Config structure
 
@@ -229,7 +229,7 @@ Each example demonstrates resource wiring (`depends_on`, `notify`, `subscribes`)
 ┌──────────────┐     gRPC/mTLS     ┌──────────────┐
 │   Agent       │◄─────────────────►│   Server      │
 │  (per node)   │     pull loop     │  :1530 gRPC   │
-│               │                   │  :8181 REST   │
+│               │                   │  :8443 REST   │
 └──────────────┘                   └──────┬───────┘
                                           │
                             ┌─────────────┼─────────────┐

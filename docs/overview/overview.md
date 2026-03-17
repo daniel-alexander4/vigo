@@ -210,7 +210,7 @@ Support covers configuration guidance, bug triage, and upgrade assistance. Custo
 
 ## Requirements
 
-- **Server**: Linux host with Docker, or Go 1.25+ for source builds. Ports 1530 (gRPC) and 8181 (REST/UI).
+- **Server**: Linux host with Docker, or Go 1.25+ for source builds. Ports 1530 (gRPC) and 8443 (REST/UI).
 - **Agent**: no runtime dependencies. ~5 MB static binary. Bootstrap: `curl -sSfk https://server:8443/bootstrap | sudo sh`
 - **Database**: SQLite (embedded, zero admin). Optional PostgreSQL support.
 

@@ -99,11 +99,11 @@ mod tests {
     #[test]
     fn test_derive_grpc_addr() {
         assert_eq!(
-            derive_grpc_addr("http://hobd.example.com:8181", "1530"),
+            derive_grpc_addr("http://hobd.example.com:8443", "1530"),
             "hobd.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("https://hobd.example.com:8181", "1530"),
+            derive_grpc_addr("https://hobd.example.com:8443", "1530"),
             "hobd.example.com:1530"
         );
         assert_eq!(
@@ -111,11 +111,11 @@ mod tests {
             "hobd.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("hobd.example.com:8181", "1530"),
+            derive_grpc_addr("hobd.example.com:8443", "1530"),
             "hobd.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("http://10.0.0.1:8181", "1530"),
+            derive_grpc_addr("http://10.0.0.1:8443", "1530"),
             "10.0.0.1:1530"
         );
     }
