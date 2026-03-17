@@ -264,24 +264,30 @@ if $BUILD && [ -d "$REPO_DIR" ]; then
         echo "  OK     hobnobcli"
     fi
 
-    # Check agent binaries (all platforms in container).
-    NEWEST_RS=$(find "$REPO_DIR/agent-rs/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
-    NEWEST_RS=${NEWEST_RS%.*}
-    AGENT_PLATFORMS=$(docker exec hobnob find /dist/agent -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null)
-    if [ -n "$AGENT_PLATFORMS" ]; then
-        for agent_path in $AGENT_PLATFORMS; do
-            CTR_AGENT=$(docker exec hobnob stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
-            platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/hobnob.*||')
-            if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
-                echo "  STALE  agent $platform (source is newer than binary)"
-                STALE=1
-            else
-                echo "  OK     agent $platform"
-            fi
-        done
+    # Check agent binaries in container.
+    if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
+        # Cross-compile just ran — binaries are fresh by definition.
+        echo "  OK     agent binaries (just cross-compiled)"
     else
-        echo "  WARN   no agent binaries found in container"
-        STALE=1
+        # No cross-compile: compare source mtime against binary mtime.
+        NEWEST_RS=$(find "$REPO_DIR/agent-rs/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
+        NEWEST_RS=${NEWEST_RS%.*}
+        AGENT_PLATFORMS=$(docker exec hobnob find /dist/agent -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null)
+        if [ -n "$AGENT_PLATFORMS" ]; then
+            for agent_path in $AGENT_PLATFORMS; do
+                CTR_AGENT=$(docker exec hobnob stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
+                platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/hobnob.*||')
+                if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
+                    echo "  STALE  agent $platform (source is newer than binary)"
+                    STALE=1
+                else
+                    echo "  OK     agent $platform"
+                fi
+            done
+        else
+            echo "  WARN   no agent binaries found in container"
+            STALE=1
+        fi
     fi
 
     # Check entrypoint.sh.
