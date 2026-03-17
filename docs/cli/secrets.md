@@ -216,4 +216,3 @@ hobnobcli secrets generate-certs --san hobnob.example.com --san 10.0.1.5
 ## Related
 
 - [doctor](doctor.md) -- verify secret resolution with health checks
-- [license](license.md) -- manage the Hobnob license

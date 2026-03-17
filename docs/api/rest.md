@@ -785,12 +785,139 @@ Returns the OpenAPI specification as JSON.
 
 ---
 
+## Health Check
+
+### GET /healthz
+
+Returns a simple health status. Useful for load balancer probes and monitoring.
+
+**Response:**
+
+```json
+{"status":"ok","spoke_id":""}
+```
+
+The `spoke_id` field is populated when the server runs in spoke mode.
+
+---
+
+## Database Administration
+
+These endpoints provide direct database inspection and maintenance. All endpoints require admin authentication.
+
+### GET /api/v1/db/stats
+
+Returns database statistics including file size, WAL size, page count, page size, and per-table row counts.
+
+**Response:**
+
+```json
+{
+  "driver": "sqlite",
+  "file_size": 4218924,
+  "wal_size": 32768,
+  "page_count": 1024,
+  "page_size": 4096,
+  "tables": {
+    "thralls": 42,
+    "runs": 1250,
+    "thrall_traits": 42
+  }
+}
+```
+
+### GET /api/v1/db/tables
+
+Returns all tables with their row counts.
+
+**Response:**
+
+```json
+{
+  "thralls": 42,
+  "runs": 1250,
+  "thrall_traits": 42
+}
+```
+
+### GET /api/v1/db/integrity
+
+Runs `PRAGMA integrity_check` and `PRAGMA foreign_key_check` (SQLite) or a connection ping (other drivers).
+
+**Response:**
+
+```json
+{
+  "driver": "sqlite",
+  "status": "ok",
+  "ok": true,
+  "foreign_key_violations": 0
+}
+```
+
+If foreign key violations are found, a `foreign_key_details` array is included.
+
+### POST /api/v1/db/vacuum
+
+Runs `VACUUM` to reclaim unused space. SQLite only. Returns the database file size before and after.
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "before": 4218924,
+  "after": 3145728,
+  "reclaimed": 1073196
+}
+```
+
+### POST /api/v1/db/checkpoint
+
+Forces a WAL checkpoint with `TRUNCATE` mode. SQLite only.
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "pages_total": 128,
+  "pages_written": 128
+}
+```
+
+### POST /api/v1/db/query
+
+Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `ATTACH`, `DETACH`, `REINDEX`, `VACUUM`, `PRAGMA`) are rejected with 403.
+
+**Request body:**
+
+```json
+{
+  "sql": "SELECT hostname, ip_address FROM thralls WHERE status = 'active' LIMIT 10"
+}
+```
+
+**Response:**
+
+```json
+{
+  "columns": ["hostname", "ip_address"],
+  "rows": [
+    {"hostname": "web-01.example.com", "ip_address": "10.0.1.10"}
+  ],
+  "count": 1
+}
+```
+
+---
+
 ## Other Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/metrics` | Prometheus metrics (see [Metrics](../operations/metrics.md)) |
-| GET | `/healthz` | Health check (spoke mode only) |
+| GET | `/healthz` | Health check (see above) |
 | GET | `/bootstrap` | Agent bootstrap script |
 | GET | `/bootstrap/agent/{os}/{arch}` | Agent binary download |
 | GET | `/bootstrap/ca.pem` | CA certificate download |

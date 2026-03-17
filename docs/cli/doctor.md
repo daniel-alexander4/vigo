@@ -93,5 +93,4 @@ hobnobcli doctor --pre-start --config /srv/hobnob/server.yaml
 
 ## Related
 
-- [license](license.md) -- manage the Hobnob license
 - [validate](validate.md) -- validate .hnb configuration files

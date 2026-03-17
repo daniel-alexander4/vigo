@@ -157,18 +157,6 @@ func (f *FleetIndex) GetByHostname(hostname string) string {
 	return f.byHostname[hostname]
 }
 
-// IsRevoked returns true if the thrall exists and is revoked.
-// Returns false if the thrall does not exist.
-func (f *FleetIndex) IsRevoked(id string) (exists bool, revoked bool) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	ts := f.thralls[id]
-	if ts == nil {
-		return false, false
-	}
-	return true, ts.Revoked
-}
-
 // ListByGlob returns all non-revoked thralls whose hostname matches the glob pattern.
 func (f *FleetIndex) ListByGlob(pattern string) []TargetInfo {
 	f.mu.RLock()
@@ -298,71 +286,11 @@ func (f *FleetIndex) PaginatedThralls(afterHostname string, limit int, statusFil
 	return candidates, hasMore
 }
 
-// Count returns the total number of thralls (including revoked).
-func (f *FleetIndex) Count() int {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	return len(f.thralls)
-}
-
-// ActiveCount returns the number of non-revoked thralls.
-func (f *FleetIndex) ActiveCount() int {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	count := 0
-	for _, ts := range f.thralls {
-		if !ts.Revoked {
-			count++
-		}
-	}
-	return count
-}
-
 // RecentRuns returns the last n run summaries (most recent first).
 func (f *FleetIndex) RecentRuns(n int) []RunSummary {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.recentRuns.Last(n)
-}
-
-// ListByGateway returns all non-revoked thralls whose Gateway field matches the given hostname.
-// Used to find network devices managed by a specific gateway thrall.
-func (f *FleetIndex) ListByGateway(gatewayHostname string) []*ThrallState {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	var results []*ThrallState
-	for _, ts := range f.thralls {
-		if ts.Revoked || ts.Gateway != gatewayHostname {
-			continue
-		}
-		cp := *ts
-		results = append(results, &cp)
-	}
-	return results
-}
-
-// GetGatewayForDevice returns the gateway hostname for a device thrall, or "" if
-// the thrall is not a network device.
-func (f *FleetIndex) GetGatewayForDevice(thrallID string) string {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	ts := f.thralls[thrallID]
-	if ts == nil {
-		return ""
-	}
-	return ts.Gateway
-}
-
-// ListByStatus returns all thrall IDs with the given compliance status.
-func (f *FleetIndex) ListByStatus(status string) []string {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	ids := f.byStatus[status]
-	result := make([]string, 0, len(ids))
-	for id := range ids {
-		result = append(result, id)
-	}
-	return result
 }
 
 // ListByTag returns all non-revoked thralls with the given tag.
@@ -595,19 +523,6 @@ func (f *FleetIndex) ClearStreamRequested(id string) {
 	f.SetStreamRequested(id, false)
 }
 
-// SetPendingRotatedSecrets sets the pending rotated secrets list.
-func (f *FleetIndex) SetPendingRotatedSecrets(id string, secrets []string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.thralls[id]
-	if !ok {
-		return
-	}
-	ts.PendingRotatedSecrets = secrets
-	f.dirty[id] = true
-}
-
 // ClearPendingRotatedSecrets clears the pending rotated secrets list.
 func (f *FleetIndex) ClearPendingRotatedSecrets(id string) {
 	f.mu.Lock()
@@ -677,32 +592,6 @@ func (f *FleetIndex) ClearMaintenance(id string) {
 	f.SetMaintenanceUntil(id, time.Time{})
 }
 
-// UpdateTraits replaces the traits for a thrall and updates the inverted index.
-func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.thralls[id]
-	if !ok {
-		return
-	}
-
-	f.removeFromTraits(id, ts.Traits)
-	ts.Traits = traits
-	f.addToTraits(id, traits)
-}
-
-// UpdateTraitsFromJSON parses a JSON traits blob and updates the inverted index.
-func (f *FleetIndex) UpdateTraitsFromJSON(id string, traitsJSON string) {
-	var flat map[string]any
-	if err := json.Unmarshal([]byte(traitsJSON), &flat); err != nil {
-		return
-	}
-	traits := make(map[string]string)
-	flattenJSON("", flat, traits)
-	f.UpdateTraits(id, traits)
-}
-
 // UpdateRunStatus updates the last run status fields and recomputes compliance.
 func (f *FleetIndex) UpdateRunStatus(id, runStatus string, changedCount int64, runAt time.Time) {
 	f.mu.Lock()
@@ -762,13 +651,6 @@ func (f *FleetIndex) DrainDirty() map[string]*ThrallState {
 	}
 	f.dirty = make(map[string]bool)
 	return result
-}
-
-// DirtyCount returns the number of dirty thralls.
-func (f *FleetIndex) DirtyCount() int {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	return len(f.dirty)
 }
 
 // --- Internal helpers (caller must hold lock) ---

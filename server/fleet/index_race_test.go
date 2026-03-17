@@ -35,7 +35,6 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				fi.GetThrall(fmt.Sprintf("w-%d", n%50))
-				fi.Count()
 			}
 		}(i)
 	}
@@ -200,47 +199,3 @@ func TestConcurrentSetForcePushAll(t *testing.T) {
 	}
 }
 
-func TestConcurrentUpdateTraits(t *testing.T) {
-	fi := NewFleetIndex()
-	const n = 50
-
-	for i := 0; i < n; i++ {
-		fi.AddThrall(ThrallState{
-			ID:               fmt.Sprintf("t-%d", i),
-			Hostname:         fmt.Sprintf("h-%d", i),
-			ComplianceStatus: "unknown",
-		}, nil)
-	}
-
-	var wg sync.WaitGroup
-
-	// Concurrent trait updates.
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			fi.UpdateTraitsFromJSON(fmt.Sprintf("t-%d", idx),
-				fmt.Sprintf(`{"os":{"distro":"distro-%d"},"arch":"amd64"}`, idx%3))
-		}(i)
-	}
-
-	// Concurrent trait reads.
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 10; j++ {
-				fi.ListByTrait("os.distro", "distro-0")
-				fi.ListByTrait("arch", "amd64")
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	// All thralls should have arch=amd64.
-	results := fi.ListByTrait("arch", "amd64")
-	if len(results) != n {
-		t.Errorf("ListByTrait(arch, amd64) = %d, want %d", len(results), n)
-	}
-}

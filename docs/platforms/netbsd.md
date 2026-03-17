@@ -151,7 +151,7 @@ resources:
 
 ## Related
 
-- [Bootstrap](bootstrap.md) — Agent installation on all platforms
+- [Bootstrap](../getting-started/bootstrap.md) — Agent installation on all platforms
 - [FreeBSD Support](freebsd.md) — Similar BSD platform (shared executors)
 - [OpenBSD Support](openbsd.md) — Similar BSD platform (shared executors)
 - [Executors](../executors/_index.md) — Full executor reference

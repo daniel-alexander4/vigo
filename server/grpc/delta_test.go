@@ -124,8 +124,8 @@ func TestHandleHeartbeat(t *testing.T) {
 	}
 
 	// Heartbeats use MarkSeenInMemory — should NOT mark dirty.
-	if idx.DirtyCount() != 0 {
-		t.Errorf("heartbeat should not mark dirty, got DirtyCount=%d", idx.DirtyCount())
+	if dirty := idx.DrainDirty(); len(dirty) != 0 {
+		t.Errorf("heartbeat should not mark dirty, got %d dirty entries", len(dirty))
 	}
 }
 

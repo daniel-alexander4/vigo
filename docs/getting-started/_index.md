@@ -7,7 +7,7 @@ This section walks you through installing Hobnob, enrolling your first thrall, a
 - [Bootstrap](bootstrap.md) — How agent enrollment works
 - [First Module](first-module.md) — Write your first .hnb module
 - [Server Configuration](server-config.md) — Full server.yaml reference
-- [Linux Support](linux.md) — Linux agent setup, all executors and traits
-- [macOS Support](macos.md) — macOS agent setup, launchd, Homebrew
-- [FreeBSD Support](freebsd.md) — FreeBSD agent setup and executors
-- [OpenBSD Support](openbsd.md) — OpenBSD agent setup and executors
+- [Linux Support](../platforms/linux.md) — Linux agent setup, all executors and traits
+- [macOS Support](../platforms/macos.md) — macOS agent setup, launchd, Homebrew
+- [FreeBSD Support](../platforms/freebsd.md) — FreeBSD agent setup and executors
+- [OpenBSD Support](../platforms/openbsd.md) — OpenBSD agent setup and executors

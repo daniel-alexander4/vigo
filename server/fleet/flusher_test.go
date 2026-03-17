@@ -71,8 +71,8 @@ func TestStateFlusher_ConcurrentMarkAndDrain(t *testing.T) {
 	}
 
 	// Dirty set must be empty now.
-	if fi.DirtyCount() != 0 {
-		t.Errorf("DirtyCount after full drain = %d, want 0", fi.DirtyCount())
+	if leftover := fi.DrainDirty(); len(leftover) != 0 {
+		t.Errorf("dirty set after full drain = %d, want 0", len(leftover))
 	}
 }
 
@@ -107,13 +107,12 @@ func TestStateFlusher_ConcurrentMarkAndFlush(t *testing.T) {
 		}(i)
 	}
 
-	// 10 goroutines performing DrainDirty + DirtyCount (simulating Flush).
+	// 10 goroutines performing DrainDirty (simulating Flush).
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 5; j++ {
-				_ = fi.DirtyCount()
 				dirty := fi.DrainDirty()
 				// Iterate the drained map as Flush does.
 				for id, ts := range dirty {

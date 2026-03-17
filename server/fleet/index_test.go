@@ -47,18 +47,10 @@ func TestAddGetRemoveLifecycle(t *testing.T) {
 		t.Errorf("GetByHostname = %q, want %q", id, "t1")
 	}
 
-	// Count.
-	if fi.Count() != 1 {
-		t.Errorf("Count = %d, want 1", fi.Count())
-	}
-
 	// Remove.
 	fi.RemoveThrall("t1")
 	if fi.GetThrall("t1") != nil {
 		t.Error("expected nil after remove")
-	}
-	if fi.Count() != 0 {
-		t.Errorf("Count after remove = %d, want 0", fi.Count())
 	}
 }
 
@@ -82,28 +74,6 @@ func TestPubKeyLookup(t *testing.T) {
 	}
 }
 
-func TestIsRevoked(t *testing.T) {
-	fi := NewFleetIndex()
-
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", Revoked: false, ComplianceStatus: "unknown"}, nil)
-	fi.AddThrall(ThrallState{ID: "t2", Hostname: "h2", Revoked: true, ComplianceStatus: "unknown"}, nil)
-
-	exists, revoked := fi.IsRevoked("t1")
-	if !exists || revoked {
-		t.Errorf("t1: exists=%v revoked=%v, want true false", exists, revoked)
-	}
-
-	exists, revoked = fi.IsRevoked("t2")
-	if !exists || !revoked {
-		t.Errorf("t2: exists=%v revoked=%v, want true true", exists, revoked)
-	}
-
-	exists, revoked = fi.IsRevoked("nope")
-	if exists {
-		t.Error("non-existent should return exists=false")
-	}
-}
-
 func TestFlagOperations(t *testing.T) {
 	fi := NewFleetIndex()
 
@@ -122,8 +92,8 @@ func TestFlagOperations(t *testing.T) {
 		t.Error("expected ForcePush=false")
 	}
 
-	// PendingRotatedSecrets.
-	fi.SetPendingRotatedSecrets("t1", []string{"secret:path/a"})
+	// AppendPendingRotatedSecret.
+	fi.AppendPendingRotatedSecret("t1", "secret:path/a")
 	got = fi.GetThrall("t1")
 	if len(got.PendingRotatedSecrets) != 1 || got.PendingRotatedSecrets[0] != "secret:path/a" {
 		t.Errorf("PendingRotatedSecrets = %v", got.PendingRotatedSecrets)
@@ -141,9 +111,6 @@ func TestDirtyTracking(t *testing.T) {
 	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "unknown"}, nil)
 
 	fi.MarkSeen("t1", time.Now())
-	if fi.DirtyCount() != 1 {
-		t.Errorf("DirtyCount = %d, want 1", fi.DirtyCount())
-	}
 
 	dirty := fi.DrainDirty()
 	if len(dirty) != 1 {
@@ -154,8 +121,8 @@ func TestDirtyTracking(t *testing.T) {
 	}
 
 	// After drain, should be empty.
-	if fi.DirtyCount() != 0 {
-		t.Errorf("DirtyCount after drain = %d, want 0", fi.DirtyCount())
+	if leftover := fi.DrainDirty(); len(leftover) != 0 {
+		t.Errorf("dirty set after drain = %d, want 0", len(leftover))
 	}
 }
 
@@ -270,7 +237,6 @@ func TestConcurrentReadWrite(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
 				fi.ComplianceSummary()
-				fi.Count()
 				fi.AllThralls()
 			}
 		}()
@@ -335,23 +301,6 @@ func TestSetForcePushAll(t *testing.T) {
 	}
 }
 
-func TestUpdateTraitsFromJSON(t *testing.T) {
-	fi := NewFleetIndex()
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "unknown"}, nil)
-
-	fi.UpdateTraitsFromJSON("t1", `{"os":{"distro":"ubuntu","version":"22.04"},"arch":"amd64"}`)
-
-	results := fi.ListByTrait("os.distro", "ubuntu")
-	if len(results) != 1 {
-		t.Errorf("ListByTrait after UpdateTraitsFromJSON = %d, want 1", len(results))
-	}
-
-	results = fi.ListByTrait("arch", "amd64")
-	if len(results) != 1 {
-		t.Errorf("ListByTrait arch = %d, want 1", len(results))
-	}
-}
-
 func TestSetRevoked(t *testing.T) {
 	fi := NewFleetIndex()
 
@@ -389,9 +338,9 @@ func TestMarkSeenInMemory(t *testing.T) {
 		t.Errorf("expected LastSeen to be recent, got %v", got.LastSeen)
 	}
 
-	// But dirty count should remain 0.
-	if fi.DirtyCount() != 0 {
-		t.Errorf("DirtyCount = %d, want 0 (MarkSeenInMemory should not mark dirty)", fi.DirtyCount())
+	// But dirty set should remain empty.
+	if dirty := fi.DrainDirty(); len(dirty) != 0 {
+		t.Errorf("dirty set = %d, want 0 (MarkSeenInMemory should not mark dirty)", len(dirty))
 	}
 }
 
@@ -403,25 +352,15 @@ func TestMarkSeenInMemory_ThenMarkSeen(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		fi.MarkSeenInMemory("t1", time.Now())
 	}
-	if fi.DirtyCount() != 0 {
-		t.Fatalf("DirtyCount after 100 MarkSeenInMemory = %d, want 0", fi.DirtyCount())
+	if dirty := fi.DrainDirty(); len(dirty) != 0 {
+		t.Fatalf("dirty set after 100 MarkSeenInMemory = %d, want 0", len(dirty))
 	}
 
 	// Simulate disconnect: one MarkSeen to persist final timestamp.
 	fi.MarkSeen("t1", time.Now())
-	if fi.DirtyCount() != 1 {
-		t.Errorf("DirtyCount after disconnect MarkSeen = %d, want 1", fi.DirtyCount())
-	}
-}
-
-func TestActiveCount(t *testing.T) {
-	fi := NewFleetIndex()
-
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "unknown"}, nil)
-	fi.AddThrall(ThrallState{ID: "t2", Hostname: "h2", Revoked: true, ComplianceStatus: "unknown"}, nil)
-
-	if fi.ActiveCount() != 1 {
-		t.Errorf("ActiveCount = %d, want 1", fi.ActiveCount())
+	dirty := fi.DrainDirty()
+	if len(dirty) != 1 {
+		t.Errorf("dirty set after disconnect MarkSeen = %d, want 1", len(dirty))
 	}
 }
 

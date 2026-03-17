@@ -233,7 +233,10 @@ func verifySSHSignature(username, pubkey, challenge, signature, namespace string
 		"-n", namespace,
 		"-s", sigFile,
 	)
-	challengeData, _ := os.Open(challengeFile)
+	challengeData, err := os.Open(challengeFile)
+	if err != nil {
+		return fmt.Errorf("opening challenge file: %w", err)
+	}
 	defer challengeData.Close()
 	cmd.Stdin = challengeData
 

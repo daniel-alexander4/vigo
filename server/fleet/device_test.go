@@ -46,42 +46,6 @@ func TestFleetIndexDeviceType(t *testing.T) {
 		t.Errorf("Gateway = %q, want netmgmt01.example.com", got.Gateway)
 	}
 
-	// ListByGateway should return only devices for that gateway.
-	devices := fi.ListByGateway("netmgmt01.example.com")
-	if len(devices) != 2 {
-		t.Fatalf("ListByGateway returned %d, want 2", len(devices))
-	}
-
-	// Verify device details.
-	found := map[string]bool{}
-	for _, d := range devices {
-		found[d.Hostname] = true
-	}
-	if !found["core-sw01.example.com"] {
-		t.Error("missing core-sw01.example.com in ListByGateway results")
-	}
-	if !found["edge-rtr01.example.com"] {
-		t.Error("missing edge-rtr01.example.com in ListByGateway results")
-	}
-
-	// ListByGateway for non-existent gateway should return empty.
-	empty := fi.ListByGateway("nonexistent.example.com")
-	if len(empty) != 0 {
-		t.Errorf("ListByGateway(nonexistent) returned %d, want 0", len(empty))
-	}
-
-	// GetGatewayForDevice should return the gateway hostname.
-	gw := fi.GetGatewayForDevice("dev-1")
-	if gw != "netmgmt01.example.com" {
-		t.Errorf("GetGatewayForDevice(dev-1) = %q, want netmgmt01.example.com", gw)
-	}
-
-	// GetGatewayForDevice for normal thrall should return empty.
-	gw = fi.GetGatewayForDevice("gw-1")
-	if gw != "" {
-		t.Errorf("GetGatewayForDevice(gw-1) = %q, want empty", gw)
-	}
-
 	// Device should be included in compliance counters.
 	summary := fi.ComplianceSummary()
 	if summary.Total != 3 {
@@ -95,23 +59,3 @@ func TestFleetIndexDeviceType(t *testing.T) {
 	}
 }
 
-func TestFleetIndexDeviceRevoked(t *testing.T) {
-	fi := NewFleetIndex()
-
-	fi.AddThrall(ThrallState{
-		ID:               "dev-1",
-		Hostname:         "sw01.example.com",
-		ComplianceStatus: "unknown",
-		Gateway:          "gw.example.com",
-		DeviceType:       "cisco_ios",
-	}, nil)
-
-	// Revoke the device.
-	fi.SetRevoked("dev-1", true)
-
-	// Revoked devices should not appear in ListByGateway.
-	devices := fi.ListByGateway("gw.example.com")
-	if len(devices) != 0 {
-		t.Errorf("ListByGateway returned %d revoked devices, want 0", len(devices))
-	}
-}
