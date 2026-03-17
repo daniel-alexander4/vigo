@@ -64,11 +64,15 @@ var thrallsListCmd = &cobra.Command{
 }
 
 var thrallsShowCmd = &cobra.Command{
-	Use:   "show <id>",
+	Use:   "show <id-or-hostname>",
 	Short: "Show enrollment details, compliance status, and recent runs for a thrall",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
+		thrallID, err := resolveThrall(client, args[0])
+		if err != nil {
+			return err
+		}
 		var resp struct {
 			Thrall struct {
 				ID                     string   `json:"id"`
@@ -81,7 +85,7 @@ var thrallsShowCmd = &cobra.Command{
 				PendingRotatedSecrets  []string `json:"pendingRotatedSecrets"`
 			} `json:"thrall"`
 		}
-		if err := client.get("/api/v1/thralls/"+args[0], &resp); err != nil {
+		if err := client.get("/api/v1/thralls/"+thrallID, &resp); err != nil {
 			return err
 		}
 
@@ -101,7 +105,7 @@ var thrallsShowCmd = &cobra.Command{
 		var compResp struct {
 			Status string `json:"status"`
 		}
-		if err := client.get("/api/v1/thralls/"+args[0]+"/compliance", &compResp); err == nil {
+		if err := client.get("/api/v1/thralls/"+thrallID+"/compliance", &compResp); err == nil {
 			fmt.Printf("Compliance: %s\n", compResp.Status)
 		}
 
@@ -412,6 +416,39 @@ Use --dry-run to preview what would be deleted without making changes.`,
 		fmt.Printf("Purged %d stale thrall(s).\n", len(toDelete))
 		return nil
 	},
+}
+
+// resolveThrall resolves an ID-or-hostname string to a thrall UUID.
+// If the argument looks like a UUID (contains a hyphen and is 36+ chars),
+// it is returned as-is. Otherwise, it searches the thrall list by hostname.
+func resolveThrall(client *apiClient, idOrHostname string) (string, error) {
+	// Simple heuristic: UUIDs are 36 chars with hyphens.
+	if len(idOrHostname) >= 36 && strings.Contains(idOrHostname, "-") {
+		return idOrHostname, nil
+	}
+	// Also accept short UUIDs (8-char prefix from truncUUID).
+	// But hostnames can also be short, so try hostname lookup first.
+	var resp struct {
+		Thralls []struct {
+			ID       string `json:"id"`
+			Hostname string `json:"hostname"`
+		} `json:"thralls"`
+	}
+	if err := client.get("/api/v1/thralls", &resp); err != nil {
+		return "", fmt.Errorf("listing thralls for hostname lookup: %w", err)
+	}
+	for _, t := range resp.Thralls {
+		if t.Hostname == idOrHostname {
+			return t.ID, nil
+		}
+	}
+	// Maybe it's a short UUID prefix.
+	for _, t := range resp.Thralls {
+		if strings.HasPrefix(t.ID, idOrHostname) {
+			return t.ID, nil
+		}
+	}
+	return "", fmt.Errorf("no thrall found matching %q", idOrHostname)
 }
 
 func init() {
