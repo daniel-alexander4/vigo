@@ -6,7 +6,7 @@ Manages individual keys in JSON files using dot-separated key paths.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `path` | Yes | -- | Absolute path to the JSON file. |
+| `target_path` | Yes | -- | Absolute path to the JSON file. |
 | `key` | Yes | -- | Dot-separated key path (e.g., `database.host` or `server.ports.0`). |
 | `value` | Yes (for present) | -- | The value to set, as a JSON string (e.g., `"\"localhost\""`, `"8080"`, `"true"`, `"[1,2,3]"`). |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
@@ -29,7 +29,7 @@ Reads and parses the JSON file, navigates to the specified key path, and compare
 resources:
   - name: Set database host
     type: json_file
-    path: /etc/myapp/config.json
+    target_path: /etc/myapp/config.json
     key: database.host
     value: '"db.internal"'
 ```
@@ -40,7 +40,7 @@ resources:
 resources:
   - name: Set server port
     type: json_file
-    path: /etc/myapp/config.json
+    target_path: /etc/myapp/config.json
     key: server.port
     value: "8080"
 ```
@@ -51,7 +51,7 @@ resources:
 resources:
   - name: Enable debug mode
     type: json_file
-    path: /etc/myapp/config.json
+    target_path: /etc/myapp/config.json
     key: debug
     value: "true"
 ```
@@ -62,7 +62,7 @@ resources:
 resources:
   - name: Remove deprecated setting
     type: json_file
-    path: /etc/myapp/config.json
+    target_path: /etc/myapp/config.json
     key: legacy.feature_flag
     state: absent
 ```

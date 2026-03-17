@@ -97,7 +97,7 @@ func TestServiceRestarted_WithSubscribes_IsClean(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "nginx-conf", Type: "file", Attributes: map[string]any{
-				"targetpath": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
 			}},
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
 				"name":  "nginx",
@@ -134,11 +134,11 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		typ   string
 		attrs map[string]any
 	}{
-		{"file", map[string]any{"targetpath": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
+		{"file", map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
 		{"package", map[string]any{"package": "nginx", "state": "present"}},
 		{"user", map[string]any{"username": "deploy"}},
 		{"repository", map[string]any{"name": "nginx", "type": "apt"}},
-		{"archive", map[string]any{"url": "https://example.com/foo.tar.gz", "targetpath": "/opt/foo"}},
+		{"archive", map[string]any{"url": "https://example.com/foo.tar.gz", "target_path": "/opt/foo"}},
 		{"cron", map[string]any{"name": "backup", "job": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy"}},
 	}
 
@@ -167,7 +167,7 @@ func TestFileValidation_MissingRequiredFields(t *testing.T) {
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for bare file resource")
 	}
-	// Should require: targetpath, owner, group, mode, content/source = 5 errors.
+	// Should require: target_path, owner, group, mode, content/source = 5 errors.
 	errorCount := 0
 	for _, f := range findings {
 		if f.Severity == SeverityError {
@@ -184,7 +184,7 @@ func TestFileValidation_AbsentSkipsContent(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "rm-file", Type: "file", Attributes: map[string]any{
-				"targetpath": "/tmp/gone", "owner": "root", "group": "root", "mode": "0644", "state": "absent",
+				"target_path": "/tmp/gone", "owner": "root", "group": "root", "mode": "0644", "state": "absent",
 			}},
 		},
 	}
@@ -199,7 +199,7 @@ func TestFileValidation_SourceSatisfiesContent(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "tmpl-file", Type: "file", Attributes: map[string]any{
-				"targetpath": "/etc/app.conf", "source": "templates/app.conf.tmpl",
+				"target_path": "/etc/app.conf", "source": "templates/app.conf.tmpl",
 				"owner": "root", "group": "root", "mode": "0600",
 			}},
 		},
@@ -274,7 +274,7 @@ func TestMissingName_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Type: "file", Attributes: map[string]any{"targetpath": "/etc/foo"}},
+			{Type: "file", Attributes: map[string]any{"target_path": "/etc/foo"}},
 		},
 	}
 
@@ -288,7 +288,7 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "good-file", Type: "file", Attributes: map[string]any{"targetpath": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
+			{Name: "good-file", Type: "file", Attributes: map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
 			{Name: "bad-exec", Type: "exec", Attributes: map[string]any{"command": "echo hello"}},
 			{Name: "good-exec", Type: "exec", Attributes: map[string]any{"command": "echo world", "creates": "/tmp/done"}},
 		},
@@ -449,7 +449,7 @@ func TestReplaceValidation_MissingMatch(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-replace", Type: "replace", Attributes: map[string]any{
-				"path": "/etc/foo", "replacement": "bar",
+				"target_path": "/etc/foo", "replacement": "bar",
 			}},
 		},
 	}
@@ -464,7 +464,7 @@ func TestReplaceValidation_ValidConfig(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-replace", Type: "replace", Attributes: map[string]any{
-				"path": "/etc/ssh/sshd_config", "match_pattern": "^PermitRootLogin", "replacement": "PermitRootLogin no",
+				"target_path": "/etc/ssh/sshd_config", "match_pattern": "^PermitRootLogin", "replacement": "PermitRootLogin no",
 			}},
 		},
 	}
@@ -535,7 +535,7 @@ func TestFileWithoutContent_IsError(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "config", Type: "file", Attributes: map[string]any{
-				"targetpath": "/etc/myapp/config",
+				"target_path": "/etc/myapp/config",
 				"owner":      "root",
 				"group":      "root",
 				"mode":       "0644",
@@ -554,7 +554,7 @@ func TestDirectoryType_NoContentRequired(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "datadir", Type: "directory", Attributes: map[string]any{
-				"targetpath": "/var/lib/myapp/data",
+				"target_path": "/var/lib/myapp/data",
 				"owner":      "root",
 				"group":      "root",
 				"mode":       "0755",
@@ -581,7 +581,7 @@ func TestDirectoryType_MissingTargetpath(t *testing.T) {
 
 	findings := ValidateModule(mod)
 	if !HasErrors(findings) {
-		t.Fatal("expected error for directory without targetpath")
+		t.Fatal("expected error for directory without target_path")
 	}
 }
 
@@ -590,7 +590,7 @@ func TestSymlinkType_Valid(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "enable-site", Type: "symlink", Attributes: map[string]any{
-				"targetpath": "/etc/nginx/sites-enabled/mysite",
+				"target_path": "/etc/nginx/sites-enabled/mysite",
 				"to":         "../sites-available/mysite",
 			}},
 		},
@@ -607,7 +607,7 @@ func TestSymlinkType_MissingTo(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-link", Type: "symlink", Attributes: map[string]any{
-				"targetpath": "/some/link",
+				"target_path": "/some/link",
 			}},
 		},
 	}
@@ -623,7 +623,7 @@ func TestSymlinkType_AbsentSkipsTo(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "rm-link", Type: "symlink", Attributes: map[string]any{
-				"targetpath": "/some/link",
+				"target_path": "/some/link",
 				"state":      "absent",
 			}},
 		},
@@ -714,7 +714,7 @@ func TestNotify_UnknownResource_IsError(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "conf", Type: "file", Attributes: map[string]any{
-				"targetpath": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
 			}, Notify: []string{"nonexistent-svc"}},
 		},
 	}
@@ -757,7 +757,7 @@ func TestRedundantNotifySubscribes_IsError(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "conf", Type: "file", Attributes: map[string]any{
-				"targetpath": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
 			}, Notify: []string{"svc"}},
 			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
 				Subscribes: []string{"conf"}},
@@ -783,7 +783,7 @@ func TestFileStateDirectory_IsError(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "mydir", Type: "file", Attributes: map[string]any{
-				"targetpath": "/srv/data", "owner": "root", "group": "root", "mode": "0755", "state": "directory",
+				"target_path": "/srv/data", "owner": "root", "group": "root", "mode": "0755", "state": "directory",
 			}},
 		},
 	}
@@ -799,7 +799,7 @@ func TestAllReferencesValid_IsClean(t *testing.T) {
 		Resources: []Resource{
 			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
 			{Name: "conf", Type: "file", Attributes: map[string]any{
-				"targetpath": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
 			}, DependsOn: []string{"pkg"}, Notify: []string{"svc"}},
 			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
 				DependsOn: []string{"pkg"}},

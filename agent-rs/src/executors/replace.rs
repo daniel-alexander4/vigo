@@ -18,11 +18,11 @@ pub struct ReplaceExecutor;
 impl Executor for ReplaceExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let path = params.get("path").cloned().unwrap_or_default();
+        let path = params.get("target_path").cloned().unwrap_or_default();
         let mut result = ResourceResult::new("replace", &path);
 
         if path.is_empty() {
-            result.error = Some("replace executor: path param is required".into());
+            result.error = Some("replace executor: target_path param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -149,13 +149,13 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[("match_pattern", "foo"), ("replacement", "bar")]);
         let result = exec.execute(&params, false);
-        assert!(result.error.unwrap().contains("path param is required"));
+        assert!(result.error.unwrap().contains("target_path param is required"));
     }
 
     #[test]
     fn missing_match_errors() {
         let exec = ReplaceExecutor;
-        let params = make_params(&[("path", "/tmp/x"), ("replacement", "bar")]);
+        let params = make_params(&[("target_path", "/tmp/x"), ("replacement", "bar")]);
         let result = exec.execute(&params, false);
         assert!(result.error.unwrap().contains("match_pattern param is required"));
     }
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn missing_replace_errors() {
         let exec = ReplaceExecutor;
-        let params = make_params(&[("path", "/tmp/x"), ("match_pattern", "foo")]);
+        let params = make_params(&[("target_path", "/tmp/x"), ("match_pattern", "foo")]);
         let result = exec.execute(&params, false);
         assert!(result.error.unwrap().contains("replacement param is required"));
     }
@@ -176,7 +176,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "port=\\d+"),
             ("replacement", "port=443"),
         ]);
@@ -196,7 +196,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "port=\\d+"),
             ("replacement", "port=443"),
             ("occurrences", "first"),
@@ -217,7 +217,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "^(PermitRootLogin)\\s+yes"),
             ("replacement", "$1 no"),
         ]);
@@ -238,7 +238,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "^port="),
             ("replacement", "port=443"),
         ]);
@@ -260,7 +260,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "PermitRootLogin yes"),
             ("replacement", "PermitRootLogin no"),
             ("region_start", "^# Authentication"),
@@ -296,7 +296,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "foo="),
             ("replacement", "bar="),
             ("region_start", "^# START"),
@@ -317,7 +317,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "foo="),
             ("replacement", "bar="),
             ("region_end", "^# END"),
@@ -339,7 +339,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "port=80"),
             ("replacement", "port=443"),
         ]);
@@ -359,7 +359,7 @@ mod tests {
 
         let exec = ReplaceExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "foo"),
             ("replacement", "bar"),
         ]);

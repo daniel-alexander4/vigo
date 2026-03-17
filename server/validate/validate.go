@@ -315,11 +315,11 @@ func validateResource(moduleName string, res Resource) []Finding {
 }
 
 // validateFile checks that file resources declare required attributes:
-// targetpath, owner, group, mode, and one of content/source (unless state=absent).
+// target_path, owner, group, mode, and one of content/source (unless state=absent).
 func validateFile(base Finding, res Resource) []Finding {
 	var findings []Finding
 
-	for _, field := range []string{"targetpath", "owner", "group", "mode"} {
+	for _, field := range []string{"target_path", "owner", "group", "mode"} {
 		if attrString(res.Attributes, field) == "" {
 			f := base
 			f.Severity = SeverityError
@@ -328,7 +328,7 @@ func validateFile(base Finding, res Resource) []Finding {
 		}
 	}
 
-	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
+	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
 	findings = append(findings, requireValidMode(base, res, "mode")...)
 
 	state := attrString(res.Attributes, "state")
@@ -351,36 +351,36 @@ func validateFile(base Finding, res Resource) []Finding {
 	return findings
 }
 
-// validateDirectory checks that directory resources have targetpath.
+// validateDirectory checks that directory resources have target_path.
 // owner, group, mode are optional (defaults: root/root/0755).
 func validateDirectory(base Finding, res Resource) []Finding {
 	var findings []Finding
 
-	if attrString(res.Attributes, "targetpath") == "" {
+	if attrString(res.Attributes, "target_path") == "" {
 		f := base
 		f.Severity = SeverityError
-		f.Message = "directory resource missing required attribute \"targetpath\""
+		f.Message = "directory resource missing required attribute \"target_path\""
 		findings = append(findings, f)
 	}
 
-	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
+	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
 	findings = append(findings, requireValidMode(base, res, "mode")...)
 
 	return findings
 }
 
-// validateSymlink checks that symlink resources have targetpath and to.
+// validateSymlink checks that symlink resources have target_path and to.
 func validateSymlink(base Finding, res Resource) []Finding {
 	var findings []Finding
 
-	if attrString(res.Attributes, "targetpath") == "" {
+	if attrString(res.Attributes, "target_path") == "" {
 		f := base
 		f.Severity = SeverityError
-		f.Message = "symlink resource missing required attribute \"targetpath\""
+		f.Message = "symlink resource missing required attribute \"target_path\""
 		findings = append(findings, f)
 	}
 
-	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
+	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
 
 	state := attrString(res.Attributes, "state")
 	if state != "absent" && attrString(res.Attributes, "to") == "" {
@@ -498,7 +498,7 @@ func validateCron(base Finding, res Resource) []Finding {
 // validateReplace checks that replace resources declare required attributes.
 func validateReplace(base Finding, res Resource) []Finding {
 	var findings []Finding
-	for _, field := range []string{"path", "match_pattern", "replacement"} {
+	for _, field := range []string{"target_path", "match_pattern", "replacement"} {
 		if attrString(res.Attributes, field) == "" {
 			f := base
 			f.Severity = SeverityError
@@ -506,7 +506,7 @@ func validateReplace(base Finding, res Resource) []Finding {
 			findings = append(findings, f)
 		}
 	}
-	findings = append(findings, requireAbsolutePath(base, res, "path")...)
+	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
 	return findings
 }
 
@@ -533,7 +533,7 @@ func validateFieldEdit(base Finding, res Resource) []Finding {
 	return findings
 }
 
-// validateArchive checks that archive resources have a url and valid targetpath/mode.
+// validateArchive checks that archive resources have a url and valid target_path/mode.
 func validateArchive(base Finding, res Resource) []Finding {
 	var findings []Finding
 
@@ -544,7 +544,7 @@ func validateArchive(base Finding, res Resource) []Finding {
 		findings = append(findings, f)
 	}
 	findings = append(findings, requireHTTPURL(base, res, "url")...)
-	findings = append(findings, requireAbsolutePath(base, res, "targetpath")...)
+	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
 	findings = append(findings, requireValidMode(base, res, "mode")...)
 
 	return findings

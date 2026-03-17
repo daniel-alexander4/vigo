@@ -6,7 +6,7 @@ Creates and removes directories with specified permissions and ownership.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `targetpath` | Yes | -- | Absolute path to the directory. |
+| `target_path` | Yes | -- | Absolute path to the directory. |
 | `mode` | No | `0755` | Directory permission mode (octal string). |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `owner` | No | -- | Directory owner (username or UID). Linux only. |
@@ -30,7 +30,7 @@ Checks if the directory exists and whether its current mode, owner, and group ma
 resources:
   - name: /opt/myapp
     type: directory
-    targetpath: /opt/myapp
+    target_path: /opt/myapp
     mode: "0755"
     owner: deploy
     group: deploy
@@ -46,7 +46,7 @@ resources:
 
   - name: /opt/myapp
     type: directory
-    targetpath: /opt/myapp
+    target_path: /opt/myapp
     owner: deploy
     depends_on: deploy-user
 ```
@@ -57,7 +57,7 @@ resources:
 resources:
   - name: /opt/myapp
     type: directory
-    targetpath: /opt/myapp
+    target_path: /opt/myapp
     mode: "0755"
     owner: deploy
     group: deploy
@@ -70,7 +70,7 @@ resources:
 resources:
   - name: /opt/old-app
     type: directory
-    targetpath: /opt/old-app
+    target_path: /opt/old-app
     state: absent
 ```
 

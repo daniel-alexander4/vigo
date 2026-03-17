@@ -6,11 +6,11 @@ Manages symbolic and hard links idempotently.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `targetpath` | Yes | -- | Path where the link will be created. |
+| `target_path` | Yes | -- | Path where the link will be created. |
 | `to` | Yes (for present) | -- | Target path the link points to. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `link_type` | No | `soft` | Link type: `soft` (symbolic) or `hard`. |
-| `force` | No | `false` | If `true`, remove an existing file/link at `targetpath` before creating the new link. |
+| `force` | No | `false` | If `true`, remove an existing file/link at `target_path` before creating the new link. |
 | `owner` | No | -- | Link owner (username or UID). Linux only. Applies to symlinks via `lchown`. |
 | `group` | No | -- | Link group (group name or GID). Linux only. |
 
@@ -31,7 +31,7 @@ For soft links, reads the current symlink target and compares it to the desired 
 resources:
   - name: /usr/local/bin/myapp
     type: symlink
-    targetpath: /usr/local/bin/myapp
+    target_path: /usr/local/bin/myapp
     to: /opt/myapp/bin/myapp
 ```
 
@@ -41,7 +41,7 @@ resources:
 resources:
   - name: /etc/nginx/sites-enabled/default
     type: symlink
-    targetpath: /etc/nginx/sites-enabled/default
+    target_path: /etc/nginx/sites-enabled/default
     to: /etc/nginx/sites-available/default
     link_type: hard
 ```
@@ -52,7 +52,7 @@ resources:
 resources:
   - name: /usr/local/bin/python
     type: symlink
-    targetpath: /usr/local/bin/python
+    target_path: /usr/local/bin/python
     to: /usr/bin/python3
     force: "true"
 ```
@@ -63,7 +63,7 @@ resources:
 resources:
   - name: /usr/local/bin/old-tool
     type: symlink
-    targetpath: /usr/local/bin/old-tool
+    target_path: /usr/local/bin/old-tool
     state: absent
 ```
 
@@ -73,5 +73,5 @@ Cross-platform. Hard links require the target file to exist. Owner/group require
 
 ## Notes
 
-- When `force: true` and a file (not a symlink) already exists at `targetpath`, it is removed before creating the link.
+- When `force: true` and a file (not a symlink) already exists at `target_path`, it is removed before creating the link.
 - Symlink ownership is set via `lchown` (does not follow the link).

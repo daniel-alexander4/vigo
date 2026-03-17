@@ -13,11 +13,11 @@ pub struct JsonFileExecutor;
 impl Executor for JsonFileExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let path = params.get("path").cloned().unwrap_or_default();
+        let path = params.get("target_path").cloned().unwrap_or_default();
         let mut result = ResourceResult::new("json_file", &path);
 
         if path.is_empty() {
-            result.error = Some("json_file executor: path param is required".into());
+            result.error = Some("json_file executor: target_path param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -201,7 +201,7 @@ mod tests {
         let params = make_params(&[("key", "port"), ("value", "80")]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("path param is required"));
+        assert!(result.error.unwrap().contains("target_path param is required"));
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
         std::fs::write(&path, "{}").unwrap();
 
         let exec = JsonFileExecutor;
-        let params = make_params(&[("path", path.to_str().unwrap())]);
+        let params = make_params(&[("target_path", path.to_str().unwrap())]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("key param is required"));
@@ -225,7 +225,7 @@ mod tests {
 
         let exec = JsonFileExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("key", "app.name"),
             ("value", "\"hobnob\""),
             ("state", "present"),
@@ -248,7 +248,7 @@ mod tests {
 
         let exec = JsonFileExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("key", "port"),
             ("value", "90"),
             ("state", "present"),
@@ -271,7 +271,7 @@ mod tests {
 
         let exec = JsonFileExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("key", "port"),
             ("value", "80"),
             ("state", "present"),
@@ -290,7 +290,7 @@ mod tests {
 
         let exec = JsonFileExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("key", "port"),
             ("state", "absent"),
         ]);
@@ -313,7 +313,7 @@ mod tests {
 
         let exec = JsonFileExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("key", "nonexistent"),
             ("state", "absent"),
         ]);
@@ -332,7 +332,7 @@ mod tests {
 
         let exec = JsonFileExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("key", "port"),
             ("value", "443"),
             ("state", "present"),

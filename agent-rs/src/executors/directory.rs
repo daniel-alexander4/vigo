@@ -21,7 +21,7 @@ impl DirectoryExecutor {
 impl Executor for DirectoryExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let path_str = params.get("targetpath").map(|s| s.as_str()).unwrap_or("");
+        let path_str = params.get("target_path").map(|s| s.as_str()).unwrap_or("");
         let mut result = ResourceResult::new("directory", path_str);
 
         let res = execute_directory(params, dry_run, &mut result);
@@ -39,9 +39,9 @@ fn execute_directory(
     result: &mut ResourceResult,
 ) -> Result<(), String> {
     let path = params
-        .get("targetpath")
+        .get("target_path")
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "directory executor: targetpath param is required".to_string())?;
+        .ok_or_else(|| "directory executor: target_path param is required".to_string())?;
 
     let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
 
@@ -203,7 +203,7 @@ mod tests {
 
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("mode", "0755")]),
+            &make_params(&[("target_path", path_str), ("mode", "0755")]),
             false,
         );
 
@@ -228,7 +228,7 @@ mod tests {
 
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("mode", "0755")]),
+            &make_params(&[("target_path", path_str), ("mode", "0755")]),
             false,
         );
 
@@ -246,7 +246,7 @@ mod tests {
 
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("mode", "0755")]),
+            &make_params(&[("target_path", path_str), ("mode", "0755")]),
             false,
         );
 
@@ -267,7 +267,7 @@ mod tests {
 
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("mode", "0750")]),
+            &make_params(&[("target_path", path_str), ("mode", "0750")]),
             false,
         );
 
@@ -286,7 +286,7 @@ mod tests {
 
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("state", "absent")]),
+            &make_params(&[("target_path", path_str), ("state", "absent")]),
             false,
         );
 
@@ -303,7 +303,7 @@ mod tests {
 
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("state", "absent")]),
+            &make_params(&[("target_path", path_str), ("state", "absent")]),
             false,
         );
 
@@ -319,7 +319,7 @@ mod tests {
 
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("mode", "0755")]),
+            &make_params(&[("target_path", path_str), ("mode", "0755")]),
             true,
         );
 
@@ -329,11 +329,11 @@ mod tests {
     }
 
     #[test]
-    fn missing_targetpath_errors() {
+    fn missing_target_path_errors() {
         let de = DirectoryExecutor::new();
         let result = de.execute(&make_params(&[("state", "present")]), false);
         assert!(result.error.is_some());
-        assert!(result.error.as_ref().unwrap().contains("targetpath"));
+        assert!(result.error.as_ref().unwrap().contains("target_path"));
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
         let path_str = root.to_str().unwrap();
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("mode", "0755"), ("recurse", "true")]),
+            &make_params(&[("target_path", path_str), ("mode", "0755"), ("recurse", "true")]),
             false,
         );
 
@@ -393,7 +393,7 @@ mod tests {
         let path_str = root.to_str().unwrap();
         let de = DirectoryExecutor::new();
         let result = de.execute(
-            &make_params(&[("targetpath", path_str), ("mode", "0755"), ("recurse", "true")]),
+            &make_params(&[("target_path", path_str), ("mode", "0755"), ("recurse", "true")]),
             false,
         );
 

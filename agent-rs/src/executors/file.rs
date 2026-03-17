@@ -52,7 +52,7 @@ impl FileExecutor {
 impl Executor for FileExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let path_str = params.get("targetpath").map(|s| s.as_str()).unwrap_or("");
+        let path_str = params.get("target_path").map(|s| s.as_str()).unwrap_or("");
         let mut result = ResourceResult::new("file", path_str);
 
         let res = execute_file(
@@ -78,9 +78,9 @@ fn execute_file(
     stream_edit_cache: &Mutex<HashMap<String, StreamEditCacheEntry>>,
 ) -> Result<(), String> {
     let path = params
-        .get("targetpath")
+        .get("target_path")
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "file executor: targetpath param is required".to_string())?;
+        .ok_or_else(|| "file executor: target_path param is required".to_string())?;
 
     let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
 
@@ -605,7 +605,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "hello world\n"),
                 ("mode", "0644"),
                 ("state", "present"),
@@ -632,7 +632,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", content),
                 ("mode", "0644"),
                 ("state", "present"),
@@ -656,7 +656,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "new content\n"),
                 ("mode", "0644"),
                 ("state", "present"),
@@ -678,7 +678,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "should not exist\n"),
                 ("state", "present"),
             ]),
@@ -700,7 +700,7 @@ mod tests {
 
         let fe = FileExecutor::new(None);
         let result = fe.execute(
-            &make_params(&[("targetpath", path_str), ("state", "absent")]),
+            &make_params(&[("target_path", path_str), ("state", "absent")]),
             false,
         );
 
@@ -717,7 +717,7 @@ mod tests {
 
         let fe = FileExecutor::new(None);
         let result = fe.execute(
-            &make_params(&[("targetpath", path_str), ("state", "absent")]),
+            &make_params(&[("target_path", path_str), ("state", "absent")]),
             false,
         );
 
@@ -738,7 +738,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", content),
                 ("mode", "0644"),
                 ("state", "present"),
@@ -759,7 +759,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "test\n"),
                 ("state", "present"),
             ]),
@@ -780,7 +780,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "nested\n"),
                 ("state", "present"),
             ]),
@@ -793,11 +793,11 @@ mod tests {
     }
 
     #[test]
-    fn missing_targetpath_errors() {
+    fn missing_target_path_errors() {
         let fe = FileExecutor::new(None);
         let result = fe.execute(&make_params(&[("state", "present")]), false);
         assert!(result.error.is_some());
-        assert!(result.error.as_ref().unwrap().contains("targetpath"));
+        assert!(result.error.as_ref().unwrap().contains("target_path"));
     }
 
     #[test]
@@ -815,7 +815,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "key = val\n  sub = nested\n"),
                 ("baseindent", "2"),
             ]),
@@ -869,7 +869,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello world"),
                 ("stream_edit", &script),
             ]),
@@ -898,7 +898,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello\nworld"),
                 ("stream_edit", &scripts_json),
             ]),
@@ -925,7 +925,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello"),
                 ("stream_edit", &script),
             ]),
@@ -948,7 +948,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello"),
                 ("stream_edit", "/nonexistent/script.sh"),
             ]),
@@ -972,7 +972,7 @@ mod tests {
         // First run: creates the file.
         let result1 = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello"),
                 ("stream_edit", &script),
             ]),
@@ -984,7 +984,7 @@ mod tests {
         // Second run: content and script unchanged, file matches → no-op.
         let result2 = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello"),
                 ("stream_edit", &script),
                 ("mode", "0644"),
@@ -1020,7 +1020,7 @@ mod tests {
         // First run: pipeline executes, counter=1.
         fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello"),
                 ("stream_edit", &script),
                 ("mode", "0644"),
@@ -1032,7 +1032,7 @@ mod tests {
         // Second run: cache hit, pipeline should NOT execute, counter stays 1.
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello"),
                 ("stream_edit", &script),
                 ("mode", "0644"),
@@ -1054,7 +1054,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("content", "hello\nworld"),
                 ("baseindent", "2"),
                 ("stream_edit", &script),
@@ -1077,7 +1077,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("state", "absent"),
                 ("stream_edit", "/nonexistent/script.sh"),
             ]),
@@ -1104,7 +1104,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "new content\n"),
                 ("mode", "0644"),
                 ("backup", "true"),
@@ -1143,7 +1143,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", content),
                 ("mode", "0644"),
                 ("backup", "true"),
@@ -1178,7 +1178,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "new content\n"),
                 ("mode", "0644"),
                 ("backup", ".orig"),
@@ -1205,7 +1205,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "valid content\n"),
                 ("mode", "0644"),
                 ("validate", "test -f %"),
@@ -1231,7 +1231,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", path_str),
+                ("target_path", path_str),
                 ("content", "bad content\n"),
                 ("mode", "0644"),
                 ("validate", "echo 'invalid config' >&2; exit 1"),
@@ -1260,7 +1260,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("source", source_str),
                 ("mode", "0644"),
             ]),
@@ -1285,7 +1285,7 @@ mod tests {
         let fe = FileExecutor::new(None);
         let result = fe.execute(
             &make_params(&[
-                ("targetpath", target_str),
+                ("target_path", target_str),
                 ("source", source_str),
                 ("content", "inline content\n"),
                 ("mode", "0644"),

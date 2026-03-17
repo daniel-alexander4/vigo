@@ -21,11 +21,11 @@ enum IniElement {
 impl Executor for IniExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let path = params.get("path").cloned().unwrap_or_default();
+        let path = params.get("target_path").cloned().unwrap_or_default();
         let mut result = ResourceResult::new("ini", &path);
 
         if path.is_empty() {
-            result.error = Some("ini executor: path param is required".into());
+            result.error = Some("ini executor: target_path param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -238,7 +238,7 @@ mod tests {
         let params = make_params(&[("key", "port"), ("value", "80")]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("path param is required"));
+        assert!(result.error.unwrap().contains("target_path param is required"));
     }
 
     #[test]
@@ -248,7 +248,7 @@ mod tests {
         std::fs::write(&path, "[app]\n").unwrap();
 
         let exec = IniExecutor;
-        let params = make_params(&[("path", path.to_str().unwrap())]);
+        let params = make_params(&[("target_path", path.to_str().unwrap())]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("key param is required"));
@@ -262,7 +262,7 @@ mod tests {
 
         let exec = IniExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("key", "port"),
             ("state", "present"),
         ]);
@@ -279,7 +279,7 @@ mod tests {
 
         let exec = IniExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("section", "database"),
             ("key", "port"),
             ("value", "5432"),
@@ -303,7 +303,7 @@ mod tests {
 
         let exec = IniExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("section", "app"),
             ("key", "port"),
             ("value", "443"),
@@ -327,7 +327,7 @@ mod tests {
 
         let exec = IniExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("section", "app"),
             ("key", "port"),
             ("value", "443"),
@@ -351,7 +351,7 @@ mod tests {
 
         let exec = IniExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("section", "app"),
             ("key", "port"),
             ("state", "absent"),
@@ -374,7 +374,7 @@ mod tests {
 
         let exec = IniExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("section", "app"),
             ("key", "nonexistent"),
             ("state", "absent"),
@@ -394,7 +394,7 @@ mod tests {
 
         let exec = IniExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("section", "app"),
             ("key", "port"),
             ("value", "443"),

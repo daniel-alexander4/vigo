@@ -6,7 +6,7 @@ Performs regex find-and-replace operations within a file. Supports backreference
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `path` | Yes | -- | Absolute path to the file. |
+| `target_path` | Yes | -- | Absolute path to the file. |
 | `match_pattern` | Yes | -- | Regex pattern to search for. |
 | `replacement` | Yes | -- | Replacement string. Supports backreferences (`$1`, `$2`, etc.). |
 | `occurrences` | No | `all` | How many matches to replace: `all` or `first`. |
@@ -29,7 +29,7 @@ Reads the file, applies the regex replacement, and compares the result to the or
 resources:
   - name: Update listen port
     type: replace
-    path: /etc/nginx/sites-available/default
+    target_path: /etc/nginx/sites-available/default
     match_pattern: "listen \\d+"
     replacement: "listen 8080"
 ```
@@ -40,7 +40,7 @@ resources:
 resources:
   - name: Comment out debug settings
     type: replace
-    path: /etc/myapp.conf
+    target_path: /etc/myapp.conf
     match_pattern: "^(debug_level\\s*=\\s*\\d+)"
     replacement: "# $1"
 ```
@@ -51,7 +51,7 @@ resources:
 resources:
   - name: Update first server entry
     type: replace
-    path: /etc/haproxy/haproxy.cfg
+    target_path: /etc/haproxy/haproxy.cfg
     match_pattern: "server old-host"
     replacement: "server new-host"
     occurrences: first
@@ -63,7 +63,7 @@ resources:
 resources:
   - name: Update database port in production section
     type: replace
-    path: /etc/myapp.conf
+    target_path: /etc/myapp.conf
     match_pattern: "port = \\d+"
     replacement: "port = 5433"
     region_start: "^\\[production\\]"

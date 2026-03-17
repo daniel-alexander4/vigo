@@ -6,7 +6,7 @@ Manages individual lines within a file. Can add, remove, or replace lines based 
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `path` | Yes | -- | Absolute path to the file. |
+| `target_path` | Yes | -- | Absolute path to the file. |
 | `line` | No | -- | The line content to ensure is present or absent. |
 | `match_pattern` | No | -- | Regex pattern to match existing lines. When combined with `line`, replaces matched lines. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
@@ -31,7 +31,7 @@ Reads the file and checks whether the desired line already exists (or matched li
 resources:
   - name: Enable IP forwarding in sysctl.conf
     type: file_line
-    path: /etc/sysctl.conf
+    target_path: /etc/sysctl.conf
     line: "net.ipv4.ip_forward = 1"
     match_pattern: "^net\\.ipv4\\.ip_forward"
 ```
@@ -42,7 +42,7 @@ resources:
 resources:
   - name: Add nameserver
     type: file_line
-    path: /etc/resolv.conf
+    target_path: /etc/resolv.conf
     line: "nameserver 10.0.0.1"
     position: "after:^search"
 ```
@@ -53,7 +53,7 @@ resources:
 resources:
   - name: Remove old entry
     type: file_line
-    path: /etc/hosts
+    target_path: /etc/hosts
     match_pattern: "old-server\\.example\\.com"
     state: absent
 ```
@@ -64,7 +64,7 @@ resources:
 resources:
   - name: Set option in section
     type: file_line
-    path: /etc/myapp.conf
+    target_path: /etc/myapp.conf
     line: "max_connections = 100"
     match_pattern: "^max_connections"
     region_start: "^\\[database\\]"

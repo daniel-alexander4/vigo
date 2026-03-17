@@ -6,7 +6,7 @@ Manages marked blocks of text within a file, delimited by BEGIN/END markers. Use
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `path` | Yes | -- | Absolute path to the file. |
+| `target_path` | Yes | -- | Absolute path to the file. |
 | `block_content` | Yes (for present) | -- | The content to place between the markers. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `label` | No | `managed` | Label used in marker comments to distinguish multiple blocks. |
@@ -32,7 +32,7 @@ Reads the file and looks for the BEGIN/END marker pair. Compares the content bet
 resources:
   - name: SSH hardening config
     type: blockinfile
-    path: /etc/ssh/sshd_config
+    target_path: /etc/ssh/sshd_config
     label: hardening
     block_content: |
       PermitRootLogin no
@@ -46,7 +46,7 @@ resources:
 resources:
   - name: Nginx upstream block
     type: blockinfile
-    path: /etc/nginx/conf.d/upstreams.conf
+    target_path: /etc/nginx/conf.d/upstreams.conf
     label: app-upstream
     block_content: |
       upstream app {
@@ -63,7 +63,7 @@ resources:
 resources:
   - name: Remove old config block
     type: blockinfile
-    path: /etc/myapp.conf
+    target_path: /etc/myapp.conf
     label: deprecated-section
     state: absent
 ```

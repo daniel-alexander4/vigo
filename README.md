@@ -82,7 +82,7 @@ resources:
 
   - name: nginx-conf
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     source: templates/nginx.conf.tmpl
     owner: root
     mode: "0644"
@@ -114,7 +114,7 @@ resources:
 
   - name: pg-conf
     type: file
-    targetpath: /etc/postgresql/16/main/postgresql.conf
+    target_path: /etc/postgresql/16/main/postgresql.conf
     content: |
       shared_buffers = {{ .Vars.shared_buffers }}
       max_connections = {{ .Vars.max_connections }}
@@ -127,7 +127,7 @@ resources:
 
   - name: pg-hba
     type: file
-    targetpath: /etc/postgresql/16/main/pg_hba.conf
+    target_path: /etc/postgresql/16/main/pg_hba.conf
     content: |
       local   all   postgres   peer
       host    all   all        0.0.0.0/0   scram-sha-256
@@ -154,7 +154,7 @@ vars:
 resources:
   - name: redis-conf
     type: file
-    targetpath: /etc/redis/redis.conf
+    target_path: /etc/redis/redis.conf
     content: |
       bind 0.0.0.0
       requirepass {{ .Vars.redis_password }}
@@ -280,7 +280,7 @@ name: backups
 resources:
   - name: backup-script
     type: file
-    targetpath: /usr/local/bin/backup.sh
+    target_path: /usr/local/bin/backup.sh
     content: |
       #!/bin/bash
       pg_dump mydb | gzip > /var/backups/mydb-$(date +%Y%m%d).sql.gz

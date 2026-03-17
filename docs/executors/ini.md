@@ -6,7 +6,7 @@ Manages key-value pairs in INI-style configuration files with optional section s
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `path` | Yes | -- | Absolute path to the INI file. |
+| `target_path` | Yes | -- | Absolute path to the INI file. |
 | `section` | No | -- | Section name (e.g., `database`). If omitted, the key is managed in the global scope (before any section). |
 | `key` | Yes | -- | The key to manage. |
 | `value` | Yes (for present) | -- | The value to set. |
@@ -30,7 +30,7 @@ Reads the file, parses sections and key-value pairs, and checks whether the key 
 resources:
   - name: Set database host
     type: ini
-    path: /etc/myapp/config.ini
+    target_path: /etc/myapp/config.ini
     section: database
     key: host
     value: db.internal
@@ -42,7 +42,7 @@ resources:
 resources:
   - name: Set app mode
     type: ini
-    path: /etc/myapp/config.ini
+    target_path: /etc/myapp/config.ini
     key: mode
     value: production
 ```
@@ -53,7 +53,7 @@ resources:
 resources:
   - name: Set syslog config
     type: ini
-    path: /etc/rsyslog.d/50-default.conf
+    target_path: /etc/rsyslog.d/50-default.conf
     key: MaxMessageSize
     value: "8192"
     separator: " "
@@ -65,7 +65,7 @@ resources:
 resources:
   - name: Remove deprecated setting
     type: ini
-    path: /etc/myapp/config.ini
+    target_path: /etc/myapp/config.ini
     section: database
     key: legacy_mode
     state: absent

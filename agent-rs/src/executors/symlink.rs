@@ -37,7 +37,7 @@ impl SymlinkExecutor {
 impl Executor for SymlinkExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let path_str = params.get("targetpath").map(|s| s.as_str()).unwrap_or("");
+        let path_str = params.get("target_path").map(|s| s.as_str()).unwrap_or("");
         let mut result = ResourceResult::new("symlink", path_str);
 
         let res = execute_symlink(params, dry_run, &mut result);
@@ -55,9 +55,9 @@ fn execute_symlink(
     result: &mut ResourceResult,
 ) -> Result<(), String> {
     let path = params
-        .get("targetpath")
+        .get("target_path")
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "symlink executor: targetpath param is required".to_string())?;
+        .ok_or_else(|| "symlink executor: target_path param is required".to_string())?;
 
     let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
 
@@ -395,7 +395,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
             ]),
             false,
@@ -419,7 +419,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
             ]),
             false,
@@ -442,7 +442,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", new_target.to_str().unwrap()),
             ]),
             false,
@@ -464,7 +464,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link_path.to_str().unwrap()),
+                ("target_path", link_path.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
                 ("force", "true"),
             ]),
@@ -488,7 +488,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link_path.to_str().unwrap()),
+                ("target_path", link_path.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
             ]),
             false,
@@ -508,7 +508,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
             ]),
             false,
@@ -531,7 +531,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", "../sites-available/mysite"),
             ]),
             false,
@@ -557,7 +557,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("state", "absent"),
             ]),
             false,
@@ -578,7 +578,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("state", "absent"),
             ]),
             false,
@@ -597,7 +597,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("state", "absent"),
             ]),
             false,
@@ -618,7 +618,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
             ]),
             true,
@@ -641,7 +641,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
                 ("link_type", "hard"),
             ]),
@@ -665,7 +665,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
                 ("link_type", "hard"),
             ]),
@@ -684,7 +684,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", "/nonexistent/file"),
                 ("link_type", "hard"),
             ]),
@@ -706,7 +706,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
                 ("link_type", "hard"),
                 ("force", "true"),
@@ -730,7 +730,7 @@ mod tests {
         let se = SymlinkExecutor::new();
         let result = se.execute(
             &make_params(&[
-                ("targetpath", link.to_str().unwrap()),
+                ("target_path", link.to_str().unwrap()),
                 ("to", target.to_str().unwrap()),
                 ("link_type", "hard"),
             ]),
@@ -745,7 +745,7 @@ mod tests {
     fn missing_to_errors() {
         let se = SymlinkExecutor::new();
         let result = se.execute(
-            &make_params(&[("targetpath", "/some/link")]),
+            &make_params(&[("target_path", "/some/link")]),
             false,
         );
         assert!(result.error.is_some());
@@ -753,10 +753,10 @@ mod tests {
     }
 
     #[test]
-    fn missing_targetpath_errors() {
+    fn missing_target_path_errors() {
         let se = SymlinkExecutor::new();
         let result = se.execute(&make_params(&[("to", "/some/target")]), false);
         assert!(result.error.is_some());
-        assert!(result.error.as_ref().unwrap().contains("targetpath"));
+        assert!(result.error.as_ref().unwrap().contains("target_path"));
     }
 }

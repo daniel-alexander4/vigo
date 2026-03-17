@@ -6,7 +6,7 @@ Manages file content, permissions, and ownership idempotently. Uses SHA-256 cont
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `targetpath` | Yes | -- | Absolute path to the file. |
+| `target_path` | Yes | -- | Absolute path to the file. |
 | `content` | No | -- | Desired file content. Supports Go templates with `.Traits` and `.Vars` namespaces. |
 | `mode` | No | `0644` | File permission mode (octal string). |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
@@ -107,7 +107,7 @@ cat
 resources:
   - name: app-config
     type: file
-    targetpath: /etc/myapp/config.conf
+    target_path: /etc/myapp/config.conf
     content: |
       # database settings
       host = localhost
@@ -132,7 +132,7 @@ ttl = 300
 resources:
   - name: authorized-keys
     type: file
-    targetpath: /etc/ssh/authorized_keys_list
+    target_path: /etc/ssh/authorized_keys_list
     content: |
       ssh-ed25519 AAAA... alice@example.com
       ssh-ed25519 AAAA... bob@example.com
@@ -164,7 +164,7 @@ vars:
 resources:
   - name: app-config
     type: file
-    targetpath: /etc/myapp/config.toml
+    target_path: /etc/myapp/config.toml
     baseindent: 2
     content: |
       [database]
@@ -184,7 +184,7 @@ You can use Hobnob itself to deploy the transform scripts:
 resources:
   - name: strip-comments-script
     type: file
-    targetpath: /usr/local/bin/strip-comments.sh
+    target_path: /usr/local/bin/strip-comments.sh
     content: |
       #!/bin/sh
       grep -v '^[[:space:]]*#'
@@ -192,7 +192,7 @@ resources:
 
   - name: app-config
     type: file
-    targetpath: /etc/myapp/config.conf
+    target_path: /etc/myapp/config.conf
     content: |
       # database settings
       host = localhost
@@ -212,7 +212,7 @@ Use `depends_on` to ensure the script exists before it's used.
 resources:
   - name: /etc/myapp/config.toml
     type: file
-    targetpath: /etc/myapp/config.toml
+    target_path: /etc/myapp/config.toml
     content: |
       [server]
       port = 8080
@@ -225,11 +225,11 @@ resources:
 resources:
   - name: /etc/myapp
     type: directory
-    targetpath: /etc/myapp
+    target_path: /etc/myapp
 
   - name: /etc/myapp/config.toml
     type: file
-    targetpath: /etc/myapp/config.toml
+    target_path: /etc/myapp/config.toml
     content: |
       [server]
       port = 8080
@@ -242,7 +242,7 @@ resources:
 resources:
   - name: /etc/nginx/nginx.conf
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: |
       worker_processes auto;
     notify: restart-nginx
@@ -260,7 +260,7 @@ resources:
 resources:
   - name: /etc/apt/apt.conf.d/99proxy
     type: file
-    targetpath: /etc/apt/apt.conf.d/99proxy
+    target_path: /etc/apt/apt.conf.d/99proxy
     content: |
       Acquire::http::Proxy "http://proxy.internal:3128";
     when: "os_family('debian')"
@@ -272,7 +272,7 @@ resources:
 resources:
   - name: /etc/myapp/old-config.toml
     type: file
-    targetpath: /etc/myapp/old-config.toml
+    target_path: /etc/myapp/old-config.toml
     state: absent
 ```
 
@@ -284,7 +284,7 @@ Copy content from a local file on the thrall instead of specifying it inline:
 resources:
   - name: hosts-backup
     type: file
-    targetpath: /etc/hosts.managed
+    target_path: /etc/hosts.managed
     source: /etc/hosts
     mode: "0644"
 ```
@@ -299,7 +299,7 @@ Create a backup of the existing file before overwriting:
 resources:
   - name: /etc/nginx/nginx.conf
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: |
       worker_processes auto;
     backup: "true"
@@ -322,7 +322,7 @@ Run a command to validate content before committing the write. The `%` character
 resources:
   - name: /etc/nginx/nginx.conf
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: |
       worker_processes auto;
       events { worker_connections 1024; }

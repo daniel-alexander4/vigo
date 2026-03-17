@@ -18,11 +18,11 @@ pub struct FileLineExecutor;
 impl Executor for FileLineExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let path = params.get("path").cloned().unwrap_or_default();
+        let path = params.get("target_path").cloned().unwrap_or_default();
         let mut result = ResourceResult::new("file_line", &path);
 
         if path.is_empty() {
-            result.error = Some("file_line executor: path param is required".into());
+            result.error = Some("file_line executor: target_path param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -252,7 +252,7 @@ mod tests {
         let params = make_params(&[("line", "some line")]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("path param is required"));
+        assert!(result.error.unwrap().contains("target_path param is required"));
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "third line"),
             ("state", "present"),
         ]);
@@ -286,7 +286,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "second line"),
             ("state", "present"),
         ]);
@@ -304,7 +304,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "port=443"),
             ("match_pattern", "^port="),
             ("state", "present"),
@@ -328,7 +328,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "remove this"),
             ("state", "absent"),
         ]);
@@ -351,7 +351,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "^port="),
             ("state", "absent"),
         ]);
@@ -373,7 +373,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "nonexistent line"),
             ("state", "absent"),
         ]);
@@ -392,7 +392,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "new line"),
             ("state", "present"),
         ]);
@@ -414,7 +414,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "inserted"),
             ("position", "before:^second"),
             ("state", "present"),
@@ -436,7 +436,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "appended"),
             ("position", "before:^MISSING"),
             ("state", "present"),
@@ -463,7 +463,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "port=443"),
             ("match_pattern", "^port="),
             ("state", "present"),
@@ -496,7 +496,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("line", "target-line"),
             ("state", "present"),
             ("region_start", "^# START"),
@@ -519,7 +519,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "^port="),
             ("state", "absent"),
             ("region_start", "^# START"),
@@ -547,7 +547,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "^port="),
             ("state", "absent"),
             ("region_start", "^# START"),
@@ -569,7 +569,7 @@ mod tests {
 
         let exec = FileLineExecutor;
         let params = make_params(&[
-            ("path", path.to_str().unwrap()),
+            ("target_path", path.to_str().unwrap()),
             ("match_pattern", "^port="),
             ("state", "absent"),
             ("region_end", "^# END"),
