@@ -8,6 +8,7 @@ use hobnob::config;
 use hobnob::executors;
 use hobnob::platform;
 use hobnob::policy;
+use hobnob::update;
 use hobnob::proto;
 use hobnob::runner;
 use hobnob::snapshots;
@@ -641,6 +642,15 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         update_cfg: Some(checkin::loop_impl::UpdateConfig {
             api_addr: cli.api_addr.clone(),
             current_version: VERSION.to_string(),
+            tls_certs: if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
+                Some(update::TlsCerts {
+                    ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+                    client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+                    client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
+                })
+            } else {
+                None
+            },
         }),
         state_store,
         server_pubkey_pem: load_server_pubkey(&cli.data_dir),

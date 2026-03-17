@@ -44,6 +44,7 @@ enum StreamExit {
 pub struct UpdateConfig {
     pub api_addr: String,
     pub current_version: String,
+    pub tls_certs: Option<crate::update::TlsCerts>,
 }
 
 /// Configuration for the daemon loop.
@@ -774,12 +775,12 @@ pub async fn daemon_loop(
                     info!("server requested forced update, downloading latest binary");
                     if let Some(ref ucfg) = update_cfg {
                         if !ucfg.api_addr.is_empty() {
-                            crate::update::force_self_update(&ucfg.api_addr).await;
+                            crate::update::force_self_update(&ucfg.api_addr, ucfg.tls_certs.as_ref()).await;
                         }
                     }
                 } else if let Some(ref ucfg) = update_cfg {
                     if !ucfg.api_addr.is_empty() && !ucfg.current_version.is_empty() {
-                        crate::update::check_self_update(&ucfg.api_addr, &ucfg.current_version).await;
+                        crate::update::check_self_update(&ucfg.api_addr, &ucfg.current_version, ucfg.tls_certs.as_ref()).await;
                     }
                 }
 

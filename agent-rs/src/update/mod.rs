@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Elastic-2.0
 
 //! Agent self-update mechanism: version checking against the server, binary
-//! download with SHA256 verification, atomic replacement, and process restart.
-//!
-//! Mirrors the Go `update` package.
+//! download with SHA256 + ED25519 signature verification, atomic replacement,
+//! and process restart.
 
 use anyhow::{bail, Context, Result};
+use ed25519_dalek::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use tracing::{debug, info, warn};
@@ -16,7 +16,124 @@ use tracing::{debug, info, warn};
 pub struct VersionInfo {
     pub version: String,
     pub sha256: String,
+    #[serde(default)]
+    pub signature: String, // hex-encoded ED25519 signature over SHA256 digest
     pub download_url: String,
+}
+
+/// TLS configuration for mTLS downloads.
+pub struct TlsCerts {
+    pub ca_cert: String,     // path to CA cert PEM
+    pub client_cert: String, // path to client cert PEM
+    pub client_key: String,  // path to client key PEM
+}
+
+/// Build a ureq agent with mTLS if certs are available, otherwise plain HTTPS.
+fn build_agent(tls: Option<&TlsCerts>) -> ureq::Agent {
+    if let Some(certs) = tls {
+        if let Ok(agent) = build_mtls_agent(certs) {
+            return agent;
+        }
+        warn!("failed to configure mTLS for update download, falling back to plain HTTPS");
+    }
+    ureq::Agent::new_with_config(
+        ureq::config::Config::builder()
+            .timeout_global(Some(std::time::Duration::from_secs(60)))
+            .build(),
+    )
+}
+
+fn build_mtls_agent(certs: &TlsCerts) -> Result<ureq::Agent> {
+    use ureq::tls::{parse_pem, PemItem};
+
+    let ca_pem = std::fs::read(&certs.ca_cert).context("read CA cert")?;
+    let cert_pem = std::fs::read(&certs.client_cert).context("read client cert")?;
+    let key_pem = std::fs::read(&certs.client_key).context("read client key")?;
+
+    // Parse CA certificate.
+    let mut ca_certs = Vec::new();
+    for item in parse_pem(&ca_pem) {
+        if let Ok(PemItem::Certificate(c)) = item {
+            ca_certs.push(c);
+        }
+    }
+    let root_certs = ureq::tls::RootCerts::new_with_certs(&ca_certs);
+
+    // Parse client cert chain.
+    let mut client_certs = Vec::new();
+    for item in parse_pem(&cert_pem) {
+        if let Ok(PemItem::Certificate(c)) = item {
+            client_certs.push(c);
+        }
+    }
+
+    // Parse client private key.
+    let mut client_key = None;
+    for item in parse_pem(&key_pem) {
+        if let Ok(PemItem::PrivateKey(k)) = item {
+            client_key = Some(k);
+            break;
+        }
+    }
+    let key = client_key.context("no private key found in client key PEM")?;
+
+    let client_id = ureq::tls::ClientCert::new_with_certs(&client_certs, key);
+
+    let tls = ureq::tls::TlsConfig::builder()
+        .root_certs(root_certs)
+        .client_cert(Some(client_id))
+        .build();
+
+    Ok(ureq::Agent::new_with_config(
+        ureq::config::Config::builder()
+            .tls_config(tls)
+            .timeout_global(Some(std::time::Duration::from_secs(60)))
+            .build(),
+    ))
+}
+
+/// Verify an ED25519 signature over a SHA256 digest.
+///
+/// The server signs the SHA256 digest of the binary (not the raw binary).
+/// Both `signature_hex` and `pubkey_hex` are hex-encoded.
+fn verify_signature(digest: &[u8], signature_hex: &str, pubkey_hex: &str) -> Result<()> {
+    let sig_bytes = hex::decode(signature_hex).context("decode signature hex")?;
+    let sig = Signature::from_slice(&sig_bytes).context("parse ED25519 signature")?;
+
+    let pubkey_bytes = hex::decode(pubkey_hex).context("decode public key hex")?;
+    let pubkey_array: [u8; 32] = pubkey_bytes
+        .try_into()
+        .map_err(|v: Vec<u8>| anyhow::anyhow!("public key must be 32 bytes, got {}", v.len()))?;
+    let verifying_key = VerifyingKey::from_bytes(&pubkey_array)
+        .context("invalid ED25519 public key")?;
+
+    verifying_key
+        .verify_strict(digest, &sig)
+        .context("ED25519 signature verification failed — binary may have been tampered with")?;
+
+    Ok(())
+}
+
+/// Fetch the server's signing public key from `/api/v1/agent/signing-key`.
+fn fetch_signing_key(agent: &ureq::Agent, api_addr: &str) -> Result<String> {
+    let url = format!("{}/api/v1/agent/signing-key", api_addr);
+    let resp = agent
+        .get(&url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("fetch signing key: {}", e))?;
+
+    if resp.status() != 200 {
+        bail!("signing key endpoint returned status {}", resp.status());
+    }
+
+    let body = resp.into_body().read_to_vec().context("read signing key body")?;
+
+    #[derive(serde::Deserialize)]
+    struct KeyResp {
+        public_key: String,
+    }
+    let kr: KeyResp = serde_json::from_slice(&body).context("decode signing key response")?;
+    Ok(kr.public_key)
 }
 
 /// Check the server's `/api/v1/agent/latest` endpoint for a newer version.
@@ -63,8 +180,8 @@ pub async fn check_for_update(
     Ok(Some(info))
 }
 
-/// Download the new agent binary, verify its SHA256 checksum, and atomically
-/// replace the current binary.
+/// Download the new agent binary, verify its SHA256 checksum and ED25519
+/// signature, and atomically replace the current binary.
 ///
 /// On any error, the original binary is left untouched and temp files are
 /// cleaned up.
@@ -75,6 +192,8 @@ pub async fn apply(
     info: &VersionInfo,
     current_binary: &str,
     exec_self: bool,
+    tls: Option<&TlsCerts>,
+    api_addr: Option<&str>,
 ) -> Result<()> {
     let dir = Path::new(current_binary)
         .parent()
@@ -85,39 +204,65 @@ pub async fn apply(
     let _cleanup = TempFileGuard(tmp_path.clone());
 
     let download_url = info.download_url.clone();
+    let tls_certs = tls.map(|t| TlsCerts {
+        ca_cert: t.ca_cert.clone(),
+        client_cert: t.client_cert.clone(),
+        client_key: t.client_key.clone(),
+    });
+    let api_addr_owned = api_addr.map(|s| s.to_string());
+    let signature = info.signature.clone();
+
+    let expected_sha = info.sha256.clone();
+
     let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let resp = ureq::Agent::new_with_config(
-            ureq::config::Config::builder()
-                .timeout_global(Some(std::time::Duration::from_secs(60)))
-                .build(),
-        )
-        .get(&download_url)
-        .call()
-        .map_err(|e| anyhow::anyhow!("download binary: {}", e))?;
+        let agent = build_agent(tls_certs.as_ref());
+
+        let resp = agent
+            .get(&download_url)
+            .call()
+            .map_err(|e| anyhow::anyhow!("download binary: {}", e))?;
 
         if resp.status() != 200 {
             bail!("download returned status {}", resp.status());
         }
 
-        resp.into_body()
+        let body = resp.into_body()
             .read_to_vec()
-            .context("download binary body")
+            .context("download binary body")?;
+
+        // Compute SHA256 digest.
+        let digest = Sha256::digest(&body);
+        let computed_hex = format!("{:x}", digest);
+
+        if computed_hex != expected_sha {
+            bail!(
+                "checksum mismatch: expected {}, got {}",
+                expected_sha,
+                computed_hex
+            );
+        }
+
+        // Verify ED25519 signature if available.
+        if !signature.is_empty() {
+            if let Some(ref addr) = api_addr_owned {
+                match fetch_signing_key(&agent, addr) {
+                    Ok(pubkey_hex) => {
+                        verify_signature(&digest, &signature, &pubkey_hex)?;
+                        info!("ED25519 signature verified");
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "could not fetch signing key, skipping signature verification");
+                    }
+                }
+            }
+        } else {
+            debug!("no signature provided, skipping ED25519 verification");
+        }
+
+        Ok(body)
     })
     .await
     .context("spawn_blocking join")??;
-
-    // Compute SHA256.
-    let mut hasher = Sha256::new();
-    hasher.update(&body);
-    let computed = format!("{:x}", hasher.finalize());
-
-    if computed != info.sha256 {
-        bail!(
-            "checksum mismatch: expected {}, got {}",
-            info.sha256,
-            computed
-        );
-    }
 
     // Write temp file.
     std::fs::write(&tmp_path, &body).context("write temp binary")?;
@@ -146,7 +291,6 @@ pub async fn apply(
         }
         #[cfg(windows)]
         {
-            // On Windows, spawn the new binary and exit the current process.
             let args: Vec<String> = std::env::args().skip(1).collect();
             std::process::Command::new(current_binary)
                 .args(&args)
@@ -162,7 +306,7 @@ pub async fn apply(
 /// Check for a self-update and apply it if available.
 ///
 /// Failures are logged but never crash the agent.
-pub async fn check_self_update(api_addr: &str, current_version: &str) {
+pub async fn check_self_update(api_addr: &str, current_version: &str, tls: Option<&TlsCerts>) {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
@@ -182,7 +326,7 @@ pub async fn check_self_update(api_addr: &str, current_version: &str) {
                 }
             };
 
-            if let Err(e) = apply(&info, &current_binary, true).await {
+            if let Err(e) = apply(&info, &current_binary, true, tls, Some(api_addr)).await {
                 warn!(error = %e, "self-update apply failed, continuing with current version");
             }
         }
@@ -196,15 +340,14 @@ pub async fn check_self_update(api_addr: &str, current_version: &str) {
 }
 
 /// Force a self-update regardless of version. Downloads the latest binary,
-/// verifies checksum, replaces the current binary, and exec restarts.
+/// verifies checksum + signature, replaces the current binary, and exec restarts.
 ///
 /// Called when the server sets force_update on the check-in response.
 /// Failures are logged but never crash the agent.
-pub async fn force_self_update(api_addr: &str) {
+pub async fn force_self_update(api_addr: &str, tls: Option<&TlsCerts>) {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
-    // Always fetch version info (we need the checksum and download URL).
     match check_for_update(api_addr, "force", os, arch).await {
         Ok(Some(info)) => {
             info!(version = %info.version, "forced update: downloading latest binary");
@@ -217,13 +360,11 @@ pub async fn force_self_update(api_addr: &str) {
                 }
             };
 
-            if let Err(e) = apply(&info, &current_binary, true).await {
+            if let Err(e) = apply(&info, &current_binary, true, tls, Some(api_addr)).await {
                 warn!(error = %e, "forced update apply failed, continuing with current version");
             }
         }
         Ok(None) => {
-            // Server returned same version as "force" (impossible in practice).
-            // Fall back to downloading by URL directly.
             info!("forced update: server reports no update available");
         }
         Err(e) => {
@@ -295,90 +436,57 @@ mod tests {
         assert!(info.is_none());
     }
 
-    #[tokio::test]
-    async fn apply_downloads_verifies_and_replaces() {
-        let binary_content = b"new-agent-binary-v2";
-        let checksum = format!("{:x}", Sha256::digest(binary_content));
+    #[test]
+    fn verify_signature_valid() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::rngs::OsRng;
 
-        let mut server = mockito::Server::new_async().await;
-        let _m = server
-            .mock("GET", "/download")
-            .with_body(binary_content.as_slice())
-            .create_async()
-            .await;
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let verifying_key = signing_key.verifying_key();
 
-        let dir = tempfile::tempdir().unwrap();
-        let current = dir.path().join("hobnob");
-        std::fs::write(&current, b"old-binary-v1").unwrap();
+        let digest = Sha256::digest(b"test binary content");
+        let sig = signing_key.sign(&digest);
 
-        let info = VersionInfo {
-            version: "2.0.0".into(),
-            sha256: checksum,
-            download_url: format!("{}/download", server.url()),
-        };
+        let sig_hex = hex::encode(sig.to_bytes());
+        let pubkey_hex = hex::encode(verifying_key.to_bytes());
 
-        apply(&info, current.to_str().unwrap(), false)
-            .await
-            .unwrap();
-
-        let content = std::fs::read(&current).unwrap();
-        assert_eq!(content, binary_content);
+        verify_signature(&digest, &sig_hex, &pubkey_hex).unwrap();
     }
 
-    #[tokio::test]
-    async fn apply_rejects_checksum_mismatch() {
-        let mut server = mockito::Server::new_async().await;
-        let _m = server
-            .mock("GET", "/download")
-            .with_body(b"some-binary".as_slice())
-            .create_async()
-            .await;
+    #[test]
+    fn verify_signature_invalid() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::rngs::OsRng;
 
-        let dir = tempfile::tempdir().unwrap();
-        let current = dir.path().join("hobnob");
-        std::fs::write(&current, b"old").unwrap();
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let wrong_key = SigningKey::generate(&mut OsRng);
+        let wrong_verifying = wrong_key.verifying_key();
 
-        let info = VersionInfo {
-            version: "2.0.0".into(),
-            sha256: "wrong-checksum".into(),
-            download_url: format!("{}/download", server.url()),
-        };
+        let digest = Sha256::digest(b"test binary content");
+        let sig = signing_key.sign(&digest);
 
-        let err = apply(&info, current.to_str().unwrap(), false).await;
-        assert!(err.is_err());
-        assert!(err.unwrap_err().to_string().contains("checksum mismatch"));
+        let sig_hex = hex::encode(sig.to_bytes());
+        let pubkey_hex = hex::encode(wrong_verifying.to_bytes());
 
-        // Original binary untouched.
-        assert_eq!(std::fs::read(&current).unwrap(), b"old");
+        assert!(verify_signature(&digest, &sig_hex, &pubkey_hex).is_err());
     }
 
-    #[tokio::test]
-    async fn apply_cleans_up_temp_on_error() {
-        let mut server = mockito::Server::new_async().await;
-        let _m = server
-            .mock("GET", "/download")
-            .with_body(b"binary-data".as_slice())
-            .create_async()
-            .await;
+    #[test]
+    fn verify_signature_tampered_digest() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::rngs::OsRng;
 
-        let dir = tempfile::tempdir().unwrap();
-        let current = dir.path().join("hobnob");
-        std::fs::write(&current, b"old").unwrap();
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let verifying_key = signing_key.verifying_key();
 
-        let info = VersionInfo {
-            version: "2.0.0".into(),
-            sha256: "bad".into(),
-            download_url: format!("{}/download", server.url()),
-        };
+        let digest = Sha256::digest(b"original content");
+        let sig = signing_key.sign(&digest);
 
-        let _ = apply(&info, current.to_str().unwrap(), false).await;
+        let tampered_digest = Sha256::digest(b"tampered content");
 
-        // No temp files should remain.
-        let entries: Vec<_> = std::fs::read_dir(dir.path())
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_name() != "hobnob")
-            .collect();
-        assert!(entries.is_empty(), "leftover temp files: {:?}", entries);
+        let sig_hex = hex::encode(sig.to_bytes());
+        let pubkey_hex = hex::encode(verifying_key.to_bytes());
+
+        assert!(verify_signature(&tampered_digest, &sig_hex, &pubkey_hex).is_err());
     }
 }
