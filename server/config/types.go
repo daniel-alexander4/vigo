@@ -102,6 +102,7 @@ type ServerConfig struct {
 	RateLimit  RateLimitSection `yaml:"rate_limit"`
 	Maintenance MaintenanceSection `yaml:"maintenance"`
 	Paths      PathsSection     `yaml:"paths"`
+	Peers      PeersSection     `yaml:"peers"`
 }
 
 // PathsSection configures directory paths for server subsystems.
@@ -154,6 +155,18 @@ type ExportSection struct {
 type PublishSection struct {
 	ComplianceThreshold int    `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
 	RollbackWindow      string `yaml:"rollback_window"`      // duration to watch after reload (default "5m")
+}
+
+// PeersSection configures peer replication for server redundancy.
+type PeersSection struct {
+	Role    string      `yaml:"role"`    // "primary" or "peer" (default "primary")
+	Servers []PeerEntry `yaml:"servers"` // list of peer server addresses
+}
+
+// PeerEntry defines a single peer server.
+type PeerEntry struct {
+	Addr         string `yaml:"addr"`          // gRPC address (host:port)
+	SyncInterval string `yaml:"sync_interval"` // push interval (default "10s")
 }
 
 // BackupSection configures continuous SQLite WAL replication via Litestream.

@@ -6,6 +6,8 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,6 +29,7 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
+	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 	hobnobai "github.com/hobnob/hobnob/server/ai"
 	"github.com/hobnob/hobnob/server/api"
 	hobnobauth "github.com/hobnob/hobnob/server/auth"
@@ -47,6 +50,7 @@ import (
 	"github.com/hobnob/hobnob/server/secrets"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
 	"github.com/hobnob/hobnob/server/tasks"
+	"github.com/hobnob/hobnob/server/peer"
 	"github.com/hobnob/hobnob/server/watcher"
 	"github.com/hobnob/hobnob/server/webhook"
 	"github.com/hobnob/hobnob/server/workflows"
@@ -85,6 +89,7 @@ func run() error {
 	// Determine config file path (the one env var that must remain — it
 	// bootstraps everything else).
 	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server.yaml")
+	serverRoot := filepath.Dir(configFile)
 
 	// Load secrets backend config (first pass — no secret resolution).
 	secretsCfg, err := config.LoadSecretsConfig(configFile)
@@ -430,6 +435,12 @@ func run() error {
 	// Initialize bundle signer for compiled promises.
 	bundleSigner, bundleMaxAge := initBundleSigner(cfg)
 
+	// Build fallback server addresses from peer config (returned to agents on registration).
+	var fallbackServers []string
+	for _, pe := range cfg.Peers.Servers {
+		fallbackServers = append(fallbackServers, pe.Addr)
+	}
+
 	// Create and start gRPC server.
 	grpcSrv, _, traitsBatch, traitsPruner, agentSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:             cfg.Server.TLS.CertFile,
@@ -462,9 +473,43 @@ func run() error {
 		RunBatcher:           runBatcher,
 		BundleSigner:        bundleSigner,
 		BundleMaxAge:        bundleMaxAge,
+		FallbackServers:     fallbackServers,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
+	}
+
+	// Wire peer replication (when peers section is configured).
+	if len(cfg.Peers.Servers) > 0 {
+		peerRole := cfg.Peers.Role
+		if peerRole == "" {
+			peerRole = "primary"
+		}
+
+		peerSvc := peer.NewService(serverRoot, peerRole, func() {
+			if err := configStore.Reload(); err != nil {
+				slog.Error("peer-triggered config reload failed", "error", err)
+			}
+		})
+
+		pb.RegisterHobnobPeerServer(grpcSrv, peerSvc)
+		slog.Info("peer replication enabled", "role", peerRole, "peers", len(cfg.Peers.Servers))
+
+		// Primary role: start pushing file changes to peers.
+		if peerRole == "primary" {
+			peerTLS, peerTLSErr := buildPeerTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+			if peerTLSErr != nil {
+				return fmt.Errorf("building peer TLS config: %w", peerTLSErr)
+			}
+
+			primary := peer.NewPrimary(serverRoot, cfg.Peers.Servers, peerTLS)
+			go func() {
+				if err := primary.Start(ctx); err != nil && ctx.Err() == nil {
+					slog.Error("peer primary error", "error", err)
+				}
+			}()
+			defer primary.Stop()
+		}
 	}
 
 	// Start async flushers with staggered offsets to avoid SQLite write lock
@@ -644,7 +689,6 @@ func run() error {
 	}
 
 	// Backup API handler.
-	serverRoot := filepath.Dir(configFile)
 	backupHandler := api.NewBackupHandler(configFile, serverRoot, dbDriver, cfg.Database.DSN, version, authMethod)
 
 	// Load workflow definitions and create engine.
@@ -1231,4 +1275,29 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 	default:
 		return nil, fmt.Errorf("unknown auth method: %q (must be basic, oidc, or isowebauth)", method)
 	}
+}
+
+// buildPeerTLS creates a *tls.Config for the primary's outbound connections to peers.
+// Uses the same server cert/key/CA as the main gRPC server (mutual TLS).
+func buildPeerTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("loading cert/key: %w", err)
+	}
+
+	caCert, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("reading CA file: %w", err)
+	}
+
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to add CA cert to pool")
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caPool,
+		MinVersion:   tls.VersionTLS13,
+	}, nil
 }

@@ -172,6 +172,18 @@ watcher:
 #   hub_addr: "hub.example.com:1530"            # enables spoke→hub status reporting
 
 
+# ── Peer Replication ──────────────────────────────────────────────────────
+# Primary/peer server redundancy. Omit for single-server deployments.
+# The primary pushes config, secrets, and TLS files to peers via gRPC.
+# Peer addresses are returned to agents on registration as fallback_servers.
+
+# peers:
+#   role: primary                              # primary (default) | peer
+#   servers:
+#     - addr: "peer1.example.com:1530"
+#     - addr: "peer2.example.com:1530"
+
+
 # ── AI Assistant ──────────────────────────────────────────────────────────
 # Disabled by default. Ollama (free, local) is the default provider.
 

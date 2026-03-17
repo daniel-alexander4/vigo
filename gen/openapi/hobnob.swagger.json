@@ -10,6 +10,9 @@
     },
     {
       "name": "HobnobAdmin"
+    },
+    {
+      "name": "HobnobPeer"
     }
   ],
   "consumes": [
@@ -33,7 +36,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -54,7 +57,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -87,7 +90,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -118,7 +121,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -141,7 +144,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -174,7 +177,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -206,7 +209,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -229,7 +232,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -262,7 +265,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -302,7 +305,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -333,7 +336,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -365,7 +368,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -394,7 +397,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -425,7 +428,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -456,7 +459,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -495,7 +498,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -534,7 +537,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -573,7 +576,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -606,7 +609,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -627,7 +630,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -660,7 +663,7 @@
           "default": {
             "description": "An unexpected error response.",
             "schema": {
-              "$ref": "#/definitions/rpcStatus"
+              "$ref": "#/definitions/googleRpcStatus"
             }
           }
         },
@@ -698,16 +701,7 @@
         }
       }
     },
-    "protobufAny": {
-      "type": "object",
-      "properties": {
-        "@type": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": {}
-    },
-    "rpcStatus": {
+    "googleRpcStatus": {
       "type": "object",
       "properties": {
         "code": {
@@ -725,6 +719,15 @@
           }
         }
       }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
     },
     "v1AddApprovedPatternRequest": {
       "type": "object",

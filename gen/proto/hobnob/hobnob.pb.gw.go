@@ -1014,6 +1014,103 @@ func local_request_HobnobAdmin_ReportSpokeStatus_0(ctx context.Context, marshale
 	return msg, metadata, err
 }
 
+func request_HobnobPeer_SyncStream_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobPeerClient, req *http.Request, pathParams map[string]string) (HobnobPeer_SyncStreamClient, runtime.ServerMetadata, error) {
+	var metadata runtime.ServerMetadata
+	stream, err := client.SyncStream(ctx)
+	if err != nil {
+		grpclog.Errorf("Failed to start streaming: %v", err)
+		return nil, metadata, err
+	}
+	dec := marshaler.NewDecoder(req.Body)
+	handleSend := func() error {
+		var protoReq PeerSyncMessage
+		err := dec.Decode(&protoReq)
+		if errors.Is(err, io.EOF) {
+			return err
+		}
+		if err != nil {
+			grpclog.Errorf("Failed to decode request: %v", err)
+			return status.Errorf(codes.InvalidArgument, "Failed to decode request: %v", err)
+		}
+		if err := stream.Send(&protoReq); err != nil {
+			grpclog.Errorf("Failed to send request: %v", err)
+			return err
+		}
+		return nil
+	}
+	go func() {
+		for {
+			if err := handleSend(); err != nil {
+				break
+			}
+		}
+		if err := stream.CloseSend(); err != nil {
+			grpclog.Errorf("Failed to terminate client stream: %v", err)
+		}
+	}()
+	header, err := stream.Header()
+	if err != nil {
+		grpclog.Errorf("Failed to get header from client: %v", err)
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
+func request_HobnobPeer_Promote_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobPeerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PeerPromoteRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.Promote(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_HobnobPeer_Promote_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobPeerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PeerPromoteRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.Promote(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_HobnobPeer_Status_0(ctx context.Context, marshaler runtime.Marshaler, client HobnobPeerClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PeerStatusRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.Status(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_HobnobPeer_Status_0(ctx context.Context, marshaler runtime.Marshaler, server HobnobPeerServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq PeerStatusRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.Status(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterHobnobAgentHandlerServer registers the http handlers for service HobnobAgent to "mux".
 // UnaryRPC     :call HobnobAgentServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -1636,6 +1733,62 @@ func RegisterHobnobAdminHandlerServer(ctx context.Context, mux *runtime.ServeMux
 			return
 		}
 		forward_HobnobAdmin_ReportSpokeStatus_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+
+	return nil
+}
+
+// RegisterHobnobPeerHandlerServer registers the http handlers for service HobnobPeer to "mux".
+// UnaryRPC     :call HobnobPeerServer directly.
+// StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterHobnobPeerHandlerFromEndpoint instead.
+// GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
+func RegisterHobnobPeerHandlerServer(ctx context.Context, mux *runtime.ServeMux, server HobnobPeerServer) error {
+	mux.Handle(http.MethodPost, pattern_HobnobPeer_SyncStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
+	})
+	mux.Handle(http.MethodPost, pattern_HobnobPeer_Promote_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobPeer/Promote", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobPeer/Promote"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_HobnobPeer_Promote_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_HobnobPeer_Promote_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_HobnobPeer_Status_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/hobnob.v1.HobnobPeer/Status", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobPeer/Status"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_HobnobPeer_Status_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_HobnobPeer_Status_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -2318,4 +2471,106 @@ var (
 	forward_HobnobAdmin_SetReassignment_0       = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_SyncConfig_0            = runtime.ForwardResponseMessage
 	forward_HobnobAdmin_ReportSpokeStatus_0     = runtime.ForwardResponseMessage
+)
+
+// RegisterHobnobPeerHandlerFromEndpoint is same as RegisterHobnobPeerHandler but
+// automatically dials to "endpoint" and closes the connection when "ctx" gets done.
+func RegisterHobnobPeerHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
+	conn, err := grpc.NewClient(endpoint, opts...)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if cerr := conn.Close(); cerr != nil {
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
+			}
+			return
+		}
+		go func() {
+			<-ctx.Done()
+			if cerr := conn.Close(); cerr != nil {
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
+			}
+		}()
+	}()
+	return RegisterHobnobPeerHandler(ctx, mux, conn)
+}
+
+// RegisterHobnobPeerHandler registers the http handlers for service HobnobPeer to "mux".
+// The handlers forward requests to the grpc endpoint over "conn".
+func RegisterHobnobPeerHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return RegisterHobnobPeerHandlerClient(ctx, mux, NewHobnobPeerClient(conn))
+}
+
+// RegisterHobnobPeerHandlerClient registers the http handlers for service HobnobPeer
+// to "mux". The handlers forward requests to the grpc endpoint over the given implementation of "HobnobPeerClient".
+// Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "HobnobPeerClient"
+// doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
+// "HobnobPeerClient" to call the correct interceptors. This client ignores the HTTP middlewares.
+func RegisterHobnobPeerHandlerClient(ctx context.Context, mux *runtime.ServeMux, client HobnobPeerClient) error {
+	mux.Handle(http.MethodPost, pattern_HobnobPeer_SyncStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobPeer/SyncStream", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobPeer/SyncStream"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_HobnobPeer_SyncStream_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_HobnobPeer_SyncStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_HobnobPeer_Promote_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobPeer/Promote", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobPeer/Promote"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_HobnobPeer_Promote_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_HobnobPeer_Promote_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_HobnobPeer_Status_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/hobnob.v1.HobnobPeer/Status", runtime.WithHTTPPathPattern("/hobnob.v1.HobnobPeer/Status"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_HobnobPeer_Status_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_HobnobPeer_Status_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	return nil
+}
+
+var (
+	pattern_HobnobPeer_SyncStream_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobPeer", "SyncStream"}, ""))
+	pattern_HobnobPeer_Promote_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobPeer", "Promote"}, ""))
+	pattern_HobnobPeer_Status_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"hobnob.v1.HobnobPeer", "Status"}, ""))
+)
+
+var (
+	forward_HobnobPeer_SyncStream_0 = runtime.ForwardResponseStream
+	forward_HobnobPeer_Promote_0    = runtime.ForwardResponseMessage
+	forward_HobnobPeer_Status_0     = runtime.ForwardResponseMessage
 )

@@ -83,6 +83,7 @@ type ServerConfig struct {
 	BundleSigner     *BundleSigner     // signs policy bundles (nil = no signing)
 	BundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	RateLimit        config.RateLimitSection // rate limiting config
+	FallbackServers  []string          // peer server addresses returned to agents on registration
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -187,6 +188,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		bundleMaxAge:     cfg.BundleMaxAge,
 		baseInterval:     cfg.Interval,
 		jitterPercent:    cfg.JitterPercent,
+		fallbackServers:  cfg.FallbackServers,
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {

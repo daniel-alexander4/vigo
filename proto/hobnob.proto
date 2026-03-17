@@ -230,6 +230,7 @@ message RegisterResponse {
   string message = 3;
   string spoke_addr = 4;    // if set, agent should connect to this spoke for check-ins
   string server_pubkey_pem = 5; // server's ED25519 public key for bundle signature verification
+  repeated string fallback_servers = 6; // peer server addresses for agent failover
 }
 
 message CheckInRequest {
@@ -879,3 +880,61 @@ message SpokeStatusReport {
 }
 
 message SpokeStatusAck {}
+
+// =============================================================================
+// Peer replication service (primary↔peer, port 1530)
+// =============================================================================
+
+service HobnobPeer {
+  // SyncStream is a bidirectional stream between primary and peer.
+  // Primary pushes file changes; peer acknowledges receipt.
+  rpc SyncStream(stream PeerSyncMessage) returns (stream PeerSyncMessage);
+
+  // Promote requests the target server to become primary.
+  rpc Promote(PeerPromoteRequest) returns (PeerPromoteResponse);
+
+  // Status returns the server's current peer role and sync state.
+  rpc Status(PeerStatusRequest) returns (PeerStatusResponse);
+}
+
+message PeerSyncMessage {
+  oneof payload {
+    PeerFileChange file_change = 1;
+    PeerSyncAck ack = 2;
+    PeerFullSync full_sync = 3;
+  }
+}
+
+message PeerFileChange {
+  string path = 1;           // relative to /srv/hobnob (e.g., "hnb/proposed/modules/nginx.hnb")
+  bytes content = 2;         // file contents (empty = deletion)
+  int64 mtime_unix = 3;      // modification time (unix seconds)
+  uint32 mode = 4;           // file permissions
+}
+
+message PeerSyncAck {
+  string path = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+message PeerFullSync {
+  repeated PeerFileChange files = 1;
+}
+
+message PeerPromoteRequest {}
+
+message PeerPromoteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PeerStatusRequest {}
+
+message PeerStatusResponse {
+  string role = 1;            // "primary" or "peer"
+  string primary_addr = 2;    // address of current primary (empty if self is primary)
+  int64 last_sync_unix = 3;   // unix timestamp of last successful sync
+  int64 files_synced = 4;     // total files in sync
+  uint64 config_version = 5;  // current config version (for split-brain resolution)
+}

@@ -46,6 +46,7 @@ type AgentService struct {
 	bundlePubKeyPEM  string            // cached PEM of bundle signing public key
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
 	jitterPercent    int32             // jitter percentage sent to agents
+	fallbackServers  []string          // peer server addresses returned to agents on registration
 }
 
 // isRecentlyActive returns true if the thrall has checked in within 2× the check-in interval.

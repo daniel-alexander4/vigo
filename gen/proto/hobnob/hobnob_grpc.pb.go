@@ -1396,3 +1396,184 @@ var HobnobAdmin_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "hobnob.proto",
 }
+
+const (
+	HobnobPeer_SyncStream_FullMethodName = "/hobnob.v1.HobnobPeer/SyncStream"
+	HobnobPeer_Promote_FullMethodName    = "/hobnob.v1.HobnobPeer/Promote"
+	HobnobPeer_Status_FullMethodName     = "/hobnob.v1.HobnobPeer/Status"
+)
+
+// HobnobPeerClient is the client API for HobnobPeer service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type HobnobPeerClient interface {
+	// SyncStream is a bidirectional stream between primary and peer.
+	// Primary pushes file changes; peer acknowledges receipt.
+	SyncStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[PeerSyncMessage, PeerSyncMessage], error)
+	// Promote requests the target server to become primary.
+	Promote(ctx context.Context, in *PeerPromoteRequest, opts ...grpc.CallOption) (*PeerPromoteResponse, error)
+	// Status returns the server's current peer role and sync state.
+	Status(ctx context.Context, in *PeerStatusRequest, opts ...grpc.CallOption) (*PeerStatusResponse, error)
+}
+
+type hobnobPeerClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewHobnobPeerClient(cc grpc.ClientConnInterface) HobnobPeerClient {
+	return &hobnobPeerClient{cc}
+}
+
+func (c *hobnobPeerClient) SyncStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[PeerSyncMessage, PeerSyncMessage], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &HobnobPeer_ServiceDesc.Streams[0], HobnobPeer_SyncStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PeerSyncMessage, PeerSyncMessage]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type HobnobPeer_SyncStreamClient = grpc.BidiStreamingClient[PeerSyncMessage, PeerSyncMessage]
+
+func (c *hobnobPeerClient) Promote(ctx context.Context, in *PeerPromoteRequest, opts ...grpc.CallOption) (*PeerPromoteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PeerPromoteResponse)
+	err := c.cc.Invoke(ctx, HobnobPeer_Promote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hobnobPeerClient) Status(ctx context.Context, in *PeerStatusRequest, opts ...grpc.CallOption) (*PeerStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PeerStatusResponse)
+	err := c.cc.Invoke(ctx, HobnobPeer_Status_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// HobnobPeerServer is the server API for HobnobPeer service.
+// All implementations must embed UnimplementedHobnobPeerServer
+// for forward compatibility.
+type HobnobPeerServer interface {
+	// SyncStream is a bidirectional stream between primary and peer.
+	// Primary pushes file changes; peer acknowledges receipt.
+	SyncStream(grpc.BidiStreamingServer[PeerSyncMessage, PeerSyncMessage]) error
+	// Promote requests the target server to become primary.
+	Promote(context.Context, *PeerPromoteRequest) (*PeerPromoteResponse, error)
+	// Status returns the server's current peer role and sync state.
+	Status(context.Context, *PeerStatusRequest) (*PeerStatusResponse, error)
+	mustEmbedUnimplementedHobnobPeerServer()
+}
+
+// UnimplementedHobnobPeerServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedHobnobPeerServer struct{}
+
+func (UnimplementedHobnobPeerServer) SyncStream(grpc.BidiStreamingServer[PeerSyncMessage, PeerSyncMessage]) error {
+	return status.Error(codes.Unimplemented, "method SyncStream not implemented")
+}
+func (UnimplementedHobnobPeerServer) Promote(context.Context, *PeerPromoteRequest) (*PeerPromoteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Promote not implemented")
+}
+func (UnimplementedHobnobPeerServer) Status(context.Context, *PeerStatusRequest) (*PeerStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Status not implemented")
+}
+func (UnimplementedHobnobPeerServer) mustEmbedUnimplementedHobnobPeerServer() {}
+func (UnimplementedHobnobPeerServer) testEmbeddedByValue()                    {}
+
+// UnsafeHobnobPeerServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to HobnobPeerServer will
+// result in compilation errors.
+type UnsafeHobnobPeerServer interface {
+	mustEmbedUnimplementedHobnobPeerServer()
+}
+
+func RegisterHobnobPeerServer(s grpc.ServiceRegistrar, srv HobnobPeerServer) {
+	// If the following call panics, it indicates UnimplementedHobnobPeerServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&HobnobPeer_ServiceDesc, srv)
+}
+
+func _HobnobPeer_SyncStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(HobnobPeerServer).SyncStream(&grpc.GenericServerStream[PeerSyncMessage, PeerSyncMessage]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type HobnobPeer_SyncStreamServer = grpc.BidiStreamingServer[PeerSyncMessage, PeerSyncMessage]
+
+func _HobnobPeer_Promote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeerPromoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HobnobPeerServer).Promote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HobnobPeer_Promote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HobnobPeerServer).Promote(ctx, req.(*PeerPromoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HobnobPeer_Status_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeerStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HobnobPeerServer).Status(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HobnobPeer_Status_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HobnobPeerServer).Status(ctx, req.(*PeerStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// HobnobPeer_ServiceDesc is the grpc.ServiceDesc for HobnobPeer service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var HobnobPeer_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "hobnob.v1.HobnobPeer",
+	HandlerType: (*HobnobPeerServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Promote",
+			Handler:    _HobnobPeer_Promote_Handler,
+		},
+		{
+			MethodName: "Status",
+			Handler:    _HobnobPeer_Status_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SyncStream",
+			Handler:       _HobnobPeer_SyncStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "hobnob.proto",
+}

@@ -141,10 +141,11 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	})
 
 	resp := &pb.RegisterResponse{
-		Success:   true,
-		ThrallId:    thrallID,
-		Message:   "registered successfully",
-		SpokeAddr: spokeAddr,
+		Success:         true,
+		ThrallId:        thrallID,
+		Message:         "registered successfully",
+		SpokeAddr:       spokeAddr,
+		FallbackServers: s.fallbackServers,
 	}
 
 	// Include server's bundle-signing public key for agent-side verification.

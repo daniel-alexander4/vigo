@@ -106,6 +106,7 @@ type RegisterResponse struct {
 	Message         string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	SpokeAddr       string                 `protobuf:"bytes,4,opt,name=spoke_addr,json=spokeAddr,proto3" json:"spoke_addr,omitempty"`                     // if set, agent should connect to this spoke for check-ins
 	ServerPubkeyPem string                 `protobuf:"bytes,5,opt,name=server_pubkey_pem,json=serverPubkeyPem,proto3" json:"server_pubkey_pem,omitempty"` // server's ED25519 public key for bundle signature verification
+	FallbackServers []string               `protobuf:"bytes,6,rep,name=fallback_servers,json=fallbackServers,proto3" json:"fallback_servers,omitempty"`   // peer server addresses for agent failover
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -173,6 +174,13 @@ func (x *RegisterResponse) GetServerPubkeyPem() string {
 		return x.ServerPubkeyPem
 	}
 	return ""
+}
+
+func (x *RegisterResponse) GetFallbackServers() []string {
+	if x != nil {
+		return x.FallbackServers
+	}
+	return nil
 }
 
 type CheckInRequest struct {
@@ -6080,6 +6088,476 @@ func (*SpokeStatusAck) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{96}
 }
 
+type PeerSyncMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*PeerSyncMessage_FileChange
+	//	*PeerSyncMessage_Ack
+	//	*PeerSyncMessage_FullSync
+	Payload       isPeerSyncMessage_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerSyncMessage) Reset() {
+	*x = PeerSyncMessage{}
+	mi := &file_hobnob_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerSyncMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerSyncMessage) ProtoMessage() {}
+
+func (x *PeerSyncMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerSyncMessage.ProtoReflect.Descriptor instead.
+func (*PeerSyncMessage) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *PeerSyncMessage) GetPayload() isPeerSyncMessage_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *PeerSyncMessage) GetFileChange() *PeerFileChange {
+	if x != nil {
+		if x, ok := x.Payload.(*PeerSyncMessage_FileChange); ok {
+			return x.FileChange
+		}
+	}
+	return nil
+}
+
+func (x *PeerSyncMessage) GetAck() *PeerSyncAck {
+	if x != nil {
+		if x, ok := x.Payload.(*PeerSyncMessage_Ack); ok {
+			return x.Ack
+		}
+	}
+	return nil
+}
+
+func (x *PeerSyncMessage) GetFullSync() *PeerFullSync {
+	if x != nil {
+		if x, ok := x.Payload.(*PeerSyncMessage_FullSync); ok {
+			return x.FullSync
+		}
+	}
+	return nil
+}
+
+type isPeerSyncMessage_Payload interface {
+	isPeerSyncMessage_Payload()
+}
+
+type PeerSyncMessage_FileChange struct {
+	FileChange *PeerFileChange `protobuf:"bytes,1,opt,name=file_change,json=fileChange,proto3,oneof"`
+}
+
+type PeerSyncMessage_Ack struct {
+	Ack *PeerSyncAck `protobuf:"bytes,2,opt,name=ack,proto3,oneof"`
+}
+
+type PeerSyncMessage_FullSync struct {
+	FullSync *PeerFullSync `protobuf:"bytes,3,opt,name=full_sync,json=fullSync,proto3,oneof"`
+}
+
+func (*PeerSyncMessage_FileChange) isPeerSyncMessage_Payload() {}
+
+func (*PeerSyncMessage_Ack) isPeerSyncMessage_Payload() {}
+
+func (*PeerSyncMessage_FullSync) isPeerSyncMessage_Payload() {}
+
+type PeerFileChange struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`                             // relative to /srv/hobnob (e.g., "hnb/proposed/modules/nginx.hnb")
+	Content       []byte                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`                       // file contents (empty = deletion)
+	MtimeUnix     int64                  `protobuf:"varint,3,opt,name=mtime_unix,json=mtimeUnix,proto3" json:"mtime_unix,omitempty"` // modification time (unix seconds)
+	Mode          uint32                 `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`                            // file permissions
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerFileChange) Reset() {
+	*x = PeerFileChange{}
+	mi := &file_hobnob_proto_msgTypes[98]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerFileChange) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerFileChange) ProtoMessage() {}
+
+func (x *PeerFileChange) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[98]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerFileChange.ProtoReflect.Descriptor instead.
+func (*PeerFileChange) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{98}
+}
+
+func (x *PeerFileChange) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *PeerFileChange) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *PeerFileChange) GetMtimeUnix() int64 {
+	if x != nil {
+		return x.MtimeUnix
+	}
+	return 0
+}
+
+func (x *PeerFileChange) GetMode() uint32 {
+	if x != nil {
+		return x.Mode
+	}
+	return 0
+}
+
+type PeerSyncAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerSyncAck) Reset() {
+	*x = PeerSyncAck{}
+	mi := &file_hobnob_proto_msgTypes[99]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerSyncAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerSyncAck) ProtoMessage() {}
+
+func (x *PeerSyncAck) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[99]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerSyncAck.ProtoReflect.Descriptor instead.
+func (*PeerSyncAck) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{99}
+}
+
+func (x *PeerSyncAck) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *PeerSyncAck) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *PeerSyncAck) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type PeerFullSync struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Files         []*PeerFileChange      `protobuf:"bytes,1,rep,name=files,proto3" json:"files,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerFullSync) Reset() {
+	*x = PeerFullSync{}
+	mi := &file_hobnob_proto_msgTypes[100]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerFullSync) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerFullSync) ProtoMessage() {}
+
+func (x *PeerFullSync) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[100]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerFullSync.ProtoReflect.Descriptor instead.
+func (*PeerFullSync) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{100}
+}
+
+func (x *PeerFullSync) GetFiles() []*PeerFileChange {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+type PeerPromoteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerPromoteRequest) Reset() {
+	*x = PeerPromoteRequest{}
+	mi := &file_hobnob_proto_msgTypes[101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerPromoteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerPromoteRequest) ProtoMessage() {}
+
+func (x *PeerPromoteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerPromoteRequest.ProtoReflect.Descriptor instead.
+func (*PeerPromoteRequest) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{101}
+}
+
+type PeerPromoteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerPromoteResponse) Reset() {
+	*x = PeerPromoteResponse{}
+	mi := &file_hobnob_proto_msgTypes[102]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerPromoteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerPromoteResponse) ProtoMessage() {}
+
+func (x *PeerPromoteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[102]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerPromoteResponse.ProtoReflect.Descriptor instead.
+func (*PeerPromoteResponse) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{102}
+}
+
+func (x *PeerPromoteResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *PeerPromoteResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type PeerStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerStatusRequest) Reset() {
+	*x = PeerStatusRequest{}
+	mi := &file_hobnob_proto_msgTypes[103]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerStatusRequest) ProtoMessage() {}
+
+func (x *PeerStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[103]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerStatusRequest.ProtoReflect.Descriptor instead.
+func (*PeerStatusRequest) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{103}
+}
+
+type PeerStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Role          string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`                                         // "primary" or "peer"
+	PrimaryAddr   string                 `protobuf:"bytes,2,opt,name=primary_addr,json=primaryAddr,proto3" json:"primary_addr,omitempty"`        // address of current primary (empty if self is primary)
+	LastSyncUnix  int64                  `protobuf:"varint,3,opt,name=last_sync_unix,json=lastSyncUnix,proto3" json:"last_sync_unix,omitempty"`  // unix timestamp of last successful sync
+	FilesSynced   int64                  `protobuf:"varint,4,opt,name=files_synced,json=filesSynced,proto3" json:"files_synced,omitempty"`       // total files in sync
+	ConfigVersion uint64                 `protobuf:"varint,5,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"` // current config version (for split-brain resolution)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeerStatusResponse) Reset() {
+	*x = PeerStatusResponse{}
+	mi := &file_hobnob_proto_msgTypes[104]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeerStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeerStatusResponse) ProtoMessage() {}
+
+func (x *PeerStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hobnob_proto_msgTypes[104]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeerStatusResponse.ProtoReflect.Descriptor instead.
+func (*PeerStatusResponse) Descriptor() ([]byte, []int) {
+	return file_hobnob_proto_rawDescGZIP(), []int{104}
+}
+
+func (x *PeerStatusResponse) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *PeerStatusResponse) GetPrimaryAddr() string {
+	if x != nil {
+		return x.PrimaryAddr
+	}
+	return ""
+}
+
+func (x *PeerStatusResponse) GetLastSyncUnix() int64 {
+	if x != nil {
+		return x.LastSyncUnix
+	}
+	return 0
+}
+
+func (x *PeerStatusResponse) GetFilesSynced() int64 {
+	if x != nil {
+		return x.FilesSynced
+	}
+	return 0
+}
+
+func (x *PeerStatusResponse) GetConfigVersion() uint64 {
+	if x != nil {
+		return x.ConfigVersion
+	}
+	return 0
+}
+
 var File_hobnob_proto protoreflect.FileDescriptor
 
 const file_hobnob_proto_rawDesc = "" +
@@ -6092,14 +6570,15 @@ const file_hobnob_proto_rawDesc = "" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
 	"\x05token\x18\x04 \x01(\tR\x05token\x12\x14\n" +
-	"\x05force\x18\x05 \x01(\bR\x05force\"\xae\x01\n" +
+	"\x05force\x18\x05 \x01(\bR\x05force\"\xd9\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1b\n" +
 	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1d\n" +
 	"\n" +
 	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\x12*\n" +
-	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\"\x8a\x04\n" +
+	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\x8a\x04\n" +
 	"\x0eCheckInRequest\x12\x1b\n" +
 	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -6542,7 +7021,36 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x05stale\x18\x06 \x01(\x05R\x05stale\x12\x18\n" +
 	"\aunknown\x18\a \x01(\x05R\aunknown\x12%\n" +
 	"\x0ecompliance_pct\x18\b \x01(\x02R\rcompliancePct\"\x10\n" +
-	"\x0eSpokeStatusAck2\xee\x03\n" +
+	"\x0eSpokeStatusAck\"\xbe\x01\n" +
+	"\x0fPeerSyncMessage\x12<\n" +
+	"\vfile_change\x18\x01 \x01(\v2\x19.hobnob.v1.PeerFileChangeH\x00R\n" +
+	"fileChange\x12*\n" +
+	"\x03ack\x18\x02 \x01(\v2\x16.hobnob.v1.PeerSyncAckH\x00R\x03ack\x126\n" +
+	"\tfull_sync\x18\x03 \x01(\v2\x17.hobnob.v1.PeerFullSyncH\x00R\bfullSyncB\t\n" +
+	"\apayload\"q\n" +
+	"\x0ePeerFileChange\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\fR\acontent\x12\x1d\n" +
+	"\n" +
+	"mtime_unix\x18\x03 \x01(\x03R\tmtimeUnix\x12\x12\n" +
+	"\x04mode\x18\x04 \x01(\rR\x04mode\"Q\n" +
+	"\vPeerSyncAck\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"?\n" +
+	"\fPeerFullSync\x12/\n" +
+	"\x05files\x18\x01 \x03(\v2\x19.hobnob.v1.PeerFileChangeR\x05files\"\x14\n" +
+	"\x12PeerPromoteRequest\"I\n" +
+	"\x13PeerPromoteResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x13\n" +
+	"\x11PeerStatusRequest\"\xbb\x01\n" +
+	"\x12PeerStatusResponse\x12\x12\n" +
+	"\x04role\x18\x01 \x01(\tR\x04role\x12!\n" +
+	"\fprimary_addr\x18\x02 \x01(\tR\vprimaryAddr\x12$\n" +
+	"\x0elast_sync_unix\x18\x03 \x01(\x03R\flastSyncUnix\x12!\n" +
+	"\ffiles_synced\x18\x04 \x01(\x03R\vfilesSynced\x12%\n" +
+	"\x0econfig_version\x18\x05 \x01(\x04R\rconfigVersion2\xee\x03\n" +
 	"\vHobnobAgent\x12C\n" +
 	"\bRegister\x12\x1a.hobnob.v1.RegisterRequest\x1a\x1b.hobnob.v1.RegisterResponse\x12@\n" +
 	"\aCheckIn\x12\x19.hobnob.v1.CheckInRequest\x1a\x1a.hobnob.v1.CheckInResponse\x12O\n" +
@@ -6578,7 +7086,13 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x0fSetReassignment\x12!.hobnob.v1.SetReassignmentRequest\x1a\".hobnob.v1.SetReassignmentResponse\x12I\n" +
 	"\n" +
 	"SyncConfig\x12\x1c.hobnob.v1.SyncConfigRequest\x1a\x1d.hobnob.v1.SyncConfigResponse\x12L\n" +
-	"\x11ReportSpokeStatus\x12\x1c.hobnob.v1.SpokeStatusReport\x1a\x19.hobnob.v1.SpokeStatusAckB+Z)github.com/hobnob/hobnob/gen/proto/hobnobb\x06proto3"
+	"\x11ReportSpokeStatus\x12\x1c.hobnob.v1.SpokeStatusReport\x1a\x19.hobnob.v1.SpokeStatusAck2\xe7\x01\n" +
+	"\n" +
+	"HobnobPeer\x12H\n" +
+	"\n" +
+	"SyncStream\x12\x1a.hobnob.v1.PeerSyncMessage\x1a\x1a.hobnob.v1.PeerSyncMessage(\x010\x01\x12H\n" +
+	"\aPromote\x12\x1d.hobnob.v1.PeerPromoteRequest\x1a\x1e.hobnob.v1.PeerPromoteResponse\x12E\n" +
+	"\x06Status\x12\x1c.hobnob.v1.PeerStatusRequest\x1a\x1d.hobnob.v1.PeerStatusResponseB+Z)github.com/hobnob/hobnob/gen/proto/hobnobb\x06proto3"
 
 var (
 	file_hobnob_proto_rawDescOnce sync.Once
@@ -6592,7 +7106,7 @@ func file_hobnob_proto_rawDescGZIP() []byte {
 	return file_hobnob_proto_rawDescData
 }
 
-var file_hobnob_proto_msgTypes = make([]protoimpl.MessageInfo, 103)
+var file_hobnob_proto_msgTypes = make([]protoimpl.MessageInfo, 111)
 var file_hobnob_proto_goTypes = []any{
 	(*RegisterRequest)(nil),               // 0: hobnob.v1.RegisterRequest
 	(*RegisterResponse)(nil),              // 1: hobnob.v1.RegisterResponse
@@ -6691,17 +7205,25 @@ var file_hobnob_proto_goTypes = []any{
 	(*SyncConfigResponse)(nil),            // 94: hobnob.v1.SyncConfigResponse
 	(*SpokeStatusReport)(nil),             // 95: hobnob.v1.SpokeStatusReport
 	(*SpokeStatusAck)(nil),                // 96: hobnob.v1.SpokeStatusAck
-	nil,                                   // 97: hobnob.v1.CheckInRequest.CachedModuleHashesEntry
-	nil,                                   // 98: hobnob.v1.Resource.ParamsEntry
-	nil,                                   // 99: hobnob.v1.PolicyResource.AttributesEntry
-	nil,                                   // 100: hobnob.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 101: hobnob.v1.TaskDispatch.EnvEntry
-	nil,                                   // 102: hobnob.v1.PromoteEnvResponse.DiffEntry
-	(*timestamppb.Timestamp)(nil),         // 103: google.protobuf.Timestamp
+	(*PeerSyncMessage)(nil),               // 97: hobnob.v1.PeerSyncMessage
+	(*PeerFileChange)(nil),                // 98: hobnob.v1.PeerFileChange
+	(*PeerSyncAck)(nil),                   // 99: hobnob.v1.PeerSyncAck
+	(*PeerFullSync)(nil),                  // 100: hobnob.v1.PeerFullSync
+	(*PeerPromoteRequest)(nil),            // 101: hobnob.v1.PeerPromoteRequest
+	(*PeerPromoteResponse)(nil),           // 102: hobnob.v1.PeerPromoteResponse
+	(*PeerStatusRequest)(nil),             // 103: hobnob.v1.PeerStatusRequest
+	(*PeerStatusResponse)(nil),            // 104: hobnob.v1.PeerStatusResponse
+	nil,                                   // 105: hobnob.v1.CheckInRequest.CachedModuleHashesEntry
+	nil,                                   // 106: hobnob.v1.Resource.ParamsEntry
+	nil,                                   // 107: hobnob.v1.PolicyResource.AttributesEntry
+	nil,                                   // 108: hobnob.v1.TraitsDelta.ChangedEntry
+	nil,                                   // 109: hobnob.v1.TaskDispatch.EnvEntry
+	nil,                                   // 110: hobnob.v1.PromoteEnvResponse.DiffEntry
+	(*timestamppb.Timestamp)(nil),         // 111: google.protobuf.Timestamp
 }
 var file_hobnob_proto_depIdxs = []int32{
-	103, // 0: hobnob.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
-	97,  // 1: hobnob.v1.CheckInRequest.cached_module_hashes:type_name -> hobnob.v1.CheckInRequest.CachedModuleHashesEntry
+	111, // 0: hobnob.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
+	105, // 1: hobnob.v1.CheckInRequest.cached_module_hashes:type_name -> hobnob.v1.CheckInRequest.CachedModuleHashesEntry
 	29,  // 2: hobnob.v1.CheckInRequest.capabilities:type_name -> hobnob.v1.StreamCapabilities
 	8,   // 3: hobnob.v1.CheckInResponse.modules:type_name -> hobnob.v1.Module
 	5,   // 4: hobnob.v1.CheckInResponse.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
@@ -6709,15 +7231,15 @@ var file_hobnob_proto_depIdxs = []int32{
 	4,   // 6: hobnob.v1.CheckInResponse.proxied_devices:type_name -> hobnob.v1.ProxiedDevice
 	10,  // 7: hobnob.v1.ProxiedDevice.policy:type_name -> hobnob.v1.PolicyBundle
 	9,   // 8: hobnob.v1.Module.resources:type_name -> hobnob.v1.Resource
-	98,  // 9: hobnob.v1.Resource.params:type_name -> hobnob.v1.Resource.ParamsEntry
+	106, // 9: hobnob.v1.Resource.params:type_name -> hobnob.v1.Resource.ParamsEntry
 	11,  // 10: hobnob.v1.PolicyBundle.modules:type_name -> hobnob.v1.PolicyModule
 	13,  // 11: hobnob.v1.PolicyBundle.conditional_vars:type_name -> hobnob.v1.ConditionalVarDef
 	5,   // 12: hobnob.v1.PolicyBundle.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
 	12,  // 13: hobnob.v1.PolicyModule.resources:type_name -> hobnob.v1.PolicyResource
-	99,  // 14: hobnob.v1.PolicyResource.attributes:type_name -> hobnob.v1.PolicyResource.AttributesEntry
+	107, // 14: hobnob.v1.PolicyResource.attributes:type_name -> hobnob.v1.PolicyResource.AttributesEntry
 	15,  // 15: hobnob.v1.ReportResultRequest.results:type_name -> hobnob.v1.ModuleResult
-	103, // 16: hobnob.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
-	103, // 17: hobnob.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	111, // 16: hobnob.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
+	111, // 17: hobnob.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	2,   // 18: hobnob.v1.AgentStreamMessage.check_in:type_name -> hobnob.v1.CheckInRequest
 	14,  // 19: hobnob.v1.AgentStreamMessage.report_result:type_name -> hobnob.v1.ReportResultRequest
 	17,  // 20: hobnob.v1.AgentStreamMessage.report_traits:type_name -> hobnob.v1.ReportTraitsRequest
@@ -6739,98 +7261,108 @@ var file_hobnob_proto_depIdxs = []int32{
 	26,  // 36: hobnob.v1.DeltaEvent.traits:type_name -> hobnob.v1.TraitsDelta
 	27,  // 37: hobnob.v1.DeltaEvent.heartbeat:type_name -> hobnob.v1.HeartbeatDelta
 	15,  // 38: hobnob.v1.RunCompleted.results:type_name -> hobnob.v1.ModuleResult
-	100, // 39: hobnob.v1.TraitsDelta.changed:type_name -> hobnob.v1.TraitsDelta.ChangedEntry
-	101, // 40: hobnob.v1.TaskDispatch.env:type_name -> hobnob.v1.TaskDispatch.EnvEntry
-	103, // 41: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
+	108, // 39: hobnob.v1.TraitsDelta.changed:type_name -> hobnob.v1.TraitsDelta.ChangedEntry
+	109, // 40: hobnob.v1.TaskDispatch.env:type_name -> hobnob.v1.TaskDispatch.EnvEntry
+	111, // 41: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
 	39,  // 42: hobnob.v1.ListApprovedPatternsResponse.patterns:type_name -> hobnob.v1.ApprovedPattern
-	103, // 43: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
+	111, // 43: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
 	44,  // 44: hobnob.v1.ListThrallsResponse.thralls:type_name -> hobnob.v1.Thrall
-	103, // 45: hobnob.v1.Thrall.enrolled_at:type_name -> google.protobuf.Timestamp
-	103, // 46: hobnob.v1.Thrall.last_seen:type_name -> google.protobuf.Timestamp
-	103, // 47: hobnob.v1.Thrall.revoked_at:type_name -> google.protobuf.Timestamp
+	111, // 45: hobnob.v1.Thrall.enrolled_at:type_name -> google.protobuf.Timestamp
+	111, // 46: hobnob.v1.Thrall.last_seen:type_name -> google.protobuf.Timestamp
+	111, // 47: hobnob.v1.Thrall.revoked_at:type_name -> google.protobuf.Timestamp
 	44,  // 48: hobnob.v1.GetThrallResponse.thrall:type_name -> hobnob.v1.Thrall
 	55,  // 49: hobnob.v1.DryRunResponse.actions:type_name -> hobnob.v1.PlannedAction
 	58,  // 50: hobnob.v1.ListRunsResponse.runs:type_name -> hobnob.v1.Run
-	103, // 51: hobnob.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	103, // 52: hobnob.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	111, // 51: hobnob.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	111, // 52: hobnob.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
 	58,  // 53: hobnob.v1.GetRunResponse.run:type_name -> hobnob.v1.Run
 	15,  // 54: hobnob.v1.GetRunResponse.results:type_name -> hobnob.v1.ModuleResult
 	69,  // 55: hobnob.v1.AddWebhookResponse.webhook:type_name -> hobnob.v1.WebhookInfo
 	69,  // 56: hobnob.v1.ListWebhooksResponse.webhooks:type_name -> hobnob.v1.WebhookInfo
-	103, // 57: hobnob.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
+	111, // 57: hobnob.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
 	58,  // 58: hobnob.v1.GetThrallComplianceResponse.last_run:type_name -> hobnob.v1.Run
 	74,  // 59: hobnob.v1.GetThrallComplianceResponse.history:type_name -> hobnob.v1.ComplianceSnapshot
 	81,  // 60: hobnob.v1.ListPackagesResponse.packages:type_name -> hobnob.v1.PackageInfo
 	82,  // 61: hobnob.v1.ListPackageDriftResponse.drifts:type_name -> hobnob.v1.PackageDrift
-	103, // 62: hobnob.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
-	102, // 63: hobnob.v1.PromoteEnvResponse.diff:type_name -> hobnob.v1.PromoteEnvResponse.DiffEntry
-	0,   // 64: hobnob.v1.HobnobAgent.Register:input_type -> hobnob.v1.RegisterRequest
-	2,   // 65: hobnob.v1.HobnobAgent.CheckIn:input_type -> hobnob.v1.CheckInRequest
-	14,  // 66: hobnob.v1.HobnobAgent.ReportResult:input_type -> hobnob.v1.ReportResultRequest
-	17,  // 67: hobnob.v1.HobnobAgent.ReportTraits:input_type -> hobnob.v1.ReportTraitsRequest
-	6,   // 68: hobnob.v1.HobnobAgent.DownloadCustomTrait:input_type -> hobnob.v1.DownloadCustomTraitRequest
-	19,  // 69: hobnob.v1.HobnobAgent.AgentStream:input_type -> hobnob.v1.AgentStreamMessage
-	35,  // 70: hobnob.v1.HobnobAdmin.AddApprovedPattern:input_type -> hobnob.v1.AddApprovedPatternRequest
-	37,  // 71: hobnob.v1.HobnobAdmin.ListApprovedPatterns:input_type -> hobnob.v1.ListApprovedPatternsRequest
-	40,  // 72: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:input_type -> hobnob.v1.RevokeApprovedPatternRequest
-	42,  // 73: hobnob.v1.HobnobAdmin.ListThralls:input_type -> hobnob.v1.ListThrallsRequest
-	45,  // 74: hobnob.v1.HobnobAdmin.GetThrall:input_type -> hobnob.v1.GetThrallRequest
-	47,  // 75: hobnob.v1.HobnobAdmin.RevokeThrall:input_type -> hobnob.v1.RevokeThrallRequest
-	49,  // 76: hobnob.v1.HobnobAdmin.DeleteThrall:input_type -> hobnob.v1.DeleteThrallRequest
-	51,  // 77: hobnob.v1.HobnobAdmin.ForcePush:input_type -> hobnob.v1.ForcePushRequest
-	53,  // 78: hobnob.v1.HobnobAdmin.DryRun:input_type -> hobnob.v1.DryRunRequest
-	56,  // 79: hobnob.v1.HobnobAdmin.ListRuns:input_type -> hobnob.v1.ListRunsRequest
-	59,  // 80: hobnob.v1.HobnobAdmin.GetRun:input_type -> hobnob.v1.GetRunRequest
-	61,  // 81: hobnob.v1.HobnobAdmin.GenerateToken:input_type -> hobnob.v1.GenerateTokenRequest
-	63,  // 82: hobnob.v1.HobnobAdmin.AddWebhook:input_type -> hobnob.v1.AddWebhookRequest
-	65,  // 83: hobnob.v1.HobnobAdmin.ListWebhooks:input_type -> hobnob.v1.ListWebhooksRequest
-	67,  // 84: hobnob.v1.HobnobAdmin.DeleteWebhook:input_type -> hobnob.v1.DeleteWebhookRequest
-	70,  // 85: hobnob.v1.HobnobAdmin.GetComplianceSummary:input_type -> hobnob.v1.GetComplianceSummaryRequest
-	72,  // 86: hobnob.v1.HobnobAdmin.GetThrallCompliance:input_type -> hobnob.v1.GetThrallComplianceRequest
-	75,  // 87: hobnob.v1.HobnobAdmin.Rollback:input_type -> hobnob.v1.RollbackRequest
-	77,  // 88: hobnob.v1.HobnobAdmin.ListPackages:input_type -> hobnob.v1.ListPackagesRequest
-	79,  // 89: hobnob.v1.HobnobAdmin.ListPackageDrift:input_type -> hobnob.v1.ListPackageDriftRequest
-	83,  // 90: hobnob.v1.HobnobAdmin.PromoteEnv:input_type -> hobnob.v1.PromoteEnvRequest
-	85,  // 91: hobnob.v1.HobnobAdmin.EnrollThrall:input_type -> hobnob.v1.EnrollThrallRequest
-	87,  // 92: hobnob.v1.HobnobAdmin.SetReassignment:input_type -> hobnob.v1.SetReassignmentRequest
-	93,  // 93: hobnob.v1.HobnobAdmin.SyncConfig:input_type -> hobnob.v1.SyncConfigRequest
-	95,  // 94: hobnob.v1.HobnobAdmin.ReportSpokeStatus:input_type -> hobnob.v1.SpokeStatusReport
-	1,   // 95: hobnob.v1.HobnobAgent.Register:output_type -> hobnob.v1.RegisterResponse
-	3,   // 96: hobnob.v1.HobnobAgent.CheckIn:output_type -> hobnob.v1.CheckInResponse
-	16,  // 97: hobnob.v1.HobnobAgent.ReportResult:output_type -> hobnob.v1.ReportResultResponse
-	18,  // 98: hobnob.v1.HobnobAgent.ReportTraits:output_type -> hobnob.v1.ReportTraitsResponse
-	7,   // 99: hobnob.v1.HobnobAgent.DownloadCustomTrait:output_type -> hobnob.v1.DownloadCustomTraitResponse
-	20,  // 100: hobnob.v1.HobnobAgent.AgentStream:output_type -> hobnob.v1.ServerStreamMessage
-	36,  // 101: hobnob.v1.HobnobAdmin.AddApprovedPattern:output_type -> hobnob.v1.AddApprovedPatternResponse
-	38,  // 102: hobnob.v1.HobnobAdmin.ListApprovedPatterns:output_type -> hobnob.v1.ListApprovedPatternsResponse
-	41,  // 103: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:output_type -> hobnob.v1.RevokeApprovedPatternResponse
-	43,  // 104: hobnob.v1.HobnobAdmin.ListThralls:output_type -> hobnob.v1.ListThrallsResponse
-	46,  // 105: hobnob.v1.HobnobAdmin.GetThrall:output_type -> hobnob.v1.GetThrallResponse
-	48,  // 106: hobnob.v1.HobnobAdmin.RevokeThrall:output_type -> hobnob.v1.RevokeThrallResponse
-	50,  // 107: hobnob.v1.HobnobAdmin.DeleteThrall:output_type -> hobnob.v1.DeleteThrallResponse
-	52,  // 108: hobnob.v1.HobnobAdmin.ForcePush:output_type -> hobnob.v1.ForcePushResponse
-	54,  // 109: hobnob.v1.HobnobAdmin.DryRun:output_type -> hobnob.v1.DryRunResponse
-	57,  // 110: hobnob.v1.HobnobAdmin.ListRuns:output_type -> hobnob.v1.ListRunsResponse
-	60,  // 111: hobnob.v1.HobnobAdmin.GetRun:output_type -> hobnob.v1.GetRunResponse
-	62,  // 112: hobnob.v1.HobnobAdmin.GenerateToken:output_type -> hobnob.v1.GenerateTokenResponse
-	64,  // 113: hobnob.v1.HobnobAdmin.AddWebhook:output_type -> hobnob.v1.AddWebhookResponse
-	66,  // 114: hobnob.v1.HobnobAdmin.ListWebhooks:output_type -> hobnob.v1.ListWebhooksResponse
-	68,  // 115: hobnob.v1.HobnobAdmin.DeleteWebhook:output_type -> hobnob.v1.DeleteWebhookResponse
-	71,  // 116: hobnob.v1.HobnobAdmin.GetComplianceSummary:output_type -> hobnob.v1.GetComplianceSummaryResponse
-	73,  // 117: hobnob.v1.HobnobAdmin.GetThrallCompliance:output_type -> hobnob.v1.GetThrallComplianceResponse
-	76,  // 118: hobnob.v1.HobnobAdmin.Rollback:output_type -> hobnob.v1.RollbackResponse
-	78,  // 119: hobnob.v1.HobnobAdmin.ListPackages:output_type -> hobnob.v1.ListPackagesResponse
-	80,  // 120: hobnob.v1.HobnobAdmin.ListPackageDrift:output_type -> hobnob.v1.ListPackageDriftResponse
-	84,  // 121: hobnob.v1.HobnobAdmin.PromoteEnv:output_type -> hobnob.v1.PromoteEnvResponse
-	86,  // 122: hobnob.v1.HobnobAdmin.EnrollThrall:output_type -> hobnob.v1.EnrollThrallResponse
-	88,  // 123: hobnob.v1.HobnobAdmin.SetReassignment:output_type -> hobnob.v1.SetReassignmentResponse
-	94,  // 124: hobnob.v1.HobnobAdmin.SyncConfig:output_type -> hobnob.v1.SyncConfigResponse
-	96,  // 125: hobnob.v1.HobnobAdmin.ReportSpokeStatus:output_type -> hobnob.v1.SpokeStatusAck
-	95,  // [95:126] is the sub-list for method output_type
-	64,  // [64:95] is the sub-list for method input_type
-	64,  // [64:64] is the sub-list for extension type_name
-	64,  // [64:64] is the sub-list for extension extendee
-	0,   // [0:64] is the sub-list for field type_name
+	111, // 62: hobnob.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
+	110, // 63: hobnob.v1.PromoteEnvResponse.diff:type_name -> hobnob.v1.PromoteEnvResponse.DiffEntry
+	98,  // 64: hobnob.v1.PeerSyncMessage.file_change:type_name -> hobnob.v1.PeerFileChange
+	99,  // 65: hobnob.v1.PeerSyncMessage.ack:type_name -> hobnob.v1.PeerSyncAck
+	100, // 66: hobnob.v1.PeerSyncMessage.full_sync:type_name -> hobnob.v1.PeerFullSync
+	98,  // 67: hobnob.v1.PeerFullSync.files:type_name -> hobnob.v1.PeerFileChange
+	0,   // 68: hobnob.v1.HobnobAgent.Register:input_type -> hobnob.v1.RegisterRequest
+	2,   // 69: hobnob.v1.HobnobAgent.CheckIn:input_type -> hobnob.v1.CheckInRequest
+	14,  // 70: hobnob.v1.HobnobAgent.ReportResult:input_type -> hobnob.v1.ReportResultRequest
+	17,  // 71: hobnob.v1.HobnobAgent.ReportTraits:input_type -> hobnob.v1.ReportTraitsRequest
+	6,   // 72: hobnob.v1.HobnobAgent.DownloadCustomTrait:input_type -> hobnob.v1.DownloadCustomTraitRequest
+	19,  // 73: hobnob.v1.HobnobAgent.AgentStream:input_type -> hobnob.v1.AgentStreamMessage
+	35,  // 74: hobnob.v1.HobnobAdmin.AddApprovedPattern:input_type -> hobnob.v1.AddApprovedPatternRequest
+	37,  // 75: hobnob.v1.HobnobAdmin.ListApprovedPatterns:input_type -> hobnob.v1.ListApprovedPatternsRequest
+	40,  // 76: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:input_type -> hobnob.v1.RevokeApprovedPatternRequest
+	42,  // 77: hobnob.v1.HobnobAdmin.ListThralls:input_type -> hobnob.v1.ListThrallsRequest
+	45,  // 78: hobnob.v1.HobnobAdmin.GetThrall:input_type -> hobnob.v1.GetThrallRequest
+	47,  // 79: hobnob.v1.HobnobAdmin.RevokeThrall:input_type -> hobnob.v1.RevokeThrallRequest
+	49,  // 80: hobnob.v1.HobnobAdmin.DeleteThrall:input_type -> hobnob.v1.DeleteThrallRequest
+	51,  // 81: hobnob.v1.HobnobAdmin.ForcePush:input_type -> hobnob.v1.ForcePushRequest
+	53,  // 82: hobnob.v1.HobnobAdmin.DryRun:input_type -> hobnob.v1.DryRunRequest
+	56,  // 83: hobnob.v1.HobnobAdmin.ListRuns:input_type -> hobnob.v1.ListRunsRequest
+	59,  // 84: hobnob.v1.HobnobAdmin.GetRun:input_type -> hobnob.v1.GetRunRequest
+	61,  // 85: hobnob.v1.HobnobAdmin.GenerateToken:input_type -> hobnob.v1.GenerateTokenRequest
+	63,  // 86: hobnob.v1.HobnobAdmin.AddWebhook:input_type -> hobnob.v1.AddWebhookRequest
+	65,  // 87: hobnob.v1.HobnobAdmin.ListWebhooks:input_type -> hobnob.v1.ListWebhooksRequest
+	67,  // 88: hobnob.v1.HobnobAdmin.DeleteWebhook:input_type -> hobnob.v1.DeleteWebhookRequest
+	70,  // 89: hobnob.v1.HobnobAdmin.GetComplianceSummary:input_type -> hobnob.v1.GetComplianceSummaryRequest
+	72,  // 90: hobnob.v1.HobnobAdmin.GetThrallCompliance:input_type -> hobnob.v1.GetThrallComplianceRequest
+	75,  // 91: hobnob.v1.HobnobAdmin.Rollback:input_type -> hobnob.v1.RollbackRequest
+	77,  // 92: hobnob.v1.HobnobAdmin.ListPackages:input_type -> hobnob.v1.ListPackagesRequest
+	79,  // 93: hobnob.v1.HobnobAdmin.ListPackageDrift:input_type -> hobnob.v1.ListPackageDriftRequest
+	83,  // 94: hobnob.v1.HobnobAdmin.PromoteEnv:input_type -> hobnob.v1.PromoteEnvRequest
+	85,  // 95: hobnob.v1.HobnobAdmin.EnrollThrall:input_type -> hobnob.v1.EnrollThrallRequest
+	87,  // 96: hobnob.v1.HobnobAdmin.SetReassignment:input_type -> hobnob.v1.SetReassignmentRequest
+	93,  // 97: hobnob.v1.HobnobAdmin.SyncConfig:input_type -> hobnob.v1.SyncConfigRequest
+	95,  // 98: hobnob.v1.HobnobAdmin.ReportSpokeStatus:input_type -> hobnob.v1.SpokeStatusReport
+	97,  // 99: hobnob.v1.HobnobPeer.SyncStream:input_type -> hobnob.v1.PeerSyncMessage
+	101, // 100: hobnob.v1.HobnobPeer.Promote:input_type -> hobnob.v1.PeerPromoteRequest
+	103, // 101: hobnob.v1.HobnobPeer.Status:input_type -> hobnob.v1.PeerStatusRequest
+	1,   // 102: hobnob.v1.HobnobAgent.Register:output_type -> hobnob.v1.RegisterResponse
+	3,   // 103: hobnob.v1.HobnobAgent.CheckIn:output_type -> hobnob.v1.CheckInResponse
+	16,  // 104: hobnob.v1.HobnobAgent.ReportResult:output_type -> hobnob.v1.ReportResultResponse
+	18,  // 105: hobnob.v1.HobnobAgent.ReportTraits:output_type -> hobnob.v1.ReportTraitsResponse
+	7,   // 106: hobnob.v1.HobnobAgent.DownloadCustomTrait:output_type -> hobnob.v1.DownloadCustomTraitResponse
+	20,  // 107: hobnob.v1.HobnobAgent.AgentStream:output_type -> hobnob.v1.ServerStreamMessage
+	36,  // 108: hobnob.v1.HobnobAdmin.AddApprovedPattern:output_type -> hobnob.v1.AddApprovedPatternResponse
+	38,  // 109: hobnob.v1.HobnobAdmin.ListApprovedPatterns:output_type -> hobnob.v1.ListApprovedPatternsResponse
+	41,  // 110: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:output_type -> hobnob.v1.RevokeApprovedPatternResponse
+	43,  // 111: hobnob.v1.HobnobAdmin.ListThralls:output_type -> hobnob.v1.ListThrallsResponse
+	46,  // 112: hobnob.v1.HobnobAdmin.GetThrall:output_type -> hobnob.v1.GetThrallResponse
+	48,  // 113: hobnob.v1.HobnobAdmin.RevokeThrall:output_type -> hobnob.v1.RevokeThrallResponse
+	50,  // 114: hobnob.v1.HobnobAdmin.DeleteThrall:output_type -> hobnob.v1.DeleteThrallResponse
+	52,  // 115: hobnob.v1.HobnobAdmin.ForcePush:output_type -> hobnob.v1.ForcePushResponse
+	54,  // 116: hobnob.v1.HobnobAdmin.DryRun:output_type -> hobnob.v1.DryRunResponse
+	57,  // 117: hobnob.v1.HobnobAdmin.ListRuns:output_type -> hobnob.v1.ListRunsResponse
+	60,  // 118: hobnob.v1.HobnobAdmin.GetRun:output_type -> hobnob.v1.GetRunResponse
+	62,  // 119: hobnob.v1.HobnobAdmin.GenerateToken:output_type -> hobnob.v1.GenerateTokenResponse
+	64,  // 120: hobnob.v1.HobnobAdmin.AddWebhook:output_type -> hobnob.v1.AddWebhookResponse
+	66,  // 121: hobnob.v1.HobnobAdmin.ListWebhooks:output_type -> hobnob.v1.ListWebhooksResponse
+	68,  // 122: hobnob.v1.HobnobAdmin.DeleteWebhook:output_type -> hobnob.v1.DeleteWebhookResponse
+	71,  // 123: hobnob.v1.HobnobAdmin.GetComplianceSummary:output_type -> hobnob.v1.GetComplianceSummaryResponse
+	73,  // 124: hobnob.v1.HobnobAdmin.GetThrallCompliance:output_type -> hobnob.v1.GetThrallComplianceResponse
+	76,  // 125: hobnob.v1.HobnobAdmin.Rollback:output_type -> hobnob.v1.RollbackResponse
+	78,  // 126: hobnob.v1.HobnobAdmin.ListPackages:output_type -> hobnob.v1.ListPackagesResponse
+	80,  // 127: hobnob.v1.HobnobAdmin.ListPackageDrift:output_type -> hobnob.v1.ListPackageDriftResponse
+	84,  // 128: hobnob.v1.HobnobAdmin.PromoteEnv:output_type -> hobnob.v1.PromoteEnvResponse
+	86,  // 129: hobnob.v1.HobnobAdmin.EnrollThrall:output_type -> hobnob.v1.EnrollThrallResponse
+	88,  // 130: hobnob.v1.HobnobAdmin.SetReassignment:output_type -> hobnob.v1.SetReassignmentResponse
+	94,  // 131: hobnob.v1.HobnobAdmin.SyncConfig:output_type -> hobnob.v1.SyncConfigResponse
+	96,  // 132: hobnob.v1.HobnobAdmin.ReportSpokeStatus:output_type -> hobnob.v1.SpokeStatusAck
+	97,  // 133: hobnob.v1.HobnobPeer.SyncStream:output_type -> hobnob.v1.PeerSyncMessage
+	102, // 134: hobnob.v1.HobnobPeer.Promote:output_type -> hobnob.v1.PeerPromoteResponse
+	104, // 135: hobnob.v1.HobnobPeer.Status:output_type -> hobnob.v1.PeerStatusResponse
+	102, // [102:136] is the sub-list for method output_type
+	68,  // [68:102] is the sub-list for method input_type
+	68,  // [68:68] is the sub-list for extension type_name
+	68,  // [68:68] is the sub-list for extension extendee
+	0,   // [0:68] is the sub-list for field type_name
 }
 
 func init() { file_hobnob_proto_init() }
@@ -6863,15 +7395,20 @@ func file_hobnob_proto_init() {
 		(*DeltaEvent_Traits)(nil),
 		(*DeltaEvent_Heartbeat)(nil),
 	}
+	file_hobnob_proto_msgTypes[97].OneofWrappers = []any{
+		(*PeerSyncMessage_FileChange)(nil),
+		(*PeerSyncMessage_Ack)(nil),
+		(*PeerSyncMessage_FullSync)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hobnob_proto_rawDesc), len(file_hobnob_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   103,
+			NumMessages:   111,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   3,
 		},
 		GoTypes:           file_hobnob_proto_goTypes,
 		DependencyIndexes: file_hobnob_proto_depIdxs,
