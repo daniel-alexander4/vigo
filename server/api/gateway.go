@@ -24,6 +24,7 @@ import (
 	"github.com/hobnob/hobnob/server/spanner"
 	"github.com/hobnob/hobnob/server/fleet"
 	"github.com/hobnob/hobnob/server/license"
+	"github.com/hobnob/hobnob/server/publish"
 	"github.com/hobnob/hobnob/ui"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -32,7 +33,7 @@ import (
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
 // at the given address using mTLS credentials. It registers the HobnobAdmin
 // service handlers on /api/ paths and mounts the web UI on /.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *hobnobai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, gwOpts ...GatewayOption) (*http.ServeMux, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *hobnobai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, gwOpts ...GatewayOption) (*http.ServeMux, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -79,6 +80,12 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 		cfgSyncer = hub
 	}
 	configHandler := NewConfigHandler(queries, configStore, fleetIndex, cfgSyncer)
+	if publishCfg.ComplianceThreshold > 0 && fleetIndex != nil {
+		monitor := publish.NewComplianceMonitor(fleetIndex, func() error {
+			return configStore.Reload()
+		})
+		configHandler.SetComplianceMonitor(monitor, publishCfg)
+	}
 	configHandler.RegisterRoutes(mux)
 
 	// Mount thrall management endpoints (tags, maintenance).

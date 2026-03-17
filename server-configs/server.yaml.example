@@ -211,6 +211,17 @@ watcher:
 #   oscal: false                               # /api/v1/export/oscal
 
 
+# ── Publish / Blast Radius ────────────────────────────────────────────────
+# Auto-rollback when a config change tanks fleet compliance.
+# After each config reload, the server monitors compliance for the rollback
+# window. If the fleet-wide compliant percentage drops below the threshold,
+# it restores the previous config snapshot automatically.
+
+# publish:
+#   compliance_threshold: 80                   # 0 = disabled (default), 1-100 = minimum %
+#   rollback_window: "5m"                      # how long to watch after reload
+
+
 # ── Rate Limiting ─────────────────────────────────────────────────────────
 # Token-bucket throttling on check-in RPCs.
 

@@ -98,6 +98,7 @@ type ServerConfig struct {
 	AI         AISection        `yaml:"ai"`
 	Backup     BackupSection    `yaml:"backup"`
 	Export     ExportSection    `yaml:"export"`
+	Publish    PublishSection   `yaml:"publish"`
 	RateLimit  RateLimitSection `yaml:"rate_limit"`
 	Maintenance MaintenanceSection `yaml:"maintenance"`
 	Paths      PathsSection     `yaml:"paths"`
@@ -144,6 +145,15 @@ type ExportSection struct {
 	SIEM  bool `yaml:"siem"`  // enable SIEM export endpoint
 	CMDB  bool `yaml:"cmdb"`  // enable CMDB export endpoint
 	OSCAL bool `yaml:"oscal"` // enable OSCAL export endpoint
+}
+
+// PublishSection configures blast radius limits for config publish.
+// When compliance_threshold is set (1-100), the server monitors fleet compliance
+// after each config reload. If compliance drops below the threshold within
+// the rollback window, the previous config is automatically restored.
+type PublishSection struct {
+	ComplianceThreshold int    `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
+	RollbackWindow      string `yaml:"rollback_window"`      // duration to watch after reload (default "5m")
 }
 
 // BackupSection configures continuous SQLite WAL replication via Litestream.

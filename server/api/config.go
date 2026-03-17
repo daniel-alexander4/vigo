@@ -36,15 +36,25 @@ type configSyncer interface {
 // ConfigHandler provides REST endpoints for config publish history,
 // versioning, rollback, and reload.
 type ConfigHandler struct {
-	queries     *db.Queries
-	configStore *config.ConfigStore
-	fleetIndex  *fleet.FleetIndex
-	hub         configSyncer // nil unless hub mode
+	queries            *db.Queries
+	configStore        *config.ConfigStore
+	fleetIndex         *fleet.FleetIndex
+	hub                configSyncer // nil unless hub mode
+	complianceMonitor  *publish.ComplianceMonitor
+	publishCfg         config.PublishSection
 }
 
 // NewConfigHandler creates a ConfigHandler.
 func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex, hub configSyncer) *ConfigHandler {
 	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex, hub: hub}
+}
+
+// SetComplianceMonitor configures the blast-radius compliance monitor and
+// publish settings. When threshold > 0, config reloads start a compliance
+// watcher that auto-rolls back if fleet health drops.
+func (h *ConfigHandler) SetComplianceMonitor(monitor *publish.ComplianceMonitor, cfg config.PublishSection) {
+	h.complianceMonitor = monitor
+	h.publishCfg = cfg
 }
 
 // RegisterRoutes registers config management endpoints.
@@ -64,6 +74,10 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 // after config publish syncs files to .live/. In hub mode, also pushes the
 // config to all spokes via gRPC (best-effort — spoke failures are logged
 // but do not fail the reload).
+//
+// When a compliance threshold is configured, starts a background monitor
+// that watches fleet compliance for the rollback window. If compliance drops
+// below the threshold, the previous config snapshot is automatically restored.
 func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	if err := h.configStore.Reload(); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
@@ -77,6 +91,17 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 			slog.Error("config sync to spokes failed", "error", err)
 			// Best-effort: don't fail the reload response.
 		}
+	}
+
+	// Start blast-radius compliance monitor if threshold is configured.
+	if h.complianceMonitor != nil && h.publishCfg.ComplianceThreshold > 0 {
+		window := 5 * time.Minute // default
+		if h.publishCfg.RollbackWindow != "" {
+			if parsed, err := time.ParseDuration(h.publishCfg.RollbackWindow); err == nil {
+				window = parsed
+			}
+		}
+		h.complianceMonitor.Start(h.publishCfg.ComplianceThreshold, window)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
