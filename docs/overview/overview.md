@@ -181,11 +181,11 @@ All features are included at every tier. No enterprise-only features, no gated a
 | Tier | Nodes | Per Node / Year | Support Level |
 |------|-------|-----------------|---------------|
 | Community | 1 – 25 | Free | Community |
-| Starter | 26 – 250 | $84 | Standard |
-| Growth | 251 – 1,000 | $77 | Standard |
-| Business | 1,001 – 5,000 | $70 | Priority |
-| Enterprise | 5,001 – 25,000 | $62 | Dedicated |
-| Scale | 25,001 – 100,000 | $49 | Dedicated |
+| Starter | 26 – 250 | $144 | Standard |
+| Growth | 251 – 1,000 | $132 | Standard |
+| Business | 1,001 – 5,000 | $120 | Priority |
+| Enterprise | 5,001 – 25,000 | $108 | Dedicated |
+| Scale | 25,001 – 100,000 | $84 | Dedicated |
 
 Billed annually. Your node count determines your tier; that rate applies to all your nodes.
 

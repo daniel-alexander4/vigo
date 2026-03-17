@@ -213,23 +213,23 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 | Cost component | Hobnob | Puppet | Chef | Ansible | Salt | CFEngine |
 |---|---|---|---|---|---|---|
-| **License** | ~$77K | ~$112K (est. ~$112/node)&dagger; | Not published | Not published | Open source or not published | Community free; Enterprise not published |
+| **License** | ~$132K | ~$112K (est. ~$112/node)&dagger; | Not published | Not published | Open source or not published | Community free; Enterprise not published |
 | **Server infrastructure** | 1 server (4 vCPU, 8 GB) ~$1.2K | Primary (12 cores, 24 GB) + PuppetDB ~$6K | Chef Server + PostgreSQL ~$4.8K | Controller + Tower/AWX ~$2.4K | Salt master (8 cores, 8 GB) ~$2.4K | Enterprise hub (8+ GB) ~$2.4K |
 | **External database** | None (SQLite) $0 | PostgreSQL (PuppetDB) ~$3.6K | PostgreSQL ~$3.6K | PostgreSQL (Tower) ~$2.4K | Optional $0–2.4K | PostgreSQL (Enterprise) ~$3.6K |
 | **Agent fleet overhead** | 1,000 × 8 MB = 8 GB ~$0.5K | 1,000 × 200 MB = 200 GB ~$12K | 1,000 × 150 MB = 150 GB ~$9K | No agent $0 | 1,000 × 80 MB = 80 GB ~$4.8K | 1,000 × 5 MB = 5 GB ~$0.3K |
 | **Dedicated staffing** | Sysadmin (~0.25 FTE) ~$38K | Puppet engineer (~1.0 FTE) ~$150K | Chef engineer (~1.0 FTE) ~$150K | Ansible engineer (~0.5 FTE) ~$75K | Salt engineer (~0.5 FTE) ~$75K | CFEngine engineer (~1.0 FTE) ~$150K |
-| **Estimated total** | **~$117K** | **~$284K** | ~$167K + license | ~$80K + license | ~$82K + license | ~$156K + license |
+| **Estimated total** | **~$172K** | **~$284K** | ~$167K + license | ~$80K + license | ~$82K + license | ~$156K + license |
 
 ### TCO at 10,000 nodes (annual estimate)
 
 | Cost component | Hobnob | Puppet | Chef | Ansible | Salt | CFEngine |
 |---|---|---|---|---|---|---|
-| **License** | ~$620K | ~$1.12M (est. ~$112/node)&dagger; | Not published | Not published | Open source or not published | Community free; Enterprise not published |
+| **License** | ~$1.08M | ~$1.12M (est. ~$112/node)&dagger; | Not published | Not published | Open source or not published | Community free; Enterprise not published |
 | **Server infrastructure** | 1 server (4 vCPU, 8 GB) ~$1.2K | Primary + 3–4 compile masters (6 cores, 12 GB each) + PuppetDB ~$24K | Chef Server cluster + PostgreSQL HA ~$18K | Controller cluster + Automation Hub ~$9.6K | 2–3 Salt masters (syndic) ~$7.2K | Enterprise hub (80+ GB) ~$12K |
 | **External database** | None (SQLite) $0 | PostgreSQL HA (PuppetDB) ~$12K | PostgreSQL HA ~$12K | PostgreSQL HA (Tower) ~$8.4K | Optional $0–8.4K | PostgreSQL (80+ GB for reporting) ~$12K |
 | **Agent fleet overhead** | 10,000 × 8 MB = 80 GB ~$4.8K | 10,000 × 200 MB = 2 TB ~$120K | 10,000 × 150 MB = 1.5 TB ~$90K | No agent $0 | 10,000 × 80 MB = 800 GB ~$48K | 10,000 × 5 MB = 50 GB ~$3K |
 | **Dedicated staffing** | Sysadmin (~0.5 FTE) ~$75K | 2.0 FTE Puppet engineers ~$300K | 2.0 FTE Chef engineers ~$300K | 1.5 FTE Ansible engineers ~$225K | 1.5 FTE Salt engineers ~$225K | 1.5 FTE CFEngine engineers ~$225K |
-| **Estimated total** | **~$701K** | **~$1.58M** | ~$420K + license | ~$243K + license | ~$280K + license | ~$255K + license |
+| **Estimated total** | **~$1.16M** | **~$1.58M** | ~$420K + license | ~$243K + license | ~$280K + license | ~$255K + license |
 
 ### Reading the TCO tables
 

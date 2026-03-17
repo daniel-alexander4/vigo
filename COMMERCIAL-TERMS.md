@@ -1,6 +1,6 @@
 # Hobnob Commercial Terms
 
-Effective 2026-03-14. Alexander4, LLC reserves the right to update these terms.
+Effective 2026-03-16. Alexander4, LLC reserves the right to update these terms.
 
 ## Licensing
 
@@ -24,13 +24,13 @@ tier, and that tier's per-node rate applies to all your nodes.
 | Tier        | Nodes            | Per Node / Year | Support Level |
 |-------------|------------------|-----------------|---------------|
 | Community   | 1 – 25           | Free            | Community     |
-| Starter     | 26 – 250         | $84             | Standard      |
-| Growth      | 251 – 1,000      | $77             | Standard      |
-| Business    | 1,001 – 5,000    | $70             | Priority      |
-| Enterprise  | 5,001 – 25,000   | $62             | Dedicated     |
-| Scale       | 25,001 – 100,000 | $49             | Dedicated     |
+| Starter     | 26 – 250         | $144            | Standard      |
+| Growth      | 251 – 1,000      | $132            | Standard      |
+| Business    | 1,001 – 5,000    | $120            | Priority      |
+| Enterprise  | 5,001 – 25,000   | $108            | Dedicated     |
+| Scale       | 25,001 – 100,000 | $84             | Dedicated     |
 
-Example: a 500-node fleet pays 500 × $77 = **$38,500/year**.
+Example: a 500-node fleet pays 500 × $132 = **$66,000/year**.
 
 Billed annually. Licenses are non-refundable once issued.
 
@@ -41,14 +41,14 @@ decreases linearly from 100% to 75% over seven years:
 
 | Year  | You Pay | 1K-node Growth customer pays |
 |-------|---------|------------------------------|
-| 1 – 5 | 100%   | $77,000                      |
-| 6     | 96%    | $73,920                      |
-| 7     | 93%    | $71,610                      |
-| 8     | 89%    | $68,530                      |
-| 9     | 86%    | $66,220                      |
-| 10    | 82%    | $63,140                      |
-| 11    | 79%    | $60,830                      |
-| 12+   | 75%    | $57,750                      |
+| 1 – 5 | 100%   | $132,000                     |
+| 6     | 96%    | $126,720                     |
+| 7     | 93%    | $122,760                     |
+| 8     | 89%    | $117,480                     |
+| 9     | 86%    | $113,520                     |
+| 10    | 82%    | $108,240                     |
+| 11    | 79%    | $104,280                     |
+| 12+   | 75%    | $99,000                      |
 
 The discount applies to the per-node rate at every tier. The floor is
 75% — your rate will never drop below three-quarters of the list price.
@@ -62,7 +62,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- Hub-spoke spanner, AI assistant, compliance export, RBAC, all 74 executors, all integrations
+- 15-second check-ins, hub-spoke spanner, AI assistant, compliance export with auto-rollback, RBAC, all 98 executors across 8 platforms, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–25 nodes) includes all features with no time limit.
