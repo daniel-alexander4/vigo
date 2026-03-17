@@ -31,41 +31,6 @@ irm https://<server-ip>:8443/bootstrap?os=windows | iex
 
 The server generates a script on the fly that downloads the agent binary for the node's OS/arch, enrolls it via CSR signing, and starts it as a service (systemd, launchd, rc.d, rcctl, SMF, or Windows Service). No package manager needed on the node.
 
-#### What bootstrap does
-
-1. Downloads the pre-built agent binary from the server
-2. Generates an ED25519 keypair + ECDSA TLS keypair
-3. Sends a CSR to the server
-4. Server validates the node (trusted pattern + CIDR, or one-time token)
-5. Server signs the CSR and returns the signed TLS cert + CA cert
-6. Agent saves certs, keypair, and node UUID
-7. Creates and starts the agent service
-
-After bootstrap, the agent checks in via mTLS every 5 minutes.
-
-#### Enrollment modes
-
-**Trusted enrollment (default)** — auto-enrolls nodes matching hostname patterns and CIDR ranges:
-
-```yaml
-bootstrap:
-  cert_validity: "8760h"
-  trusted_enrollment:
-    - pattern: "*.web.example.com"
-      cidrs: ["10.0.1.0/24"]
-    - pattern: "*.db.internal"
-      cidrs: ["10.0.2.0/24"]
-```
-
-**Token-based enrollment** — for untrusted networks or explicit per-node approval:
-
-```bash
-hobnobcli tokens generate
-hobnobcli approved add "web-01.example.com" --token <TOKEN>
-# On the node:
-curl -sSf "https://<server-ip>:8443/bootstrap?token=<TOKEN>" | sudo sh
-```
-
 ### 3. Define desired state
 
 Map hostnames to modules and roles in `.hnb` files (YAML syntax):
@@ -75,18 +40,40 @@ Map hostnames to modules and roles in `.hnb` files (YAML syntax):
 nodes:
   - match: "web01.example.com"
     environment: production
-    modules: [nginx]
+    roles: [webserver]
     vars:
       doc_root: "/var/www/html"
+
+  - match: "*.db.internal"
+    environment: production
+    roles: [database]
+    vars:
+      pg_max_connections: "200"
+
+  - match: "monitoring.example.com"
+    modules: [prometheus, grafana, node-exporter]
 ```
 
-Modules define resources:
+### 4. Publish and verify
+
+```bash
+hobnobcli config publish
+hobnobcli thralls list
+hobnobcli runs list
+```
+
+Or open the web dashboard at `https://<server-ip>:8443/`.
+
+## Examples
+
+### Nginx with templated config
 
 ```yaml
 # thrall-configs/modules/nginx.hnb
 name: nginx
 vars:
   worker_processes: "auto"
+  server_name: "example.com"
 resources:
   - name: install-nginx
     type: package
@@ -110,29 +97,264 @@ resources:
     subscribes: [nginx-conf]
 ```
 
-Group modules into roles:
+### PostgreSQL with secrets
+
+```yaml
+# thrall-configs/modules/postgresql.hnb
+name: postgresql
+vars:
+  pg_password: "secret:hobnob/postgres/password"
+  shared_buffers: "256MB"
+  max_connections: "100"
+resources:
+  - name: install-postgres
+    type: package
+    package: postgresql
+    state: present
+
+  - name: pg-conf
+    type: file
+    targetpath: /etc/postgresql/16/main/postgresql.conf
+    content: |
+      shared_buffers = {{ .Vars.shared_buffers }}
+      max_connections = {{ .Vars.max_connections }}
+      listen_addresses = '*'
+      ssl = on
+    owner: postgres
+    mode: "0600"
+    depends_on: [install-postgres]
+    notify: [pg-service]
+
+  - name: pg-hba
+    type: file
+    targetpath: /etc/postgresql/16/main/pg_hba.conf
+    content: |
+      local   all   postgres   peer
+      host    all   all        0.0.0.0/0   scram-sha-256
+    owner: postgres
+    mode: "0600"
+    notify: [pg-service]
+
+  - name: pg-service
+    type: service
+    service: postgresql
+    enabled: true
+    state: running
+    subscribes: [pg-conf, pg-hba]
+```
+
+### Docker container with resource wiring
+
+```yaml
+# thrall-configs/modules/redis.hnb
+name: redis
+vars:
+  redis_password: "secret:hobnob/redis/password"
+  maxmemory: "256mb"
+resources:
+  - name: redis-conf
+    type: file
+    targetpath: /etc/redis/redis.conf
+    content: |
+      bind 0.0.0.0
+      requirepass {{ .Vars.redis_password }}
+      maxmemory {{ .Vars.maxmemory }}
+      maxmemory-policy allkeys-lru
+      appendonly yes
+    owner: redis
+    mode: "0600"
+    notify: [redis-container]
+
+  - name: redis-container
+    type: docker_container
+    container: redis
+    image: redis:7-alpine
+    state: running
+    subscribes: [redis-conf]
+```
+
+### OS-conditional packages
+
+```yaml
+# thrall-configs/modules/webserver.hnb
+name: webserver
+vars:
+  is_debian:
+    trait: os.distro
+    only: [debian, ubuntu]
+resources:
+  - name: install-nginx-deb
+    type: package
+    package: nginx
+    state: present
+    when: "is_debian"
+
+  - name: install-nginx-rpm
+    type: package
+    package: nginx
+    state: present
+    when: "!is_debian"
+
+  - name: nginx-service
+    type: service
+    service: nginx
+    enabled: true
+    state: running
+```
+
+### User accounts with SSH keys
+
+```yaml
+# thrall-configs/modules/ops-users.hnb
+name: ops-users
+resources:
+  - name: deploy-user
+    type: user
+    username: deploy
+    shell: /bin/bash
+    groups: [sudo, docker]
+    state: present
+
+  - name: deploy-ssh-key
+    type: sshkey
+    username: deploy
+    key_type: ed25519
+    key: "AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyHere"
+    state: present
+    depends_on: [deploy-user]
+```
+
+### Exec with idempotency guards
+
+```yaml
+# thrall-configs/modules/certbot.hnb
+name: certbot
+vars:
+  domain: "example.com"
+resources:
+  - name: install-certbot
+    type: package
+    package: certbot
+    state: present
+
+  - name: obtain-cert
+    type: exec
+    command: "certbot certonly --nginx -d {{ .Vars.domain }} --non-interactive --agree-tos -m admin@{{ .Vars.domain }}"
+    creates: "/etc/letsencrypt/live/{{ .Vars.domain }}/fullchain.pem"
+    depends_on: [install-certbot]
+```
+
+### Firewall rules
+
+```yaml
+# thrall-configs/modules/firewall.hnb
+name: firewall
+resources:
+  - name: allow-ssh
+    type: firewall
+    port: "22"
+    protocol: tcp
+    action: accept
+    state: present
+
+  - name: allow-http
+    type: firewall
+    port: "80"
+    protocol: tcp
+    action: accept
+    state: present
+
+  - name: allow-https
+    type: firewall
+    port: "443"
+    protocol: tcp
+    action: accept
+    state: present
+```
+
+### Cron job
+
+```yaml
+# thrall-configs/modules/backups.hnb
+name: backups
+resources:
+  - name: backup-script
+    type: file
+    targetpath: /usr/local/bin/backup.sh
+    content: |
+      #!/bin/bash
+      pg_dump mydb | gzip > /var/backups/mydb-$(date +%Y%m%d).sql.gz
+      find /var/backups -name "mydb-*.sql.gz" -mtime +7 -delete
+    owner: root
+    mode: "0755"
+
+  - name: nightly-backup
+    type: cron
+    user: postgres
+    schedule: "0 2 * * *"
+    command: /usr/local/bin/backup.sh
+    depends_on: [backup-script]
+```
+
+### Network device configuration
+
+```yaml
+# thrall-configs/modules/switch-baseline.hnb
+name: switch-baseline
+resources:
+  - name: set-ntp
+    type: network_ntp
+    servers: ["10.0.0.1", "10.0.0.2"]
+    state: present
+
+  - name: set-syslog
+    type: network_syslog
+    host: "10.0.0.5"
+    port: "514"
+    state: present
+
+  - name: login-banner
+    type: network_banner
+    banner_type: motd
+    text: "Authorized access only. All activity is monitored."
+    state: present
+```
+
+### Roles and node mappings
 
 ```yaml
 # thrall-configs/roles/webserver.hnb
 name: webserver
-modules: [nginx, certbot]
+modules: [nginx, certbot, firewall, ops-users, node-exporter]
+
+# thrall-configs/roles/database.hnb
+name: database
+modules: [postgresql, backups, firewall, ops-users, node-exporter]
 ```
 
-Publish and reload:
+```yaml
+# thrall-configs/nodes.hnb
+nodes:
+  - match: "web*.example.com"
+    environment: production
+    roles: [webserver]
+    vars:
+      server_name: "example.com"
 
-```bash
-hobnobcli config publish
+  - match: "db*.example.com"
+    environment: production
+    roles: [database]
+    vars:
+      shared_buffers: "1GB"
+      max_connections: "400"
+
+  - match: "staging-*"
+    environment: staging
+    roles: [webserver, database]
+    environment_overrides:
+      staging:
+        shared_buffers: "128MB"
 ```
-
-### 4. Verify convergence
-
-```bash
-hobnobcli thralls list
-hobnobcli runs list
-hobnobcli thralls show web01.example.com
-```
-
-Or open the web dashboard at `https://<server-ip>:8443/`.
 
 ## Architecture
 
@@ -151,14 +373,9 @@ Or open the web dashboard at `https://<server-ip>:8443/`.
                        └────────┘   └──────────┘  └────────┘
 ```
 
-Four binaries:
-
 - **hobd** — Go server: gRPC (port 1530) + REST API + web UI + metrics (port 8443)
 - **hobnob** — Rust agent daemon on each managed node
 - **hobnobcli** — Go admin CLI, talks to server REST API
-- **hobnob-site** — Go public website
-
-**Port 1530** — approximate first recorded written use of "hobgoblin" in English.
 
 ## Resource types
 
@@ -180,33 +397,6 @@ Four binaries:
 
 All executors are idempotent — they check current state before acting. `exec` requires an idempotency guard (`creates`, `onlyif`, `unless`, or `subscribes`).
 
-## Trait collection
-
-27 trait collectors report facts about each node on every check-in: OS, hardware, network, packages, time, identity, virtualization, uptime, load, mountpoints, processors, DMI, cloud, filesystem, kernel, users, memory, block devices, Docker, systemd, SELinux, timezone, locale, swap, GPU, certificate expiry, and listening ports.
-
-Platform-specific collectors extend this: 25 for BSD/macOS, 9 for illumos, 13 for Windows, 1 for network devices.
-
-Traits power conditional resources (`when:` expressions), template rendering (`.Traits` namespace), and fleet inventory queries.
-
-## Conditionals
-
-Resources use `when:` expressions to control where they run, evaluated server-side:
-
-```yaml
-resources:
-  - name: install-nginx
-    type: package
-    package: nginx
-    when: "os_family('debian') && has_enough_ram"
-
-  - name: install-httpd
-    type: package
-    package: httpd
-    when: "os_family('rhel')"
-```
-
-Supports `&&`, `||`, `!`, parentheses, builtin functions (`os_family()`, `is_container`, `file_exists()`, etc.), and conditional vars defined against traits. Whole modules can also be conditional.
-
 ## Orchestration
 
 ### Ad-hoc pushes
@@ -220,20 +410,20 @@ hobnobcli push status <run-id>
 
 ### Workflows
 
-Chain tasks with conditional branching:
+Chain pushes with conditional branching:
 
 ```yaml
-# tasks/deploy.yaml
+# push/deploy.yaml
 name: rolling-deploy
 steps:
-  - task: pre-check
+  - push: pre-check
     target: "*.web.example.com"
-  - task: deploy-code
+  - push: deploy-code
     target: "*.web.example.com"
     rolling:
       batch_size: 25%
       health_check: "curl -sf http://localhost/health"
-  - task: post-check
+  - push: post-check
     target: "*.web.example.com"
 ```
 
@@ -244,10 +434,6 @@ Query fleet state in real-time:
 ```bash
 hobnobcli query run "df -h /var" --target "*.db.example.com"
 ```
-
-### Rolling execution
-
-Batch-based execution with health checks between rounds. Configurable batch size, pause duration, and failure thresholds.
 
 ## Authentication
 
@@ -273,61 +459,6 @@ Two backends: **local** (default, AES-256-GCM encrypted files on disk) and **iso
 ## Spanner
 
 Hub-spoke scaling for large fleets. A hub aggregates data from spokes, each handling a partition of nodes. Per-spoke compliance metrics, drill-down views, and thrall reassignment with drain support.
-
-## Config structure
-
-```
-thrall-configs/
-├── nodes.hnb             # Maps hostnames/globs to roles and modules
-├── modules/              # Reusable resource sets with default vars
-│   ├── nginx.hnb
-│   └── ...
-├── roles/                # Named groups of modules
-│   ├── webserver.hnb
-│   └── ...
-└── templates/            # External template files (referenced via source:)
-    └── nginx.conf.tmpl
-```
-
-Config files use `.hnb` extension (YAML syntax). First match wins in `nodes.hnb`. Node-level vars override module defaults.
-
-## CLI
-
-23 subcommands:
-
-```
-approved    thralls     runs        push        query       vi
-inventory   license     doctor      spanner     ask         workflow
-secrets     export      auth        users       webhooks    tokens
-config      backup      db          test        server
-```
-
-## Web dashboard
-
-HTMX-based UI at `https://<server>:8443/`:
-
-- Fleet overview with compliance sparklines
-- Node drill-down (traits, run history, compliance status)
-- Push and workflow management with live status
-- Live query results
-- Config publish history and audit trail
-- Spanner spoke drill-down
-- User and token management (admin)
-- Built-in documentation browser at `/docs`
-- AI assistant drawer (Claude, OpenAI, or Ollama)
-
-## Development
-
-```bash
-make build          # Build all binaries (hobd, hobnobcli, hobnob agent)
-make build-agent    # Build Rust agent only
-make proto          # Regenerate protobuf/gRPC code
-make sqlc           # Regenerate type-safe Go from SQL queries
-make test           # Run all tests (Go + Rust, 1500+)
-make lint           # golangci-lint + buf lint + cargo clippy
-make dist           # Cross-compile server/CLI static binaries
-make dist-agent     # Cross-compile Rust agent (musl, amd64+arm64)
-```
 
 ## License
 
