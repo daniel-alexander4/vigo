@@ -565,6 +565,102 @@ Remove the config publish freeze.
 
 Re-read all config files from disk. Called automatically by `hobnobcli config publish`.
 
+---
+
+## Config Changes (Approval)
+
+These endpoints are only active when `publish.approval_required: true` in `server.yaml`. When disabled, all endpoints return 404.
+
+### POST /api/v1/config/changes
+
+Create a pending config change. The change must be approved by a different admin before it takes effect.
+
+**Request body:**
+
+```json
+{
+  "diff_summary": "--- modules/nginx.hnb\n+++ modules/nginx.hnb\n..."
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": "chg-abc123",
+  "status": "pending",
+  "requested_by": "admin",
+  "diff_summary": "...",
+  "created_at": "2026-03-16T10:00:00Z",
+  "expires_at": "2026-03-17T10:00:00Z"
+}
+```
+
+### GET /api/v1/config/changes
+
+List pending config changes.
+
+**Response:**
+
+```json
+{
+  "changes": [
+    {
+      "id": "chg-abc123",
+      "status": "pending",
+      "requested_by": "admin",
+      "created_at": "2026-03-16T10:00:00Z",
+      "expires_at": "2026-03-17T10:00:00Z"
+    }
+  ]
+}
+```
+
+### GET /api/v1/config/changes/{id}
+
+Get a single config change, including the full diff summary.
+
+### POST /api/v1/config/changes/{id}/approve
+
+Approve and activate a pending config change. Returns 403 if the approver is the same user who requested the change.
+
+**Response:**
+
+```json
+{
+  "id": "chg-abc123",
+  "status": "approved",
+  "approved_by": "ops-lead",
+  "approved_at": "2026-03-16T11:00:00Z"
+}
+```
+
+### POST /api/v1/config/changes/{id}/reject
+
+Reject a pending config change.
+
+**Request body:**
+
+```json
+{
+  "reason": "nginx worker count too high for staging"
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "chg-abc123",
+  "status": "rejected",
+  "rejected_by": "ops-lead",
+  "reason": "nginx worker count too high for staging",
+  "rejected_at": "2026-03-16T11:00:00Z"
+}
+```
+
+---
+
 ### POST /api/v1/secrets/rotated
 
 Notify the server that a secret has been changed. Triggers `watch_secret` resources on affected thralls at their next check-in. Called automatically by `hobnobcli secrets set`.

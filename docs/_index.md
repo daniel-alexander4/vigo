@@ -66,6 +66,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 
 - [Authentication](operations/authentication.md) — Basic auth (default), OIDC, isowebauth, localhost trust
 - [Config Publishing](operations/config-publish.md) — Validate, sync, and reload
+- [Change Approval](operations/change-approval.md) — Two-person approval gate for config publish
 - [Backup & Recovery](operations/backup.md) — Litestream replication, snapshots, web UI download
 - [Disaster Recovery](operations/disaster-recovery.md) — Five failure scenarios with runbooks
 - [Email Notifications](operations/smtp.md) — SMTP events and digest
