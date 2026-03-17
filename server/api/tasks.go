@@ -23,9 +23,10 @@ type TaskDispatcher interface {
 
 // TasksHandler serves the REST endpoints for ad-hoc task dispatch and status.
 type TasksHandler struct {
-	queries     *db.Queries
-	dispatcher  TaskDispatcher
-	auditWriter auditRecorder
+	queries            *db.Queries
+	dispatcher         TaskDispatcher
+	auditWriter        auditRecorder
+	requireDefinition  bool
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
@@ -34,8 +35,8 @@ func (h *TasksHandler) SetAuditWriter(w auditRecorder) {
 }
 
 // NewTasksHandler creates a TasksHandler with database access and task dispatch.
-func NewTasksHandler(queries *db.Queries, dispatcher TaskDispatcher) *TasksHandler {
-	return &TasksHandler{queries: queries, dispatcher: dispatcher}
+func NewTasksHandler(queries *db.Queries, dispatcher TaskDispatcher, requireDefinition bool) *TasksHandler {
+	return &TasksHandler{queries: queries, dispatcher: dispatcher, requireDefinition: requireDefinition}
 }
 
 // RegisterRoutes registers task endpoints on the given mux.
@@ -71,6 +72,10 @@ func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Target == "" && req.TaskName == "" {
 		writeJSONError(w, http.StatusBadRequest, "target is required")
+		return
+	}
+	if h.requireDefinition && req.TaskName == "" {
+		writeJSONError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named task definition (tasks.require_definition is enabled)")
 		return
 	}
 	if req.Operator == "" {

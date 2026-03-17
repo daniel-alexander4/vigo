@@ -247,6 +247,13 @@ watcher:
 #   approval_timeout: "24h"                    # how long pending changes stay valid
 
 
+# ── Task Dispatch ────────────────────────────────────────────────────────
+# When require_definition is true, only named task definitions (from the
+# tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
+
+# tasks:
+#   require_definition: false                  # default false — allow ad-hoc commands
+
 # ── Rate Limiting ─────────────────────────────────────────────────────────
 # Token-bucket throttling on check-in RPCs.
 

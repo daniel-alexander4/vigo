@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,7 +85,7 @@ func (s *stubDispatcher) DispatchTask(_ context.Context, params isgrpc.DispatchP
 func TestTasksHandler_Dispatch(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
 	dispatcher := &stubDispatcher{returnResult: &isgrpc.DispatchResult{ID: "task-123", Status: "running"}}
-	handler := NewTasksHandler(db.New(sqlDB), dispatcher)
+	handler := NewTasksHandler(db.New(sqlDB), dispatcher, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -121,7 +122,7 @@ func TestTasksHandler_DispatchDryRun(t *testing.T) {
 		},
 		Offline: []string{"web04"},
 	}}
-	handler := NewTasksHandler(db.New(sqlDB), dispatcher)
+	handler := NewTasksHandler(db.New(sqlDB), dispatcher, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -155,7 +156,7 @@ func TestTasksHandler_DispatchDryRun(t *testing.T) {
 
 func TestTasksHandler_DispatchMissingCommand(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
-	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{}, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -171,7 +172,7 @@ func TestTasksHandler_DispatchMissingCommand(t *testing.T) {
 
 func TestTasksHandler_DispatchMissingTarget(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
-	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{}, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -188,7 +189,7 @@ func TestTasksHandler_DispatchMissingTarget(t *testing.T) {
 func TestTasksHandler_DispatchError(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
 	dispatcher := &stubDispatcher{returnErr: fmt.Errorf("no thralls matched")}
-	handler := NewTasksHandler(db.New(sqlDB), dispatcher)
+	handler := NewTasksHandler(db.New(sqlDB), dispatcher, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -205,7 +206,7 @@ func TestTasksHandler_DispatchError(t *testing.T) {
 func TestTasksHandler_List(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
 	queries := db.New(sqlDB)
-	handler := NewTasksHandler(queries, &stubDispatcher{})
+	handler := NewTasksHandler(queries, &stubDispatcher{}, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -239,7 +240,7 @@ func TestTasksHandler_List(t *testing.T) {
 
 func TestTasksHandler_ListEmpty(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
-	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{}, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -262,7 +263,7 @@ func TestTasksHandler_ListEmpty(t *testing.T) {
 
 func TestTasksHandler_Get(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
-	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{}, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -325,7 +326,7 @@ func TestTasksHandler_Get(t *testing.T) {
 
 func TestTasksHandler_GetNotFound(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
-	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{})
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{}, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -335,5 +336,40 @@ func TestTasksHandler_GetNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestTasksHandler_RequireDefinitionBlocksAdHoc(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	handler := NewTasksHandler(db.New(sqlDB), &stubDispatcher{}, true) // require_definition enabled
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Ad-hoc command (no taskName) should be rejected.
+	body := `{"command":"echo hello","target":"*"}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for ad-hoc command, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTasksHandler_RequireDefinitionAllowsNamed(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	dispatcher := &stubDispatcher{returnResult: &isgrpc.DispatchResult{ID: "task-456", Status: "running"}}
+	handler := NewTasksHandler(db.New(sqlDB), dispatcher, true) // require_definition enabled
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Named task (taskName set) should be allowed.
+	body := `{"taskName":"restart-service","target":"*","params":{"service":"nginx"}}`
+	req := httptest.NewRequest("POST", "/api/v1/tasks", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated && rec.Code != http.StatusOK {
+		t.Fatalf("expected 200/201 for named task, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

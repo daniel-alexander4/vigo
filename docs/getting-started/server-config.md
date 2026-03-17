@@ -329,6 +329,21 @@ When `approval_required` is enabled, `hobnobcli config publish` no longer applie
 
 If `compliance_threshold` is set, the server monitors fleet compliance for `rollback_window` after a config reload. If compliance drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 
+### tasks
+
+Controls task dispatch behavior.
+
+```yaml
+tasks:
+  require_definition: true
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `require_definition` | `false` | When true, only named task definitions (from the `tasks/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
+
+When enabled, `POST /api/v1/tasks` requires a `taskName` field referencing a predefined task definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved task definitions.
+
 ## Environment Variables
 
 Only one environment variable is supported. All other configuration belongs in `server.yaml`.

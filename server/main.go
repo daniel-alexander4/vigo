@@ -682,7 +682,7 @@ func run() error {
 	})
 
 	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
-	tasksHandler := api.NewTasksHandler(queries, agentSvc)
+	tasksHandler := api.NewTasksHandler(queries, agentSvc, cfg.Tasks.RequireDefinition)
 	tasksHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
