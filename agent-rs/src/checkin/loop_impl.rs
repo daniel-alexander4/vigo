@@ -719,6 +719,14 @@ pub async fn daemon_loop(
         .await
         {
             Ok(rr) => {
+                // Record success for failover tracking.
+                client.record_success();
+
+                // If currently failed over, periodically probe the primary.
+                if client.is_failed_over() {
+                    client.maybe_probe_primary().await;
+                }
+
                 // Update server pubkey if the server sent one.
                 if !rr.server_pubkey_pem.is_empty() && rr.server_pubkey_pem != server_pubkey_pem {
                     info!("updating server bundle-signing public key");
@@ -887,6 +895,13 @@ pub async fn daemon_loop(
                 }
             }
             Err(e) => {
+                // Attempt failover to a fallback server before going offline.
+                if client.record_failure().await {
+                    // Failover occurred — retry immediately on the new server.
+                    info!(server = %client.active_server(), "retrying on failover server");
+                    continue;
+                }
+
                 // Server unreachable — attempt offline convergence.
                 if let Some(ref store) = state_store {
                     if let Some((rr, _traits_bytes)) = converge_local(

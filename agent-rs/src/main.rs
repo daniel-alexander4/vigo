@@ -588,6 +588,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     )
     .await?;
 
+    // Load fallback servers from config for failover.
+    let cfg = config::load(&cli.data_dir);
+    let fallbacks = config::parse_fallback_servers(&cfg);
+    if !fallbacks.is_empty() {
+        info!(fallback_servers = ?fallbacks, "configured failover servers");
+        client.set_fallback_servers(fallbacks);
+    }
+
     info!(
         server = %addr,
         thrall_id = %thrall_id,
@@ -806,6 +814,15 @@ async fn main() -> Result<()> {
                 info!(spoke_addr = %resp.spoke_addr, "hub routed to spoke");
             }
 
+            // Persist fallback servers for agent failover.
+            if !resp.fallback_servers.is_empty() {
+                let fb = resp.fallback_servers.join(",");
+                if let Err(e) = config::save(&cli.data_dir, &[("fallback_servers", &fb)]) {
+                    warn!(error = %e, "failed to save fallback_servers to config");
+                }
+                info!(fallback_servers = %fb, "stored fallback servers for failover");
+            }
+
             info!(thrall_id = %resp.thrall_id, message = %resp.message, "registration successful");
             Ok(())
         }
@@ -909,8 +926,16 @@ async fn main() -> Result<()> {
 
             // Persist server address so subsequent runs don't need --server.
             let grpc_addr = format!("{}:{}", bootstrap_server.trim_start_matches("http://").trim_start_matches("https://").split(':').next().unwrap_or(bootstrap_server), grpc_port);
-            if let Err(e) = config::save(&cli.data_dir, &[("server", &grpc_addr), ("api_addr", bootstrap_server)]) {
+            let mut config_pairs: Vec<(&str, &str)> = vec![("server", &grpc_addr), ("api_addr", bootstrap_server)];
+            let fb_str = resp.fallback_servers.join(",");
+            if !resp.fallback_servers.is_empty() {
+                config_pairs.push(("fallback_servers", &fb_str));
+            }
+            if let Err(e) = config::save(&cli.data_dir, &config_pairs) {
                 warn!(error = %e, "failed to save config");
+            }
+            if !resp.fallback_servers.is_empty() {
+                info!(fallback_servers = %fb_str, "stored fallback servers for failover");
             }
 
             info!(

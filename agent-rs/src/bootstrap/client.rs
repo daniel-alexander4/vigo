@@ -23,6 +23,8 @@ pub struct RegisterResponse {
     pub thrall_id: String,
     pub signed_cert_pem: String,
     pub ca_cert_pem: String,
+    #[serde(default)]
+    pub fallback_servers: Vec<String>,
 }
 
 /// POST the bootstrap registration request and return the signed certs.

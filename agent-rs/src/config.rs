@@ -65,6 +65,15 @@ pub fn save(data_dir: &Path, values: &[(&str, &str)]) -> Result<(), std::io::Err
     Ok(())
 }
 
+/// Parse `fallback_servers` from config as a comma-separated list.
+/// Returns an empty vec if the key is absent or empty.
+pub fn parse_fallback_servers(cfg: &HashMap<String, String>) -> Vec<String> {
+    match cfg.get("fallback_servers") {
+        Some(v) if !v.is_empty() => v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+        _ => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,5 +126,35 @@ mod tests {
         let cfg = load(dir.path());
         assert_eq!(cfg.len(), 1);
         assert_eq!(cfg.get("server").unwrap(), "10.0.0.1:1530");
+    }
+
+    #[test]
+    fn parse_fallback_servers_empty() {
+        let cfg = HashMap::new();
+        assert!(parse_fallback_servers(&cfg).is_empty());
+    }
+
+    #[test]
+    fn parse_fallback_servers_single() {
+        let mut cfg = HashMap::new();
+        cfg.insert("fallback_servers".into(), "peer1:1530".into());
+        assert_eq!(parse_fallback_servers(&cfg), vec!["peer1:1530"]);
+    }
+
+    #[test]
+    fn parse_fallback_servers_multiple() {
+        let mut cfg = HashMap::new();
+        cfg.insert("fallback_servers".into(), "peer1:1530, peer2:1530,peer3:1530".into());
+        assert_eq!(
+            parse_fallback_servers(&cfg),
+            vec!["peer1:1530", "peer2:1530", "peer3:1530"]
+        );
+    }
+
+    #[test]
+    fn parse_fallback_servers_empty_value() {
+        let mut cfg = HashMap::new();
+        cfg.insert("fallback_servers".into(), "".into());
+        assert!(parse_fallback_servers(&cfg).is_empty());
     }
 }
