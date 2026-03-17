@@ -18,3 +18,4 @@ Core concepts that explain how Hobnob works.
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
 - [Custom Executors](custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](custom-traits.md) — Custom trait collector scripts
+- [Use Cases](use-cases.md) — Beyond configuration management: security, IoT, DR, observability

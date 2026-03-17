@@ -18,3 +18,6 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Drift Alerting](drift-alerting.md) -- Fleet compliance threshold monitoring
 - [Audit Log](audit.md) -- Unified audit trail for config, tasks, and workflows
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics
+- [Performance: 1-Minute Check-ins](performance-analysis.md) -- Scaling projections on 4 vCPU / 8 GB
+- [Performance: 30-Second Check-ins](performance-30s.md) -- Recommended for responsive fleets
+- [Performance: 15-Second Check-ins](performance-15s.md) -- Near-real-time state enforcement
