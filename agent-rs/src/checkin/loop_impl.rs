@@ -89,6 +89,8 @@ pub struct RunResult {
     pub proxied_devices: Vec<ProxiedDevice>,
     /// Server's bundle-signing public key PEM (updated on each check-in).
     pub server_pubkey_pem: String,
+    /// Server requests immediate binary update and restart.
+    pub force_update: bool,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -264,6 +266,7 @@ fn converge(
             stream_requested: resp.stream_requested,
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
+            force_update: resp.force_update,
         });
     } else {
         return Ok(RunResult {
@@ -277,6 +280,7 @@ fn converge(
             stream_requested: resp.stream_requested,
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
+            force_update: resp.force_update,
         });
     };
 
@@ -302,6 +306,7 @@ fn converge(
                 stream_requested: resp.stream_requested,
                 proxied_devices: proxied_devices.clone(),
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
+                force_update: resp.force_update,
             });
         }
     };
@@ -322,6 +327,7 @@ fn converge(
             stream_requested: resp.stream_requested,
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
+            force_update: resp.force_update,
         });
     }
 
@@ -345,6 +351,7 @@ fn converge(
         stream_requested: resp.stream_requested,
         proxied_devices,
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
+        force_update: resp.force_update,
     })
 }
 
@@ -762,7 +769,15 @@ pub async fn daemon_loop(
                 }
 
                 // Self-update check (failures are logged, never crash the agent).
-                if let Some(ref ucfg) = update_cfg {
+                // force_update from server: skip version check, always download + restart.
+                if rr.force_update {
+                    info!("server requested forced update, downloading latest binary");
+                    if let Some(ref ucfg) = update_cfg {
+                        if !ucfg.api_addr.is_empty() {
+                            crate::update::force_self_update(&ucfg.api_addr).await;
+                        }
+                    }
+                } else if let Some(ref ucfg) = update_cfg {
                     if !ucfg.api_addr.is_empty() && !ucfg.current_version.is_empty() {
                         crate::update::check_self_update(&ucfg.api_addr, &ucfg.current_version).await;
                     }
@@ -1601,6 +1616,7 @@ mod tests {
             stream_requested: false,
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
+            force_update: false,
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1623,6 +1639,7 @@ mod tests {
             stream_requested: false,
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
+            force_update: false,
         };
 
         update_state(&mut ps, &rr, None);
@@ -1795,6 +1812,7 @@ mod tests {
             stream_requested: false,
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
+            force_update: false,
         };
 
         update_state(&mut ps, &rr, None);

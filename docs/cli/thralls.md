@@ -248,27 +248,21 @@ Purged 2 stale thrall(s).
 
 ## rebootstrap
 
-Re-bootstrap one or more thralls by SSHing into each machine and running the server's bootstrap script. This downloads the latest agent binary, re-enrolls with `--force`, and restarts the service.
+Signal thralls to download the latest agent binary and restart on their next check-in. No SSH required — the server sets a `force_update` flag that the agent picks up during its normal polling cycle.
 
 ```bash
-# Re-bootstrap specific thralls
+# Update specific thralls
 hobnobcli thralls rebootstrap plex raspberry
 
-# Re-bootstrap all active thralls
+# Update all active thralls
 hobnobcli thralls rebootstrap --all
-
-# Preview without acting
-hobnobcli thralls rebootstrap --all --dry-run
-
-# Use a different SSH user (default: root)
-hobnobcli thralls rebootstrap plex --user admin
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Re-bootstrap every active thrall |
-| `--dry-run` | Show targets without acting |
-| `--user` | SSH user (default: `root`) |
+| `--all` | Signal every active thrall to update |
+
+The agent downloads the latest binary from the server's `/api/v1/agent/download` endpoint, verifies the SHA256 checksum, atomically replaces its own binary, and exec-restarts. On systemd, this is seamless — the service continues running with the new binary.
 
 ## Related
 

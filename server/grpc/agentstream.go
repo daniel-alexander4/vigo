@@ -260,12 +260,18 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	forcePush := thrall.ForcePush != 0
 	hasPending := thrall.PendingRotatedSecrets != "" && thrall.PendingRotatedSecrets != "[]"
 	streamRequested := false
+	forceUpdate := false
 	if s.fleetIndex != nil {
 		if freshState, ok, _ := s.fleetIndex.GetThrallLite(thrallID); ok {
 			forcePush = freshState.ForcePush
 			hasPending = len(freshState.PendingRotatedSecrets) > 0
 			streamRequested = freshState.StreamRequested
+			forceUpdate = freshState.ForceUpdate
 		}
+	}
+	// Clear the ephemeral flag so it's only sent once.
+	if forceUpdate && s.fleetIndex != nil {
+		s.fleetIndex.SetForceUpdate(thrallID, false)
 	}
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
 		!forcePush && !hasPending {
@@ -274,6 +280,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 			NoChange:        true,
 			PolicyVersion:   configVersion,
 			StreamRequested: streamRequested,
+			ForceUpdate:     forceUpdate,
 			Interval:        formatDuration(s.baseInterval),
 			JitterPercent:   s.jitterPercent,
 			ServerPubkeyPem: s.bundlePubKeyPEM,
@@ -423,6 +430,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		PolicyBundle:    bundle,
 		PolicyVersion:   configVersion,
 		StreamRequested: streamRequested,
+		ForceUpdate:     forceUpdate,
 		Interval:        formatDuration(s.baseInterval),
 		JitterPercent:   s.jitterPercent,
 		ServerPubkeyPem: s.bundlePubKeyPEM,

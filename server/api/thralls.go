@@ -32,6 +32,8 @@ func (h *ThrallsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/thralls/{id}/maintenance", h.SetMaintenance)
 	mux.HandleFunc("DELETE /api/v1/thralls/{id}/maintenance", h.ClearMaintenance)
 	mux.HandleFunc("GET /api/v1/thralls/{id}/compliance", h.GetCompliance)
+	mux.HandleFunc("POST /api/v1/thralls/{id}/update", h.ForceUpdate)
+	mux.HandleFunc("POST /api/v1/thralls/update", h.ForceUpdateAll)
 }
 
 // SetTags sets the tags for a thrall.
@@ -154,4 +156,33 @@ func (h *ThrallsHandler) GetCompliance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSONError(w, http.StatusNotImplemented, "compliance requires FleetIndex")
+}
+
+// ForceUpdate sets the force_update flag on a single thrall so it downloads
+// the latest binary on its next check-in.
+func (h *ThrallsHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
+	if h.fleetIndex == nil {
+		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
+		return
+	}
+
+	id := r.PathValue("id")
+	if _, ok, _ := h.fleetIndex.GetThrallLite(id); !ok {
+		writeJSONError(w, http.StatusNotFound, "thrall not found")
+		return
+	}
+
+	h.fleetIndex.SetForceUpdate(id, true)
+	writeJSON(w, http.StatusOK, map[string]any{"status": "queued"})
+}
+
+// ForceUpdateAll sets the force_update flag on all active thralls.
+func (h *ThrallsHandler) ForceUpdateAll(w http.ResponseWriter, r *http.Request) {
+	if h.fleetIndex == nil {
+		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
+		return
+	}
+
+	count := h.fleetIndex.SetForceUpdateAll()
+	writeJSON(w, http.StatusOK, map[string]any{"status": "queued", "count": count})
 }

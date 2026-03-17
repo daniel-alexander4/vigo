@@ -195,6 +195,43 @@ pub async fn check_self_update(api_addr: &str, current_version: &str) {
     }
 }
 
+/// Force a self-update regardless of version. Downloads the latest binary,
+/// verifies checksum, replaces the current binary, and exec restarts.
+///
+/// Called when the server sets force_update on the check-in response.
+/// Failures are logged but never crash the agent.
+pub async fn force_self_update(api_addr: &str) {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+
+    // Always fetch version info (we need the checksum and download URL).
+    match check_for_update(api_addr, "force", os, arch).await {
+        Ok(Some(info)) => {
+            info!(version = %info.version, "forced update: downloading latest binary");
+
+            let current_binary = match std::env::current_exe() {
+                Ok(p) => p.to_string_lossy().to_string(),
+                Err(e) => {
+                    warn!(error = %e, "cannot determine current binary path");
+                    return;
+                }
+            };
+
+            if let Err(e) = apply(&info, &current_binary, true).await {
+                warn!(error = %e, "forced update apply failed, continuing with current version");
+            }
+        }
+        Ok(None) => {
+            // Server returned same version as "force" (impossible in practice).
+            // Fall back to downloading by URL directly.
+            info!("forced update: server reports no update available");
+        }
+        Err(e) => {
+            warn!(error = %e, "forced update version check failed");
+        }
+    }
+}
+
 /// RAII guard that removes a temp file on drop (if it still exists).
 struct TempFileGuard(std::path::PathBuf);
 

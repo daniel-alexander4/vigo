@@ -33,6 +33,7 @@ type ThrallState struct {
 	Traits                map[string]string // flattened key→value for trait index
 	PendingRotatedSecrets []string
 	ForcePush             bool
+	ForceUpdate           bool   // ephemeral: agent should download latest binary and restart
 	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
 	Gateway               string // hostname of gateway thrall (empty for normal thralls)
 	DeviceType            string // network device type (empty for normal thralls)
@@ -529,6 +530,34 @@ func (f *FleetIndex) SetForcePush(id string, val bool) {
 	}
 	ts.ForcePush = val
 	f.dirty[id] = true
+}
+
+// SetForceUpdate sets the ForceUpdate flag on a single thrall.
+func (f *FleetIndex) SetForceUpdate(id string, val bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.thralls[id]
+	if !ok {
+		return
+	}
+	ts.ForceUpdate = val
+}
+
+// SetForceUpdateAll sets ForceUpdate on all non-revoked thralls. Returns count.
+func (f *FleetIndex) SetForceUpdateAll() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	count := 0
+	for _, ts := range f.thralls {
+		if ts.Revoked {
+			continue
+		}
+		ts.ForceUpdate = true
+		count++
+	}
+	return count
 }
 
 // SetForcePushAll sets ForcePush on all non-revoked thralls. Returns count.

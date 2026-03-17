@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"text/tabwriter"
 
@@ -454,134 +453,63 @@ func resolveThrall(client *apiClient, idOrHostname string) (string, error) {
 
 var thrallsRebootstrapCmd = &cobra.Command{
 	Use:   "rebootstrap [hostname...]",
-	Short: "Re-bootstrap thralls by SSHing in and running the bootstrap script",
-	Long: `Re-bootstrap one or more thralls by SSHing into each machine and running
-the bootstrap script from the server. This downloads the latest agent binary,
-re-enrolls with the server, and restarts the service.
+	Short: "Signal thralls to download the latest agent binary and restart",
+	Long: `Signal one or more thralls to update their agent binary on the next check-in.
+The server sets a force_update flag that tells the agent to download the latest
+binary, verify its checksum, replace itself, and restart — no SSH required.
 
-With --all, re-bootstraps every active thrall. Otherwise, pass hostnames.
+With --all, signals every active thrall. Otherwise, pass hostnames.
 
 Examples:
   hobnobcli thralls rebootstrap plex raspberry
-  hobnobcli thralls rebootstrap --all
-  hobnobcli thralls rebootstrap --all --user admin
-  hobnobcli thralls rebootstrap plex --dry-run`,
+  hobnobcli thralls rebootstrap --all`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
-		sshUser, _ := cmd.Flags().GetString("user")
 
 		if !all && len(args) == 0 {
 			return fmt.Errorf("specify hostnames or use --all")
 		}
 
 		client := newAPIClient()
-		var listResp struct {
-			Thralls []struct {
-				ID        string `json:"id"`
-				Hostname  string `json:"hostname"`
-				IPAddress string `json:"ipAddress"`
-			} `json:"thralls"`
-		}
-		if err := client.get("/api/v1/thralls", &listResp); err != nil {
-			return fmt.Errorf("listing thralls: %w", err)
-		}
-
-		// Build target list.
-		type target struct {
-			hostname string
-			ip       string
-		}
-		var targets []target
 
 		if all {
-			for _, t := range listResp.Thralls {
-				targets = append(targets, target{t.Hostname, t.IPAddress})
+			var resp struct {
+				Count int `json:"count"`
 			}
-		} else {
-			thrallMap := make(map[string]string, len(listResp.Thralls))
-			for _, t := range listResp.Thralls {
-				thrallMap[t.Hostname] = t.IPAddress
+			if err := client.post("/api/v1/thralls/update", nil, &resp); err != nil {
+				return err
 			}
-			for _, name := range args {
-				ip, ok := thrallMap[name]
-				if !ok {
-					return fmt.Errorf("thrall %q not found", name)
-				}
-				targets = append(targets, target{name, ip})
-			}
-		}
-
-		if len(targets) == 0 {
-			fmt.Println("No thralls to re-bootstrap.")
+			fmt.Printf("Queued update for %d thrall(s). They will update on next check-in.\n", resp.Count)
 			return nil
 		}
 
-		// Derive the server address for the bootstrap curl command.
-		// Use the CLI's --server flag value (what we're talking to).
-		bootstrapURL := serverURL + "/bootstrap"
-
-		fmt.Printf("Will re-bootstrap %d thrall(s):\n", len(targets))
-		for _, t := range targets {
-			fmt.Printf("  %s (%s)\n", t.hostname, t.ip)
-		}
-		fmt.Printf("\nBootstrap URL: %s\n", bootstrapURL)
-
-		if dryRun {
-			fmt.Println("\nDry run — no changes made.")
-			return nil
-		}
-
-		if !confirmAction("Proceed?") {
-			fmt.Println("Cancelled.")
-			return nil
-		}
-
-		sshTarget := func(t target) string {
-			host := t.hostname
-			// Fall back to IP if hostname might not resolve.
-			if t.ip != "" {
-				host = t.ip
-			}
-			if sshUser != "" {
-				return sshUser + "@" + host
-			}
-			return "root@" + host
-		}
-
+		// Resolve hostnames to IDs and signal each one.
 		var failures int
-		for _, t := range targets {
-			fmt.Printf("\n--- %s (%s) ---\n", t.hostname, t.ip)
-			sshCmd := fmt.Sprintf("curl -sSfk %s | sh", bootstrapURL)
-			// #nosec G204 — args are from server API, not user input
-			c := execCommand("ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10", sshTarget(t), sshCmd)
-			c.Stdout = os.Stdout
-			c.Stderr = os.Stderr
-			if err := c.Run(); err != nil {
-				fmt.Fprintf(os.Stderr, "  FAILED: %v\n", err)
+		for _, name := range args {
+			id, err := resolveThrall(client, name)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  %s: %v\n", name, err)
+				failures++
+				continue
+			}
+			if err := client.post("/api/v1/thralls/"+id+"/update", nil, nil); err != nil {
+				fmt.Fprintf(os.Stderr, "  %s: %v\n", name, err)
 				failures++
 			} else {
-				fmt.Printf("  OK\n")
+				fmt.Printf("  %s: queued\n", name)
 			}
 		}
-
-		fmt.Println()
 		if failures > 0 {
-			return fmt.Errorf("%d of %d re-bootstrap(s) failed", failures, len(targets))
+			return fmt.Errorf("%d target(s) failed", failures)
 		}
-		fmt.Printf("All %d thrall(s) re-bootstrapped successfully.\n", len(targets))
+		fmt.Println("Thralls will update on next check-in.")
 		return nil
 	},
 }
 
-// execCommand wraps exec.Command for testability.
-var execCommand = exec.Command
-
 func init() {
 	thrallsListCmd.Flags().Bool("all", false, "include revoked thralls")
-	thrallsRebootstrapCmd.Flags().Bool("all", false, "re-bootstrap all active thralls")
-	thrallsRebootstrapCmd.Flags().Bool("dry-run", false, "show what would be done without acting")
-	thrallsRebootstrapCmd.Flags().String("user", "root", "SSH user")
+	thrallsRebootstrapCmd.Flags().Bool("all", false, "update all active thralls")
 	thrallsMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
 	thrallsMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
 	thrallsPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
