@@ -1,4 +1,6 @@
-# Performance Analysis: 30-Second Check-ins on 4 vCPU / 8 GB / SSD
+# Performance Analysis (Theoretical): 30-Second Check-ins on 4 vCPU / 8 GB / SSD
+
+These projections are based on benchmarked per-request costs from the codebase, not measured end-to-end under production load. Actual performance will vary with hardware, network conditions, policy complexity, and fleet composition.
 
 This document analyzes Hobnob server performance under 30-second check-in intervals on modest hardware. 30-second intervals are the recommended setting for fleets where responsiveness matters — drift correction within 30 seconds, stale detection within 90 seconds, and a dashboard that feels alive.
 

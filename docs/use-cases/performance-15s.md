@@ -1,4 +1,6 @@
-# Performance Analysis: 15-Second Check-ins on 4 vCPU / 8 GB / SSD
+# Performance Analysis (Theoretical): 15-Second Check-ins on 4 vCPU / 8 GB / SSD
+
+These projections are based on benchmarked per-request costs from the codebase, not measured end-to-end under production load. Actual performance will vary with hardware, network conditions, policy complexity, and fleet composition.
 
 This document analyzes Hobnob server performance under 15-second check-in intervals on modest hardware. 15-second intervals provide near-real-time responsiveness — drift corrected in under 15 seconds, stale machines flagged within 45 seconds. This is the fastest practical polling interval before streaming becomes a better choice.
 
