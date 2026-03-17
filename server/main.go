@@ -480,28 +480,38 @@ func run() error {
 	}
 
 	// Wire peer replication (when peers section is configured).
+	var peerSvc *peer.Service
 	if len(cfg.Peers.Servers) > 0 {
 		peerRole := cfg.Peers.Role
 		if peerRole == "" {
 			peerRole = "primary"
 		}
 
-		peerSvc := peer.NewService(serverRoot, peerRole, func() {
+		peerSvc = peer.NewService(serverRoot, peerRole, func() {
 			if err := configStore.Reload(); err != nil {
 				slog.Error("peer-triggered config reload failed", "error", err)
 			}
 		})
+
+		// Build TLS config for peer-to-peer communication (used by both roles
+		// for split-brain resolution and primary push).
+		peerTLS, peerTLSErr := buildPeerTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+		if peerTLSErr != nil {
+			return fmt.Errorf("building peer TLS config: %w", peerTLSErr)
+		}
+
+		// Configure peer addresses for split-brain resolution during Promote.
+		var peerAddrs []string
+		for _, entry := range cfg.Peers.Servers {
+			peerAddrs = append(peerAddrs, entry.Addr)
+		}
+		peerSvc.SetPeers(peerAddrs, peerTLS)
 
 		pb.RegisterHobnobPeerServer(grpcSrv, peerSvc)
 		slog.Info("peer replication enabled", "role", peerRole, "peers", len(cfg.Peers.Servers))
 
 		// Primary role: start pushing file changes to peers.
 		if peerRole == "primary" {
-			peerTLS, peerTLSErr := buildPeerTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
-			if peerTLSErr != nil {
-				return fmt.Errorf("building peer TLS config: %w", peerTLSErr)
-			}
-
 			primary := peer.NewPrimary(serverRoot, cfg.Peers.Servers, peerTLS)
 			go func() {
 				if err := primary.Start(ctx); err != nil && ctx.Err() == nil {
@@ -669,6 +679,7 @@ func run() error {
 	tasksHandler := api.NewTasksHandler(queries, agentSvc)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
+	peerHandler := api.NewPeerHandler(peerSvc)
 
 	// Auth-related API handlers.
 	userStore := hobnobauth.NewUserStore(queries)
@@ -737,6 +748,7 @@ func run() error {
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
 		spannerHandler.RegisterRoutes(mux)
+		peerHandler.RegisterRoutes(mux)
 		tasksHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
 		workflowHandler.RegisterRoutes(mux)
@@ -792,6 +804,7 @@ func run() error {
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
+		peerHandler.RegisterRoutes(gwMux)
 		tasksHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)
 		workflowHandler.RegisterRoutes(gwMux)

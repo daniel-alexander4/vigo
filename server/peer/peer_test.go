@@ -5,6 +5,7 @@ package peer
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"os"
 	"path/filepath"
@@ -397,6 +398,71 @@ func TestServiceStatus(t *testing.T) {
 	}
 	if resp.ConfigVersion != 42 {
 		t.Errorf("config_version = %d, want 42", resp.ConfigVersion)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestServiceDemote
+// ---------------------------------------------------------------------------
+
+func TestServiceDemote(t *testing.T) {
+	svc := NewService("/srv/hobnob", "primary", nil)
+
+	svc.Demote(context.Background(), "new-primary.example.com:1530")
+
+	if role := svc.Role(); role != "peer" {
+		t.Errorf("role = %q, want %q", role, "peer")
+	}
+
+	svc.mu.RLock()
+	addr := svc.primaryAddr
+	svc.mu.RUnlock()
+	if addr != "new-primary.example.com:1530" {
+		t.Errorf("primaryAddr = %q, want %q", addr, "new-primary.example.com:1530")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestServicePromoteNoPeers — promotion succeeds when no peers configured
+// ---------------------------------------------------------------------------
+
+func TestServicePromoteNoPeers(t *testing.T) {
+	svc := NewService("/srv/hobnob", "peer", nil)
+	svc.SetPrimaryAddr("old-primary.example.com:1530")
+
+	// No SetPeers call — promotion should succeed unconditionally.
+	resp, err := svc.Promote(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Promote returned error: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("Promote success = false, message = %s", resp.Message)
+	}
+	if role := svc.Role(); role != "primary" {
+		t.Errorf("role = %q, want %q", role, "primary")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestServicePromoteUnreachablePeer — promotion succeeds when peer is down
+// ---------------------------------------------------------------------------
+
+func TestServicePromoteUnreachablePeer(t *testing.T) {
+	svc := NewService("/srv/hobnob", "peer", nil)
+	svc.SetConfigVersion(10)
+
+	// Set an unreachable peer address.
+	svc.SetPeers([]string{"127.0.0.1:19999"}, &tls.Config{InsecureSkipVerify: true})
+
+	resp, err := svc.Promote(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Promote returned error: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("Promote success = false (should succeed when peer unreachable), message = %s", resp.Message)
+	}
+	if role := svc.Role(); role != "primary" {
+		t.Errorf("role = %q, want %q", role, "primary")
 	}
 }
 
