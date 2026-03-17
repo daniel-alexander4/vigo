@@ -2,7 +2,7 @@
 
 ## What It Is
 
-Hobnob is a configuration management system. It ensures every machine in your fleet is configured exactly how you declared it, continuously and automatically. You describe desired state in YAML. Hobnob makes it so.
+Hobnob is a distributed state enforcement engine. It ensures every machine in your fleet is configured exactly how you declared it, continuously and automatically. You describe desired state in YAML. Hobnob makes it so.
 
 ## Architecture
 

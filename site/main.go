@@ -130,7 +130,7 @@ func main() {
 			return
 		}
 		landingTmpl.ExecuteTemplate(w, "base", pageData{
-			Title:     "Hobnob — Configuration Management",
+			Title:     "Hobnob — Distributed State Enforcement",
 			ActiveNav: "home",
 		})
 	})

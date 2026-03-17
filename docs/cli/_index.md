@@ -1,6 +1,6 @@
 # CLI Reference
 
-`hobnobcli` is the administrative CLI for the Hobnob configuration management system. It communicates with the server's REST API to manage enrollment, thralls, operations, orchestration, secrets, and spanner.
+`hobnobcli` is the administrative CLI for the Hobnob distributed state enforcement engine. It communicates with the server's REST API to manage enrollment, thralls, operations, orchestration, secrets, and spanner.
 
 When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
 

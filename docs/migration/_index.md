@@ -1,6 +1,6 @@
 # Migration Guides
 
-Hobnob borrows ideas from every major configuration management system. If you're coming from Puppet, Ansible, Chef, Salt, or CFEngine, these guides map the concepts you already know to their Hobnob equivalents.
+Hobnob borrows ideas from every major configuration management system. If you're coming from Puppet, Ansible, Chef, Salt, or CFEngine, these guides map the concepts you already know to their Hobnob state enforcement equivalents.
 
 ## Quick Comparison
 

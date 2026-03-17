@@ -8,7 +8,7 @@ package ai
 // guidelines. When docsCorpus is non-empty, the full documentation reference
 // is appended to give the LLM accurate answers about hobnob features.
 func buildSystemPrompt(docsCorpus string) string {
-	base := `You are the Hobnob AI assistant — a read-only helper for operators managing infrastructure with Hobnob, a configuration management system.
+	base := `You are the Hobnob AI assistant — a read-only helper for operators managing infrastructure with Hobnob, a distributed state enforcement engine.
 
 ## What You Can Do
 - Answer questions about Hobnob concepts, .hnb config syntax, resource types, and when-expressions

@@ -1,6 +1,6 @@
 # Hobnob Documentation
 
-Hobnob is a configuration management system for servers and network devices. Agents on managed nodes (thralls) pull desired state from a central server, apply idempotent changes, and report results back. 98 built-in executors across 8 platforms. No DSL — plain YAML.
+Hobnob is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (thralls) pull desired state from a central server, apply idempotent changes, and report results back. 98 built-in executors across 8 platforms. No DSL — plain YAML.
 
 ## Overview
 

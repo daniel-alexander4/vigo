@@ -6,7 +6,7 @@ Alexander4, LLC | hobnob.licensing@alexander4.org
 
 ## What It Is
 
-Hobnob is a pull-based configuration management system. Agents on managed nodes pull desired state from a central server, apply changes idempotently, and report results back. Configuration is declared in YAML files. The system continuously converges machines toward the declared state.
+Hobnob is a pull-based distributed state enforcement engine. Agents on managed nodes pull desired state from a central server, apply changes idempotently, and report results back. Configuration is declared in YAML files. The system continuously converges machines toward the declared state.
 
 ## Components
 
@@ -14,7 +14,7 @@ Hobnob is a pull-based configuration management system. Agents on managed nodes 
 |--------|----------|------|
 | `hobd` | Go | Server — gRPC (port 1530) + REST API/Web UI (port 8443) |
 | `hobnob` | Rust | Agent — runs on each managed node |
-| `hobnobcli` | Go | Admin CLI — enrollment, config management, orchestration |
+| `hobnobcli` | Go | Admin CLI — enrollment, state management, orchestration |
 
 The server uses SQLite (embedded, WAL mode). No external database, message broker, or application runtime is required.
 

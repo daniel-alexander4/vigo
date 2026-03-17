@@ -1,6 +1,6 @@
 # Overview
 
-Hobnob is a configuration management system for managing fleets of servers and network devices. These pages explain what it is, how it compares, and why it exists.
+Hobnob is a distributed state enforcement engine for managing fleets of servers and network devices. These pages explain what it is, how it compares, and why it exists.
 
 | Page | Description |
 |------|-------------|

@@ -1,6 +1,6 @@
 # hobnobcli
 
-Admin CLI for the Hobnob configuration management system. Communicates with the server's REST API to manage enrollment, nodes, runs, and operational queries.
+Admin CLI for the Hobnob distributed state enforcement engine. Communicates with the server's REST API to manage enrollment, nodes, runs, and operational queries.
 
 - **Binary:** `hobnobcli` (symlink `hnbvi` for config editing)
 - **Transport:** REST API (default: `https://localhost:8443`)

@@ -31,7 +31,7 @@ func main() {
 
 var rootCmd = &cobra.Command{
 	Use:           "hobnobcli",
-	Short:         "Administrative CLI for the Hobnob configuration management system",
+	Short:         "Administrative CLI for the Hobnob distributed state enforcement engine",
 	Long:          "hobnobcli communicates with the Hobnob server's REST API to manage enrollment,\nthrall lifecycle, config publishing, orchestration, secrets, and fleet operations.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
