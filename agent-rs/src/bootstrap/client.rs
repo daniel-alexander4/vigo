@@ -43,6 +43,7 @@ pub async fn register(server: &str, req: &RegisterRequest) -> Result<RegisterRes
         let agent = ureq::Agent::new_with_config(
             ureq::config::Config::builder()
                 .tls_config(tls)
+                .http_status_as_error(false)
                 .build(),
         );
 

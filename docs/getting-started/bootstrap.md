@@ -114,16 +114,10 @@ bootstrap:
 ## Troubleshooting
 
 **"An active thrall with this hostname already exists":**
-- A thrall with the same hostname is already enrolled. If the machine was reimaged or its identity files were lost, use `--force` on re-registration to revoke the old thrall and re-enroll:
+- A thrall with the same hostname is already enrolled. The bootstrap script handles this automatically (it always passes `--force` to revoke and re-enroll). If using `hobnob register` directly, pass `--force`:
 
 ```bash
 hobnob register --token <token> --force
-```
-
-Or during bootstrap:
-
-```bash
-curl -sSfk https://<server>:8443/bootstrap | sudo sh -s -- --token <token> --force
 ```
 
 **Agent fails to register:**
