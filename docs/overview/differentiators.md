@@ -20,9 +20,19 @@ What Hobnob does in the areas of safety, reliability, and simplicity that other 
 
 - **Gradual license enforcement that never locks out existing nodes.** If you exceed your license, you get 15 days of warnings, then 15 days where only new enrollments are blocked, then shutdown. At no point are already-managed machines cut off from convergence.
 
+- **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, task dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. `hobnobcli audit verify` or the web UI validates the entire chain in seconds. Meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, and SOX requirements. No other CM tool provides cryptographic tamper evidence on its audit trail.
+
+- **Two-person change approval.** When enabled, config publish creates a pending change that a different admin must approve. The approver cannot be the same user as the publisher. Pending changes expire after a configurable timeout. Satisfies SOX segregation of duties and FDA change control requirements.
+
+- **Blast radius protection.** After config publish, the server monitors fleet compliance for a configurable window. If compliance drops below the threshold, the previous config is automatically restored and reloaded. Catches bad configs before they spread across the fleet.
+
 - **Source-available agent.** The code that runs as root on your machines is readable and auditable under the Elastic License 2.0. You do not have to trust a proprietary binary with root access on every machine in your fleet.
 
+- **Agent transparency.** `hobnob status` shows the enforced policy, collected traits, and pending results on any managed machine. The machine's local admin can verify exactly what the agent is doing without server access.
+
 ## Reliability
+
+- **Peer replication for server redundancy.** The primary server syncs config, secrets, and TLS certs to peers via gRPC. Agents fail over automatically after 3 consecutive failures. A promoted peer rebuilds fleet state from agent check-ins within one check-in cycle. No SQLite replication needed — agents are the source of truth. Integrates with hub-spoke spanner for full topology redundancy.
 
 - **Signed policy bundles with offline convergence.** The server compiles policy into a bundle, signs it with ED25519, and sends it to the agent. The agent verifies the signature, caches the bundle in LMDB, and can continue converging indefinitely if the server disappears. Pending results queue in LMDB, drained automatically on reconnect.
 
