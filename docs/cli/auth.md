@@ -42,3 +42,52 @@ Remove the stored API token.
 ```bash
 hobnobcli auth clear
 ```
+
+### create-token
+
+Create a new API token on the server. The plaintext token is shown once and cannot be retrieved again.
+
+```bash
+hobnobcli auth create-token --name "ci-automation" --expires-in "720h"
+```
+
+Output:
+```
+Token created.
+  ID:    tok_a1b2c3d4
+  Name:  ci-automation
+  Token: hbt_abc123...
+
+Save this token — it will not be shown again.
+To use it: hobnobcli auth set-token hbt_abc123...
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--name` | Descriptive name for the token |
+| `--expires-in` | Expiry duration (e.g., `720h` for 30 days). Omit for no expiry. |
+
+### list-tokens
+
+List your API tokens on the server. Shows ID, name, prefix, creation date, and expiry.
+
+```bash
+hobnobcli auth list-tokens
+```
+
+Output:
+```
+ID              NAME            PREFIX    CREATED     EXPIRES
+tok_a1b2c3d4    ci-automation   hbt_abc   2026-03-16  2026-04-15
+tok_e5f6a7b8    monitoring      hbt_def   2026-03-10  never
+```
+
+### revoke-token
+
+Revoke an API token by ID. The token is immediately invalidated.
+
+```bash
+hobnobcli auth revoke-token tok_a1b2c3d4
+```
