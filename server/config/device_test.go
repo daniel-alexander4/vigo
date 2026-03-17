@@ -204,7 +204,7 @@ thralls:
   - match: "gw.example.com"
     modules: []
   - match: "sw01.example.com"
-    device_type: arista_eos
+    device_type: huawei_vrp
     gateway: "gw.example.com"
     credential: "secret:net/sw01"
     ip_address: "10.0.1.1"
