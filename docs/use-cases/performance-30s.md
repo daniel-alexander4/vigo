@@ -2,7 +2,7 @@
 
 This document analyzes Hobnob server performance under 30-second check-in intervals on modest hardware. 30-second intervals are the recommended setting for fleets where responsiveness matters — drift correction within 30 seconds, stale detection within 90 seconds, and a dashboard that feels alive.
 
-All numbers reference benchmarked values from the codebase or are derived from measured operations. See [performance-analysis.md](performance-analysis.md) for the per-request cost derivations.
+All numbers reference benchmarked values from the codebase or are derived from measured operations. See [performance-1m.md](performance-1m.md) for the per-request cost derivations.
 
 ## Hardware Assumptions
 

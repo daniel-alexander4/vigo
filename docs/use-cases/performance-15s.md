@@ -2,7 +2,7 @@
 
 This document analyzes Hobnob server performance under 15-second check-in intervals on modest hardware. 15-second intervals provide near-real-time responsiveness — drift corrected in under 15 seconds, stale machines flagged within 45 seconds. This is the fastest practical polling interval before streaming becomes a better choice.
 
-All numbers reference benchmarked values from the codebase or are derived from measured operations. See [performance-analysis.md](performance-analysis.md) for the per-request cost derivations.
+All numbers reference benchmarked values from the codebase or are derived from measured operations. See [performance-1m.md](performance-1m.md) for the per-request cost derivations.
 
 ## Hardware Assumptions
 

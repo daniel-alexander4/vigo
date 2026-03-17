@@ -50,6 +50,14 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [Spanner](concepts/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](concepts/p2p-spanner.md) — Future peer-to-peer architecture (design doc)
 
+## Use Cases & Performance
+
+- [Core Use Cases](use-cases/use-cases.md) — Config management, security, network, DR/IR, observability — tiered by interval
+- [Extended Use Cases](use-cases/extended-use-cases.md) — Live events, elections, medical devices, autonomous vehicles, smart buildings, and more
+- [Performance: 1-Minute](use-cases/performance-1m.md) — Baseline projections and per-request cost derivations
+- [Performance: 30-Second](use-cases/performance-30s.md) — Recommended for responsive fleets
+- [Performance: 15-Second](use-cases/performance-15s.md) — Near-real-time state enforcement
+
 ## AI Assistant
 
 - [Providers](ai/providers.md) — Ollama, Claude, OpenAI
