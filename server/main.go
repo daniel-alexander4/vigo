@@ -441,6 +441,7 @@ func run() error {
 		Queries:              queries,
 		RunStore:             runStore,
 		Interval:             baseInterval,
+		JitterPercent:        int32(cfg.CheckIn.JitterPercent),
 		Dispatcher:           dispatcher,
 		TraitsDir:            traitsDir,
 		SignatureWindow:      sigWindow,

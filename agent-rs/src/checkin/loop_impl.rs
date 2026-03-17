@@ -700,20 +700,24 @@ pub async fn daemon_loop(
         .await
         {
             Ok(rr) => {
-                bo.reset();
-
                 // Verify bundle signature before accepting.
                 if let Some(ref bundle) = rr.policy_bundle {
                     if let Err(e) = verify::verify_bundle(bundle, &server_pubkey_pem) {
                         warn!(error = %e, "bundle signature verification failed, rejecting");
-                        let wait = bo.next_backoff();
+                        // Use the server-provided interval (or default) instead of
+                        // tight retry — the bundle will keep failing until the
+                        // server pubkey is configured.
+                        let sleep_dur = jittered_duration(rr.interval, rr.jitter_pct);
+                        info!(duration = ?sleep_dur, "sleeping until next check-in (bundle rejected)");
                         tokio::select! {
                             _ = cancel.cancelled() => return Ok(()),
-                            _ = tokio::time::sleep(wait) => {}
+                            _ = tokio::time::sleep(sleep_dur) => {}
                         }
                         continue;
                     }
                 }
+
+                bo.reset();
 
                 update_state(&mut policy_state, &rr, Some(&mut last_fingerprint));
                 log_run_result(&rr);

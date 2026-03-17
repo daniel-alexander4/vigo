@@ -44,6 +44,7 @@ type AgentService struct {
 	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
 	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
+	jitterPercent    int32             // jitter percentage sent to agents
 }
 
 // isRecentlyActive returns true if the thrall has checked in within 2× the check-in interval.
@@ -74,4 +75,9 @@ type AdminService struct {
 	hub           *spanner.Hub   // non-nil when role=hub; aggregates from spokes
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending thrall reassignments (spoke side)
+}
+
+// formatDuration formats a time.Duration as a Go-style string (e.g. "5m0s").
+func formatDuration(d time.Duration) string {
+	return d.String()
 }

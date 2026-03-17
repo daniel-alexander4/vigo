@@ -61,6 +61,7 @@ type ServerConfig struct {
 	Queries         *db.Queries
 	RunStore        db.RunStore
 	Interval        time.Duration
+	JitterPercent   int32
 	Dispatcher      *webhook.Dispatcher
 	TraitsDir            string
 	SignatureWindow      time.Duration // 0 → default 5m
@@ -185,6 +186,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		bundleSigner:     cfg.BundleSigner,
 		bundleMaxAge:     cfg.BundleMaxAge,
 		baseInterval:     cfg.Interval,
+		jitterPercent:    cfg.JitterPercent,
 	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 

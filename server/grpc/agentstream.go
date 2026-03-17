@@ -274,6 +274,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 			NoChange:        true,
 			PolicyVersion:   configVersion,
 			StreamRequested: streamRequested,
+			Interval:        formatDuration(s.baseInterval),
+			JitterPercent:   s.jitterPercent,
 		}
 		// Check for pending reassignment even on no-change cycles.
 		if s.reassignStore != nil {
@@ -420,6 +422,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		PolicyBundle:    bundle,
 		PolicyVersion:   configVersion,
 		StreamRequested: streamRequested,
+		Interval:        formatDuration(s.baseInterval),
+		JitterPercent:   s.jitterPercent,
 	}
 
 	// Surface config reload errors as warnings so agents know why
