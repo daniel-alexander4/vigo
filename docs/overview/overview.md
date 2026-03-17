@@ -51,7 +51,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 - `hobnob status` shows the local agent's enforced policy, collected traits, and pending results — fully transparent to the machine's admin.
 - Configuration is YAML only. One format, one directory, one publish command. No API writes, no database config, no UI mutations.
 
-## Executors (74 built-in)
+## Executors (72 built-in)
 
 ### Cross-Platform (24)
 

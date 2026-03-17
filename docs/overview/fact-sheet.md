@@ -91,7 +91,7 @@ Works across all supported platforms: Linux (systemd), macOS (launchd), FreeBSD/
 
 ## Platform Support
 
-One agent binary, seven operating system families, 98 built-in executors.
+One agent binary, seven operating system families, 72 built-in resource types.
 
 | Platform | Init System | Package Manager | Fully Supported |
 |----------|-------------|-----------------|:---------------:|
@@ -109,7 +109,7 @@ Network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos) are managed 
 
 ## Executors
 
-98 built-in resource types, organized by scope:
+72 built-in resource types, organized by scope:
 
 **System:** package, service, user, group, cron, hostname, timezone, sysctl, firewall, kernel_module, mount, swap, reboot, selinux, alternatives, tmpfile, logrotate, systemd_dropin
 

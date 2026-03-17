@@ -11,7 +11,7 @@ This document assesses Hobnob's readiness for regulated environments — healthc
 | Encrypted transport | Complete | mTLS on all gRPC traffic, TLS 1.3 minimum, no plaintext mode |
 | Request authentication | Complete | ED25519 signature verification on every check-in, per-request |
 | Secrets management | Complete | AES-256-GCM encrypted at rest, `secret:` prefix, never plaintext in config/logs/DB/wire |
-| Idempotent enforcement | Complete | Check-before-act on all 98 executors, no side effects on no-op |
+| Idempotent enforcement | Complete | Check-before-act on all 72 resource types, no side effects on no-op |
 | Continuous convergence | Complete | 15-second check-in intervals, sub-30s drift correction |
 | Offline resilience | Complete | Signed policy bundles cached in LMDB, local convergence, pending results queue |
 | Agent source availability | Complete | ELv2 — readable and auditable by customers (critical for "what runs as root on our machines") |

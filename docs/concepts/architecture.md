@@ -20,7 +20,7 @@ The central server written in Go. It:
 The Rust agent that runs on each managed machine (thrall). It:
 - Checks in with the server on a configurable interval (default 5m)
 - Receives desired state (modules + resources) from the server
-- Applies resources idempotently using 74 built-in executors
+- Applies resources idempotently using 72 built-in resource types
 - Reports results back to the server
 - Collects 27 traits (hardware, OS, network, packages, etc.)
 - Caches policy bundles in LMDB for offline convergence

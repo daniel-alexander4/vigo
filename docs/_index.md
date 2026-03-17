@@ -1,6 +1,6 @@
 # Hobnob Documentation
 
-Hobnob is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (thralls) pull desired state from a central server, apply idempotent changes, and report results back. 98 built-in executors across 8 platforms. No DSL — plain YAML.
+Hobnob is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (thralls) pull desired state from a central server, apply idempotent changes, and report results back. 72 built-in resource types across 8 platforms. No DSL — plain YAML.
 
 ## Overview
 
@@ -86,7 +86,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 
 ## Reference
 
-- [Executors](executors/_index.md) — 98 resource executors across all platforms
+- [Executors](executors/_index.md) — 72 resource types across all platforms
 - [Trait Collectors](traits/_index.md) — System fact collectors
 - [Agent CLI](cli/agent.md) — hobnob agent commands (daemon, status, traits, run)
 - [CLI Reference](cli/_index.md) — hobnobcli admin commands

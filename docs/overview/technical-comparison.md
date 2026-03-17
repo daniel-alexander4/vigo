@@ -138,7 +138,7 @@ All six tools enforce idempotency — check current state, act only if drift is 
 | LVM/RAID | No | Yes | No | Yes | No | No |
 | Docker containers | No | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng | No |
 
-Hobnob has 98 built-in executors covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Hobnob's custom executor JSON protocol allows extending coverage without modifying the agent binary.
+Hobnob has 72 built-in resource types covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Hobnob's custom executor JSON protocol allows extending coverage without modifying the agent binary.
 
 ### Package management depth
 
