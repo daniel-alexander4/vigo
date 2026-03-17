@@ -59,7 +59,7 @@ impl Executor for KernelModuleExecutor {
         }
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
-        let mod_params = params.get("params").cloned().unwrap_or_default();
+        let mod_params = params.get("module_params").cloned().unwrap_or_default();
         let persist = params.get("persist").map(|s| s.as_str()).unwrap_or("true") == "true";
         let loaded = self.is_loaded(&name);
         let persisted = Self::is_persisted(&name);

@@ -7,8 +7,8 @@ Performs regex find-and-replace operations within a file. Supports backreference
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `path` | Yes | -- | Absolute path to the file. |
-| `match` | Yes | -- | Regex pattern to search for. |
-| `replace` | Yes | -- | Replacement string. Supports backreferences (`$1`, `$2`, etc.). |
+| `match_pattern` | Yes | -- | Regex pattern to search for. |
+| `replacement` | Yes | -- | Replacement string. Supports backreferences (`$1`, `$2`, etc.). |
 | `occurrences` | No | `all` | How many matches to replace: `all` or `first`. |
 | `region_start` | No | -- | Regex marking the start of a region to constrain replacements within. |
 | `region_end` | No | -- | Regex marking the end of a region to constrain replacements within. |
@@ -30,8 +30,8 @@ resources:
   - name: Update listen port
     type: replace
     path: /etc/nginx/sites-available/default
-    match: "listen \\d+"
-    replace: "listen 8080"
+    match_pattern: "listen \\d+"
+    replacement: "listen 8080"
 ```
 
 ### With backreferences
@@ -41,8 +41,8 @@ resources:
   - name: Comment out debug settings
     type: replace
     path: /etc/myapp.conf
-    match: "^(debug_level\\s*=\\s*\\d+)"
-    replace: "# $1"
+    match_pattern: "^(debug_level\\s*=\\s*\\d+)"
+    replacement: "# $1"
 ```
 
 ### Replace first occurrence only
@@ -52,8 +52,8 @@ resources:
   - name: Update first server entry
     type: replace
     path: /etc/haproxy/haproxy.cfg
-    match: "server old-host"
-    replace: "server new-host"
+    match_pattern: "server old-host"
+    replacement: "server new-host"
     occurrences: first
 ```
 
@@ -64,8 +64,8 @@ resources:
   - name: Update database port in production section
     type: replace
     path: /etc/myapp.conf
-    match: "port = \\d+"
-    replace: "port = 5433"
+    match_pattern: "port = \\d+"
+    replacement: "port = 5433"
     region_start: "^\\[production\\]"
     region_end: "^\\["
 ```

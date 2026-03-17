@@ -61,7 +61,7 @@ impl Executor for ArchiveExecutor {
             return result;
         }
 
-        let binary = params.get("binary").cloned().unwrap_or_default();
+        let binary = params.get("binary_path").cloned().unwrap_or_default();
         let sha256 = params.get("sha256").cloned().unwrap_or_default();
         let unless_cmd = params.get("unless").cloned().unwrap_or_default();
         let mode = params.get("mode").map(|s| s.as_str()).unwrap_or("0755");

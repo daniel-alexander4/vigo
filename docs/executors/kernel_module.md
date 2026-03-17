@@ -8,7 +8,7 @@ Loads and unloads Linux kernel modules, with optional persistence across reboots
 |-----------|----------|---------|-------------|
 | `module` | Yes | -- | Kernel module name (e.g., `br_netfilter`). |
 | `state` | No | `present` | Desired state: `present`, `absent`, `loaded`, or `unloaded`. |
-| `params` | No | -- | Module parameters (space-separated key=value pairs passed to `modprobe`). |
+| `module_params` | No | -- | Module parameters (space-separated key=value pairs passed to `modprobe`). |
 | `persist` | No | `true` | If `true`, persist the module configuration to `/etc/modules-load.d/`. |
 
 ## States
@@ -40,7 +40,7 @@ resources:
   - name: Load vfio with IOMMU
     type: kernel_module
     module: vfio
-    params: "enable_unsafe_noiommu_mode=1"
+    module_params: "enable_unsafe_noiommu_mode=1"
 ```
 
 ### Runtime only (no persistence)

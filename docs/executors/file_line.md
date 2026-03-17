@@ -8,7 +8,7 @@ Manages individual lines within a file. Can add, remove, or replace lines based 
 |-----------|----------|---------|-------------|
 | `path` | Yes | -- | Absolute path to the file. |
 | `line` | No | -- | The line content to ensure is present or absent. |
-| `match` | No | -- | Regex pattern to match existing lines. When combined with `line`, replaces matched lines. |
+| `match_pattern` | No | -- | Regex pattern to match existing lines. When combined with `line`, replaces matched lines. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `position` | No | `end` | Where to insert the line: `end`, `begin`, `after:<regex>`, or `before:<regex>`. |
 | `region_start` | No | -- | Regex marking the start of a region to constrain operations within. |
@@ -16,8 +16,8 @@ Manages individual lines within a file. Can add, remove, or replace lines based 
 
 ## States
 
-- **`present`** -- Ensure the line exists in the file. If `match` is given, replace matching lines with `line`. If no match and line is not found, insert at `position`.
-- **`absent`** -- Remove lines matching `line` (exact) or `match` (regex).
+- **`present`** -- Ensure the line exists in the file. If `match_pattern` is given, replace matching lines with `line`. If no match and line is not found, insert at `position`.
+- **`absent`** -- Remove lines matching `line` (exact) or `match_pattern` (regex).
 
 ## Idempotency
 
@@ -33,7 +33,7 @@ resources:
     type: file_line
     path: /etc/sysctl.conf
     line: "net.ipv4.ip_forward = 1"
-    match: "^net\\.ipv4\\.ip_forward"
+    match_pattern: "^net\\.ipv4\\.ip_forward"
 ```
 
 ### Insert after a pattern
@@ -54,7 +54,7 @@ resources:
   - name: Remove old entry
     type: file_line
     path: /etc/hosts
-    match: "old-server\\.example\\.com"
+    match_pattern: "old-server\\.example\\.com"
     state: absent
 ```
 
@@ -66,7 +66,7 @@ resources:
     type: file_line
     path: /etc/myapp.conf
     line: "max_connections = 100"
-    match: "^max_connections"
+    match_pattern: "^max_connections"
     region_start: "^\\[database\\]"
     region_end: "^\\["
 ```
@@ -77,7 +77,7 @@ Cross-platform.
 
 ## Notes
 
-- When both `line` and `match` are provided for `state: present`, lines matching the regex are replaced with the specified `line`.
+- When both `line` and `match_pattern` are provided for `state: present`, lines matching the regex are replaced with the specified `line`.
 - The `position` parameter only applies when inserting a new line (no existing match found).
 - Region constraints limit operations to lines between `region_start` and `region_end`.
 

@@ -15,6 +15,7 @@ use crate::proto::{
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
 use std::collections::HashMap;
+use std::time::Duration;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
 /// Number of consecutive failures before switching to the next server.
@@ -135,6 +136,11 @@ impl Client {
             .context("parse server address")?
             .tls_config(tls_config)
             .context("configure TLS")?
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .tcp_keepalive(Some(Duration::from_secs(30)))
+            .http2_keep_alive_interval(Duration::from_secs(30))
+            .keep_alive_timeout(Duration::from_secs(10))
             .connect()
             .await
             .context("connect to gRPC server")

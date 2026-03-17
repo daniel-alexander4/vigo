@@ -434,7 +434,7 @@ func TestReplaceValidation_MissingPath(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-replace", Type: "replace", Attributes: map[string]any{
-				"match": "foo", "replace": "bar",
+				"match_pattern": "foo", "replacement": "bar",
 			}},
 		},
 	}
@@ -449,7 +449,7 @@ func TestReplaceValidation_MissingMatch(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-replace", Type: "replace", Attributes: map[string]any{
-				"path": "/etc/foo", "replace": "bar",
+				"path": "/etc/foo", "replacement": "bar",
 			}},
 		},
 	}
@@ -464,7 +464,7 @@ func TestReplaceValidation_ValidConfig(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-replace", Type: "replace", Attributes: map[string]any{
-				"path": "/etc/ssh/sshd_config", "match": "^PermitRootLogin", "replace": "PermitRootLogin no",
+				"path": "/etc/ssh/sshd_config", "match_pattern": "^PermitRootLogin", "replacement": "PermitRootLogin no",
 			}},
 		},
 	}

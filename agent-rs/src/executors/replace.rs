@@ -27,17 +27,17 @@ impl Executor for ReplaceExecutor {
             return result;
         }
 
-        let match_pat = params.get("match").cloned().unwrap_or_default();
+        let match_pat = params.get("match_pattern").cloned().unwrap_or_default();
         if match_pat.is_empty() {
-            result.error = Some("replace executor: match param is required".into());
+            result.error = Some("replace executor: match_pattern param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
 
-        let replace_str = match params.get("replace") {
+        let replace_str = match params.get("replacement") {
             Some(s) => s.clone(),
             None => {
-                result.error = Some("replace executor: replace param is required".into());
+                result.error = Some("replace executor: replacement param is required".into());
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn missing_path_errors() {
         let exec = ReplaceExecutor;
-        let params = make_params(&[("match", "foo"), ("replace", "bar")]);
+        let params = make_params(&[("match_pattern", "foo"), ("replacement", "bar")]);
         let result = exec.execute(&params, false);
         assert!(result.error.unwrap().contains("path param is required"));
     }
@@ -155,17 +155,17 @@ mod tests {
     #[test]
     fn missing_match_errors() {
         let exec = ReplaceExecutor;
-        let params = make_params(&[("path", "/tmp/x"), ("replace", "bar")]);
+        let params = make_params(&[("path", "/tmp/x"), ("replacement", "bar")]);
         let result = exec.execute(&params, false);
-        assert!(result.error.unwrap().contains("match param is required"));
+        assert!(result.error.unwrap().contains("match_pattern param is required"));
     }
 
     #[test]
     fn missing_replace_errors() {
         let exec = ReplaceExecutor;
-        let params = make_params(&[("path", "/tmp/x"), ("match", "foo")]);
+        let params = make_params(&[("path", "/tmp/x"), ("match_pattern", "foo")]);
         let result = exec.execute(&params, false);
-        assert!(result.error.unwrap().contains("replace param is required"));
+        assert!(result.error.unwrap().contains("replacement param is required"));
     }
 
     #[test]
@@ -177,8 +177,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "port=\\d+"),
-            ("replace", "port=443"),
+            ("match_pattern", "port=\\d+"),
+            ("replacement", "port=443"),
         ]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_none(), "{:?}", result.error);
@@ -197,8 +197,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "port=\\d+"),
-            ("replace", "port=443"),
+            ("match_pattern", "port=\\d+"),
+            ("replacement", "port=443"),
             ("occurrences", "first"),
         ]);
         let result = exec.execute(&params, false);
@@ -218,8 +218,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "^(PermitRootLogin)\\s+yes"),
-            ("replace", "$1 no"),
+            ("match_pattern", "^(PermitRootLogin)\\s+yes"),
+            ("replacement", "$1 no"),
         ]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_none(), "{:?}", result.error);
@@ -239,8 +239,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "^port="),
-            ("replace", "port=443"),
+            ("match_pattern", "^port="),
+            ("replacement", "port=443"),
         ]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_none(), "{:?}", result.error);
@@ -261,8 +261,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "PermitRootLogin yes"),
-            ("replace", "PermitRootLogin no"),
+            ("match_pattern", "PermitRootLogin yes"),
+            ("replacement", "PermitRootLogin no"),
             ("region_start", "^# Authentication"),
             ("region_end", "^# Logging"),
         ]);
@@ -297,8 +297,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "foo="),
-            ("replace", "bar="),
+            ("match_pattern", "foo="),
+            ("replacement", "bar="),
             ("region_start", "^# START"),
         ]);
         let result = exec.execute(&params, false);
@@ -318,8 +318,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "foo="),
-            ("replace", "bar="),
+            ("match_pattern", "foo="),
+            ("replacement", "bar="),
             ("region_end", "^# END"),
         ]);
         let result = exec.execute(&params, false);
@@ -340,8 +340,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "port=80"),
-            ("replace", "port=443"),
+            ("match_pattern", "port=80"),
+            ("replacement", "port=443"),
         ]);
         let result = exec.execute(&params, true);
         assert!(result.error.is_none(), "{:?}", result.error);
@@ -360,8 +360,8 @@ mod tests {
         let exec = ReplaceExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "foo"),
-            ("replace", "bar"),
+            ("match_pattern", "foo"),
+            ("replacement", "bar"),
         ]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_none(), "{:?}", result.error);

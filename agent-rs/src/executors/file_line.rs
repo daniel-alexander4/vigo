@@ -29,7 +29,7 @@ impl Executor for FileLineExecutor {
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
         let line = params.get("line").cloned().unwrap_or_default();
-        let match_pattern = params.get("match").cloned().unwrap_or_default();
+        let match_pattern = params.get("match_pattern").cloned().unwrap_or_default();
         let position = params.get("position").map(|s| s.as_str()).unwrap_or("end");
         let region_start = params.get("region_start").map(|s| s.as_str());
         let region_end = params.get("region_end").map(|s| s.as_str());
@@ -306,7 +306,7 @@ mod tests {
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
             ("line", "port=443"),
-            ("match", "^port="),
+            ("match_pattern", "^port="),
             ("state", "present"),
         ]);
         let result = exec.execute(&params, false);
@@ -352,7 +352,7 @@ mod tests {
         let exec = FileLineExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "^port="),
+            ("match_pattern", "^port="),
             ("state", "absent"),
         ]);
         let result = exec.execute(&params, false);
@@ -465,7 +465,7 @@ mod tests {
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
             ("line", "port=443"),
-            ("match", "^port="),
+            ("match_pattern", "^port="),
             ("state", "present"),
             ("region_start", "^# START"),
             ("region_end", "^# END"),
@@ -520,7 +520,7 @@ mod tests {
         let exec = FileLineExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "^port="),
+            ("match_pattern", "^port="),
             ("state", "absent"),
             ("region_start", "^# START"),
             ("region_end", "^# END"),
@@ -548,7 +548,7 @@ mod tests {
         let exec = FileLineExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "^port="),
+            ("match_pattern", "^port="),
             ("state", "absent"),
             ("region_start", "^# START"),
         ]);
@@ -570,7 +570,7 @@ mod tests {
         let exec = FileLineExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("match", "^port="),
+            ("match_pattern", "^port="),
             ("state", "absent"),
             ("region_end", "^# END"),
         ]);

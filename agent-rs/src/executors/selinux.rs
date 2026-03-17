@@ -6,7 +6,7 @@
 //! Params:
 //! - `path` (required) — file or directory path
 //! - `context` — full SELinux context string (e.g., "system_u:object_r:httpd_sys_content_t:s0")
-//! - `type` — just the type component (shorthand; uses semanage fcontext + restorecon)
+//! - `selinux_type` — just the type component (shorthand; uses semanage fcontext + restorecon)
 //! - `state` — "present" (default) or "absent" (removes fcontext rules)
 
 use super::{Action, Executor, ResourceResult};
@@ -35,12 +35,12 @@ impl Executor for SelinuxExecutor {
         }
 
         let context = params.get("context").map(|s| s.as_str());
-        let se_type = params.get("type").map(|s| s.as_str());
+        let se_type = params.get("selinux_type").map(|s| s.as_str());
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
 
         if context.is_none() && se_type.is_none() {
             result.error =
-                Some("selinux executor: either context or type param is required".to_string());
+                Some("selinux executor: either context or selinux_type param is required".to_string());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -52,14 +52,14 @@ impl Executor for SelinuxExecutor {
                 } else if let Some(t) = se_type {
                     apply_type_context(path, t, dry_run, &mut result)
                 } else {
-                    Err("selinux executor: either context or type param is required".to_string())
+                    Err("selinux executor: either context or selinux_type param is required".to_string())
                 }
             }
             "absent" => {
                 if let Some(t) = se_type.or(context) {
                     remove_fcontext(path, t, dry_run, &mut result)
                 } else {
-                    Err("selinux executor: either context or type param is required for absent state".to_string())
+                    Err("selinux executor: either context or selinux_type param is required for absent state".to_string())
                 }
             }
             other => Err(format!(
@@ -285,7 +285,7 @@ mod tests {
         let result = exec.execute(&make_params(&[("path", "/var/www")]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_ref().unwrap().contains("context or type"),
+            result.error.as_ref().unwrap().contains("context or selinux_type"),
             "got: {:?}",
             result.error
         );

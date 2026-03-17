@@ -9,13 +9,13 @@ Manages running processes -- ensures processes are running or stopped, with opti
 | `process` | Yes | -- | Process name to match. |
 | `state` | No | `running` | Desired state: `running` or `stopped`. |
 | `signal` | No | `TERM` | Signal to send when stopping processes. |
-| `match` | No | `exact` | Match mode: `exact` (process name equals) or `pattern` (regex match via `pgrep -f`). |
+| `match_mode` | No | `exact` | Match mode: `exact` (process name equals) or `pattern` (regex match via `pgrep -f`). |
 | `count` | No | -- | Exact number of matching processes expected. If the count differs, triggers action. |
 | `min` | No | -- | Minimum number of matching processes. Below this triggers action. |
 | `max` | No | -- | Maximum number of matching processes. Above this kills excess. |
-| `restart` | No | -- | Command to run to restart the process if needed. |
+| `restart_method` | No | -- | Restart method to use if the process is not running (e.g., `systemctl`). |
 | `restart_unit` | No | -- | Systemd unit to restart via `systemctl restart`. |
-| `kill_over` | No | -- | Kill processes when count exceeds this threshold. |
+| `kill_timeout` | No | -- | When `true`, kill excess processes that exceed the count/max threshold. |
 
 ## States
 
@@ -57,7 +57,7 @@ resources:
   - name: Ensure worker pool
     type: process
     process: "myapp-worker"
-    match: pattern
+    match_mode: pattern
     min: "4"
     max: "8"
 ```
@@ -79,6 +79,6 @@ Cross-platform. Uses `pgrep`/`pkill` which must be available on the system.
 
 ## Notes
 
-- The `restart` parameter takes a shell command to run when the process needs to be started. `restart_unit` is a convenience that runs `systemctl restart <unit>`.
+- The `restart_method` parameter specifies how to restart the process (e.g., `systemctl`). `restart_unit` is a convenience that specifies which systemd unit to restart.
 - When `state: stopped`, the executor sends the specified signal using `pkill`.
 - Count constraints (`count`, `min`, `max`) provide fine-grained control over process pool sizes.

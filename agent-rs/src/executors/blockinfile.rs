@@ -23,7 +23,7 @@ impl Executor for BlockInFileExecutor {
         }
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
-        let block = params.get("block").cloned().unwrap_or_default();
+        let block = params.get("block_content").cloned().unwrap_or_default();
         let label = params.get("label").cloned().unwrap_or_default();
 
         let mut marker_begin = params
@@ -75,7 +75,7 @@ impl Executor for BlockInFileExecutor {
         match state {
             "present" => {
                 if block.is_empty() {
-                    result.error = Some("blockinfile executor: block param is required for state=present".into());
+                    result.error = Some("blockinfile executor: block_content param is required for state=present".into());
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn missing_path_errors() {
         let exec = BlockInFileExecutor;
-        let params = make_params(&[("block", "some content")]);
+        let params = make_params(&[("block_content", "some content")]);
         let result = exec.execute(&params, false);
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("path param is required"));
@@ -211,7 +211,7 @@ mod tests {
         let exec = BlockInFileExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("block", "nameserver 8.8.8.8\nnameserver 8.8.4.4"),
+            ("block_content", "nameserver 8.8.8.8\nnameserver 8.8.4.4"),
             ("state", "present"),
         ]);
         let result = exec.execute(&params, false);
@@ -238,7 +238,7 @@ mod tests {
         let exec = BlockInFileExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("block", "hello world"),
+            ("block_content", "hello world"),
             ("state", "present"),
         ]);
         let result = exec.execute(&params, false);
@@ -257,7 +257,7 @@ mod tests {
         let exec = BlockInFileExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("block", "new content"),
+            ("block_content", "new content"),
             ("state", "present"),
         ]);
         let result = exec.execute(&params, false);
@@ -324,7 +324,7 @@ mod tests {
         let exec = BlockInFileExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("block", "new block content"),
+            ("block_content", "new block content"),
             ("state", "present"),
         ]);
         let result = exec.execute(&params, true);
@@ -345,7 +345,7 @@ mod tests {
         let exec = BlockInFileExecutor;
         let params = make_params(&[
             ("path", path.to_str().unwrap()),
-            ("block", "labeled content"),
+            ("block_content", "labeled content"),
             ("label", "myapp"),
             ("state", "present"),
         ]);

@@ -7,7 +7,7 @@ Manages marked blocks of text within a file, delimited by BEGIN/END markers. Use
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `path` | Yes | -- | Absolute path to the file. |
-| `block` | Yes (for present) | -- | The content to place between the markers. |
+| `block_content` | Yes (for present) | -- | The content to place between the markers. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `label` | No | `managed` | Label used in marker comments to distinguish multiple blocks. |
 | `marker_begin` | No | `# BEGIN {label} - managed by hobnob` | Custom begin marker. `{label}` is replaced with the label value. |
@@ -22,7 +22,7 @@ Manages marked blocks of text within a file, delimited by BEGIN/END markers. Use
 
 ## Idempotency
 
-Reads the file and looks for the BEGIN/END marker pair. Compares the content between the markers against the desired `block`. Only writes when the content differs or the markers are missing.
+Reads the file and looks for the BEGIN/END marker pair. Compares the content between the markers against the desired `block_content`. Only writes when the content differs or the markers are missing.
 
 ## Examples
 
@@ -34,7 +34,7 @@ resources:
     type: blockinfile
     path: /etc/ssh/sshd_config
     label: hardening
-    block: |
+    block_content: |
       PermitRootLogin no
       PasswordAuthentication no
       MaxAuthTries 3
@@ -48,7 +48,7 @@ resources:
     type: blockinfile
     path: /etc/nginx/conf.d/upstreams.conf
     label: app-upstream
-    block: |
+    block_content: |
       upstream app {
         server 10.0.1.10:8080;
         server 10.0.1.11:8080;

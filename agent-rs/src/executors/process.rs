@@ -63,7 +63,7 @@ impl Executor for ProcessExecutor {
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("running");
         let signal = params.get("signal").map(|s| s.as_str()).unwrap_or("TERM");
-        let match_mode = params.get("match").map(|s| s.as_str()).unwrap_or("exact");
+        let match_mode = params.get("match_mode").map(|s| s.as_str()).unwrap_or("exact");
 
         // Parse count constraints.
         let count_str = params.get("count").cloned().unwrap_or_default();
@@ -88,9 +88,9 @@ impl Executor for ProcessExecutor {
             }
         }
 
-        let restart_method = params.get("restart").cloned().unwrap_or_default();
+        let restart_method = params.get("restart_method").cloned().unwrap_or_default();
         let restart_unit = params.get("restart_unit").cloned().unwrap_or_default();
-        let kill_over = params.get("kill_over").map(|s| s == "true").unwrap_or(false);
+        let kill_timeout = params.get("kill_timeout").map(|s| s == "true").unwrap_or(false);
 
         let count = self.process_count(&name, match_mode);
 
@@ -182,7 +182,7 @@ impl Executor for ProcessExecutor {
                     return result;
                 }
 
-                if too_many && kill_over {
+                if too_many && kill_timeout {
                     let target = max_count.or(exact_count).unwrap_or(0);
                     let excess = (count - target) as usize;
 

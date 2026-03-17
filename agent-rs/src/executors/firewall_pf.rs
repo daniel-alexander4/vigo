@@ -70,8 +70,8 @@ impl Executor for FirewallPfExecutor {
             return result;
         }
 
-        // Handle individual rules via the "rule" param and pf.conf anchor.
-        if let Some(rule) = params.get("rule") {
+        // Handle individual rules via the "pf_rule" param and pf.conf anchor.
+        if let Some(rule) = params.get("pf_rule") {
             match state {
                 "present" => {
                     if self.rule_exists(rule) {
@@ -132,7 +132,7 @@ mod tests {
     fn missing_rule_no_panic() {
         let exec = FirewallPfExecutor::new();
         let result = exec.execute(&HashMap::new(), true);
-        // No rule or enabled param — should return cleanly
+        // No pf_rule or enabled param — should return cleanly
         assert!(result.error.is_none());
     }
 }

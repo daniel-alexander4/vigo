@@ -498,7 +498,7 @@ func validateCron(base Finding, res Resource) []Finding {
 // validateReplace checks that replace resources declare required attributes.
 func validateReplace(base Finding, res Resource) []Finding {
 	var findings []Finding
-	for _, field := range []string{"path", "match", "replace"} {
+	for _, field := range []string{"path", "match_pattern", "replacement"} {
 		if attrString(res.Attributes, field) == "" {
 			f := base
 			f.Severity = SeverityError

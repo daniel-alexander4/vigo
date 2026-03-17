@@ -8,10 +8,10 @@ Manage SELinux security contexts on files and directories. Linux only.
 |-----------|----------|-------------|
 | `path` | Yes | File or directory path to manage |
 | `context` | No | Full SELinux context (e.g., `system_u:object_r:httpd_sys_content_t:s0`) |
-| `type` | No | SELinux type component only (e.g., `httpd_sys_content_t`) -- shorthand |
+| `selinux_type` | No | SELinux type component only (e.g., `httpd_sys_content_t`) -- shorthand |
 | `state` | No | `present` (default) or `absent` for persistent fcontext rules |
 
-Either `context` or `type` must be specified.
+Either `context` or `selinux_type` must be specified.
 
 ## Behavior
 
@@ -19,8 +19,8 @@ Either `context` or `type` must be specified.
 
 **Apply (full context):** `chcon <context> <path>`
 
-**Apply (type only, persistent):**
-1. `semanage fcontext -a -t <type> <path>` (or `-m` to modify existing)
+**Apply (selinux_type only, persistent):**
+1. `semanage fcontext -a -t <selinux_type> <path>` (or `-m` to modify existing)
 2. `restorecon -v <path>`
 
 **Remove (state: absent):**
@@ -35,7 +35,7 @@ Either `context` or `type` must be specified.
 - name: web-content-context
   type: selinux
   path: /var/www/html
-  type: httpd_sys_content_t
+  selinux_type: httpd_sys_content_t
 ```
 
 ### Set a full context
