@@ -145,6 +145,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
+	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
 	mux.HandleFunc("GET /ui/fragments/thralls-table", h.ThrallsTable)
 	mux.HandleFunc("GET /ui/fragments/thrall-runs/{id}", h.ThrallRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/thrall-facts/{id}", h.ThrallFactsFragment)
@@ -235,6 +236,16 @@ type DashboardPageData struct {
 	RecentFailures int
 	DriftRate      float64
 	RecentRuns     []RunRow
+	FleetRows      []FleetRow
+}
+
+// FleetRow is a thrall row for the dashboard fleet status table.
+type FleetRow struct {
+	ID       string
+	Hostname string
+	IP       string
+	LastSeen time.Time
+	Status   string
 }
 
 // RunRow is a single run displayed in a table.
@@ -878,6 +889,12 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }
 
+// DashboardFleet renders the fleet status table fragment for HTMX polling.
+func (h *Handler) DashboardFleet(w http.ResponseWriter, r *http.Request) {
+	data := h.dataSource.DashboardData(h.baseInterval)
+	h.renderer.RenderFragment(w, "dashboard", "dashboard-fleet", data)
+}
+
 // Compliance renders the compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
@@ -1094,6 +1111,25 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		})
 	}
 
+	fleetRows := make([]FleetRow, 0, len(thralls))
+	for _, n := range thralls {
+		if n.Revoked != 0 {
+			continue
+		}
+		status, _ := ds.thrallComplianceInfo(ctx, n, baseInterval)
+		var lastSeen time.Time
+		if n.LastSeen.Valid {
+			lastSeen = n.LastSeen.Time
+		}
+		fleetRows = append(fleetRows, FleetRow{
+			ID:       n.ID,
+			Hostname: n.Hostname,
+			IP:       n.IpAddress,
+			LastSeen: lastSeen,
+			Status:   status,
+		})
+	}
+
 	return DashboardPageData{
 		PageData:       PageData{Title: "Dashboard", ActiveNav: "dashboard"},
 		TotalThralls:     totalThralls,
@@ -1101,6 +1137,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     recentRuns,
+		FleetRows:      fleetRows,
 	}
 }
 

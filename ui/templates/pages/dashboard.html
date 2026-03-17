@@ -11,6 +11,16 @@
     {{template "dashboard-stats" .}}
 </div>
 
+{{if .FleetRows}}
+<div class="table-container"
+     id="fleet-status"
+     hx-get="/ui/fragments/dashboard-fleet"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "dashboard-fleet" .}}
+</div>
+{{end}}
+
 {{if .RecentRuns}}
 <div class="table-container">
     <h3>Recent Activity</h3>
@@ -42,6 +52,30 @@
     </table>
 </div>
 {{end}}
+{{end}}
+
+{{define "dashboard-fleet"}}
+<h3>Fleet Status</h3>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Hostname</th>
+            <th>IP Address</th>
+            <th>Last Check-in</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .FleetRows}}
+        <tr>
+            <td><a href="/thralls/{{.ID}}">{{.Hostname}}</a></td>
+            <td class="mono">{{.IP}}</td>
+            <td class="text-muted">{{formatTime .LastSeen}}</td>
+            <td>{{template "status-badge" dict "Status" .Status}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
 {{end}}
 
 {{define "dashboard-stats"}}

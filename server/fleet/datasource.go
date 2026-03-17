@@ -99,6 +99,20 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		}
 	}
 
+	fleetRows := make([]ui.FleetRow, 0, len(allThralls))
+	for _, ts := range allThralls {
+		if ts.Revoked {
+			continue
+		}
+		fleetRows = append(fleetRows, ui.FleetRow{
+			ID:       ts.ID,
+			Hostname: ts.Hostname,
+			IP:       ts.IP,
+			LastSeen: ts.LastSeen,
+			Status:   ts.ComplianceStatus,
+		})
+	}
+
 	return ui.DashboardPageData{
 		PageData:       ui.PageData{Title: "Dashboard", ActiveNav: "dashboard"},
 		TotalThralls:   totalThralls,
@@ -106,6 +120,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     recentRuns,
+		FleetRows:      fleetRows,
 	}
 }
 

@@ -674,6 +674,17 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 		})
 	}
 
+	fleetRows := make([]FleetRow, 0, len(m.data.thralls))
+	for _, c := range m.data.thralls {
+		fleetRows = append(fleetRows, FleetRow{
+			ID:       c.id.String(),
+			Hostname: c.hostname,
+			IP:       c.ipAddress,
+			LastSeen: c.lastSeen,
+			Status:   c.status,
+		})
+	}
+
 	return DashboardPageData{
 		PageData: PageData{
 			Title:     "Dashboard",
@@ -685,6 +696,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     runs,
+		FleetRows:      fleetRows,
 	}
 }
 
