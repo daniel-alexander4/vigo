@@ -125,7 +125,13 @@ func (s *AdminService) ListThralls(ctx context.Context, req *pb.ListThrallsReque
 
 	resp := &pb.ListThrallsResponse{}
 	for _, n := range thralls {
-		resp.Thralls = append(resp.Thralls, dbThrallToProto(n))
+		pt := dbThrallToProto(n)
+		if s.fleetIndex != nil {
+			if ts, ok, _ := s.fleetIndex.GetThrallLite(n.ID); ok {
+				pt.AgentVersion = ts.AgentVersion
+			}
+		}
+		resp.Thralls = append(resp.Thralls, pt)
 	}
 
 	return resp, nil
@@ -141,8 +147,14 @@ func (s *AdminService) GetThrall(ctx context.Context, req *pb.GetThrallRequest) 
 		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
 	}
 
+	pt := dbThrallToProto(n)
+	if s.fleetIndex != nil {
+		if ts, ok, _ := s.fleetIndex.GetThrallLite(req.Id); ok {
+			pt.AgentVersion = ts.AgentVersion
+		}
+	}
 	return &pb.GetThrallResponse{
-		Thrall: dbThrallToProto(n),
+		Thrall: pt,
 	}, nil
 }
 

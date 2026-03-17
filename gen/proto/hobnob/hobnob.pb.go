@@ -194,6 +194,7 @@ type CheckInRequest struct {
 	PolicyMode         bool                   `protobuf:"varint,7,opt,name=policy_mode,json=policyMode,proto3" json:"policy_mode,omitempty"`                                                                                                    // true = agent supports policy bundles
 	CachedModuleHashes map[string]string      `protobuf:"bytes,8,rep,name=cached_module_hashes,json=cachedModuleHashes,proto3" json:"cached_module_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // module name → content hash for delta transfer
 	Capabilities       *StreamCapabilities    `protobuf:"bytes,9,opt,name=capabilities,proto3" json:"capabilities,omitempty"`                                                                                                                   // agent protocol capabilities (delta streaming)
+	AgentVersion       string                 `protobuf:"bytes,10,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                                                                                              // agent binary version (e.g. "1.2.0" or "dev")
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -289,6 +290,13 @@ func (x *CheckInRequest) GetCapabilities() *StreamCapabilities {
 		return x.Capabilities
 	}
 	return nil
+}
+
+func (x *CheckInRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
 }
 
 type CheckInResponse struct {
@@ -3262,6 +3270,7 @@ type Thrall struct {
 	Revoked               bool                   `protobuf:"varint,6,opt,name=revoked,proto3" json:"revoked,omitempty"`
 	RevokedAt             *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
 	PendingRotatedSecrets []string               `protobuf:"bytes,8,rep,name=pending_rotated_secrets,json=pendingRotatedSecrets,proto3" json:"pending_rotated_secrets,omitempty"`
+	AgentVersion          string                 `protobuf:"bytes,9,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3350,6 +3359,13 @@ func (x *Thrall) GetPendingRotatedSecrets() []string {
 		return x.PendingRotatedSecrets
 	}
 	return nil
+}
+
+func (x *Thrall) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
 }
 
 type GetThrallRequest struct {
@@ -6578,7 +6594,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\n" +
 	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\x8a\x04\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xaf\x04\n" +
 	"\x0eCheckInRequest\x12\x1b\n" +
 	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -6590,7 +6606,9 @@ const file_hobnob_proto_rawDesc = "" +
 	"\vpolicy_mode\x18\a \x01(\bR\n" +
 	"policyMode\x12c\n" +
 	"\x14cached_module_hashes\x18\b \x03(\v21.hobnob.v1.CheckInRequest.CachedModuleHashesEntryR\x12cachedModuleHashes\x12A\n" +
-	"\fcapabilities\x18\t \x01(\v2\x1d.hobnob.v1.StreamCapabilitiesR\fcapabilities\x1aE\n" +
+	"\fcapabilities\x18\t \x01(\v2\x1d.hobnob.v1.StreamCapabilitiesR\fcapabilities\x12#\n" +
+	"\ragent_version\x18\n" +
+	" \x01(\tR\fagentVersion\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x97\x05\n" +
@@ -6836,7 +6854,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x12ListThrallsRequest\x12'\n" +
 	"\x0finclude_revoked\x18\x01 \x01(\bR\x0eincludeRevoked\"B\n" +
 	"\x13ListThrallsResponse\x12+\n" +
-	"\athralls\x18\x01 \x03(\v2\x11.hobnob.v1.ThrallR\athralls\"\xd6\x02\n" +
+	"\athralls\x18\x01 \x03(\v2\x11.hobnob.v1.ThrallR\athralls\"\xfb\x02\n" +
 	"\x06Thrall\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1d\n" +
@@ -6848,7 +6866,8 @@ const file_hobnob_proto_rawDesc = "" +
 	"\arevoked\x18\x06 \x01(\bR\arevoked\x129\n" +
 	"\n" +
 	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x126\n" +
-	"\x17pending_rotated_secrets\x18\b \x03(\tR\x15pendingRotatedSecrets\"\"\n" +
+	"\x17pending_rotated_secrets\x18\b \x03(\tR\x15pendingRotatedSecrets\x12#\n" +
+	"\ragent_version\x18\t \x01(\tR\fagentVersion\"\"\n" +
 	"\x10GetThrallRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
 	"\x11GetThrallResponse\x12)\n" +

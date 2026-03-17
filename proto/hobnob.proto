@@ -243,6 +243,7 @@ message CheckInRequest {
   bool policy_mode = 7;          // true = agent supports policy bundles
   map<string, string> cached_module_hashes = 8;  // module name → content hash for delta transfer
   StreamCapabilities capabilities = 9;  // agent protocol capabilities (delta streaming)
+  string agent_version = 10;             // agent binary version (e.g. "1.2.0" or "dev")
 }
 
 message CheckInResponse {
@@ -589,6 +590,7 @@ message Thrall {
   bool revoked = 6;
   google.protobuf.Timestamp revoked_at = 7;
   repeated string pending_rotated_secrets = 8;
+  string agent_version = 9;
 }
 
 message GetThrallRequest {

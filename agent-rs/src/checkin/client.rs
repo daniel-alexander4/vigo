@@ -42,6 +42,9 @@ pub struct Client {
     // TLS config state needed for reconnection.
     tls_ca_pem: Option<Vec<u8>>,
     tls_identity: Option<(Vec<u8>, Vec<u8>)>,
+
+    /// Agent binary version string (sent on every check-in).
+    agent_version: String,
 }
 
 impl Client {
@@ -90,7 +93,13 @@ impl Client {
             cycles_since_probe: 0,
             tls_ca_pem: ca_pem,
             tls_identity: identity_pem,
+            agent_version: String::new(),
         })
+    }
+
+    /// Set the agent version string reported on every check-in.
+    pub fn set_agent_version(&mut self, version: &str) {
+        self.agent_version = version.to_string();
     }
 
     /// Build a gRPC channel to the given server address.
@@ -243,6 +252,7 @@ impl Client {
                     policy_mode: true,
                     cached_module_hashes: HashMap::new(),
                     capabilities: None,
+                    agent_version: self.agent_version.clone(),
                 };
 
                 match probe_client.check_in(tonic::Request::new(req)).await {
@@ -309,6 +319,7 @@ impl Client {
             policy_mode: true,
             cached_module_hashes: cached_module_hashes.unwrap_or_default(),
             capabilities: None,
+            agent_version: self.agent_version.clone(),
         };
 
         let resp = self
@@ -493,6 +504,7 @@ impl Client {
             policy_mode: true,
             cached_module_hashes: cached_module_hashes.unwrap_or_default(),
             capabilities,
+            agent_version: self.agent_version.clone(),
         }
     }
 

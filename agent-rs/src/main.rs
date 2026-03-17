@@ -591,6 +591,8 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     )
     .await?;
 
+    client.set_agent_version(VERSION);
+
     // Load fallback servers from config for failover.
     let cfg = config::load(&cli.data_dir);
     let fallbacks = config::parse_fallback_servers(&cfg);

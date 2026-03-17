@@ -1247,6 +1247,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "agentVersion": {
+          "type": "string"
         }
       }
     },

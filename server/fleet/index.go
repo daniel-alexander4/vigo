@@ -34,6 +34,7 @@ type ThrallState struct {
 	PendingRotatedSecrets []string
 	ForcePush             bool
 	ForceUpdate           bool   // ephemeral: agent should download latest binary and restart
+	AgentVersion          string // agent binary version reported on check-in
 	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
 	Gateway               string // hostname of gateway thrall (empty for normal thralls)
 	DeviceType            string // network device type (empty for normal thralls)
@@ -445,6 +446,18 @@ func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
 		return
 	}
 	ts.LastSeen = t
+}
+
+// SetAgentVersion records the agent binary version reported during check-in.
+func (f *FleetIndex) SetAgentVersion(id, version string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.thralls[id]
+	if !ok {
+		return
+	}
+	ts.AgentVersion = version
 }
 
 // SetForcePush sets the ForcePush flag.

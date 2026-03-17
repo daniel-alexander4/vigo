@@ -252,6 +252,11 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		}
 	}
 
+	// Record agent version if reported.
+	if v := req.GetAgentVersion(); v != "" && s.fleetIndex != nil {
+		s.fleetIndex.SetAgentVersion(thrallID, v)
+	}
+
 	configVersion := s.configStore.Version()
 
 	// Short-circuit: agent has a cached bundle with matching config version

@@ -83,6 +83,7 @@ var thrallsShowCmd = &cobra.Command{
 				Revoked                bool     `json:"revoked"`
 				RevokedAt              string   `json:"revokedAt"`
 				PendingRotatedSecrets  []string `json:"pendingRotatedSecrets"`
+				AgentVersion           string   `json:"agentVersion"`
 			} `json:"thrall"`
 		}
 		if err := client.get("/api/v1/thralls/"+thrallID, &resp); err != nil {
@@ -100,6 +101,9 @@ var thrallsShowCmd = &cobra.Command{
 			status = fmt.Sprintf("revoked (%s)", formatTimestamp(c.RevokedAt))
 		}
 		fmt.Printf("Status:     %s\n", status)
+		if c.AgentVersion != "" {
+			fmt.Printf("Agent:      %s\n", c.AgentVersion)
+		}
 
 		// Also fetch compliance status
 		var compResp struct {
