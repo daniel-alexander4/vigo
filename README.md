@@ -217,9 +217,9 @@ resources:
 
   - name: deploy-ssh-key
     type: sshkey
-    username: deploy
-    key_type: ed25519
-    key: "AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyHere"
+    hostname: deploy.example.com
+    sshkey_type: ssh-ed25519
+    sshkey: "AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyHere"
     state: present
     depends_on: [deploy-user]
 ```

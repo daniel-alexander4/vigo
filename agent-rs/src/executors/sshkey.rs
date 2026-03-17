@@ -26,8 +26,8 @@ impl Executor for SshKeyExecutor {
         }
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
-        let key_type = params.get("type").cloned().unwrap_or_default();
-        let key_data = params.get("key").cloned().unwrap_or_default();
+        let key_type = params.get("sshkey_type").cloned().unwrap_or_default();
+        let key_data = params.get("sshkey").cloned().unwrap_or_default();
         let aliases = params.get("aliases").cloned().unwrap_or_default();
         let file = params
             .get("file")
@@ -39,7 +39,7 @@ impl Executor for SshKeyExecutor {
         match state {
             "present" => {
                 if key_type.is_empty() || key_data.is_empty() {
-                    result.error = Some("sshkey executor: type and key params required for state=present".into());
+                    result.error = Some("sshkey executor: sshkey_type and sshkey params required for state=present".into());
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
@@ -165,8 +165,8 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("hostname", "github.com"),
-                ("type", "ssh-ed25519"),
-                ("key", "AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+                ("sshkey_type", "ssh-ed25519"),
+                ("sshkey","AAAAC3NzaC1lZDI1NTE5AAAAITest"),
                 ("file", file_path.to_str().unwrap()),
             ]),
             false,
@@ -191,8 +191,8 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("hostname", "github.com"),
-                ("type", "ssh-ed25519"),
-                ("key", "AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+                ("sshkey_type", "ssh-ed25519"),
+                ("sshkey","AAAAC3NzaC1lZDI1NTE5AAAAITest"),
                 ("file", file_path.to_str().unwrap()),
             ]),
             false,
@@ -211,8 +211,8 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("hostname", "github.com"),
-                ("type", "ssh-ed25519"),
-                ("key", "NEWKEYdata"),
+                ("sshkey_type", "ssh-ed25519"),
+                ("sshkey","NEWKEYdata"),
                 ("file", file_path.to_str().unwrap()),
             ]),
             false,
@@ -234,8 +234,8 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("hostname", "github.com"),
-                ("type", "ssh-ed25519"),
-                ("key", "AAAAC3NzaC1lZDI1NTE5AAAAITest"),
+                ("sshkey_type", "ssh-ed25519"),
+                ("sshkey","AAAAC3NzaC1lZDI1NTE5AAAAITest"),
                 ("aliases", "gh.com ghproxy.com"),
                 ("file", file_path.to_str().unwrap()),
             ]),

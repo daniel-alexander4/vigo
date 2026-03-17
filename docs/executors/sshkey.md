@@ -8,8 +8,8 @@ Manages SSH known host key entries in a known hosts file.
 |-----------|----------|---------|-------------|
 | `hostname` | Yes | -- | The hostname for the SSH key entry. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
-| `type` | Yes (for present) | -- | Key type (e.g., `ssh-rsa`, `ssh-ed25519`, `ecdsa-sha2-nistp256`). |
-| `key` | Yes (for present) | -- | The public key data (base64-encoded). |
+| `sshkey_type` | Yes (for present) | -- | Key type (e.g., `ssh-rsa`, `ssh-ed25519`, `ecdsa-sha2-nistp256`). |
+| `sshkey` | Yes (for present) | -- | The public key data (base64-encoded). |
 | `aliases` | No | -- | Comma-separated list of hostname aliases for the key entry. |
 | `file` | No | `/etc/ssh/ssh_known_hosts` | Path to the known hosts file. |
 
@@ -31,8 +31,8 @@ resources:
   - name: github.com SSH key
     type: sshkey
     hostname: github.com
-    type: ssh-ed25519
-    key: AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+    sshkey_type: ssh-ed25519
+    sshkey: AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
 ```
 
 ### With aliases
@@ -42,8 +42,8 @@ resources:
   - name: internal git server
     type: sshkey
     hostname: git.internal
-    type: ssh-rsa
-    key: AAAAB3NzaC1yc2EAAA...
+    sshkey_type: ssh-rsa
+    sshkey: AAAAB3NzaC1yc2EAAA...
     aliases: "git.internal.example.com,10.0.1.50"
 ```
 
@@ -54,8 +54,8 @@ resources:
   - name: deploy key
     type: sshkey
     hostname: deploy.internal
-    type: ssh-ed25519
-    key: AAAAC3NzaC1lZDI1NTE5...
+    sshkey_type: ssh-ed25519
+    sshkey: AAAAC3NzaC1lZDI1NTE5...
     file: /home/deploy/.ssh/known_hosts
 ```
 
