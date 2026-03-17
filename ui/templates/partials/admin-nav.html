@@ -1,7 +1,8 @@
 {{define "admin-nav"}}
 <aside class="sidebar sidebar--admin">
-    <div class="sidebar__brand">
-        <a href="/" class="docs-nav__back"><img src="/static/img/logo.svg" alt="Hobnob" style="height:22px;vertical-align:middle;margin-right:6px">&larr; Dashboard</a>
+    <div class="sidebar__brand docs-nav__header">
+        <a href="/"><img src="/static/img/logo.svg" alt="Hobnob" class="docs-nav__logo"></a>
+        <a href="/" class="docs-nav__back">&larr; Dashboard</a>
     </div>
     <nav class="sidebar__nav">
         <a href="/admin" class="nav-link{{if eq .ActiveNav "admin"}} nav-link--active{{end}}">
