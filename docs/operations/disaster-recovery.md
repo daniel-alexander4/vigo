@@ -118,9 +118,10 @@ If both the server and all backups are lost:
 2. Re-create config files (`hnb/proposed/`) from git or documentation
 3. Re-create secrets
 4. Start the server — it will initialize an empty database
-5. **Agents must re-enroll**: generate new tokens, add approved patterns, then either:
+5. **Agents must re-enroll**: configure trusted enrollment patterns, then either:
    - Wait for agents to retry (they will eventually hit the server, fail auth, and need bootstrapping)
-   - SSH to each node and re-run: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`
+   - Run `hobnobcli thralls rebootstrap --all` to signal all agents to update
+   - Or manually bootstrap each node: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`
 
 ## Verification After Restore
 

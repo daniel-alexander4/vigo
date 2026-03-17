@@ -15,7 +15,7 @@ Manage enrolled thralls (managed nodes). Also available as `hobnobcli nodes`.
 | `untag` | Remove specific tags from a thrall |
 | `maintenance` | Set or clear maintenance mode |
 | `purge` | Delete stale duplicate thralls, keeping only the most recently seen per hostname |
-| `rebootstrap` | Re-bootstrap thralls by SSHing in and running the bootstrap script |
+| `rebootstrap` | Signal thralls to download the latest agent binary and restart |
 
 ## Usage
 
@@ -25,11 +25,16 @@ hobnobcli thralls [subcommand] [flags]
 
 ## list
 
-List all enrolled thralls with their status.
+List active (non-revoked) thralls with their status. Pass `--all` to include revoked thralls.
 
 ```bash
 hobnobcli thralls list
+hobnobcli thralls list --all   # include revoked
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Include revoked thralls in the output |
 
 ### Example output
 
@@ -37,20 +42,20 @@ hobnobcli thralls list
 ID          HOSTNAME              IP             ENROLLED           LAST SEEN          STATUS
 a1b2c3d4    web-01.example.com    10.0.1.10      2026-03-01 08:00   2026-03-13 12:30   active
 e5f6g7h8    db-01.internal.net    10.0.2.20      2026-03-02 09:15   2026-03-13 12:28   active
-i9j0k1l2    old-server.local      10.0.3.30      2026-02-15 10:00   2026-03-10 06:00   revoked
 ```
 
 ## show
 
-Show detailed information for a specific thrall, including compliance status and pending secret rotations.
+Show detailed information for a specific thrall, including compliance status and pending secret rotations. Accepts a full UUID, short UUID prefix, or hostname.
 
 ```bash
-hobnobcli thralls show <id>
+hobnobcli thralls show <id-or-hostname>
 ```
 
 ### Example
 
 ```bash
+hobnobcli thralls show web-01.example.com
 hobnobcli thralls show a1b2c3d4
 ```
 

@@ -15,9 +15,20 @@ Four top-level stat cards, auto-refreshing every 30 seconds:
 | Recent Failures | Red | Count of recent failed convergence runs |
 | Drift Rate | Yellow | Percentage of thralls with drift detected |
 
+### Fleet Status Table
+
+Shows every active thrall with its last check-in time. This ensures all thralls are visible on the dashboard, even those with no modules assigned (which would not appear in the Recent Activity table). Auto-refreshes every 30 seconds.
+
+| Column | Description |
+|--------|-------------|
+| Hostname | Link to thrall detail page |
+| IP Address | Management IP |
+| Last Check-in | When the thrall last contacted the server |
+| Status | Compliance status badge |
+
 ### Recent Activity Table
 
-A table of the most recent convergence runs across all thralls:
+A table of the most recent convergence runs across all thralls. Auto-refreshes every 30 seconds.
 
 | Column | Description |
 |--------|-------------|
@@ -31,10 +42,12 @@ A table of the most recent convergence runs across all thralls:
 
 ## Key Actions
 
+- Click any hostname in the Fleet Status table to view thrall details
 - Click any run row to view full run details at `/runs/{id}`
 - Stat cards link to filtered views (e.g., clicking "Recent Failures" filters the runs page)
 
 ## Data Sources
 
 - Stat cards: FleetIndex (`ComplianceSummary()`, `ActiveCount()`, `RecentRuns()`)
+- Fleet status table: FleetIndex (all non-revoked thralls)
 - Recent runs table: FleetIndex ring buffer (`RecentRuns(n)`) or database `ListRuns` query

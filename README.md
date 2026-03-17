@@ -20,7 +20,7 @@ The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`,
 On each node you want to manage, run:
 
 ```bash
-curl -sSf https://<server-ip>:8443/bootstrap | sudo sh
+curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
 That's it. The server generates a shell script on the fly that downloads the `hobnob` agent binary for the node's OS/arch, enrolls it, and starts it as a systemd service. No Go, no source code, no package manager needed on the node.
