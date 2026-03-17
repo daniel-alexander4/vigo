@@ -64,17 +64,23 @@ Every connection is authenticated and encrypted. There are no optional security 
 - **Revocation is immediate.** A revoked agent gets an error on its next check-in and cannot re-enroll.
 - **Source-available agent.** The code that runs as root on your machines is readable and auditable.
 
-## Bootstrap
+## Install
 
-One command enrolls a machine:
+Two commands to install the server, one command to enroll each machine:
 
 ```bash
-curl -sSfk https://server:8443/bootstrap | sudo sh
+# Server (any Linux host with Docker)
+sudo mkdir -p /srv/hobnob
+docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
+cd /srv/hobnob && docker compose up -d
+
+# Each managed machine
+curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-This downloads the agent binary, generates TLS certificates via CSR signing, registers with the server, installs the system service, and verifies connectivity. The machine is under management in seconds.
+The server seed populates config, TLS certs, database, and examples — ready to run. The bootstrap script downloads the agent binary, generates TLS certificates via CSR signing, registers with the server, installs the platform-appropriate service, and verifies connectivity. A machine is under management in seconds.
 
-Platform-specific bootstrap for Windows (PowerShell), macOS (launchd), FreeBSD (rc.d), OpenBSD (rcctl), NetBSD (rc.d), and illumos (SMF).
+Bootstrap works across all supported platforms: Linux (systemd), macOS (launchd), FreeBSD/NetBSD (rc.d), OpenBSD (rcctl), illumos (SMF), and Windows (PowerShell: `irm https://<server>:8443/bootstrap?os=windows | iex`).
 
 ## Platform Support
 
