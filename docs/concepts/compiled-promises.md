@@ -89,6 +89,8 @@ Agent-side: No configuration needed. The agent automatically:
 - Falls back to cached bundles when offline
 - Drains pending results on reconnect
 
+To inspect the agent's cached bundle, pending results queue, and traits cache, run `hobnob status` on the thrall. See [Agent CLI](../cli/agent.md#status) for details.
+
 ## Related
 
 - [Check-in Lifecycle](check-in-lifecycle.md) — Normal check-in flow

@@ -87,7 +87,8 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 
 - [Executors](executors/_index.md) — 98 resource executors across all platforms
 - [Trait Collectors](traits/_index.md) — System fact collectors
-- [CLI Reference](cli/_index.md) — hobnobcli commands
+- [Agent CLI](cli/agent.md) — hobnob agent commands (daemon, status, traits, run)
+- [CLI Reference](cli/_index.md) — hobnobcli admin commands
 - [API Reference](api/_index.md) — gRPC and REST APIs
 
 ## Web UI

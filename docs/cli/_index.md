@@ -1,8 +1,17 @@
 # CLI Reference
 
-`hobnobcli` is the administrative CLI for the Hobnob distributed state enforcement engine. It communicates with the server's REST API to manage enrollment, thralls, operations, orchestration, secrets, and spanner.
+Hobnob has two CLI binaries:
 
-When invoked as `hnbvi`, it behaves as `hobnobcli vi <args>`.
+- **`hobnob`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands.
+- **`hobnobcli`** -- the admin CLI that talks to the server's REST API (documented below).
+
+When invoked as `hnbvi`, `hobnobcli` behaves as `hobnobcli vi <args>`.
+
+---
+
+## hobnobcli
+
+`hobnobcli` communicates with the server's REST API to manage enrollment, thralls, operations, orchestration, secrets, and spanner.
 
 ## Global Flags
 

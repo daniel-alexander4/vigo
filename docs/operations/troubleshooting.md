@@ -4,6 +4,24 @@ Common issues and how to diagnose them.
 
 ## Diagnostic Tools
 
+### hobnob status (agent-side)
+
+Run on any thrall to inspect the agent's local state without contacting the server:
+
+```bash
+sudo hobnob status
+```
+
+This shows the thrall UUID, server address, cached policy details (version, modules, resources), cached traits age, pending result queue depth, and server pubkey status. It reads from the config file and LMDB state store only -- no network required.
+
+Useful for verifying:
+- Whether the agent is registered (`Thrall ID` vs `(not registered)`)
+- Which policy version the agent is running (`Policy > Version`)
+- Whether offline results are queued (`Pending results` count)
+- Whether the agent has the server's bundle-signing key (`Server pubkey`)
+
+See [Agent CLI](../cli/agent.md#status) for full output examples.
+
 ### hobnobcli doctor
 
 The `doctor` command checks all server subsystems and reports their health:
@@ -160,7 +178,13 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
    journalctl -u hobnob-thrall --since "10 minutes ago"
    ```
 
-4. Verify network connectivity:
+4. Check the agent's local state:
+   ```bash
+   sudo hobnob status
+   ```
+   Look at `Pending results` (queued but undelivered) and `Policy > Version` (stale cache).
+
+5. Verify network connectivity:
    ```bash
    curl -k https://server:1530   # should get a TLS error, not a connection error
    ```
