@@ -830,6 +830,14 @@ pub async fn daemon_loop(
                                 }
                                 StreamExit::Cancelled => return Ok(()),
                             }
+                            // Sleep before resuming polling to avoid tight loop
+                            // when the stream is immediately released.
+                            let sleep_dur = jittered_duration(rr.interval, rr.jitter_pct);
+                            info!(duration = ?sleep_dur, "sleeping before resuming polling");
+                            tokio::select! {
+                                _ = cancel.cancelled() => return Ok(()),
+                                _ = tokio::time::sleep(sleep_dur) => {}
+                            }
                             continue; // back to top → next unary check-in
                         }
                         Err(e) => {
