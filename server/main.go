@@ -837,6 +837,7 @@ func run() error {
 			reporter := spanner.NewReporter(
 				cfg.Spanner.SpokeID,
 				cfg.Spanner.HubAddr,
+				cfg.Spanner.HubFallbackAddrs,
 				cfg.Server.TLS.CertFile,
 				cfg.Server.TLS.KeyFile,
 				cfg.Server.TLS.CAFile,

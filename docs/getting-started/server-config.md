@@ -159,6 +159,7 @@ spanner:
 | `role` | `standalone` | Server role: `standalone`, `hub`, or `spoke` |
 | `spoke_id` | — | Unique spoke identifier (required for spoke mode) |
 | `hub_addr` | — | Hub gRPC address (spoke→hub status reporting) |
+| `hub_fallback_addrs` | — | Spoke-only: fallback hub addresses for failover |
 | `spokes` | — | Hub-only: list of spoke definitions |
 | `spokes[].id` | — | Unique spoke identifier |
 | `spokes[].addr` | — | Spoke gRPC address (host:port) |

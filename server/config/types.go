@@ -31,11 +31,12 @@ const (
 // SpannerSection configures hub-spoke spanner. Omit entirely
 // (or set role: standalone) for single-server deployments.
 type SpannerSection struct {
-	Role         SpannerRole        `yaml:"role"`          // standalone (default), hub, spoke
-	SpokeID      string             `yaml:"spoke_id"`      // required for spoke mode
-	HubAddr      string             `yaml:"hub_addr"`      // hub gRPC address (for spoke→hub status reporting)
-	Spokes       []SpokeEntry       `yaml:"spokes"`        // hub-only: spoke definitions
-	AutoFailover AutoFailoverConfig `yaml:"auto_failover"` // hub-only: automatic spoke failover
+	Role             SpannerRole        `yaml:"role"`               // standalone (default), hub, spoke
+	SpokeID          string             `yaml:"spoke_id"`           // required for spoke mode
+	HubAddr          string             `yaml:"hub_addr"`           // hub gRPC address (for spoke→hub status reporting)
+	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs"` // spoke-only: fallback hub addresses for failover
+	Spokes           []SpokeEntry       `yaml:"spokes"`             // hub-only: spoke definitions
+	AutoFailover     AutoFailoverConfig `yaml:"auto_failover"`      // hub-only: automatic spoke failover
 }
 
 // AutoFailoverConfig controls automatic spoke failover on the hub.

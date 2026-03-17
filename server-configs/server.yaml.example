@@ -170,6 +170,8 @@ watcher:
 #   role: spoke
 #   spoke_id: "dc1"
 #   hub_addr: "hub.example.com:1530"            # enables spoke→hub status reporting
+#   hub_fallback_addrs:                          # fallback hub addresses for failover
+#     - "hub-standby.example.com:1530"
 
 
 # ── Peer Replication ──────────────────────────────────────────────────────

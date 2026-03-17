@@ -104,6 +104,21 @@ spanner:
 
 The spoke sends compliance metrics to the hub every 30 seconds. If the hub is unreachable, the spoke continues operating normally.
 
+### Hub Failover for Spokes
+
+When the hub has [peer replication](../concepts/p2p-spanner.md) configured, spokes should list the hub's peer addresses as fallbacks. After 3 consecutive failures on the current hub address, the spoke automatically tries the next fallback:
+
+```yaml
+spanner:
+  role: spoke
+  spoke_id: "dc1"
+  hub_addr: "hub.example.com:1530"
+  hub_fallback_addrs:
+    - "hub-standby.example.com:1530"
+```
+
+The spoke cycles through all addresses (primary, then fallbacks) until one responds. This ensures spokes reconnect to a promoted hub peer without manual intervention.
+
 ### Auto-Failover
 
 The hub can automatically drain unhealthy spokes:
