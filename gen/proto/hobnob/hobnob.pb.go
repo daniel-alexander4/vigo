@@ -298,6 +298,7 @@ type CheckInResponse struct {
 	StreamRequested     bool                   `protobuf:"varint,11,opt,name=stream_requested,json=streamRequested,proto3" json:"stream_requested,omitempty"`           // server wants agent to open AgentStream
 	Warnings            []string               `protobuf:"bytes,12,rep,name=warnings,proto3" json:"warnings,omitempty"`                                                 // config errors, missing modules, etc.
 	ProxiedDevices      []*ProxiedDevice       `protobuf:"bytes,13,rep,name=proxied_devices,json=proxiedDevices,proto3" json:"proxied_devices,omitempty"`               // network devices this gateway manages
+	ServerPubkeyPem     string                 `protobuf:"bytes,14,opt,name=server_pubkey_pem,json=serverPubkeyPem,proto3" json:"server_pubkey_pem,omitempty"`          // server's bundle-signing public key (ED25519 PEM)
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -421,6 +422,13 @@ func (x *CheckInResponse) GetProxiedDevices() []*ProxiedDevice {
 		return x.ProxiedDevices
 	}
 	return nil
+}
+
+func (x *CheckInResponse) GetServerPubkeyPem() string {
+	if x != nil {
+		return x.ServerPubkeyPem
+	}
+	return ""
 }
 
 // ProxiedDevice describes a network device managed through a gateway thrall.
@@ -6090,7 +6098,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"\fcapabilities\x18\t \x01(\v2\x1d.hobnob.v1.StreamCapabilitiesR\fcapabilities\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc8\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf4\x04\n" +
 	"\x0fCheckInResponse\x12+\n" +
 	"\amodules\x18\x01 \x03(\v2\x11.hobnob.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -6106,7 +6114,8 @@ const file_hobnob_proto_rawDesc = "" +
 	"reassignId\x12)\n" +
 	"\x10stream_requested\x18\v \x01(\bR\x0fstreamRequested\x12\x1a\n" +
 	"\bwarnings\x18\f \x03(\tR\bwarnings\x12A\n" +
-	"\x0fproxied_devices\x18\r \x03(\v2\x18.hobnob.v1.ProxiedDeviceR\x0eproxiedDevices\"\x89\x02\n" +
+	"\x0fproxied_devices\x18\r \x03(\v2\x18.hobnob.v1.ProxiedDeviceR\x0eproxiedDevices\x12*\n" +
+	"\x11server_pubkey_pem\x18\x0e \x01(\tR\x0fserverPubkeyPem\"\x89\x02\n" +
 	"\rProxiedDevice\x12\x1b\n" +
 	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1f\n" +

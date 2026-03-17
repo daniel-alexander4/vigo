@@ -258,6 +258,7 @@ message CheckInResponse {
   bool stream_requested = 11;           // server wants agent to open AgentStream
   repeated string warnings = 12;        // config errors, missing modules, etc.
   repeated ProxiedDevice proxied_devices = 13;  // network devices this gateway manages
+  string server_pubkey_pem = 14;               // server's bundle-signing public key (ED25519 PEM)
 }
 
 // ProxiedDevice describes a network device managed through a gateway thrall.

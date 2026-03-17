@@ -57,6 +57,8 @@ pub struct LoopConfig {
     pub state_store: Option<StateStore>,
     /// Server's bundle-signing public key PEM (empty = no verification).
     pub server_pubkey_pem: String,
+    /// Agent data directory for persisting server pubkey updates.
+    pub data_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for LoopConfig {
@@ -68,6 +70,7 @@ impl Default for LoopConfig {
             update_cfg: None,
             state_store: None,
             server_pubkey_pem: String::new(),
+            data_dir: None,
         }
     }
 }
@@ -84,6 +87,8 @@ pub struct RunResult {
     pub stream_requested: bool,
     /// Network devices this gateway should converge (empty for non-gateways).
     pub proxied_devices: Vec<ProxiedDevice>,
+    /// Server's bundle-signing public key PEM (updated on each check-in).
+    pub server_pubkey_pem: String,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -258,6 +263,7 @@ fn converge(
             policy_bundle: None,
             stream_requested: resp.stream_requested,
             proxied_devices,
+            server_pubkey_pem: resp.server_pubkey_pem.clone(),
         });
     } else {
         return Ok(RunResult {
@@ -270,6 +276,7 @@ fn converge(
             policy_bundle: None,
             stream_requested: resp.stream_requested,
             proxied_devices,
+            server_pubkey_pem: resp.server_pubkey_pem.clone(),
         });
     };
 
@@ -294,6 +301,7 @@ fn converge(
                 policy_bundle: resp.policy_bundle.clone(),
                 stream_requested: resp.stream_requested,
                 proxied_devices: proxied_devices.clone(),
+                server_pubkey_pem: resp.server_pubkey_pem.clone(),
             });
         }
     };
@@ -313,6 +321,7 @@ fn converge(
             policy_bundle: resp.policy_bundle.clone(),
             stream_requested: resp.stream_requested,
             proxied_devices,
+            server_pubkey_pem: resp.server_pubkey_pem.clone(),
         });
     }
 
@@ -335,6 +344,7 @@ fn converge(
         policy_bundle: resp.policy_bundle.clone(),
         stream_requested: resp.stream_requested,
         proxied_devices,
+        server_pubkey_pem: resp.server_pubkey_pem.clone(),
     })
 }
 
@@ -661,7 +671,8 @@ pub async fn daemon_loop(
     let traits_cache_dir = cfg.traits_cache_dir.clone();
     let update_cfg = cfg.update_cfg;
     let state_store = cfg.state_store;
-    let server_pubkey_pem = cfg.server_pubkey_pem;
+    let mut server_pubkey_pem = cfg.server_pubkey_pem;
+    let data_dir = cfg.data_dir;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -700,6 +711,16 @@ pub async fn daemon_loop(
         .await
         {
             Ok(rr) => {
+                // Update server pubkey if the server sent one.
+                if !rr.server_pubkey_pem.is_empty() && rr.server_pubkey_pem != server_pubkey_pem {
+                    info!("updating server bundle-signing public key");
+                    server_pubkey_pem = rr.server_pubkey_pem.clone();
+                    if let Some(dd) = data_dir.as_ref() {
+                        let path = dd.join("server_pubkey.pem");
+                        let _ = std::fs::write(&path, &server_pubkey_pem);
+                    }
+                }
+
                 // Verify bundle signature before accepting.
                 if let Some(ref bundle) = rr.policy_bundle {
                     if let Err(e) = verify::verify_bundle(bundle, &server_pubkey_pem) {
@@ -1571,6 +1592,7 @@ mod tests {
             }),
             stream_requested: false,
             proxied_devices: vec![],
+            server_pubkey_pem: String::new(),
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1592,6 +1614,7 @@ mod tests {
             policy_bundle: None,
             stream_requested: false,
             proxied_devices: vec![],
+            server_pubkey_pem: String::new(),
         };
 
         update_state(&mut ps, &rr, None);
@@ -1763,6 +1786,7 @@ mod tests {
             }),
             stream_requested: false,
             proxied_devices: vec![],
+            server_pubkey_pem: String::new(),
         };
 
         update_state(&mut ps, &rr, None);

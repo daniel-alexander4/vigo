@@ -644,6 +644,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         }),
         state_store,
         server_pubkey_pem: load_server_pubkey(&cli.data_dir),
+        data_dir: Some(cli.data_dir.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await

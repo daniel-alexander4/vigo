@@ -43,6 +43,7 @@ type AgentService struct {
 	reassignStore    *ReassignStore     // pending thrall reassignments (spoke side)
 	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
 	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
+	bundlePubKeyPEM  string            // cached PEM of bundle signing public key
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
 	jitterPercent    int32             // jitter percentage sent to agents
 }

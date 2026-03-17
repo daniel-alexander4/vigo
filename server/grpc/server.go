@@ -188,6 +188,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		baseInterval:     cfg.Interval,
 		jitterPercent:    cfg.JitterPercent,
 	}
+	if cfg.BundleSigner != nil {
+		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {
+			agentSvc.bundlePubKeyPEM = pem
+		}
+	}
 	pb.RegisterHobnobAgentServer(srv, agentSvc)
 
 	adminSvc := &AdminService{
