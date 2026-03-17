@@ -78,6 +78,13 @@ type Result struct {
 // When opts.CheckURLs is true, http/https URLs in changed/new modules are
 // checked for aliveness via HTTP HEAD.
 func ValidateSource(opts Options) (*Result, error) {
+	// Normalize whitespace in all .hnb/.yaml files: strip trailing whitespace
+	// from every line. This prevents invisible formatting issues from editors
+	// that add trailing spaces or mixed line endings.
+	if err := normalizeWhitespace(ProposedDir); err != nil {
+		return nil, fmt.Errorf("normalizing whitespace: %w", err)
+	}
+
 	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
@@ -574,6 +581,43 @@ func CheckLivePermissions(live string) string {
 		return fmt.Sprintf(".live directory %s is group and world accessible (mode %04o) — run 'chmod 750 %s'", live, mode, live)
 	}
 	return ""
+}
+
+// normalizeWhitespace walks the proposed directory and strips trailing
+// whitespace from every line of .hnb, .yaml, and .yml files. Files are
+// rewritten in-place only if they changed. This prevents editor artifacts
+// (trailing spaces, mixed line endings) from causing spurious diffs.
+func normalizeWhitespace(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		ext := filepath.Ext(path)
+		if ext != ".hnb" && ext != ".yaml" && ext != ".yml" {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		lines := strings.Split(string(data), "\n")
+		changed := false
+		for i, line := range lines {
+			trimmed := strings.TrimRight(line, " \t\r")
+			if trimmed != line {
+				lines[i] = trimmed
+				changed = true
+			}
+		}
+
+		if !changed {
+			return nil
+		}
+
+		return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+	})
 }
 
 var _ secrets.Provider = (*stubProvider)(nil)
