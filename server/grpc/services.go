@@ -16,7 +16,7 @@ import (
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/tasks"
+	"github.com/hobnob/hobnob/server/push"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 )
@@ -40,9 +40,9 @@ type AgentService struct {
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache
 	streamMgr        *streamManager
-	taskRouter       *taskRouter
+	pushRouter       *pushRouter
 	queryRouter      *queryRouter
-	taskStore        *tasks.Store
+	pushStore        *push.Store
 	hub              *spanner.Hub    // non-nil when role=hub; routes enrollment to spokes
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations

@@ -10,7 +10,7 @@
 use crate::proto::{
     agent_stream_message, server_stream_message, AgentStreamMessage, CheckInRequest,
     CheckInResponse, DeltaAck, QueryRequest, ReportResultRequest, ServerStreamMessage,
-    StreamPolicyPush, TaskDispatch,
+    StreamPolicyPush, PushDispatch,
 };
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
@@ -30,8 +30,8 @@ pub struct StreamHandle {
     pub force_push_rx: mpsc::Receiver<()>,
     /// Check-in response correlation.
     pub check_in_resp_rx: mpsc::Receiver<CheckInResponse>,
-    /// Server-dispatched ad-hoc tasks.
-    pub task_dispatch_rx: mpsc::Receiver<TaskDispatch>,
+    /// Server-dispatched ad-hoc pushes.
+    pub push_dispatch_rx: mpsc::Receiver<PushDispatch>,
     /// Server-dispatched live queries.
     pub query_request_rx: mpsc::Receiver<QueryRequest>,
     /// Delta acknowledgements from server.
@@ -129,7 +129,7 @@ pub async fn open(
     let (policy_push_tx, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
     let (force_push_tx, force_push_rx) = mpsc::channel::<()>(4);
     let (check_in_resp_tx, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
-    let (task_dispatch_tx, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
+    let (push_dispatch_tx, push_dispatch_rx) = mpsc::channel::<PushDispatch>(4);
     let (query_request_tx, query_request_rx) = mpsc::channel::<QueryRequest>(8);
     let (delta_ack_tx, delta_ack_rx) = mpsc::channel::<DeltaAck>(8);
     let (stream_release_tx, stream_release_rx) = mpsc::channel::<()>(1);
@@ -142,7 +142,7 @@ pub async fn open(
             policy_push_tx,
             force_push_tx,
             check_in_resp_tx,
-            task_dispatch_tx,
+            push_dispatch_tx,
             query_request_tx,
             delta_ack_tx,
             stream_release_tx,
@@ -156,7 +156,7 @@ pub async fn open(
         policy_push_rx,
         force_push_rx,
         check_in_resp_rx,
-        task_dispatch_rx,
+        push_dispatch_rx,
         query_request_rx,
         delta_ack_rx,
         stream_release_rx,
@@ -173,7 +173,7 @@ async fn read_loop(
     policy_push_tx: mpsc::Sender<StreamPolicyPush>,
     force_push_tx: mpsc::Sender<()>,
     check_in_resp_tx: mpsc::Sender<CheckInResponse>,
-    task_dispatch_tx: mpsc::Sender<TaskDispatch>,
+    push_dispatch_tx: mpsc::Sender<PushDispatch>,
     query_request_tx: mpsc::Sender<QueryRequest>,
     delta_ack_tx: mpsc::Sender<DeltaAck>,
     stream_release_tx: mpsc::Sender<()>,
@@ -200,9 +200,9 @@ async fn read_loop(
                         server_stream_message::Msg::ForcePush(_) => {
                             let _ = force_push_tx.try_send(());
                         }
-                        server_stream_message::Msg::TaskDispatch(dispatch) => {
-                            if task_dispatch_tx.try_send(dispatch).is_err() {
-                                warn!("task dispatch dropped (buffer full)");
+                        server_stream_message::Msg::PushDispatch(dispatch) => {
+                            if push_dispatch_tx.try_send(dispatch).is_err() {
+                                warn!("push dispatch dropped (buffer full)");
                             }
                         }
                         server_stream_message::Msg::QueryRequest(req) => {
@@ -424,7 +424,7 @@ mod tests {
         let (_, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
         let (_, force_push_rx) = mpsc::channel::<()>(4);
         let (_, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
-        let (_, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
+        let (_, push_dispatch_rx) = mpsc::channel::<PushDispatch>(4);
         let (_, query_request_rx) = mpsc::channel::<QueryRequest>(8);
         let (_, delta_ack_rx) = mpsc::channel::<DeltaAck>(8);
         let (_, stream_release_rx) = mpsc::channel::<()>(1);
@@ -435,7 +435,7 @@ mod tests {
             policy_push_rx,
             force_push_rx,
             check_in_resp_rx,
-            task_dispatch_rx,
+            push_dispatch_rx,
             query_request_rx,
             delta_ack_rx,
             stream_release_rx,

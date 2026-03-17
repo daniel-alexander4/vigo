@@ -16,34 +16,34 @@ import (
 	isgrpc "github.com/hobnob/hobnob/server/grpc"
 )
 
-// TaskDispatcher dispatches ad-hoc commands to connected agents.
-type TaskDispatcher interface {
-	DispatchTask(ctx context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error)
+// PushDispatcher dispatches ad-hoc commands to connected agents.
+type PushDispatcher interface {
+	DispatchPush(ctx context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error)
 }
 
-// TasksHandler serves the REST endpoints for ad-hoc task dispatch and status.
-type TasksHandler struct {
+// PushHandler serves the REST endpoints for ad-hoc push dispatch and status.
+type PushHandler struct {
 	queries            *db.Queries
-	dispatcher         TaskDispatcher
+	dispatcher         PushDispatcher
 	auditWriter        auditRecorder
 	requireDefinition  bool
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
-func (h *TasksHandler) SetAuditWriter(w auditRecorder) {
+func (h *PushHandler) SetAuditWriter(w auditRecorder) {
 	h.auditWriter = w
 }
 
-// NewTasksHandler creates a TasksHandler with database access and task dispatch.
-func NewTasksHandler(queries *db.Queries, dispatcher TaskDispatcher, requireDefinition bool) *TasksHandler {
-	return &TasksHandler{queries: queries, dispatcher: dispatcher, requireDefinition: requireDefinition}
+// NewPushHandler creates a PushHandler with database access and push dispatch.
+func NewPushHandler(queries *db.Queries, dispatcher PushDispatcher, requireDefinition bool) *PushHandler {
+	return &PushHandler{queries: queries, dispatcher: dispatcher, requireDefinition: requireDefinition}
 }
 
-// RegisterRoutes registers task endpoints on the given mux.
-func (h *TasksHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/tasks", h.HandleDispatch)
-	mux.HandleFunc("GET /api/v1/tasks", h.HandleList)
-	mux.HandleFunc("GET /api/v1/tasks/{id}", h.HandleGet)
+// RegisterRoutes registers push endpoints on the given mux.
+func (h *PushHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/v1/push", h.HandleDispatch)
+	mux.HandleFunc("GET /api/v1/push", h.HandleList)
+	mux.HandleFunc("GET /api/v1/push/{id}", h.HandleGet)
 }
 
 type dispatchRequest struct {
@@ -59,8 +59,8 @@ type dispatchRequest struct {
 	Params      map[string]string `json:"params"`
 }
 
-// HandleDispatch creates a new task run and dispatches the command to matching agents.
-func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
+// HandleDispatch creates a new push run and dispatches the command to matching agents.
+func (h *PushHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	var req dispatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
@@ -75,14 +75,14 @@ func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.requireDefinition && req.TaskName == "" {
-		writeJSONError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named task definition (tasks.require_definition is enabled)")
+		writeJSONError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named push definition (push.require_definition is enabled)")
 		return
 	}
 	if req.Operator == "" {
 		req.Operator = "api"
 	}
 
-	result, err := h.dispatcher.DispatchTask(r.Context(), isgrpc.DispatchParams{
+	result, err := h.dispatcher.DispatchPush(r.Context(), isgrpc.DispatchParams{
 		Command:     req.Command,
 		TargetSpec:  req.Target,
 		Operator:    req.Operator,
@@ -101,7 +101,7 @@ func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 
 	// Record tamper-evident audit event (skip dry runs).
 	if result.Status != "dry_run" {
-		recordAudit(r.Context(), h.auditWriter, "task.dispatch", req.Operator,
+		recordAudit(r.Context(), h.auditWriter, "push.dispatch", req.Operator,
 			req.Command+" on "+req.Target, "")
 	}
 
@@ -114,7 +114,7 @@ func (h *TasksHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-type taskSummary struct {
+type pushSummary struct {
 	ID           string `json:"id"`
 	Command      string `json:"command"`
 	Target       string `json:"target"`
@@ -125,8 +125,8 @@ type taskSummary struct {
 	FinishedAt   string `json:"finishedAt,omitempty"`
 }
 
-// HandleList returns recent task runs.
-func (h *TasksHandler) HandleList(w http.ResponseWriter, r *http.Request) {
+// HandleList returns recent push runs.
+func (h *PushHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	limit := int64(20)
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if parsed, err := strconv.ParseInt(l, 10, 64); err == nil && parsed > 0 {
@@ -134,15 +134,15 @@ func (h *TasksHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tasks, err := h.queries.ListTaskRuns(r.Context(), limit)
+	pushRuns, err := h.queries.ListPushRuns(r.Context(), limit)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	summaries := make([]taskSummary, 0, len(tasks))
-	for _, t := range tasks {
-		s := taskSummary{
+	summaries := make([]pushSummary, 0, len(pushRuns))
+	for _, t := range pushRuns {
+		s := pushSummary{
 			ID:           t.ID,
 			Command:      t.Command,
 			Target:       t.TargetGlob,
@@ -158,10 +158,10 @@ func (h *TasksHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"tasks": summaries})
+	json.NewEncoder(w).Encode(map[string]any{"pushRuns": summaries})
 }
 
-type taskDetail struct {
+type pushDetail struct {
 	ID           string `json:"id"`
 	Command      string `json:"command"`
 	Target       string `json:"target"`
@@ -188,48 +188,48 @@ type targetDetail struct {
 	FinishedAt string `json:"finishedAt,omitempty"`
 }
 
-// HandleGet returns a task run with per-target details.
-func (h *TasksHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
+// HandleGet returns a push run with per-target details.
+func (h *PushHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
-	task, err := h.queries.GetTaskRun(ctx, id)
+	pushRun, err := h.queries.GetPushRun(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "task not found")
+			writeJSONError(w, http.StatusNotFound, "push run not found")
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	targets, err := h.queries.ListTaskRunTargets(ctx, id)
+	targets, err := h.queries.ListPushRunTargets(ctx, id)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	td := taskDetail{
-		ID:           task.ID,
-		Command:      task.Command,
-		Target:       task.TargetGlob,
-		Operator:     task.Operator,
-		Status:       task.Status,
-		TotalTargets: task.TotalTargets,
-		TimeoutSecs:  task.TimeoutSecs,
-		CreatedAt:    task.CreatedAt.Format(time.RFC3339),
+	pd := pushDetail{
+		ID:           pushRun.ID,
+		Command:      pushRun.Command,
+		Target:       pushRun.TargetGlob,
+		Operator:     pushRun.Operator,
+		Status:       pushRun.Status,
+		TotalTargets: pushRun.TotalTargets,
+		TimeoutSecs:  pushRun.TimeoutSecs,
+		CreatedAt:    pushRun.CreatedAt.Format(time.RFC3339),
 	}
-	if task.BatchSize.Valid {
-		td.BatchSize = task.BatchSize.String
+	if pushRun.BatchSize.Valid {
+		pd.BatchSize = pushRun.BatchSize.String
 	}
-	if task.MaxFailures.Valid {
-		td.MaxFailures = task.MaxFailures.String
+	if pushRun.MaxFailures.Valid {
+		pd.MaxFailures = pushRun.MaxFailures.String
 	}
-	if task.StartedAt.Valid {
-		td.StartedAt = task.StartedAt.Time.Format(time.RFC3339)
+	if pushRun.StartedAt.Valid {
+		pd.StartedAt = pushRun.StartedAt.Time.Format(time.RFC3339)
 	}
-	if task.FinishedAt.Valid {
-		td.FinishedAt = task.FinishedAt.Time.Format(time.RFC3339)
+	if pushRun.FinishedAt.Valid {
+		pd.FinishedAt = pushRun.FinishedAt.Time.Format(time.RFC3339)
 	}
 
 	tds := make([]targetDetail, 0, len(targets))
@@ -264,7 +264,7 @@ func (h *TasksHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"task":    td,
+		"push":    pd,
 		"targets": tds,
 	})
 }

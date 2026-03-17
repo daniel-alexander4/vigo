@@ -519,5 +519,5 @@ func init() {
 	thrallsPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
 	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd,
 		thrallsTraitsCmd, thrallsTagCmd, thrallsUntagCmd, thrallsMaintenanceCmd,
-		thrallsPurgeCmd, thrallsRebootstrapCmd, pushCmd, rollbackCmd, previewCmd, packagesCmd)
+		thrallsPurgeCmd, thrallsRebootstrapCmd, thrallsPushCmd, rollbackCmd, previewCmd, packagesCmd)
 }

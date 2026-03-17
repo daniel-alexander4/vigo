@@ -10,8 +10,8 @@ import (
 	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
 )
 
-func TestTaskRouterTrackAndLookup(t *testing.T) {
-	router := newTaskRouter(nil)
+func TestPushRouterTrackAndLookup(t *testing.T) {
+	router := newPushRouter(nil)
 
 	router.trackTarget("run-1", "thrall-a", "target-1")
 	router.trackTarget("run-1", "thrall-b", "target-2")
@@ -45,8 +45,8 @@ func TestTaskRouterTrackAndLookup(t *testing.T) {
 	}
 }
 
-func TestTaskRouterRemoveTarget(t *testing.T) {
-	router := newTaskRouter(nil)
+func TestPushRouterRemoveTarget(t *testing.T) {
+	router := newPushRouter(nil)
 
 	router.trackTarget("run-1", "thrall-a", "target-1")
 	router.trackTarget("run-1", "thrall-b", "target-2")
@@ -104,22 +104,22 @@ func TestStreamManagerConnectedThrallIDs(t *testing.T) {
 	}
 }
 
-func TestStreamManagerDispatchTask(t *testing.T) {
+func TestStreamManagerDispatchPush(t *testing.T) {
 	sm := newStreamManager(0, nil, 0)
 
 	as, cleanup := sm.register("thrall-1", "host-1")
 	defer cleanup()
 
 	msg := &pb.ServerStreamMessage{
-		Msg: &pb.ServerStreamMessage_TaskDispatch{
-			TaskDispatch: &pb.TaskDispatch{
-				TaskId:  "task-1",
+		Msg: &pb.ServerStreamMessage_PushDispatch{
+			PushDispatch: &pb.PushDispatch{
+				PushId:  "push-1",
 				Command: "echo test",
 			},
 		},
 	}
 
-	ok := sm.dispatchTask("thrall-1", msg)
+	ok := sm.dispatchPush("thrall-1", msg)
 	if !ok {
 		t.Error("expected dispatch to succeed")
 	}
@@ -127,19 +127,19 @@ func TestStreamManagerDispatchTask(t *testing.T) {
 	// Verify the message arrived on the send channel.
 	select {
 	case received := <-as.send:
-		dispatch := received.GetTaskDispatch()
+		dispatch := received.GetPushDispatch()
 		if dispatch == nil {
-			t.Fatal("expected TaskDispatch message")
+			t.Fatal("expected PushDispatch message")
 		}
-		if dispatch.TaskId != "task-1" {
-			t.Errorf("expected task-1, got %s", dispatch.TaskId)
+		if dispatch.PushId != "push-1" {
+			t.Errorf("expected push-1, got %s", dispatch.PushId)
 		}
 	default:
 		t.Error("expected message on send channel")
 	}
 
 	// Dispatch to non-existent thrall.
-	ok = sm.dispatchTask("thrall-2", msg)
+	ok = sm.dispatchPush("thrall-2", msg)
 	if ok {
 		t.Error("expected dispatch to non-existent thrall to fail")
 	}

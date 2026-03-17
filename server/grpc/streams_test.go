@@ -12,10 +12,10 @@ import (
 	"github.com/hobnob/hobnob/server/fleet"
 )
 
-func testMsg(taskID string) *pb.ServerStreamMessage {
+func testMsg(pushID string) *pb.ServerStreamMessage {
 	return &pb.ServerStreamMessage{
-		Msg: &pb.ServerStreamMessage_TaskDispatch{
-			TaskDispatch: &pb.TaskDispatch{TaskId: taskID},
+		Msg: &pb.ServerStreamMessage_PushDispatch{
+			PushDispatch: &pb.PushDispatch{PushId: pushID},
 		},
 	}
 }
@@ -26,7 +26,7 @@ func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
-	msg := testMsg("task-1")
+	msg := testMsg("push-1")
 	sm.queueForPromotion("t1", msg, nil)
 
 	// Verify StreamRequested is set.
@@ -70,7 +70,7 @@ func TestStreamPromotionTimeout(t *testing.T) {
 	sm := newStreamManager(8, fi, 10*time.Millisecond)
 
 	timedOut := make(chan struct{}, 1)
-	sm.queueForPromotion("t1", testMsg("task-1"), func() {
+	sm.queueForPromotion("t1", testMsg("push-1"), func() {
 		timedOut <- struct{}{}
 	})
 
@@ -149,7 +149,7 @@ func TestStreamPromotionToAlreadyConnected(t *testing.T) {
 	as, cleanup := sm.register("t1", "web1.example.com")
 	defer cleanup()
 
-	msg := testMsg("task-1")
+	msg := testMsg("push-1")
 	sm.queueForPromotion("t1", msg, nil)
 
 	// Message should be delivered immediately.
@@ -175,8 +175,8 @@ func TestStreamPromotionMultipleMessages(t *testing.T) {
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
-	msg1 := testMsg("task-1")
-	msg2 := testMsg("task-2")
+	msg1 := testMsg("push-1")
+	msg2 := testMsg("push-2")
 	sm.queueForPromotion("t1", msg1, nil)
 	sm.queueForPromotion("t1", msg2, nil)
 
@@ -247,7 +247,7 @@ func TestStreamPromotionTimeoutClearsFlag(t *testing.T) {
 	sm := newStreamManager(8, fi, 10*time.Millisecond)
 
 	timedOut := make(chan struct{}, 1)
-	sm.queueForPromotion("t1", testMsg("task-1"), func() {
+	sm.queueForPromotion("t1", testMsg("push-1"), func() {
 		timedOut <- struct{}{}
 	})
 

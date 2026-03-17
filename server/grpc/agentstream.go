@@ -197,14 +197,14 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 					return
 				}
 
-			case *pb.AgentStreamMessage_TaskAck:
-				s.taskRouter.handleTaskAck(stream.Context(), thrallID, m.TaskAck)
-				if !m.TaskAck.Accepted {
+			case *pb.AgentStreamMessage_PushAck:
+				s.pushRouter.handlePushAck(stream.Context(), thrallID, m.PushAck)
+				if !m.PushAck.Accepted {
 					s.streamMgr.workCompleted(thrallID)
 				}
 
-			case *pb.AgentStreamMessage_TaskResult:
-				s.taskRouter.handleTaskResult(stream.Context(), thrallID, m.TaskResult)
+			case *pb.AgentStreamMessage_PushResult:
+				s.pushRouter.handlePushResult(stream.Context(), thrallID, m.PushResult)
 				s.streamMgr.workCompleted(thrallID)
 
 			case *pb.AgentStreamMessage_QueryResponse:

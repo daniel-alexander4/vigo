@@ -163,8 +163,8 @@ func TestPlanBatches_SingleTarget(t *testing.T) {
 	}
 }
 
-func TestTaskRouterNotifiers(t *testing.T) {
-	router := newTaskRouter(nil)
+func TestPushRouterNotifiers(t *testing.T) {
+	router := newPushRouter(nil)
 
 	// Register a notifier.
 	ch := router.registerNotifier("run-1", "thrall-a")
@@ -181,8 +181,8 @@ func TestTaskRouterNotifiers(t *testing.T) {
 	}
 }
 
-func TestTaskRouterNotifierRemove(t *testing.T) {
-	router := newTaskRouter(nil)
+func TestPushRouterNotifierRemove(t *testing.T) {
+	router := newPushRouter(nil)
 
 	ch := router.registerNotifier("run-1", "thrall-a")
 	router.removeNotifier("run-1", "thrall-a")
@@ -198,8 +198,8 @@ func TestTaskRouterNotifierRemove(t *testing.T) {
 	}
 }
 
-func TestTaskRouterNotifierUnknown(t *testing.T) {
-	router := newTaskRouter(nil)
+func TestPushRouterNotifierUnknown(t *testing.T) {
+	router := newPushRouter(nil)
 
 	// Should not panic for unknown task/thrall.
 	router.notifyCompletion("run-1", "thrall-a")

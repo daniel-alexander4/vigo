@@ -18,7 +18,7 @@ import (
 	"github.com/hobnob/hobnob/server/db"
 )
 
-// DispatchParams holds all parameters for task dispatch.
+// DispatchParams holds all parameters for push dispatch.
 type DispatchParams struct {
 	Command     string
 	TargetSpec  string
@@ -28,11 +28,11 @@ type DispatchParams struct {
 	MaxFailures string // count ("2") or percentage ("10%")
 	HealthCheck string // shell command run between batches
 	DryRun      bool
-	TaskName    string            // named task to resolve from task store
-	Params      map[string]string // parameters for named tasks
+	TaskName    string            // named push definition to resolve from push store
+	Params      map[string]string // parameters for named push definitions
 }
 
-// DispatchResult is the result of a task dispatch.
+// DispatchResult is the result of a push dispatch.
 type DispatchResult struct {
 	ID      string         `json:"id,omitempty"`
 	Status  string         `json:"status"`
@@ -138,7 +138,7 @@ type targetRecord struct {
 // runRollingExecution executes batches sequentially, checking failure
 // thresholds and health checks between batches. Called as a goroutine.
 func (s *AgentService) runRollingExecution(
-	taskRunID string,
+	pushRunID string,
 	batches [][]targetRecord,
 	command string,
 	timeoutSecs int32,
@@ -152,7 +152,7 @@ func (s *AgentService) runRollingExecution(
 
 	for batchIdx, batch := range batches {
 		slog.Info("rolling execution: starting batch",
-			"task_run_id", taskRunID,
+			"push_run_id", pushRunID,
 			"batch", batchIdx+1,
 			"total_batches", len(batches),
 			"targets", len(batch),
@@ -161,8 +161,8 @@ func (s *AgentService) runRollingExecution(
 		// Register notifiers and track targets for this batch.
 		doneChans := make([]chan struct{}, 0, len(batch))
 		for _, tr := range batch {
-			s.taskRouter.trackTarget(taskRunID, tr.info.ThrallID, tr.targetID)
-			ch := s.taskRouter.registerNotifier(taskRunID, tr.info.ThrallID)
+			s.pushRouter.trackTarget(pushRunID, tr.info.ThrallID, tr.targetID)
+			ch := s.pushRouter.registerNotifier(pushRunID, tr.info.ThrallID)
 			doneChans = append(doneChans, ch)
 		}
 
@@ -170,9 +170,9 @@ func (s *AgentService) runRollingExecution(
 		now := sql.NullTime{Time: time.Now(), Valid: true}
 		for _, tr := range batch {
 			msg := &pb.ServerStreamMessage{
-				Msg: &pb.ServerStreamMessage_TaskDispatch{
-					TaskDispatch: &pb.TaskDispatch{
-						TaskId:         taskRunID,
+				Msg: &pb.ServerStreamMessage_PushDispatch{
+					PushDispatch: &pb.PushDispatch{
+						PushId:         pushRunID,
 						Command:        command,
 						TimeoutSeconds: timeoutSecs,
 						Env:            env,
@@ -180,9 +180,9 @@ func (s *AgentService) runRollingExecution(
 				},
 			}
 
-			if !s.streamMgr.dispatchTask(tr.info.ThrallID, msg) {
+			if !s.streamMgr.dispatchPush(tr.info.ThrallID, msg) {
 				// Stream closed between target creation and dispatch.
-				if err := s.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
+				if err := s.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
 					ID:         tr.targetID,
 					Status:     "offline",
 					FinishedAt: now,
@@ -190,8 +190,8 @@ func (s *AgentService) runRollingExecution(
 					slog.Error("failed to mark target offline",
 						"target_id", tr.targetID, "error", err)
 				}
-				s.taskRouter.removeTarget(taskRunID, tr.info.ThrallID)
-				s.taskRouter.notifyCompletion(taskRunID, tr.info.ThrallID)
+				s.pushRouter.removeTarget(pushRunID, tr.info.ThrallID)
+				s.pushRouter.notifyCompletion(pushRunID, tr.info.ThrallID)
 			}
 		}
 
@@ -209,26 +209,26 @@ func (s *AgentService) runRollingExecution(
 			// Batch completed normally.
 		case <-time.After(batchTimeout):
 			slog.Warn("rolling execution: batch timed out",
-				"task_run_id", taskRunID, "batch", batchIdx+1)
+				"push_run_id", pushRunID, "batch", batchIdx+1)
 		}
 
 		// Clean up notifiers.
 		for _, tr := range batch {
-			s.taskRouter.removeNotifier(taskRunID, tr.info.ThrallID)
+			s.pushRouter.removeNotifier(pushRunID, tr.info.ThrallID)
 		}
 
 		// Check max_failures threshold.
 		if maxFailuresSpec != "" {
 			maxFailures, err := parseBatchSpec(maxFailuresSpec, totalConnected)
 			if err == nil && maxFailures > 0 {
-				failed := s.countFailedTargets(ctx, taskRunID)
+				failed := s.countFailedTargets(ctx, pushRunID)
 				if failed >= maxFailures {
 					slog.Warn("rolling execution: max failures threshold reached, aborting",
-						"task_run_id", taskRunID,
+						"push_run_id", pushRunID,
 						"failed", failed,
 						"max_failures", maxFailures,
 					)
-					s.skipRemainingBatches(ctx, taskRunID, batches[batchIdx+1:])
+					s.skipRemainingBatches(ctx, pushRunID, batches[batchIdx+1:])
 					break
 				}
 			}
@@ -238,21 +238,21 @@ func (s *AgentService) runRollingExecution(
 		if batchIdx < len(batches)-1 && healthCheck != "" {
 			if err := runHealthCheck(healthCheck); err != nil {
 				slog.Warn("rolling execution: health check failed, aborting",
-					"task_run_id", taskRunID,
+					"push_run_id", pushRunID,
 					"error", err,
 				)
-				s.skipRemainingBatches(ctx, taskRunID, batches[batchIdx+1:])
+				s.skipRemainingBatches(ctx, pushRunID, batches[batchIdx+1:])
 				break
 			}
 		}
 	}
 
-	s.taskRouter.maybeFinishTaskRun(ctx, taskRunID)
+	s.pushRouter.maybeFinishPushRun(ctx, pushRunID)
 }
 
 // countFailedTargets returns the number of failed/timeout/rejected targets.
-func (s *AgentService) countFailedTargets(ctx context.Context, taskRunID string) int {
-	counts, err := s.queries.CountTaskRunTargetsByStatus(ctx, taskRunID)
+func (s *AgentService) countFailedTargets(ctx context.Context, pushRunID string) int {
+	counts, err := s.queries.CountPushRunTargetsByStatus(ctx, pushRunID)
 	if err != nil {
 		return 0
 	}
@@ -267,11 +267,11 @@ func (s *AgentService) countFailedTargets(ctx context.Context, taskRunID string)
 }
 
 // skipRemainingBatches marks all targets in remaining batches as 'skipped'.
-func (s *AgentService) skipRemainingBatches(ctx context.Context, taskRunID string, batches [][]targetRecord) {
+func (s *AgentService) skipRemainingBatches(ctx context.Context, pushRunID string, batches [][]targetRecord) {
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	for _, batch := range batches {
 		for _, tr := range batch {
-			if err := s.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
+			if err := s.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
 				ID:         tr.targetID,
 				Status:     "skipped",
 				ErrorMsg:   sql.NullString{String: "skipped: rolling execution aborted", Valid: true},

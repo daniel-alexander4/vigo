@@ -21,7 +21,7 @@ import (
 	"github.com/hobnob/hobnob/server/license"
 	"github.com/hobnob/hobnob/server/registry"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/tasks"
+	"github.com/hobnob/hobnob/server/push"
 	"github.com/hobnob/hobnob/server/traits"
 	"github.com/hobnob/hobnob/server/webhook"
 	"google.golang.org/grpc"
@@ -77,7 +77,7 @@ type ServerConfig struct {
 	Hub              *spanner.Hub // non-nil when role=hub
 	SMTPNotifier     *hobnobsmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
-	TaskStore        *tasks.Store
+	PushStore        *push.Store
 	FleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	RunBatcher       *fleet.RunBatcher  // async run persistence from delta events
 	BundleSigner     *BundleSigner     // signs policy bundles (nil = no signing)
@@ -177,9 +177,9 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
 		streamMgr:        newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, 12*time.Minute),
-		taskRouter:       newTaskRouter(cfg.Queries),
+		pushRouter:       newPushRouter(cfg.Queries),
 		queryRouter:      newQueryRouter(),
-		taskStore:        cfg.TaskStore,
+		pushStore:        cfg.PushStore,
 		hub:              cfg.Hub,
 		licenseEnforcer:  cfg.LicenseEnforcer,
 		fleetIndex:       cfg.FleetIndex,

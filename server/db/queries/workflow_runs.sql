@@ -17,7 +17,7 @@ SET status = ?2, current_step = ?3, started_at = ?4, finished_at = ?5, failure_r
 WHERE id = ?1;
 
 -- name: CreateWorkflowStepResult :one
-INSERT INTO workflow_step_results (workflow_run_id, step_index, step_name, task_run_id, status)
+INSERT INTO workflow_step_results (workflow_run_id, step_index, step_name, push_run_id, status)
 VALUES (?, ?, ?, ?, 'pending')
 RETURNING *;
 
@@ -28,7 +28,7 @@ ORDER BY step_index ASC;
 
 -- name: UpdateWorkflowStepResult :exec
 UPDATE workflow_step_results
-SET status = ?2, task_run_id = ?3, started_at = ?4, finished_at = ?5
+SET status = ?2, push_run_id = ?3, started_at = ?4, finished_at = ?5
 WHERE id = ?1;
 
 -- name: FailInterruptedWorkflows :exec

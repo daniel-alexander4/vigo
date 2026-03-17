@@ -30,7 +30,7 @@ func openWorkflowTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { sqlDB.Close() })
 
 	_, err = sqlDB.Exec(`
-		CREATE TABLE task_runs (
+		CREATE TABLE push_runs (
 			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
 			command        TEXT NOT NULL,
 			target_glob    TEXT NOT NULL,
@@ -61,7 +61,7 @@ func openWorkflowTestDB(t *testing.T) *sql.DB {
 			workflow_run_id TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE,
 			step_index      INTEGER NOT NULL DEFAULT 0,
 			step_name       TEXT NOT NULL DEFAULT '',
-			task_run_id     TEXT,
+			push_run_id     TEXT,
 			status          TEXT NOT NULL DEFAULT 'pending',
 			started_at      DATETIME,
 			finished_at     DATETIME

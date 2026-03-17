@@ -41,16 +41,16 @@ func (q *Queries) CreateWorkflowRun(ctx context.Context, arg CreateWorkflowRunPa
 }
 
 const createWorkflowStepResult = `-- name: CreateWorkflowStepResult :one
-INSERT INTO workflow_step_results (workflow_run_id, step_index, step_name, task_run_id, status)
+INSERT INTO workflow_step_results (workflow_run_id, step_index, step_name, push_run_id, status)
 VALUES (?, ?, ?, ?, 'pending')
-RETURNING id, workflow_run_id, step_index, step_name, task_run_id, status, started_at, finished_at
+RETURNING id, workflow_run_id, step_index, step_name, push_run_id, status, started_at, finished_at
 `
 
 type CreateWorkflowStepResultParams struct {
 	WorkflowRunID string         `json:"workflow_run_id"`
 	StepIndex     int64          `json:"step_index"`
 	StepName      string         `json:"step_name"`
-	TaskRunID     sql.NullString `json:"task_run_id"`
+	PushRunID     sql.NullString `json:"push_run_id"`
 }
 
 func (q *Queries) CreateWorkflowStepResult(ctx context.Context, arg CreateWorkflowStepResultParams) (WorkflowStepResult, error) {
@@ -58,7 +58,7 @@ func (q *Queries) CreateWorkflowStepResult(ctx context.Context, arg CreateWorkfl
 		arg.WorkflowRunID,
 		arg.StepIndex,
 		arg.StepName,
-		arg.TaskRunID,
+		arg.PushRunID,
 	)
 	var i WorkflowStepResult
 	err := row.Scan(
@@ -66,7 +66,7 @@ func (q *Queries) CreateWorkflowStepResult(ctx context.Context, arg CreateWorkfl
 		&i.WorkflowRunID,
 		&i.StepIndex,
 		&i.StepName,
-		&i.TaskRunID,
+		&i.PushRunID,
 		&i.Status,
 		&i.StartedAt,
 		&i.FinishedAt,
@@ -148,7 +148,7 @@ func (q *Queries) ListWorkflowRuns(ctx context.Context, limit int64) ([]Workflow
 }
 
 const listWorkflowStepResults = `-- name: ListWorkflowStepResults :many
-SELECT id, workflow_run_id, step_index, step_name, task_run_id, status, started_at, finished_at FROM workflow_step_results
+SELECT id, workflow_run_id, step_index, step_name, push_run_id, status, started_at, finished_at FROM workflow_step_results
 WHERE workflow_run_id = ?
 ORDER BY step_index ASC
 `
@@ -167,7 +167,7 @@ func (q *Queries) ListWorkflowStepResults(ctx context.Context, workflowRunID str
 			&i.WorkflowRunID,
 			&i.StepIndex,
 			&i.StepName,
-			&i.TaskRunID,
+			&i.PushRunID,
 			&i.Status,
 			&i.StartedAt,
 			&i.FinishedAt,
@@ -214,14 +214,14 @@ func (q *Queries) UpdateWorkflowRunStatus(ctx context.Context, arg UpdateWorkflo
 
 const updateWorkflowStepResult = `-- name: UpdateWorkflowStepResult :exec
 UPDATE workflow_step_results
-SET status = ?2, task_run_id = ?3, started_at = ?4, finished_at = ?5
+SET status = ?2, push_run_id = ?3, started_at = ?4, finished_at = ?5
 WHERE id = ?1
 `
 
 type UpdateWorkflowStepResultParams struct {
 	ID         string         `json:"id"`
 	Status     string         `json:"status"`
-	TaskRunID  sql.NullString `json:"task_run_id"`
+	PushRunID  sql.NullString `json:"push_run_id"`
 	StartedAt  sql.NullTime   `json:"started_at"`
 	FinishedAt sql.NullTime   `json:"finished_at"`
 }
@@ -230,7 +230,7 @@ func (q *Queries) UpdateWorkflowStepResult(ctx context.Context, arg UpdateWorkfl
 	_, err := q.db.ExecContext(ctx, updateWorkflowStepResult,
 		arg.ID,
 		arg.Status,
-		arg.TaskRunID,
+		arg.PushRunID,
 		arg.StartedAt,
 		arg.FinishedAt,
 	)

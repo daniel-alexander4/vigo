@@ -1091,8 +1091,8 @@ async fn stream_loop(
     let next_checkin = tokio::time::sleep(jittered_duration(interval, jitter_pct));
     tokio::pin!(next_checkin);
 
-    // Create a cancellation token tied to this stream's lifetime for task cleanup.
-    let task_cancel = tokio_util::sync::CancellationToken::new();
+    // Create a cancellation token tied to this stream's lifetime for push cleanup.
+    let push_cancel = tokio_util::sync::CancellationToken::new();
 
     // Destructure handle so each field can be borrowed independently in select!.
     let stream::StreamHandle {
@@ -1100,7 +1100,7 @@ async fn stream_loop(
         ref mut policy_push_rx,
         ref mut force_push_rx,
         ref mut check_in_resp_rx,
-        ref mut task_dispatch_rx,
+        ref mut push_dispatch_rx,
         ref mut query_request_rx,
         ref mut delta_ack_rx,
         ref mut stream_release_rx,
@@ -1199,42 +1199,42 @@ async fn stream_loop(
                     next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
                 }
 
-                dispatch = task_dispatch_rx.recv() => {
+                dispatch = push_dispatch_rx.recv() => {
                     let dispatch = match dispatch {
                         Some(d) => d,
                         None => continue, // channel closed, keep running
                     };
 
-                    info!(task_id = %dispatch.task_id, command = %dispatch.command, "received task dispatch");
+                    info!(push_id = %dispatch.push_id, command = %dispatch.command, "received push dispatch");
 
                     // Self-protection guardrails — reject dangerous commands.
-                    if let Some(reason) = crate::guardrails::check_task_command(&dispatch.command) {
+                    if let Some(reason) = crate::guardrails::check_push_command(&dispatch.command) {
                         warn!(
-                            task_id = %dispatch.task_id,
+                            push_id = %dispatch.push_id,
                             command = %dispatch.command,
                             reason = %reason,
-                            "GUARDRAIL BLOCKED task dispatch"
+                            "GUARDRAIL BLOCKED push dispatch"
                         );
-                        crate::task::send_ack(request_tx, &dispatch.task_id, false, &format!("guardrail violation: {}", reason)).await;
+                        crate::push::send_ack(request_tx, &dispatch.push_id, false, &format!("guardrail violation: {}", reason)).await;
                         continue;
                     }
 
-                    // Acknowledge the task immediately.
-                    crate::task::send_ack(request_tx, &dispatch.task_id, true, "").await;
+                    // Acknowledge the push immediately.
+                    crate::push::send_ack(request_tx, &dispatch.push_id, true, "").await;
 
-                    // Execute the task synchronously (blocks this select arm,
+                    // Execute the push synchronously (blocks this select arm,
                     // providing mutual exclusion with convergence).
-                    let result = crate::task::execute(&dispatch, &task_cancel).await;
+                    let result = crate::push::execute(&dispatch, &push_cancel).await;
 
                     info!(
-                        task_id = %result.task_id,
+                        push_id = %result.push_id,
                         status = %result.status,
                         exit_code = result.exit_code,
                         duration_ms = result.duration_ms,
-                        "task execution complete"
+                        "push execution complete"
                     );
 
-                    crate::task::send_result(request_tx, result).await;
+                    crate::push::send_result(request_tx, result).await;
                 }
 
                 query = query_request_rx.recv() => {
@@ -1333,8 +1333,8 @@ async fn stream_loop(
     }
     .await;
 
-    // Cancel any in-flight task subprocess when the stream loop exits.
-    task_cancel.cancel();
+    // Cancel any in-flight push subprocess when the stream loop exits.
+    push_cancel.cancel();
 
     result
 }

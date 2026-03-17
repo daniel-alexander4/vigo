@@ -1595,8 +1595,8 @@ type AgentStreamMessage struct {
 	//	*AgentStreamMessage_CheckIn
 	//	*AgentStreamMessage_ReportResult
 	//	*AgentStreamMessage_ReportTraits
-	//	*AgentStreamMessage_TaskResult
-	//	*AgentStreamMessage_TaskAck
+	//	*AgentStreamMessage_PushResult
+	//	*AgentStreamMessage_PushAck
 	//	*AgentStreamMessage_QueryResponse
 	//	*AgentStreamMessage_Delta
 	Msg           isAgentStreamMessage_Msg `protobuf_oneof:"msg"`
@@ -1668,19 +1668,19 @@ func (x *AgentStreamMessage) GetReportTraits() *ReportTraitsRequest {
 	return nil
 }
 
-func (x *AgentStreamMessage) GetTaskResult() *TaskResult {
+func (x *AgentStreamMessage) GetPushResult() *PushResult {
 	if x != nil {
-		if x, ok := x.Msg.(*AgentStreamMessage_TaskResult); ok {
-			return x.TaskResult
+		if x, ok := x.Msg.(*AgentStreamMessage_PushResult); ok {
+			return x.PushResult
 		}
 	}
 	return nil
 }
 
-func (x *AgentStreamMessage) GetTaskAck() *TaskAck {
+func (x *AgentStreamMessage) GetPushAck() *PushAck {
 	if x != nil {
-		if x, ok := x.Msg.(*AgentStreamMessage_TaskAck); ok {
-			return x.TaskAck
+		if x, ok := x.Msg.(*AgentStreamMessage_PushAck); ok {
+			return x.PushAck
 		}
 	}
 	return nil
@@ -1720,12 +1720,12 @@ type AgentStreamMessage_ReportTraits struct {
 	ReportTraits *ReportTraitsRequest `protobuf:"bytes,3,opt,name=report_traits,json=reportTraits,proto3,oneof"`
 }
 
-type AgentStreamMessage_TaskResult struct {
-	TaskResult *TaskResult `protobuf:"bytes,4,opt,name=task_result,json=taskResult,proto3,oneof"`
+type AgentStreamMessage_PushResult struct {
+	PushResult *PushResult `protobuf:"bytes,4,opt,name=push_result,json=pushResult,proto3,oneof"`
 }
 
-type AgentStreamMessage_TaskAck struct {
-	TaskAck *TaskAck `protobuf:"bytes,5,opt,name=task_ack,json=taskAck,proto3,oneof"`
+type AgentStreamMessage_PushAck struct {
+	PushAck *PushAck `protobuf:"bytes,5,opt,name=push_ack,json=pushAck,proto3,oneof"`
 }
 
 type AgentStreamMessage_QueryResponse struct {
@@ -1742,9 +1742,9 @@ func (*AgentStreamMessage_ReportResult) isAgentStreamMessage_Msg() {}
 
 func (*AgentStreamMessage_ReportTraits) isAgentStreamMessage_Msg() {}
 
-func (*AgentStreamMessage_TaskResult) isAgentStreamMessage_Msg() {}
+func (*AgentStreamMessage_PushResult) isAgentStreamMessage_Msg() {}
 
-func (*AgentStreamMessage_TaskAck) isAgentStreamMessage_Msg() {}
+func (*AgentStreamMessage_PushAck) isAgentStreamMessage_Msg() {}
 
 func (*AgentStreamMessage_QueryResponse) isAgentStreamMessage_Msg() {}
 
@@ -1760,7 +1760,7 @@ type ServerStreamMessage struct {
 	//	*ServerStreamMessage_ReportTraitsAck
 	//	*ServerStreamMessage_PolicyPush
 	//	*ServerStreamMessage_ForcePush
-	//	*ServerStreamMessage_TaskDispatch
+	//	*ServerStreamMessage_PushDispatch
 	//	*ServerStreamMessage_QueryRequest
 	//	*ServerStreamMessage_DeltaAck
 	//	*ServerStreamMessage_StreamRelease
@@ -1851,10 +1851,10 @@ func (x *ServerStreamMessage) GetForcePush() *StreamForcePush {
 	return nil
 }
 
-func (x *ServerStreamMessage) GetTaskDispatch() *TaskDispatch {
+func (x *ServerStreamMessage) GetPushDispatch() *PushDispatch {
 	if x != nil {
-		if x, ok := x.Msg.(*ServerStreamMessage_TaskDispatch); ok {
-			return x.TaskDispatch
+		if x, ok := x.Msg.(*ServerStreamMessage_PushDispatch); ok {
+			return x.PushDispatch
 		}
 	}
 	return nil
@@ -1911,8 +1911,8 @@ type ServerStreamMessage_ForcePush struct {
 	ForcePush *StreamForcePush `protobuf:"bytes,5,opt,name=force_push,json=forcePush,proto3,oneof"`
 }
 
-type ServerStreamMessage_TaskDispatch struct {
-	TaskDispatch *TaskDispatch `protobuf:"bytes,6,opt,name=task_dispatch,json=taskDispatch,proto3,oneof"`
+type ServerStreamMessage_PushDispatch struct {
+	PushDispatch *PushDispatch `protobuf:"bytes,6,opt,name=push_dispatch,json=pushDispatch,proto3,oneof"`
 }
 
 type ServerStreamMessage_QueryRequest struct {
@@ -1937,7 +1937,7 @@ func (*ServerStreamMessage_PolicyPush) isServerStreamMessage_Msg() {}
 
 func (*ServerStreamMessage_ForcePush) isServerStreamMessage_Msg() {}
 
-func (*ServerStreamMessage_TaskDispatch) isServerStreamMessage_Msg() {}
+func (*ServerStreamMessage_PushDispatch) isServerStreamMessage_Msg() {}
 
 func (*ServerStreamMessage_QueryRequest) isServerStreamMessage_Msg() {}
 
@@ -2479,10 +2479,10 @@ func (x *StreamCapabilities) GetLastAckedSequence() int64 {
 	return 0
 }
 
-// TaskDispatch is sent server→agent to execute a command on the thrall.
-type TaskDispatch struct {
+// PushDispatch is sent server→agent to execute a command on the thrall.
+type PushDispatch struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	TaskId         string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`                                                       // unique ID for this task execution
+	PushId         string                 `protobuf:"bytes,1,opt,name=push_id,json=pushId,proto3" json:"push_id,omitempty"`                                                       // unique ID for this push execution
 	Command        string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`                                                                   // shell command to execute
 	TimeoutSeconds int32                  `protobuf:"varint,3,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`                              // max execution time (0 = use default 60s)
 	Env            map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // additional environment variables
@@ -2490,20 +2490,20 @@ type TaskDispatch struct {
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *TaskDispatch) Reset() {
-	*x = TaskDispatch{}
+func (x *PushDispatch) Reset() {
+	*x = PushDispatch{}
 	mi := &file_hobnob_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TaskDispatch) String() string {
+func (x *PushDispatch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TaskDispatch) ProtoMessage() {}
+func (*PushDispatch) ProtoMessage() {}
 
-func (x *TaskDispatch) ProtoReflect() protoreflect.Message {
+func (x *PushDispatch) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2515,63 +2515,63 @@ func (x *TaskDispatch) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TaskDispatch.ProtoReflect.Descriptor instead.
-func (*TaskDispatch) Descriptor() ([]byte, []int) {
+// Deprecated: Use PushDispatch.ProtoReflect.Descriptor instead.
+func (*PushDispatch) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{30}
 }
 
-func (x *TaskDispatch) GetTaskId() string {
+func (x *PushDispatch) GetPushId() string {
 	if x != nil {
-		return x.TaskId
+		return x.PushId
 	}
 	return ""
 }
 
-func (x *TaskDispatch) GetCommand() string {
+func (x *PushDispatch) GetCommand() string {
 	if x != nil {
 		return x.Command
 	}
 	return ""
 }
 
-func (x *TaskDispatch) GetTimeoutSeconds() int32 {
+func (x *PushDispatch) GetTimeoutSeconds() int32 {
 	if x != nil {
 		return x.TimeoutSeconds
 	}
 	return 0
 }
 
-func (x *TaskDispatch) GetEnv() map[string]string {
+func (x *PushDispatch) GetEnv() map[string]string {
 	if x != nil {
 		return x.Env
 	}
 	return nil
 }
 
-// TaskAck is sent agent→server to acknowledge receipt of a task dispatch.
-type TaskAck struct {
+// PushAck is sent agent→server to acknowledge receipt of a push dispatch.
+type PushAck struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	PushId        string                 `protobuf:"bytes,1,opt,name=push_id,json=pushId,proto3" json:"push_id,omitempty"`
 	Accepted      bool                   `protobuf:"varint,2,opt,name=accepted,proto3" json:"accepted,omitempty"`                            // false if agent cannot accept (e.g., shutting down)
 	RejectReason  string                 `protobuf:"bytes,3,opt,name=reject_reason,json=rejectReason,proto3" json:"reject_reason,omitempty"` // set when accepted=false
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *TaskAck) Reset() {
-	*x = TaskAck{}
+func (x *PushAck) Reset() {
+	*x = PushAck{}
 	mi := &file_hobnob_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TaskAck) String() string {
+func (x *PushAck) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TaskAck) ProtoMessage() {}
+func (*PushAck) ProtoMessage() {}
 
-func (x *TaskAck) ProtoReflect() protoreflect.Message {
+func (x *PushAck) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2583,36 +2583,36 @@ func (x *TaskAck) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TaskAck.ProtoReflect.Descriptor instead.
-func (*TaskAck) Descriptor() ([]byte, []int) {
+// Deprecated: Use PushAck.ProtoReflect.Descriptor instead.
+func (*PushAck) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{31}
 }
 
-func (x *TaskAck) GetTaskId() string {
+func (x *PushAck) GetPushId() string {
 	if x != nil {
-		return x.TaskId
+		return x.PushId
 	}
 	return ""
 }
 
-func (x *TaskAck) GetAccepted() bool {
+func (x *PushAck) GetAccepted() bool {
 	if x != nil {
 		return x.Accepted
 	}
 	return false
 }
 
-func (x *TaskAck) GetRejectReason() string {
+func (x *PushAck) GetRejectReason() string {
 	if x != nil {
 		return x.RejectReason
 	}
 	return ""
 }
 
-// TaskResult is sent agent→server with the outcome of a task execution.
-type TaskResult struct {
+// PushResult is sent agent→server with the outcome of a push execution.
+type PushResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	PushId        string                 `protobuf:"bytes,1,opt,name=push_id,json=pushId,proto3" json:"push_id,omitempty"`
 	ExitCode      int32                  `protobuf:"varint,2,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
 	Stdout        []byte                 `protobuf:"bytes,3,opt,name=stdout,proto3" json:"stdout,omitempty"`
 	Stderr        []byte                 `protobuf:"bytes,4,opt,name=stderr,proto3" json:"stderr,omitempty"`
@@ -2623,20 +2623,20 @@ type TaskResult struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *TaskResult) Reset() {
-	*x = TaskResult{}
+func (x *PushResult) Reset() {
+	*x = PushResult{}
 	mi := &file_hobnob_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TaskResult) String() string {
+func (x *PushResult) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TaskResult) ProtoMessage() {}
+func (*PushResult) ProtoMessage() {}
 
-func (x *TaskResult) ProtoReflect() protoreflect.Message {
+func (x *PushResult) ProtoReflect() protoreflect.Message {
 	mi := &file_hobnob_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2648,54 +2648,54 @@ func (x *TaskResult) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TaskResult.ProtoReflect.Descriptor instead.
-func (*TaskResult) Descriptor() ([]byte, []int) {
+// Deprecated: Use PushResult.ProtoReflect.Descriptor instead.
+func (*PushResult) Descriptor() ([]byte, []int) {
 	return file_hobnob_proto_rawDescGZIP(), []int{32}
 }
 
-func (x *TaskResult) GetTaskId() string {
+func (x *PushResult) GetPushId() string {
 	if x != nil {
-		return x.TaskId
+		return x.PushId
 	}
 	return ""
 }
 
-func (x *TaskResult) GetExitCode() int32 {
+func (x *PushResult) GetExitCode() int32 {
 	if x != nil {
 		return x.ExitCode
 	}
 	return 0
 }
 
-func (x *TaskResult) GetStdout() []byte {
+func (x *PushResult) GetStdout() []byte {
 	if x != nil {
 		return x.Stdout
 	}
 	return nil
 }
 
-func (x *TaskResult) GetStderr() []byte {
+func (x *PushResult) GetStderr() []byte {
 	if x != nil {
 		return x.Stderr
 	}
 	return nil
 }
 
-func (x *TaskResult) GetStatus() string {
+func (x *PushResult) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *TaskResult) GetDurationMs() int32 {
+func (x *PushResult) GetDurationMs() int32 {
 	if x != nil {
 		return x.DurationMs
 	}
 	return 0
 }
 
-func (x *TaskResult) GetErrorMessage() string {
+func (x *PushResult) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
 	}
@@ -6744,9 +6744,9 @@ const file_hobnob_proto_rawDesc = "" +
 	"\bcheck_in\x18\x01 \x01(\v2\x19.hobnob.v1.CheckInRequestH\x00R\acheckIn\x12E\n" +
 	"\rreport_result\x18\x02 \x01(\v2\x1e.hobnob.v1.ReportResultRequestH\x00R\freportResult\x12E\n" +
 	"\rreport_traits\x18\x03 \x01(\v2\x1e.hobnob.v1.ReportTraitsRequestH\x00R\freportTraits\x128\n" +
-	"\vtask_result\x18\x04 \x01(\v2\x15.hobnob.v1.TaskResultH\x00R\n" +
-	"taskResult\x12/\n" +
-	"\btask_ack\x18\x05 \x01(\v2\x12.hobnob.v1.TaskAckH\x00R\ataskAck\x12A\n" +
+	"\vpush_result\x18\x04 \x01(\v2\x15.hobnob.v1.PushResultH\x00R\n" +
+	"pushResult\x12/\n" +
+	"\bpush_ack\x18\x05 \x01(\v2\x12.hobnob.v1.PushAckH\x00R\apushAck\x12A\n" +
 	"\x0equery_response\x18\x06 \x01(\v2\x18.hobnob.v1.QueryResponseH\x00R\rqueryResponse\x12-\n" +
 	"\x05delta\x18\a \x01(\v2\x15.hobnob.v1.DeltaEventH\x00R\x05deltaB\x05\n" +
 	"\x03msg\"\xf8\x04\n" +
@@ -6758,7 +6758,7 @@ const file_hobnob_proto_rawDesc = "" +
 	"policyPush\x12;\n" +
 	"\n" +
 	"force_push\x18\x05 \x01(\v2\x1a.hobnob.v1.StreamForcePushH\x00R\tforcePush\x12>\n" +
-	"\rtask_dispatch\x18\x06 \x01(\v2\x17.hobnob.v1.TaskDispatchH\x00R\ftaskDispatch\x12>\n" +
+	"\rpush_dispatch\x18\x06 \x01(\v2\x17.hobnob.v1.PushDispatchH\x00R\fpushDispatch\x12>\n" +
 	"\rquery_request\x18\a \x01(\v2\x17.hobnob.v1.QueryRequestH\x00R\fqueryRequest\x122\n" +
 	"\tdelta_ack\x18\b \x01(\v2\x13.hobnob.v1.DeltaAckH\x00R\bdeltaAck\x12A\n" +
 	"\x0estream_release\x18\t \x01(\v2\x18.hobnob.v1.StreamReleaseH\x00R\rstreamReleaseB\x05\n" +
@@ -6798,21 +6798,21 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x12StreamCapabilities\x12%\n" +
 	"\x0esupports_delta\x18\x01 \x01(\bR\rsupportsDelta\x12.\n" +
 	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\xd6\x01\n" +
-	"\fTaskDispatch\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x18\n" +
+	"\fPushDispatch\x12\x17\n" +
+	"\apush_id\x18\x01 \x01(\tR\x06pushId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12'\n" +
 	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\x122\n" +
-	"\x03env\x18\x04 \x03(\v2 .hobnob.v1.TaskDispatch.EnvEntryR\x03env\x1a6\n" +
+	"\x03env\x18\x04 \x03(\v2 .hobnob.v1.PushDispatch.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"c\n" +
-	"\aTaskAck\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1a\n" +
+	"\aPushAck\x12\x17\n" +
+	"\apush_id\x18\x01 \x01(\tR\x06pushId\x12\x1a\n" +
 	"\baccepted\x18\x02 \x01(\bR\baccepted\x12#\n" +
 	"\rreject_reason\x18\x03 \x01(\tR\frejectReason\"\xd0\x01\n" +
 	"\n" +
-	"TaskResult\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1b\n" +
+	"PushResult\x12\x17\n" +
+	"\apush_id\x18\x01 \x01(\tR\x06pushId\x12\x1b\n" +
 	"\texit_code\x18\x02 \x01(\x05R\bexitCode\x12\x16\n" +
 	"\x06stdout\x18\x03 \x01(\fR\x06stdout\x12\x16\n" +
 	"\x06stderr\x18\x04 \x01(\fR\x06stderr\x12\x16\n" +
@@ -7157,9 +7157,9 @@ var file_hobnob_proto_goTypes = []any{
 	(*HeartbeatDelta)(nil),                // 27: hobnob.v1.HeartbeatDelta
 	(*DeltaAck)(nil),                      // 28: hobnob.v1.DeltaAck
 	(*StreamCapabilities)(nil),            // 29: hobnob.v1.StreamCapabilities
-	(*TaskDispatch)(nil),                  // 30: hobnob.v1.TaskDispatch
-	(*TaskAck)(nil),                       // 31: hobnob.v1.TaskAck
-	(*TaskResult)(nil),                    // 32: hobnob.v1.TaskResult
+	(*PushDispatch)(nil),                  // 30: hobnob.v1.PushDispatch
+	(*PushAck)(nil),                       // 31: hobnob.v1.PushAck
+	(*PushResult)(nil),                    // 32: hobnob.v1.PushResult
 	(*QueryRequest)(nil),                  // 33: hobnob.v1.QueryRequest
 	(*QueryResponse)(nil),                 // 34: hobnob.v1.QueryResponse
 	(*AddApprovedPatternRequest)(nil),     // 35: hobnob.v1.AddApprovedPatternRequest
@@ -7236,7 +7236,7 @@ var file_hobnob_proto_goTypes = []any{
 	nil,                                   // 106: hobnob.v1.Resource.ParamsEntry
 	nil,                                   // 107: hobnob.v1.PolicyResource.AttributesEntry
 	nil,                                   // 108: hobnob.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 109: hobnob.v1.TaskDispatch.EnvEntry
+	nil,                                   // 109: hobnob.v1.PushDispatch.EnvEntry
 	nil,                                   // 110: hobnob.v1.PromoteEnvResponse.DiffEntry
 	(*timestamppb.Timestamp)(nil),         // 111: google.protobuf.Timestamp
 }
@@ -7262,8 +7262,8 @@ var file_hobnob_proto_depIdxs = []int32{
 	2,   // 18: hobnob.v1.AgentStreamMessage.check_in:type_name -> hobnob.v1.CheckInRequest
 	14,  // 19: hobnob.v1.AgentStreamMessage.report_result:type_name -> hobnob.v1.ReportResultRequest
 	17,  // 20: hobnob.v1.AgentStreamMessage.report_traits:type_name -> hobnob.v1.ReportTraitsRequest
-	32,  // 21: hobnob.v1.AgentStreamMessage.task_result:type_name -> hobnob.v1.TaskResult
-	31,  // 22: hobnob.v1.AgentStreamMessage.task_ack:type_name -> hobnob.v1.TaskAck
+	32,  // 21: hobnob.v1.AgentStreamMessage.push_result:type_name -> hobnob.v1.PushResult
+	31,  // 22: hobnob.v1.AgentStreamMessage.push_ack:type_name -> hobnob.v1.PushAck
 	34,  // 23: hobnob.v1.AgentStreamMessage.query_response:type_name -> hobnob.v1.QueryResponse
 	24,  // 24: hobnob.v1.AgentStreamMessage.delta:type_name -> hobnob.v1.DeltaEvent
 	3,   // 25: hobnob.v1.ServerStreamMessage.check_in_response:type_name -> hobnob.v1.CheckInResponse
@@ -7271,7 +7271,7 @@ var file_hobnob_proto_depIdxs = []int32{
 	18,  // 27: hobnob.v1.ServerStreamMessage.report_traits_ack:type_name -> hobnob.v1.ReportTraitsResponse
 	22,  // 28: hobnob.v1.ServerStreamMessage.policy_push:type_name -> hobnob.v1.StreamPolicyPush
 	23,  // 29: hobnob.v1.ServerStreamMessage.force_push:type_name -> hobnob.v1.StreamForcePush
-	30,  // 30: hobnob.v1.ServerStreamMessage.task_dispatch:type_name -> hobnob.v1.TaskDispatch
+	30,  // 30: hobnob.v1.ServerStreamMessage.push_dispatch:type_name -> hobnob.v1.PushDispatch
 	33,  // 31: hobnob.v1.ServerStreamMessage.query_request:type_name -> hobnob.v1.QueryRequest
 	28,  // 32: hobnob.v1.ServerStreamMessage.delta_ack:type_name -> hobnob.v1.DeltaAck
 	21,  // 33: hobnob.v1.ServerStreamMessage.stream_release:type_name -> hobnob.v1.StreamRelease
@@ -7281,7 +7281,7 @@ var file_hobnob_proto_depIdxs = []int32{
 	27,  // 37: hobnob.v1.DeltaEvent.heartbeat:type_name -> hobnob.v1.HeartbeatDelta
 	15,  // 38: hobnob.v1.RunCompleted.results:type_name -> hobnob.v1.ModuleResult
 	108, // 39: hobnob.v1.TraitsDelta.changed:type_name -> hobnob.v1.TraitsDelta.ChangedEntry
-	109, // 40: hobnob.v1.TaskDispatch.env:type_name -> hobnob.v1.TaskDispatch.EnvEntry
+	109, // 40: hobnob.v1.PushDispatch.env:type_name -> hobnob.v1.PushDispatch.EnvEntry
 	111, // 41: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
 	39,  // 42: hobnob.v1.ListApprovedPatternsResponse.patterns:type_name -> hobnob.v1.ApprovedPattern
 	111, // 43: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
@@ -7393,8 +7393,8 @@ func file_hobnob_proto_init() {
 		(*AgentStreamMessage_CheckIn)(nil),
 		(*AgentStreamMessage_ReportResult)(nil),
 		(*AgentStreamMessage_ReportTraits)(nil),
-		(*AgentStreamMessage_TaskResult)(nil),
-		(*AgentStreamMessage_TaskAck)(nil),
+		(*AgentStreamMessage_PushResult)(nil),
+		(*AgentStreamMessage_PushAck)(nil),
 		(*AgentStreamMessage_QueryResponse)(nil),
 		(*AgentStreamMessage_Delta)(nil),
 	}
@@ -7404,7 +7404,7 @@ func file_hobnob_proto_init() {
 		(*ServerStreamMessage_ReportTraitsAck)(nil),
 		(*ServerStreamMessage_PolicyPush)(nil),
 		(*ServerStreamMessage_ForcePush)(nil),
-		(*ServerStreamMessage_TaskDispatch)(nil),
+		(*ServerStreamMessage_PushDispatch)(nil),
 		(*ServerStreamMessage_QueryRequest)(nil),
 		(*ServerStreamMessage_DeltaAck)(nil),
 		(*ServerStreamMessage_StreamRelease)(nil),

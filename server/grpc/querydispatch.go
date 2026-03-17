@@ -154,7 +154,7 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 				},
 			},
 		}
-		if s.streamMgr.dispatchTask(t.ThrallID, msg) {
+		if s.streamMgr.dispatchPush(t.ThrallID, msg) {
 			dispatched[t.ThrallID] = t
 		} else {
 			offlineTargets = append(offlineTargets, t)

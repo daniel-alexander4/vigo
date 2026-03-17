@@ -145,11 +145,14 @@ pub async fn check_for_update(
     current_version: &str,
     os: &str,
     arch: &str,
+    tls: Option<&TlsCerts>,
 ) -> Result<Option<VersionInfo>> {
     let url = format!("{}/api/v1/agent/latest?os={}&arch={}", api_addr, os, arch);
+    let agent = build_agent(tls);
 
     let resp_bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let resp = ureq::get(&url)
+        let resp = agent
+            .get(&url)
             .call()
             .map_err(|e| anyhow::anyhow!("version check request: {}", e))?;
 
@@ -310,7 +313,7 @@ pub async fn check_self_update(api_addr: &str, current_version: &str, tls: Optio
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
-    match check_for_update(api_addr, current_version, os, arch).await {
+    match check_for_update(api_addr, current_version, os, arch, tls).await {
         Ok(Some(info)) => {
             info!(
                 current = current_version,
@@ -348,7 +351,7 @@ pub async fn force_self_update(api_addr: &str, tls: Option<&TlsCerts>) {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
-    match check_for_update(api_addr, "force", os, arch).await {
+    match check_for_update(api_addr, "force", os, arch, tls).await {
         Ok(Some(info)) => {
             info!(version = %info.version, "forced update: downloading latest binary");
 
@@ -397,7 +400,7 @@ mod tests {
             .create_async()
             .await;
 
-        let info = check_for_update(&server.url(), "1.0.0", "linux", "x86_64")
+        let info = check_for_update(&server.url(), "1.0.0", "linux", "x86_64", None)
             .await
             .unwrap();
         let info = info.unwrap();
@@ -415,7 +418,7 @@ mod tests {
             .create_async()
             .await;
 
-        let info = check_for_update(&server.url(), "1.0.0", "linux", "x86_64")
+        let info = check_for_update(&server.url(), "1.0.0", "linux", "x86_64", None)
             .await
             .unwrap();
         assert!(info.is_none());
@@ -430,7 +433,7 @@ mod tests {
             .create_async()
             .await;
 
-        let info = check_for_update(&server.url(), "1.0.0", "linux", "x86_64")
+        let info = check_for_update(&server.url(), "1.0.0", "linux", "x86_64", None)
             .await
             .unwrap();
         assert!(info.is_none());

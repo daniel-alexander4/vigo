@@ -58,8 +58,8 @@ func ValidateSelfProtection(mod Module) []Finding {
 	return findings
 }
 
-// ValidateTaskCommand checks an ad-hoc task command for guardrail violations.
-func ValidateTaskCommand(command string) error {
+// ValidatePushCommand checks an ad-hoc push command for guardrail violations.
+func ValidatePushCommand(command string) error {
 	lower := strings.ToLower(command)
 	for _, pattern := range dangerousPatterns {
 		if strings.Contains(lower, pattern) {
@@ -162,7 +162,7 @@ func checkExecProtection(base Finding, res Resource) []Finding {
 		return nil
 	}
 
-	if err := ValidateTaskCommand(command); err != nil {
+	if err := ValidatePushCommand(command); err != nil {
 		f := base
 		f.Message = fmt.Sprintf("exec command blocked: %s", err)
 		return []Finding{f}

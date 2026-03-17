@@ -44,22 +44,22 @@ type WorkflowDef struct {
 	Steps       []StepDef `yaml:"steps"`
 }
 
-// TaskRunner dispatches tasks and returns results.
-type TaskRunner interface {
-	DispatchTask(ctx context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error)
+// PushRunner dispatches push commands and returns results.
+type PushRunner interface {
+	DispatchPush(ctx context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error)
 }
 
 // Engine executes workflows.
 type Engine struct {
 	queries    *db.Queries
-	runner     TaskRunner
+	runner     PushRunner
 	workflows  map[string]*WorkflowDef
 	mu         sync.RWMutex
 	abortFlags sync.Map // workflowRunID → struct{}
 }
 
 // NewEngine creates a workflow engine.
-func NewEngine(queries *db.Queries, runner TaskRunner) *Engine {
+func NewEngine(queries *db.Queries, runner PushRunner) *Engine {
 	return &Engine{
 		queries:   queries,
 		runner:    runner,
@@ -248,7 +248,7 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		}
 
 		// Dispatch.
-		result, err := e.runner.DispatchTask(ctx, params)
+		result, err := e.runner.DispatchPush(ctx, params)
 		if err != nil {
 			stepFinished := sql.NullTime{Time: time.Now(), Valid: true}
 			e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
@@ -270,18 +270,18 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:        stepResult.ID,
 			Status:    "running",
-			TaskRunID: sql.NullString{String: result.ID, Valid: result.ID != ""},
+			PushRunID: sql.NullString{String: result.ID, Valid: result.ID != ""},
 			StartedAt: stepNow,
 		})
 
-		// Poll for task completion.
-		stepStatus := e.pollTaskCompletion(ctx, runID, result.ID)
+		// Poll for push completion.
+		stepStatus := e.pollPushCompletion(ctx, runID, result.ID)
 
 		stepFinished := sql.NullTime{Time: time.Now(), Valid: true}
 		e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:         stepResult.ID,
 			Status:     stepStatus,
-			TaskRunID:  sql.NullString{String: result.ID, Valid: result.ID != ""},
+			PushRunID:  sql.NullString{String: result.ID, Valid: result.ID != ""},
 			StartedAt:  stepNow,
 			FinishedAt: stepFinished,
 		})
@@ -320,8 +320,8 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 	slog.Info("workflow: completed", "workflow_run_id", runID)
 }
 
-// pollTaskCompletion polls a task run until it finishes or the workflow is aborted.
-func (e *Engine) pollTaskCompletion(ctx context.Context, workflowRunID, taskRunID string) string {
+// pollPushCompletion polls a push run until it finishes or the workflow is aborted.
+func (e *Engine) pollPushCompletion(ctx context.Context, workflowRunID, pushRunID string) string {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
@@ -334,13 +334,13 @@ func (e *Engine) pollTaskCompletion(ctx context.Context, workflowRunID, taskRunI
 				return "aborted"
 			}
 
-			task, err := e.queries.GetTaskRun(ctx, taskRunID)
+			pushRun, err := e.queries.GetPushRun(ctx, pushRunID)
 			if err != nil {
-				slog.Error("workflow: failed to poll task", "task_run_id", taskRunID, "error", err)
+				slog.Error("workflow: failed to poll push run", "push_run_id", pushRunID, "error", err)
 				continue
 			}
 
-			switch task.Status {
+			switch pushRun.Status {
 			case "complete":
 				return "complete"
 			case "failed":
@@ -348,7 +348,7 @@ func (e *Engine) pollTaskCompletion(ctx context.Context, workflowRunID, taskRunI
 			case "running", "pending":
 				continue
 			default:
-				return task.Status
+				return pushRun.Status
 			}
 		}
 	}

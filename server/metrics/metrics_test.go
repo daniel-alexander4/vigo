@@ -20,7 +20,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	SigVerifyFailed.WithLabelValues("test").Add(0)
 	GRPCRequestsTotal.WithLabelValues("test", "test").Add(0)
 	GRPCRequestDuration.WithLabelValues("test").Observe(0)
-	TaskRunsTotal.WithLabelValues("test").Add(0)
+	PushRunsTotal.WithLabelValues("test").Add(0)
 	WorkflowRunsTotal.WithLabelValues("test").Add(0)
 	WebhookDeliveriesTotal.WithLabelValues("test").Add(0)
 	WebhookDuration.Observe(0)
@@ -61,7 +61,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 		// New metrics.
 		"hobnob_grpc_requests_total",
 		"hobnob_grpc_request_duration_seconds",
-		"hobnob_task_runs_total",
+		"hobnob_push_runs_total",
 		"hobnob_workflow_runs_total",
 		"hobnob_webhook_deliveries_total",
 		"hobnob_webhook_duration_seconds",
@@ -96,7 +96,7 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	DriftDetected.WithLabelValues("testnode", "testmodule").Inc()
 	ModuleActions.WithLabelValues("file", "create").Inc()
 	GRPCRequestsTotal.WithLabelValues("/hobnob.HobnobAgent/CheckIn", "OK").Inc()
-	TaskRunsTotal.WithLabelValues("complete").Inc()
+	PushRunsTotal.WithLabelValues("complete").Inc()
 	WorkflowRunsTotal.WithLabelValues("complete").Inc()
 	WebhookDeliveriesTotal.WithLabelValues("success").Inc()
 	SMTPSendsTotal.WithLabelValues("run.failure", "success").Inc()

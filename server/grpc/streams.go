@@ -295,10 +295,10 @@ func (sm *streamManager) connectedThrallIDs() map[string]bool {
 	return ids
 }
 
-// dispatchTask sends a TaskDispatch to a specific agent. Uses a blocking
+// dispatchPush sends a PushDispatch to a specific agent. Uses a blocking
 // send with a short timeout to avoid silent drops (Pitfall 6).
 // Returns false if the agent is not connected or the send buffer is full.
-func (sm *streamManager) dispatchTask(thrallID string, msg *pb.ServerStreamMessage) bool {
+func (sm *streamManager) dispatchPush(thrallID string, msg *pb.ServerStreamMessage) bool {
 	sm.mu.RLock()
 	as, ok := sm.streams[thrallID]
 	sm.mu.RUnlock()
@@ -309,7 +309,7 @@ func (sm *streamManager) dispatchTask(thrallID string, msg *pb.ServerStreamMessa
 	case as.send <- msg:
 		return true
 	default:
-		slog.Warn("task dispatch dropped (buffer full)", "thrall_id", thrallID)
+		slog.Warn("push dispatch dropped (buffer full)", "thrall_id", thrallID)
 		return false
 	}
 }

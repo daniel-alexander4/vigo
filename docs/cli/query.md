@@ -76,4 +76,4 @@ web-03.example.com    timed_out
 
 - [thralls](thralls.md) -- view traits for a specific thrall
 - [inventory](inventory.md) -- query thralls by traits
-- [task](task.md) -- dispatch ad-hoc commands
+- [push](push.md) -- dispatch ad-hoc commands

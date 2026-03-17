@@ -1,0 +1,38 @@
+-- name: CreatePushRun :one
+INSERT INTO push_runs (command, target_glob, operator, status, total_targets, timeout_secs, batch_size, max_failures)
+VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)
+RETURNING *;
+
+-- name: GetPushRun :one
+SELECT * FROM push_runs WHERE id = ?;
+
+-- name: ListPushRuns :many
+SELECT * FROM push_runs
+ORDER BY created_at DESC
+LIMIT ?;
+
+-- name: UpdatePushRunStatus :exec
+UPDATE push_runs
+SET status = ?2, started_at = ?3, finished_at = ?4
+WHERE id = ?1;
+
+-- name: CreatePushRunTarget :one
+INSERT INTO push_run_targets (push_run_id, thrall_id, hostname, status)
+VALUES (?, ?, ?, ?)
+RETURNING *;
+
+-- name: ListPushRunTargets :many
+SELECT * FROM push_run_targets
+WHERE push_run_id = ?
+ORDER BY hostname ASC;
+
+-- name: UpdatePushRunTarget :exec
+UPDATE push_run_targets
+SET status = ?2, exit_code = ?3, stdout = ?4, stderr = ?5, duration_ms = ?6, error_msg = ?7, dispatched_at = ?8, finished_at = ?9
+WHERE id = ?1;
+
+-- name: CountPushRunTargetsByStatus :many
+SELECT status, COUNT(*) as count
+FROM push_run_targets
+WHERE push_run_id = ?
+GROUP BY status;

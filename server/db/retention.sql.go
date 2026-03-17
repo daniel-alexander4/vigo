@@ -30,6 +30,17 @@ func (q *Queries) PruneFileSnapshotsByAge(ctx context.Context, createdAt time.Ti
 	return err
 }
 
+const prunePushRunsByAge = `-- name: PrunePushRunsByAge :exec
+DELETE FROM push_runs
+WHERE created_at < ?
+  AND status NOT IN ('running', 'pending')
+`
+
+func (q *Queries) PrunePushRunsByAge(ctx context.Context, createdAt time.Time) error {
+	_, err := q.db.ExecContext(ctx, prunePushRunsByAge, createdAt)
+	return err
+}
+
 const pruneRunsByAge = `-- name: PruneRunsByAge :exec
 DELETE FROM runs
 WHERE started_at < ?
@@ -38,17 +49,6 @@ WHERE started_at < ?
 
 func (q *Queries) PruneRunsByAge(ctx context.Context, startedAt time.Time) error {
 	_, err := q.db.ExecContext(ctx, pruneRunsByAge, startedAt)
-	return err
-}
-
-const pruneTaskRunsByAge = `-- name: PruneTaskRunsByAge :exec
-DELETE FROM task_runs
-WHERE created_at < ?
-  AND status NOT IN ('running', 'pending')
-`
-
-func (q *Queries) PruneTaskRunsByAge(ctx context.Context, createdAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneTaskRunsByAge, createdAt)
 	return err
 }
 

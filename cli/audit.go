@@ -13,7 +13,7 @@ import (
 
 var auditCmd = &cobra.Command{
 	Use:   "audit",
-	Short: "View the unified audit trail of config publishes, tasks, and workflows",
+	Short: "View the unified audit trail of config publishes, push dispatches, and workflows",
 }
 
 var auditListCmd = &cobra.Command{
@@ -95,7 +95,7 @@ var auditVerifyCmd = &cobra.Command{
 func init() {
 	auditListCmd.Flags().String("since", "", "time filter (duration like 24h or RFC3339)")
 	auditListCmd.Flags().String("operator", "", "filter by operator")
-	auditListCmd.Flags().String("type", "", "filter by event type (config_publish, task_run, workflow_run, audit_entry)")
+	auditListCmd.Flags().String("type", "", "filter by event type (config_publish, push_run, workflow_run, audit_entry)")
 	auditListCmd.Flags().Int("limit", 50, "maximum events to return")
 
 	auditCmd.AddCommand(auditListCmd)

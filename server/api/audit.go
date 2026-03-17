@@ -110,23 +110,23 @@ func (h *AuditHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Task runs.
-	if typeFilter == "" || typeFilter == "task_run" {
-		taskRuns, err := h.queries.ListTaskRuns(r.Context(), int64(limit))
+	// Push runs.
+	if typeFilter == "" || typeFilter == "push_run" {
+		pushRuns, err := h.queries.ListPushRuns(r.Context(), int64(limit))
 		if err == nil {
-			for _, tr := range taskRuns {
-				if !sinceTime.IsZero() && tr.CreatedAt.Before(sinceTime) {
+			for _, pr := range pushRuns {
+				if !sinceTime.IsZero() && pr.CreatedAt.Before(sinceTime) {
 					continue
 				}
-				if operatorFilter != "" && tr.Operator != operatorFilter {
+				if operatorFilter != "" && pr.Operator != operatorFilter {
 					continue
 				}
 				events = append(events, auditEvent{
-					ID:        tr.ID,
-					Type:      "task_run",
-					Operator:  tr.Operator,
-					Timestamp: tr.CreatedAt.Format(time.RFC3339),
-					Summary:   tr.Command + " on " + tr.TargetGlob,
+					ID:        pr.ID,
+					Type:      "push_run",
+					Operator:  pr.Operator,
+					Timestamp: pr.CreatedAt.Format(time.RFC3339),
+					Summary:   pr.Command + " on " + pr.TargetGlob,
 				})
 			}
 		}

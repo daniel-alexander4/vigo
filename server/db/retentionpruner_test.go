@@ -40,14 +40,14 @@ func openRetentionTestDB(t *testing.T) *sql.DB {
 			module_name TEXT, resource_type TEXT, resource_name TEXT, action_taken TEXT,
 			changed INTEGER NOT NULL DEFAULT 0, error_message TEXT, duration_ms INTEGER, created_at DATETIME DEFAULT (datetime('now'))
 		);
-		CREATE TABLE task_runs (
+		CREATE TABLE push_runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, command TEXT NOT NULL, target_glob TEXT NOT NULL,
 			operator TEXT, status TEXT NOT NULL DEFAULT 'pending', total_targets INTEGER NOT NULL DEFAULT 0,
 			timeout_secs INTEGER, batch_size INTEGER, max_failures INTEGER,
 			created_at DATETIME NOT NULL DEFAULT (datetime('now')), started_at DATETIME, finished_at DATETIME
 		);
-		CREATE TABLE task_run_targets (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, task_run_id INTEGER NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+		CREATE TABLE push_run_targets (
+			id INTEGER PRIMARY KEY AUTOINCREMENT, push_run_id INTEGER NOT NULL REFERENCES push_runs(id) ON DELETE CASCADE,
 			thrall_id TEXT, hostname TEXT, status TEXT NOT NULL DEFAULT 'pending',
 			exit_code INTEGER, stdout TEXT, stderr TEXT, duration_ms INTEGER, error_msg TEXT,
 			dispatched_at DATETIME, finished_at DATETIME
@@ -60,7 +60,7 @@ func openRetentionTestDB(t *testing.T) *sql.DB {
 		);
 		CREATE TABLE workflow_step_results (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_run_id INTEGER NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
-			step_index INTEGER NOT NULL, step_name TEXT, task_run_id INTEGER,
+			step_index INTEGER NOT NULL, step_name TEXT, push_run_id INTEGER,
 			status TEXT NOT NULL DEFAULT 'pending', started_at DATETIME, finished_at DATETIME
 		);
 		CREATE TABLE compliance_history (
@@ -96,8 +96,8 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 	sqlDB.Exec(`INSERT INTO runs (thrall_id, started_at, status) VALUES ('t1', ?, 'running')`, old)
 
 	// Old and recent task runs.
-	sqlDB.Exec(`INSERT INTO task_runs (command, target_glob, status, total_targets, created_at) VALUES ('echo', '*', 'complete', 1, ?)`, old)
-	sqlDB.Exec(`INSERT INTO task_runs (command, target_glob, status, total_targets, created_at) VALUES ('echo', '*', 'complete', 1, ?)`, recent)
+	sqlDB.Exec(`INSERT INTO push_runs (command, target_glob, status, total_targets, created_at) VALUES ('echo', '*', 'complete', 1, ?)`, old)
+	sqlDB.Exec(`INSERT INTO push_runs (command, target_glob, status, total_targets, created_at) VALUES ('echo', '*', 'complete', 1, ?)`, recent)
 
 	// Old and recent workflow runs.
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, old)
@@ -118,10 +118,10 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 		t.Errorf("runs count = %d, want 2 (recent + running)", runCount)
 	}
 
-	var taskRunCount int
-	sqlDB.QueryRow("SELECT COUNT(*) FROM task_runs").Scan(&taskRunCount)
-	if taskRunCount != 1 {
-		t.Errorf("task_runs count = %d, want 1", taskRunCount)
+	var pushRunCount int
+	sqlDB.QueryRow("SELECT COUNT(*) FROM push_runs").Scan(&pushRunCount)
+	if pushRunCount != 1 {
+		t.Errorf("push_runs count = %d, want 1", pushRunCount)
 	}
 
 	var workflowRunCount int

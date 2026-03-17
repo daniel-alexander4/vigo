@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package tasks
+package push
 
 import (
 	"os"
@@ -122,7 +122,7 @@ func TestStore_LoadMissingDir(t *testing.T) {
 }
 
 func TestValidateParams_Valid(t *testing.T) {
-	def := &TaskDef{
+	def := &PushDef{
 		Parameters: map[string]ParamDef{
 			"env":    {Type: "string", Required: true},
 			"force":  {Type: "bool", Default: "false"},
@@ -136,7 +136,7 @@ func TestValidateParams_Valid(t *testing.T) {
 }
 
 func TestValidateParams_MissingRequired(t *testing.T) {
-	def := &TaskDef{
+	def := &PushDef{
 		Parameters: map[string]ParamDef{
 			"env": {Type: "string", Required: true},
 		},
@@ -152,7 +152,7 @@ func TestValidateParams_MissingRequired(t *testing.T) {
 }
 
 func TestValidateParams_Unknown(t *testing.T) {
-	def := &TaskDef{
+	def := &PushDef{
 		Parameters: map[string]ParamDef{
 			"env": {Type: "string"},
 		},
@@ -168,7 +168,7 @@ func TestValidateParams_Unknown(t *testing.T) {
 }
 
 func TestValidateParams_RequiredWithDefault(t *testing.T) {
-	def := &TaskDef{
+	def := &PushDef{
 		Parameters: map[string]ParamDef{
 			"env": {Type: "string", Required: true, Default: "production"},
 		},
@@ -181,7 +181,7 @@ func TestValidateParams_RequiredWithDefault(t *testing.T) {
 }
 
 func TestBuildEnv(t *testing.T) {
-	def := &TaskDef{
+	def := &PushDef{
 		Parameters: map[string]ParamDef{
 			"env":       {Type: "string"},
 			"force-run": {Type: "bool", Default: "false"},
@@ -201,7 +201,7 @@ func TestBuildEnv(t *testing.T) {
 }
 
 func TestBuildEnv_EmptyDefault(t *testing.T) {
-	def := &TaskDef{
+	def := &PushDef{
 		Parameters: map[string]ParamDef{
 			"opt": {Type: "string"},
 		},

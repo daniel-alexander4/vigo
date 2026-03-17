@@ -50,7 +50,7 @@ import (
 	"github.com/hobnob/hobnob/server/registry"
 	"github.com/hobnob/hobnob/server/secrets"
 	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/tasks"
+	"github.com/hobnob/hobnob/server/push"
 	"github.com/hobnob/hobnob/server/peer"
 	"github.com/hobnob/hobnob/server/watcher"
 	"github.com/hobnob/hobnob/server/webhook"
@@ -126,7 +126,7 @@ func run() error {
 	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
 	traitsDir := envOrDefault("HOBNOB_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
 	docsDir := envOrDefault("HOBNOB_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "docs"))
-	tasksDir := envOrDefault("HOBNOB_TASKS_DIR", stringOrDefault(cfg.Paths.Tasks, "tasks"))
+	pushDir := envOrDefault("HOBNOB_PUSH_DIR", stringOrDefault(cfg.Paths.Tasks, "tasks"))
 	workflowsDir := envOrDefault("HOBNOB_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, "workflows"))
 	agentDir := envOrDefault("HOBNOB_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
@@ -420,12 +420,12 @@ func run() error {
 		}
 	}
 
-	// Load task definitions.
-	taskStore := tasks.NewStore()
-	if err := taskStore.Load(tasksDir); err != nil {
-		return fmt.Errorf("loading tasks: %w", err)
+	// Load push definitions.
+	pushStore := push.NewStore()
+	if err := pushStore.Load(pushDir); err != nil {
+		return fmt.Errorf("loading push definitions: %w", err)
 	}
-	slog.Info("tasks loaded", "count", len(taskStore.List()), "dir", tasksDir)
+	slog.Info("push definitions loaded", "count", len(pushStore.List()), "dir", pushDir)
 
 	// Create and rehydrate FleetIndex.
 	fleetIndex := fleet.NewFleetIndex()
@@ -472,7 +472,7 @@ func run() error {
 		Hub:                  hub,
 		SMTPNotifier:         smtpNotifier,
 		LicenseEnforcer:      enforcer,
-		TaskStore:            taskStore,
+		PushStore:            pushStore,
 		FleetIndex:           fleetIndex,
 		RunBatcher:           runBatcher,
 		BundleSigner:        bundleSigner,
@@ -682,8 +682,8 @@ func run() error {
 	})
 
 	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
-	tasksHandler := api.NewTasksHandler(queries, agentSvc, cfg.Tasks.RequireDefinition)
-	tasksHandler.SetAuditWriter(auditWriter)
+	pushHandler := api.NewPushHandler(queries, agentSvc, cfg.Push.RequireDefinition)
+	pushHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
 	peerHandler := api.NewPeerHandler(peerSvc)
@@ -756,7 +756,7 @@ func run() error {
 		doctorHandler.RegisterRoutes(mux)
 		spannerHandler.RegisterRoutes(mux)
 		peerHandler.RegisterRoutes(mux)
-		tasksHandler.RegisterRoutes(mux)
+		pushHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
 		workflowHandler.RegisterRoutes(mux)
 		exportHandler.RegisterRoutes(mux)
@@ -812,7 +812,7 @@ func run() error {
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
 		peerHandler.RegisterRoutes(gwMux)
-		tasksHandler.RegisterRoutes(gwMux)
+		pushHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)
 		workflowHandler.RegisterRoutes(gwMux)
 		exportHandler.RegisterRoutes(gwMux)

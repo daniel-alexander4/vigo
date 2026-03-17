@@ -176,7 +176,7 @@ type workflowResponse struct {
 		ID         string `json:"id"`
 		StepIndex  int64  `json:"stepIndex"`
 		StepName   string `json:"stepName"`
-		TaskRunID  string `json:"taskRunId"`
+		PushRunID  string `json:"pushRunId"`
 		Status     string `json:"status"`
 		StartedAt  string `json:"startedAt"`
 		FinishedAt string `json:"finishedAt"`
@@ -215,13 +215,13 @@ func printWorkflowResults(resp *workflowResponse) {
 
 	fmt.Println()
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "STEP\tNAME\tSTATUS\tTASK RUN")
+	fmt.Fprintln(w, "STEP\tNAME\tSTATUS\tPUSH RUN")
 	for _, s := range resp.Steps {
-		taskID := "-"
-		if s.TaskRunID != "" {
-			taskID = s.TaskRunID
+		pushID := "-"
+		if s.PushRunID != "" {
+			pushID = s.PushRunID
 		}
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", s.StepIndex, s.StepName, s.Status, taskID)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", s.StepIndex, s.StepName, s.Status, pushID)
 	}
 	w.Flush()
 }

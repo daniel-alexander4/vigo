@@ -559,6 +559,7 @@ impl Client {
             cycles_since_probe: 0,
             tls_ca_pem: None,
             tls_identity: None,
+            agent_version: String::new(),
         }
     }
 }

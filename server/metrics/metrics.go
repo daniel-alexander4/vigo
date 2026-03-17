@@ -110,10 +110,10 @@ var (
 
 	// --- Orchestration ---
 
-	// TaskRunsTotal counts completed task runs by status.
-	TaskRunsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "hobnob_task_runs_total",
-		Help: "Total task runs by final status.",
+	// PushRunsTotal counts completed push runs by status.
+	PushRunsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "hobnob_push_runs_total",
+		Help: "Total push runs by final status.",
 	}, []string{"status"})
 
 	// WorkflowRunsTotal counts completed workflow runs by status.

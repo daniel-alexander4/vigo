@@ -291,29 +291,29 @@ func TestSelfProtect_PathSimilarBinaryAllowed(t *testing.T) {
 	}
 }
 
-func TestValidateTaskCommand_StopAgent(t *testing.T) {
-	err := ValidateTaskCommand("systemctl stop hobnob-thrall && echo done")
+func TestValidatePushCommand_StopAgent(t *testing.T) {
+	err := ValidatePushCommand("systemctl stop hobnob-thrall && echo done")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestValidateTaskCommand_StopServer(t *testing.T) {
-	err := ValidateTaskCommand("systemctl stop hobd")
+func TestValidatePushCommand_StopServer(t *testing.T) {
+	err := ValidatePushCommand("systemctl stop hobd")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestValidateTaskCommand_RmServerConfig(t *testing.T) {
-	err := ValidateTaskCommand("rm -rf /srv/hobnob/db")
+func TestValidatePushCommand_RmServerConfig(t *testing.T) {
+	err := ValidatePushCommand("rm -rf /srv/hobnob/db")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestValidateTaskCommand_SafeCommand(t *testing.T) {
-	err := ValidateTaskCommand("df -h && free -m")
+func TestValidatePushCommand_SafeCommand(t *testing.T) {
+	err := ValidatePushCommand("df -h && free -m")
 	if err != nil {
 		t.Fatalf("safe command should pass: %v", err)
 	}

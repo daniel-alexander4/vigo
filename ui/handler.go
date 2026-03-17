@@ -52,7 +52,7 @@ type DataSource interface {
 type Handler struct {
 	renderer     *Renderer
 	dataSource   DataSource
-	queries      *db.Queries // direct DB access for task/workflow pages
+	queries      *db.Queries // direct DB access for push/workflow pages
 	baseInterval time.Duration
 	serverAddr   string
 	caFile       string
@@ -146,8 +146,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
 	mux.HandleFunc("GET /compliance", h.Compliance)
-	mux.HandleFunc("GET /tasks", h.Tasks)
-	mux.HandleFunc("GET /tasks/{id}", h.TaskDetail)
+	mux.HandleFunc("GET /push", h.Push)
+	mux.HandleFunc("GET /push/{id}", h.PushDetail)
 	mux.HandleFunc("GET /workflows", h.Workflows)
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
 	mux.HandleFunc("GET /query", h.Query)
@@ -1605,10 +1605,10 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 	}, nil
 }
 
-// --- Task and Workflow page types ---
+// --- Push and Workflow page types ---
 
-// TaskRow is a single task run displayed in the tasks list.
-type TaskRow struct {
+// PushRow is a single push run displayed in the push list.
+type PushRow struct {
 	ID           string
 	Command      string
 	Target       string
@@ -1620,16 +1620,16 @@ type TaskRow struct {
 	CreatedAt    time.Time
 }
 
-// TasksPageData holds data for the tasks list page.
-type TasksPageData struct {
+// PushPageData holds data for the push list page.
+type PushPageData struct {
 	PageData
-	Tasks        []TaskRow
+	PushRuns     []PushRow
 	StatusFilter string
-	TaskCount    int
+	PushCount    int
 }
 
-// TaskTargetRow is a per-thrall result in the task detail page.
-type TaskTargetRow struct {
+// PushTargetRow is a per-thrall result in the push detail page.
+type PushTargetRow struct {
 	ID         string
 	Hostname   string
 	Status     string
@@ -1640,11 +1640,11 @@ type TaskTargetRow struct {
 	ErrorMsg   string
 }
 
-// TaskDetailPageData holds data for the task detail page.
-type TaskDetailPageData struct {
+// PushDetailPageData holds data for the push detail page.
+type PushDetailPageData struct {
 	PageData
-	Task      TaskRow
-	Targets   []TaskTargetRow
+	Push      PushRow
+	Targets   []PushTargetRow
 	IsRunning bool
 }
 
@@ -1672,7 +1672,7 @@ type WorkflowsPageData struct {
 type WorkflowStepRow struct {
 	StepIndex  int64
 	StepName   string
-	TaskRunID  string
+	PushRunID  string
 	Status     string
 	StartedAt  time.Time
 	FinishedAt time.Time
@@ -1714,53 +1714,53 @@ type AuditEventRow struct {
 	Summary   string
 }
 
-// Tasks renders the task history page.
-func (h *Handler) Tasks(w http.ResponseWriter, r *http.Request) {
+// Push renders the push history page.
+func (h *Handler) Push(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	ctx := r.Context()
 
-	taskRuns, err := h.queries.ListTaskRuns(ctx, 100)
+	pushRuns, err := h.queries.ListPushRuns(ctx, 100)
 	if err != nil {
-		slog.Error("failed to list task runs", "error", err)
+		slog.Error("failed to list push runs", "error", err)
 	}
 
-	var rows []TaskRow
-	for _, t := range taskRuns {
+	var rows []PushRow
+	for _, t := range pushRuns {
 		if statusFilter != "" && t.Status != statusFilter {
 			continue
 		}
-		rows = append(rows, taskRowFromDB(t))
+		rows = append(rows, pushRowFromDB(t))
 	}
 
-	data := TasksPageData{
-		PageData:     PageData{Title: "Tasks", ActiveNav: "tasks"},
-		Tasks:        rows,
+	data := PushPageData{
+		PageData:     PageData{Title: "Push", ActiveNav: "push"},
+		PushRuns:     rows,
 		StatusFilter: statusFilter,
-		TaskCount:    len(rows),
+		PushCount:    len(rows),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "tasks", data)
+	h.renderer.Render(w, "push", data)
 }
 
-// TaskDetail renders the task detail page with per-thrall results.
-func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
+// PushDetail renders the push detail page with per-thrall results.
+func (h *Handler) PushDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
-	task, err := h.queries.GetTaskRun(ctx, id)
+	pushRun, err := h.queries.GetPushRun(ctx, id)
 	if err != nil {
-		http.Error(w, "task not found", http.StatusNotFound)
+		http.Error(w, "push run not found", http.StatusNotFound)
 		return
 	}
 
-	targets, err := h.queries.ListTaskRunTargets(ctx, id)
+	targets, err := h.queries.ListPushRunTargets(ctx, id)
 	if err != nil {
-		slog.Error("failed to list task run targets", "error", err)
+		slog.Error("failed to list push run targets", "error", err)
 	}
 
-	var tgtRows []TaskTargetRow
+	var tgtRows []PushTargetRow
 	for _, t := range targets {
-		row := TaskTargetRow{
+		row := PushTargetRow{
 			ID:       t.ID,
 			Hostname: t.Hostname,
 			Status:   t.Status,
@@ -1783,14 +1783,14 @@ func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
 		tgtRows = append(tgtRows, row)
 	}
 
-	data := TaskDetailPageData{
-		PageData:  PageData{Title: "Task Detail", ActiveNav: "tasks"},
-		Task:      taskRowFromDB(task),
+	data := PushDetailPageData{
+		PageData:  PageData{Title: "Push Detail", ActiveNav: "push"},
+		Push:      pushRowFromDB(pushRun),
 		Targets:   tgtRows,
-		IsRunning: task.Status == "running" || task.Status == "pending",
+		IsRunning: pushRun.Status == "running" || pushRun.Status == "pending",
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "task-detail", data)
+	h.renderer.Render(w, "push-detail", data)
 }
 
 // Workflows renders the workflow list page.
@@ -1845,8 +1845,8 @@ func (h *Handler) WorkflowDetail(w http.ResponseWriter, r *http.Request) {
 			StepName:  s.StepName,
 			Status:    s.Status,
 		}
-		if s.TaskRunID.Valid {
-			row.TaskRunID = s.TaskRunID.String
+		if s.PushRunID.Valid {
+			row.PushRunID = s.PushRunID.String
 		}
 		if s.StartedAt.Valid {
 			row.StartedAt = s.StartedAt.Time
@@ -1933,16 +1933,16 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Task runs.
-	if typeFilter == "" || typeFilter == "task_run" {
-		taskRuns, err := h.queries.ListTaskRuns(ctx, 100)
+	// Push runs.
+	if typeFilter == "" || typeFilter == "push_run" {
+		pushRuns, err := h.queries.ListPushRuns(ctx, 100)
 		if err == nil {
-			for _, tr := range taskRuns {
+			for _, pr := range pushRuns {
 				events = append(events, AuditEventRow{
-					Timestamp: tr.CreatedAt.Format(time.RFC3339),
-					Type:      "task_run",
-					Operator:  tr.Operator,
-					Summary:   tr.Command + " on " + tr.TargetGlob,
+					Timestamp: pr.CreatedAt.Format(time.RFC3339),
+					Type:      "push_run",
+					Operator:  pr.Operator,
+					Summary:   pr.Command + " on " + pr.TargetGlob,
 				})
 			}
 		}
@@ -1996,9 +1996,9 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "audit", data)
 }
 
-// taskRowFromDB converts a DB TaskRun to a TaskRow.
-func taskRowFromDB(t db.TaskRun) TaskRow {
-	row := TaskRow{
+// pushRowFromDB converts a DB PushRun to a PushRow.
+func pushRowFromDB(t db.PushRun) PushRow {
+	row := PushRow{
 		ID:           t.ID,
 		Command:      t.Command,
 		Target:       t.TargetGlob,

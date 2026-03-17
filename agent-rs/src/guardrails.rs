@@ -139,10 +139,10 @@ pub fn check_resource(
     }
 }
 
-/// Check whether an ad-hoc task command violates guardrails.
+/// Check whether an ad-hoc push command violates guardrails.
 ///
 /// Returns `Some(reason)` if the command must be rejected.
-pub fn check_task_command(command: &str) -> Option<String> {
+pub fn check_push_command(command: &str) -> Option<String> {
     let lower = command.to_lowercase();
     for pattern in DANGEROUS_PATTERNS {
         if lower.contains(pattern) {
@@ -312,7 +312,7 @@ fn check_exec_resource(
         return None;
     }
 
-    if let Some(reason) = check_task_command(command) {
+    if let Some(reason) = check_push_command(command) {
         return Some(Violation {
             resource_name: resource_name.to_string(),
             resource_type: resource_type.to_string(),
@@ -512,35 +512,35 @@ mod tests {
         assert!(v.is_none());
     }
 
-    // ── Task command tests ──────────────────────────────────────────
+    // ── Push command tests ──────────────────────────────────────────
 
     #[test]
-    fn task_stop_agent_blocked() {
-        let r = check_task_command("systemctl stop hobnob-thrall && echo done");
+    fn push_stop_agent_blocked() {
+        let r = check_push_command("systemctl stop hobnob-thrall && echo done");
         assert!(r.is_some());
     }
 
     #[test]
-    fn task_stop_server_blocked() {
-        let r = check_task_command("systemctl stop hobd");
+    fn push_stop_server_blocked() {
+        let r = check_push_command("systemctl stop hobd");
         assert!(r.is_some());
     }
 
     #[test]
-    fn task_rm_server_config_blocked() {
-        let r = check_task_command("rm -rf /srv/hobnob/db");
+    fn push_rm_server_config_blocked() {
+        let r = check_push_command("rm -rf /srv/hobnob/db");
         assert!(r.is_some());
     }
 
     #[test]
-    fn task_safe_command_allowed() {
-        let r = check_task_command("df -h && free -m");
+    fn push_safe_command_allowed() {
+        let r = check_push_command("df -h && free -m");
         assert!(r.is_none());
     }
 
     #[test]
-    fn task_case_insensitive() {
-        let r = check_task_command("Systemctl Stop Hobnob-Thrall");
+    fn push_case_insensitive() {
+        let r = check_push_command("Systemctl Stop Hobnob-Thrall");
         assert!(r.is_some());
     }
 
