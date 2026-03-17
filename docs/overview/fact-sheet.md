@@ -64,23 +64,27 @@ Every connection is authenticated and encrypted. There are no optional security 
 - **Revocation is immediate.** A revoked agent gets an error on its next check-in and cannot re-enroll.
 - **Source-available agent.** The code that runs as root on your machines is readable and auditable.
 
-## Install
+## Install the Server
 
-Two commands to install the server, one command to enroll each machine:
+One command on any Linux host with Docker:
 
 ```bash
-# Server (any Linux host with Docker)
-sudo mkdir -p /srv/hobnob
-docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
-cd /srv/hobnob && docker compose up -d
+docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only && cd /srv/hobnob && docker compose up -d
+```
 
-# Each managed machine
+This seeds the data directory (config, TLS certs, database, examples), then starts the server. Ready to enroll machines immediately.
+
+## Enroll a Machine
+
+One command on each managed machine:
+
+```bash
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-The server seed populates config, TLS certs, database, and examples — ready to run. The bootstrap script downloads the agent binary, generates TLS certificates via CSR signing, registers with the server, installs the platform-appropriate service, and verifies connectivity. A machine is under management in seconds.
+Downloads the agent binary, generates TLS certificates via CSR signing, registers with the server, installs the platform-appropriate service, and verifies connectivity. A machine is under management in seconds.
 
-Bootstrap works across all supported platforms: Linux (systemd), macOS (launchd), FreeBSD/NetBSD (rc.d), OpenBSD (rcctl), illumos (SMF), and Windows (PowerShell: `irm https://<server>:8443/bootstrap?os=windows | iex`).
+Works across all supported platforms: Linux (systemd), macOS (launchd), FreeBSD/NetBSD (rc.d), OpenBSD (rcctl), illumos (SMF), and Windows (PowerShell: `irm https://<server>:8443/bootstrap?os=windows | iex`).
 
 ## Platform Support
 
