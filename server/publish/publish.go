@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/hobnob/hobnob/server/config"
+	"github.com/hobnob/hobnob/server/modlint"
 	"github.com/hobnob/hobnob/server/secrets"
 	"gopkg.in/yaml.v3"
 )
@@ -85,22 +86,30 @@ func ValidateSource(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
-	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, false)
-	if err != nil {
-		return nil, err
-	}
-
+	// Compute diff first so cosmetic lint changes (like adding #~ comments)
+	// don't make unchanged modules appear in the changed set.
 	allFiles, changed, removed, err := diffTrees(ProposedDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
 
-	if opts.CheckURLs {
-		changedModules := filterBySubdir(changed, "modules")
-		if len(changedModules) > 0 {
-			if err := checkURLs(ProposedDir, changedModules, opts.URLTimeout); err != nil {
-				return nil, err
-			}
+	// Run modlint on changed/new module files: repair, normalize, auto-comment.
+	// Linted output is written back to proposed/ before config store validation.
+	changedModules := filterBySubdir(changed, "modules")
+	if len(changedModules) > 0 {
+		if err := lintModules(ProposedDir, changedModules); err != nil {
+			return nil, fmt.Errorf("linting modules: %w", err)
+		}
+	}
+
+	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if opts.CheckURLs && len(changedModules) > 0 {
+		if err := checkURLs(ProposedDir, changedModules, opts.URLTimeout); err != nil {
+			return nil, err
 		}
 	}
 
@@ -621,3 +630,38 @@ func normalizeWhitespace(dir string) error {
 }
 
 var _ secrets.Provider = (*stubProvider)(nil)
+
+// lintModules runs the modlint pipeline on the given module files (relative
+// paths like "modules/nginx.hnb"). Linted output is written back in place.
+// Returns an error if any module has validation errors that cannot be auto-fixed.
+func lintModules(baseDir string, relPaths []string) error {
+	var lintErrors []string
+
+	for _, rel := range relPaths {
+		path := filepath.Join(baseDir, rel)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		result := modlint.Lint(data, modlint.Options{})
+		if !result.OK() {
+			for _, e := range result.Errors {
+				lintErrors = append(lintErrors, fmt.Sprintf("  %s: %s", rel, e))
+			}
+			continue // collect all errors before failing
+		}
+
+		// Write back the linted output if it changed.
+		if result.Output != string(data) {
+			if err := os.WriteFile(path, []byte(result.Output), 0644); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(lintErrors) > 0 {
+		return fmt.Errorf("module validation failed:\n%s", strings.Join(lintErrors, "\n"))
+	}
+	return nil
+}
