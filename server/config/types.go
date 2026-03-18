@@ -537,6 +537,11 @@ type ThrallEntry struct {
 	Vars        map[string]any            `yaml:"vars"`
 	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	Tags                 []string `yaml:"tags"` // static tags for targeting
+	ExcludeModules       []string `yaml:"exclude_modules"` // opt out of inherited modules
+
+	// DirPath is the relative directory path within the config tree where
+	// this entry was loaded from. Set by the loader for inheritance resolution.
+	DirPath string `yaml:"-"`
 
 	// Network device fields — set when this entry is a virtual thrall managed
 	// through a gateway. Gateway must be a real compute thrall.
@@ -546,6 +551,17 @@ type ThrallEntry struct {
 	Username   string `yaml:"username"`    // SSH username (default: admin)
 	Port       int    `yaml:"port"`        // SSH port (default: 22)
 	IPAddress  string `yaml:"ip_address"`  // management IP (if different from DNS)
+}
+
+// CommonConfig defines modules, roles, and vars inherited by all thrall
+// entries in subdirectories. Loaded from common.hnb files at each directory
+// level. Files without match: entries are treated as common configs.
+type CommonConfig struct {
+	Modules  []ModuleRef    `yaml:"modules"`
+	Roles    []string       `yaml:"roles"`
+	Vars     map[string]any `yaml:"vars"`
+	VarsFrom []string       `yaml:"vars_from"`
+	DirPath  string         `yaml:"-"` // relative dir path (e.g., "production/web")
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ThrallEntry. It walks the
@@ -621,6 +637,14 @@ func (n *ThrallEntry) UnmarshalYAML(value *yaml.Node) error {
 		case "ip_address":
 			if err := val.Decode(&n.IPAddress); err != nil {
 				return fmt.Errorf("decoding ip_address: %w", err)
+			}
+		case "exclude_modules":
+			if err := val.Decode(&n.ExcludeModules); err != nil {
+				return fmt.Errorf("decoding exclude_modules: %w", err)
+			}
+		case "tags":
+			if err := val.Decode(&n.Tags); err != nil {
+				return fmt.Errorf("decoding tags: %w", err)
 			}
 		}
 	}

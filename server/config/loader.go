@@ -179,8 +179,9 @@ type resolvedEntry struct {
 }
 
 // ConfigStore loads, watches, and provides per-thrall configuration.
-// The base dir contains thralls/, modules/, and roles/ subdirectories with
-// .hnb/.yaml config files. Secret references are resolved via a
+// The base dir contains modules/ and templates/ subdirectories plus
+// .hnb/.yaml config files organized in a directory hierarchy for
+// cascading inheritance. Secret references are resolved via a
 // secrets.Provider. Reload triggered by config publish via REST endpoint.
 type ConfigStore struct {
 	mu            sync.RWMutex
@@ -190,6 +191,7 @@ type ConfigStore struct {
 	thrallEntries []ThrallEntry                // original entries for tracing
 	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing
 	moduleDefs    map[string]*ModuleDefinition // loaded modules for tracing
+	commonConfigs map[string]*CommonConfig     // dir path → common.hnb inheritance config
 	dir           string                       // thrall-configs directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
@@ -279,11 +281,11 @@ func (cs *ConfigStore) ListModuleNames() []string {
 }
 
 // ListRoleNames returns the sorted names of all loaded roles.
-// Roles are loaded during loadAll but not stored separately, so we
-// re-read them from the roles directory.
 func (cs *ConfigStore) ListRoleNames() []string {
-	roleDefs, err := loadRoleDefs(cs.rolesDir())
-	if err != nil {
+	cs.mu.RLock()
+	roleDefs := cs.roleDefs
+	cs.mu.RUnlock()
+	if roleDefs == nil {
 		return nil
 	}
 	names := make([]string, 0, len(roleDefs))
@@ -293,6 +295,7 @@ func (cs *ConfigStore) ListRoleNames() []string {
 	sort.Strings(names)
 	return names
 }
+
 
 // Reload re-reads all config files from disk and re-resolves secrets.
 // Called by the REST API after config publish and by the secret rotation watcher.
@@ -392,11 +395,20 @@ type ConfigTrace struct {
 	Environment     string                `json:"environment,omitempty"`
 	Roles           []string              `json:"roles,omitempty"`
 	RoleExpansion   []RoleTraceEntry      `json:"role_expansion,omitempty"`
+	Inheritance     []InheritanceLevel    `json:"inheritance,omitempty"`
 	Modules         []string              `json:"modules"`
 	VarSources      []VarSourceEntry      `json:"var_sources"`
 	FinalVars       map[string]any        `json:"final_vars"`
 	ConditionalVars []string              `json:"conditional_vars,omitempty"`
 	ResourceCount   int                   `json:"resource_count"`
+}
+
+// InheritanceLevel describes one level in the directory inheritance chain.
+type InheritanceLevel struct {
+	Dir     string   `json:"dir"`               // relative dir path (e.g., "production/web")
+	File    string   `json:"file"`              // filename (e.g., "common.hnb")
+	Modules []string `json:"modules,omitempty"` // modules contributed at this level
+	Roles   []string `json:"roles,omitempty"`   // roles contributed at this level
 }
 
 // RoleTraceEntry shows which modules came from which role (and includes).
@@ -451,6 +463,22 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 	if thrallEntry == nil {
 		return trace
+	}
+
+	// Build inheritance chain for trace output.
+	if thrallEntry.DirPath != "" && len(cs.commonConfigs) > 0 {
+		chain := inheritanceChain(thrallEntry.DirPath, cs.commonConfigs)
+		for _, cc := range chain {
+			level := InheritanceLevel{
+				Dir:  cc.DirPath,
+				File: "common.hnb",
+			}
+			for _, ref := range cc.Modules {
+				level.Modules = append(level.Modules, ref.Name)
+			}
+			level.Roles = cc.Roles
+			trace.Inheritance = append(trace.Inheritance, level)
+		}
 	}
 
 	trace.Environment = thrallEntry.Environment
@@ -625,12 +653,13 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("resolving source files: %w", err)
 	}
 
-	roleDefs, err := loadRoleDefs(cs.rolesDir())
+	// Load roles: try roles.hnb at root first, fall back to roles/ directory.
+	roleDefs, err := loadRolesFile(cs.dir)
 	if err != nil {
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	thrallEntries, err := loadThrallsDir(cs.thrallsDir())
+	thrallEntries, commonConfigs, err := loadThrallsDir(cs.dir)
 	if err != nil {
 		return fmt.Errorf("loading thralls: %w", err)
 	}
@@ -647,6 +676,12 @@ func (cs *ConfigStore) loadAllInner() error {
 	// Validate network device entries: gateway references, device types, credentials.
 	if err := validateDeviceEntries(thrallEntries); err != nil {
 		return err
+	}
+
+	// Apply directory inheritance: prepend inherited modules/roles/vars
+	// from common.hnb files in ancestor directories.
+	for i := range thrallEntries {
+		applyInheritance(&thrallEntries[i], commonConfigs)
 	}
 
 	var entries []resolvedEntry
@@ -687,6 +722,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.thrallEntries = thrallEntries
 	cs.roleDefs = roleDefs
 	cs.moduleDefs = moduleDefs
+	cs.commonConfigs = commonConfigs
 	cs.mu.Unlock()
 
 	v := cs.version.Add(1)
@@ -1330,42 +1366,253 @@ func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
 	return defs, nil
 }
 
-// loadThrallsDir reads all config files (.hnb/.yaml) from the thralls directory
-// and merges their thrall entries in filesystem order.
-func loadThrallsDir(dir string) ([]ThrallEntry, error) {
-	paths, err := walkConfigFiles(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading thralls dir: %w", err)
-	}
-
-	var allEntries []ThrallEntry
-	for _, path := range paths {
+// loadRolesFile loads roles from a single roles.hnb file at the base dir,
+// falling back to the roles/ directory for backward compatibility.
+func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
+	// Try roles.hnb at root first.
+	for _, name := range []string{"roles.hnb", "roles.yaml", "roles.yml"} {
+		path := filepath.Join(baseDir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", path, err)
+			continue
 		}
-		var cfg ThrallsConfig
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
+		// roles.hnb contains a top-level "roles:" list.
+		var container struct {
+			Roles []RoleDefinition `yaml:"roles"`
+		}
+		if err := yaml.Unmarshal(data, &container); err != nil {
+			// Try as a single role definition (backward compat).
+			var single RoleDefinition
+			if err2 := yaml.Unmarshal(data, &single); err2 != nil {
+				return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
+			}
+			if single.Name != "" {
+				return map[string]*RoleDefinition{single.Name: &single}, nil
+			}
 			return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
+		}
+
+		defs := make(map[string]*RoleDefinition, len(container.Roles))
+		for i := range container.Roles {
+			def := &container.Roles[i]
+			if def.Name == "" {
+				return nil, fmt.Errorf("%s: role %d missing required 'name' field", path, i)
+			}
+			if _, exists := defs[def.Name]; exists {
+				return nil, fmt.Errorf("%s: duplicate role name %q", path, def.Name)
+			}
+			defs[def.Name] = def
+		}
+
+		// Validate includes.
+		for _, def := range defs {
+			for _, incName := range def.Includes {
+				inc, ok := defs[incName]
+				if !ok {
+					return nil, fmt.Errorf("role %q includes %q which does not exist", def.Name, incName)
+				}
+				if len(inc.Includes) > 0 {
+					return nil, fmt.Errorf("role %q includes %q which itself has includes — only single-level nesting is allowed", def.Name, incName)
+				}
+			}
+		}
+		return defs, nil
+	}
+
+	// Fall back to roles/ directory.
+	return loadRoleDefs(filepath.Join(baseDir, "roles"))
+}
+
+// applyInheritance prepends inherited modules, roles, and vars from
+// common.hnb files in ancestor directories to a ThrallEntry.
+// Parent modules come first (foundation before specialization).
+// Child vars override parent vars. exclude_modules strips specific inherited modules.
+func applyInheritance(entry *ThrallEntry, commons map[string]*CommonConfig) {
+	if len(commons) == 0 {
+		return
+	}
+
+	// Build the ancestor chain from root to the entry's directory.
+	chain := inheritanceChain(entry.DirPath, commons)
+	if len(chain) == 0 {
+		return
+	}
+
+	// Collect inherited modules and roles (parent first).
+	var inheritedModules []ModuleRef
+	var inheritedRoles []string
+	inheritedVars := make(map[string]any)
+
+	for _, cc := range chain {
+		inheritedModules = append(inheritedModules, cc.Modules...)
+		inheritedRoles = append(inheritedRoles, cc.Roles...)
+		for k, v := range cc.Vars {
+			inheritedVars[k] = v
+		}
+	}
+
+	// Apply exclude_modules — remove named modules from the inherited set.
+	if len(entry.ExcludeModules) > 0 {
+		exclude := make(map[string]bool, len(entry.ExcludeModules))
+		for _, name := range entry.ExcludeModules {
+			exclude[name] = true
+		}
+		filtered := inheritedModules[:0]
+		for _, ref := range inheritedModules {
+			if !exclude[ref.Name] {
+				filtered = append(filtered, ref)
+			}
+		}
+		inheritedModules = filtered
+	}
+
+	// Prepend inherited modules before the entry's own.
+	entry.Modules = append(inheritedModules, entry.Modules...)
+
+	// Prepend inherited roles before the entry's own.
+	entry.Roles = append(inheritedRoles, entry.Roles...)
+
+	// Merge vars: inherited first, entry's own override.
+	if len(inheritedVars) > 0 {
+		merged := inheritedVars
+		for k, v := range entry.Vars {
+			merged[k] = v
+		}
+		entry.Vars = merged
+	}
+}
+
+// inheritanceChain returns the ordered list of CommonConfigs from root
+// down to (but not including) the entry's own directory level.
+// For an entry at "production/web", it returns commons for:
+// "" (root), "production" — in that order.
+func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*CommonConfig {
+	if dirPath == "" {
+		// Root-level entries get no inheritance (common.hnb at root
+		// applies only to subdirectories).
+		return nil
+	}
+
+	var chain []*CommonConfig
+
+	// Root common.
+	if cc, ok := commons[""]; ok {
+		chain = append(chain, cc)
+	}
+
+	// Walk path segments: "production/web" → ["production", "production/web"]
+	parts := strings.Split(dirPath, string(filepath.Separator))
+	for i := range parts {
+		seg := filepath.Join(parts[:i+1]...)
+		// The last segment is the entry's own directory — include it
+		// because common.hnb there applies to entries in that dir.
+		if cc, ok := commons[seg]; ok {
+			chain = append(chain, cc)
+		}
+	}
+
+	return chain
+}
+
+// loadThrallsDir walks the config directory hierarchy and returns all
+// leaf ThrallEntry items (files with match: entries) plus a map of
+// CommonConfig items from common.hnb files at each directory level.
+//
+// The directory structure defines inheritance:
+//   - common.hnb at any level = modules/roles/vars inherited by all subdirs
+//   - Any other .hnb file = leaf entry (must have match:)
+//   - Root-level common.hnb applies only to subdirectories
+//
+// This also supports the legacy thralls/ subdirectory layout: if a thralls/
+// subdir exists, it is loaded as the thrall hierarchy root instead.
+func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error) {
+	// Legacy support: if thralls/ subdir exists, use it as the hierarchy root.
+	thrallRoot := dir
+	thrallsSub := filepath.Join(dir, "thralls")
+	if info, err := os.Stat(thrallsSub); err == nil && info.IsDir() {
+		thrallRoot = thrallsSub
+	}
+
+	commons := make(map[string]*CommonConfig)
+	var allEntries []ThrallEntry
+
+	err := filepath.WalkDir(thrallRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !isConfigFile(d.Name()) {
+			return nil
+		}
+		// Skip modules/, templates/, and roles.hnb — they are not thrall entries.
+		rel, _ := filepath.Rel(dir, path)
+		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
+			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("reading %s: %w", path, readErr)
+		}
+
+		// Determine the relative dir path for this file within the hierarchy.
+		relToRoot, _ := filepath.Rel(thrallRoot, path)
+		dirPath := filepath.Dir(relToRoot)
+		if dirPath == "." {
+			dirPath = ""
+		}
+
+		// common.hnb files define inheritance — they should not have match: entries.
+		baseName := filepath.Base(path)
+		if baseName == "common.hnb" || baseName == "common.yaml" || baseName == "common.yml" {
+			var cc CommonConfig
+			if unmarshalErr := yaml.Unmarshal(data, &cc); unmarshalErr != nil {
+				return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
+			}
+			cc.DirPath = dirPath
+			commons[dirPath] = &cc
+			return nil
+		}
+
+		// roles.hnb at root level is handled separately — skip here.
+		if dirPath == "" && (baseName == "roles.hnb" || baseName == "roles.yaml" || baseName == "roles.yml") {
+			return nil
+		}
+
+		// Regular thrall entry file.
+		var cfg ThrallsConfig
+		if unmarshalErr := yaml.Unmarshal(data, &cfg); unmarshalErr != nil {
+			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
 		}
 		for i, entry := range cfg.Thralls {
 			if entry.Match == "" {
-				return nil, fmt.Errorf("%s entry %d: missing required 'match' field", path, i)
+				return fmt.Errorf("%s entry %d: missing required 'match' field", path, i)
 			}
+			cfg.Thralls[i].DirPath = dirPath
 		}
 		allEntries = append(allEntries, cfg.Thralls...)
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Reject duplicate match patterns — a hostname should only match one entry.
 	seen := make(map[string]string, len(allEntries))
 	for _, entry := range allEntries {
 		if prev, exists := seen[entry.Match]; exists {
-			return nil, fmt.Errorf("duplicate thrall match pattern %q (also defined in %s)", entry.Match, prev)
+			return nil, nil, fmt.Errorf("duplicate thrall match pattern %q (also defined in %s)", entry.Match, prev)
 		}
 		seen[entry.Match] = entry.Match
 	}
 
-	return allEntries, nil
+	return allEntries, commons, nil
 }
 
 // mergeEnvironmentOverrides merges base vars with environment-specific overrides.

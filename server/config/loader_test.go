@@ -3256,3 +3256,473 @@ thralls:
 		t.Errorf("MatchPattern = %q, want web-*.example.com", trace.MatchPattern)
 	}
 }
+
+// --- Directory Inheritance Tests ---
+
+// setupInheritanceDir creates a config directory using the new flat layout
+// (no thralls/ subdirectory, common.hnb for inheritance).
+func setupInheritanceDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "config")
+	if err := os.MkdirAll(filepath.Join(dir, "modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestInheritance_BasicModules(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "sshd.hnb"), `
+name: sshd
+resources:
+  - name: install-sshd
+    type: package
+    package: openssh-server
+`)
+	writeFile(t, filepath.Join(dir, "modules", "monitoring.hnb"), `
+name: monitoring
+resources:
+  - name: install-monitoring
+    type: package
+    package: prometheus-node-exporter
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx.hnb"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+`)
+
+	// Root common.hnb — inherited by all subdirs.
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+modules: [sshd, monitoring]
+`)
+
+	// Leaf entry in a subdirectory.
+	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "web", "web.hnb"), `
+thralls:
+  - match: "web*.example.com"
+    modules: [nginx]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("web01.example.com")
+	if cfg == nil {
+		t.Fatal("expected config for web01.example.com")
+	}
+
+	// Should have inherited sshd + monitoring, plus own nginx.
+	var moduleNames []string
+	for _, m := range cfg.Modules {
+		moduleNames = append(moduleNames, m.Name)
+	}
+
+	if len(moduleNames) != 3 {
+		t.Fatalf("expected 3 modules, got %d: %v", len(moduleNames), moduleNames)
+	}
+	// Parent modules first, then own.
+	if moduleNames[0] != "sshd" {
+		t.Errorf("module[0] = %q, want sshd", moduleNames[0])
+	}
+	if moduleNames[1] != "monitoring" {
+		t.Errorf("module[1] = %q, want monitoring", moduleNames[1])
+	}
+	if moduleNames[2] != "nginx" {
+		t.Errorf("module[2] = %q, want nginx", moduleNames[2])
+	}
+}
+
+func TestInheritance_MultiLevel(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	for _, name := range []string{"sshd", "logging", "nginx"} {
+		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+name: %s
+resources:
+  - name: install-%s
+    type: package
+    package: %s
+`, name, name, name))
+	}
+
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+modules: [sshd]
+`)
+
+	os.MkdirAll(filepath.Join(dir, "production"), 0o755)
+	writeFile(t, filepath.Join(dir, "production", "common.hnb"), `
+modules: [logging]
+`)
+
+	os.MkdirAll(filepath.Join(dir, "production", "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "production", "web", "web.hnb"), `
+thralls:
+  - match: "web*.prod.example.com"
+    modules: [nginx]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("web01.prod.example.com")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+
+	var names []string
+	for _, m := range cfg.Modules {
+		names = append(names, m.Name)
+	}
+	// root(sshd) → production(logging) → web(nginx)
+	want := []string{"sshd", "logging", "nginx"}
+	if len(names) != len(want) {
+		t.Fatalf("modules = %v, want %v", names, want)
+	}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("module[%d] = %q, want %q", i, names[i], w)
+		}
+	}
+}
+
+func TestInheritance_ExcludeModules(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	for _, name := range []string{"sshd", "monitoring", "nginx"} {
+		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+name: %s
+resources:
+  - name: install-%s
+    type: package
+    package: %s
+`, name, name, name))
+	}
+
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+modules: [sshd, monitoring]
+`)
+
+	os.MkdirAll(filepath.Join(dir, "containers"), 0o755)
+	writeFile(t, filepath.Join(dir, "containers", "containers.hnb"), `
+thralls:
+  - match: "docker*.example.com"
+    modules: [nginx]
+    exclude_modules: [monitoring]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("docker01.example.com")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+
+	var names []string
+	for _, m := range cfg.Modules {
+		names = append(names, m.Name)
+	}
+	// sshd inherited, monitoring excluded, nginx own.
+	want := []string{"sshd", "nginx"}
+	if len(names) != len(want) {
+		t.Fatalf("modules = %v, want %v", names, want)
+	}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("module[%d] = %q, want %q", i, names[i], w)
+		}
+	}
+}
+
+func TestInheritance_VarsOverride(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.hnb"), `
+name: app
+resources:
+  - name: install-app
+    type: package
+    package: app
+`)
+
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+modules: [app]
+vars:
+  log_level: info
+  dns_server: "1.1.1.1"
+`)
+
+	os.MkdirAll(filepath.Join(dir, "staging"), 0o755)
+	writeFile(t, filepath.Join(dir, "staging", "staging.hnb"), `
+thralls:
+  - match: "*.staging.example.com"
+    vars:
+      log_level: debug
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("app01.staging.example.com")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+
+	// log_level should be overridden to debug, dns_server inherited.
+	if cfg.Vars["log_level"] != "debug" {
+		t.Errorf("log_level = %v, want debug", cfg.Vars["log_level"])
+	}
+	if cfg.Vars["dns_server"] != "1.1.1.1" {
+		t.Errorf("dns_server = %v, want 1.1.1.1", cfg.Vars["dns_server"])
+	}
+}
+
+func TestInheritance_RootEntryNoInheritance(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "sshd.hnb"), `
+name: sshd
+resources:
+  - name: install-sshd
+    type: package
+    package: openssh-server
+`)
+	writeFile(t, filepath.Join(dir, "modules", "legacy.hnb"), `
+name: legacy
+resources:
+  - name: install-legacy
+    type: package
+    package: legacy-app
+`)
+
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+modules: [sshd]
+`)
+
+	// Entry at root level (in thralls/ subdir, but not in a subdirectory
+	// below the hierarchy root) should NOT inherit from common.hnb.
+	os.MkdirAll(filepath.Join(dir, "thralls"), 0o755)
+	writeFile(t, filepath.Join(dir, "thralls", "legacy.hnb"), `
+thralls:
+  - match: "old*.example.com"
+    modules: [legacy]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("old01.example.com")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+
+	var names []string
+	for _, m := range cfg.Modules {
+		names = append(names, m.Name)
+	}
+	// Should only have legacy, not sshd from common.
+	if len(names) != 1 || names[0] != "legacy" {
+		t.Errorf("modules = %v, want [legacy]", names)
+	}
+}
+
+func TestInheritance_BackwardCompatLegacyLayout(t *testing.T) {
+	// The legacy layout with thralls/ subdir should still work.
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.hnb"), `
+name: nginx
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+`)
+	writeFile(t, filepath.Join(dir, "thralls", "all.hnb"), `
+thralls:
+  - match: "web*.example.com"
+    modules: [nginx]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("web01.example.com")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "nginx" {
+		t.Errorf("expected [nginx], got %v", cfg.Modules)
+	}
+}
+
+func TestInheritance_TraceShowsChain(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	for _, name := range []string{"sshd", "nginx"} {
+		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+name: %s
+resources:
+  - name: install-%s
+    type: package
+    package: %s
+`, name, name, name))
+	}
+
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+modules: [sshd]
+`)
+
+	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "web", "web.hnb"), `
+thralls:
+  - match: "web*.example.com"
+    modules: [nginx]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := cs.Trace("web01.example.com")
+	if !trace.Matched {
+		t.Fatal("expected match")
+	}
+
+	if len(trace.Inheritance) != 1 {
+		t.Fatalf("expected 1 inheritance level, got %d", len(trace.Inheritance))
+	}
+	if trace.Inheritance[0].File != "common.hnb" {
+		t.Errorf("inheritance[0].File = %q, want common.hnb", trace.Inheritance[0].File)
+	}
+	if len(trace.Inheritance[0].Modules) != 1 || trace.Inheritance[0].Modules[0] != "sshd" {
+		t.Errorf("inheritance[0].Modules = %v, want [sshd]", trace.Inheritance[0].Modules)
+	}
+}
+
+func TestInheritance_InheritedRoles(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	for _, name := range []string{"sshd", "monitoring", "nginx"} {
+		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+name: %s
+resources:
+  - name: install-%s
+    type: package
+    package: %s
+`, name, name, name))
+	}
+
+	// roles.hnb at root.
+	writeFile(t, filepath.Join(dir, "roles.hnb"), `
+roles:
+  - name: base-security
+    modules: [sshd]
+`)
+
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+roles: [base-security]
+modules: [monitoring]
+`)
+
+	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "web", "web.hnb"), `
+thralls:
+  - match: "web*.example.com"
+    modules: [nginx]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("web01.example.com")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+
+	var names []string
+	for _, m := range cfg.Modules {
+		names = append(names, m.Name)
+	}
+	// Inherited role base-security(sshd) + inherited module monitoring + own nginx.
+	want := []string{"sshd", "monitoring", "nginx"}
+	if len(names) != len(want) {
+		t.Fatalf("modules = %v, want %v", names, want)
+	}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("module[%d] = %q, want %q", i, names[i], w)
+		}
+	}
+}
+
+func TestInheritance_CommonVarsFromFile(t *testing.T) {
+	dir := setupInheritanceDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.hnb"), `
+name: app
+resources:
+  - name: install-app
+    type: package
+    package: app
+`)
+
+	// common.hnb with vars defined at directory level.
+	os.MkdirAll(filepath.Join(dir, "production"), 0o755)
+	writeFile(t, filepath.Join(dir, "common.hnb"), `
+modules: [app]
+vars:
+  region: us-west
+`)
+	writeFile(t, filepath.Join(dir, "production", "common.hnb"), `
+vars:
+  environment: production
+`)
+
+	writeFile(t, filepath.Join(dir, "production", "prod.hnb"), `
+thralls:
+  - match: "*.prod.example.com"
+    vars:
+      instance_type: large
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := cs.Get("app01.prod.example.com")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+
+	// region from root common, environment from production common, instance_type from entry.
+	if cfg.Vars["region"] != "us-west" {
+		t.Errorf("region = %v, want us-west", cfg.Vars["region"])
+	}
+	if cfg.Vars["environment"] != "production" {
+		t.Errorf("environment = %v, want production", cfg.Vars["environment"])
+	}
+	if cfg.Vars["instance_type"] != "large" {
+		t.Errorf("instance_type = %v, want large", cfg.Vars["instance_type"])
+	}
+}
