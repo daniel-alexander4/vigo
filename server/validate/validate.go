@@ -679,6 +679,18 @@ func attrString(attrs map[string]any, key string) string {
 	if !ok {
 		return ""
 	}
-	s, _ := v.(string)
-	return s
+	switch t := v.(type) {
+	case string:
+		return t
+	case int:
+		return fmt.Sprintf("%d", t)
+	case int64:
+		return fmt.Sprintf("%d", t)
+	case float64:
+		return fmt.Sprintf("%g", t)
+	case bool:
+		return fmt.Sprintf("%t", t)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
