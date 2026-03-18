@@ -205,6 +205,15 @@ Unknown resource types are blocked by default. If a resource uses a custom execu
   creates: "/var/www/app/current"
 ```
 
+## Startup Behavior with Invalid Config
+
+If the server starts with invalid config in `.live/`, the behavior depends on the error type:
+
+- **Idempotency errors** (unguarded exec, reboot without subscribes, etc.) — **non-fatal**. The server starts with zero modules loaded. The error is logged at ERROR level and stored in `LastReloadError()`, surfaced via `hobnobcli doctor` and the web dashboard. The REST API, UI, and gRPC remain available so you can diagnose and fix the config. Thralls get empty policy (no changes applied) until the config is repaired and republished.
+- **Structural errors** (invalid YAML, dangling role→module references, secret resolution failures) — **fatal**. The server refuses to start. These indicate a fundamentally broken config tree.
+
+Since `config publish` runs the module linter before syncing, most idempotency errors are caught before they reach `.live/`. The non-fatal startup behavior is a safety net for configs that bypass publish (e.g., placed directly in `.live/`).
+
 ## First-Time Setup
 
 On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero thrall entries. Place your configs in `proposed/` and run `hobnobcli config publish` to populate `.live/` for the first time.

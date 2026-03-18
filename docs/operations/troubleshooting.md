@@ -129,6 +129,17 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 - Agent re-enrolled with a new key pair but old UUID
 - Thrall was revoked
 
+### Server Started with Zero Modules
+
+**Symptoms:** Server is running but thralls get empty policy (no resources applied). Logs show `config loaded with validation errors — starting with empty config`.
+
+**Cause:** Idempotency validation errors in `.live/` modules. The server treats these as non-fatal — it starts with empty config so the REST API, UI, and gRPC remain available for diagnosis.
+
+**Fix:**
+1. Check the error details: `hobnobcli doctor` or look at the server logs
+2. Fix the module in `hnb/proposed/` (the module linter will catch and repair most issues)
+3. Republish: `hobnobcli config publish`
+
 ### Config Reload Errors
 
 **Symptoms:** Config changes are not picked up. `hobnob_config_reload_errors_total` increases.
@@ -142,7 +153,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 2. Validate config files manually:
    ```bash
-   hobnobcli validate
+   hobnobcli config publish --dry-run
    ```
 
 3. Common YAML errors:
