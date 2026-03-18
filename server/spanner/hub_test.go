@@ -251,12 +251,12 @@ func TestHub_AggregateListThralls(t *testing.T) {
 func TestHub_AggregateComplianceSummary(t *testing.T) {
 	spokeA := &fakeAdminService{
 		compliance: &pb.GetComplianceSummaryResponse{
-			Total: 10, Compliant: 8, Drifted: 1, Failing: 1,
+			Total: 10, Compliant: 8, RecurringDrift: 1, Errors: 1,
 		},
 	}
 	spokeB := &fakeAdminService{
 		compliance: &pb.GetComplianceSummaryResponse{
-			Total: 5, Compliant: 4, Stale: 1,
+			Total: 5, Compliant: 4, LostContact: 1,
 		},
 	}
 
@@ -275,18 +275,18 @@ func TestHub_AggregateComplianceSummary(t *testing.T) {
 	if resp.Compliant != 12 {
 		t.Errorf("compliant = %d, want 12", resp.Compliant)
 	}
-	if resp.Drifted != 1 {
-		t.Errorf("drifted = %d, want 1", resp.Drifted)
+	if resp.RecurringDrift != 1 {
+		t.Errorf("recurring_drift = %d, want 1", resp.RecurringDrift)
 	}
-	if resp.Failing != 1 {
-		t.Errorf("failing = %d, want 1", resp.Failing)
+	if resp.Errors != 1 {
+		t.Errorf("errors = %d, want 1", resp.Errors)
 	}
-	if resp.Stale != 1 {
-		t.Errorf("stale = %d, want 1", resp.Stale)
+	if resp.LostContact != 1 {
+		t.Errorf("lost_contact = %d, want 1", resp.LostContact)
 	}
-	// 12/(15-1 stale) = 85.7%
+	// 12/(15-1 lost contact) = 85.7%
 	if resp.CompliancePct < 85.0 || resp.CompliancePct > 86.5 {
-		t.Errorf("compliance_pct = %f, want ~85.7 (stale excluded)", resp.CompliancePct)
+		t.Errorf("compliance_pct = %f, want ~85.7 (lost contact excluded)", resp.CompliancePct)
 	}
 }
 
@@ -348,13 +348,13 @@ func TestHub_SpokeCount(t *testing.T) {
 func TestSpokeStatusCompliance(t *testing.T) {
 	mock := &mockAdminClient{
 		complianceResp: &pb.GetComplianceSummaryResponse{
-			Total:         20,
-			Compliant:     15,
-			Drifted:       2,
-			Failing:       1,
-			Stale:         1,
-			Unknown:       1,
-			CompliancePct: 75.0,
+			Total:          20,
+			Compliant:      15,
+			RecurringDrift: 2,
+			Errors:         1,
+			LostContact:    1,
+			NoData:         1,
+			CompliancePct:  75.0,
 		},
 	}
 
@@ -386,17 +386,17 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	if s.Compliant != 15 {
 		t.Errorf("Compliant = %d, want 15", s.Compliant)
 	}
-	if s.Drifted != 2 {
-		t.Errorf("Drifted = %d, want 2", s.Drifted)
+	if s.RecurringDrift != 2 {
+		t.Errorf("RecurringDrift = %d, want 2", s.RecurringDrift)
 	}
-	if s.Failing != 1 {
-		t.Errorf("Failing = %d, want 1", s.Failing)
+	if s.Errors != 1 {
+		t.Errorf("Errors = %d, want 1", s.Errors)
 	}
-	if s.Stale != 1 {
-		t.Errorf("Stale = %d, want 1", s.Stale)
+	if s.LostContact != 1 {
+		t.Errorf("LostContact = %d, want 1", s.LostContact)
 	}
-	if s.Unknown != 1 {
-		t.Errorf("Unknown = %d, want 1", s.Unknown)
+	if s.NoData != 1 {
+		t.Errorf("NoData = %d, want 1", s.NoData)
 	}
 	if s.CompliancePct != 75.0 {
 		t.Errorf("CompliancePct = %f, want 75.0", s.CompliancePct)
@@ -468,7 +468,7 @@ func TestMultipleSpokeStatuses(t *testing.T) {
 			complianceResp: &pb.GetComplianceSummaryResponse{Total: 10, Compliant: 10, CompliancePct: 100},
 		}},
 		spokeConn{id: "spoke-b", addr: "b:1530", admin: &mockAdminClient{
-			complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Compliant: 3, Drifted: 2, CompliancePct: 60},
+			complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Compliant: 3, RecurringDrift: 2, CompliancePct: 60},
 		}},
 	)
 
@@ -484,8 +484,8 @@ func TestMultipleSpokeStatuses(t *testing.T) {
 	if statuses[0].ThrallCount != 10 {
 		t.Errorf("spoke-a ThrallCount = %d, want 10", statuses[0].ThrallCount)
 	}
-	if statuses[1].Drifted != 2 {
-		t.Errorf("spoke-b Drifted = %d, want 2", statuses[1].Drifted)
+	if statuses[1].RecurringDrift != 2 {
+		t.Errorf("spoke-b RecurringDrift = %d, want 2", statuses[1].RecurringDrift)
 	}
 }
 
@@ -578,7 +578,7 @@ func TestSpokeListRuns(t *testing.T) {
 func TestSpokeComplianceSummary(t *testing.T) {
 	mock := &mockAdminClient{
 		complianceResp: &pb.GetComplianceSummaryResponse{
-			Total: 10, Compliant: 8, Drifted: 1, Failing: 1, CompliancePct: 80.0,
+			Total: 10, Compliant: 8, RecurringDrift: 1, Errors: 1, CompliancePct: 80.0,
 		},
 	}
 

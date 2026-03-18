@@ -278,21 +278,21 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 				if received.Compliant != 80 {
 					t.Errorf("Compliant = %d, want 80", received.Compliant)
 				}
-				if received.Drifted != 10 {
-					t.Errorf("Drifted = %d, want 10", received.Drifted)
+				if received.RecurringDrift != 10 {
+					t.Errorf("RecurringDrift = %d, want 10", received.RecurringDrift)
 				}
-				if received.Failing != 5 {
-					t.Errorf("Failing = %d, want 5", received.Failing)
+				if received.Errors != 5 {
+					t.Errorf("Errors = %d, want 5", received.Errors)
 				}
-				if received.Stale != 3 {
-					t.Errorf("Stale = %d, want 3", received.Stale)
+				if received.LostContact != 3 {
+					t.Errorf("LostContact = %d, want 3", received.LostContact)
 				}
-				if received.Unknown != 2 {
-					t.Errorf("Unknown = %d, want 2", received.Unknown)
+				if received.NoData != 2 {
+					t.Errorf("NoData = %d, want 2", received.NoData)
 				}
-				// 80 compliant / (100 total - 3 stale) = 82.47%
+				// 80 compliant / (100 total - 3 lost contact) = 82.47%
 				if received.CompliancePct < 82.0 || received.CompliancePct > 83.0 {
-					t.Errorf("CompliancePct = %f, want ~82.5 (stale excluded from denominator)", received.CompliancePct)
+					t.Errorf("CompliancePct = %f, want ~82.5 (lost contact excluded from denominator)", received.CompliancePct)
 				}
 				return
 			}

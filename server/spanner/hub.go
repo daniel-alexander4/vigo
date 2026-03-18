@@ -138,16 +138,16 @@ func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetCompliance
 		resp := r.value.(*pb.GetComplianceSummaryResponse)
 		agg.Total += resp.Total
 		agg.Compliant += resp.Compliant
-		agg.Drifted += resp.Drifted
-		agg.Failing += resp.Failing
-		agg.Stale += resp.Stale
-		agg.Unknown += resp.Unknown
+		agg.RecurringDrift += resp.RecurringDrift
+		agg.Errors += resp.Errors
+		agg.LostContact += resp.LostContact
+		agg.NoData += resp.NoData
 		spokeCount++
 	}
 
-	// Stale thralls excluded from compliance percentage — they represent
+	// Lost-contact thralls excluded from compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := agg.Total - agg.Stale
+	activeTotal := agg.Total - agg.LostContact
 	if activeTotal > 0 {
 		agg.CompliancePct = float32(agg.Compliant) / float32(activeTotal) * 100
 	}
@@ -317,10 +317,10 @@ type SpokeStatus struct {
 	Healthy       bool     `json:"healthy"`
 	ThrallCount   int32    `json:"thrall_count"`
 	Compliant     int32    `json:"compliant"`
-	Drifted       int32    `json:"drifted"`
-	Failing       int32    `json:"failing"`
-	Stale         int32    `json:"stale"`
-	Unknown       int32    `json:"unknown"`
+	RecurringDrift int32   `json:"recurring_drift"`
+	Errors         int32   `json:"errors"`
+	LostContact    int32   `json:"lost_contact"`
+	NoData         int32   `json:"no_data"`
 	CompliancePct float32  `json:"compliance_pct"`
 	LatencyMs     int64    `json:"latency_ms"`
 	Error         string   `json:"error,omitempty"`
@@ -370,10 +370,10 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			if report := h.getSpokeReport(sc.id); report != nil {
 				statuses[i].ThrallCount = report.ThrallCount
 				statuses[i].Compliant = report.Compliant
-				statuses[i].Drifted = report.Drifted
-				statuses[i].Failing = report.Failing
-				statuses[i].Stale = report.Stale
-				statuses[i].Unknown = report.Unknown
+				statuses[i].RecurringDrift = report.RecurringDrift
+				statuses[i].Errors = report.Errors
+				statuses[i].LostContact = report.LostContact
+				statuses[i].NoData = report.NoData
 				statuses[i].CompliancePct = report.CompliancePct
 			}
 		} else {
@@ -381,10 +381,10 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Healthy = true
 			statuses[i].ThrallCount = pr.resp.Total
 			statuses[i].Compliant = pr.resp.Compliant
-			statuses[i].Drifted = pr.resp.Drifted
-			statuses[i].Failing = pr.resp.Failing
-			statuses[i].Stale = pr.resp.Stale
-			statuses[i].Unknown = pr.resp.Unknown
+			statuses[i].RecurringDrift = pr.resp.RecurringDrift
+			statuses[i].Errors = pr.resp.Errors
+			statuses[i].LostContact = pr.resp.LostContact
+			statuses[i].NoData = pr.resp.NoData
 			statuses[i].CompliancePct = pr.resp.CompliancePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()
 			metrics.SpannerSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())

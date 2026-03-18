@@ -22,12 +22,12 @@
         <div class="stat-card__label">Compliant</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-warning">{{.TotalDrifted}}</div>
-        <div class="stat-card__label">Drifted</div>
+        <div class="stat-card__value text-warning">{{.TotalRecurringDrift}}</div>
+        <div class="stat-card__label">Recurring Drift</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-danger">{{.TotalFailing}}</div>
-        <div class="stat-card__label">Failing</div>
+        <div class="stat-card__value text-danger">{{.TotalErrors}}</div>
+        <div class="stat-card__label">Errors</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">{{printf "%.1f" .CompliancePct}}%</div>

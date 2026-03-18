@@ -520,7 +520,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 
 	total := int32(len(thralls))
 
-	// Stale thralls excluded from compliance percentage — they represent
+	// Lost-contact thralls excluded from compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := total - counts["lost contact"]
 	var pct float32
@@ -529,13 +529,13 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	}
 
 	return &pb.GetComplianceSummaryResponse{
-		Total:         total,
-		Compliant:     counts["compliant"],
-		Drifted:       counts["drifted"],
-		Failing:       counts["failing"],
-		Stale:         counts["stale"],
-		Unknown:       counts["unknown"],
-		CompliancePct: pct,
+		Total:          total,
+		Compliant:      counts["compliant"],
+		RecurringDrift: counts["recurring drift"],
+		Errors:         counts["errors"],
+		LostContact:    counts["lost contact"],
+		NoData:         counts["no data"],
+		CompliancePct:  pct,
 	}, nil
 }
 
@@ -579,13 +579,13 @@ func (s *AdminService) GetThrallCompliance(ctx context.Context, req *pb.GetThral
 	var snapshots []*pb.ComplianceSnapshot
 	for _, h := range history {
 		snapshots = append(snapshots, &pb.ComplianceSnapshot{
-			Date:      h.RecordedAt, // already a date string from SQLite
-			Total:     int32(h.Total),
-			Compliant: int32(h.Compliant),
-			Drifted:   int32(h.Drifted),
-			Failing:   int32(h.Failing),
-			Stale:     int32(h.Stale),
-			Unknown:   int32(h.Unknown),
+			Date:           h.RecordedAt, // already a date string from SQLite
+			Total:          int32(h.Total),
+			Compliant:      int32(h.Compliant),
+			RecurringDrift: int32(h.RecurringDrift),
+			Errors:         int32(h.Errors),
+			LostContact:    int32(h.LostContact),
+			NoData:         int32(h.NoData),
 		})
 	}
 

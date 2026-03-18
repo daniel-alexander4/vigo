@@ -174,7 +174,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		sparkData = make([]float64, 0, len(history))
 		for i := len(history) - 1; i >= 0; i-- {
 			h := history[i]
-			active := h.Total - h.Stale
+			active := h.Total - h.LostContact
 			if active > 0 {
 				sparkData = append(sparkData, float64(h.Compliant)/float64(active)*100)
 			}

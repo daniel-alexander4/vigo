@@ -2051,32 +2051,32 @@ func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
 
 // SpannerSpokeRow represents a spoke in the spanner UI table.
 type SpannerSpokeRow struct {
-	ID            string
-	Addr          string
-	Patterns      []string
-	Healthy       bool
-	ThrallCount   int32
-	Compliant     int32
-	Drifted       int32
-	Failing       int32
-	Stale         int32
-	Unknown       int32
-	CompliancePct float32
-	LatencyMs     int64
-	Error         string
+	ID             string
+	Addr           string
+	Patterns       []string
+	Healthy        bool
+	ThrallCount    int32
+	Compliant      int32
+	RecurringDrift int32
+	Errors         int32
+	LostContact    int32
+	NoData         int32
+	CompliancePct  float32
+	LatencyMs      int64
+	Error          string
 }
 
 // SpannerPageData holds data for the spanner page.
 type SpannerPageData struct {
 	PageData
-	SpokeCount     int
-	HealthyCount   int
-	TotalThralls   int32
-	TotalCompliant int32
-	TotalDrifted   int32
-	TotalFailing   int32
-	CompliancePct  float32
-	Spokes         []SpannerSpokeRow
+	SpokeCount          int
+	HealthyCount        int
+	TotalThralls        int32
+	TotalCompliant      int32
+	TotalRecurringDrift int32
+	TotalErrors         int32
+	CompliancePct       float32
+	Spokes              []SpannerSpokeRow
 }
 
 // Spanner renders the spanner hub status page.
@@ -2085,30 +2085,30 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 
 	var spokes []SpannerSpokeRow
 	healthyCount := 0
-	var totalThralls, totalCompliant, totalDrifted, totalFailing int32
+	var totalThralls, totalCompliant, totalRecurringDrift, totalErrors int32
 	for _, s := range statuses {
 		spokes = append(spokes, SpannerSpokeRow{
-			ID:            s.ID,
-			Addr:          s.Addr,
-			Patterns:      s.Patterns,
-			Healthy:       s.Healthy,
-			ThrallCount:   s.ThrallCount,
-			Compliant:     s.Compliant,
-			Drifted:       s.Drifted,
-			Failing:       s.Failing,
-			Stale:         s.Stale,
-			Unknown:       s.Unknown,
-			CompliancePct: s.CompliancePct,
-			LatencyMs:     s.LatencyMs,
-			Error:         s.Error,
+			ID:             s.ID,
+			Addr:           s.Addr,
+			Patterns:       s.Patterns,
+			Healthy:        s.Healthy,
+			ThrallCount:    s.ThrallCount,
+			Compliant:      s.Compliant,
+			RecurringDrift: s.RecurringDrift,
+			Errors:         s.Errors,
+			LostContact:    s.LostContact,
+			NoData:         s.NoData,
+			CompliancePct:  s.CompliancePct,
+			LatencyMs:      s.LatencyMs,
+			Error:          s.Error,
 		})
 		if s.Healthy {
 			healthyCount++
 		}
 		totalThralls += s.ThrallCount
 		totalCompliant += s.Compliant
-		totalDrifted += s.Drifted
-		totalFailing += s.Failing
+		totalRecurringDrift += s.RecurringDrift
+		totalErrors += s.Errors
 	}
 
 	var compPct float32
@@ -2117,15 +2117,15 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := SpannerPageData{
-		PageData:       PageData{Title: "Spanner", ActiveNav: "spanner"},
-		SpokeCount:     len(spokes),
-		HealthyCount:   healthyCount,
-		TotalThralls:   totalThralls,
-		TotalCompliant: totalCompliant,
-		TotalDrifted:   totalDrifted,
-		TotalFailing:   totalFailing,
-		CompliancePct:  compPct,
-		Spokes:         spokes,
+		PageData:            PageData{Title: "Spanner", ActiveNav: "spanner"},
+		SpokeCount:          len(spokes),
+		HealthyCount:        healthyCount,
+		TotalThralls:        totalThralls,
+		TotalCompliant:      totalCompliant,
+		TotalRecurringDrift: totalRecurringDrift,
+		TotalErrors:         totalErrors,
+		CompliancePct:       compPct,
+		Spokes:              spokes,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "spanner", data)
@@ -2134,19 +2134,19 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 // SpokeDetailPageData holds data for the spoke detail page.
 type SpokeDetailPageData struct {
 	PageData
-	SpokeID       string
-	Addr          string
-	Healthy       bool
-	ThrallCount   int32
-	Compliant     int32
-	Drifted       int32
-	Failing       int32
-	Stale         int32
-	Unknown       int32
-	CompliancePct float32
-	LatencyMs     int64
-	Thralls       []SpokeDetailThrallRow
-	Runs          []SpokeDetailRunRow
+	SpokeID        string
+	Addr           string
+	Healthy        bool
+	ThrallCount    int32
+	Compliant      int32
+	RecurringDrift int32
+	Errors         int32
+	LostContact    int32
+	NoData         int32
+	CompliancePct  float32
+	LatencyMs      int64
+	Thralls        []SpokeDetailThrallRow
+	Runs           []SpokeDetailRunRow
 }
 
 // SpokeDetailThrallRow is a thrall on a spoke.
@@ -2222,20 +2222,20 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := SpokeDetailPageData{
-		PageData:      PageData{Title: "Spoke: " + id, ActiveNav: "spanner"},
-		SpokeID:       spoke.ID,
-		Addr:          spoke.Addr,
-		Healthy:       spoke.Healthy,
-		ThrallCount:   spoke.ThrallCount,
-		Compliant:     spoke.Compliant,
-		Drifted:       spoke.Drifted,
-		Failing:       spoke.Failing,
-		Stale:         spoke.Stale,
-		Unknown:       spoke.Unknown,
-		CompliancePct: spoke.CompliancePct,
-		LatencyMs:     spoke.LatencyMs,
-		Thralls:       thrallRows,
-		Runs:          runRows,
+		PageData:       PageData{Title: "Spoke: " + id, ActiveNav: "spanner"},
+		SpokeID:        spoke.ID,
+		Addr:           spoke.Addr,
+		Healthy:        spoke.Healthy,
+		ThrallCount:    spoke.ThrallCount,
+		Compliant:      spoke.Compliant,
+		RecurringDrift: spoke.RecurringDrift,
+		Errors:         spoke.Errors,
+		LostContact:    spoke.LostContact,
+		NoData:         spoke.NoData,
+		CompliancePct:  spoke.CompliancePct,
+		LatencyMs:      spoke.LatencyMs,
+		Thralls:        thrallRows,
+		Runs:           runRows,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "spoke-detail", data)

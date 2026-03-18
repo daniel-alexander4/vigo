@@ -22,8 +22,8 @@ import (
 // Implemented by *fleet.FleetIndex (via its ComplianceSummary method wrapper).
 type ComplianceSource interface {
 	// ComplianceCounts returns the current compliance breakdown:
-	// total, compliant, drifted, failing, stale, unknown.
-	ComplianceCounts() (total, compliant, drifted, failing, stale, unknown int)
+	// total, compliant, recurringDrift, errors, lostContact, noData.
+	ComplianceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int)
 }
 
 // failoverThreshold is the number of consecutive failures on the current hub
@@ -253,10 +253,10 @@ func (r *Reporter) report(ctx context.Context, client pb.HobnobAdminClient) bool
 		SpokeId:       r.spokeID,
 		ThrallCount:   int32(total),
 		Compliant:     int32(compliant),
-		Drifted:       int32(recurringDrift),
-		Failing:       int32(errors),
-		Stale:         int32(lostContact),
-		Unknown:       int32(noData),
+		RecurringDrift: int32(recurringDrift),
+		Errors:         int32(errors),
+		LostContact:    int32(lostContact),
+		NoData:         int32(noData),
 		CompliancePct: compliancePct,
 	}
 

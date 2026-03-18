@@ -98,19 +98,19 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 		Role    string `json:"role"`
 		SpokeID string `json:"spoke_id"`
 		Spokes  []struct {
-			ID            string   `json:"id"`
-			Addr          string   `json:"addr"`
-			Patterns      []string `json:"patterns"`
-			Healthy       bool     `json:"healthy"`
-			ThrallCount   int32    `json:"thrall_count"`
-			Compliant     int32    `json:"compliant"`
-			Drifted       int32    `json:"drifted"`
-			Failing       int32    `json:"failing"`
-			Stale         int32    `json:"stale"`
-			Unknown       int32    `json:"unknown"`
-			CompliancePct float32  `json:"compliance_pct"`
-			LatencyMs     int64    `json:"latency_ms"`
-			Error         string   `json:"error"`
+			ID             string   `json:"id"`
+			Addr           string   `json:"addr"`
+			Patterns       []string `json:"patterns"`
+			Healthy        bool     `json:"healthy"`
+			ThrallCount    int32    `json:"thrall_count"`
+			Compliant      int32    `json:"compliant"`
+			RecurringDrift int32    `json:"recurring_drift"`
+			Errors         int32    `json:"errors"`
+			LostContact    int32    `json:"lost_contact"`
+			NoData         int32    `json:"no_data"`
+			CompliancePct  float32  `json:"compliance_pct"`
+			LatencyMs      int64    `json:"latency_ms"`
+			Error          string   `json:"error"`
 		} `json:"spokes"`
 	}
 
@@ -207,19 +207,19 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	spokeID := args[0]
 
 	var resp struct {
-		ID            string   `json:"id"`
-		Addr          string   `json:"addr"`
-		Patterns      []string `json:"patterns"`
-		Healthy       bool     `json:"healthy"`
-		ThrallCount   int32    `json:"thrall_count"`
-		Compliant     int32    `json:"compliant"`
-		Drifted       int32    `json:"drifted"`
-		Failing       int32    `json:"failing"`
-		Stale         int32    `json:"stale"`
-		Unknown       int32    `json:"unknown"`
-		CompliancePct float32  `json:"compliance_pct"`
-		LatencyMs     int64    `json:"latency_ms"`
-		Error         string   `json:"error"`
+		ID             string   `json:"id"`
+		Addr           string   `json:"addr"`
+		Patterns       []string `json:"patterns"`
+		Healthy        bool     `json:"healthy"`
+		ThrallCount    int32    `json:"thrall_count"`
+		Compliant      int32    `json:"compliant"`
+		RecurringDrift int32    `json:"recurring_drift"`
+		Errors         int32    `json:"errors"`
+		LostContact    int32    `json:"lost_contact"`
+		NoData         int32    `json:"no_data"`
+		CompliancePct  float32  `json:"compliance_pct"`
+		LatencyMs      int64    `json:"latency_ms"`
+		Error          string   `json:"error"`
 	}
 
 	if err := client.get("/api/v1/spanner/spokes/"+spokeID, &resp); err != nil {
@@ -240,10 +240,10 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Thralls: %d\n", resp.ThrallCount)
 	fmt.Printf("  Compliance: %.1f%%\n", resp.CompliancePct)
 	fmt.Printf("    Compliant: %s\n", green(fmt.Sprintf("%d", resp.Compliant)))
-	fmt.Printf("    Drifted:   %s\n", yellow(fmt.Sprintf("%d", resp.Drifted)))
-	fmt.Printf("    Failing:   %s\n", red(fmt.Sprintf("%d", resp.Failing)))
-	fmt.Printf("    Stale:     %d\n", resp.Stale)
-	fmt.Printf("    Unknown:   %d\n", resp.Unknown)
+	fmt.Printf("    Recurring Drift: %s\n", yellow(fmt.Sprintf("%d", resp.RecurringDrift)))
+	fmt.Printf("    Errors:          %s\n", red(fmt.Sprintf("%d", resp.Errors)))
+	fmt.Printf("    Lost Contact:    %d\n", resp.LostContact)
+	fmt.Printf("    No Data:         %d\n", resp.NoData)
 
 	if resp.Error != "" {
 		fmt.Printf("\n  Error: %s\n", red(resp.Error))

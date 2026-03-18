@@ -615,25 +615,25 @@ func (d *toolDeps) getComplianceHistory(ctx context.Context, args map[string]any
 	}
 
 	type snapshot struct {
-		RecordedAt string `json:"recorded_at"`
-		Compliant  int64  `json:"compliant"`
-		Drifted    int64  `json:"drifted"`
-		Failing    int64  `json:"failing"`
-		Stale      int64  `json:"stale"`
-		Unknown    int64  `json:"unknown"`
-		Total      int64  `json:"total"`
+		RecordedAt     string `json:"recorded_at"`
+		Compliant      int64  `json:"compliant"`
+		RecurringDrift int64  `json:"recurring_drift"`
+		Errors         int64  `json:"errors"`
+		LostContact    int64  `json:"lost_contact"`
+		NoData         int64  `json:"no_data"`
+		Total          int64  `json:"total"`
 	}
 
 	results := make([]snapshot, 0, len(history))
 	for _, h := range history {
 		results = append(results, snapshot{
-			RecordedAt: h.RecordedAt,
-			Compliant:  h.Compliant,
-			Drifted:    h.Drifted,
-			Failing:    h.Failing,
-			Stale:      h.Stale,
-			Unknown:    h.Unknown,
-			Total:      h.Total,
+			RecordedAt:     h.RecordedAt,
+			Compliant:      h.Compliant,
+			RecurringDrift: h.RecurringDrift,
+			Errors:         h.Errors,
+			LostContact:    h.LostContact,
+			NoData:         h.NoData,
+			Total:          h.Total,
 		})
 	}
 

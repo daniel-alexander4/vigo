@@ -142,10 +142,10 @@ func TestComplianceCounterConsistency(t *testing.T) {
 		t.Errorf("Compliant = %d, want 1", c.Compliant)
 	}
 	if c.RecurringDrift != 1 {
-		t.Errorf("Drifted = %d, want 1", c.RecurringDrift)
+		t.Errorf("RecurringDrift = %d, want 1", c.RecurringDrift)
 	}
 	if c.Errors != 1 {
-		t.Errorf("Failing = %d, want 1", c.Errors)
+		t.Errorf("Errors = %d, want 1", c.Errors)
 	}
 
 	// Update run status → compliance changes.
@@ -155,7 +155,7 @@ func TestComplianceCounterConsistency(t *testing.T) {
 		t.Errorf("after update: Compliant = %d, want 2", c.Compliant)
 	}
 	if c.RecurringDrift != 0 {
-		t.Errorf("after update: Drifted = %d, want 0", c.RecurringDrift)
+		t.Errorf("after update: RecurringDrift = %d, want 0", c.RecurringDrift)
 	}
 
 	// Remove a thrall.

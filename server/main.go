@@ -1031,12 +1031,12 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 		return
 	}
 	if err := queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
-		Total:     int64(summary.Total),
-		Compliant: int64(summary.Compliant),
-		Drifted:   int64(summary.RecurringDrift),
-		Failing:   int64(summary.Errors),
-		Stale:     int64(summary.LostContact),
-		Unknown:   int64(summary.NoData),
+		Total:          int64(summary.Total),
+		Compliant:      int64(summary.Compliant),
+		RecurringDrift: int64(summary.RecurringDrift),
+		Errors:         int64(summary.Errors),
+		LostContact:    int64(summary.LostContact),
+		NoData:         int64(summary.NoData),
 	}); err != nil {
 		slog.Error("failed to persist compliance snapshot", "error", err)
 	}
