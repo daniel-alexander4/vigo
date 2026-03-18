@@ -76,13 +76,6 @@ func normalizeResourceAttrs(attrs map[string]any) {
 			attrs["mode"] = fmt.Sprintf("%04o", n)
 		}
 	}
-	// Normalize targetpath → target_path.
-	if v, ok := attrs["targetpath"]; ok {
-		if _, hasCanonical := attrs["target_path"]; !hasCanonical {
-			attrs["target_path"] = v
-		}
-		delete(attrs, "targetpath")
-	}
 }
 
 // mergeConditionals combines block-level and resource-level when expressions.
