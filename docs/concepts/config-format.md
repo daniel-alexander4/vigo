@@ -183,7 +183,9 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
       exclude_modules: [ntp]  # containers use host clock
   ```
 - Root-level `common.hnb` applies only to subdirectories — leaf entries at the root level are self-contained.
-- Use `hobnobcli config trace <hostname>` to see the full inheritance chain.
+- Use `hobnobcli config trace <hostname>` to see the full inheritance chain for a specific host.
+- Use `hobnobcli config tree` to see the entire directory hierarchy at a glance.
+- Use `hobnobcli config search --module <name>` to find which entries use a specific module.
 
 ## Variable Resolution
 

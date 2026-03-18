@@ -7,6 +7,8 @@ Config inspection commands.
 | Command | Description |
 |---------|-------------|
 | `config trace` | Trace config resolution for a hostname |
+| `config tree` | Show the directory inheritance hierarchy |
+| `config search` | Search thrall entries by match pattern, module, or var |
 | `config publish` | Validate and publish config from proposed to live |
 | `config history` | View config publish history |
 | `config rollback` | Rollback to a previous config version |
@@ -80,6 +82,87 @@ No config entry matches hostname "unknown.example.com"
 - Secret values (prefixed with `secret:`) are masked in output
 - Variable values longer than 60 characters are truncated
 - The source column shows where each variable was set (module defaults, node vars, environment_overrides, or vars_from file)
+
+## config tree
+
+Displays the directory inheritance hierarchy as a colored tree. Shows `common.hnb` files at each level, leaf entries with their match patterns, and accumulated module totals.
+
+### Usage
+
+```bash
+hobnobcli config tree
+```
+
+### Example
+
+```
+common.hnb → [sshd, ntp, monitoring]
+├── production/
+│   common.hnb → [log-shipping, auditd]
+│   ├── web/
+│   │   └── web.hnb → web*.prod.example.com → [nginx, certbot]
+│   │       Total: sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot
+│   └── db/
+│       └── db.hnb → db*.prod.example.com → [postgres, pg-backup]
+│           Total: sshd, ntp, monitoring, log-shipping, auditd, postgres, pg-backup
+└── staging/
+    └── staging.hnb → *.staging.example.com → [debug-tools]
+        Total: sshd, ntp, monitoring, debug-tools
+        Excluded: monitoring
+```
+
+**Colors** (in terminal):
+- Directories: blue
+- Match patterns: yellow
+- Inherited modules: dim gray
+- Own modules: bold white
+- Excluded modules: red strikethrough
+- Total line: green
+
+## config search
+
+Search thrall entries by match pattern, module name, or var name. Shows the full inheritance chain, own modules, and accumulated totals.
+
+### Usage
+
+```bash
+hobnobcli config search --match <glob>
+hobnobcli config search --module <name>
+hobnobcli config search --var <name>
+```
+
+At least one flag is required. Flags can be combined.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--match` | Glob pattern to match against thrall `match:` patterns (e.g., `*web*`) |
+| `--module` | Find entries that use this module (inherited or direct) |
+| `--var` | Find entries that define this var |
+
+### Examples
+
+```bash
+# Find all entries with "web" in their pattern
+$ hobnobcli config search --match "*web*"
+  web*.prod.example.com  production/web
+  Chain:
+    (root)/common.hnb → sshd, ntp, monitoring
+    production/common.hnb → log-shipping, auditd
+  Own: nginx, certbot
+  Total: sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot
+
+# Find every entry using the nginx module
+$ hobnobcli config search --module nginx
+  web*.prod.example.com  production/web
+  ...
+
+# Find where log_level is defined
+$ hobnobcli config search --var log_level
+  web*.prod.example.com  production/web
+  Var: log_level = warn
+```
 
 ## config publish
 
