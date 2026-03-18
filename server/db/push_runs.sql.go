@@ -10,6 +10,39 @@ import (
 	"database/sql"
 )
 
+const cancelAllRunningPushRuns = `-- name: CancelAllRunningPushRuns :exec
+UPDATE push_runs
+SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP
+WHERE status IN ('pending', 'running')
+`
+
+func (q *Queries) CancelAllRunningPushRuns(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, cancelAllRunningPushRuns)
+	return err
+}
+
+const cancelPushRun = `-- name: CancelPushRun :exec
+UPDATE push_runs
+SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('pending', 'running')
+`
+
+func (q *Queries) CancelPushRun(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, cancelPushRun, id)
+	return err
+}
+
+const cancelPushRunTargets = `-- name: CancelPushRunTargets :exec
+UPDATE push_run_targets
+SET status = 'cancelled'
+WHERE push_run_id = ? AND status IN ('pending', 'dispatched')
+`
+
+func (q *Queries) CancelPushRunTargets(ctx context.Context, pushRunID string) error {
+	_, err := q.db.ExecContext(ctx, cancelPushRunTargets, pushRunID)
+	return err
+}
+
 const countPushRunTargetsByStatus = `-- name: CountPushRunTargetsByStatus :many
 SELECT status, COUNT(*) as count
 FROM push_run_targets
@@ -225,6 +258,33 @@ func (q *Queries) ListPushRuns(ctx context.Context, limit int64) ([]PushRun, err
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunningPushRunIDs = `-- name: ListRunningPushRunIDs :many
+SELECT id FROM push_runs WHERE status IN ('pending', 'running')
+`
+
+func (q *Queries) ListRunningPushRunIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRunningPushRunIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

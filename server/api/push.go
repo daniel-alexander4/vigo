@@ -44,6 +44,8 @@ func (h *PushHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/push", h.HandleDispatch)
 	mux.HandleFunc("GET /api/v1/push", h.HandleList)
 	mux.HandleFunc("GET /api/v1/push/{id}", h.HandleGet)
+	mux.HandleFunc("POST /api/v1/push/{id}/cancel", h.HandleCancel)
+	mux.HandleFunc("POST /api/v1/push/cancel-running", h.HandleCancelRunning)
 }
 
 type dispatchRequest struct {
@@ -267,4 +269,45 @@ func (h *PushHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		"push":    pd,
 		"targets": tds,
 	})
+}
+
+// HandleCancel cancels a specific push run and its pending targets.
+func (h *PushHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSONError(w, http.StatusBadRequest, "push id is required")
+		return
+	}
+
+	ctx := r.Context()
+	if err := h.queries.CancelPushRun(ctx, id); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to cancel push: "+err.Error())
+		return
+	}
+	_ = h.queries.CancelPushRunTargets(ctx, id)
+
+	writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled", "id": id})
+}
+
+// HandleCancelRunning cancels all pushes stuck in pending/running state.
+func (h *PushHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get IDs of running pushes so we can cancel their targets too.
+	ids, err := h.queries.ListRunningPushRunIDs(ctx)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to list running pushes: "+err.Error())
+		return
+	}
+
+	for _, id := range ids {
+		_ = h.queries.CancelPushRunTargets(ctx, id)
+	}
+
+	if err := h.queries.CancelAllRunningPushRuns(ctx); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to cancel running pushes: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled", "count": len(ids)})
 }

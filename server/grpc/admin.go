@@ -502,12 +502,12 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 
 	counts := make(map[string]int32)
 	for _, n := range thralls {
-		var runInfo *compliance.RunInfo
+		var recent []compliance.RunInfo
 		if run, ok := latestRuns[n.ID]; ok {
-			runInfo = &compliance.RunInfo{
+			recent = []compliance.RunInfo{{
 				Status:       run.Status,
 				ChangedCount: run.ChangedCount,
-			}
+			}}
 		}
 
 		lastSeen := n.EnrolledAt
@@ -515,14 +515,14 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 			lastSeen = n.LastSeen.Time
 		}
 
-		counts[compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval)]++
+		counts[compliance.ComputeStatus(recent, lastSeen, s.baseInterval)]++
 	}
 
 	total := int32(len(thralls))
 
 	// Stale thralls excluded from compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := total - counts["stale"]
+	activeTotal := total - counts["lost contact"]
 	var pct float32
 	if activeTotal > 0 {
 		pct = float32(counts["compliant"]) / float32(activeTotal) * 100
@@ -550,16 +550,15 @@ func (s *AdminService) GetThrallCompliance(ctx context.Context, req *pb.GetThral
 		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
 	}
 
-	var runInfo *compliance.RunInfo
 	var lastRunProto *pb.Run
 	runs, err := s.runStore.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
 		ThrallID: thrallID,
-		Limit:  1,
+		Limit:    int64(compliance.RecurringDriftThreshold),
 	})
+	var recent []compliance.RunInfo
 	if err == nil && len(runs) > 0 {
-		runInfo = &compliance.RunInfo{
-			Status:       runs[0].Status,
-			ChangedCount: runs[0].ChangedCount,
+		for _, r := range runs {
+			recent = append(recent, compliance.RunInfo{Status: r.Status, ChangedCount: r.ChangedCount})
 		}
 		lastRunProto = dbRunToProto(runs[0])
 	}
@@ -569,7 +568,7 @@ func (s *AdminService) GetThrallCompliance(ctx context.Context, req *pb.GetThral
 		lastSeen = n.LastSeen.Time
 	}
 
-	compStatus := compliance.ComputeStatus(runInfo, lastSeen, s.baseInterval)
+	compStatus := compliance.ComputeStatus(recent, lastSeen, s.baseInterval)
 
 	// Get compliance history (last 30 entries).
 	history, err := s.queries.ListComplianceHistory(ctx, 30)

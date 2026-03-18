@@ -311,6 +311,45 @@ func countBatchTargets(batches []struct {
 	return total
 }
 
+var pushCancelCmd = &cobra.Command{
+	Use:   "cancel [id]",
+	Short: "Cancel a stuck push or all running pushes",
+	Long: `Cancel a specific push by ID, or cancel all pushes stuck in running/pending state.
+
+  hobnobcli push cancel <id>       Cancel a specific push
+  hobnobcli push cancel --running  Cancel all running/pending pushes`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cancelRunning, _ := cmd.Flags().GetBool("running")
+		client := newAPIClient()
+
+		if cancelRunning {
+			var resp struct {
+				Status string `json:"status"`
+				Count  int    `json:"count"`
+			}
+			if err := client.post("/api/v1/push/cancel-running", nil, &resp); err != nil {
+				return err
+			}
+			fmt.Printf("%s %d push(es) cancelled\n", green("OK"), resp.Count)
+			return nil
+		}
+
+		if len(args) < 1 {
+			return fmt.Errorf("specify a push ID, or use --running to cancel all")
+		}
+
+		var resp struct {
+			Status string `json:"status"`
+			ID     string `json:"id"`
+		}
+		if err := client.post("/api/v1/push/"+args[0]+"/cancel", nil, &resp); err != nil {
+			return err
+		}
+		fmt.Printf("%s push %s cancelled\n", green("OK"), resp.ID)
+		return nil
+	},
+}
+
 func init() {
 	pushRunCmd.Flags().String("target", "", "Target spec: hostname, glob (*.web.*), UUID, or trait filter (os.distro=ubuntu)")
 	pushRunCmd.Flags().Int("timeout", 60, "Command timeout in seconds")
@@ -321,6 +360,7 @@ func init() {
 	pushRunCmd.Flags().Bool("dry-run", false, "Display batch plan without executing")
 	pushRunCmd.Flags().StringArray("param", nil, "Task parameter (key=value), repeatable")
 	pushListCmd.Flags().Int("limit", 20, "Maximum number of pushes to display")
+	pushCancelCmd.Flags().Bool("running", false, "Cancel all pushes in running/pending state")
 
-	pushCmd.AddCommand(pushRunCmd, pushStatusCmd, pushListCmd)
+	pushCmd.AddCommand(pushRunCmd, pushStatusCmd, pushListCmd, pushCancelCmd)
 }

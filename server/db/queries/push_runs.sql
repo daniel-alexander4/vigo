@@ -36,3 +36,21 @@ SELECT status, COUNT(*) as count
 FROM push_run_targets
 WHERE push_run_id = ?
 GROUP BY status;
+
+-- name: CancelPushRun :exec
+UPDATE push_runs
+SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('pending', 'running');
+
+-- name: CancelPushRunTargets :exec
+UPDATE push_run_targets
+SET status = 'cancelled'
+WHERE push_run_id = ? AND status IN ('pending', 'dispatched');
+
+-- name: CancelAllRunningPushRuns :exec
+UPDATE push_runs
+SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP
+WHERE status IN ('pending', 'running');
+
+-- name: ListRunningPushRunIDs :many
+SELECT id FROM push_runs WHERE status IN ('pending', 'running');

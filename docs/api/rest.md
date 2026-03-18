@@ -116,6 +116,26 @@ Get a push run with per-target results.
 }
 ```
 
+### POST /api/v1/push/{id}/cancel
+
+Cancel a specific push run. Sets the push and its pending/dispatched targets to `cancelled` status.
+
+**Response:**
+
+```json
+{"status": "cancelled", "id": "abc123"}
+```
+
+### POST /api/v1/push/cancel-running
+
+Cancel all pushes stuck in `running` or `pending` state. Also cancels their pending/dispatched targets.
+
+**Response:**
+
+```json
+{"status": "cancelled", "count": 2}
+```
+
 ---
 
 ## Workflows
