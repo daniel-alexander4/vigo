@@ -429,14 +429,16 @@ fn execute_resource(
         }
     };
 
-    // Inject _run_id for snapshot support (used by file executor).
-    let params = if node.resource_type == "file" && !run_id.is_empty() {
-        let mut p = node.params.clone();
-        p.insert("_run_id".to_string(), run_id.to_string());
-        p
-    } else {
-        node.params.clone()
-    };
+    // Build params: start with resource params, inject resource name if
+    // not already present (needed by executors like logrotate and cron that
+    // use name as a functional parameter), and add _run_id for file snapshots.
+    let mut params = node.params.clone();
+    if !params.contains_key("name") {
+        params.insert("name".to_string(), node.name.clone());
+    }
+    if node.resource_type == "file" && !run_id.is_empty() {
+        params.insert("_run_id".to_string(), run_id.to_string());
+    }
 
     // Determine execution timeout.
     let default_timeout: u64 = match node.resource_type.as_str() {
