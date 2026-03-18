@@ -1,4 +1,4 @@
-# hobnobcli users
+# hobnobcli webusers
 
 Manage web UI and API user accounts.
 
@@ -9,7 +9,7 @@ Manage web UI and API user accounts.
 List all user accounts.
 
 ```bash
-hobnobcli users list
+hobnobcli webusers list
 ```
 
 ```
@@ -24,14 +24,14 @@ Create a new user account. The first user created is always promoted to admin.
 
 ```bash
 # Create an admin account
-hobnobcli users create --username admin --role admin
+hobnobcli webusers create --username admin --role admin
 
 # Create a viewer with details
-hobnobcli users create --username alice --role viewer \
+hobnobcli webusers create --username alice --role viewer \
   --display-name "Alice Smith" --email alice@example.com
 
 # Create a user with an SSH key (for isowebauth)
-hobnobcli users create --username bob --role viewer \
+hobnobcli webusers create --username bob --role viewer \
   --ssh-key-file ~/.ssh/id_ed25519.pub
 ```
 
@@ -43,34 +43,22 @@ hobnobcli users create --username bob --role viewer \
 | `--email` | — | Email address |
 | `--ssh-key-file` | — | Path to SSH public key file (isowebauth) |
 
-### set-password
+### Setting a password
 
-Set or reset a user's password for basic auth. Prompts interactively for the password with confirmation. The bcrypt hash is stored in the local secrets provider at `hobnob/web/auth/<username>`.
-
-The account must exist in the database (created via `users create`) and is not active for login until a password is set.
+Web UI passwords are managed via the secrets system:
 
 ```bash
-hobnobcli users set-password --username admin
+hobnobcli secrets set-web-password hobnob/web/auth/admin
 ```
 
-```
-Enter password:
-Confirm password:
-Password set for user "admin"
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--username` | — | Username (required) |
-| `--key-file` | auto | Path to master encryption key |
-| `--secrets-dir` | `/srv/hobnob/secrets` | Directory for secret files |
+See [hobnobcli secrets](secrets.md) for details.
 
 ### delete
 
 Permanently remove a user account.
 
 ```bash
-hobnobcli users delete --username alice
+hobnobcli webusers delete --username alice
 ```
 
 | Flag | Default | Description |

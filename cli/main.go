@@ -57,7 +57,7 @@ func init() {
 		secretsCmd,
 		exportCmd,
 		authCmd,
-		usersCmd,
+		webusersCmd,
 		webhooksCmd,
 		tokensCmd,
 		configCmd,

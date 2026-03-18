@@ -72,7 +72,7 @@ bootstrap:
 # ── Authentication ────────────────────────────────────────────────────────
 # Web UI and REST API auth. Default: basic (username/password).
 # Passwords stored as bcrypt hashes in the local secrets provider
-# at hobnob/web/auth/<username>. Set via: hobnobcli users set-password
+# at hobnob/web/auth/<username>. Set via: hobnobcli secrets set-web-password
 
 # auth:
 #   method: basic                              # basic | none | oidc | isowebauth

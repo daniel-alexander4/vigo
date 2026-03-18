@@ -42,7 +42,7 @@ cd /srv/hobnob
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli users create --username admin --role admin` and set a password with `hobnobcli users set-password --username admin`, then sign in at `https://localhost:8443/login`.
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli webusers create --username admin --role admin` and set a password with `hobnobcli secrets set-web-password hobnob/web/auth/admin`, then sign in at `https://localhost:8443/login`.
 
 ### 3. Verify
 

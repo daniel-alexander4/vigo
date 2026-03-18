@@ -128,7 +128,7 @@ auth:
 | `oidc.scopes` | `[openid, profile, email]` | OIDC scopes to request |
 | `isowebauth.namespace` | `hobnob` | Namespace for SSH signature verification |
 
-Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `hobnob/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `hobnobcli users set-password --username admin`.
+Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `hobnob/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `hobnobcli secrets set-web-password hobnob/web/auth/admin`.
 
 See [Authentication](../operations/authentication.md) for setup details.
 

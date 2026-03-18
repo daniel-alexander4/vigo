@@ -700,7 +700,7 @@ func run() error {
 		}); err != nil {
 			slog.Warn("failed to seed admin user", "error", err)
 		} else {
-			slog.Info("seeded default admin account (no password — run: hobnobcli users set-password --username admin)")
+			slog.Info("seeded default admin account (no password — run: hobnobcli secrets set-web-password hobnob/web/auth/admin)")
 		}
 	}
 

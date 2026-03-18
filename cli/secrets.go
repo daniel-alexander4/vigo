@@ -15,6 +15,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/hobnob/hobnob/server/secrets"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 )
 
@@ -93,6 +95,104 @@ with --san. Refuses to overwrite existing certs unless --force is set.`,
 	RunE: runSecretsGenerateCerts,
 }
 
+var secretsSetOSPasswordCmd = &cobra.Command{
+	Use:   "set-os-password <key>",
+	Short: "Hash a password with SHA-512 crypt and store it for use with the user executor's password param",
+	Long: `Prompts for a plaintext password, hashes it with SHA-512 crypt ($6$...),
+and stores the result as an encrypted secret. The hash is suitable for
+Linux /etc/shadow via the user executor's password parameter.
+
+Requires openssl to be installed (used for SHA-512 crypt hashing).`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		pw, err := promptPassword()
+		if err != nil {
+			return err
+		}
+
+		// Use openssl to generate SHA-512 crypt hash.
+		opensslCmd := exec.Command("openssl", "passwd", "-6", "-stdin")
+		opensslCmd.Stdin = strings.NewReader(string(pw))
+		out, err := opensslCmd.Output()
+		if err != nil {
+			return fmt.Errorf("openssl passwd -6 failed (is openssl installed?): %w", err)
+		}
+		hash := strings.TrimSpace(string(out))
+
+		provider, err := newLocalProvider(cmd)
+		if err != nil {
+			return err
+		}
+		defer provider.Close()
+
+		if err := provider.Set(args[0], hash); err != nil {
+			return fmt.Errorf("storing password hash: %w", err)
+		}
+
+		fmt.Printf("SHA-512 password hash stored at %s\n", args[0])
+		return nil
+	},
+}
+
+var secretsSetWebPasswordCmd = &cobra.Command{
+	Use:   "set-web-password <key>",
+	Short: "Hash a password with bcrypt and store it for Hobnob web UI authentication",
+	Long: `Prompts for a plaintext password, hashes it with bcrypt, and stores the
+result as an encrypted secret. Used for web UI login accounts.
+
+Typical key: hobnob/web/auth/<username>`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		pw, err := promptPassword()
+		if err != nil {
+			return err
+		}
+
+		hash, err := bcrypt.GenerateFromPassword(pw, bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("hashing password: %w", err)
+		}
+
+		provider, err := newLocalProvider(cmd)
+		if err != nil {
+			return err
+		}
+		defer provider.Close()
+
+		if err := provider.Set(args[0], string(hash)); err != nil {
+			return fmt.Errorf("storing password hash: %w", err)
+		}
+
+		fmt.Printf("Bcrypt password hash stored at %s\n", args[0])
+		return nil
+	},
+}
+
+// promptPassword reads a password interactively with confirmation.
+func promptPassword() ([]byte, error) {
+	fmt.Fprint(os.Stderr, "Enter password: ")
+	pw1, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return nil, fmt.Errorf("reading password: %w", err)
+	}
+	if len(pw1) < 8 {
+		return nil, fmt.Errorf("password must be at least 8 characters")
+	}
+
+	fmt.Fprint(os.Stderr, "Confirm password: ")
+	pw2, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return nil, fmt.Errorf("reading password: %w", err)
+	}
+	if string(pw1) != string(pw2) {
+		return nil, fmt.Errorf("passwords do not match")
+	}
+
+	return pw1, nil
+}
+
 func init() {
 	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
 	secretsCmd.PersistentFlags().String("secrets-dir", "/srv/hobnob/secrets", "Directory for secret files")
@@ -114,6 +214,8 @@ func init() {
 	secretsCmd.AddCommand(secretsListCmd)
 	secretsCmd.AddCommand(secretsInitCmd)
 	secretsCmd.AddCommand(secretsGenerateCertsCmd)
+	secretsCmd.AddCommand(secretsSetOSPasswordCmd)
+	secretsCmd.AddCommand(secretsSetWebPasswordCmd)
 }
 
 func newLocalProvider(cmd *cobra.Command) (*secrets.LocalProvider, error) {

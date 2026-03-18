@@ -9,16 +9,14 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/term"
 )
 
-var usersCmd = &cobra.Command{
-	Use:   "users",
+var webusersCmd = &cobra.Command{
+	Use:   "webusers",
 	Short: "Manage web UI and API user accounts (admin/viewer roles)",
 }
 
-var usersListCmd = &cobra.Command{
+var webusersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all user accounts with role and creation time",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -51,7 +49,7 @@ var (
 	userSSHKeyFile  string
 )
 
-var usersCreateCmd = &cobra.Command{
+var webusersCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new user account with a username, password, and admin/viewer role",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -92,7 +90,7 @@ var usersCreateCmd = &cobra.Command{
 	},
 }
 
-var usersDeleteCmd = &cobra.Command{
+var webusersDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Permanently remove a user account and revoke their sessions",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -135,78 +133,17 @@ var usersDeleteCmd = &cobra.Command{
 	},
 }
 
-var usersSetPasswordCmd = &cobra.Command{
-	Use:   "set-password",
-	Short: "Set or reset a user's password (prompts interactively)",
-	Long: `Set the password for a web UI user account. The password is bcrypt-hashed
-and stored in the local secrets provider at hobnob/web/auth/<username>.
-
-The account must already exist in the database (created via 'users create').
-The account is not active for login until a password is set.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if userUsername == "" {
-			return fmt.Errorf("--username is required")
-		}
-
-		// Read password interactively.
-		fmt.Fprint(os.Stderr, "Enter password: ")
-		pw1, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Fprintln(os.Stderr)
-		if err != nil {
-			return fmt.Errorf("reading password: %w", err)
-		}
-		if len(pw1) < 8 {
-			return fmt.Errorf("password must be at least 8 characters")
-		}
-
-		fmt.Fprint(os.Stderr, "Confirm password: ")
-		pw2, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Fprintln(os.Stderr)
-		if err != nil {
-			return fmt.Errorf("reading password: %w", err)
-		}
-		if string(pw1) != string(pw2) {
-			return fmt.Errorf("passwords do not match")
-		}
-
-		// Bcrypt hash the password.
-		hash, err := bcrypt.GenerateFromPassword(pw1, bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("hashing password: %w", err)
-		}
-
-		// Store the hash in the local secrets provider.
-		provider, err := newLocalProvider(cmd)
-		if err != nil {
-			return err
-		}
-		defer provider.Close()
-
-		secretKey := fmt.Sprintf("hobnob/web/auth/%s", userUsername)
-		if err := provider.Set(secretKey, string(hash)); err != nil {
-			return fmt.Errorf("storing password: %w", err)
-		}
-
-		fmt.Printf("Password set for user %q\n", userUsername)
-		return nil
-	},
-}
 
 func init() {
-	usersCreateCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
-	usersCreateCmd.Flags().StringVar(&userDisplayName, "display-name", "", "Display name")
-	usersCreateCmd.Flags().StringVar(&userEmail, "email", "", "Email address")
-	usersCreateCmd.Flags().StringVar(&userRole, "role", "viewer", "Role (admin or viewer)")
-	usersCreateCmd.Flags().StringVar(&userSSHKeyFile, "ssh-key-file", "", "Path to SSH public key file")
+	webusersCreateCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
+	webusersCreateCmd.Flags().StringVar(&userDisplayName, "display-name", "", "Display name")
+	webusersCreateCmd.Flags().StringVar(&userEmail, "email", "", "Email address")
+	webusersCreateCmd.Flags().StringVar(&userRole, "role", "viewer", "Role (admin or viewer)")
+	webusersCreateCmd.Flags().StringVar(&userSSHKeyFile, "ssh-key-file", "", "Path to SSH public key file")
 
-	usersDeleteCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
+	webusersDeleteCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
 
-	usersSetPasswordCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
-	usersSetPasswordCmd.Flags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
-	usersSetPasswordCmd.Flags().String("secrets-dir", "/srv/hobnob/secrets", "Directory for secret files")
-
-	usersCmd.AddCommand(usersListCmd)
-	usersCmd.AddCommand(usersCreateCmd)
-	usersCmd.AddCommand(usersDeleteCmd)
-	usersCmd.AddCommand(usersSetPasswordCmd)
+	webusersCmd.AddCommand(webusersListCmd)
+	webusersCmd.AddCommand(webusersCreateCmd)
+	webusersCmd.AddCommand(webusersDeleteCmd)
 }

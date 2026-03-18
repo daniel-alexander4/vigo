@@ -32,7 +32,7 @@ Basic authentication stores user accounts in the database and password hashes (b
 The server automatically creates an `admin` account on first startup. The web UI redirects to a setup page with the one command needed to activate it:
 
 ```bash
-hobnobcli users set-password --username admin
+hobnobcli secrets set-web-password hobnob/web/auth/admin
 ```
 
 Until a password is set, all web UI requests redirect to the setup page. Password hashes are stored at `hobnob/web/auth/<username>` in the secrets provider.
@@ -41,16 +41,16 @@ Until a password is set, all web UI requests redirect to the setup page. Passwor
 
 ```bash
 # Create a viewer account
-hobnobcli users create --username alice --role viewer --email alice@example.com
+hobnobcli webusers create --username alice --role viewer --email alice@example.com
 
 # Set their password
-hobnobcli users set-password --username alice
+hobnobcli secrets set-web-password hobnob/web/auth/alice
 ```
 
 ### Resetting Passwords
 
 ```bash
-hobnobcli users set-password --username admin
+hobnobcli secrets set-web-password hobnob/web/auth/admin
 ```
 
 ### CLI Access (Localhost Trust)
@@ -143,10 +143,10 @@ Unlike OIDC, isowebauth requires users to be pre-created with their SSH public k
 
 ```bash
 # First, set the admin password to get CLI access:
-hobnobcli users set-password --username admin
+hobnobcli secrets set-web-password hobnob/web/auth/admin
 
 # Create users with SSH keys:
-hobnobcli users create --username bob --role viewer --ssh-key-file /path/to/bob.pub
+hobnobcli webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
 ```
 
 ### Sign-In Flow
@@ -255,10 +255,10 @@ The token is stored at `~/.config/hobnob/token` (mode 0600).
 ### CLI
 
 ```bash
-hobnobcli users list
-hobnobcli users create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
-hobnobcli users set-password --username alice
-hobnobcli users delete --username alice
+hobnobcli webusers list
+hobnobcli webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
+hobnobcli secrets set-web-password hobnob/web/auth/alice
+hobnobcli webusers delete --username alice
 ```
 
 ## Troubleshooting
