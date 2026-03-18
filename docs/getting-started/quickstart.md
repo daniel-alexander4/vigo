@@ -43,7 +43,7 @@ After enrollment, the thrall appears in the dashboard and begins checking in eve
 
 ## 3. Write a Module
 
-Create a file at `/srv/hobnob/hnb/proposed/modules/motd.hnb`:
+Create a file at `/srv/hobnob/policy/proposed/modules/motd.hnb`:
 
 ```yaml
 name: motd
@@ -67,18 +67,18 @@ resources:
 The simplest approach: create a `common.hnb` at the root that assigns the module to all thralls via directory inheritance:
 
 ```yaml
-# /srv/hobnob/hnb/proposed/common.hnb
+# /srv/hobnob/policy/proposed/common.hnb
 modules: [motd]
 ```
 
 Then create a catch-all leaf entry in a subdirectory:
 
 ```bash
-mkdir -p /srv/hobnob/hnb/proposed/all
+mkdir -p /srv/hobnob/policy/proposed/all
 ```
 
 ```yaml
-# /srv/hobnob/hnb/proposed/all/all.hnb
+# /srv/hobnob/policy/proposed/all/all.hnb
 thralls:
   - match: "*"
 ```
@@ -88,7 +88,7 @@ Every thrall inherits `motd` from `common.hnb`. As you add more modules to `comm
 Alternatively, for a flat layout without inheritance, you can put the thrall entry in a `thralls/` directory:
 
 ```yaml
-# /srv/hobnob/hnb/proposed/thralls/nodes.hnb
+# /srv/hobnob/policy/proposed/thralls/nodes.hnb
 thralls:
   - match: "*"
     modules: [motd]

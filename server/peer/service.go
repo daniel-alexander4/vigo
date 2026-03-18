@@ -52,7 +52,7 @@ func (s *Service) SetAuditWriter(w auditRecorder) {
 }
 
 // NewService creates a new peer service. role is "primary" or "peer".
-// onConfigChange is called after writing files under hnb/ to trigger config reload.
+// onConfigChange is called after writing files under policy/ to trigger config reload.
 func NewService(serverRoot string, role string, onConfigChange func()) *Service {
 	return &Service{
 		serverRoot:     serverRoot,
@@ -141,7 +141,7 @@ func (s *Service) SyncStream(stream grpc.BidiStreamingServer[pb.PeerSyncMessage,
 			slog.Warn("peer sync stream: unknown payload type")
 		}
 
-		// Trigger config reload if any hnb/ files were written this iteration.
+		// Trigger config reload if any policy/ files were written this iteration.
 		if needsConfigReload.CompareAndSwap(true, false) {
 			if s.onConfigChange != nil {
 				slog.Info("triggering config reload after sync")
@@ -311,7 +311,7 @@ func (s *Service) Status(_ context.Context, _ *pb.PeerStatusRequest) (*pb.PeerSt
 }
 
 // handleFileChange writes a single file change to disk and returns an ack.
-// If the content is empty, the file is deleted. After writing to a path under hnb/,
+// If the content is empty, the file is deleted. After writing to a path under policy/,
 // the needsConfigReload flag is set so the caller can trigger a reload.
 func (s *Service) handleFileChange(fc *pb.PeerFileChange, needsConfigReload *atomic.Bool) *pb.PeerSyncAck {
 	path := fc.GetPath()
@@ -339,7 +339,7 @@ func (s *Service) handleFileChange(fc *pb.PeerFileChange, needsConfigReload *ato
 		}
 		slog.Info("peer sync: deleted file", "path", path)
 		s.recordSync()
-		if isHnbPath(path) {
+		if isPolicyPath(path) {
 			needsConfigReload.Store(true)
 		}
 		return &pb.PeerSyncAck{Path: path, Success: true}
@@ -372,7 +372,7 @@ func (s *Service) handleFileChange(fc *pb.PeerFileChange, needsConfigReload *ato
 
 	slog.Info("peer sync: wrote file", "path", path, "size", len(fc.GetContent()), "mode", mode)
 	s.recordSync()
-	if isHnbPath(path) {
+	if isPolicyPath(path) {
 		needsConfigReload.Store(true)
 	}
 	return &pb.PeerSyncAck{Path: path, Success: true}
@@ -403,11 +403,11 @@ func validatePath(path string) error {
 	return nil
 }
 
-// isHnbPath returns true if the path is under the hnb/ directory,
+// isPolicyPath returns true if the path is under the policy/ directory,
 // meaning a config reload should be triggered after writing.
-func isHnbPath(path string) bool {
+func isPolicyPath(path string) bool {
 	normalized := filepath.ToSlash(path)
-	return strings.HasPrefix(normalized, "hnb/") || normalized == "hnb"
+	return strings.HasPrefix(normalized, "policy/") || normalized == "policy"
 }
 
 // atomicWrite writes data to a temp file in the same directory, then renames it

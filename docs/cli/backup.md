@@ -19,7 +19,7 @@ The SQLite database is snapshotted using `VACUUM INTO`, which is safe with concu
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--server-yaml` | `/srv/hobnob/server.yaml` | Path to server.yaml (used to find DB settings) |
-| `--server-root` | `/srv/hobnob` | Root directory containing hnb/, secrets/, tls/ |
+| `--server-root` | `/srv/hobnob` | Root directory containing policy/, secrets/, tls/ |
 
 **Examples:**
 
@@ -79,7 +79,7 @@ hobnobcli backup inspect <path>
   "db_dsn": "/srv/hobnob/db/hobnob.db",
   "files": [
     "db/hobnob.db",
-    "hnb/proposed/modules/nginx.hnb",
+    "policy/proposed/modules/nginx.hnb",
     "secrets/db_pass",
     "tls/cert",
     "server.yaml"

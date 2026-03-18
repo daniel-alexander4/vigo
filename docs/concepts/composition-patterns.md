@@ -30,7 +30,7 @@ Each layer eliminates a specific type of repetition.
 **Solution:** Place `common.hnb` files at directory levels. Everything in subdirectories inherits automatically.
 
 ```
-hnb/proposed/
+policy/proposed/
 ├── common.hnb            # modules: [sshd, ntp, monitoring]
 ├── production/
 │   ├── common.hnb        # modules: [log-shipping, auditd]

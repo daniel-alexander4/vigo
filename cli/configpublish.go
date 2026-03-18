@@ -189,7 +189,7 @@ func suggestFixes(err error, disabled bool) {
 func buildGenericFixPrompt(err error) string {
 	errMsg := err.Error()
 
-	// Try to find a file path in the error (e.g., "parsing /srv/hobnob/hnb/proposed/modules/foo.hnb: ...")
+	// Try to find a file path in the error (e.g., "parsing /srv/hobnob/policy/proposed/modules/foo.hnb: ...")
 	var filePath string
 	for _, part := range strings.Fields(errMsg) {
 		if strings.HasSuffix(part, ".hnb") || strings.HasSuffix(part, ".hnb:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {

@@ -22,7 +22,7 @@ This populates `/srv/hobnob/` with everything needed to run the server:
 ├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
-├── hnb/
+├── policy/
 │   ├── proposed/            # edit .hnb config files here
 │   │   ├── modules/
 │   │   ├── roles/

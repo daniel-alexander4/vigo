@@ -4,7 +4,7 @@ This example builds and runs a brown noise Docker container on a managed node, w
 
 ## Module Definition
 
-`hnb/proposed/modules/brownnoise.hnb`:
+`policy/proposed/modules/brownnoise.hnb`:
 
 ```yaml
 name: brownnoise
@@ -73,7 +73,7 @@ resources:
 
 ## Node Assignment
 
-`hnb/proposed/thralls/nodes.hnb`:
+`policy/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:
@@ -88,7 +88,7 @@ thralls:
 
 ## Template
 
-Place your `brownnoise.sh` script at `hnb/proposed/modules/templates/brownnoise.sh.tmpl`. You can optionally template the parameters:
+Place your `brownnoise.sh` script at `policy/proposed/modules/templates/brownnoise.sh.tmpl`. You can optionally template the parameters:
 
 ```bash
 minutes=${1:-'{{ .Vars.brownnoise_minutes }}'}

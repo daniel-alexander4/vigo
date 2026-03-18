@@ -36,7 +36,7 @@ var backupCreateCmd = &cobra.Command{
 	Short: "Snapshot the database, configs, secrets, and TLS certs into a tar.gz archive",
 	Long: `Create a tar.gz backup archive containing:
   - SQLite database snapshot (safe with concurrent WAL writes)
-  - Config files (hnb/proposed/)
+  - Config files (policy/proposed/)
   - Encrypted secrets (secrets/)
   - TLS certificates (tls/)
   - server.yaml
@@ -109,7 +109,7 @@ var backupRestoreCmd = &cobra.Command{
 
 Components restored:
   - SQLite database (or Postgres via psql)
-  - Config files → hnb/proposed/
+  - Config files → policy/proposed/
   - Encrypted secrets → secrets/
   - TLS certificates → tls/
   - server.yaml
@@ -209,7 +209,7 @@ func init() {
 	backupCreateCmd.Flags().String("server-yaml", "/srv/hobnob/server.yaml",
 		"Path to server.yaml (used to find DB settings)")
 	backupCreateCmd.Flags().String("server-root", "/srv/hobnob",
-		"Server root directory containing hnb/, secrets/, tls/")
+		"Server root directory containing policy/, secrets/, tls/")
 
 	backupRestoreCmd.Flags().String("target", "/srv/hobnob",
 		"Root directory to restore into")

@@ -93,16 +93,16 @@ func TestValidatePath(t *testing.T) {
 		path    string
 		wantErr bool
 	}{
-		{"normal relative path", "hnb/proposed/modules/nginx.hnb", false},
+		{"normal relative path", "policy/proposed/modules/nginx.hnb", false},
 		{"simple filename", "server.yaml", false},
 		{"nested path", "secrets/db/password", false},
 		{"empty path", "", true},
 		{"absolute path unix", "/etc/passwd", true},
-		{"path traversal dotdot", "hnb/../../etc/passwd", true},
+		{"path traversal dotdot", "policy/../../etc/passwd", true},
 		{"leading dotdot", "../secret", true},
 		{"dotdot only", "..", true},
 		{"dotdot in middle", "a/../b", true},
-		{"single dot ok", "hnb/./modules/nginx.hnb", false},
+		{"single dot ok", "policy/./modules/nginx.hnb", false},
 	}
 
 	for _, tt := range tests {
@@ -174,7 +174,7 @@ func TestServiceSyncStream(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "hnb/proposed/modules/nginx.hnb",
+				Path:    "policy/proposed/modules/nginx.hnb",
 				Content: []byte("package: nginx\nensure: present\n"),
 				Mode:    0o644,
 			},
@@ -195,12 +195,12 @@ func TestServiceSyncStream(t *testing.T) {
 	if !acks[0].Success {
 		t.Errorf("ack success = false, error = %s", acks[0].Error)
 	}
-	if acks[0].Path != "hnb/proposed/modules/nginx.hnb" {
-		t.Errorf("ack path = %s, want hnb/proposed/modules/nginx.hnb", acks[0].Path)
+	if acks[0].Path != "policy/proposed/modules/nginx.hnb" {
+		t.Errorf("ack path = %s, want policy/proposed/modules/nginx.hnb", acks[0].Path)
 	}
 
 	// Verify the file was written to disk.
-	written, err := os.ReadFile(filepath.Join(root, "hnb/proposed/modules/nginx.hnb"))
+	written, err := os.ReadFile(filepath.Join(root, "policy/proposed/modules/nginx.hnb"))
 	if err != nil {
 		t.Fatalf("reading written file: %v", err)
 	}
@@ -208,9 +208,9 @@ func TestServiceSyncStream(t *testing.T) {
 		t.Errorf("file content = %q", written)
 	}
 
-	// Verify config reload was triggered (path is under hnb/).
+	// Verify config reload was triggered (path is under policy/).
 	if !reloaded {
-		t.Error("expected onConfigChange to be called for hnb/ path")
+		t.Error("expected onConfigChange to be called for policy/ path")
 	}
 }
 
@@ -223,7 +223,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	svc := NewService(root, "peer", nil)
 
 	// Pre-create the file to be deleted.
-	target := filepath.Join(root, "hnb/proposed/modules/old.hnb")
+	target := filepath.Join(root, "policy/proposed/modules/old.hnb")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "hnb/proposed/modules/old.hnb",
+				Path:    "policy/proposed/modules/old.hnb",
 				Content: nil,
 			},
 		},
@@ -278,7 +278,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 			FullSync: &pb.PeerFullSync{
 				Files: []*pb.PeerFileChange{
 					{
-						Path:    "hnb/proposed/modules/nginx.hnb",
+						Path:    "policy/proposed/modules/nginx.hnb",
 						Content: []byte("nginx config"),
 						Mode:    0o644,
 					},
@@ -315,7 +315,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 
 	// Verify all files were written.
 	checks := map[string]string{
-		"hnb/proposed/modules/nginx.hnb": "nginx config",
+		"policy/proposed/modules/nginx.hnb": "nginx config",
 		"secrets/db/password":            "hunter2",
 		"server.yaml":                    "listen: :8443\n",
 	}
@@ -487,7 +487,7 @@ func TestServiceRejectsPathTraversal(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "hnb/../../etc/passwd",
+				Path:    "policy/../../etc/passwd",
 				Content: []byte("malicious"),
 				Mode:    0o644,
 			},

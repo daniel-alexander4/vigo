@@ -4,7 +4,7 @@ This walkthrough builds a complete nginx module with package installation, confi
 
 ## Module Structure
 
-A module is a YAML file with a `.hnb` extension in `hnb/proposed/modules/`. It contains:
+A module is a YAML file with a `.hnb` extension in `policy/proposed/modules/`. It contains:
 
 ```yaml
 name: module-name
@@ -18,7 +18,7 @@ resources:
 
 ## Step 1: Create the Module
 
-Create `hnb/proposed/modules/nginx.hnb`:
+Create `policy/proposed/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -74,11 +74,11 @@ This module demonstrates three key patterns:
 Create a directory for your web servers and add a thrall entry:
 
 ```bash
-mkdir -p hnb/proposed/web
+mkdir -p policy/proposed/web
 ```
 
 ```yaml
-# hnb/proposed/web/web.hnb
+# policy/proposed/web/web.hnb
 thralls:
   - match: "web*.example.com"
     modules: [nginx]
@@ -89,11 +89,11 @@ thralls:
 
 Node-level `vars` override the module's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have modules that should apply to *all* your thralls (like SSH and monitoring), put them in `hnb/proposed/common.hnb` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
+**Tip:** If you have modules that should apply to *all* your thralls (like SSH and monitoring), put them in `policy/proposed/common.hnb` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
-For multiple modules, group them into a role. Create `hnb/proposed/roles.hnb`:
+For multiple modules, group them into a role. Create `policy/proposed/roles.hnb`:
 
 ```yaml
 roles:

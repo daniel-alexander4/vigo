@@ -28,11 +28,11 @@ import (
 
 var (
 	// ProposedDir is where operators edit .hnb files.
-	ProposedDir = "/srv/hobnob/hnb/proposed"
+	ProposedDir = "/srv/hobnob/policy/proposed"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
-	LiveDir = "/srv/hobnob/hnb/.live"
+	LiveDir = "/srv/hobnob/policy/.live"
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.

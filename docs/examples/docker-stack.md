@@ -4,7 +4,7 @@ This example uses the `docker_image`, `docker_container`, and `docker_compose` [
 
 ## Module Definition
 
-`hnb/proposed/modules/redis.hnb`:
+`policy/proposed/modules/redis.hnb`:
 
 ```yaml
 name: redis
@@ -32,7 +32,7 @@ resources:
 
 ## Multi-Container Stack
 
-`hnb/proposed/modules/app-stack.hnb`:
+`policy/proposed/modules/app-stack.hnb`:
 
 ```yaml
 name: app-stack
@@ -66,7 +66,7 @@ resources:
 
 ## Role Definition
 
-`hnb/proposed/roles/docker-app.hnb`:
+`policy/proposed/roles/docker-app.hnb`:
 
 ```yaml
 name: docker-app
@@ -77,7 +77,7 @@ modules:
 
 ## Node Assignment
 
-`hnb/proposed/thralls/nodes.hnb`:
+`policy/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:
@@ -119,7 +119,7 @@ hobnobcli push run \
 
 For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
 
-`hnb/proposed/modules/compose-app.hnb`:
+`policy/proposed/modules/compose-app.hnb`:
 
 ```yaml
 name: compose-app

@@ -62,7 +62,7 @@ COPY --from=rust-builder /build/agent-rs/target/x86_64-unknown-linux-musl/releas
 COPY server-configs/server.yaml /seed/server.yaml
 COPY docker-compose.prod.yml /seed/docker-compose.yml
 COPY thrall-configs/ /seed/thrall-configs/
-COPY server-configs/hnb/ /seed/hnb/
+COPY server-configs/policy/ /seed/policy/
 COPY server-configs/push/ /seed/push/
 
 # Documentation — seeded into /srv/hobnob/docs/ by entrypoint.

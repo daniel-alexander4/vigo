@@ -15,16 +15,16 @@ import (
 
 // hnbConfigRoot is the base directory for .hnb config files.
 // vi only allows editing files within this tree.
-const hnbConfigRoot = "/srv/hobnob/hnb"
+const hnbConfigRoot = "/srv/hobnob/policy"
 
 var viCmd = &cobra.Command{
 	Use:   "vi <file.hnb>",
 	Short: "Open a .hnb config file in an editor with YAML validation on save",
 	Long: `Opens a .hnb file in vim with hobnob-aware syntax highlighting.
 
-Files must be within /srv/hobnob/hnb/. Paths can be relative —
+Files must be within /srv/hobnob/policy/. Paths can be relative —
 if the file is not found at the given path, it is resolved relative
-to /srv/hobnob/hnb/proposed/.
+to /srv/hobnob/policy/proposed/.
 
 On save, the file is checked for YAML correctness and idempotency. If
 validation fails, the write is aborted and errors are shown. Use :w! to
@@ -41,9 +41,9 @@ Can also be invoked as 'hnbvi' for convenience.`,
 	},
 }
 
-// resolveHnbPath resolves a file path within the hnb config directory.
-// Accepts absolute paths (must be within /srv/hobnob/hnb/) or relative
-// paths (resolved against /srv/hobnob/hnb/proposed/).
+// resolveHnbPath resolves a file path within the policy config directory.
+// Accepts absolute paths (must be within /srv/hobnob/policy/) or relative
+// paths (resolved against /srv/hobnob/policy/proposed/).
 func resolveHnbPath(input string) (string, error) {
 	var absPath string
 	if filepath.IsAbs(input) {

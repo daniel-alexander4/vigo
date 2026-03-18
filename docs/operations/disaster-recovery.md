@@ -11,7 +11,7 @@ A complete Hobnob server consists of five components, all stored under `/srv/hob
 | Component | Path | Purpose | Backup method |
 |-----------|------|---------|---------------|
 | Database | `db/hobnob.db` | Enrolled thralls, run history, traits, users, tokens | `hobnobcli backup` or Litestream |
-| Config files | `hnb/proposed/` | Modules, roles, thrall mappings, vars | `hobnobcli backup` (also: git) |
+| Config files | `policy/proposed/` | Modules, roles, thrall mappings, vars | `hobnobcli backup` (also: git) |
 | Secrets | `secrets/` | AES-256-GCM encrypted files + `.master.key` | `hobnobcli backup` |
 | TLS certs | `tls/` | CA + server cert/key (plain PEM) | `hobnobcli backup` |
 | Server config | `server.yaml` | Ports, intervals, backends, SMTP, export | `hobnobcli backup` |
@@ -58,7 +58,7 @@ This section walks through the most common disaster scenario: the disk on your s
 
 **Total recovery time: 5-15 minutes.** Most of that is provisioning the new server and restoring the volume. hobd startup itself is seconds.
 
-**The gap to watch.** Litestream only covers the SQLite database. Config files (`hnb/`), secrets, TLS certs, and `server.yaml` need a separate filesystem backup. If your last filesystem backup was an hour ago and you published config changes 10 minutes before the disk died, those changes are lost. Keep `hnb/proposed/` in git to eliminate this risk.
+**The gap to watch.** Litestream only covers the SQLite database. Config files (`policy/`), secrets, TLS certs, and `server.yaml` need a separate filesystem backup. If your last filesystem backup was an hour ago and you published config changes 10 minutes before the disk died, those changes are lost. Keep `policy/proposed/` in git to eliminate this risk.
 
 ## Recovery Procedures
 
@@ -146,7 +146,7 @@ systemctl start hobd
 If both the server and all backups are lost:
 
 1. Install Hobnob fresh, configure `server.yaml` and TLS certs
-2. Re-create config files (`hnb/proposed/`) from git or documentation
+2. Re-create config files (`policy/proposed/`) from git or documentation
 3. Re-create secrets
 4. Start the server — it will initialize an empty database
 5. **Agents must re-enroll**: configure trusted enrollment patterns, then either:
@@ -190,10 +190,10 @@ In a hub-spoke spanner topology:
 
 ### Back Up Config Files in Git
 
-The config source of truth (`hnb/proposed/`) is plain YAML on the filesystem. Track it in git for versioned history, diff visibility, and easy restore:
+The config source of truth (`policy/proposed/`) is plain YAML on the filesystem. Track it in git for versioned history, diff visibility, and easy restore:
 
 ```bash
-cd /srv/hobnob/hnb/proposed
+cd /srv/hobnob/policy/proposed
 git init && git add -A && git commit -m "initial config"
 
 # After changes:

@@ -5,9 +5,9 @@ set -e
 # All persistent state lives under /srv/hobnob (bind-mounted from host).
 
 DATA_DIR="/srv/hobnob"
-HNB_PROPOSED="${DATA_DIR}/hnb/proposed"
-HNB_LIVE="${DATA_DIR}/hnb/.live"
-EXAMPLES_DIR="${DATA_DIR}/hnb/examples"
+HNB_PROPOSED="${DATA_DIR}/policy/proposed"
+HNB_LIVE="${DATA_DIR}/policy/.live"
+EXAMPLES_DIR="${DATA_DIR}/policy/examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
 
@@ -74,10 +74,10 @@ fi
 # Seed starter config files (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# Starter HNB config: common.hnb, roles.hnb, modules/motd.hnb, default/all.hnb
-if [ -d "${SEED_DIR}/hnb" ]; then
-    find "${SEED_DIR}/hnb" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/hnb/}"
+# Starter policy config: common.hnb, roles.hnb, modules/motd.hnb
+if [ -d "${SEED_DIR}/policy" ]; then
+    find "${SEED_DIR}/policy" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/policy/}"
         dest="${HNB_PROPOSED}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"

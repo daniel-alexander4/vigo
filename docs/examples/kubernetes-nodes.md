@@ -8,7 +8,7 @@ Hobnob manages the OS layer underneath Kubernetes. It does not manage Kubernetes
 
 Installs and configures the container runtime.
 
-`hnb/proposed/modules/k8s/containerd.hnb`:
+`policy/proposed/modules/k8s/containerd.hnb`:
 
 ```yaml
 name: k8s-containerd
@@ -59,7 +59,7 @@ resources:
 
 Configures the kubelet daemon and its systemd unit.
 
-`hnb/proposed/modules/k8s/kubelet.hnb`:
+`policy/proposed/modules/k8s/kubelet.hnb`:
 
 ```yaml
 name: k8s-kubelet
@@ -137,7 +137,7 @@ resources:
 
 Required kernel parameters and modules for Kubernetes networking and performance.
 
-`hnb/proposed/modules/k8s/kernel-tuning.hnb`:
+`policy/proposed/modules/k8s/kernel-tuning.hnb`:
 
 ```yaml
 name: k8s-kernel-tuning
@@ -199,7 +199,7 @@ resources:
 
 Drops CNI configuration files. The actual CNI plugin (Calico, Cilium, Flannel) is typically deployed via a DaemonSet, but the host-level config directory and any bridge config must exist.
 
-`hnb/proposed/modules/k8s/cni.hnb`:
+`policy/proposed/modules/k8s/cni.hnb`:
 
 ```yaml
 name: k8s-cni
@@ -238,7 +238,7 @@ resources:
 
 Opens the ports required by Kubernetes components.
 
-`hnb/proposed/modules/k8s/firewall.hnb`:
+`policy/proposed/modules/k8s/firewall.hnb`:
 
 ```yaml
 name: k8s-firewall
@@ -283,7 +283,7 @@ resources:
 
 ## Role Definition
 
-`hnb/proposed/roles/k8s-node.hnb`:
+`policy/proposed/roles/k8s-node.hnb`:
 
 ```yaml
 name: k8s-node
@@ -297,7 +297,7 @@ modules:
 
 ## Node Assignment
 
-`hnb/proposed/thralls/nodes.hnb`:
+`policy/proposed/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

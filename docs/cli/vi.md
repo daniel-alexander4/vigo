@@ -16,11 +16,11 @@ or
 hnbvi <file.hnb>
 ```
 
-Files must be within `/srv/hobnob/hnb/`. Relative paths are resolved against `/srv/hobnob/hnb/proposed/`, so you can use short names:
+Files must be within `/srv/hobnob/policy/`. Relative paths are resolved against `/srv/hobnob/policy/proposed/`, so you can use short names:
 
 ```bash
-hnbvi modules/nginx.hnb           # opens /srv/hobnob/hnb/proposed/modules/nginx.hnb
-hnbvi thralls/web-servers.hnb     # opens /srv/hobnob/hnb/proposed/thralls/web-servers.hnb
+hnbvi modules/nginx.hnb           # opens /srv/hobnob/policy/proposed/modules/nginx.hnb
+hnbvi thralls/web-servers.hnb     # opens /srv/hobnob/policy/proposed/thralls/web-servers.hnb
 ```
 
 ## Features
@@ -69,7 +69,7 @@ hnbvi modules/nginx.hnb
 ### Edit with full path
 
 ```bash
-hobnobcli vi /srv/hobnob/hnb/proposed/modules/nginx.hnb
+hobnobcli vi /srv/hobnob/policy/proposed/modules/nginx.hnb
 ```
 
 ## Related
