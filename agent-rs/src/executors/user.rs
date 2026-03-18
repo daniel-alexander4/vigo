@@ -12,6 +12,7 @@ pub struct UserExecutor {
     pub runner: Box<dyn CommandRunner>,
     pub passwd_path: String,
     pub shadow_path: String,
+    pub sudoers_dir: String,
 }
 
 struct PasswdEntry {
@@ -26,6 +27,7 @@ impl UserExecutor {
     pub fn new() -> Self {
         Self {
             runner: Box::new(DefaultRunner),
+            sudoers_dir: "/etc/sudoers.d".into(),
             passwd_path: "/etc/passwd".into(),
             shadow_path: "/etc/shadow".into(),
         }
@@ -148,6 +150,65 @@ impl UserExecutor {
         }
     }
 
+    fn desired_sudoers_content(name: &str, params: &HashMap<String, String>) -> Result<Option<String>, String> {
+        let sudo_passwd = params.get("sudo_passwd").map(|s| s == "true").unwrap_or(false);
+        let sudo_nopasswd = params.get("sudo_nopasswd").map(|s| s == "true").unwrap_or(false);
+
+        if sudo_passwd && sudo_nopasswd {
+            return Err("sudo_passwd and sudo_nopasswd are mutually exclusive".into());
+        }
+
+        if sudo_passwd {
+            Ok(Some(format!("{} ALL=(ALL) ALL\n", name)))
+        } else if sudo_nopasswd {
+            Ok(Some(format!("{} ALL=(ALL) NOPASSWD: ALL\n", name)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn sudoers_path(&self, name: &str) -> String {
+        format!("{}/{}", self.sudoers_dir, name)
+    }
+
+    fn apply_sudoers(&self, name: &str, params: &HashMap<String, String>) -> Result<bool, String> {
+        let desired = Self::desired_sudoers_content(name, params)?;
+        let path = self.sudoers_path(name);
+
+        match desired {
+            Some(content) => {
+                // Check if already correct.
+                if let Ok(existing) = std::fs::read_to_string(&path) {
+                    if existing == content {
+                        return Ok(false);
+                    }
+                }
+                std::fs::write(&path, &content)
+                    .map_err(|e| format!("writing {}: {}", path, e))?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o440));
+                }
+                Ok(true)
+            }
+            None => {
+                // No sudo requested — remove file if it exists.
+                if std::fs::metadata(&path).is_ok() {
+                    std::fs::remove_file(&path)
+                        .map_err(|e| format!("removing {}: {}", path, e))?;
+                    return Ok(true);
+                }
+                Ok(false)
+            }
+        }
+    }
+
+    fn remove_sudoers(&self, name: &str) {
+        let path = self.sudoers_path(name);
+        let _ = std::fs::remove_file(&path);
+    }
+
     fn find_available_system_uid(&self) -> Result<i32, String> {
         let f = std::fs::File::open(&self.passwd_path)
             .map_err(|e| format!("open passwd: {}", e))?;
@@ -183,6 +244,13 @@ impl Executor for UserExecutor {
 
         if name.is_empty() {
             result.error = Some("user executor: username param is required".into());
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        // Validate sudo params early.
+        if let Err(e) = Self::desired_sudoers_content(&name, params) {
+            result.error = Some(format!("user executor: {}", e));
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -279,6 +347,11 @@ impl Executor for UserExecutor {
                                 result.error = Some(e);
                             }
                         }
+                    }
+
+                    // Sudoers.
+                    if let Err(e) = self.apply_sudoers(&name, params) {
+                        result.error = Some(e);
                     }
                 } else {
                     // Update existing user.
@@ -418,6 +491,21 @@ impl Executor for UserExecutor {
                         }
                     }
 
+                    // Check sudoers.
+                    let mut sudoers_changed = false;
+                    if let Ok(desired) = Self::desired_sudoers_content(&name, params) {
+                        let path = self.sudoers_path(&name);
+                        let current = std::fs::read_to_string(&path).ok();
+                        match (&desired, &current) {
+                            (Some(d), Some(c)) if d == c => {}
+                            (None, None) => {}
+                            _ => {
+                                sudoers_changed = true;
+                                needs_update = true;
+                            }
+                        }
+                    }
+
                     if !needs_update {
                         result.action = Action::None;
                         result.duration_ms = start.elapsed().as_millis() as i32;
@@ -552,6 +640,13 @@ impl Executor for UserExecutor {
                             result.error = Some(e);
                         }
                     }
+
+                    // Apply sudoers.
+                    if sudoers_changed {
+                        if let Err(e) = self.apply_sudoers(&name, params) {
+                            result.error = Some(e);
+                        }
+                    }
                 }
             }
             "absent" => {
@@ -577,6 +672,7 @@ impl Executor for UserExecutor {
                             }
                             _ => {}
                         }
+                        self.remove_sudoers(&name);
                     }
                 }
             }
@@ -609,6 +705,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(&make_params(&[]), false);
@@ -635,6 +732,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -686,6 +784,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -731,6 +830,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -768,6 +868,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -804,6 +905,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -836,6 +938,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -866,6 +969,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -912,6 +1016,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         // Explicit manage_home: "true" (also the default).
@@ -955,6 +1060,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -990,6 +1096,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1034,6 +1141,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1069,6 +1177,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1117,6 +1226,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         // Desired groups: docker only. wheel should be purged.
@@ -1160,6 +1270,7 @@ mod tests {
             runner: Box::new(mock),
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1173,5 +1284,147 @@ mod tests {
             "unexpected error: {:?}",
             result.error
         );
+    }
+
+    #[test]
+    fn sudo_passwd_creates_sudoers_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        let sudoers = dir.path().join("sudoers.d");
+        std::fs::create_dir_all(&sudoers).unwrap();
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: sudoers.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("sudo_passwd", "true")]),
+            false,
+        );
+
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        let content = std::fs::read_to_string(sudoers.join("deploy")).unwrap();
+        assert_eq!(content, "deploy ALL=(ALL) ALL\n");
+    }
+
+    #[test]
+    fn sudo_nopasswd_creates_nopasswd_sudoers() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        let sudoers = dir.path().join("sudoers.d");
+        std::fs::create_dir_all(&sudoers).unwrap();
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: sudoers.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("sudo_nopasswd", "true")]),
+            false,
+        );
+
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        let content = std::fs::read_to_string(sudoers.join("deploy")).unwrap();
+        assert_eq!(content, "deploy ALL=(ALL) NOPASSWD: ALL\n");
+    }
+
+    #[test]
+    fn sudo_passwd_and_nopasswd_is_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("sudo_passwd", "true"), ("sudo_nopasswd", "true")]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+        assert!(result.error.as_deref().unwrap().contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn sudo_idempotent_no_change() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        let sudoers = dir.path().join("sudoers.d");
+        std::fs::create_dir_all(&sudoers).unwrap();
+        std::fs::write(&passwd, "deploy:x:1001:1001::/home/deploy:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "deploy:$6$abc:19000:0:99999:7:::\n").unwrap();
+        std::fs::write(sudoers.join("deploy"), "deploy ALL=(ALL) ALL\n").unwrap();
+
+        let mock = MockRunner::empty();
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: sudoers.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("shell", "/bin/bash"), ("sudo_passwd", "true")]),
+            false,
+        );
+
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn absent_removes_sudoers_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        let sudoers = dir.path().join("sudoers.d");
+        std::fs::create_dir_all(&sudoers).unwrap();
+        std::fs::write(&passwd, "deploy:x:1001:1001::/home/deploy:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "deploy:$6$abc:19000:0:99999:7:::\n").unwrap();
+        std::fs::write(sudoers.join("deploy"), "deploy ALL=(ALL) ALL\n").unwrap();
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: sudoers.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("state", "absent")]),
+            false,
+        );
+
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!sudoers.join("deploy").exists());
     }
 }

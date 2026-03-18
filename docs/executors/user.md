@@ -21,6 +21,8 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `password_max_age` | No | -- | Maximum password age in days. Runs `chage -M <days>` after create/update. |
 | `expiredate` | No | -- | Account expiration date (`YYYY-MM-DD`). Passed to `useradd --expiredate` / `usermod --expiredate`. |
 | `purge_groups` | No | `false` | When `true` with `groups`, removes user from supplementary groups not in the list (`usermod -G` instead of `-aG`). |
+| `sudo_passwd` | No | `false` | If `true`, grant sudo access with password required. Writes `/etc/sudoers.d/<username>`. Mutually exclusive with `sudo_nopasswd`. |
+| `sudo_nopasswd` | No | `false` | If `true`, grant passwordless sudo access. Writes `/etc/sudoers.d/<username>` with `NOPASSWD`. Mutually exclusive with `sudo_passwd`. |
 
 ## States
 
@@ -94,6 +96,28 @@ resources:
     shell: /usr/sbin/nologin
 ```
 
+### Sudo with password
+
+```yaml
+resources:
+  - name: deploy user
+    type: user
+    username: deploy
+    shell: /bin/bash
+    sudo_passwd: "true"
+```
+
+### Passwordless sudo
+
+```yaml
+resources:
+  - name: admin user
+    type: user
+    username: admin
+    shell: /bin/bash
+    sudo_nopasswd: "true"
+```
+
 ### Remove a user
 
 ```yaml
@@ -112,4 +136,5 @@ Linux only. On Windows, the same `type: user` maps to the [user_windows](user_wi
 
 - Uses `useradd`, `usermod`, and `userdel` commands.
 - The `authorized_keys` content is written to `<home>/.ssh/authorized_keys` with mode 0600, and the `.ssh` directory is created with mode 0700 if needed.
-- When `state: absent`, the user is deleted with `userdel --remove` (which also removes the home directory).
+- When `state: absent`, the user is deleted with `userdel --remove` (which also removes the home directory) and any `/etc/sudoers.d/<username>` file is removed.
+- Sudoers files are written to `/etc/sudoers.d/<username>` with mode `0440`. Setting both `sudo_passwd` and `sudo_nopasswd` to `true` is an error. Removing both params from a user that previously had sudo will delete the sudoers file.
