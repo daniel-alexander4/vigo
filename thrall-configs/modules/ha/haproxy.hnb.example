@@ -65,7 +65,7 @@ resources:
     type: logrotate
     path: /var/log/haproxy/*.log
     frequency: daily
-    rotate: "14"
+    rotate_count: "14"
     compress: "true"
     missingok: "true"
     notifempty: "true"

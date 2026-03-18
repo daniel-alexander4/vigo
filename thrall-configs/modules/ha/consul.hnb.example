@@ -115,7 +115,6 @@ resources:
     depends_on: [consul-unit-file]
     notify: [consul-service]
     subscribes: [consul-unit-file]
-    when: "changed"
 
   # --- Service ---
 

@@ -10,7 +10,7 @@ vars:
 resources:
   # --- Repository ---
 
-  - name: elastic-repo
+  - name: elastic-repo-debian
     type: repository
     repository: elastic-8.x
     key_url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
@@ -18,7 +18,7 @@ resources:
     state: present
     when: "os_family('debian')"
 
-  - name: elastic-repo
+  - name: elastic-repo-redhat
     type: repository
     repository: elastic-8.x
     key_url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
@@ -32,19 +32,19 @@ resources:
     type: package
     package: elasticsearch
     state: present
-    depends_on: [elastic-repo]
+    depends_on: [elastic-repo-debian, elastic-repo-redhat]
 
   - name: install-kibana
     type: package
     package: kibana
     state: present
-    depends_on: [elastic-repo]
+    depends_on: [elastic-repo-debian, elastic-repo-redhat]
 
   - name: install-logstash
     type: package
     package: logstash
     state: present
-    depends_on: [elastic-repo]
+    depends_on: [elastic-repo-debian, elastic-repo-redhat]
 
   # --- Elasticsearch config ---
 
@@ -119,7 +119,7 @@ resources:
     type: logrotate
     path: /var/log/elasticsearch/*.log
     frequency: daily
-    rotate: "7"
+    rotate_count: "7"
     compress: "true"
     missingok: "true"
     notifempty: "true"
@@ -130,7 +130,7 @@ resources:
     type: logrotate
     path: /var/log/logstash/*.log
     frequency: daily
-    rotate: "7"
+    rotate_count: "7"
     compress: "true"
     missingok: "true"
     notifempty: "true"

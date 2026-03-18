@@ -8,7 +8,7 @@ vars:
 resources:
   - name: backup-dir
     type: directory
-    path: "{{ .Vars.backup_dest }}"
+    target_path: "{{ .Vars.backup_dest }}"
     owner: root
     group: root
     mode: "0555"
@@ -49,8 +49,7 @@ resources:
 
   - name: backup-cron
     type: cron
-    name: hobnob-backup
-    job: /usr/local/bin/hobnob-backup.sh
-    special: "@daily"
+    command: /usr/local/bin/hobnob-backup.sh
+    schedule: "@daily"
     user: root
     depends_on: [backup-script]

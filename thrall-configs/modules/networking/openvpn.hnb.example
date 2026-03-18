@@ -30,9 +30,8 @@ resources:
     state: present
 
   - name: openvpn-log-dir
-    type: file
+    type: directory
     target_path: /var/log/openvpn
-    filetype: directory
     owner: root
     group: root
     mode: "0750"

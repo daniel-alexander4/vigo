@@ -11,7 +11,7 @@ resources:
     package: chrony
     state: present
 
-  - name: chrony-conf
+  - name: chrony-conf-debian
     type: file
     target_path: /etc/chrony/chrony.conf
     content: |
@@ -40,10 +40,10 @@ resources:
     group: root
     mode: "0644"
     depends_on: [install-chrony]
-    notify: [chrony-service]
+    notify: [chrony-service-debian]
     when: "os_family('debian')"
 
-  - name: chrony-conf
+  - name: chrony-conf-redhat
     type: file
     target_path: /etc/chrony.conf
     content: |
@@ -72,21 +72,21 @@ resources:
     group: root
     mode: "0644"
     depends_on: [install-chrony]
-    notify: [chrony-service]
+    notify: [chrony-service-redhat]
     when: "!os_family('debian')"
 
-  - name: chrony-service
+  - name: chrony-service-debian
     type: service
     service: chrony
     enabled: true
     state: running
-    depends_on: [chrony-conf]
+    depends_on: [chrony-conf-debian]
     when: "os_family('debian')"
 
-  - name: chrony-service
+  - name: chrony-service-redhat
     type: service
     service: chronyd
     enabled: true
     state: running
-    depends_on: [chrony-conf]
+    depends_on: [chrony-conf-redhat]
     when: "!os_family('debian')"

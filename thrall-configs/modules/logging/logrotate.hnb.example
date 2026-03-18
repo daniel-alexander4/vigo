@@ -16,7 +16,7 @@ resources:
     type: logrotate
     path: "/var/log/app/*.log"
     frequency: daily
-    rotate: "14"
+    rotate_count: "14"
     size: "100M"
     compress: "true"
     delaycompress: "true"

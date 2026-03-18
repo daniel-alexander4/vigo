@@ -43,13 +43,13 @@ resources:
     stdin: "secret:hobnob/grafana/admin-password"
     depends_on: [grafana-service]
     watch_secret: ["hobnob/grafana/admin-password"]
-    when: "changed"
+    subscribes: [grafana-ini]
 
   - name: grafana-logrotate
     type: logrotate
     path: /var/log/grafana/*.log
     frequency: daily
-    rotate: "7"
+    rotate_count: "7"
     compress: "true"
     missingok: "true"
     notifempty: "true"

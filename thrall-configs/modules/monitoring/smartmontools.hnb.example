@@ -10,7 +10,7 @@ resources:
     package: smartmontools
     state: present
 
-  - name: smartd-conf
+  - name: smartd-conf-debian
     type: file
     target_path: /etc/smartmontools/smartd.conf
     content: |
@@ -28,10 +28,10 @@ resources:
     group: root
     mode: "0644"
     depends_on: [install-smartmontools]
-    notify: [smartd-service]
+    notify: [smartd-service-debian]
     when: "os_family('debian')"
 
-  - name: smartd-conf
+  - name: smartd-conf-redhat
     type: file
     target_path: /etc/smartd.conf
     content: |
@@ -49,21 +49,21 @@ resources:
     group: root
     mode: "0644"
     depends_on: [install-smartmontools]
-    notify: [smartd-service]
+    notify: [smartd-service-redhat]
     when: "!os_family('debian')"
 
-  - name: smartd-service
+  - name: smartd-service-debian
     type: service
     service: smartmontools
     enabled: true
     state: running
-    depends_on: [smartd-conf]
+    depends_on: [smartd-conf-debian]
     when: "os_family('debian')"
 
-  - name: smartd-service
+  - name: smartd-service-redhat
     type: service
     service: smartd
     enabled: true
     state: running
-    depends_on: [smartd-conf]
+    depends_on: [smartd-conf-redhat]
     when: "!os_family('debian')"

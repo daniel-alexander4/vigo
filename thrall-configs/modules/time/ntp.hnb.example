@@ -32,9 +32,9 @@ resources:
     group: root
     mode: "0644"
     depends_on: [install-ntp]
-    notify: [ntp-service]
+    notify: [ntp-service-debian, ntp-service-redhat]
 
-  - name: ntp-service
+  - name: ntp-service-debian
     type: service
     service: ntp
     enabled: true
@@ -42,7 +42,7 @@ resources:
     depends_on: [ntp-conf]
     when: "os_family('debian')"
 
-  - name: ntp-service
+  - name: ntp-service-redhat
     type: service
     service: ntpd
     enabled: true

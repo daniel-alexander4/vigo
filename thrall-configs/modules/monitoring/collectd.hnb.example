@@ -10,7 +10,7 @@ resources:
     package: collectd
     state: present
 
-  - name: collectd-conf
+  - name: collectd-conf-base
     type: file
     target_path: /etc/collectd/collectd.conf
     content: |
@@ -62,7 +62,7 @@ resources:
     notify: [collectd-service]
     when: "os_family('debian')"
 
-  - name: collectd-conf
+  - name: collectd-conf-disk
     type: file
     target_path: /etc/collectd.conf
     content: |
@@ -119,4 +119,4 @@ resources:
     service: collectd
     enabled: true
     state: running
-    depends_on: [collectd-conf]
+    depends_on: [collectd-conf-base, collectd-conf-disk]

@@ -8,25 +8,25 @@ vars:
   load_crit: "10.0,8.0,6.0"
 
 resources:
-  - name: install-nrpe
+  - name: install-nrpe-debian
     type: package
     package: nagios-nrpe-server
     state: present
     when: "os_family('debian')"
 
-  - name: install-nrpe
+  - name: install-nrpe-redhat
     type: package
     package: nrpe
     state: present
     when: "!os_family('debian')"
 
-  - name: install-nagios-plugins
+  - name: install-nagios-plugins-debian
     type: package
     package: nagios-plugins-basic
     state: present
     when: "os_family('debian')"
 
-  - name: install-nagios-plugins
+  - name: install-nagios-plugins-redhat
     type: package
     package: nagios-plugins-all
     state: present
@@ -65,10 +65,10 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    depends_on: [install-nrpe]
-    notify: [nrpe-service]
+    depends_on: [install-nrpe-debian, install-nrpe-redhat]
+    notify: [nrpe-service-debian, nrpe-service-redhat]
 
-  - name: nrpe-service
+  - name: nrpe-service-debian
     type: service
     service: nagios-nrpe-server
     enabled: true
@@ -76,7 +76,7 @@ resources:
     depends_on: [nrpe-cfg]
     when: "os_family('debian')"
 
-  - name: nrpe-service
+  - name: nrpe-service-redhat
     type: service
     service: nrpe
     enabled: true

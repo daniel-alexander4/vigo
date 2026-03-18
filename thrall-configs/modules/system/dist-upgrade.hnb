@@ -18,17 +18,17 @@ resources:
     when: "os_family('debian')"
     unless: "apt-get dist-upgrade --simulate 2>/dev/null | grep -q '0 upgraded, 0 newly installed'"
     depends_on: [apt-update]
-    timeout: 600
+    timeout_secs: 600
     notify: [autoremove, reboot-if-needed]
 
   - name: autoremove
     type: exec
     command: "apt-get autoremove -y -qq"
     when: "os_family('debian')"
-    refreshonly: true
+    subscribes: [apt-dist-upgrade]
 
   - name: reboot-if-needed
     type: exec
     command: "[ -f /var/run/reboot-required ] && shutdown -r +1 'Rebooting after dist-upgrade' || true"
     when: "os_family('debian')"
-    refreshonly: true
+    subscribes: [apt-dist-upgrade]
