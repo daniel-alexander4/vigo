@@ -104,7 +104,7 @@ hobnobcli backup create /tmp/hobnob-backup.tar.gz
 The command reads `server.yaml` to find the database path, then:
 
 1. Snapshots the SQLite database using the sqlite3 backup API (safe with concurrent WAL writers)
-2. Copies `policy/proposed/` (config source of truth)
+2. Copies `policy/stage/` (config source of truth)
 3. Copies `secrets/` (already AES-256-GCM encrypted at rest)
 4. Copies `tls/` (CA + server certs)
 5. Copies `server.yaml`
@@ -158,7 +158,7 @@ hobnob-backup-2026-03-13T14:30:00Z.tar.gz
 ├── db/
 │   └── hobnob.db
 ├── policy/
-│   └── proposed/
+│   └── stage/
 │       ├── modules/
 │       ├── roles/
 │       ├── thralls/
@@ -233,13 +233,13 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
-| `policy/proposed/` | Modules, roles, thrall mappings, vars | High — your entire policy |
+| `policy/stage/` | Modules, roles, thrall mappings, vars | High — your entire policy |
 | `secrets/` | AES-256-GCM encrypted files + `.master.key` | Critical — unrecoverable without master key |
 | `tls/` | CA cert/key, server cert/key | High — agents authenticate against these |
 | `server.yaml` | Server configuration | Medium — can be recreated |
 | `db/hobnob.db` | SQLite database | Covered by Litestream if configured |
 
-1. **Keep `policy/proposed/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
+1. **Keep `policy/stage/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
 2. **Use the built-in `hobnob-server-backup` module** for daily rsync to `/srv/backups.hobnob/`. This covers all critical files with a consistent DB snapshot.
 

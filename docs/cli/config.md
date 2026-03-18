@@ -9,7 +9,7 @@ Config inspection commands.
 | `config trace` | Trace config resolution for a hostname |
 | `config tree` | Show the directory inheritance hierarchy |
 | `config search` | Search thrall entries by match pattern, module, or var |
-| `config publish` | Validate and publish config from proposed to live |
+| `config publish` | Validate and publish config from stage to live |
 | `config history` | View config publish history |
 | `config rollback` | Rollback to a previous config version |
 | `config pending` | List config changes awaiting approval |
@@ -166,7 +166,7 @@ $ hobnobcli config search --var log_level
 
 ## config publish
 
-Validates `.hnb` files in `/srv/hobnob/policy/proposed/` then atomically syncs to `/srv/hobnob/policy/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../operations/config-publish.md) for full details.
+Validates `.hnb` files in `/srv/hobnob/policy/stage/` then atomically syncs to `/srv/hobnob/policy/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../operations/config-publish.md) for full details.
 
 ### Usage
 
@@ -202,7 +202,7 @@ Published: 12 modules, 3 roles, 8 thrall entries (15 files synced)
 
 # Nothing changed
 $ hobnobcli config publish
-Nothing to publish — proposed matches live.
+Nothing to publish — stage matches live.
 ```
 
 ## config history

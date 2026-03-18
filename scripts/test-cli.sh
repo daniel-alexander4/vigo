@@ -375,8 +375,8 @@ echo ""
 # 19. test (config validation)
 # -------------------------------------------------------------------
 echo -e "${BOLD}[test]${NC}"
-if [[ -d "/srv/hobnob/policy/proposed" ]]; then
-    run_test "test" $CLI test /srv/hobnob/policy/proposed --server "$SERVER"
+if [[ -d "/srv/hobnob/policy/stage" ]]; then
+    run_test "test" $CLI test /srv/hobnob/policy/stage --server "$SERVER"
 elif [[ -d "thrall-configs" ]]; then
     run_test "test" $CLI test thrall-configs --server "$SERVER"
 else

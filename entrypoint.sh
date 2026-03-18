@@ -5,7 +5,7 @@ set -e
 # All persistent state lives under /srv/hobnob (bind-mounted from host).
 
 DATA_DIR="/srv/hobnob"
-HNB_PROPOSED="${DATA_DIR}/policy/proposed"
+HNB_STAGE="${DATA_DIR}/policy/stage"
 HNB_LIVE="${DATA_DIR}/policy/.live"
 EXAMPLES_DIR="${DATA_DIR}/policy/examples"
 ENV_FILE="${DATA_DIR}/.env"
@@ -18,7 +18,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${HNB_PROPOSED}/modules" "${HNB_PROPOSED}/templates"
+mkdir -p "${HNB_STAGE}/modules" "${HNB_STAGE}/templates"
 mkdir -p -m 750 "${HNB_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/push" "${DATA_DIR}/custom-traits" "${DATA_DIR}/workflows"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
@@ -78,7 +78,7 @@ fi
 if [ -d "${SEED_DIR}/policy" ]; then
     find "${SEED_DIR}/policy" -type f | while IFS= read -r src; do
         rel="${src#${SEED_DIR}/policy/}"
-        dest="${HNB_PROPOSED}/${rel}"
+        dest="${HNB_STAGE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
             cp "$src" "$dest"

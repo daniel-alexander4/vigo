@@ -115,7 +115,7 @@ http {
 
 ### Hobnob Version
 
-`policy/proposed/modules/nginx.hnb`:
+`policy/stage/modules/nginx.hnb`:
 
 ```yaml
 name: nginx
@@ -167,7 +167,7 @@ resources:
     enabled: true
 ```
 
-`policy/proposed/roles/webserver.hnb`:
+`policy/stage/roles/webserver.hnb`:
 
 ```yaml
 name: webserver
@@ -175,7 +175,7 @@ modules:
   - nginx
 ```
 
-`policy/proposed/thralls/nodes.hnb`:
+`policy/stage/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

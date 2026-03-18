@@ -52,7 +52,7 @@ Checks performed in pre-start mode:
 | `secrets_provider` | Initialize the secrets provider |
 | `secret_resolution` | Resolve `secret:` references in config |
 | `tls_certs` | Check cert files exist, parse, and verify expiry |
-| `config_dir` | Verify `policy/proposed/` exists with `modules/`, `roles/`, `thralls/` subdirs |
+| `config_dir` | Verify `policy/stage/` exists with `modules/`, `roles/`, `thralls/` subdirs |
 | `config_validation` | Load and validate all `.hnb` module files |
 | `spanner` | Validate spanner configuration |
 

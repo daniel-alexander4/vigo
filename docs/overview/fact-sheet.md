@@ -25,7 +25,7 @@ No external database. No message broker. No JVM. No language runtime on managed 
 One format, one path, one way to configure:
 
 ```yaml
-# /srv/hobnob/policy/proposed/modules/webserver.hnb
+# /srv/hobnob/policy/stage/modules/webserver.hnb
 name: webserver
 resources:
   - name: Install nginx

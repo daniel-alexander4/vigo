@@ -138,9 +138,9 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	proposedDir := filepath.Join(serverRoot, "policy", "proposed", "modules")
-	os.MkdirAll(proposedDir, 0700)
-	os.WriteFile(filepath.Join(proposedDir, "nginx.hnb"), []byte("name: nginx\n"), 0644)
+	stageDir := filepath.Join(serverRoot, "policy", "stage", "modules")
+	os.MkdirAll(stageDir, 0700)
+	os.WriteFile(filepath.Join(stageDir, "nginx.hnb"), []byte("name: nginx\n"), 0644)
 
 	secretsDir := filepath.Join(serverRoot, "secrets")
 	os.MkdirAll(secretsDir, 0700)
@@ -173,7 +173,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 
 	expectedFiles := map[string]bool{
 		"db/hobnob.db":                  false,
-		"policy/proposed/modules/nginx.hnb": false,
+		"policy/stage/modules/nginx.hnb": false,
 		"secrets/db_pass":               false,
 		"tls/cert":                      false,
 		"server.yaml":                   false,
@@ -242,9 +242,9 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	proposedDir := filepath.Join(serverRoot, "policy", "proposed", "modules")
-	os.MkdirAll(proposedDir, 0700)
-	os.WriteFile(filepath.Join(proposedDir, "nginx.hnb"), []byte("name: nginx\n"), 0644)
+	stageDir := filepath.Join(serverRoot, "policy", "stage", "modules")
+	os.MkdirAll(stageDir, 0700)
+	os.WriteFile(filepath.Join(stageDir, "nginx.hnb"), []byte("name: nginx\n"), 0644)
 
 	secretsDir := filepath.Join(serverRoot, "secrets")
 	os.MkdirAll(secretsDir, 0700)
@@ -298,7 +298,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	}
 
 	// Verify config was restored.
-	data, err := os.ReadFile(filepath.Join(restoreDir, "policy", "proposed", "modules", "nginx.hnb"))
+	data, err := os.ReadFile(filepath.Join(restoreDir, "policy", "stage", "modules", "nginx.hnb"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,9 +342,9 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	proposedDir := filepath.Join(serverRoot, "policy", "proposed")
-	os.MkdirAll(proposedDir, 0700)
-	os.WriteFile(filepath.Join(proposedDir, "test.hnb"), []byte("test"), 0644)
+	stageDir := filepath.Join(serverRoot, "policy", "stage")
+	os.MkdirAll(stageDir, 0700)
+	os.WriteFile(filepath.Join(stageDir, "test.hnb"), []byte("test"), 0644)
 
 	os.WriteFile(filepath.Join(serverRoot, "server.yaml"), []byte("test"), 0644)
 
@@ -376,7 +376,7 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 	}
 
 	// Config should NOT exist.
-	if _, err := os.Stat(filepath.Join(restoreDir, "policy", "proposed", "test.hnb")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(restoreDir, "policy", "stage", "test.hnb")); !os.IsNotExist(err) {
 		t.Error("config should not be restored in db-only mode")
 	}
 

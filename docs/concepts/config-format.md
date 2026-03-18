@@ -1,13 +1,13 @@
 # Config Format
 
-All Hobnob configuration lives in YAML files with the `.hnb` extension under `policy/proposed/`. The server reloads config when `hobnobcli config publish` syncs files to `.live/`.
+All Hobnob configuration lives in YAML files with the `.hnb` extension under `policy/stage/`. The server reloads config when `hobnobcli config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
 The config directory doubles as a thrall hierarchy. Subdirectories define inheritance — `common.hnb` at any level defines modules, roles, and vars inherited by all entries in subdirectories below it.
 
 ```
-policy/proposed/
+policy/stage/
 ├── modules/              # Module definitions (unchanged)
 │   ├── nginx.hnb
 │   ├── postgres.hnb
@@ -140,7 +140,7 @@ thralls:
 | `modules` | no | Additional modules (beyond those from roles) |
 | `vars` | no | Variable overrides (override module defaults) |
 | `environment_overrides` | no | Per-environment variable overrides |
-| `vars_from` | no | External var files to load (relative to policy/proposed/) |
+| `vars_from` | no | External var files to load (relative to policy/stage/) |
 | `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
 
 ## Directory Inheritance

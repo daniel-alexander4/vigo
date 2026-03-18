@@ -24,14 +24,14 @@ import (
 
 var configPublishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Validate .hnb files in proposed/, sync to .live/, and trigger a server config reload",
+	Short: "Validate .hnb files in stage/, sync to .live/, and trigger a server config reload",
 	Long: fmt.Sprintf(`Validates all .hnb config files in %s using the same
 logic as the server's config loader. If valid, atomically syncs to %s.
 
 By default, all http/https URLs in changed modules are checked for aliveness.
 Use --skip-url-check to disable (e.g., in air-gapped environments).
 
-Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.LiveDir),
+Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDir),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
@@ -89,7 +89,7 @@ Use --dry-run to validate without publishing.`, publish.ProposedDir, publish.Liv
 		}
 		printFileList(res)
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
-			fmt.Println("\nNothing to publish — proposed matches live.")
+			fmt.Println("\nNothing to publish — stage matches live.")
 			return nil
 		}
 		fmt.Printf("\nPublished: %d modules, %d roles, %d thrall entries (%d files synced)\n",
@@ -189,7 +189,7 @@ func suggestFixes(err error, disabled bool) {
 func buildGenericFixPrompt(err error) string {
 	errMsg := err.Error()
 
-	// Try to find a file path in the error (e.g., "parsing /srv/hobnob/policy/proposed/modules/foo.hnb: ...")
+	// Try to find a file path in the error (e.g., "parsing /srv/hobnob/policy/stage/modules/foo.hnb: ...")
 	var filePath string
 	for _, part := range strings.Fields(errMsg) {
 		if strings.HasSuffix(part, ".hnb") || strings.HasSuffix(part, ".hnb:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
@@ -348,7 +348,7 @@ func init() {
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
-	configPublishCmd.Flags().String("file", "", "publish a single .hnb file (path relative to proposed/)")
+	configPublishCmd.Flags().String("file", "", "publish a single .hnb file (path relative to stage/)")
 
 	configCmd.AddCommand(configPublishCmd)
 }

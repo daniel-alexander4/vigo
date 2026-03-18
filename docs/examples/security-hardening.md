@@ -4,7 +4,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 
 ## Firewall Module
 
-`policy/proposed/modules/firewall.hnb`:
+`policy/stage/modules/firewall.hnb`:
 
 ```yaml
 name: firewall
@@ -57,7 +57,7 @@ resources:
 
 ## SSH Hardening Module
 
-`policy/proposed/modules/ssh-hardening.hnb`:
+`policy/stage/modules/ssh-hardening.hnb`:
 
 ```yaml
 name: ssh-hardening
@@ -96,7 +96,7 @@ resources:
 
 ## Fail2ban Module
 
-`policy/proposed/modules/fail2ban.hnb`:
+`policy/stage/modules/fail2ban.hnb`:
 
 ```yaml
 name: fail2ban
@@ -138,7 +138,7 @@ resources:
 
 ## Sudo Module
 
-`policy/proposed/modules/sudo-config.hnb`:
+`policy/stage/modules/sudo-config.hnb`:
 
 ```yaml
 name: sudo-config
@@ -166,7 +166,7 @@ resources:
 
 ## Role Definition
 
-`policy/proposed/roles/hardened.hnb`:
+`policy/stage/roles/hardened.hnb`:
 
 ```yaml
 name: hardened
@@ -179,7 +179,7 @@ modules:
 
 ## Node Assignment
 
-`policy/proposed/thralls/nodes.hnb`:
+`policy/stage/thralls/nodes.hnb`:
 
 ```yaml
 thralls:

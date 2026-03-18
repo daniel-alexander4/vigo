@@ -24,7 +24,7 @@ var viCmd = &cobra.Command{
 
 Files must be within /srv/hobnob/policy/. Paths can be relative —
 if the file is not found at the given path, it is resolved relative
-to /srv/hobnob/policy/proposed/.
+to /srv/hobnob/policy/stage/.
 
 On save, the file is checked for YAML correctness and idempotency. If
 validation fails, the write is aborted and errors are shown. Use :w! to
@@ -43,7 +43,7 @@ Can also be invoked as 'hnbvi' for convenience.`,
 
 // resolveHnbPath resolves a file path within the policy config directory.
 // Accepts absolute paths (must be within /srv/hobnob/policy/) or relative
-// paths (resolved against /srv/hobnob/policy/proposed/).
+// paths (resolved against /srv/hobnob/policy/stage/).
 func resolveHnbPath(input string) (string, error) {
 	var absPath string
 	if filepath.IsAbs(input) {
@@ -53,8 +53,8 @@ func resolveHnbPath(input string) (string, error) {
 		if _, err := os.Stat(input); err == nil {
 			absPath, _ = filepath.Abs(input)
 		} else {
-			// Resolve relative to proposed/ directory.
-			absPath = filepath.Join(hnbConfigRoot, "proposed", input)
+			// Resolve relative to stage/ directory.
+			absPath = filepath.Join(hnbConfigRoot, "stage", input)
 		}
 	}
 

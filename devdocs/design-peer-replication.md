@@ -109,7 +109,7 @@ message PeerSyncMessage {
 }
 
 message FileChange {
-  string path = 1;                    // relative to /srv/hobnob (e.g., "policy/proposed/modules/nginx.hnb")
+  string path = 1;                    // relative to /srv/hobnob (e.g., "policy/stage/modules/nginx.hnb")
   bytes content = 2;                  // file contents (empty = deletion)
   int64 mtime = 3;                    // modification time (unix nanos)
   uint32 mode = 4;                    // file permissions

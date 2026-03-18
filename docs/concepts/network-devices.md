@@ -142,7 +142,7 @@ Traits are available in templates (`{{ .Traits.device.model }}`) and `when:` exp
 ## Example Module
 
 ```yaml
-# policy/proposed/modules/switch-base.hnb
+# policy/stage/modules/switch-base.hnb
 name: switch-base
 resources:
   - name: login-banner

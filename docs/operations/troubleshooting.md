@@ -137,7 +137,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 **Fix:**
 1. Check the error details: `hobnobcli doctor` or look at the server logs
-2. Fix the module in `policy/proposed/` (the module linter will catch and repair most issues)
+2. Fix the module in `policy/stage/` (the module linter will catch and repair most issues)
 3. Republish: `hobnobcli config publish`
 
 ### Config Reload Errors

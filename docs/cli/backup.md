@@ -79,7 +79,7 @@ hobnobcli backup inspect <path>
   "db_dsn": "/srv/hobnob/db/hobnob.db",
   "files": [
     "db/hobnob.db",
-    "policy/proposed/modules/nginx.hnb",
+    "policy/stage/modules/nginx.hnb",
     "secrets/db_pass",
     "tls/cert",
     "server.yaml"

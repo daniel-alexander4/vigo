@@ -23,7 +23,7 @@ This populates `/srv/hobnob/` with everything needed to run the server:
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
 ├── policy/
-│   ├── proposed/            # edit .hnb config files here
+│   ├── stage/               # edit .hnb config files here
 │   │   ├── modules/
 │   │   ├── roles/
 │   │   ├── thralls/

@@ -15,29 +15,29 @@ import (
 
 // --- helpers ---
 
-// withTestDirs temporarily overrides ProposedDir and LiveDir for testing,
+// withTestDirs temporarily overrides StageDir and LiveDir for testing,
 // restoring them when the test completes.
-func withTestDirs(t *testing.T) (proposed, live string) {
+func withTestDirs(t *testing.T) (stage, live string) {
 	t.Helper()
-	proposed = t.TempDir()
+	stage = t.TempDir()
 	live = filepath.Join(t.TempDir(), ".live")
 
-	origProposed := ProposedDir
+	origStage := StageDir
 	origLive := LiveDir
 
 	// Override package-level "constants" via a test seam.
-	setTestDirs(proposed, live)
+	setTestDirs(stage, live)
 
 	t.Cleanup(func() {
-		setTestDirs(origProposed, origLive)
+		setTestDirs(origStage, origLive)
 	})
 
 	for _, sub := range []string{"modules", "roles", "thralls"} {
-		if err := os.MkdirAll(filepath.Join(proposed, sub), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(stage, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return proposed, live
+	return stage, live
 }
 
 func writeFile(t *testing.T, path, content string) {
@@ -71,8 +71,8 @@ func noURLOpts() Options {
 // --- Structural validation tests ---
 
 func TestValidateSource_Valid(t *testing.T) {
-	proposed, _ := withTestDirs(t)
-	writeValidConfig(t, proposed)
+	stage, _ := withTestDirs(t)
+	writeValidConfig(t, stage)
 
 	res, err := ValidateSource(noURLOpts())
 	if err != nil {
@@ -87,8 +87,8 @@ func TestValidateSource_Valid(t *testing.T) {
 }
 
 func TestValidateSource_MissingModuleRef(t *testing.T) {
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "nginx.hnb"), `
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "nginx.hnb"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -96,7 +96,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(proposed, "thralls", "web.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "web.hnb"), `
 thralls:
   - match: "web.example.com"
     modules: [nginx, nonexistent]
@@ -109,15 +109,15 @@ thralls:
 }
 
 func TestValidateSource_IdempotencyError(t *testing.T) {
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "risky.hnb"), `
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "risky.hnb"), `
 name: risky
 resources:
   - name: run-something
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [risky]
@@ -130,8 +130,8 @@ thralls:
 }
 
 func TestPublish_SyncsFiles(t *testing.T) {
-	proposed, live := withTestDirs(t)
-	writeValidConfig(t, proposed)
+	stage, live := withTestDirs(t)
+	writeValidConfig(t, stage)
 
 	res, err := Publish(noURLOpts())
 	if err != nil {
@@ -150,8 +150,8 @@ func TestPublish_SyncsFiles(t *testing.T) {
 }
 
 func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
-	proposed, live := withTestDirs(t)
-	writeValidConfig(t, proposed)
+	stage, live := withTestDirs(t)
+	writeValidConfig(t, stage)
 
 	// Pre-populate live with an extra file.
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
@@ -168,8 +168,8 @@ func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 }
 
 func TestPublish_LeavesLiveOnValidationFailure(t *testing.T) {
-	proposed, live := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "thralls", "bad.hnb"), `
+	stage, live := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "thralls", "bad.hnb"), `
 thralls:
   - match: "bad.example.com"
     modules: [nonexistent]
@@ -192,8 +192,8 @@ thralls:
 }
 
 func TestPublish_SkipValidationAllowsCustomType(t *testing.T) {
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "custom.hnb"), `
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "custom.hnb"), `
 name: custom
 resources:
   - name: deploy-app
@@ -201,7 +201,7 @@ resources:
     skip_validation: true
     command: "cap deploy"
 `)
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [custom]
@@ -217,8 +217,8 @@ thralls:
 }
 
 func TestPublish_SkipsMissingProposedSubdirs(t *testing.T) {
-	proposed, live := withTestDirs(t)
-	writeValidConfig(t, proposed)
+	stage, live := withTestDirs(t)
+	writeValidConfig(t, stage)
 
 	os.MkdirAll(filepath.Join(live, "vars"), 0o755)
 	writeFile(t, filepath.Join(live, "vars", "old.yaml"), "old")
@@ -234,8 +234,8 @@ func TestPublish_SkipsMissingProposedSubdirs(t *testing.T) {
 }
 
 func TestPublish_NothingToPublish(t *testing.T) {
-	proposed, live := withTestDirs(t)
-	writeValidConfig(t, proposed)
+	stage, live := withTestDirs(t)
+	writeValidConfig(t, stage)
 
 	// First publish.
 	_, err := Publish(noURLOpts())
@@ -258,8 +258,8 @@ func TestPublish_NothingToPublish(t *testing.T) {
 }
 
 func TestDiff_DetectsChanges(t *testing.T) {
-	proposed, live := withTestDirs(t)
-	writeValidConfig(t, proposed)
+	stage, live := withTestDirs(t)
+	writeValidConfig(t, stage)
 
 	// Populate live with different content.
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
@@ -267,7 +267,7 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
 	writeFile(t, filepath.Join(live, "modules", "deleted.hnb"), "will be removed")
 
-	_, changed, removed, err := diffTrees(proposed, live)
+	_, changed, removed, err := diffTrees(stage, live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}
@@ -281,11 +281,11 @@ func TestDiff_DetectsChanges(t *testing.T) {
 }
 
 func TestDiff_EmptyLive(t *testing.T) {
-	proposed, live := withTestDirs(t)
-	writeValidConfig(t, proposed)
+	stage, live := withTestDirs(t)
+	writeValidConfig(t, stage)
 
 	// .live doesn't exist yet — everything is new.
-	_, changed, removed, err := diffTrees(proposed, live)
+	_, changed, removed, err := diffTrees(stage, live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}
@@ -305,8 +305,8 @@ func TestCheckURLs_ReachableURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "download.hnb"), fmt.Sprintf(`
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -314,7 +314,7 @@ resources:
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [download]
@@ -332,8 +332,8 @@ func TestCheckURLs_404Fails(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "download.hnb"), fmt.Sprintf(`
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -341,7 +341,7 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [download]
@@ -354,8 +354,8 @@ thralls:
 }
 
 func TestCheckURLs_SkipsNonHTTPURLs(t *testing.T) {
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "gitmod.hnb"), `
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "gitmod.hnb"), `
 name: gitmod
 resources:
   - name: clone-repo
@@ -363,7 +363,7 @@ resources:
     repo: "git@github.com:example/repo.git"
     path: "/opt/repo"
 `)
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [gitmod]
@@ -376,8 +376,8 @@ thralls:
 }
 
 func TestCheckURLs_SkippedWhenDisabled(t *testing.T) {
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "download.hnb"), `
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), `
 name: download
 resources:
   - name: get-archive
@@ -385,7 +385,7 @@ resources:
     url: "http://nonexistent.invalid/file.tar.gz"
     target_path: "/opt/app"
 `)
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [download]
@@ -407,8 +407,8 @@ func TestCheckURLs_HEAD405FallsBackToGET(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "download.hnb"), fmt.Sprintf(`
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -416,7 +416,7 @@ resources:
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [download]
@@ -434,8 +434,8 @@ func TestCheckURLs_KeyURLChecked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	proposed, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(proposed, "modules", "repo.hnb"), fmt.Sprintf(`
+	stage, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stage, "modules", "repo.hnb"), fmt.Sprintf(`
 name: repo
 resources:
   - name: add-repo
@@ -443,7 +443,7 @@ resources:
     repo: "deb https://example.com/apt stable main"
     key_url: "%s/gpg.key"
 `, srv.URL))
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [repo]
@@ -461,7 +461,7 @@ func TestCheckURLs_OnlyChecksChangedModules(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	proposed, live := withTestDirs(t)
+	stage, live := withTestDirs(t)
 
 	// Module with a bad URL — but it's already in live unchanged.
 	badModule := fmt.Sprintf(`
@@ -472,11 +472,11 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL)
-	writeFile(t, filepath.Join(proposed, "modules", "download.hnb"), badModule)
+	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), badModule)
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
 	writeFile(t, filepath.Join(live, "modules", "download.hnb"), badModule) // same content
 
-	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
+	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
 thralls:
   - match: "*.example.com"
     modules: [download]

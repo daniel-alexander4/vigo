@@ -1,12 +1,12 @@
 # Config Publish Pipeline
 
-Operators edit `.hnb` files in a proposed directory. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to the hidden `.live` directory the server reads from.
+Operators edit `.hnb` files in a stage directory. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to the hidden `.live` directory the server reads from.
 
 ## Directory Layout
 
 ```
 /srv/hobnob/policy/
-├── proposed/                     ← operators edit here
+├── stage/                        ← operators edit here
 │   ├── modules/                  # Module definitions
 │   ├── templates/                # Template files for source: references
 │   ├── roles.hnb                 # All role definitions
@@ -47,9 +47,9 @@ hobnobcli config publish --skip-url-check
 ## How It Works
 
 1. Normalizes whitespace in all `.hnb`/`.yaml` files (strip trailing spaces, fix line endings)
-2. Diffs `proposed/` against `.live/` using SHA-256 hashes to find new, changed, and removed files
+2. Diffs `stage/` against `.live/` using SHA-256 hashes to find new, changed, and removed files
 3. Runs the **module linter** on changed/new module files (see below)
-4. Loads all `.hnb` files from `proposed/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and thrall entries cross-reference each other.
+4. Loads all `.hnb` files from `stage/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and thrall entries cross-reference each other.
 5. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
 6. If validation passes and `--dry-run` is not set, atomically syncs `modules/`, `roles/`, `thralls/`, `templates/`, and `vars/` to `.live/`
 7. The CLI calls `POST /api/v1/config/reload` to trigger a server-side config reload
@@ -128,12 +128,12 @@ resources:
 
 Each subdirectory is synced independently using a rename strategy:
 
-1. Copy proposed subdir to a temp directory inside `.live/` (`.publish-tmp-*`)
+1. Copy stage subdir to a temp directory inside `.live/` (`.publish-tmp-*`)
 2. Rename existing `.live/` subdir to a backup (`.publish-backup-*`)
 3. Rename temp to live
 4. Remove backup on success; rollback on failure
 
-Subdirectories not present in proposed are removed from `.live/` (sync is replacement, not additive).
+Subdirectories not present in stage are removed from `.live/` (sync is replacement, not additive).
 
 ## What Gets Validated
 
@@ -177,7 +177,7 @@ The `.live/` directory is protected so operators cannot bypass validation by wri
 
 - **`.live/`** — `0750` (root can read/write, group can read)
 - **Files in `.live/`** — `0640` (root can read/write, group can read)
-- **`proposed/`** — `0770` (operators can read/write)
+- **`stage/`** — `0770` (operators can read/write)
 
 Permissions are enforced automatically after each publish. The server logs a warning at startup if `.live/` is world-writable.
 
@@ -191,8 +191,8 @@ groupadd hobnob
 chown -R root:hobnob /srv/hobnob/policy/.live
 chmod 750 /srv/hobnob/policy/.live
 
-# Operators can write to proposed
-chmod 770 /srv/hobnob/policy/proposed
+# Operators can write to stage
+chmod 770 /srv/hobnob/policy/stage
 ```
 
 ## Custom Executor Resources
@@ -218,7 +218,7 @@ Since `config publish` runs the module linter before syncing, most idempotency e
 
 ## First-Time Setup
 
-On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero thrall entries. Place your configs in `proposed/` and run `hobnobcli config publish` to populate `.live/` for the first time.
+On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero thrall entries. Place your configs in `stage/` and run `hobnobcli config publish` to populate `.live/` for the first time.
 
 ## Output
 

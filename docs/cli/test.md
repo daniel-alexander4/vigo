@@ -17,19 +17,19 @@ hobnobcli test tests/nginx-module.test.hnb
 hobnobcli test tests/
 
 # Specify a different config directory
-hobnobcli test --config-dir /srv/hobnob/policy/proposed
+hobnobcli test --config-dir /srv/hobnob/policy/stage
 ```
 
 ## Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--config-dir` | `/srv/hobnob/policy/proposed` | Config directory to load |
+| `--config-dir` | `/srv/hobnob/policy/stage` | Config directory to load |
 | `-v`, `--verbose` | `false` | Show resolved resource counts on pass |
 
 ## Test File Format
 
-Test files use the `.test.hnb` extension and are placed in `policy/proposed/tests/`. They are YAML files with these fields:
+Test files use the `.test.hnb` extension and are placed in `policy/stage/tests/`. They are YAML files with these fields:
 
 ```yaml
 name: descriptive test name

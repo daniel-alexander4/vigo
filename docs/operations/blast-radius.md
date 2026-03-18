@@ -4,7 +4,7 @@ Hobnob can automatically roll back a config publish when it causes fleet complia
 
 ## How It Works
 
-1. An operator runs `hobnobcli config publish`, which syncs proposed configs to `.live/` and triggers a config reload on the server.
+1. An operator runs `hobnobcli config publish`, which syncs stage configs to `.live/` and triggers a config reload on the server.
 2. The publish pipeline snapshots the current `.live/` directory before overwriting it, so the previous version is always available for rollback.
 3. After a successful reload, if `publish.compliance_threshold` is set, the server starts a **compliance monitor** that polls the FleetIndex every 5 seconds.
 4. If the fleet-wide compliant percentage drops below the threshold at any point during the rollback window, the server:

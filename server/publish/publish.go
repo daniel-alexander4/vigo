@@ -76,7 +76,7 @@ type Result struct {
 	DiffSummary string   // unified diff of changed files
 }
 
-// ValidateSource runs full config validation against the proposed directory.
+// ValidateSource runs full config validation against the stage directory.
 // Uses a permissive secrets stub so validation focuses on structure/idempotency.
 // When opts.CheckURLs is true, http/https URLs in changed/new modules are
 // checked for aliveness via HTTP HEAD.
@@ -84,33 +84,33 @@ func ValidateSource(opts Options) (*Result, error) {
 	// Normalize whitespace in all .hnb/.yaml files: strip trailing whitespace
 	// from every line. This prevents invisible formatting issues from editors
 	// that add trailing spaces or mixed line endings.
-	if err := normalizeWhitespace(ProposedDir); err != nil {
+	if err := normalizeWhitespace(StageDir); err != nil {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
 	// Compute diff first so cosmetic lint changes (like adding #~ comments)
 	// don't make unchanged modules appear in the changed set.
-	allFiles, changed, removed, err := diffTrees(ProposedDir, LiveDir)
+	allFiles, changed, removed, err := diffTrees(StageDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
 
 	// Run modlint on changed/new module files: repair, normalize, auto-comment.
-	// Linted output is written back to proposed/ before config store validation.
+	// Linted output is written back to stage/ before config store validation.
 	changedModules := filterBySubdir(changed, "modules")
 	if len(changedModules) > 0 {
-		if err := lintModules(ProposedDir, changedModules); err != nil {
+		if err := lintModules(StageDir, changedModules); err != nil {
 			return nil, fmt.Errorf("linting modules: %w", err)
 		}
 	}
 
-	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, false)
+	store, err := config.NewConfigStore(StageDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}
 
 	if opts.CheckURLs && len(changedModules) > 0 {
-		if err := checkURLs(ProposedDir, changedModules, opts.URLTimeout); err != nil {
+		if err := checkURLs(StageDir, changedModules, opts.URLTimeout); err != nil {
 			return nil, err
 		}
 	}
@@ -130,7 +130,7 @@ func ValidateSource(opts Options) (*Result, error) {
 // If non-nil and in the future, Publish() will reject.
 var FreezeUntil *time.Time
 
-// Publish validates proposed configs then atomically syncs them to .live.
+// Publish validates staged configs then atomically syncs them to .live.
 // After a successful sync, it snapshots .live for rollback support.
 func Publish(opts Options) (*Result, error) {
 	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
@@ -146,12 +146,12 @@ func Publish(opts Options) (*Result, error) {
 		return res, nil
 	}
 
-	// Compute diff before sync (comparing proposed vs current live).
+	// Compute diff before sync (comparing stage vs current live).
 	if opts.Diff || true { // always compute for DB attribution
-		res.DiffSummary = ComputeAllDiffs(ProposedDir, LiveDir, res.Changed, res.Removed)
+		res.DiffSummary = ComputeAllDiffs(StageDir, LiveDir, res.Changed, res.Removed)
 	}
 
-	files, err := atomicSync(ProposedDir, LiveDir)
+	files, err := atomicSync(StageDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("sync failed: %w", err)
 	}
@@ -169,10 +169,10 @@ func Publish(opts Options) (*Result, error) {
 
 // --- Diff ---
 
-// diffTrees compares proposed vs live and returns paths (relative to root)
+// diffTrees compares stage vs live and returns paths (relative to root)
 // that are new/changed or removed.
-func diffTrees(proposed, live string) (allFiles, changed, removed []string, err error) {
-	proposedFiles, err := hashTree(proposed)
+func diffTrees(stage, live string) (allFiles, changed, removed []string, err error) {
+	stageFiles, err := hashTree(stage)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -182,19 +182,19 @@ func diffTrees(proposed, live string) (allFiles, changed, removed []string, err 
 		return nil, nil, nil, err
 	}
 
-	for path := range proposedFiles {
+	for path := range stageFiles {
 		allFiles = append(allFiles, path)
 	}
 	sort.Strings(allFiles)
 
-	for path, hash := range proposedFiles {
+	for path, hash := range stageFiles {
 		if liveHash, ok := liveFiles[path]; !ok || liveHash != hash {
 			changed = append(changed, path)
 		}
 	}
 
 	for path := range liveFiles {
-		if _, ok := proposedFiles[path]; !ok {
+		if _, ok := stageFiles[path]; !ok {
 			removed = append(removed, path)
 		}
 	}
@@ -419,10 +419,10 @@ func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error)
 
 // --- Atomic sync ---
 
-// atomicSync copies the entire config tree from proposed to live.
+// atomicSync copies the entire config tree from stage to live.
 // Root-level files are copied directly. Subdirectories use a
 // tmp+rename strategy for atomicity. Returns total files copied.
-func atomicSync(proposed, live string) (int, error) {
+func atomicSync(stage, live string) (int, error) {
 	// Ensure live parent exists.
 	if err := os.MkdirAll(filepath.Dir(live), 0o755); err != nil {
 		return 0, fmt.Errorf("creating live parent: %w", err)
@@ -433,29 +433,29 @@ func atomicSync(proposed, live string) (int, error) {
 
 	totalFiles := 0
 
-	// Discover top-level entries in proposed.
-	proposedEntries, err := os.ReadDir(proposed)
+	// Discover top-level entries in stage.
+	stageEntries, err := os.ReadDir(stage)
 	if err != nil {
-		return 0, fmt.Errorf("reading proposed dir: %w", err)
+		return 0, fmt.Errorf("reading stage dir: %w", err)
 	}
 
-	proposedNames := make(map[string]bool)
-	for _, entry := range proposedEntries {
+	stageNames := make(map[string]bool)
+	for _, entry := range stageEntries {
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") || skipDirs[name] {
 			continue
 		}
-		proposedNames[name] = true
+		stageNames[name] = true
 
 		if entry.IsDir() {
-			n, syncErr := syncSubdir(proposed, live, name)
+			n, syncErr := syncSubdir(stage, live, name)
 			if syncErr != nil {
 				return totalFiles, syncErr
 			}
 			totalFiles += n
 		} else if isPublishableFile(name) {
 			// Copy root-level files only if content changed.
-			srcData, readErr := os.ReadFile(filepath.Join(proposed, name))
+			srcData, readErr := os.ReadFile(filepath.Join(stage, name))
 			if readErr != nil {
 				return totalFiles, fmt.Errorf("reading %s: %w", name, readErr)
 			}
@@ -470,7 +470,7 @@ func atomicSync(proposed, live string) (int, error) {
 		}
 	}
 
-	// Remove entries in live that are not in proposed.
+	// Remove entries in live that are not in stage.
 	liveEntries, err := os.ReadDir(live)
 	if err != nil {
 		return totalFiles, nil // best-effort
@@ -480,7 +480,7 @@ func atomicSync(proposed, live string) (int, error) {
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		if !proposedNames[name] {
+		if !stageNames[name] {
 			os.RemoveAll(filepath.Join(live, name))
 		}
 	}
@@ -488,9 +488,9 @@ func atomicSync(proposed, live string) (int, error) {
 	return totalFiles, nil
 }
 
-// syncSubdir atomically replaces live/sub with contents from proposed/sub.
-func syncSubdir(proposed, live, sub string) (int, error) {
-	src := filepath.Join(proposed, sub)
+// syncSubdir atomically replaces live/sub with contents from stage/sub.
+func syncSubdir(stage, live, sub string) (int, error) {
+	src := filepath.Join(stage, sub)
 	dst := filepath.Join(live, sub)
 
 	tmpDir, err := os.MkdirTemp(live, ".publish-tmp-"+sub+"-")
@@ -579,9 +579,9 @@ func lockdownLiveDir(live string) {
 	})
 }
 
-// PublishFile copies a single .hnb file into proposed/, validates the full
+// PublishFile copies a single .hnb file into stage/, validates the full
 // config tree, and syncs only that file to .live/. The file path must be
-// relative to the proposed directory (e.g., "modules/nginx.hnb").
+// relative to the stage directory (e.g., "modules/nginx.hnb").
 func PublishFile(srcPath string, opts Options) (*Result, error) {
 	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
 		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
@@ -591,16 +591,16 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	// Accept either an absolute path or a relative path like "modules/nginx.hnb".
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
-		// Check if the file is already inside proposed/.
-		if rel, err := filepath.Rel(ProposedDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
+		// Check if the file is already inside stage/.
+		if rel, err := filepath.Rel(StageDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
 			relPath = rel
 		} else {
-			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, ProposedDir)
+			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, StageDir)
 		}
 	}
 
 	// Validate the full config tree (cross-references require all files).
-	store, err := config.NewConfigStore(ProposedDir, &stubProvider{}, false)
+	store, err := config.NewConfigStore(StageDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +612,7 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	}
 
 	// Read source and write to .live/.
-	data, err := os.ReadFile(filepath.Join(ProposedDir, relPath))
+	data, err := os.ReadFile(filepath.Join(StageDir, relPath))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", relPath, err)
 	}
@@ -649,7 +649,7 @@ func CheckLivePermissions(live string) string {
 	return ""
 }
 
-// normalizeWhitespace walks the proposed directory and strips trailing
+// normalizeWhitespace walks the stage directory and strips trailing
 // whitespace from every line of .hnb, .yaml, and .yml files. Files are
 // rewritten in-place only if they changed. This prevents editor artifacts
 // (trailing spaces, mixed line endings) from causing spurious diffs.

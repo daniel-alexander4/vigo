@@ -26,23 +26,23 @@ Accepts `.hnb`, `.yaml`, and `.yml` file extensions.
 ### Validate a single module
 
 ```bash
-hobnobcli validate policy/proposed/modules/nginx.hnb
+hobnobcli validate policy/stage/modules/nginx.hnb
 ```
 
 ```
-policy/proposed/modules/nginx.hnb: OK
+policy/stage/modules/nginx.hnb: OK
 ```
 
 ### Validate multiple files
 
 ```bash
-hobnobcli validate policy/proposed/modules/*.hnb
+hobnobcli validate policy/stage/modules/*.hnb
 ```
 
 ```
-policy/proposed/modules/nginx.hnb: OK
-policy/proposed/modules/postgres.hnb: OK
-policy/proposed/modules/app.hnb: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
+policy/stage/modules/nginx.hnb: OK
+policy/stage/modules/postgres.hnb: OK
+policy/stage/modules/app.hnb: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
 ```
 
 ### Exit codes

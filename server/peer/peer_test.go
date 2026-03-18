@@ -93,7 +93,7 @@ func TestValidatePath(t *testing.T) {
 		path    string
 		wantErr bool
 	}{
-		{"normal relative path", "policy/proposed/modules/nginx.hnb", false},
+		{"normal relative path", "policy/stage/modules/nginx.hnb", false},
 		{"simple filename", "server.yaml", false},
 		{"nested path", "secrets/db/password", false},
 		{"empty path", "", true},
@@ -174,7 +174,7 @@ func TestServiceSyncStream(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "policy/proposed/modules/nginx.hnb",
+				Path:    "policy/stage/modules/nginx.hnb",
 				Content: []byte("package: nginx\nensure: present\n"),
 				Mode:    0o644,
 			},
@@ -195,12 +195,12 @@ func TestServiceSyncStream(t *testing.T) {
 	if !acks[0].Success {
 		t.Errorf("ack success = false, error = %s", acks[0].Error)
 	}
-	if acks[0].Path != "policy/proposed/modules/nginx.hnb" {
-		t.Errorf("ack path = %s, want policy/proposed/modules/nginx.hnb", acks[0].Path)
+	if acks[0].Path != "policy/stage/modules/nginx.hnb" {
+		t.Errorf("ack path = %s, want policy/stage/modules/nginx.hnb", acks[0].Path)
 	}
 
 	// Verify the file was written to disk.
-	written, err := os.ReadFile(filepath.Join(root, "policy/proposed/modules/nginx.hnb"))
+	written, err := os.ReadFile(filepath.Join(root, "policy/stage/modules/nginx.hnb"))
 	if err != nil {
 		t.Fatalf("reading written file: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	svc := NewService(root, "peer", nil)
 
 	// Pre-create the file to be deleted.
-	target := filepath.Join(root, "policy/proposed/modules/old.hnb")
+	target := filepath.Join(root, "policy/stage/modules/old.hnb")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "policy/proposed/modules/old.hnb",
+				Path:    "policy/stage/modules/old.hnb",
 				Content: nil,
 			},
 		},
@@ -278,7 +278,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 			FullSync: &pb.PeerFullSync{
 				Files: []*pb.PeerFileChange{
 					{
-						Path:    "policy/proposed/modules/nginx.hnb",
+						Path:    "policy/stage/modules/nginx.hnb",
 						Content: []byte("nginx config"),
 						Mode:    0o644,
 					},
@@ -315,7 +315,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 
 	// Verify all files were written.
 	checks := map[string]string{
-		"policy/proposed/modules/nginx.hnb": "nginx config",
+		"policy/stage/modules/nginx.hnb": "nginx config",
 		"secrets/db/password":            "hunter2",
 		"server.yaml":                    "listen: :8443\n",
 	}
