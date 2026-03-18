@@ -44,12 +44,83 @@ hobnobcli config publish --skip-url-check
 
 ## How It Works
 
-1. Diffs `proposed/` against `.live/` using SHA-256 hashes to find new, changed, and removed files
-2. Loads all `.hnb` files from `proposed/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and thrall entries cross-reference each other.
-3. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
-4. If validation passes and `--dry-run` is not set, atomically syncs `modules/`, `roles/`, `thralls/`, `templates/`, and `vars/` to `.live/`
-5. The CLI calls `POST /api/v1/config/reload` to trigger a server-side config reload
-6. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`
+1. Normalizes whitespace in all `.hnb`/`.yaml` files (strip trailing spaces, fix line endings)
+2. Diffs `proposed/` against `.live/` using SHA-256 hashes to find new, changed, and removed files
+3. Runs the **module linter** on changed/new module files (see below)
+4. Loads all `.hnb` files from `proposed/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and thrall entries cross-reference each other.
+5. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
+6. If validation passes and `--dry-run` is not set, atomically syncs `modules/`, `roles/`, `thralls/`, `templates/`, and `vars/` to `.live/`
+7. The CLI calls `POST /api/v1/config/reload` to trigger a server-side config reload
+8. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`
+
+## Module Linter
+
+Every changed or new module file is run through the module linter (`server/modlint`) before validation. The linter is a four-stage pipeline:
+
+### 1. YAML Repair
+
+Fixes common syntax issues at the text level:
+- Tabs → 2 spaces
+- Trailing whitespace removal
+- Normalize line endings (CRLF → LF)
+- Ensure final newline
+- Unquoted YAML special values (`yes`/`no`/`on`/`off`) → `true`/`false`
+
+### 2. Structure Normalization
+
+- Canonical key ordering per resource type (e.g., `target_path` before `content` before `owner` for file resources)
+- Consistent 2-space indentation
+- Duplicate key handling (last wins per YAML spec)
+
+### 3. Schema Validation
+
+- Required fields per resource type (e.g., `file` needs `target_path`, `owner`, `group`, `mode`)
+- Unknown resource types rejected (unless `skip_validation: true` is set)
+- Cross-reference validation (`depends_on`, `notify`, `subscribes`, `before` must reference existing resource names)
+- DAG cycle detection
+- Idempotency checks (exec needs `creates`/`onlyif`/`unless`, service `restarted`/`reloaded` needs `subscribes`)
+- Redundant trigger detection (`notify` + `subscribes` on the same pair)
+
+### 4. Auto-Commenting
+
+The linter adds `#~` prefixed auto-generated comments:
+
+- **Module-level**: A block comment at the top describing what the module manages
+- **Resource-level**: A single-line comment above each resource describing its action
+
+```yaml
+#~ Manages package, file, service
+name: nginx
+
+resources:
+  #~ Install nginx package
+  - name: nginx-package
+    type: package
+    package: nginx
+
+  #~ Deploy /etc/nginx/nginx.conf
+  - name: nginx-config
+    type: file
+    target_path: /etc/nginx/nginx.conf
+    content: "server {}"
+    owner: root
+    group: root
+    mode: "0644"
+    notify: [nginx-service]
+
+  #~ Ensure nginx is running and enabled
+  - name: nginx-service
+    type: service
+    service: nginx
+    state: running
+    enabled: true
+    depends_on: [nginx-package, nginx-config]
+```
+
+**Comment convention:**
+- `#~` comments are auto-generated and **regenerated on every publish**. Never edit them — they will be overwritten.
+- `#` comments (without the tilde) are hand-written and **never touched** by the linter. Use these for your own notes.
+- Comments are derived from resource name, type, and attributes — they never restate what the YAML already says.
 
 ## Atomic Sync
 

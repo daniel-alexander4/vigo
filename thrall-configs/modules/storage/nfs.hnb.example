@@ -1,3 +1,4 @@
+#~ Manages package, directory, file, exec, service, mount
 name: nfs
 
 vars:
@@ -9,12 +10,14 @@ vars:
 resources:
   # --- Package (distro-specific) ---
 
+  #~ Install nfs-kernel-server package
   - name: install-nfs-debian
     type: package
     package: nfs-kernel-server
     state: present
     when: "os_family('debian')"
 
+  #~ Install nfs-utils package
   - name: install-nfs-redhat
     type: package
     package: nfs-utils
@@ -23,18 +26,20 @@ resources:
 
   # --- Export directory ---
 
+  #~ Create directory /srv/nfs
   - name: nfs-export-dir
     type: directory
-    targetpath: /srv/nfs
+    target_path: /srv/nfs
     owner: root
     group: root
     mode: "0755"
 
   # --- Exports config ---
 
+  #~ Deploy /etc/exports
   - name: nfs-exports
     type: file
-    targetpath: /etc/exports
+    target_path: /etc/exports
     content: |
       # Managed by Hobnob — do not edit manually
       {{ .Vars.nfs_export_path }} {{ .Vars.nfs_export_clients }}
@@ -45,42 +50,45 @@ resources:
     notify: [reload-exports]
 
   # Re-export shares when /etc/exports changes
+  #~ Run reload-exports
   - name: reload-exports
     type: exec
     command: "exportfs -ra"
-    depends_on: [nfs-exports]
     subscribes: [nfs-exports]
-    when: "changed"
 
   # --- Service (distro-specific) ---
 
+  #~ Ensure nfs-kernel-server is running and enabled
   - name: nfs-service-debian
     type: service
     service: nfs-kernel-server
-    enabled: true
     state: running
+    enabled: true
     when: "os_family('debian')"
     depends_on: [nfs-exports]
     subscribes: [nfs-exports]
 
+  #~ Ensure nfs-server is running and enabled
   - name: nfs-service-redhat
     type: service
     service: nfs-server
-    enabled: true
     state: running
+    enabled: true
     when: "!os_family('debian')"
     depends_on: [nfs-exports]
     subscribes: [nfs-exports]
 
   # --- Client mount ---
 
+  #~ Create directory /mnt/nfs
   - name: nfs-mount-dir
     type: directory
-    targetpath: /mnt/nfs
+    target_path: /mnt/nfs
     owner: root
     group: root
     mode: "0755"
 
+  #~ Manage nfs-mount (mount)
   - name: nfs-mount
     type: mount
     path: /mnt/nfs

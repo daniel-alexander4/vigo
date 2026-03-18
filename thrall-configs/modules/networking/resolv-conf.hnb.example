@@ -1,3 +1,4 @@
+#~ Manages file
 name: resolv-conf
 
 vars:
@@ -8,9 +9,10 @@ vars:
   dns_options: "timeout:2 attempts:3"
 
 resources:
+  #~ Deploy /etc/resolv.conf
   - name: resolv-conf
     type: file
-    targetpath: /etc/resolv.conf
+    target_path: /etc/resolv.conf
     content: |
       # Managed by Hobnob — do not edit manually
       {{ if ne .Vars.search_domain "" }}

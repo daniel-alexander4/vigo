@@ -50,8 +50,13 @@ hnb/proposed/modules/app.hnb: [error] app: resource "deploy" (exec) missing idem
 - `0` -- all checks pass
 - `1` -- validation errors found
 
+## Relationship to Config Publish
+
+`hobnobcli validate` checks individual files in isolation. `hobnobcli config publish` runs a more comprehensive pipeline that includes the **module linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
+
 ## Related
 
 - [vi](vi.md) -- edit .hnb files with live validation
 - [preview](preview.md) -- preview planned changes
 - [doctor](doctor.md) -- server health checks including config validation
+- [config publish](config.md#config-publish) -- full validation + linting pipeline

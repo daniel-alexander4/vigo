@@ -74,7 +74,7 @@ No config entry matches hostname "unknown.example.com"
 
 ## config publish
 
-Validates `.hnb` files in `/srv/hobnob/hnb/proposed/` then atomically syncs to `/srv/hobnob/hnb/.live/` (the hidden directory the server reads from). See [Config Publish Pipeline](../operations/config-publish.md) for full details.
+Validates `.hnb` files in `/srv/hobnob/hnb/proposed/` then atomically syncs to `/srv/hobnob/hnb/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../operations/config-publish.md) for full details.
 
 ### Usage
 

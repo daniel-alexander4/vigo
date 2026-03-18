@@ -278,6 +278,17 @@ resources:
 
 Block-level `when` is AND-composed with each child resource's individual `when` (if any).
 
+## Module Linter
+
+The module linter (`server/modlint`) runs on changed module files during `config publish`, before the config store loads them. It:
+
+1. **Repairs** YAML syntax issues (tabs→spaces, unquoted booleans, trailing whitespace)
+2. **Normalizes** structure (canonical key ordering, 2-space indentation)
+3. **Validates** schema (required fields per type, cross-references, DAG cycles, idempotency)
+4. **Auto-comments** with `#~` prefix (regenerated every publish; hand-written `#` comments preserved)
+
+The linter is a standalone package with no server dependencies — it can be imported by hobd, hobnobcli, or any external Go program (e.g., Google Cloud Functions for the community module site).
+
 ## Config Reload
 
 - `hobnobcli config publish` calls `POST /api/v1/config/reload` after syncing files

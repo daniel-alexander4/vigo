@@ -153,6 +153,26 @@ Publish the config to make it active:
 hobnobcli config publish
 ```
 
+The publish command runs your module through the **module linter**, which:
+- Fixes common YAML issues (tabs, trailing whitespace, unquoted booleans)
+- Normalizes key ordering and indentation
+- Validates required fields, cross-references, and idempotency
+- Adds `#~` auto-comments describing each resource
+
+After publishing, your module file will have `#~` comments like:
+
+```yaml
+#~ Manages package, file, service
+name: nginx
+...
+resources:
+  #~ Install nginx package
+  - name: nginx-package
+    ...
+```
+
+These `#~` comments are regenerated on every publish — don't edit them. Use plain `#` comments for your own notes.
+
 Then force an immediate check-in:
 
 ```bash

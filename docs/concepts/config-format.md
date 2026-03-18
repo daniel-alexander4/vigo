@@ -233,6 +233,47 @@ Every resource has these common fields:
 
 Plus type-specific attributes (see [Executors](../executors/_index.md)).
 
+## Auto-Comments (`#~`)
+
+When you run `hobnobcli config publish`, the module linter automatically adds `#~` prefixed comments to changed modules:
+
+```yaml
+#~ Manages package, file, service
+name: nginx
+
+resources:
+  #~ Install nginx package
+  - name: nginx-package
+    type: package
+    package: nginx
+
+  #~ Deploy /etc/nginx/sites-available/default
+  - name: nginx-config
+    type: file
+    target_path: /etc/nginx/sites-available/default
+    content: |
+      server {
+          listen {{ .Vars.nginx_port }};
+      }
+    owner: root
+    group: root
+    mode: "0644"
+    notify: [nginx-service]
+
+  # Custom note: we use reloaded here because nginx supports graceful reload
+  #~ Reload nginx on dependency change
+  - name: nginx-service
+    type: service
+    service: nginx
+    state: reloaded
+    subscribes: [nginx-config]
+```
+
+**Rules:**
+- `#~` comments are auto-generated — they are stripped and regenerated on every publish. Do not edit them.
+- `#` comments (no tilde) are hand-written and never touched by the linter. Use these for your own notes.
+- The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../operations/config-publish.md#module-linter) for details.
+
 ## Config Reload
 
 After `hobnobcli config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:

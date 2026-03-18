@@ -132,6 +132,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 | `server/bootstrap/` | Agent bootstrap handler (curl-pipe install flow) |
 | `server/conditionals/` | Conditional variable parsing and evaluation. See [conditionals/README.md](conditionals/README.md). |
 | `server/validate/` | Module idempotency validation |
+| `server/modlint/` | Module linter: YAML repair, normalization, schema validation, `#~` auto-commenting. Standalone package (no server deps) for use in hobd, CLI, and community website. |
 
 ### Startup Sequence
 

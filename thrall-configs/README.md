@@ -287,7 +287,7 @@ resources:
 
 Secrets never appear in plaintext in logs, API responses, or gRPC payloads.
 
-## Validation
+## Validation and Linting
 
 ```bash
 # Validate a config file
@@ -295,4 +295,48 @@ hobnobcli validate modules/nginx.hnb
 
 # Edit with auto-validation on save
 hobnobcli vi modules/nginx.hnb
+
+# Full validation + linting (dry run)
+hobnobcli config publish --dry-run
+```
+
+When you run `hobnobcli config publish`, the **module linter** automatically processes changed modules:
+
+- **Repairs** YAML issues (tabs→spaces, unquoted booleans like `yes`→`true`, trailing whitespace)
+- **Normalizes** key ordering and indentation
+- **Validates** required fields, cross-references, dependency cycles, and idempotency guards
+- **Adds `#~` comments** describing each resource (regenerated every publish)
+
+Hand-written `#` comments are never touched. Only `#~` prefixed comments are auto-generated:
+
+```yaml
+#~ Manages package, file, service
+name: openssh
+
+resources:
+  #~ Install openssh-server package
+  - name: install-openssh
+    type: package
+    package: openssh-server
+
+  # We lock down root login for PCI compliance
+  #~ Deploy /etc/ssh/sshd_config
+  - name: sshd-config
+    type: file
+    target_path: /etc/ssh/sshd_config
+    content: |
+      Port {{ .Vars.ssh_port }}
+      PermitRootLogin {{ .Vars.ssh_permit_root }}
+    owner: root
+    group: root
+    mode: "0600"
+    depends_on: [install-openssh]
+    notify: [sshd-service]
+
+  #~ Ensure sshd is running and enabled
+  - name: sshd-service
+    type: service
+    service: sshd
+    state: running
+    enabled: true
 ```
