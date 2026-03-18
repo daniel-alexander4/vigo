@@ -312,6 +312,7 @@ type ThrallRow struct {
 	IPAddress  string
 	EnrolledAt time.Time
 	LastSeen   time.Time
+	LastRunAt  time.Time
 	Status     string
 }
 
@@ -1299,12 +1300,22 @@ func (ds *dbDataSource) ThrallsData(baseInterval time.Duration, statusFilter str
 			lastSeen = n.LastSeen.Time
 		}
 
+		var lastRunAt time.Time
+		latestRuns, _ := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
+			ThrallID: n.ID,
+			Limit:    1,
+		})
+		if len(latestRuns) > 0 && !latestRuns[0].StartedAt.IsZero() {
+			lastRunAt = latestRuns[0].StartedAt
+		}
+
 		rows = append(rows, ThrallRow{
 			ID:         n.ID,
 			Hostname:   n.Hostname,
 			IPAddress:  n.IpAddress,
 			EnrolledAt: n.EnrolledAt,
 			LastSeen:   lastSeen,
+			LastRunAt:  lastRunAt,
 			Status:     status,
 		})
 

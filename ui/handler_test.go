@@ -189,7 +189,7 @@ func TestThrallsHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Table should have expected column headers
-	for _, col := range []string{"Hostname", "IP Address", "Enrolled", "Last Seen", "Status"} {
+	for _, col := range []string{"Hostname", "IP Address", "Last Seen", "Last Run", "Status"} {
 		if !strings.Contains(body, col) {
 			t.Errorf("Thralls page missing column header %q", col)
 		}

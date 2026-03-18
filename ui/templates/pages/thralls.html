@@ -28,8 +28,8 @@
         <tr>
             <th>Hostname</th>
             <th>IP Address</th>
-            <th>Enrolled</th>
             <th>Last Seen</th>
+            <th>Last Run</th>
             <th>Status</th>
         </tr>
     </thead>
@@ -38,8 +38,8 @@
         <tr>
             <td><a href="/thralls/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IPAddress}}</td>
-            <td class="text-muted">{{formatTime .EnrolledAt}}</td>
             <td class="text-muted">{{formatTime .LastSeen}}</td>
+            <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}{{formatTime .LastRunAt}}{{end}}</td>
             <td>{{template "status-badge" dict "Status" .Status}}</td>
         </tr>
         {{end}}
