@@ -8,7 +8,7 @@
 # Requires: hobnobcli in PATH (or ./bin/hobnobcli), jq, curl.
 # Assumes the server is running and reachable from localhost (implicit admin).
 
-set -euo pipefail
+set -uo pipefail
 
 SERVER="${1:-https://localhost:8443}"
 # Strip --server prefix if passed as flag
