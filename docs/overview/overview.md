@@ -98,7 +98,7 @@ resources:
 
   - name: Nginx config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: "0644"
@@ -134,7 +134,7 @@ resources:
 resources:
   - name: App compose file
     type: file
-    targetpath: /opt/myapp/docker-compose.yml
+    target_path: /opt/myapp/docker-compose.yml
     owner: root
     group: root
     mode: "0644"

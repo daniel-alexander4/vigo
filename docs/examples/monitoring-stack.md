@@ -27,7 +27,7 @@ resources:
 
   - name: node-exporter-config
     type: file
-    targetpath: /etc/default/prometheus-node-exporter
+    target_path: /etc/default/prometheus-node-exporter
     owner: root
     group: root
     mode: "0644"
@@ -63,7 +63,7 @@ resources:
 
   - name: prometheus-config
     type: file
-    targetpath: /etc/prometheus/prometheus.yml
+    target_path: /etc/prometheus/prometheus.yml
     owner: prometheus
     group: prometheus
     mode: "0644"
@@ -122,7 +122,7 @@ resources:
 
   - name: grafana-config
     type: file
-    targetpath: /etc/grafana/grafana.ini
+    target_path: /etc/grafana/grafana.ini
     owner: root
     group: grafana
     mode: "0640"
@@ -140,7 +140,7 @@ resources:
 
   - name: grafana-datasource
     type: file
-    targetpath: /etc/grafana/provisioning/datasources/prometheus.yaml
+    target_path: /etc/grafana/provisioning/datasources/prometheus.yaml
     owner: root
     group: grafana
     mode: "0640"

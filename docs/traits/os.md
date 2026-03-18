@@ -30,7 +30,7 @@ Parses `/etc/os-release` for distribution identity fields (`ID`, `ID_LIKE`, `VER
 ```yaml
 - name: motd
   type: file
-  targetpath: /etc/motd
+  target_path: /etc/motd
   content: |
     Distribution: {{ .Traits.os.distro }} {{ .Traits.os.version }}
     Kernel: {{ .Traits.os.kernel }}

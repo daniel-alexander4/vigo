@@ -15,9 +15,10 @@ resources:
 
   - name: backup-script
     type: file
-    targetpath: /usr/local/bin/hobnob-backup.sh
+    target_path: /usr/local/bin/hobnob-backup.sh
     mode: "0700"
     owner: root
+    group: root
     content: |
       #!/bin/sh
       set -e

@@ -27,14 +27,14 @@ resources:
 
   - name: zk-data-dir
     type: directory
-    targetpath: /var/lib/zookeeper
+    target_path: /var/lib/zookeeper
     owner: zookeeper
     group: zookeeper
     mode: "0755"
 
   - name: zoo-cfg
     type: file
-    targetpath: /etc/zookeeper/conf/zoo.cfg
+    target_path: /etc/zookeeper/conf/zoo.cfg
     content: |
       # Managed by Hobnob — do not edit manually
       tickTime={{ .Vars.zk_tick_time }}
@@ -53,7 +53,7 @@ resources:
 
   - name: zk-myid
     type: file
-    targetpath: /var/lib/zookeeper/myid
+    target_path: /var/lib/zookeeper/myid
     content: "{{ .Vars.zk_server_id }}"
     owner: zookeeper
     group: zookeeper

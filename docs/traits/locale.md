@@ -34,7 +34,7 @@ Runs the `locale` command and parses its `KEY=VALUE` output. Keys are converted 
 ```yaml
 - name: locale-info
   type: file
-  targetpath: /var/lib/hobnob/locale.txt
+  target_path: /var/lib/hobnob/locale.txt
   content: |
     Language: {{ .Traits.locale.lang }}
 ```

@@ -32,7 +32,7 @@ Puppet's agent runs on a 30-minute interval by default. Hobnob's agent interval 
 | Puppet Forge module | Module `.hnb` file | No package manager — just YAML files |
 | PuppetDB | FleetIndex + SQLite | In-memory index, no external database |
 | hiera-eyaml | `secret:` prefix | Resolved at bundle compile time |
-| ERB template | Go template in `content:` | Templates only in `content:` — never in `targetpath:`, `package:`, etc. |
+| ERB template | Go template in `content:` | Templates only in `content:` — never in `target_path:`, `package:`, etc. |
 | `environments/` | `environment_overrides` in `nodes.hnb` | Environment-specific overrides, not directory-based |
 | Puppet agent | hobnob agent | Rust binary, LMDB state store |
 | Puppet server | hobd | Go binary, gRPC + REST |
@@ -51,7 +51,7 @@ Puppet's agent runs on a 30-minute interval by default. Hobnob's agent interval 
 | `cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `file_line` | `file_line` | `path:`, `line:`, `match:` |
 | `yumrepo` / `apt::source` | `repository` | Unified across distros |
-| `archive` | `archive` | `url:`, `targetpath:`, `checksum:` |
+| `archive` | `archive` | `url:`, `target_path:`, `checksum:` |
 | `mount` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `sysctl` | `sysctl` | `key:`, `value:` |
 | `host` | `host` | `hostname:`, `ip:` |
@@ -132,7 +132,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: "0644"
@@ -232,7 +232,7 @@ Puppet uses ERB (or EPP). Hobnob uses Go templates. Key syntax differences:
 | `<% @items.each do |item| %>` | `{{ range .Vars.items }}` |
 | `<%= @variable.downcase %>` | `{{ lower .Vars.variable }}` |
 
-**Critical restriction:** Templates are only allowed in `content:` attributes. You cannot template `targetpath:`, `package:`, `service:`, or any other attribute. Use `when:` expressions for conditional logic and separate resources for OS-specific packages.
+**Critical restriction:** Templates are only allowed in `content:` attributes. You cannot template `target_path:`, `package:`, `service:`, or any other attribute. Use `when:` expressions for conditional logic and separate resources for OS-specific packages.
 
 ## Conditionals and Targeting
 

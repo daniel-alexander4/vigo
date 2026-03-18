@@ -441,9 +441,9 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 			if err := val.Decode(&m.Name); err != nil {
 				return fmt.Errorf("decoding name: %w", err)
 			}
-		case "depends_on", "require":
+		case "depends_on":
 			if err := val.Decode(&m.DependsOn); err != nil {
-				return fmt.Errorf("decoding %s: %w", key, err)
+				return fmt.Errorf("decoding depends_on: %w", err)
 			}
 		case "before":
 			if err := val.Decode(&m.Before); err != nil {

@@ -19,7 +19,7 @@ resources:
 
   - name: prometheus-conf
     type: file
-    targetpath: /etc/prometheus/prometheus.yml
+    target_path: /etc/prometheus/prometheus.yml
     content: |
       global:
         scrape_interval: {{ .Vars.prometheus_scrape_interval }}

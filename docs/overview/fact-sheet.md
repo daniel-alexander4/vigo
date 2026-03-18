@@ -34,7 +34,7 @@ resources:
 
   - name: nginx config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: |
       worker_processes {{ .Traits.hardware.cpu_count }};
     notify: restart-nginx

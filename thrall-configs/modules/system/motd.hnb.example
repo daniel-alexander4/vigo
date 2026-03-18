@@ -7,7 +7,7 @@ vars:
 resources:
   - name: motd
     type: file
-    targetpath: /etc/motd
+    target_path: /etc/motd
     content: |
       ========================================
         {{ .Vars.org_name }}

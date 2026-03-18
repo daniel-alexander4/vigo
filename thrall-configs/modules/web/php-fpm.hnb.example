@@ -23,7 +23,7 @@ resources:
 
   - name: php-fpm-pool-debian
     type: file
-    targetpath: /etc/php/8.2/fpm/pool.d/www.conf
+    target_path: /etc/php/8.2/fpm/pool.d/www.conf
     content: |
       ; Managed by Hobnob — do not edit manually
       [www]
@@ -60,7 +60,7 @@ resources:
 
   - name: php-fpm-pool-redhat
     type: file
-    targetpath: /etc/php-fpm.d/www.conf
+    target_path: /etc/php-fpm.d/www.conf
     content: |
       ; Managed by Hobnob — do not edit manually
       [www]
@@ -97,7 +97,7 @@ resources:
 
   - name: php-fpm-log-dir-debian
     type: directory
-    targetpath: /var/log/php-fpm
+    target_path: /var/log/php-fpm
     owner: www-data
     group: www-data
     mode: "0755"
@@ -105,7 +105,7 @@ resources:
 
   - name: php-fpm-log-dir-redhat
     type: directory
-    targetpath: /var/log/php-fpm
+    target_path: /var/log/php-fpm
     owner: apache
     group: apache
     mode: "0755"

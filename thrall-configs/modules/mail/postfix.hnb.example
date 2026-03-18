@@ -14,7 +14,7 @@ resources:
 
   - name: postfix-main-cf
     type: file
-    targetpath: /etc/postfix/main.cf
+    target_path: /etc/postfix/main.cf
     content: |
       # Managed by Hobnob — do not edit manually
       smtpd_banner = $myhostname ESMTP

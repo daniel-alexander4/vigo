@@ -20,7 +20,7 @@ resources:
 
   - name: grafana-ini
     type: file
-    targetpath: /etc/grafana/grafana.ini
+    target_path: /etc/grafana/grafana.ini
     content: |
       [server]
       http_port = {{ .Vars.grafana_port }}

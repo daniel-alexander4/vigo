@@ -16,7 +16,7 @@ resources:
 
   - name: app-workdir
     type: directory
-    targetpath: /opt/myapp
+    target_path: /opt/myapp
     owner: myapp
     group: myapp
     mode: "0755"
@@ -24,7 +24,7 @@ resources:
 
   - name: app-unit-file
     type: file
-    targetpath: /etc/systemd/system/myapp.service
+    target_path: /etc/systemd/system/myapp.service
     content: |
       [Unit]
       Description={{ .Vars.app_name }}

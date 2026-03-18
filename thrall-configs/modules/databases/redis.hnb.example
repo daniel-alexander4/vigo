@@ -14,7 +14,7 @@ resources:
 
   - name: redis-conf
     type: file
-    targetpath: /etc/redis/redis.conf
+    target_path: /etc/redis/redis.conf
     content: |
       bind {{ .Vars.redis_bind }}
       port {{ .Vars.redis_port }}

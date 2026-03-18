@@ -58,7 +58,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: |
       worker_processes {{ .Vars.worker_count }};
       server {
@@ -84,7 +84,7 @@ Instead of inline `content`, use `source` to reference a file relative to the co
 resources:
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     source: templates/nginx/nginx.conf.tmpl
     mode: "0644"
 ```
@@ -214,7 +214,6 @@ Known secret fields (`dsn`, `tls_cert_path`, `tls_key_path`, `webhook_secret`) a
 | Keyword | Direction | Description |
 |---------|-----------|-------------|
 | `depends_on` | Forward | This resource runs after the listed resources |
-| `require` | Forward | Alias for `depends_on` |
 | `before` | Reverse | Listed resources run after this resource (resolved at load time) |
 | `notify` | Trigger | Re-execute target resource if this one makes a change |
 | `subscribes` | Trigger | Listen for changes on the named resource (converted to `notify` internally) |
@@ -234,7 +233,7 @@ resources:
 
   - name: high-perf-config
     type: file
-    targetpath: /etc/app/performance.conf
+    target_path: /etc/app/performance.conf
     content: "threads: 16"
     when: "high_memory || many_cpus"
 

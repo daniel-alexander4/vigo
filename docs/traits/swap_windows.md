@@ -27,7 +27,7 @@ Runs `wmic pagefile get AllocatedBaseSize,CurrentUsage /value`. Both values are 
 ```yaml
 - name: swap-report
   type: file
-  targetpath: C:\ProgramData\hobnob\swap.txt
+  target_path: C:\ProgramData\hobnob\swap.txt
   content: |
     Pagefile total: {{ .Traits.swap.total_bytes }} bytes
     Pagefile used: {{ .Traits.swap.used_bytes }} bytes

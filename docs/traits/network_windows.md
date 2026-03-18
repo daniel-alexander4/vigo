@@ -28,7 +28,7 @@ Hostname is retrieved via the `hostname` crate (cross-platform). The primary IP 
 ```yaml
 - name: network-info
   type: file
-  targetpath: C:\ProgramData\hobnob\network.txt
+  target_path: C:\ProgramData\hobnob\network.txt
   content: |
     Hostname: {{ .Traits.network.hostname }}
     IP: {{ .Traits.network.ip }}

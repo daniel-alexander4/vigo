@@ -40,6 +40,7 @@ func FlattenResourceNodes(nodes []*yaml.Node) ([]ResourceConfig, error) {
 			if err := node.Decode(&res); err != nil {
 				return nil, fmt.Errorf("decoding resource: %w", err)
 			}
+			normalizeResourceAttrs(res.Attributes)
 			result = append(result, res)
 			continue
 		}
@@ -57,11 +58,31 @@ func FlattenResourceNodes(nodes []*yaml.Node) ([]ResourceConfig, error) {
 		// Merge block-level when onto each child resource.
 		for i := range block.Resources {
 			mergeConditionals(&block, &block.Resources[i])
+			normalizeResourceAttrs(block.Resources[i].Attributes)
 			result = append(result, block.Resources[i])
 		}
 	}
 
 	return result, nil
+}
+
+// normalizeResourceAttrs fixes YAML parsing quirks in resource attributes:
+//   - mode: 0644 (parsed as octal int 420) → string "0644"
+//   - targetpath → target_path (canonical form)
+func normalizeResourceAttrs(attrs map[string]any) {
+	// Coerce integer mode to octal string.
+	if v, ok := attrs["mode"]; ok {
+		if n, isInt := v.(int); isInt {
+			attrs["mode"] = fmt.Sprintf("%04o", n)
+		}
+	}
+	// Normalize targetpath → target_path.
+	if v, ok := attrs["targetpath"]; ok {
+		if _, hasCanonical := attrs["target_path"]; !hasCanonical {
+			attrs["target_path"] = v
+		}
+		delete(attrs, "targetpath")
+	}
 }
 
 // mergeConditionals combines block-level and resource-level when expressions.

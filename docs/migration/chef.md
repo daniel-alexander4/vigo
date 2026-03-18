@@ -51,7 +51,7 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | `group` | `group` | `groupname:`, `gid:`, `members:` |
 | `cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `apt_repository` / `yum_repository` | `repository` | Unified across distros |
-| `remote_file` | `archive` | `url:`, `targetpath:`, `checksum:` |
+| `remote_file` | `archive` | `url:`, `target_path:`, `checksum:` |
 | `mount` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `sysctl` | `sysctl` | `key:`, `value:` |
 | `hostname` | `hostname` | `hostname:` |
@@ -140,7 +140,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: "0644"
@@ -241,7 +241,7 @@ Chef uses ERB. Hobnob uses Go templates.
 | `<% if condition %>` | `{{ if .Vars.condition }}` |
 | `<% @items.each do \|i\| %>` | `{{ range .Vars.items }}` |
 
-**Critical restriction:** Go templates work only in `content:` attributes. You cannot use `{{ }}` in `package:`, `targetpath:`, `command:`, or any other attribute.
+**Critical restriction:** Go templates work only in `content:` attributes. You cannot use `{{ }}` in `package:`, `target_path:`, `command:`, or any other attribute.
 
 ## Conditionals and Targeting
 

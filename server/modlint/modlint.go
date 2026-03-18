@@ -303,6 +303,13 @@ func parseOneResource(node *yaml.Node) (resource, error) {
 				if err := val.Decode(&v); err != nil {
 					return res, fmt.Errorf("decoding %q: %w", key, err)
 				}
+				// YAML parses bare octal like 0644 as int 420. Coerce
+				// mode values back to an octal string so "0644" round-trips.
+				if key == "mode" {
+					if n, ok := v.(int); ok {
+						v = fmt.Sprintf("%04o", n)
+					}
+				}
 				res.Attrs[key] = v
 				res.AttrOrder = append(res.AttrOrder, key)
 			}

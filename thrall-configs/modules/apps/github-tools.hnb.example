@@ -9,20 +9,20 @@ resources:
   - name: install-bat
     type: archive
     url: "https://github.com/sharkdp/bat/releases/download/v0.25.0/bat-v0.25.0-x86_64-unknown-linux-musl.tar.gz"
-    targetpath: /usr/local/bin/bat
+    target_path: /usr/local/bin/bat
     binary: bat
     unless: "bat --version | grep 0.25.0"
 
   - name: install-fd
     type: archive
     url: "https://github.com/sharkdp/fd/releases/download/v10.2.0/fd-v10.2.0-x86_64-unknown-linux-musl.tar.gz"
-    targetpath: /usr/local/bin/fd
+    target_path: /usr/local/bin/fd
     binary: fd
     unless: "fd --version | grep 10.2.0"
 
   - name: install-ripgrep
     type: archive
     url: "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz"
-    targetpath: /usr/local/bin/rg
+    target_path: /usr/local/bin/rg
     binary: rg
     unless: "rg --version | grep 14.1.1"

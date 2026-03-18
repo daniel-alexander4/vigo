@@ -20,7 +20,7 @@ func TestHashPolicyModule_Deterministic(t *testing.T) {
 				Name: "nginx-conf",
 				Type: "file",
 				Attributes: map[string]string{
-					"targetpath": "/etc/nginx/nginx.conf",
+					"target_path": "/etc/nginx/nginx.conf",
 					"content":    "server { listen 80; }",
 				},
 				Notify: []string{"nginx-svc"},

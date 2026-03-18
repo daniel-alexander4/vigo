@@ -23,7 +23,7 @@ Returns an empty object if no supported package manager is found.
 ```yaml
 - name: configure-nginx
   type: file
-  targetpath: /etc/nginx/nginx.conf
+  target_path: /etc/nginx/nginx.conf
   when: "os_family('debian')"
 ```
 
@@ -31,7 +31,7 @@ Returns an empty object if no supported package manager is found.
 ```yaml
 - name: package-report
   type: file
-  targetpath: /var/lib/hobnob/package-report.txt
+  target_path: /var/lib/hobnob/package-report.txt
   content: |
     Installed packages on {{ .Traits.network.hostname }}:
     {{ range $name, $ver := .Traits.packages.installed }}{{ $name }}={{ $ver }}

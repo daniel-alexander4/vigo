@@ -21,7 +21,7 @@ Uses `localtime_r` via libc to get the `tm_zone` abbreviation and `tm_gmtoff` of
 ```yaml
 - name: ntp-config
   type: file
-  targetpath: /etc/ntp.conf
+  target_path: /etc/ntp.conf
   when: "os_family('debian')"
 ```
 
@@ -29,7 +29,7 @@ Uses `localtime_r` via libc to get the `tm_zone` abbreviation and `tm_gmtoff` of
 ```yaml
 - name: timezone-info
   type: file
-  targetpath: /var/lib/hobnob/timezone.txt
+  target_path: /var/lib/hobnob/timezone.txt
   content: |
     Timezone: {{ .Traits.timezone.name }} ({{ .Traits.timezone.abbreviation }})
     UTC Offset: {{ .Traits.timezone.utc_offset }}

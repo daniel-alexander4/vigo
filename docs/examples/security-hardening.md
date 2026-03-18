@@ -71,7 +71,7 @@ vars:
 resources:
   - name: sshd-config
     type: file
-    targetpath: /etc/ssh/sshd_config.d/99-hardening.conf
+    target_path: /etc/ssh/sshd_config.d/99-hardening.conf
     owner: root
     group: root
     mode: "0644"
@@ -113,7 +113,7 @@ resources:
 
   - name: fail2ban-jail-config
     type: file
-    targetpath: /etc/fail2ban/jail.local
+    target_path: /etc/fail2ban/jail.local
     owner: root
     group: root
     mode: "0644"
@@ -152,7 +152,7 @@ resources:
 
   - name: sudoers-config
     type: file
-    targetpath: /etc/sudoers.d/hobnob-managed
+    target_path: /etc/sudoers.d/hobnob-managed
     owner: root
     group: root
     mode: "0440"

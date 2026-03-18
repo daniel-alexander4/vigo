@@ -31,7 +31,7 @@ Reads three files from `/proc`:
 ```yaml
 - name: kernel-info
   type: file
-  targetpath: /var/lib/hobnob/kernel.txt
+  target_path: /var/lib/hobnob/kernel.txt
   content: |
     Kernel: {{ .Traits.kernel.release }}
     Hostname: {{ .Traits.kernel.hostname }}

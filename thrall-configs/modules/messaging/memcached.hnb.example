@@ -14,7 +14,7 @@ resources:
 
   - name: memcached-conf
     type: file
-    targetpath: /etc/memcached.conf
+    target_path: /etc/memcached.conf
     content: |
       # Managed by Hobnob — do not edit manually
       -l {{ .Vars.memcached_listen }}

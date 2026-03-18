@@ -14,7 +14,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: "..."
     depends_on: [nginx-package]
 
@@ -56,7 +56,7 @@ Triggers re-application of another resource when this one makes a change:
 resources:
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: "..."
     notify: [nginx-service]
 
@@ -82,7 +82,7 @@ The inverse of `notify`. A resource watches another and re-applies itself when t
 resources:
   - name: app-config
     type: file
-    targetpath: /etc/app/config.yaml
+    target_path: /etc/app/config.yaml
     content: "..."
 
   - name: app-service
@@ -102,7 +102,7 @@ Watches secret paths for rotation. When a secret is changed via `hobnobcli secre
 resources:
   - name: app-config
     type: file
-    targetpath: /etc/app/config.yaml
+    target_path: /etc/app/config.yaml
     content: |
       dsn: {{ .Vars.db_dsn }}
     watch_secret: ["hobnob/db/dsn"]

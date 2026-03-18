@@ -8,7 +8,7 @@ Hobnob uses Go template syntax for dynamic content in resource definitions. Temp
 |-----------|:-:|-------|
 | `content:` | Yes | Inline template in the YAML |
 | `source:` | Yes | External template file (e.g., `source: templates/nginx.conf.tmpl`) |
-| `targetpath:` | No | |
+| `target_path:` | No | |
 | `package:` | No | |
 | `service:` | No | |
 | `command:` | No | |
@@ -39,7 +39,7 @@ vars:
 resources:
   - name: app-config
     type: file
-    targetpath: /etc/app/config.yaml
+    target_path: /etc/app/config.yaml
     content: |
       name: {{ .Vars.app_name }}
       port: {{ .Vars.app_port }}
@@ -53,7 +53,7 @@ Thrall traits (auto-discovered facts):
 resources:
   - name: motd
     type: file
-    targetpath: /etc/motd
+    target_path: /etc/motd
     content: |
       ==========================================
       Hostname: {{ .Traits.network.hostname }}
@@ -125,7 +125,7 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 ```yaml
 - name: sshd-config
   type: file
-  targetpath: /etc/ssh/sshd_config
+  target_path: /etc/ssh/sshd_config
   content: |
     Port {{ .Vars.ssh_port }}
     PermitRootLogin no
@@ -141,7 +141,7 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 ```yaml
 - name: vhost
   type: file
-  targetpath: /etc/nginx/sites-available/app
+  target_path: /etc/nginx/sites-available/app
   content: |
     server {
         listen {{ .Vars.nginx_port }};
@@ -160,7 +160,7 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 ```yaml
 - name: node-info
   type: file
-  targetpath: /etc/hobnob-node-info
+  target_path: /etc/hobnob-node-info
   content: |
     hostname={{ .Traits.network.hostname }}
     os={{ .Traits.os.distro }}
@@ -177,7 +177,7 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 # WRONG — templates not allowed in targetpath
 - name: config
   type: file
-  targetpath: "/etc/{{ .Vars.app_name }}/config.yaml"
+  target_path: "/etc/{{ .Vars.app_name }}/config.yaml"
 ```
 
 **Fix:** Use a literal path or set it via vars at the node level.

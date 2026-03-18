@@ -13,7 +13,7 @@ resources:
 
   - name: rsyslog-hobnob-conf
     type: file
-    targetpath: /etc/rsyslog.d/50-hobnob.conf
+    target_path: /etc/rsyslog.d/50-hobnob.conf
     content: |
       # Managed by Hobnob — do not edit manually
 

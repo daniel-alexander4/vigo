@@ -31,7 +31,7 @@ resources:
 
   - name: pg-config
     type: file
-    targetpath: "/etc/postgresql/{{ .Vars.pg_version }}/main/postgresql.conf"
+    target_path: "/etc/postgresql/{{ .Vars.pg_version }}/main/postgresql.conf"
     owner: postgres
     group: postgres
     mode: "0644"
@@ -52,7 +52,7 @@ resources:
 
   - name: pg-hba
     type: file
-    targetpath: "/etc/postgresql/{{ .Vars.pg_version }}/main/pg_hba.conf"
+    target_path: "/etc/postgresql/{{ .Vars.pg_version }}/main/pg_hba.conf"
     owner: postgres
     group: postgres
     mode: "0640"

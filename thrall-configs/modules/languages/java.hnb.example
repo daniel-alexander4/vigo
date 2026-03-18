@@ -34,7 +34,7 @@ resources:
 
   - name: java-profile
     type: file
-    targetpath: /etc/profile.d/java.sh
+    target_path: /etc/profile.d/java.sh
     content: |
       # Managed by Hobnob — do not edit manually
       export JAVA_HOME="{{ .Vars.java_home }}"

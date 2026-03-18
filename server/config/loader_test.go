@@ -185,7 +185,7 @@ name: app
 resources:
   - name: config
     type: file
-    targetpath: /etc/app/db.conf
+    target_path: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
 	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
@@ -676,7 +676,7 @@ name: app
 resources:
   - name: config
     type: file
-    targetpath: /etc/app/config
+    target_path: /etc/app/config
     content: "secret:myapp/db/config"
 `)
 	writeFile(t, filepath.Join(dir, "modules", "other.yaml"), `
@@ -727,7 +727,7 @@ vars:
 resources:
   - name: nginx-conf
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     source: templates/nginx.conf.tmpl
     owner: root
     mode: "0644"
@@ -775,7 +775,7 @@ name: bad
 resources:
   - name: both-set
     type: file
-    targetpath: /etc/test
+    target_path: /etc/test
     source: templates/test.tmpl
     content: "inline content"
 `)
@@ -803,7 +803,7 @@ name: bad
 resources:
   - name: missing-source
     type: file
-    targetpath: /etc/test
+    target_path: /etc/test
     source: templates/nonexistent.tmpl
 `)
 	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
@@ -838,7 +838,7 @@ vars:
 resources:
   - name: nginx-site
     type: file
-    targetpath: /etc/nginx/sites-enabled/default
+    target_path: /etc/nginx/sites-enabled/default
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
 `)
@@ -2623,7 +2623,7 @@ name: app
 resources:
   - name: conf
     type: file
-    targetpath: /etc/app/config
+    target_path: /etc/app/config
     source: "../../etc/shadow"
 `)
 	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
@@ -2649,7 +2649,7 @@ name: app
 resources:
   - name: conf
     type: file
-    targetpath: /etc/app/config
+    target_path: /etc/app/config
     source: "/etc/passwd"
 `)
 	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
@@ -2851,7 +2851,7 @@ name: evil
 resources:
   - name: evil-file
     type: file
-    targetpath: /etc/evil.conf
+    target_path: /etc/evil.conf
     source: templates/evil.conf
 `)
 	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
@@ -2879,14 +2879,14 @@ name: firewall
 resources:
   - name: fw-rules
     type: file
-    targetpath: /etc/iptables/rules.v4
+    target_path: /etc/iptables/rules.v4
 `)
 	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
 name: sshd
 resources:
   - name: sshd-config
     type: file
-    targetpath: /etc/ssh/sshd_config
+    target_path: /etc/ssh/sshd_config
 `)
 	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
 name: nginx
@@ -2943,7 +2943,7 @@ name: a
 resources:
   - name: r
     type: file
-    targetpath: /tmp/a
+    target_path: /tmp/a
 `)
 	writeFile(t, filepath.Join(dir, "roles", "inner.yaml"), `
 name: inner
@@ -2982,14 +2982,14 @@ name: shared
 resources:
   - name: r
     type: file
-    targetpath: /tmp/shared
+    target_path: /tmp/shared
 `)
 	writeFile(t, filepath.Join(dir, "modules", "web.yaml"), `
 name: web
 resources:
   - name: r
     type: file
-    targetpath: /tmp/web
+    target_path: /tmp/web
 `)
 	writeFile(t, filepath.Join(dir, "roles", "base.yaml"), `
 name: base
@@ -3039,7 +3039,7 @@ vars:
 resources:
   - name: cfg
     type: file
-    targetpath: /etc/app.conf
+    target_path: /etc/app.conf
 `)
 
 	varsDir := filepath.Join(dir, "vars")
@@ -3077,7 +3077,7 @@ name: app
 resources:
   - name: cfg
     type: file
-    targetpath: /etc/app.conf
+    target_path: /etc/app.conf
 `)
 
 	varsDir := filepath.Join(dir, "vars")
@@ -3123,14 +3123,14 @@ resources:
     state: present
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
 `)
 	writeFile(t, filepath.Join(dir, "modules", "firewall.yaml"), `
 name: firewall
 resources:
   - name: fw
     type: file
-    targetpath: /etc/iptables/rules.v4
+    target_path: /etc/iptables/rules.v4
 `)
 	writeFile(t, filepath.Join(dir, "roles", "base.yaml"), `
 name: base
@@ -3207,7 +3207,7 @@ name: a
 resources:
   - name: r
     type: file
-    targetpath: /tmp/a
+    target_path: /tmp/a
 `)
 	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
 thralls:
@@ -3233,7 +3233,7 @@ name: app
 resources:
   - name: r
     type: file
-    targetpath: /tmp/app
+    target_path: /tmp/app
 `)
 	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
 thralls:

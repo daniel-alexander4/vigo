@@ -34,7 +34,7 @@ Parses `/proc/mounts` to identify physical mount points, filtering out pseudo fi
 ```yaml
 - name: mount-report
   type: file
-  targetpath: /var/lib/hobnob/mounts.txt
+  target_path: /var/lib/hobnob/mounts.txt
   content: |
     {{ range $path, $mount := .Traits.mountpoints.mounts }}{{ $path }}: {{ $mount.used_pct }}% used ({{ $mount.fstype }})
     {{ end }}

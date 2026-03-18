@@ -21,7 +21,7 @@ Runs `wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed /v
 ```yaml
 - name: set-thread-pool
   type: file
-  targetpath: C:\ProgramData\app\config.yaml
+  target_path: C:\ProgramData\app\config.yaml
   when: "os_family('windows')"
 ```
 
@@ -29,7 +29,7 @@ Runs `wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed /v
 ```yaml
 - name: cpu-info
   type: file
-  targetpath: C:\ProgramData\hobnob\cpu.txt
+  target_path: C:\ProgramData\hobnob\cpu.txt
   content: |
     CPU: {{ .Traits.processors.model }}
     Cores: {{ .Traits.processors.physical_cores }} physical, {{ .Traits.processors.logical_cores }} logical

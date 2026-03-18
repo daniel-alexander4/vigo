@@ -17,7 +17,7 @@ vars:
 resources:
   - name: webapp-config
     type: file
-    targetpath: /etc/webapp/config.yaml
+    target_path: /etc/webapp/config.yaml
     owner: webapp
     group: webapp
     mode: "0640"

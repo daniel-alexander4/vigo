@@ -37,7 +37,7 @@ Parses `/proc/swaps`, skipping the header line. Each line provides the swap devi
 ```yaml
 - name: swap-report
   type: file
-  targetpath: /var/lib/hobnob/swap.txt
+  target_path: /var/lib/hobnob/swap.txt
   content: |
     Active swap devices: {{ .Traits.swap.count }}
 ```

@@ -98,7 +98,7 @@ func checkSelfProtection(moduleName string, res Resource) []Finding {
 }
 
 func checkFileProtection(base Finding, res Resource) []Finding {
-	target := attrString(res.Attributes, "targetpath")
+	target := attrString(res.Attributes, "target_path")
 	if target == "" {
 		target = attrString(res.Attributes, "path")
 	}

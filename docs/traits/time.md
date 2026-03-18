@@ -35,7 +35,7 @@ On Linux, calls `localtime_r` and `gmtime_r` via libc to get local and UTC time 
 ```yaml
 - name: daily-report-header
   type: file
-  targetpath: /var/lib/reports/header.txt
+  target_path: /var/lib/reports/header.txt
   content: |
     Report generated: {{ .Traits.time.date }} {{ .Traits.time.clock }}
 ```

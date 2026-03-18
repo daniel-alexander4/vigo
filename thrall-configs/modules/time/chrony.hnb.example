@@ -13,7 +13,7 @@ resources:
 
   - name: chrony-conf
     type: file
-    targetpath: /etc/chrony/chrony.conf
+    target_path: /etc/chrony/chrony.conf
     content: |
       # Managed by Hobnob — do not edit manually
 
@@ -45,7 +45,7 @@ resources:
 
   - name: chrony-conf
     type: file
-    targetpath: /etc/chrony.conf
+    target_path: /etc/chrony.conf
     content: |
       # Managed by Hobnob — do not edit manually
 

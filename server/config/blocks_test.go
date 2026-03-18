@@ -23,7 +23,7 @@ func TestFlattenPlainResourcesPassThrough(t *testing.T) {
 	input := `
 - name: a
   type: file
-  targetpath: /etc/a
+  target_path: /etc/a
 - name: b
   type: package
   package: nginx
@@ -52,7 +52,7 @@ func TestFlattenBlockMergesConditionals(t *testing.T) {
     resources:
       - name: r1
         type: file
-        targetpath: /etc/r1
+        target_path: /etc/r1
       - name: r2
         type: exec
         command: "apt-get update"
@@ -83,7 +83,7 @@ func TestFlattenBlockMergesDifferentConditionals(t *testing.T) {
     resources:
       - name: r1
         type: file
-        targetpath: /etc/r1
+        target_path: /etc/r1
         when: "not is_container"
 `
 	resources, err := flattenFromYAML(t, input)
@@ -105,7 +105,7 @@ func TestFlattenBlockSameFieldConcatenated(t *testing.T) {
     resources:
       - name: r1
         type: file
-        targetpath: /etc/r1
+        target_path: /etc/r1
         when: "has_enough_mem"
 `
 	resources, err := flattenFromYAML(t, input)
@@ -124,18 +124,18 @@ func TestFlattenMixedResourcesAndBlocksOrdering(t *testing.T) {
 	input := `
 - name: a
   type: file
-  targetpath: /a
+  target_path: /a
 - conditional_block:
     resources:
       - name: b
         type: file
-        targetpath: /b
+        target_path: /b
       - name: c
         type: file
-        targetpath: /c
+        target_path: /c
 - name: d
   type: file
-  targetpath: /d
+  target_path: /d
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
@@ -158,7 +158,7 @@ func TestFlattenDependsOnAcrossBlockBoundaryOutsideToInside(t *testing.T) {
 	input := `
 - name: outside
   type: file
-  targetpath: /outside
+  target_path: /outside
   depends_on: [inside]
 - conditional_block:
     when: "x"
@@ -190,7 +190,7 @@ func TestFlattenDependsOnFromInsideToOutside(t *testing.T) {
 	input := `
 - name: outside
   type: file
-  targetpath: /outside
+  target_path: /outside
 - conditional_block:
     resources:
       - name: inside
@@ -240,7 +240,7 @@ func TestFlattenBlockWhenExpression(t *testing.T) {
     resources:
       - name: r1
         type: file
-        targetpath: /etc/r1
+        target_path: /etc/r1
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
@@ -269,7 +269,7 @@ resources:
       resources:
         - name: apt-config
           type: file
-          targetpath: /etc/apt/config
+          target_path: /etc/apt/config
           content: "deb http://..."
         - name: apt-update
           type: exec

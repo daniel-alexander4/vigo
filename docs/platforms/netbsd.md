@@ -113,7 +113,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /usr/pkg/etc/nginx/nginx.conf
+    target_path: /usr/pkg/etc/nginx/nginx.conf
     content: |
       worker_processes auto;
       events { worker_connections 1024; }
@@ -129,7 +129,7 @@ resources:
 
   - name: webroot
     type: directory
-    targetpath: /var/www
+    target_path: /var/www
     owner: www
     group: www
 

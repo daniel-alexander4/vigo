@@ -30,7 +30,7 @@ Runs `wmic os get TotalVisibleMemorySize,FreePhysicalMemory /value` and parses t
 ```yaml
 - name: memory-report
   type: file
-  targetpath: C:\ProgramData\hobnob\memory.txt
+  target_path: C:\ProgramData\hobnob\memory.txt
   content: |
     Memory: {{ .Traits.memory.percent_used }}% used
 ```

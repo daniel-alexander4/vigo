@@ -16,13 +16,13 @@ defaults:
 resources:
   - name: index-html
     type: file
-    targetpath: /var/www/html/index.html
+    target_path: /var/www/html/index.html
     content: "<h1>Hello</h1>"
     # owner, group, mode inherited from defaults
 
   - name: error-page
     type: file
-    targetpath: /var/www/html/error.html
+    target_path: /var/www/html/error.html
     content: "<h1>Error</h1>"
     # also inherits defaults
 ```
@@ -76,15 +76,15 @@ Select attribute overrides based on a template expression:
 resources:
   - name: package-manager-config
     type: file
-    targetpath: /etc/package-manager.conf
+    target_path: /etc/package-manager.conf
     case: "{{ .Traits.os.family }}"
     match:
       debian:
         content: "manager=apt"
-        targetpath: /etc/apt/apt.conf.d/99-custom
+        target_path: /etc/apt/apt.conf.d/99-custom
       redhat:
         content: "manager=yum"
-        targetpath: /etc/yum.conf.d/custom.conf
+        target_path: /etc/yum.conf.d/custom.conf
 ```
 
 The `case` expression is evaluated, and the matching `match` branch's attributes override the resource's base attributes. If no branch matches, the resource uses its base attributes (or is skipped if no base `content` exists).
@@ -156,7 +156,7 @@ Every executor supports `state: absent` to remove/disable the managed resource:
 
 - name: remove-old-config
   type: file
-  targetpath: /etc/legacy/config.yaml
+  target_path: /etc/legacy/config.yaml
   state: absent
 
 - name: disable-old-service
@@ -203,7 +203,7 @@ Pipe file content through scripts on the thrall before writing. Accepts a single
 resources:
   - name: deploy-filter
     type: file
-    targetpath: /usr/local/bin/strip-comments.sh
+    target_path: /usr/local/bin/strip-comments.sh
     content: |
       #!/bin/sh
       grep -v '^[[:space:]]*#'
@@ -211,7 +211,7 @@ resources:
 
   - name: clean-config
     type: file
-    targetpath: /etc/myapp/config.conf
+    target_path: /etc/myapp/config.conf
     content: |
       # database settings
       host = localhost

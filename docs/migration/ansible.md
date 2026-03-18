@@ -50,7 +50,7 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 | `ansible.builtin.cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `ansible.builtin.lineinfile` | `file_line` | `path:`, `line:`, `match:` |
 | `ansible.builtin.apt_repository` | `repository` | Unified across distros |
-| `ansible.builtin.get_url` / `unarchive` | `archive` | `url:`, `targetpath:`, `checksum:` |
+| `ansible.builtin.get_url` / `unarchive` | `archive` | `url:`, `target_path:`, `checksum:` |
 | `ansible.posix.mount` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `ansible.posix.sysctl` | `sysctl` | `key:`, `value:`, `state: present` |
 | `ansible.builtin.hostname` | `hostname` | `hostname:` |
@@ -146,7 +146,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: "0644"
@@ -248,7 +248,7 @@ Ansible uses Jinja2 templates everywhere. Hobnob uses Go templates in `content:`
 | `{{ variable \| lower }}` | `{{ lower .Vars.variable }}` |
 | `{{ variable \| default('x') }}` | `{{ default .Vars.variable "x" }}` |
 
-**Critical restriction:** Hobnob templates work only inside `content:` attributes. You cannot use `{{ }}` in `package:`, `targetpath:`, `command:`, or any other field. For dynamic behavior in non-content fields, use `when:` expressions with separate resources.
+**Critical restriction:** Hobnob templates work only inside `content:` attributes. You cannot use `{{ }}` in `package:`, `target_path:`, `command:`, or any other field. For dynamic behavior in non-content fields, use `when:` expressions with separate resources.
 
 ## Conditionals and Targeting
 
@@ -302,7 +302,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Hobnob resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or `vars_from:` (for external data).
 
-3. **Templates only in `content:`.** Ansible's Jinja2 works everywhere — task arguments, `when:`, variable files. Hobnob restricts templates to `content:`. Resist the urge to template `targetpath:` or `command:`.
+3. **Templates only in `content:`.** Ansible's Jinja2 works everywhere — task arguments, `when:`, variable files. Hobnob restricts templates to `content:`. Resist the urge to template `target_path:` or `command:`.
 
 4. **No task ordering by file position.** Ansible runs tasks in the order they appear. Hobnob builds a DAG — without explicit `depends_on` or `notify`, resources may execute in any order. Always declare dependencies explicitly.
 

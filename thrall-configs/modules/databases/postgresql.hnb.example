@@ -18,7 +18,7 @@ resources:
 
   - name: pg-conf
     type: file
-    targetpath: /etc/postgresql/16/main/postgresql.conf
+    target_path: /etc/postgresql/16/main/postgresql.conf
     content: |
       data_directory = '{{ .Vars.pg_data_dir }}'
       listen_addresses = '*'
@@ -40,7 +40,7 @@ resources:
 
   - name: pg-hba
     type: file
-    targetpath: /etc/postgresql/16/main/pg_hba.conf
+    target_path: /etc/postgresql/16/main/pg_hba.conf
     content: |
       # TYPE  DATABASE  USER  ADDRESS       METHOD
       local   all       postgres              peer
@@ -56,7 +56,7 @@ resources:
 
   - name: backup-dir
     type: directory
-    targetpath: /var/backups/postgresql
+    target_path: /var/backups/postgresql
     owner: postgres
     group: postgres
     mode: "0750"

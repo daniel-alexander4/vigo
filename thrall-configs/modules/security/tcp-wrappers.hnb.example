@@ -19,7 +19,7 @@ resources:
 
   - name: hosts-allow
     type: file
-    targetpath: /etc/hosts.allow
+    target_path: /etc/hosts.allow
     content: |
       # /etc/hosts.allow — managed by hobnob
       {{ .Vars.allowed_services }}: {{ .Vars.allowed_sshd_networks }}
@@ -30,7 +30,7 @@ resources:
 
   - name: hosts-deny
     type: file
-    targetpath: /etc/hosts.deny
+    target_path: /etc/hosts.deny
     content: |
       # /etc/hosts.deny — managed by hobnob
       ALL: ALL

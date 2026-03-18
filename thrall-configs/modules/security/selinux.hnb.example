@@ -9,7 +9,7 @@ resources:
       resources:
         - name: selinux-config
           type: file
-          targetpath: /etc/selinux/config
+          target_path: /etc/selinux/config
           content: |
             # /etc/selinux/config — managed by hobnob
             SELINUX={{ .Vars.selinux_mode }}

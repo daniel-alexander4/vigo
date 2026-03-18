@@ -13,7 +13,7 @@ resources:
 
   - name: ntp-conf
     type: file
-    targetpath: /etc/ntp.conf
+    target_path: /etc/ntp.conf
     content: |
       # Managed by Hobnob — do not edit manually
       driftfile /var/lib/ntp/ntp.drift

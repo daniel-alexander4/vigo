@@ -9,7 +9,7 @@ resources:
   # Remove stale config file
   - name: remove-old-config
     type: file
-    targetpath: /etc/old-app.conf
+    target_path: /etc/old-app.conf
     state: absent
 
   # Remove decommissioned user

@@ -34,7 +34,7 @@ First checks if `systemctl` is available via `which`. If not available, returns 
 ```yaml
 - name: systemd-report
   type: file
-  targetpath: /var/lib/hobnob/systemd.txt
+  target_path: /var/lib/hobnob/systemd.txt
   content: |
     systemd {{ .Traits.systemd.version }}
     Default target: {{ .Traits.systemd.default_target }}

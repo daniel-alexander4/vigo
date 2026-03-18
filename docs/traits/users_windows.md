@@ -26,7 +26,7 @@ Runs `net user` and parses the output. The command outputs a header line, a sepa
 ```yaml
 - name: user-report
   type: file
-  targetpath: C:\ProgramData\hobnob\users.txt
+  target_path: C:\ProgramData\hobnob\users.txt
   content: |
     Local users: {{ range .Traits.users.users }}{{ . }} {{ end }}
 ```

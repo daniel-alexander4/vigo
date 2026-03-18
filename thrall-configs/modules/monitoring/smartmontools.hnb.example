@@ -12,7 +12,7 @@ resources:
 
   - name: smartd-conf
     type: file
-    targetpath: /etc/smartmontools/smartd.conf
+    target_path: /etc/smartmontools/smartd.conf
     content: |
       # Managed by Hobnob — do not edit manually
       #
@@ -33,7 +33,7 @@ resources:
 
   - name: smartd-conf
     type: file
-    targetpath: /etc/smartd.conf
+    target_path: /etc/smartd.conf
     content: |
       # Managed by Hobnob — do not edit manually
       #

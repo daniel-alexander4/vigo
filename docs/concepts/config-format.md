@@ -49,7 +49,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: |
       worker_connections {{ .Vars.worker_connections }};
     depends_on: [nginx-package]

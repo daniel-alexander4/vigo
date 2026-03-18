@@ -50,7 +50,7 @@ name: motd
 resources:
   - name: motd-file
     type: file
-    targetpath: /etc/motd
+    target_path: /etc/motd
     content: |
       ========================================
       Managed by Hobnob

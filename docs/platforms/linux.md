@@ -242,7 +242,7 @@ Use traits in `when:` expressions and templates:
 ```yaml
 - name: high-memory-config
   type: file
-  targetpath: /etc/myapp/config.yaml
+  target_path: /etc/myapp/config.yaml
   content: |
     max_memory: {{ if ge .Traits.memory.total_mb 16384 }}8192{{ else }}2048{{ end }}
     workers: {{ .Traits.processors.count }}
@@ -315,7 +315,7 @@ resources:
 
   - name: mysql-configured-flag
     type: file
-    targetpath: /root/.mysql_configured
+    target_path: /root/.mysql_configured
     content: "configured"
     depends_on: [mysql-root-password]
 
@@ -343,7 +343,7 @@ resources:
   # Document root
   - name: document-root
     type: directory
-    targetpath: "{{ .Vars.document_root }}"
+    target_path: "{{ .Vars.document_root }}"
     owner: www-data
     group: www-data
     mode: "0755"
@@ -351,7 +351,7 @@ resources:
 
   - name: document-root-redhat
     type: directory
-    targetpath: "{{ .Vars.document_root }}"
+    target_path: "{{ .Vars.document_root }}"
     owner: apache
     group: apache
     mode: "0755"
@@ -359,7 +359,7 @@ resources:
 
   - name: index-page
     type: file
-    targetpath: "{{ .Vars.document_root }}/index.php"
+    target_path: "{{ .Vars.document_root }}/index.php"
     content: |
       <?php
       echo "Managed by Hobnob on {{ .Traits.identity.hostname }}";

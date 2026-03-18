@@ -34,7 +34,7 @@ Parses `/proc/meminfo` for `MemTotal`, `MemFree`, `MemAvailable`, `Buffers`, `Ca
 ```yaml
 - name: memory-report
   type: file
-  targetpath: /var/lib/hobnob/memory.txt
+  target_path: /var/lib/hobnob/memory.txt
   content: |
     Memory: {{ .Traits.memory.percent }}% used
     Swap: {{ .Traits.memory.swap_percent }}% used

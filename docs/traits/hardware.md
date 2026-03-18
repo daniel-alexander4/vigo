@@ -28,7 +28,7 @@ CPU count is determined by counting `processor` entries in `/proc/cpuinfo`. Tota
 ```yaml
 - name: system-info
   type: file
-  targetpath: /etc/system-info
+  target_path: /etc/system-info
   content: |
     CPUs: {{ .Traits.hardware.cpu_count }}
     Memory: {{ .Traits.hardware.memory_mb }} MB

@@ -312,7 +312,7 @@ resources:
   - name: get-archive
     type: archive
     url: "%s/archive.tar.gz"
-    targetpath: "/opt/app"
+    target_path: "/opt/app"
 `, srv.URL))
 	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
 thralls:
@@ -339,7 +339,7 @@ resources:
   - name: get-archive
     type: archive
     url: "%s/missing.tar.gz"
-    targetpath: "/opt/app"
+    target_path: "/opt/app"
 `, srv.URL))
 	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
 thralls:
@@ -383,7 +383,7 @@ resources:
   - name: get-archive
     type: archive
     url: "http://nonexistent.invalid/file.tar.gz"
-    targetpath: "/opt/app"
+    target_path: "/opt/app"
 `)
 	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
 thralls:
@@ -414,7 +414,7 @@ resources:
   - name: get-archive
     type: archive
     url: "%s/archive.tar.gz"
-    targetpath: "/opt/app"
+    target_path: "/opt/app"
 `, srv.URL))
 	writeFile(t, filepath.Join(proposed, "thralls", "all.hnb"), `
 thralls:
@@ -470,7 +470,7 @@ resources:
   - name: get-archive
     type: archive
     url: "%s/missing.tar.gz"
-    targetpath: "/opt/app"
+    target_path: "/opt/app"
 `, srv.URL)
 	writeFile(t, filepath.Join(proposed, "modules", "download.hnb"), badModule)
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)

@@ -121,7 +121,7 @@ resources:
 
   - name: pf-config
     type: file
-    targetpath: /etc/pf.conf
+    target_path: /etc/pf.conf
     content: |
       ext_if = "{{ .Vars.pf_ext_if }}"
       jail_net = "{{ .Vars.jail_net }}"

@@ -32,7 +32,7 @@ resources:
   - name: Install terraform
     type: archive
     url: https://releases.hashicorp.com/terraform/1.5.0/terraform_1.5.0_linux_amd64.zip
-    targetpath: /usr/local/bin
+    target_path: /usr/local/bin
     binary_path: terraform
     sha256: "abc123..."
 ```
@@ -44,7 +44,7 @@ resources:
   - name: Extract app release
     type: archive
     url: https://releases.example.com/myapp-v2.0.tar.gz
-    targetpath: /opt/myapp
+    target_path: /opt/myapp
 ```
 
 ### With unless guard
@@ -54,7 +54,7 @@ resources:
   - name: Install kubectl
     type: archive
     url: https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl
-    targetpath: /usr/local/bin/kubectl
+    target_path: /usr/local/bin/kubectl
     unless: "kubectl version --client | grep v1.28.0"
 ```
 
@@ -64,7 +64,7 @@ resources:
 resources:
   - name: Remove old app
     type: archive
-    targetpath: /opt/old-app
+    target_path: /opt/old-app
     url: https://example.com/placeholder
     state: absent
 ```

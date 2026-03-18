@@ -22,7 +22,7 @@ resources:
   - name: install-consul
     type: archive
     url: "https://releases.hashicorp.com/consul/1.18.1/consul_1.18.1_linux_amd64.zip"
-    targetpath: /usr/local/bin/consul
+    target_path: /usr/local/bin/consul
     binary: consul
     unless: "consul version | grep 1.18.1"
 
@@ -30,7 +30,7 @@ resources:
 
   - name: consul-data-dir
     type: directory
-    targetpath: /opt/consul/data
+    target_path: /opt/consul/data
     owner: consul
     group: consul
     mode: "0750"
@@ -38,7 +38,7 @@ resources:
 
   - name: consul-config-dir
     type: directory
-    targetpath: /etc/consul.d
+    target_path: /etc/consul.d
     owner: consul
     group: consul
     mode: "0750"
@@ -48,7 +48,7 @@ resources:
 
   - name: consul-hcl
     type: file
-    targetpath: /etc/consul.d/consul.hcl
+    target_path: /etc/consul.d/consul.hcl
     content: |
       # Managed by Hobnob — do not edit manually
       datacenter = "{{ .Vars.consul_datacenter }}"
@@ -81,7 +81,7 @@ resources:
 
   - name: consul-unit-file
     type: file
-    targetpath: /etc/systemd/system/consul.service
+    target_path: /etc/systemd/system/consul.service
     content: |
       [Unit]
       Description=HashiCorp Consul

@@ -94,7 +94,7 @@ Traits are available as `.Traits` in Go templates within `content:` attributes:
 ```yaml
 - name: motd
   type: file
-  targetpath: /etc/motd
+  target_path: /etc/motd
   content: |
     Welcome to {{ .Traits.network.hostname }}
     OS: {{ .Traits.os.distro }} {{ .Traits.os.version }}

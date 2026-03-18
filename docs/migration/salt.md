@@ -51,7 +51,7 @@ Salt requires Python on both master and minion. Hobnob's server is Go (hobd) and
 | `group.present` | `group` | `groupname:`, `gid:`, `members:` |
 | `cron.present` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `pkgrepo.managed` | `repository` | Unified across distros |
-| `archive.extracted` | `archive` | `url:`, `targetpath:`, `checksum:` |
+| `archive.extracted` | `archive` | `url:`, `target_path:`, `checksum:` |
 | `mount.mounted` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `sysctl.present` | `sysctl` | `key:`, `value:` |
 | `file.blockreplace` | `blockinfile` | `path:`, `block:`, `marker:` |
@@ -143,7 +143,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: "0644"
@@ -302,7 +302,7 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 
 4. **No `salt://` file URIs.** Salt serves files from the file_roots via `salt://`. Hobnob inlines templates in `content:` or uses `sourcepath:` for agent-local files. There is no file server.
 
-5. **Templates only in `content:`.** Salt renders Jinja2 in any YAML value. Hobnob restricts Go templates to `content:`. Do not attempt to template `package:`, `targetpath:`, or `command:`.
+5. **Templates only in `content:`.** Salt renders Jinja2 in any YAML value. Hobnob restricts Go templates to `content:`. Do not attempt to template `package:`, `target_path:`, or `command:`.
 
 6. **No compound targeting.** Salt's compound matchers (`G@os:CentOS and P@hostname:web.*`) don't have a direct equivalent. Use glob patterns in `nodes.hnb` and `when:` on individual resources for fine-grained targeting.
 

@@ -12,7 +12,7 @@ func TestSelfProtect_FileTargetingAgentBinary(t *testing.T) {
 			Name: "overwrite-agent",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/usr/local/sbin/hobnob",
+				"target_path": "/usr/local/sbin/hobnob",
 				"content":    "malicious",
 			},
 		}},
@@ -30,7 +30,7 @@ func TestSelfProtect_FileTargetingServerBinary(t *testing.T) {
 			Name: "overwrite-server",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/usr/local/sbin/hobd",
+				"target_path": "/usr/local/sbin/hobd",
 				"content":    "malicious",
 			},
 		}},
@@ -48,7 +48,7 @@ func TestSelfProtect_FileTargetingServerConfigDir(t *testing.T) {
 			Name: "overwrite-config",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/srv/hobnob/server.yaml",
+				"target_path": "/srv/hobnob/server.yaml",
 				"content":    "malicious",
 			},
 		}},
@@ -66,7 +66,7 @@ func TestSelfProtect_FileTargetingAgentState(t *testing.T) {
 			Name: "overwrite-lmdb",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/var/lib/hobnob/state/data.mdb",
+				"target_path": "/var/lib/hobnob/state/data.mdb",
 				"content":    "garbage",
 			},
 		}},
@@ -84,7 +84,7 @@ func TestSelfProtect_FileSafePathAllowed(t *testing.T) {
 			Name: "nginx-conf",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/etc/nginx/nginx.conf",
+				"target_path": "/etc/nginx/nginx.conf",
 				"content":    "server {}",
 			},
 		}},

@@ -12,7 +12,7 @@ resources:
 
   - name: sudoers
     type: file
-    targetpath: /etc/sudoers
+    target_path: /etc/sudoers
     content: |
       # /etc/sudoers — managed by hobnob
       Defaults    env_reset
@@ -32,7 +32,7 @@ resources:
 
   - name: sudoers-hobnob
     type: file
-    targetpath: /etc/sudoers.d/hobnob
+    target_path: /etc/sudoers.d/hobnob
     content: |
       # /etc/sudoers.d/hobnob — managed by hobnob
       {{ if eq .Traits.os.family "redhat" -}}

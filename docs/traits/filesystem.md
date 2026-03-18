@@ -31,7 +31,7 @@ Iterates over physical mount points from `/proc/mounts` (excluding pseudo filesy
 ```yaml
 - name: disk-report
   type: file
-  targetpath: /var/lib/hobnob/disk-report.txt
+  target_path: /var/lib/hobnob/disk-report.txt
   content: |
     Root filesystem usage: {{ (index .Traits.filesystem "/").percent }}%
 ```

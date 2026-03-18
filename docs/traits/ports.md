@@ -37,7 +37,7 @@ The `port_listening()` builtin checks whether a specific port is in the `ports.l
 ```yaml
 - name: nginx-config
   type: file
-  targetpath: /etc/nginx/nginx.conf
+  target_path: /etc/nginx/nginx.conf
   content: "..."
   when: "port_listening(80)"
 ```

@@ -54,7 +54,7 @@ The `file` executor also supports a `secontext` parameter to set the SELinux con
 ```yaml
 - name: app-config
   type: file
-  targetpath: /etc/app/config.yml
+  target_path: /etc/app/config.yml
   content: "..."
   secontext: "system_u:object_r:etc_t:s0"
 ```

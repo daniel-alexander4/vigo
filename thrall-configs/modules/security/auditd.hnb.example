@@ -14,7 +14,7 @@ resources:
 
   - name: auditd-conf
     type: file
-    targetpath: /etc/audit/auditd.conf
+    target_path: /etc/audit/auditd.conf
     content: |
       # /etc/audit/auditd.conf — managed by hobnob
       log_file = {{ .Vars.audit_log_file }}
@@ -41,7 +41,7 @@ resources:
 
   - name: auditd-rules
     type: file
-    targetpath: /etc/audit/rules.d/hobnob.rules
+    target_path: /etc/audit/rules.d/hobnob.rules
     content: |
       # /etc/audit/rules.d/hobnob.rules — managed by hobnob
 

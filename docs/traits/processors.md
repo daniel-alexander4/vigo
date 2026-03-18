@@ -30,7 +30,7 @@ Parses `/proc/cpuinfo` to count logical processors, identify unique physical/cor
 ```yaml
 - name: cpu-info
   type: file
-  targetpath: /var/lib/hobnob/cpu-info.txt
+  target_path: /var/lib/hobnob/cpu-info.txt
   content: |
     CPU: {{ .Traits.processors.model }}
     Cores: {{ .Traits.processors.physical_cores }} physical, {{ .Traits.processors.logical_cores }} logical

@@ -58,7 +58,7 @@ expect:
       package: nginx
     - resource: nginx-config
       type: file
-      targetpath: /etc/nginx/nginx.conf
+      target_path: /etc/nginx/nginx.conf
       content_contains: "worker_connections 4096"
     - resource: nginx-service
       type: service

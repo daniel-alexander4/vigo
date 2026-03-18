@@ -64,7 +64,7 @@ resources:
 resources:
   - name: share-dir
     type: directory
-    targetpath: "D:\\Shares\\Logs"
+    target_path: "D:\\Shares\\Logs"
 
   - name: logs-share
     type: smb_share

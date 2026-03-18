@@ -21,7 +21,7 @@ Hostname is retrieved via the `hostname` crate. The FQDN is resolved by reverse 
 ```yaml
 - name: web-config
   type: file
-  targetpath: /etc/nginx/conf.d/server.conf
+  target_path: /etc/nginx/conf.d/server.conf
   when: "!is_container"
 ```
 
@@ -29,7 +29,7 @@ Hostname is retrieved via the `hostname` crate. The FQDN is resolved by reverse 
 ```yaml
 - name: hosts-entry
   type: file
-  targetpath: /etc/hosts.d/self
+  target_path: /etc/hosts.d/self
   content: |
     {{ index .Traits.network.ip_addresses 0 }} {{ .Traits.network.hostname }} {{ .Traits.network.fqdn }}
 ```

@@ -50,7 +50,7 @@ resources:
 
   - name: elasticsearch-yml
     type: file
-    targetpath: /etc/elasticsearch/elasticsearch.yml
+    target_path: /etc/elasticsearch/elasticsearch.yml
     content: |
       # Managed by Hobnob — do not edit manually
       cluster.name: {{ .Vars.es_cluster_name }}
@@ -69,7 +69,7 @@ resources:
 
   - name: elasticsearch-heap
     type: file
-    targetpath: /etc/elasticsearch/jvm.options.d/heap.options
+    target_path: /etc/elasticsearch/jvm.options.d/heap.options
     content: |
       -Xms{{ .Vars.es_heap_size }}
       -Xmx{{ .Vars.es_heap_size }}
@@ -83,7 +83,7 @@ resources:
 
   - name: kibana-yml
     type: file
-    targetpath: /etc/kibana/kibana.yml
+    target_path: /etc/kibana/kibana.yml
     content: |
       # Managed by Hobnob — do not edit manually
       server.port: {{ .Vars.kibana_port }}
@@ -100,7 +100,7 @@ resources:
 
   - name: logstash-yml
     type: file
-    targetpath: /etc/logstash/logstash.yml
+    target_path: /etc/logstash/logstash.yml
     content: |
       # Managed by Hobnob — do not edit manually
       node.name: {{ .Traits.identity.hostname }}

@@ -15,7 +15,7 @@ func TestExpandForEach_BasicExpansion(t *testing.T) {
 			Name: "vimrc-{{ .Item }}",
 			Type: "file",
 			Attributes: map[string]any{
-				"targetpath": "/home/{{ .Item }}/.vimrc",
+				"target_path": "/home/{{ .Item }}/.vimrc",
 				"owner":      "{{ .Item }}",
 				"content":    "set number",
 			},
@@ -40,8 +40,8 @@ func TestExpandForEach_BasicExpansion(t *testing.T) {
 		}
 	}
 
-	if result[0].Attributes["targetpath"] != "/home/dan/.vimrc" {
-		t.Errorf("result[0].targetpath = %v", result[0].Attributes["targetpath"])
+	if result[0].Attributes["target_path"] != "/home/dan/.vimrc" {
+		t.Errorf("result[0].targetpath = %v", result[0].Attributes["target_path"])
 	}
 	if result[1].Attributes["owner"] != "alice" {
 		t.Errorf("result[1].owner = %v", result[1].Attributes["owner"])
@@ -56,7 +56,7 @@ func TestExpandForEach_SubstitutionInNameAndWhen(t *testing.T) {
 			When:    "user_exists('{{ .Item }}')",
 			ForEach: "users",
 			Attributes: map[string]any{
-				"targetpath": "/home/{{ .Item }}/.config",
+				"target_path": "/home/{{ .Item }}/.config",
 			},
 		},
 	}
@@ -136,7 +136,7 @@ func TestExpandForEach_MixedResources(t *testing.T) {
 			Type:    "file",
 			ForEach: "users",
 			Attributes: map[string]any{
-				"targetpath": "/home/{{ .Item }}/.rc",
+				"target_path": "/home/{{ .Item }}/.rc",
 			},
 		},
 		{

@@ -13,7 +13,7 @@ vars:
 resources:
   - name: login-defs
     type: file
-    targetpath: /etc/login.defs
+    target_path: /etc/login.defs
     content: |
       # /etc/login.defs — managed by hobnob
       MAIL_DIR        /var/mail
@@ -63,7 +63,7 @@ resources:
 
         - name: pwquality-conf
           type: file
-          targetpath: /etc/security/pwquality.conf
+          target_path: /etc/security/pwquality.conf
           content: |
             # /etc/security/pwquality.conf — managed by hobnob
             minlen = {{ .Vars.pass_min_len }}

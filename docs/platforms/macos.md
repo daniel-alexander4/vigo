@@ -263,7 +263,7 @@ Use traits in `when:` expressions and templates:
 ```yaml
 - name: apple-silicon-config
   type: file
-  targetpath: /usr/local/etc/myapp/config.yaml
+  target_path: /usr/local/etc/myapp/config.yaml
   content: |
     arch: {{ .Traits.os.arch }}
     cores: {{ .Traits.processors.count }}
@@ -347,7 +347,7 @@ resources:
   # Shell configuration
   - name: zshrc
     type: file
-    targetpath: /Users/{{ .Traits.identity.hostname }}/.zshrc
+    target_path: /Users/{{ .Traits.identity.hostname }}/.zshrc
     content: |
       # Managed by Hobnob
       export EDITOR=vim
@@ -363,7 +363,7 @@ resources:
   # SSH directory
   - name: ssh-directory
     type: directory
-    targetpath: /Users/{{ .Traits.identity.hostname }}/.ssh
+    target_path: /Users/{{ .Traits.identity.hostname }}/.ssh
     mode: "0700"
 
   # Hostname
@@ -379,7 +379,7 @@ resources:
   # Launch agent for custom daemon
   - name: custom-plist
     type: file
-    targetpath: /Library/LaunchDaemons/com.example.myapp.plist
+    target_path: /Library/LaunchDaemons/com.example.myapp.plist
     content: |
       <?xml version="1.0" encoding="UTF-8"?>
       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

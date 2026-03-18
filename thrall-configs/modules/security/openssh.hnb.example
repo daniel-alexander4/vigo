@@ -14,7 +14,7 @@ resources:
 
   - name: sshd-config
     type: file
-    targetpath: /etc/ssh/sshd_config
+    target_path: /etc/ssh/sshd_config
     content: |
       Port {{ .Vars.ssh_port }}
       Protocol 2

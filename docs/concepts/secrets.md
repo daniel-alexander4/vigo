@@ -114,7 +114,7 @@ The `content:` template renders the resolved value:
 resources:
   - name: pg-config
     type: file
-    targetpath: /etc/postgresql/conf.d/auth.conf
+    target_path: /etc/postgresql/conf.d/auth.conf
     content: |
       password = {{ .Vars.db_password }}
     watch_secret: ["hobnob/db/password"]

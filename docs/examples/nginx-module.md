@@ -21,7 +21,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: "0644"
@@ -101,7 +101,7 @@ Extend the module with an SSL vhost:
 ```yaml
   - name: nginx-ssl-cert
     type: file
-    targetpath: /etc/nginx/ssl/server.crt
+    target_path: /etc/nginx/ssl/server.crt
     owner: root
     group: root
     mode: "0644"
@@ -109,7 +109,7 @@ Extend the module with an SSL vhost:
 
   - name: nginx-ssl-key
     type: file
-    targetpath: /etc/nginx/ssl/server.key
+    target_path: /etc/nginx/ssl/server.key
     owner: root
     group: root
     mode: "0600"

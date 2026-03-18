@@ -6,7 +6,7 @@ vars:
 resources:
   - name: nsswitch-conf
     type: file
-    targetpath: /etc/nsswitch.conf
+    target_path: /etc/nsswitch.conf
     content: |
       # Managed by Hobnob — do not edit manually
       {{ if eq .Vars.use_ldap "true" }}

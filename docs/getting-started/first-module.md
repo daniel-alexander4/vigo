@@ -35,7 +35,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/sites-available/default
+    target_path: /etc/nginx/sites-available/default
     content: |
       server {
           listen {{ .Vars.nginx_port }};

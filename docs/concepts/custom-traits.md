@@ -52,7 +52,7 @@ vars:
 resources:
   - name: v2-config
     type: file
-    targetpath: /etc/app/v2.conf
+    target_path: /etc/app/v2.conf
     content: "..."
     when: "is_app_v2"
 ```
@@ -62,7 +62,7 @@ resources:
 ```yaml
 - name: app-info
   type: file
-  targetpath: /etc/app-info
+  target_path: /etc/app-info
   content: |
     App Version: {{ index .Traits "custom" "app" "version" }}
 ```

@@ -126,7 +126,7 @@ name: compose-app
 resources:
   - name: compose-file
     type: file
-    targetpath: /opt/myapp/docker-compose.yml
+    target_path: /opt/myapp/docker-compose.yml
     content: |
       services:
         web:

@@ -203,11 +203,11 @@ defaults:
 resources:
   - name: vimrc
     type: file
-    targetpath: "/home/dan/.vimrc"
+    target_path: "/home/dan/.vimrc"
     content: "set number"
   - name: bashrc
     type: file
-    targetpath: "/home/dan/.bashrc"
+    target_path: "/home/dan/.bashrc"
     content: "export PS1='$ '"
 `)
 
@@ -240,11 +240,11 @@ defaults:
 resources:
   - name: vimrc
     type: file
-    targetpath: "/home/dan/.vimrc"
+    target_path: "/home/dan/.vimrc"
     content: "set number"
   - name: script
     type: file
-    targetpath: "/home/dan/run.sh"
+    target_path: "/home/dan/run.sh"
     content: "#!/bin/sh"
     mode: "0755"
 `)
@@ -275,7 +275,7 @@ defaults:
 resources:
   - name: cfg
     type: file
-    targetpath: /etc/test.conf
+    target_path: /etc/test.conf
     content: "test"
 `)
 
@@ -302,7 +302,7 @@ defaults: {}
 resources:
   - name: cfg
     type: file
-    targetpath: /etc/test.conf
+    target_path: /etc/test.conf
     content: "test"
 `)
 
@@ -322,7 +322,7 @@ resources:
   - name: "vimrc-{{ .Item }}"
     type: file
     foreach: users
-    targetpath: "/home/{{ .Item }}/.vimrc"
+    target_path: "/home/{{ .Item }}/.vimrc"
     content: "set number"
     owner: "{{ .Item }}"
 `)

@@ -37,7 +37,7 @@ resources:
 
   - name: rabbitmq-conf
     type: file
-    targetpath: /etc/rabbitmq/rabbitmq.conf
+    target_path: /etc/rabbitmq/rabbitmq.conf
     content: |
       # Managed by Hobnob — do not edit manually
       listeners.tcp.default = {{ .Vars.rabbitmq_port }}

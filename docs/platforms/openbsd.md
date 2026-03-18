@@ -135,7 +135,7 @@ resources:
 
   - name: pf-config
     type: file
-    targetpath: /etc/pf.conf
+    target_path: /etc/pf.conf
     content: |
       ext_if = "{{ .Vars.ext_if }}"
       int_if = "{{ .Vars.int_if }}"

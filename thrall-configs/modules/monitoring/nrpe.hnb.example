@@ -34,7 +34,7 @@ resources:
 
   - name: nrpe-cfg
     type: file
-    targetpath: /etc/nagios/nrpe.cfg
+    target_path: /etc/nagios/nrpe.cfg
     content: |
       # Managed by Hobnob — do not edit manually
       log_facility=daemon

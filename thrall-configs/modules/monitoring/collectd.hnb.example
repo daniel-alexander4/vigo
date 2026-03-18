@@ -12,7 +12,7 @@ resources:
 
   - name: collectd-conf
     type: file
-    targetpath: /etc/collectd/collectd.conf
+    target_path: /etc/collectd/collectd.conf
     content: |
       # Managed by Hobnob — do not edit manually
       {{ if ne .Vars.collectd_hostname_override "" }}Hostname "{{ .Vars.collectd_hostname_override }}"{{ end }}
@@ -64,7 +64,7 @@ resources:
 
   - name: collectd-conf
     type: file
-    targetpath: /etc/collectd.conf
+    target_path: /etc/collectd.conf
     content: |
       # Managed by Hobnob — do not edit manually
       {{ if ne .Vars.collectd_hostname_override "" }}Hostname "{{ .Vars.collectd_hostname_override }}"{{ end }}

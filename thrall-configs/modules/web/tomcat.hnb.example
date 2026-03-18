@@ -35,7 +35,7 @@ resources:
 
   - name: tomcat-server-xml-debian
     type: file
-    targetpath: /etc/tomcat10/server.xml
+    target_path: /etc/tomcat10/server.xml
     content: |
       <?xml version="1.0" encoding="UTF-8"?>
       <!-- Managed by Hobnob — do not edit manually -->
@@ -75,7 +75,7 @@ resources:
 
   - name: tomcat-server-xml-redhat
     type: file
-    targetpath: /etc/tomcat/server.xml
+    target_path: /etc/tomcat/server.xml
     content: |
       <?xml version="1.0" encoding="UTF-8"?>
       <!-- Managed by Hobnob — do not edit manually -->
@@ -115,7 +115,7 @@ resources:
 
   - name: tomcat-defaults-debian
     type: file
-    targetpath: /etc/default/tomcat10
+    target_path: /etc/default/tomcat10
     content: |
       # Managed by Hobnob — do not edit manually
       JAVA_OPTS="-Djava.awt.headless=true"
@@ -129,7 +129,7 @@ resources:
 
   - name: tomcat-defaults-redhat
     type: file
-    targetpath: /etc/sysconfig/tomcat
+    target_path: /etc/sysconfig/tomcat
     content: |
       # Managed by Hobnob — do not edit manually
       JAVA_OPTS="-Djava.awt.headless=true"

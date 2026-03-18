@@ -53,7 +53,7 @@ resources:
 resources:
   - name: /etc/nginx/nginx.conf
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: |
       worker_processes auto;
     notify: restart-nginx

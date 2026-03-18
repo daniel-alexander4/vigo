@@ -190,7 +190,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     source: templates/nginx.conf.tmpl
     depends_on: [nginx-package]
     notify: [nginx-service]
@@ -230,13 +230,13 @@ defaults:
 resources:
   - name: app-config
     type: file
-    targetpath: /etc/myapp/config.yaml
+    target_path: /etc/myapp/config.yaml
     content: "..."
     # owner, group, mode inherited from defaults
 
   - name: db-config
     type: file
-    targetpath: /etc/myapp/database.yaml
+    target_path: /etc/myapp/database.yaml
     content: "..."
     # also inherits defaults
 ```
@@ -277,7 +277,7 @@ resources:
   - name: "vhost-{{ .Item.name }}"
     type: file
     foreach: vhosts
-    targetpath: "/etc/nginx/sites-enabled/{{ .Item.name }}.conf"
+    target_path: "/etc/nginx/sites-enabled/{{ .Item.name }}.conf"
     content: |
       server {
           server_name {{ .Item.domain }};
@@ -288,7 +288,7 @@ resources:
   - name: "webroot-{{ .Item.name }}"
     type: directory
     foreach: vhosts
-    targetpath: "{{ .Item.root }}"
+    target_path: "{{ .Item.root }}"
     owner: www-data
 ```
 
@@ -305,11 +305,11 @@ resources:
     case: "{{ .Traits.os.family }}"
     match:
       debian:
-        targetpath: /etc/apt/apt.conf.d/99-hobnob
+        target_path: /etc/apt/apt.conf.d/99-hobnob
         content: |
           APT::Install-Recommends "false";
       redhat:
-        targetpath: /etc/yum.conf.d/hobnob.conf
+        target_path: /etc/yum.conf.d/hobnob.conf
         content: |
           installonly_limit=3
 ```
@@ -322,7 +322,7 @@ One resource definition, two behaviors. The `case` expression selects which `mat
 resources:
   - name: jvm-heap
     type: file
-    targetpath: /etc/app/jvm.opts
+    target_path: /etc/app/jvm.opts
     case: "{{ if ge .Traits.hardware.memory_mb 32768 }}large{{ else if ge .Traits.hardware.memory_mb 8192 }}medium{{ else }}small{{ end }}"
     match:
       large:
@@ -420,7 +420,7 @@ Base vars provide sensible defaults. Each environment overrides only what differ
 resources:
   - name: prometheus-config
     type: file
-    targetpath: /etc/prometheus/prometheus.yml
+    target_path: /etc/prometheus/prometheus.yml
     content: |
       global:
         scrape_interval: 15s
@@ -434,7 +434,7 @@ resources:
             - targets: ['localhost:{{ .Vars.exporter_port }}']
 ```
 
-Templates resolve at check-in time using the thrall's actual traits and resolved vars. They're only allowed in `content:` attributes and `source:` template files — not in `command:`, `targetpath:`, or other parameters.
+Templates resolve at check-in time using the thrall's actual traits and resolved vars. They're only allowed in `content:` attributes and `source:` template files — not in `command:`, `target_path:`, or other parameters.
 
 ## Putting It All Together
 
@@ -469,7 +469,7 @@ resources:
   - name: "vhost-{{ .Item.name }}"
     type: file
     foreach: vhosts
-    targetpath: "/etc/nginx/sites-enabled/{{ .Item.name }}.conf"
+    target_path: "/etc/nginx/sites-enabled/{{ .Item.name }}.conf"
     source: templates/nginx-vhost.tmpl
     notify: [reload-nginx]
   - name: reload-nginx

@@ -29,7 +29,7 @@ resources:
 
   - name: containerd-config
     type: file
-    targetpath: /etc/containerd/config.toml
+    target_path: /etc/containerd/config.toml
     owner: root
     group: root
     mode: "0644"
@@ -108,7 +108,7 @@ resources:
 
   - name: kubelet-config
     type: file
-    targetpath: /var/lib/kubelet/config.yaml
+    target_path: /var/lib/kubelet/config.yaml
     owner: root
     group: root
     mode: "0644"
@@ -144,7 +144,7 @@ name: k8s-kernel-tuning
 resources:
   - name: br-netfilter-module
     type: file
-    targetpath: /etc/modules-load.d/k8s.conf
+    target_path: /etc/modules-load.d/k8s.conf
     owner: root
     group: root
     mode: "0644"
@@ -222,7 +222,7 @@ resources:
 
   - name: cni-loopback-config
     type: file
-    targetpath: /etc/cni/net.d/99-loopback.conf
+    target_path: /etc/cni/net.d/99-loopback.conf
     owner: root
     group: root
     mode: "0644"

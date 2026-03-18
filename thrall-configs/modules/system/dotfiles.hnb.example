@@ -10,12 +10,12 @@ resources:
   - name: "vimrc-{{ .Item }}"
     type: file
     foreach: users
-    targetpath: "/home/{{ .Item }}/.vimrc"
+    target_path: "/home/{{ .Item }}/.vimrc"
     content: "{{ .Vars.vimrc_content }}"
 
   - name: "bashrc-{{ .Item }}"
     type: file
     foreach: users
-    targetpath: "/home/{{ .Item }}/.bashrc"
+    target_path: "/home/{{ .Item }}/.bashrc"
     content: "{{ .Vars.bashrc_content }}"
     mode: "0755"

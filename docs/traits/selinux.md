@@ -32,7 +32,7 @@ SELinux is considered enabled if the mode is neither empty nor `"disabled"`.
 ```yaml
 - name: selinux-report
   type: file
-  targetpath: /var/lib/hobnob/selinux.txt
+  target_path: /var/lib/hobnob/selinux.txt
   content: |
     SELinux: {{ .Traits.selinux.mode }}
     Policy: {{ .Traits.selinux.policy }}

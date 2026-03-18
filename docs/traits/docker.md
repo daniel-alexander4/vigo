@@ -27,7 +27,7 @@ First checks if `docker` is available via `which`. If not installed, returns def
 ```yaml
 - name: configure-docker-daemon
   type: file
-  targetpath: /etc/docker/daemon.json
+  target_path: /etc/docker/daemon.json
   when: "os_family('debian')"
 ```
 
@@ -35,7 +35,7 @@ First checks if `docker` is available via `which`. If not installed, returns def
 ```yaml
 - name: docker-report
   type: file
-  targetpath: /var/lib/hobnob/docker.txt
+  target_path: /var/lib/hobnob/docker.txt
   content: |
     Docker {{ .Traits.docker.version }}
     Running containers: {{ .Traits.docker.running_count }}

@@ -126,7 +126,7 @@ touch /var/lib/hobnob/flags/beta-features
 ```yaml
 - name: haproxy-backend
   type: file
-  targetpath: /etc/haproxy/haproxy.cfg
+  target_path: /etc/haproxy/haproxy.cfg
   content: "..."
   when: "port_listening(8080)"
 ```

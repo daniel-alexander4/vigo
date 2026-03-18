@@ -19,11 +19,11 @@ vars:
 resources:
   - name: brownnoise-dir
     type: directory
-    targetpath: "{{ .Vars.brownnoise_dir }}"
+    target_path: "{{ .Vars.brownnoise_dir }}"
 
   - name: brownnoise-script
     type: file
-    targetpath: "{{ .Vars.brownnoise_dir }}/brownnoise.sh"
+    target_path: "{{ .Vars.brownnoise_dir }}/brownnoise.sh"
     owner: root
     group: root
     mode: "0755"
@@ -33,7 +33,7 @@ resources:
 
   - name: brownnoise-dockerfile
     type: file
-    targetpath: "{{ .Vars.brownnoise_dir }}/Dockerfile"
+    target_path: "{{ .Vars.brownnoise_dir }}/Dockerfile"
     owner: root
     group: root
     mode: "0644"

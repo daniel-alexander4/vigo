@@ -98,7 +98,7 @@ resources:
 
   - name: sshd-config
     type: file
-    targetpath: /etc/ssh/sshd_config
+    target_path: /etc/ssh/sshd_config
     content: |
       Port {{ .Vars.ssh_port }}
       PermitRootLogin {{ .Vars.ssh_permit_root }}
@@ -185,7 +185,7 @@ Pipe file content through a script (or chain of scripts) on the thrall before wr
 resources:
   - name: strip-comments-script
     type: file
-    targetpath: /usr/local/bin/strip-comments.sh
+    target_path: /usr/local/bin/strip-comments.sh
     content: |
       #!/bin/sh
       grep -v '^[[:space:]]*#'
@@ -193,7 +193,7 @@ resources:
 
   - name: clean-config
     type: file
-    targetpath: /etc/myapp/config.conf
+    target_path: /etc/myapp/config.conf
     content: |
       # database settings
       host = localhost
@@ -244,7 +244,7 @@ resources:
 
   - name: config-file
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     content: "..."
     depends_on: [install-pkg]    # runs after install-pkg
     notify: [restart-svc]        # triggers restart-svc if changed
@@ -256,7 +256,7 @@ resources:
     subscribes: [config-file]    # also listens for config-file changes
 ```
 
-Aliases: `require` is equivalent to `depends_on`. `before` is reverse `depends_on`.
+`before` is reverse `depends_on` — listed resources run after this one.
 
 ## Conditional Execution
 
@@ -289,7 +289,7 @@ vars:
 resources:
   - name: db-config
     type: file
-    targetpath: /etc/app/db.conf
+    target_path: /etc/app/db.conf
     content: |
       dsn={{ .Vars.db_dsn }}
 ```

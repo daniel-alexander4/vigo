@@ -51,7 +51,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | `commands:` | `exec` | `command:`, `creates:`, `onlyif:`, `unless:` |
 | `users:` | `user` | `username:`, `uid:`, `shell:`, `groups:` |
 | `storage:` (mount) | `mount` | `device:`, `mountpoint:`, `fstype:` |
-| `files:` (link) | `symlink` | `targetpath:`, `source:` |
+| `files:` (link) | `symlink` | `target_path:`, `source:` |
 | `files:` (perms) | `file` | `owner:`, `group:`, `mode:` |
 | `vars:` (sysctl) | `sysctl` | `key:`, `value:` |
 | `files:` (`edit_line` insert) | `file_line` | `path:`, `line:`, `match:` |
@@ -134,7 +134,7 @@ resources:
 
   - name: nginx-config
     type: file
-    targetpath: /etc/nginx/nginx.conf
+    target_path: /etc/nginx/nginx.conf
     owner: root
     group: root
     mode: "0644"

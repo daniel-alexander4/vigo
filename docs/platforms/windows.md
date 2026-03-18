@@ -641,7 +641,7 @@ Use traits in `when:` expressions and templates:
 ```yaml
 - name: high-memory-config
   type: file
-  targetpath: "C:\\ProgramData\\MyApp\\config.ini"
+  target_path: "C:\\ProgramData\\MyApp\\config.ini"
   content: |
     max_memory={{ if ge .Traits.hardware.memory_mb 16384 }}8192{{ else }}2048{{ end }}
 ```
@@ -666,13 +666,13 @@ Windows configs use backslash paths. In YAML, either escape or quote:
 
 ```yaml
 # Double backslash (escaped)
-targetpath: C:\\ProgramData\\MyApp\\config.ini
+target_path: C:\\ProgramData\\MyApp\\config.ini
 
 # Single backslash in quoted string
-targetpath: "C:\\ProgramData\\MyApp\\config.ini"
+target_path: "C:\\ProgramData\\MyApp\\config.ini"
 
 # Forward slashes also work (Go/Rust normalize)
-targetpath: C:/ProgramData/MyApp/config.ini
+target_path: C:/ProgramData/MyApp/config.ini
 ```
 
 ## Example: Complete Windows Web Server Module
@@ -706,12 +706,12 @@ resources:
 
   - name: app-directory
     type: directory
-    targetpath: "C:\\inetpub\\wwwroot\\myapp"
+    target_path: "C:\\inetpub\\wwwroot\\myapp"
     owner: IIS_IUSRS
 
   - name: web-config
     type: file
-    targetpath: "C:\\inetpub\\wwwroot\\myapp\\web.config"
+    target_path: "C:\\inetpub\\wwwroot\\myapp\\web.config"
     content: |
       <?xml version="1.0" encoding="utf-8"?>
       <configuration>

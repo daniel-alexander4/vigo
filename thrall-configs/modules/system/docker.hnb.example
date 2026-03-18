@@ -39,7 +39,7 @@ resources:
 
   - name: docker-daemon-json
     type: file
-    targetpath: /etc/docker/daemon.json
+    target_path: /etc/docker/daemon.json
     content: |
       {
         "storage-driver": "{{ .Vars.docker_storage_driver }}",

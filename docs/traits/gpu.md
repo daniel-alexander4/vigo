@@ -45,7 +45,7 @@ Tries `nvidia-smi` first with `--query-gpu=name,driver_version,memory.total,temp
 ```yaml
 - name: gpu-report
   type: file
-  targetpath: /var/lib/hobnob/gpu.txt
+  target_path: /var/lib/hobnob/gpu.txt
   content: |
     GPUs detected: {{ .Traits.gpu.count }}
 ```
