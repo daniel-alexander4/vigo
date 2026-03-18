@@ -482,7 +482,7 @@ func validateCron(res resource, r *Result) {
 	if state == "absent" {
 		return
 	}
-	hasSchedule := attrStr(res.Attrs, "schedule") != ""
+	hasSchedule := attrStr(res.Attrs, "schedule") != "" || attrStr(res.Attrs, "special") != ""
 	if !hasSchedule {
 		hasAll := true
 		for _, f := range []string{"minute", "hour", "day", "month", "weekday"} {
