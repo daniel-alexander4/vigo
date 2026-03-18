@@ -277,24 +277,24 @@ run_test "export oscal" $CLI export oscal --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
-# 12. users
+# 12. webusers
 # -------------------------------------------------------------------
-echo -e "${BOLD}[users]${NC}"
-run_test "users list" $CLI users list --server "$SERVER"
+echo -e "${BOLD}[webusers]${NC}"
+run_test "webusers list" $CLI webusers list --server "$SERVER"
 
 # Create → verify → delete a test user.
-CREATE_OUT=$($CLI users create --username "cli-test-user" --role viewer --server "$SERVER" 2>&1 || true)
+CREATE_OUT=$($CLI webusers create --username "cli-test-user" --role viewer --server "$SERVER" 2>&1 || true)
 if echo "$CREATE_OUT" | grep -qiE "created|success|cli-test-user"; then
-    echo -e "  ${GREEN}PASS${NC}  users create"
+    echo -e "  ${GREEN}PASS${NC}  webusers create"
     ((PASS++))
-    run_test "users delete" $CLI users delete --username "cli-test-user" --server "$SERVER"
+    run_test "webusers delete" $CLI webusers delete --username "cli-test-user" --server "$SERVER"
 else
-    echo -e "  ${RED}FAIL${NC}  users create"
+    echo -e "  ${RED}FAIL${NC}  webusers create"
     echo "        $CREATE_OUT" | head -3
     ((FAIL++))
-    FAILURES+=("users create")
+    FAILURES+=("webusers create")
     # Try cleanup anyway.
-    $CLI users delete --username "cli-test-user" --server "$SERVER" 2>/dev/null || true
+    $CLI webusers delete --username "cli-test-user" --server "$SERVER" 2>/dev/null || true
 fi
 echo ""
 

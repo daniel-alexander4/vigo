@@ -7,11 +7,13 @@ Manage secrets stored as AES-256-GCM encrypted files in the local secrets provid
 | Subcommand | Description |
 |------------|-------------|
 | `set` | Encrypt and store a secret |
-| `get` | Decrypt and display a secret |
+| `reveal` | Decrypt and display a secret |
 | `delete` | Remove an encrypted secret |
 | `list` | List all secret keys |
 | `init` | Generate a new master key file |
 | `generate-certs` | Generate self-signed CA and server TLS certificates |
+| `set-os-password` | Hash a password with SHA-512 crypt and store it for OS user accounts |
+| `set-web-password` | Hash a password with bcrypt and store it for web UI login |
 
 ## Usage
 
@@ -213,6 +215,61 @@ hobnobcli secrets generate-certs --san hobnob.example.com --san 10.0.1.5
   IPs:  127.0.0.1, 10.0.1.5
 ```
 
+## set-os-password
+
+Hash a plaintext password with SHA-512 crypt (`$6$...`) and store it as an encrypted secret. The resulting hash is suitable for Linux `/etc/shadow` via the user executor's `password` parameter.
+
+Requires `openssl` to be installed on the machine running the CLI.
+
+```bash
+hobnobcli secrets set-os-password <key>
+```
+
+### Example
+
+```bash
+hobnobcli secrets set-os-password hobnob/users/dan-password
+```
+
+```
+Enter password:
+Confirm password:
+SHA-512 password hash stored at hobnob/users/dan-password
+```
+
+Then reference it in a user resource:
+
+```yaml
+resources:
+  - name: dan
+    type: user
+    username: dan
+    password: "secret:hobnob/users/dan-password"
+```
+
+## set-web-password
+
+Hash a plaintext password with bcrypt and store it as an encrypted secret. Used for Hobnob web UI login accounts (basic auth).
+
+```bash
+hobnobcli secrets set-web-password <key>
+```
+
+### Example
+
+```bash
+hobnobcli secrets set-web-password hobnob/web/auth/admin
+```
+
+```
+Enter password:
+Confirm password:
+Bcrypt password hash stored at hobnob/web/auth/admin
+```
+
+The key must follow the pattern `hobnob/web/auth/<username>` to match the account created with `hobnobcli webusers create`.
+
 ## Related
 
+- [webusers](webusers.md) -- manage web UI user accounts
 - [doctor](doctor.md) -- verify secret resolution with health checks
