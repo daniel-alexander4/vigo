@@ -1739,10 +1739,11 @@ func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error)
 		if !isConfigFile(d.Name()) {
 			return nil
 		}
-		// Skip modules/, templates/, and roles.hnb — they are not thrall entries.
+		// Skip modules/, templates/, examples/ and roles.hnb — they are not thrall entries.
 		rel, _ := filepath.Rel(dir, path)
 		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
-			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) {
+			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
+			strings.HasPrefix(rel, "examples"+string(filepath.Separator)) {
 			return nil
 		}
 
@@ -2101,6 +2102,9 @@ func walkConfigFiles(dir string) ([]string, error) {
 				return nil
 			}
 			return err
+		}
+		if d.IsDir() && d.Name() == "examples" {
+			return filepath.SkipDir
 		}
 		if !d.IsDir() && isConfigFile(d.Name()) {
 			paths = append(paths, path)

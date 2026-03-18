@@ -7,7 +7,7 @@ set -e
 DATA_DIR="/srv/hobnob"
 HNB_PROPOSED="${DATA_DIR}/hnb/proposed"
 HNB_LIVE="${DATA_DIR}/hnb/.live"
-EXAMPLES_DIR="${DATA_DIR}/examples"
+EXAMPLES_DIR="${DATA_DIR}/hnb/examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
 
@@ -18,7 +18,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${HNB_PROPOSED}/modules" "${HNB_PROPOSED}/templates" "${HNB_PROPOSED}/default"
+mkdir -p "${HNB_PROPOSED}/modules" "${HNB_PROPOSED}/templates"
 mkdir -p -m 750 "${HNB_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/push" "${DATA_DIR}/custom-traits" "${DATA_DIR}/workflows"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
