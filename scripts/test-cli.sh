@@ -201,7 +201,7 @@ if [[ -n "$TOKEN" ]]; then
 
     # Revoke the pattern we just created.
     if [[ -n "$PATTERN_ID" ]]; then
-        run_test "approved revoke" $CLI approved revoke "$PATTERN_ID" --server "$SERVER"
+        run_test "approved revoke" bash -c "echo y | $CLI approved revoke '$PATTERN_ID' --server '$SERVER'"
     fi
 else
     skip_test "tokens generate + approved add/revoke" "token generation failed"
@@ -287,7 +287,7 @@ CREATE_OUT=$($CLI webusers create --username "cli-test-user" --role viewer --ser
 if echo "$CREATE_OUT" | grep -qiE "created|success|cli-test-user"; then
     echo -e "  ${GREEN}PASS${NC}  webusers create"
     PASS=$((PASS + 1))
-    run_test "webusers delete" $CLI webusers delete --username "cli-test-user" --server "$SERVER"
+    run_test "webusers delete" bash -c "echo y | $CLI webusers delete --username 'cli-test-user' --server '$SERVER'"
 else
     echo -e "  ${RED}FAIL${NC}  webusers create"
     echo "        $CREATE_OUT" | head -3
@@ -317,7 +317,7 @@ WH_ID=$(echo "$WH_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
 if [[ -n "$WH_ID" ]]; then
     echo -e "  ${GREEN}PASS${NC}  webhooks add"
     PASS=$((PASS + 1))
-    run_test "webhooks delete" $CLI webhooks delete "$WH_ID" --server "$SERVER"
+    run_test "webhooks delete" bash -c "echo y | $CLI webhooks delete '$WH_ID' --server '$SERVER'"
 else
     echo -e "  ${RED}FAIL${NC}  webhooks add"
     echo "        $WH_OUT" | head -3
@@ -341,7 +341,7 @@ if [[ -f "$KEYFILE" ]]; then
     run_test "secrets set" $CLI secrets set "test/key" "hello-world" --key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR"
     run_test_grep "secrets reveal" "hello-world" $CLI secrets reveal "test/key" --key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR"
     run_test "secrets list" $CLI secrets list --key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR"
-    run_test "secrets delete" $CLI secrets delete "test/key" --key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR"
+    run_test "secrets delete" bash -c "echo y | $CLI secrets delete 'test/key' --key-file '$KEYFILE' --secrets-dir '$SECRETS_DIR'"
 fi
 rm -rf "$TMPDIR"
 echo ""
