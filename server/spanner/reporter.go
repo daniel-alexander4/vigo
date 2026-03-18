@@ -240,10 +240,10 @@ func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.Tran
 
 // report sends a single status report to the hub. Returns true on success.
 func (r *Reporter) report(ctx context.Context, client pb.HobnobAdminClient) bool {
-	total, compliant, drifted, failing, stale, unknown := r.compliance.ComplianceCounts()
+	total, compliant, recurringDrift, errors, lostContact, noData := r.compliance.ComplianceCounts()
 
-	// Stale thralls excluded from compliance percentage.
-	activeTotal := total - stale
+	// Lost-contact thralls excluded from compliance percentage.
+	activeTotal := total - lostContact
 	var compliancePct float32
 	if activeTotal > 0 {
 		compliancePct = float32(compliant) / float32(activeTotal) * 100
@@ -253,10 +253,10 @@ func (r *Reporter) report(ctx context.Context, client pb.HobnobAdminClient) bool
 		SpokeId:       r.spokeID,
 		ThrallCount:   int32(total),
 		Compliant:     int32(compliant),
-		Drifted:       int32(drifted),
-		Failing:       int32(failing),
-		Stale:         int32(stale),
-		Unknown:       int32(unknown),
+		Drifted:       int32(recurringDrift),
+		Failing:       int32(errors),
+		Stale:         int32(lostContact),
+		Unknown:       int32(noData),
 		CompliancePct: compliancePct,
 	}
 

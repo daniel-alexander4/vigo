@@ -313,15 +313,15 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 			return "", err
 		}
 
-		var runs []compliance.RunInfo
+		var recent []compliance.RunInfo
 		if run, ok := latestRuns[t.ID]; ok {
-			runs = []compliance.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
+			recent = []compliance.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
 		}
 		lastSeen := time.Time{}
 		if t.LastSeen.Valid {
 			lastSeen = t.LastSeen.Time
 		}
-		status := compliance.ComputeStatus(runs, lastSeen, d.baseInterval)
+		status := compliance.ComputeStatus(recent, lastSeen, d.baseInterval)
 
 		return marshalResult(map[string]any{
 			"hostname": hostname,
@@ -357,15 +357,15 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 	var statuses []string
 	for _, id := range ids {
 		t := thrallMap[id]
-		var runs []compliance.RunInfo
+		var recent []compliance.RunInfo
 		if run, ok := latestRuns[id]; ok {
-			runs = []compliance.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
+			recent = []compliance.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
 		}
 		lastSeen := time.Time{}
 		if t.LastSeen.Valid {
 			lastSeen = t.LastSeen.Time
 		}
-		statuses = append(statuses, compliance.ComputeStatus(runs, lastSeen, d.baseInterval))
+		statuses = append(statuses, compliance.ComputeStatus(recent, lastSeen, d.baseInterval))
 	}
 
 	return marshalResult(map[string]any{

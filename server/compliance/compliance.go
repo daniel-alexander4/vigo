@@ -14,35 +14,53 @@ type RunInfo struct {
 	ChangedCount int64
 }
 
+// RecurringDriftThreshold is the number of consecutive runs with changes
+// before a thrall is flagged as "recurring drift".
+const RecurringDriftThreshold = 3
+
 // ComputeStatus determines the compliance status for a single thrall.
-// Returns one of: "compliant", "drifted", "failing", "stale", "unknown".
+// Returns one of: "compliant", "recurring drift", "errors", "lost contact", "no data".
+//
+// recentRuns should be the last N runs in reverse chronological order (newest first).
+// Only the first RecurringDriftThreshold entries are examined for drift detection.
 //
 // Priority order:
-//  1. Stale — thrall hasn't checked in within 2x base interval
-//  2. Unknown — no run data available
-//  3. Compliant — last run succeeded with no changes
-//  4. Drifted — last run succeeded but applied changes
-//  5. Failing — last run failed or partially failed
-//  6. Unknown — unrecognized run status (fallback)
-func ComputeStatus(lastRun *RunInfo, lastSeen time.Time, baseInterval time.Duration) string {
+//  1. Lost Contact - thrall has not checked in within 2x base interval
+//  2. No Data - no run data available
+//  3. Errors - last run had failures
+//  4. Recurring Drift - last 3+ consecutive runs all had changes
+//  5. Compliant - last run succeeded
+func ComputeStatus(recentRuns []RunInfo, lastSeen time.Time, baseInterval time.Duration) string {
 	if time.Since(lastSeen) > 2*baseInterval {
-		return "stale"
+		return "lost contact"
 	}
 
-	if lastRun == nil {
-		return "unknown"
+	if len(recentRuns) == 0 {
+		return "no data"
 	}
 
-	switch lastRun.Status {
-	case "success":
-		if lastRun.ChangedCount == 0 {
-			return "compliant"
-		}
-		return "drifted"
+	last := recentRuns[0]
+	switch last.Status {
 	case "failure", "partial":
-		return "failing"
+		return "errors"
+	case "success":
+		// Check for recurring drift: N consecutive successful runs with changes.
+		if last.ChangedCount > 0 && len(recentRuns) >= RecurringDriftThreshold {
+			allHadChanges := true
+			for i := 0; i < RecurringDriftThreshold; i++ {
+				r := recentRuns[i]
+				if r.Status != "success" || r.ChangedCount == 0 {
+					allHadChanges = false
+					break
+				}
+			}
+			if allHadChanges {
+				return "recurring drift"
+			}
+		}
+		return "compliant"
 	default:
-		return "unknown"
+		return "no data"
 	}
 }
 

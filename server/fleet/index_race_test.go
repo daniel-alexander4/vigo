@@ -96,10 +96,10 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 
 	// Verify counters are internally consistent.
 	c := fi.ComplianceSummary()
-	sum := c.Compliant + c.Drifted + c.Failing + c.Stale + c.Unknown
+	sum := c.Compliant + c.RecurringDrift + c.Errors + c.LostContact + c.NoData
 	if sum != c.Total {
 		t.Errorf("counter inconsistency: %d+%d+%d+%d+%d = %d, Total = %d",
-			c.Compliant, c.Drifted, c.Failing, c.Stale, c.Unknown, sum, c.Total)
+			c.Compliant, c.RecurringDrift, c.Errors, c.LostContact, c.NoData, sum, c.Total)
 	}
 }
 

@@ -280,11 +280,11 @@ type CompliancePageData struct {
 	PageData
 	CompliancePct float64
 	Total         int64
-	Compliant     int64
-	Drifted       int64
-	Failing       int64
-	Stale         int64
-	Unknown       int64
+	Compliant      int64
+	RecurringDrift int64
+	Errors         int64
+	LostContact    int64
+	NoData         int64
 	SparklineData []float64
 	NonCompliant  []ComplianceRow
 }
@@ -1070,7 +1070,7 @@ type dbDataSource struct {
 	configStore *config.ConfigStore
 }
 
-// thrallComplianceInfo computes compliance status for a thrall using its latest run.
+// thrallComplianceInfo computes compliance status for a thrall using recent runs.
 func (ds *dbDataSource) thrallComplianceInfo(ctx context.Context, c db.Thrall, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
 	lastSeen := time.Time{}
 	if c.LastSeen.Valid {
@@ -1079,20 +1079,25 @@ func (ds *dbDataSource) thrallComplianceInfo(ctx context.Context, c db.Thrall, b
 
 	latestRuns, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
 		ThrallID: c.ID,
-		Limit:  1,
+		Limit:    int64(compliance.RecurringDriftThreshold),
 	})
 	if err != nil {
 		return compliance.ComputeStatus(nil, lastSeen, baseInterval), nil
 	}
 
-	if len(latestRuns) > 0 {
-		runInfo = &compliance.RunInfo{
-			Status:       latestRuns[0].Status,
-			ChangedCount: latestRuns[0].ChangedCount,
-		}
+	var recent []compliance.RunInfo
+	for _, r := range latestRuns {
+		recent = append(recent, compliance.RunInfo{
+			Status:       r.Status,
+			ChangedCount: r.ChangedCount,
+		})
 	}
 
-	return compliance.ComputeStatus(runInfo, lastSeen, baseInterval), runInfo
+	if len(recent) > 0 {
+		runInfo = &recent[0]
+	}
+
+	return compliance.ComputeStatus(recent, lastSeen, baseInterval), runInfo
 }
 
 func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
@@ -1249,10 +1254,10 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 		CompliancePct: compPct,
 		Total:         total,
 		Compliant:     int64(summary["compliant"]),
-		Drifted:       int64(summary["drifted"]),
-		Failing:       int64(summary["failing"]),
-		Stale:         int64(summary["stale"]),
-		Unknown:       int64(summary["unknown"]),
+		RecurringDrift: int64(summary["recurring drift"]),
+		Errors:         int64(summary["errors"]),
+		LostContact:    int64(summary["lost contact"]),
+		NoData:         int64(summary["no data"]),
 		SparklineData: sparkData,
 		NonCompliant:  nonCompliant,
 	}
@@ -2275,24 +2280,24 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageData
-		CompliancePct float64
-		Total         int64
-		Compliant     int64
-		Drifted       int64
-		Failing       int64
-		Stale         int64
-		Unknown       int64
-		DriftCount    int
-		DriftRows     []AskDriftRow
+		CompliancePct  float64
+		Total          int64
+		Compliant      int64
+		RecurringDrift int64
+		Errors         int64
+		LostContact    int64
+		NoData         int64
+		DriftCount     int
+		DriftRows      []AskDriftRow
 	}{
 		PageData:      PageData{Title: "Compliance & Security", ActiveNav: "ask"},
 		CompliancePct: compData.CompliancePct,
 		Total:         compData.Total,
 		Compliant:     compData.Compliant,
-		Drifted:       compData.Drifted,
-		Failing:       compData.Failing,
-		Stale:         compData.Stale,
-		Unknown:       compData.Unknown,
+		RecurringDrift: compData.RecurringDrift,
+		Errors:         compData.Errors,
+		LostContact:    compData.LostContact,
+		NoData:         compData.NoData,
 		DriftCount:    len(driftRows),
 		DriftRows:     driftRows,
 	}

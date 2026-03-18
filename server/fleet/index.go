@@ -46,10 +46,10 @@ type ThrallState struct {
 type ComplianceCounters struct {
 	Total     int
 	Compliant int
-	Drifted   int
-	Failing   int
-	Stale     int
-	Unknown   int
+	RecurringDrift int
+	Errors         int
+	LostContact    int
+	NoData         int
 }
 
 // RunSummary is a brief record of a completed run for the recent-runs ring buffer.
@@ -216,9 +216,9 @@ func (f *FleetIndex) ComplianceSummary() ComplianceCounters {
 
 // ComplianceCounts returns the compliance breakdown as flat values.
 // Satisfies the spanner.ComplianceSource interface.
-func (f *FleetIndex) ComplianceCounts() (total, compliant, drifted, failing, stale, unknown int) {
+func (f *FleetIndex) ComplianceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int) {
 	c := f.ComplianceSummary()
-	return c.Total, c.Compliant, c.Drifted, c.Failing, c.Stale, c.Unknown
+	return c.Total, c.Compliant, c.RecurringDrift, c.Errors, c.LostContact, c.NoData
 }
 
 // SnapshotCompliance records a compliance snapshot for the sparkline.
@@ -670,7 +670,7 @@ func (f *FleetIndex) DrainDirty() map[string]*ThrallState {
 
 func (f *FleetIndex) addToStatus(id, status string) {
 	if status == "" {
-		status = "unknown"
+		status = "no data"
 	}
 	if f.byStatus[status] == nil {
 		f.byStatus[status] = make(map[string]bool)
@@ -680,7 +680,7 @@ func (f *FleetIndex) addToStatus(id, status string) {
 
 func (f *FleetIndex) removeFromStatus(id, status string) {
 	if status == "" {
-		status = "unknown"
+		status = "no data"
 	}
 	delete(f.byStatus[status], id)
 }
@@ -735,14 +735,14 @@ func (f *FleetIndex) incrementCounter(status string) {
 	switch status {
 	case "compliant":
 		f.compliance.Compliant++
-	case "drifted":
-		f.compliance.Drifted++
-	case "failing":
-		f.compliance.Failing++
-	case "stale":
-		f.compliance.Stale++
+	case "recurring drift":
+		f.compliance.RecurringDrift++
+	case "errors":
+		f.compliance.Errors++
+	case "lost contact":
+		f.compliance.LostContact++
 	default:
-		f.compliance.Unknown++
+		f.compliance.NoData++
 	}
 }
 
@@ -750,14 +750,14 @@ func (f *FleetIndex) decrementCounter(status string) {
 	switch status {
 	case "compliant":
 		f.compliance.Compliant--
-	case "drifted":
-		f.compliance.Drifted--
-	case "failing":
-		f.compliance.Failing--
-	case "stale":
-		f.compliance.Stale--
+	case "recurring drift":
+		f.compliance.RecurringDrift--
+	case "errors":
+		f.compliance.Errors--
+	case "lost contact":
+		f.compliance.LostContact--
 	default:
-		f.compliance.Unknown--
+		f.compliance.NoData--
 	}
 }
 

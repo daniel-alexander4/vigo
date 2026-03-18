@@ -130,7 +130,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 
 	// Stale thralls are excluded from the compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := total - int64(summary.Stale)
+	activeTotal := total - int64(summary.LostContact)
 	compPct := float64(0)
 	if activeTotal > 0 {
 		compPct = float64(summary.Compliant) / float64(activeTotal) * 100
@@ -160,7 +160,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 	if len(snapshots) > 0 {
 		sparkData = make([]float64, 0, len(snapshots))
 		for _, s := range snapshots {
-			active := s.Counters.Total - s.Counters.Stale
+			active := s.Counters.Total - s.Counters.LostContact
 			if active > 0 {
 				sparkData = append(sparkData, float64(s.Counters.Compliant)/float64(active)*100)
 			}
@@ -186,10 +186,10 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		CompliancePct: compPct,
 		Total:         total,
 		Compliant:     int64(summary.Compliant),
-		Drifted:       int64(summary.Drifted),
-		Failing:       int64(summary.Failing),
-		Stale:         int64(summary.Stale),
-		Unknown:       int64(summary.Unknown),
+		RecurringDrift: int64(summary.RecurringDrift),
+		Errors:         int64(summary.Errors),
+		LostContact:    int64(summary.LostContact),
+		NoData:         int64(summary.NoData),
 		SparklineData: sparkData,
 		NonCompliant:  nonCompliant,
 	}
@@ -248,12 +248,12 @@ func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Durati
 		if thrall.LastSeen.Valid {
 			lastSeen = thrall.LastSeen.Time
 		}
-		var ri *compliance.RunInfo
+		var recent []compliance.RunInfo
 		runs, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{ThrallID: thrallID, Limit: 1})
 		if err == nil && len(runs) > 0 {
-			ri = &compliance.RunInfo{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount}
+			recent = []compliance.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount}}
 		}
-		compStatus := compliance.ComputeStatus(ri, lastSeen, baseInterval)
+		compStatus := compliance.ComputeStatus(recent, lastSeen, baseInterval)
 		ts = &ThrallState{
 			ID:               thrall.ID,
 			Hostname:         thrall.Hostname,

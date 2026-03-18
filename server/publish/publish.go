@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package publish implements a staging pipeline for thrall configuration.
-// Operators edit .hnb files in the proposed directory. The publish command
+// Operators edit .hnb files in the stage directory. The publish command
 // validates them using the same NewConfigStore logic the server uses, then
 // atomically syncs to the .live directory the server reads from.
 package publish
@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	// ProposedDir is where operators edit .hnb files.
-	ProposedDir = "/srv/hobnob/policy/proposed"
+	// StageDir is where operators edit .hnb files.
+	StageDir = "/srv/hobnob/policy/stage"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
@@ -36,12 +36,12 @@ var (
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.
-func setTestDirs(proposed, live string) {
-	ProposedDir = proposed
+func setTestDirs(stage, live string) {
+	StageDir = stage
 	LiveDir = live
 }
 
-// skipDirs are directories that should not be synced from proposed to .live.
+// skipDirs are directories that should not be synced from stage to .live.
 var skipDirs = map[string]bool{
 	".git": true, ".live": true, ".publish-tmp": true, ".publish-backup": true,
 }
@@ -70,9 +70,9 @@ type Result struct {
 	Roles       int
 	Entries     int
 	Files       int      // total files synced (0 for validate-only)
-	AllFiles    []string // all files examined in proposed/
+	AllFiles    []string // all files examined in stage/
 	Changed     []string // files that are new or changed vs .live
-	Removed     []string // files in .live not present in proposed
+	Removed     []string // files in .live not present in stage
 	DiffSummary string   // unified diff of changed files
 }
 

@@ -61,14 +61,14 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			lastSeen = t.LastSeen.Time
 		}
 
-		var runInfo *compliance.RunInfo
+		var recent []compliance.RunInfo
 		if twr.LatestRunStatus.Valid {
-			runInfo = &compliance.RunInfo{
+			recent = []compliance.RunInfo{{
 				Status:       twr.LatestRunStatus.String,
 				ChangedCount: twr.LatestRunChangedCount.Int64,
-			}
+			}}
 		}
-		compStatus := compliance.ComputeStatus(runInfo, lastSeen, baseInterval)
+		compStatus := compliance.ComputeStatus(recent, lastSeen, baseInterval)
 
 		// Parse pending rotated secrets.
 		var pendingSecrets []string

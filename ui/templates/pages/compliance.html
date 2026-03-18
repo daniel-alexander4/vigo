@@ -23,20 +23,20 @@
         <div class="breakdown__status">Compliant</div>
     </div>
     <div class="breakdown__item">
-        <div class="breakdown__count text-warning">{{.Drifted}}</div>
-        <div class="breakdown__status">Drifted</div>
+        <div class="breakdown__count text-warning">{{.RecurringDrift}}</div>
+        <div class="breakdown__status">Recurring Drift</div>
     </div>
     <div class="breakdown__item">
-        <div class="breakdown__count text-danger">{{.Failing}}</div>
-        <div class="breakdown__status">Failing</div>
+        <div class="breakdown__count text-danger">{{.Errors}}</div>
+        <div class="breakdown__status">Errors</div>
     </div>
     <div class="breakdown__item">
-        <div class="breakdown__count text-warning">{{.Stale}}</div>
-        <div class="breakdown__status">Stale</div>
+        <div class="breakdown__count text-warning">{{.LostContact}}</div>
+        <div class="breakdown__status">Lost Contact</div>
     </div>
     <div class="breakdown__item">
-        <div class="breakdown__count text-muted">{{.Unknown}}</div>
-        <div class="breakdown__status">Unknown</div>
+        <div class="breakdown__count text-muted">{{.NoData}}</div>
+        <div class="breakdown__status">No Data</div>
     </div>
 </div>
 
@@ -55,8 +55,8 @@
             <tr>
                 <th>Hostname</th>
                 <th>Status</th>
-                <th>Last Seen</th>
-                <th>Last Run</th>
+                <th>Last Contact</th>
+                <th>Last Converged</th>
             </tr>
         </thead>
         <tbody>

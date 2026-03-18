@@ -1029,10 +1029,10 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 	if err := queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
 		Total:     int64(summary.Total),
 		Compliant: int64(summary.Compliant),
-		Drifted:   int64(summary.Drifted),
-		Failing:   int64(summary.Failing),
-		Stale:     int64(summary.Stale),
-		Unknown:   int64(summary.Unknown),
+		Drifted:   int64(summary.RecurringDrift),
+		Failing:   int64(summary.Errors),
+		Stale:     int64(summary.LostContact),
+		Unknown:   int64(summary.NoData),
 	}); err != nil {
 		slog.Error("failed to persist compliance snapshot", "error", err)
 	}
@@ -1202,18 +1202,18 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 			compliantCount := 0
 			for _, id := range ids {
 				t := thrallMap[id]
-				var ri *compliance.RunInfo
+				var recent []compliance.RunInfo
 				if run, ok := latestRuns[id]; ok {
-					ri = &compliance.RunInfo{
+					recent = []compliance.RunInfo{{
 						Status:       run.Status,
 						ChangedCount: int64(run.ChangedCount),
-					}
+					}}
 				}
 				lastSeen := time.Time{}
 				if t.LastSeen.Valid {
 					lastSeen = t.LastSeen.Time
 				}
-				if compliance.ComputeStatus(ri, lastSeen, baseInterval) == "compliant" {
+				if compliance.ComputeStatus(recent, lastSeen, baseInterval) == "compliant" {
 					compliantCount++
 				}
 			}

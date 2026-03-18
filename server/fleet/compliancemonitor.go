@@ -86,10 +86,10 @@ func (m *ComplianceMonitor) fireAlert(pct float64) {
 		"threshold":  m.threshold,
 		"total":      summary.Total,
 		"compliant":  summary.Compliant,
-		"drifted":    summary.Drifted,
-		"failing":    summary.Failing,
-		"stale":      summary.Stale,
-		"unknown":    summary.Unknown,
+		"recurring_drift":    summary.RecurringDrift,
+		"errors":    summary.Errors,
+		"lost_contact":      summary.LostContact,
+		"no_data":    summary.NoData,
 	}
 
 	if m.dispatcher != nil {
