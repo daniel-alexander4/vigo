@@ -54,3 +54,18 @@ WHERE status IN ('pending', 'running');
 
 -- name: ListRunningPushRunIDs :many
 SELECT id FROM push_runs WHERE status IN ('pending', 'running');
+
+-- name: TimeoutExpiredPushRuns :many
+SELECT id FROM push_runs
+WHERE status IN ('pending', 'running')
+  AND datetime(created_at, '+' || timeout_secs || ' seconds') < datetime('now');
+
+-- name: TimeoutPushRunTargets :exec
+UPDATE push_run_targets
+SET status = 'timeout'
+WHERE push_run_id = ? AND status IN ('pending', 'dispatched');
+
+-- name: TimeoutPushRun :exec
+UPDATE push_runs
+SET status = 'timeout', finished_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('pending', 'running');

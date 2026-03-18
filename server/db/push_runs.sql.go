@@ -295,6 +295,57 @@ func (q *Queries) ListRunningPushRunIDs(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const timeoutExpiredPushRuns = `-- name: TimeoutExpiredPushRuns :many
+SELECT id FROM push_runs
+WHERE status IN ('pending', 'running')
+  AND datetime(created_at, '+' || timeout_secs || ' seconds') < datetime('now')
+`
+
+func (q *Queries) TimeoutExpiredPushRuns(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, timeoutExpiredPushRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const timeoutPushRun = `-- name: TimeoutPushRun :exec
+UPDATE push_runs
+SET status = 'timeout', finished_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('pending', 'running')
+`
+
+func (q *Queries) TimeoutPushRun(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, timeoutPushRun, id)
+	return err
+}
+
+const timeoutPushRunTargets = `-- name: TimeoutPushRunTargets :exec
+UPDATE push_run_targets
+SET status = 'timeout'
+WHERE push_run_id = ? AND status IN ('pending', 'dispatched')
+`
+
+func (q *Queries) TimeoutPushRunTargets(ctx context.Context, pushRunID string) error {
+	_, err := q.db.ExecContext(ctx, timeoutPushRunTargets, pushRunID)
+	return err
+}
+
 const updatePushRunStatus = `-- name: UpdatePushRunStatus :exec
 UPDATE push_runs
 SET status = ?2, started_at = ?3, finished_at = ?4

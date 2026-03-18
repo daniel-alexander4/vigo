@@ -538,6 +538,10 @@ func run() error {
 	// Start async traits pruner.
 	go traitsPruner.Start(ctx, traitsPruneInterval)
 
+	// Start push timeout reaper — marks expired pushes as timed out.
+	pushReaper := push.NewReaper(queries)
+	go pushReaper.Start(ctx)
+
 	// Start retention pruner (if configured).
 	if retention := parseRetention(cfg.Database.Retention); retention > 0 {
 		retentionPruner := db.NewRetentionPruner(queries, sqlDB, retention)
