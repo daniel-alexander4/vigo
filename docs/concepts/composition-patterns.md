@@ -10,17 +10,39 @@ Hobnob solves this differently: **layered composition in plain YAML**, with each
 
 ## The Composition Stack
 
-Hobnob provides five layers of composition, from broadest to most specific:
+Hobnob provides six layers of composition, from broadest to most specific:
 
 ```
-thrall glob match    → assigns roles/modules to groups of machines
-  roles              → bundles modules into reusable profiles
-    modules          → packages related resources together
-      resource tools → foreach, case, conditional_block, when, defaults
-        templates    → dynamic values from traits and vars
+directory inheritance → shared base config via common.hnb at directory levels
+  thrall glob match   → assigns roles/modules to groups of machines
+    roles             → bundles modules into reusable profiles
+      modules         → packages related resources together
+        resource tools → foreach, case, conditional_block, when, defaults
+          templates    → dynamic values from traits and vars
 ```
 
 Each layer eliminates a specific type of repetition.
+
+## Layer 0: Directory Inheritance — Shared Base Config
+
+**Problem:** Every machine needs sshd, monitoring, and NTP. Every production machine also needs log shipping and audit logging. You don't want to repeat these on every thrall entry.
+
+**Solution:** Place `common.hnb` files at directory levels. Everything in subdirectories inherits automatically.
+
+```
+hnb/proposed/
+├── common.hnb            # modules: [sshd, ntp, monitoring]
+├── production/
+│   ├── common.hnb        # modules: [log-shipping, auditd]
+│   └── web/web.hnb       # match: "web*.prod.example.com", modules: [nginx]
+└── staging/staging.hnb   # match: "*.staging.example.com", modules: [debug-tools]
+```
+
+A production web server gets: `sshd, ntp, monitoring, log-shipping, auditd, nginx`. A staging box gets: `sshd, ntp, monitoring, debug-tools`. Zero duplication.
+
+Use `exclude_modules:` to opt out: a container host can drop `ntp` with `exclude_modules: [ntp]`.
+
+See [Config Format: Directory Inheritance](config-format.md#directory-inheritance) for full details.
 
 ## Layer 1: Glob Matching — Group Machines by Name
 

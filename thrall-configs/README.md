@@ -5,27 +5,36 @@ Configuration files that define the desired state of managed thralls. These YAML
 ## Summary
 
 - YAML syntax with `.hnb` file extension
-- Three layers: modules (reusable resource sets), roles (module groups), thralls (hostname-to-role mapping)
+- Directory hierarchy defines thrall inheritance via `common.hnb` files
+- Modules (reusable resource sets), roles (module groups in `roles.hnb`), thrall entries (hostname-to-module mapping)
 - Single source of truth: edit files, publish to reload the server
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Secret references use `secret:` prefix, resolved at server load time
 
 ## Directory Structure
 
+The directory layout is both a file organization and an inheritance tree. `common.hnb` at any level defines modules/roles/vars inherited by everything in subdirectories.
+
 ```
 thrall-configs/
-  modules/           # Reusable resource definitions
+  modules/              # Reusable resource definitions
     nginx.hnb
     openssh.hnb
     monitoring.hnb
-  roles/             # Named collections of modules
-    webserver.hnb
-    base.hnb
-  thralls/           # Map hostnames to roles and modules
-    thralls.hnb
+  templates/            # Template files for source: references
+  roles.hnb             # All role definitions in one file
+  common.hnb            # Modules/vars inherited by ALL subdirs
+  production/
+    common.hnb          # Additional modules/vars for production
+    web/
+      web.hnb           # Leaf entry: match: "web*.prod.example.com"
+    db/
+      db.hnb            # Leaf entry: match: "db*.prod.example.com"
+  staging/
+    staging.hnb         # Leaf entry: match: "*.staging.example.com"
 ```
 
-Directories are read recursively -- subdirectories are supported for organization:
+The `modules/` directory supports subdirectories for organization:
 
 ```
 modules/

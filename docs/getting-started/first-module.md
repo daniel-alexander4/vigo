@@ -71,9 +71,14 @@ This module demonstrates three key patterns:
 
 ## Step 3: Assign to a Thrall
 
-Edit `hnb/proposed/thralls/nodes.hnb`:
+Create a directory for your web servers and add a thrall entry:
+
+```bash
+mkdir -p hnb/proposed/web
+```
 
 ```yaml
+# hnb/proposed/web/web.hnb
 thralls:
   - match: "web*.example.com"
     modules: [nginx]
@@ -84,16 +89,19 @@ thralls:
 
 Node-level `vars` override the module's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
+**Tip:** If you have modules that should apply to *all* your thralls (like SSH and monitoring), put them in `hnb/proposed/common.hnb` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
+
 ## Step 4: Use Roles for Reuse
 
-For multiple modules, group them into a role. Create `hnb/proposed/roles/webserver.hnb`:
+For multiple modules, group them into a role. Create `hnb/proposed/roles.hnb`:
 
 ```yaml
-name: webserver
-modules:
-  - nginx
-  - logrotate-nginx
-  - monitoring-node-exporter
+roles:
+  - name: webserver
+    modules:
+      - nginx
+      - logrotate-nginx
+      - monitoring-node-exporter
 ```
 
 Then assign the role:

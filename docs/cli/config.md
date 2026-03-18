@@ -36,28 +36,37 @@ Match pattern: web*.prod.example.com (glob)
 Environment:   production
 Resources:     14 total
 
+Inheritance:
+  common.hnb              → [sshd, monitoring]
+  production/common.hnb   → [log-shipping, auditd]
+
 Roles:
   webserver (includes: base-security)
     → firewall
-    → sshd
     → nginx
     → logrotate
 
-Modules (4):
+Modules (6):
+  sshd           (inherited from common.hnb)
+  monitoring     (inherited from common.hnb)
+  log-shipping   (inherited from production/common.hnb)
+  auditd         (inherited from production/common.hnb)
   firewall
-  sshd
   nginx
   logrotate
 
 Vars:
-  nginx_port      = 443                             ← environment_overrides[production]
-  worker_procs    = 4                               ← vars_from[vars/web01.hnb]
-  log_level       = info                            ← node vars
-  ssl_protocols   = TLSv1.2 TLSv1.3                ← vars_from[vars/web-common.hnb]
-  db_password     = secret:****                     ← vars_from[vars/db-creds.hnb]
+  dns_server      = 1.1.1.1                          ← inherited:common.hnb
+  log_level       = warn                              ← inherited:production/common.hnb
+  nginx_port      = 443                               ← environment_overrides[production]
+  worker_procs    = 4                                 ← vars_from[vars/web01.hnb]
+  ssl_protocols   = TLSv1.2 TLSv1.3                  ← vars_from[vars/web-common.hnb]
+  db_password     = secret:****                       ← vars_from[vars/db-creds.hnb]
 
 Conditional vars: is_debian, has_enough_ram
 ```
+
+When directory inheritance is configured, the trace shows the full inheritance chain — which `common.hnb` files contributed which modules and vars.
 
 If no config entry matches the hostname:
 

@@ -64,15 +64,35 @@ resources:
 
 ## 4. Map the Thrall to the Module
 
-Create or edit `/srv/hobnob/hnb/proposed/thralls/nodes.hnb`:
+The simplest approach: create a `common.hnb` at the root that assigns the module to all thralls via directory inheritance:
 
 ```yaml
+# /srv/hobnob/hnb/proposed/common.hnb
+modules: [motd]
+```
+
+Then create a catch-all leaf entry in a subdirectory:
+
+```bash
+mkdir -p /srv/hobnob/hnb/proposed/all
+```
+
+```yaml
+# /srv/hobnob/hnb/proposed/all/all.hnb
+thralls:
+  - match: "*"
+```
+
+Every thrall inherits `motd` from `common.hnb`. As you add more modules to `common.hnb`, all thralls get them automatically.
+
+Alternatively, for a flat layout without inheritance, you can put the thrall entry in a `thralls/` directory:
+
+```yaml
+# /srv/hobnob/hnb/proposed/thralls/nodes.hnb
 thralls:
   - match: "*"
     modules: [motd]
 ```
-
-This assigns the `motd` module to all thralls. The `*` glob matches any hostname.
 
 ## 5. Publish the Config
 

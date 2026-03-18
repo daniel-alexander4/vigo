@@ -6,19 +6,21 @@ Operators edit `.hnb` files in a proposed directory. The `config publish` comman
 
 ```
 /srv/hobnob/hnb/
-├── proposed/                 ← operators edit here
-│   ├── modules/
-│   ├── roles/
-│   ├── thralls/
-│   ├── templates/            (optional)
-│   └── vars/                 (optional)
-└── .live/                    ← server reads here (hidden, do not edit)
-    ├── modules/
-    ├── roles/
-    ├── thralls/
-    ├── templates/
-    └── vars/
+├── proposed/                     ← operators edit here
+│   ├── modules/                  # Module definitions
+│   ├── templates/                # Template files for source: references
+│   ├── roles.hnb                 # All role definitions
+│   ├── common.hnb                # Inherited by all subdirs
+│   ├── production/
+│   │   ├── common.hnb            # Inherited by production subdirs
+│   │   └── web/web.hnb           # Leaf entries with match:
+│   └── staging/staging.hnb
+└── .live/                        ← server reads here (hidden, do not edit)
 ```
+
+The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../concepts/config-format.md#directory-inheritance) for details.
+
+The legacy layout with `thralls/`, `roles/`, and `vars/` directories is still supported.
 
 ## Usage
 

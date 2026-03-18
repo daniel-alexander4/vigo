@@ -4,35 +4,40 @@ The config system loads module, role, and node definitions from YAML files (`.hn
 
 ## Summary
 
-- Three config layers: **modules** -> **roles** -> **nodes**
+- Directory hierarchy defines thrall inheritance via `common.hnb` files
+- `modules/` for reusable resource sets, `templates/` for template files, `roles.hnb` for all roles
 - YAML syntax with `.hnb` file extension (`.yaml` and `.yml` also accepted)
 - Secret references resolved at load time (`secret:` prefix)
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Reload: triggered by `POST /api/v1/config/reload`, bumps policy version on change
-- First-match-wins for node mapping
-- Recursive directory loading via `filepath.WalkDir`
+- First-match-wins for node mapping within the resolved inheritance tree
 - Idempotency validation at load time (bypass individual resources with `skip_validation: true`)
 
 ## Config Hierarchy
 
+The directory structure doubles as the thrall hierarchy. `common.hnb` at any level defines modules/roles/vars inherited by all entries in subdirectories.
+
 ```
 /srv/hobnob/hnb/proposed/
-├── modules/           # Reusable resource sets with default vars
+├── modules/              # Reusable resource sets with default vars
 │   ├── nginx.hnb
 │   ├── openssh.hnb
-│   └── monitoring/    # Subdirectories supported
+│   └── monitoring/
 │       └── prometheus.hnb
-├── roles/             # Named lists of modules
-│   └── webserver.hnb
-├── nodes/             # Map hostnames to roles + modules
-│   ├── production.hnb
-│   └── staging.hnb
-└── templates/         # External template files referenced by source:
-    └── nginx/
-        └── nginx.conf.tmpl
+├── templates/            # External template files referenced by source:
+│   └── nginx/
+│       └── nginx.conf.tmpl
+├── roles.hnb             # All role definitions in one file
+├── common.hnb            # Modules/vars inherited by ALL subdirs
+├── production/
+│   ├── common.hnb        # Additional modules/vars for production
+│   └── web/
+│       └── web.hnb       # Leaf entry: match: "web*.prod.example.com"
+└── staging/
+    └── staging.hnb       # Leaf entry: match: "*.staging.example.com"
 ```
 
-All directories are scanned recursively. Files ending in `.example` are ignored.
+Files ending in `.example` are ignored. The legacy layout with `thralls/`, `roles/`, and `vars/` directories is still supported.
 
 ## Module Format
 
