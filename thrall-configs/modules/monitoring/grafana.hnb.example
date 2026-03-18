@@ -41,6 +41,7 @@ resources:
     type: exec
     command: "grafana-cli admin reset-admin-password --password-from-stdin"
     stdin: "secret:hobnob/grafana/admin-password"
+    when: "changed"
     depends_on: [grafana-service]
     watch_secret: ["hobnob/grafana/admin-password"]
     subscribes: [grafana-ini]
