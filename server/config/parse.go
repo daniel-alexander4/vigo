@@ -4,17 +4,33 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
+// sanitizeYAML replaces leading tabs with spaces so YAML parsing doesn't
+// fail on tab-indented files. Tabs are technically illegal in YAML indentation
+// but common enough that rejecting them is unfriendly.
+func sanitizeYAML(data []byte) []byte {
+	if !bytes.ContainsRune(data, '\t') {
+		return data
+	}
+	lines := bytes.Split(data, []byte("\n"))
+	for i, line := range lines {
+		lines[i] = bytes.ReplaceAll(line, []byte("\t"), []byte("  "))
+	}
+	return bytes.Join(lines, []byte("\n"))
+}
+
 // ParseModuleFile parses raw YAML bytes into a ModuleDefinition, using the
 // same tolerant node-based parsing as the config loader. This handles cases
 // where resources have duplicate YAML keys (e.g., "name" as both resource
 // identifier and type-specific attribute) by manually walking the YAML nodes.
 func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
+	data = sanitizeYAML(data)
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
 		return nil, formatYAMLError(data, err)

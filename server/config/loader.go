@@ -1014,6 +1014,7 @@ func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
 	}
 
 	// Parse with yaml.Node to preserve key order.
+	data = sanitizeYAML(data)
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, nil, fmt.Errorf("parsing vars file %q: %w", relPath, err)
@@ -1582,6 +1583,7 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 		var container struct {
 			Roles []RoleDefinition `yaml:"roles"`
 		}
+		data = sanitizeYAML(data)
 		if err := yaml.Unmarshal(data, &container); err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
 		}
@@ -1748,6 +1750,7 @@ func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error)
 		if readErr != nil {
 			return fmt.Errorf("reading %s: %w", path, readErr)
 		}
+		data = sanitizeYAML(data)
 
 		// Determine the relative dir path for this file within the hierarchy.
 		relToRoot, _ := filepath.Rel(thrallRoot, path)
