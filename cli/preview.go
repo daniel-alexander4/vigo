@@ -43,8 +43,12 @@ var previewCmd = &cobra.Command{
 	},
 }
 
-func previewNode(thrallID string) error {
+func previewNode(idOrHostname string) error {
 	client := newAPIClient()
+	thrallID, err := resolveThrall(client, idOrHostname)
+	if err != nil {
+		return err
+	}
 	var resp struct {
 		Actions []struct {
 			ModuleName    string `json:"moduleName"`
