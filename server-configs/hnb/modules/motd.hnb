@@ -1,0 +1,15 @@
+name: motd
+
+resources:
+  - name: motd-file
+    type: file
+    target_path: /etc/motd
+    content: |
+      ========================================
+        Managed by Hobnob
+        Hostname: {{ .Traits.network.hostname }}
+        OS:       {{ .Traits.os.distro }} {{ .Traits.os.version }}
+      ========================================
+    owner: root
+    group: root
+    mode: "0644"

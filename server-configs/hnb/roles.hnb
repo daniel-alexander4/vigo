@@ -1,0 +1,18 @@
+# Role definitions — group modules into reusable profiles.
+# Assign roles to thrall entries instead of listing modules individually.
+#
+# Example:
+#   roles:
+#     - name: webserver
+#       modules: [nginx, certbot, logrotate]
+#     - name: database
+#       modules: [postgres, pg-backup]
+#     - name: base-security
+#       modules: [sshd, fail2ban, auditd]
+#
+# Roles can include other roles (single level):
+#     - name: webserver
+#       includes: [base-security]
+#       modules: [nginx, certbot]
+
+roles: []

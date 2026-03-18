@@ -1,0 +1,12 @@
+# Modules and vars defined here are inherited by all thrall entries
+# in subdirectories. Edit this file to set your fleet-wide baseline.
+#
+# Example:
+#   modules: [sshd, ntp, monitoring, motd]
+#   vars:
+#     dns_server: "1.1.1.1"
+#     ntp_server: pool.ntp.org
+#
+# See: https://hobnob.dev/docs/concepts/config-format#directory-inheritance
+
+modules: [motd]

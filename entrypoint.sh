@@ -18,9 +18,9 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${HNB_PROPOSED}/modules" "${HNB_PROPOSED}/roles" "${HNB_PROPOSED}/thralls" "${HNB_PROPOSED}/templates" "${HNB_PROPOSED}/vars"
+mkdir -p "${HNB_PROPOSED}/modules" "${HNB_PROPOSED}/templates" "${HNB_PROPOSED}/default"
 mkdir -p -m 750 "${HNB_LIVE}"
-mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history"
+mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/push" "${DATA_DIR}/custom-traits" "${DATA_DIR}/workflows"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------
@@ -68,6 +68,35 @@ fi
 if [ ! -f "${DATA_DIR}/docker-compose.yml" ]; then
     cp "${SEED_DIR}/docker-compose.yml" "${DATA_DIR}/docker-compose.yml"
     echo "Default docker-compose.yml created."
+fi
+
+# ---------------------------------------------------------------------------
+# Seed starter config files (skip files that already exist)
+# ---------------------------------------------------------------------------
+
+# Starter HNB config: common.hnb, roles.hnb, modules/motd.hnb, default/all.hnb
+if [ -d "${SEED_DIR}/hnb" ]; then
+    find "${SEED_DIR}/hnb" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/hnb/}"
+        dest="${HNB_PROPOSED}/${rel}"
+        if [ ! -f "$dest" ]; then
+            mkdir -p "$(dirname "$dest")"
+            cp "$src" "$dest"
+        fi
+    done
+    echo "Starter config files seeded."
+fi
+
+# Push definitions: set-password, restart-service, run-command, etc.
+if [ -d "${SEED_DIR}/push" ]; then
+    for src in "${SEED_DIR}"/push/*.yaml; do
+        [ -f "$src" ] || continue
+        dest="${DATA_DIR}/push/$(basename "$src")"
+        if [ ! -f "$dest" ]; then
+            cp "$src" "$dest"
+        fi
+    done
+    echo "Push definitions seeded."
 fi
 
 # ---------------------------------------------------------------------------

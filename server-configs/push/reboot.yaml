@@ -1,0 +1,12 @@
+name: reboot
+description: Reboot the system with a warning message. Use with caution.
+
+vars:
+  message: "System reboot initiated by Hobnob"
+  delay_secs: "5"
+
+resources:
+  - name: reboot
+    type: exec
+    command: "shutdown -r +0 '{{ .Vars.message }}'"
+    onlyif: "true"

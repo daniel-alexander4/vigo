@@ -1,0 +1,12 @@
+name: run-command
+description: Run an ad-hoc command with an optional guard.
+
+vars:
+  command: ""
+  onlyif: "true"
+
+resources:
+  - name: run-command
+    type: exec
+    command: "{{ .Vars.command }}"
+    onlyif: "{{ .Vars.onlyif }}"
