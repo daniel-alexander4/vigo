@@ -61,6 +61,12 @@ The admin CLI written in Go. It:
 | Compliance | `server/compliance/` | Per-thrall status: compliant/drifted/failing/stale/unknown |
 | Spanner | `server/spanner/` | Hub-spoke scaling with enrollment routing |
 
+## Self-Managing Server
+
+The server automatically enrolls itself as its own thrall on startup. This allows the server to manage its own state -- backups, monitoring, log rotation, packages -- using the same module system as every other machine. The server's hostname (from `os.Hostname()`) is used for thrall matching; no token or pubkey is required for self-enrollment.
+
+The built-in `server-backup` module is the first example of this pattern: assign it to your server's hostname to get daily rsync backups of `/srv/hobnob/` with consistent SQLite snapshots.
+
 ## Related
 
 - [Check-in Lifecycle](check-in-lifecycle.md) -- Detailed check-in flow

@@ -189,11 +189,47 @@ Use cron for periodic snapshots. Litestream handles continuous replication; manu
 0 2 * * * /usr/local/bin/hobnobcli backup create /backup/hobnob-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'hobnob-*.tar.gz' -mtime +7 -delete
 ```
 
-## Filesystem Backup Recommendations
+## Built-in Filesystem Backup
 
-Litestream covers the SQLite database, but `/srv/hobnob` contains more than just the database. Config files, secrets, TLS certs, and `server.yaml` also need protection. This is standard sysadmin practice — Hobnob does not manage its own filesystem backups.
+Hobnob ships a `server-backup` module that automatically backs up the entire `/srv/hobnob` directory to `/srv/backups.hobnob/` daily via rsync. This is the recommended baseline for filesystem protection.
 
-### What to back up
+### How it works
+
+The server auto-enrolls itself as its own thrall on startup (self-managing server). When the `server-backup` module is assigned to the server's hostname in your thrall mappings, it:
+
+1. Creates `/srv/backups.hobnob/` with mode `0555` (read-only)
+2. Installs `/usr/local/bin/hobnob-backup.sh` which:
+   - Snapshots the SQLite database using `VACUUM INTO` (consistent, safe with concurrent writers)
+   - Unlocks the backup directory (`chmod 755`)
+   - Rsyncs `/srv/hobnob/` with `--delete`, excluding the live DB files (the snapshot replaces them)
+   - Locks the backup directory back to `0555`
+3. Creates a daily cron job (`@daily`) to run the script
+
+### Setup
+
+Add the `server-backup` module to your server's thrall mapping:
+
+```yaml
+thralls:
+  - match: "my-hobnob-server"
+    modules: [server-backup]
+```
+
+The server's hostname (from `os.Hostname()`) is used for matching. The module uses sensible defaults but all paths are configurable via vars:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `backup_dest` | `/srv/backups.hobnob` | Backup destination directory |
+| `backup_db_src` | `/srv/hobnob/db/hobnob.db` | SQLite database path |
+| `backup_src` | `/srv/hobnob` | Source directory to back up |
+
+### Security
+
+The backup directory is non-writable (`0555`) except during the brief backup window. This prevents accidental or malicious modification of backup data between runs. The backup script runs as root.
+
+## Additional Backup Recommendations
+
+Litestream covers the SQLite database with near-real-time replication. The built-in `server-backup` module covers the full filesystem. For maximum protection:
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
@@ -203,18 +239,11 @@ Litestream covers the SQLite database, but `/srv/hobnob` contains more than just
 | `server.yaml` | Server configuration | Medium — can be recreated |
 | `db/hobnob.db` | SQLite database | Covered by Litestream if configured |
 
-### Recommended approach
-
 1. **Keep `hnb/proposed/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
-2. **Back up `/srv/hobnob` to a remote location.** Use whatever your organization already uses — rsync, Borg, restic, Veeam, cloud volume snapshots. A simple hourly rsync to a remote host is sufficient:
+2. **Use the built-in `server-backup` module** for daily rsync to `/srv/backups.hobnob/`. This covers all critical files with a consistent DB snapshot.
 
-   ```bash
-   # Hourly rsync of /srv/hobnob to remote backup host
-   0 * * * * rsync -a --delete /srv/hobnob/ backup-host:/backup/hobnob/
-   ```
-
-3. **Configure Litestream for near-zero database RPO.** Filesystem backups are hourly at best. Litestream replicates SQLite WAL changes within seconds.
+3. **Configure Litestream for near-zero database RPO.** The daily rsync provides a recovery point but Litestream replicates WAL changes within seconds.
 
 4. **Protect the master key separately.** `secrets/.master.key` is the single most critical file. Store a copy in a password manager, HSM, or separate secure location. Without it, all encrypted secrets are unrecoverable.
 
