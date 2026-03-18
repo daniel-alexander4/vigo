@@ -297,7 +297,8 @@ func run() error {
 
 	configStore, err := config.NewConfigStore(publish.LiveDir, provider, false)
 	if err != nil {
-		return fmt.Errorf("initializing config store: %w", err)
+		slog.Error("config loaded with errors — starting with empty config", "error", err)
+		configStore = config.NewEmptyConfigStore(provider)
 	}
 	configStore.SetBackend(secretsCfg.Backend)
 

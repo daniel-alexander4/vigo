@@ -201,6 +201,21 @@ type ConfigStore struct {
 	lastReloadErr   error // last reload error (nil if last reload succeeded)
 }
 
+// NewEmptyConfigStore creates a ConfigStore with no loaded config.
+// Used when initial config loading fails so the server can still start.
+func NewEmptyConfigStore(provider secrets.Provider) *ConfigStore {
+	return &ConfigStore{
+		entries:       nil,
+		index:         buildPatternIndex(nil),
+		rawModules:    make(map[string]*ModuleDefinition),
+		thrallEntries: nil,
+		roleDefs:      make(map[string]*RoleDefinition),
+		moduleDefs:    make(map[string]*ModuleDefinition),
+		commonConfigs: make(map[string]*CommonConfig),
+		provider:      provider,
+	}
+}
+
 // SetBackend sets the secrets backend name for diagnostic hints.
 func (cs *ConfigStore) SetBackend(backend string) {
 	cs.backend = backend
