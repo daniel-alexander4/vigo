@@ -185,6 +185,36 @@ type Session struct {
 	Expiry float64 `json:"expiry"`
 }
 
+type TaskRun struct {
+	ID           string         `json:"id"`
+	Command      string         `json:"command"`
+	TargetGlob   string         `json:"target_glob"`
+	Operator     string         `json:"operator"`
+	Status       string         `json:"status"`
+	TotalTargets int64          `json:"total_targets"`
+	CreatedAt    time.Time      `json:"created_at"`
+	StartedAt    sql.NullTime   `json:"started_at"`
+	FinishedAt   sql.NullTime   `json:"finished_at"`
+	TimeoutSecs  int64          `json:"timeout_secs"`
+	BatchSize    sql.NullString `json:"batch_size"`
+	MaxFailures  sql.NullString `json:"max_failures"`
+}
+
+type TaskRunTarget struct {
+	ID           string         `json:"id"`
+	TaskRunID    string         `json:"task_run_id"`
+	ThrallID     string         `json:"thrall_id"`
+	Hostname     string         `json:"hostname"`
+	Status       string         `json:"status"`
+	ExitCode     sql.NullInt64  `json:"exit_code"`
+	Stdout       sql.NullString `json:"stdout"`
+	Stderr       sql.NullString `json:"stderr"`
+	DurationMs   sql.NullInt64  `json:"duration_ms"`
+	ErrorMsg     sql.NullString `json:"error_msg"`
+	DispatchedAt sql.NullTime   `json:"dispatched_at"`
+	FinishedAt   sql.NullTime   `json:"finished_at"`
+}
+
 type Thrall struct {
 	ID                    string       `json:"id"`
 	Hostname              string       `json:"hostname"`
