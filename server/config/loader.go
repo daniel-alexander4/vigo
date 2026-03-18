@@ -610,6 +610,229 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 }
 
 // thrallsDir returns the path to the thralls subdirectory.
+// TreeNode represents one node in the config directory hierarchy for
+// the config tree command. It shows inheritance at each level.
+type TreeNode struct {
+	Dir      string      `json:"dir"`                // relative dir path ("", "production", "production/web")
+	File     string      `json:"file,omitempty"`     // filename if this is a leaf or common.hnb
+	Modules  []string    `json:"modules,omitempty"`  // modules defined at this level
+	Roles    []string    `json:"roles,omitempty"`    // roles defined at this level
+	Match    string      `json:"match,omitempty"`    // match pattern (leaf entries only)
+	Total    []string    `json:"total,omitempty"`    // accumulated modules (leaf entries only)
+	Excluded []string    `json:"excluded,omitempty"` // excluded modules (leaf entries only)
+	Children []*TreeNode `json:"children,omitempty"` // subdirectories
+}
+
+// Tree returns the directory inheritance structure for visualization.
+func (cs *ConfigStore) Tree() *TreeNode {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	root := &TreeNode{Dir: ""}
+
+	// Add common.hnb at root.
+	if cc, ok := cs.commonConfigs[""]; ok {
+		root.File = "common.hnb"
+		for _, ref := range cc.Modules {
+			root.Modules = append(root.Modules, ref.Name)
+		}
+		root.Roles = cc.Roles
+	}
+
+	// Build tree from thrall entries grouped by directory.
+	dirNodes := map[string]*TreeNode{"": root}
+
+	// Ensure all common.hnb directories have nodes.
+	for dirPath, cc := range cs.commonConfigs {
+		if dirPath == "" {
+			continue
+		}
+		node := getOrCreateNode(dirNodes, root, dirPath)
+		node.File = "common.hnb"
+		for _, ref := range cc.Modules {
+			node.Modules = append(node.Modules, ref.Name)
+		}
+		node.Roles = cc.Roles
+	}
+
+	// Add leaf entries.
+	for _, entry := range cs.thrallEntries {
+		dirPath := entry.DirPath
+		parent := getOrCreateNode(dirNodes, root, dirPath)
+
+		leaf := &TreeNode{
+			Dir:      dirPath,
+			Match:    entry.Match,
+			Excluded: entry.ExcludeModules,
+		}
+
+		// Own modules.
+		for _, ref := range entry.Modules {
+			leaf.Modules = append(leaf.Modules, ref.Name)
+		}
+		leaf.Roles = entry.Roles
+
+		// Compute total accumulated modules from resolved config.
+		for i := range cs.entries {
+			if cs.entries[i].match == entry.Match {
+				for _, mod := range cs.entries[i].config.Modules {
+					leaf.Total = append(leaf.Total, mod.Name)
+				}
+				break
+			}
+		}
+
+		parent.Children = append(parent.Children, leaf)
+	}
+
+	return root
+}
+
+// SearchResult holds results for the config search command.
+type SearchResult struct {
+	Entries []SearchEntry `json:"entries"`
+}
+
+// SearchEntry is a single search result showing a thrall entry and its context.
+type SearchEntry struct {
+	Match       string             `json:"match"`
+	Dir         string             `json:"dir"`
+	Inheritance []InheritanceLevel `json:"inheritance,omitempty"`
+	OwnModules  []string           `json:"own_modules"`
+	OwnRoles    []string           `json:"own_roles,omitempty"`
+	Total       []string           `json:"total"`
+	Excluded    []string           `json:"excluded,omitempty"`
+	Vars        map[string]any     `json:"vars,omitempty"`
+}
+
+// Search finds thrall entries matching the given criteria.
+// query is matched against match: patterns using glob-style matching.
+// moduleName filters to entries that use a specific module (inherited or direct).
+// varName filters to entries that define a specific var.
+func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	result := &SearchResult{Entries: []SearchEntry{}}
+
+	for _, entry := range cs.thrallEntries {
+		// Filter by match pattern.
+		if query != "" && !globContains(entry.Match, query) {
+			continue
+		}
+
+		// Build the entry.
+		se := SearchEntry{
+			Match:    entry.Match,
+			Dir:      entry.DirPath,
+			Excluded: entry.ExcludeModules,
+		}
+
+		// Own modules/roles (before inheritance).
+		for _, ref := range entry.Modules {
+			se.OwnModules = append(se.OwnModules, ref.Name)
+		}
+		se.OwnRoles = entry.Roles
+
+		// Inheritance chain.
+		if entry.DirPath != "" && len(cs.commonConfigs) > 0 {
+			chain := inheritanceChain(entry.DirPath, cs.commonConfigs)
+			for _, cc := range chain {
+				level := InheritanceLevel{
+					Dir:  cc.DirPath,
+					File: "common.hnb",
+				}
+				for _, ref := range cc.Modules {
+					level.Modules = append(level.Modules, ref.Name)
+				}
+				level.Roles = cc.Roles
+				se.Inheritance = append(se.Inheritance, level)
+			}
+		}
+
+		// Total modules from resolved config.
+		for i := range cs.entries {
+			if cs.entries[i].match == entry.Match {
+				cfg := cs.entries[i].config
+				for _, mod := range cfg.Modules {
+					se.Total = append(se.Total, mod.Name)
+				}
+				se.Vars = cfg.Vars
+				break
+			}
+		}
+
+		// Filter by module name (must appear in total).
+		if moduleName != "" {
+			found := false
+			for _, m := range se.Total {
+				if m == moduleName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		// Filter by var name.
+		if varName != "" {
+			if _, ok := se.Vars[varName]; !ok {
+				continue
+			}
+		}
+
+		result.Entries = append(result.Entries, se)
+	}
+
+	return result
+}
+
+// getOrCreateNode ensures a TreeNode exists for the given directory path,
+// creating intermediate nodes as needed.
+func getOrCreateNode(nodes map[string]*TreeNode, root *TreeNode, dirPath string) *TreeNode {
+	if dirPath == "" {
+		return root
+	}
+	if node, ok := nodes[dirPath]; ok {
+		return node
+	}
+
+	parts := strings.Split(dirPath, string(filepath.Separator))
+	current := root
+	for i := range parts {
+		seg := filepath.Join(parts[:i+1]...)
+		if node, ok := nodes[seg]; ok {
+			current = node
+			continue
+		}
+		node := &TreeNode{Dir: seg}
+		current.Children = append(current.Children, node)
+		nodes[seg] = node
+		current = node
+	}
+	return current
+}
+
+// globContains checks if a pattern matches a query using simple substring
+// and glob matching. The query can contain * wildcards.
+func globContains(pattern, query string) bool {
+	// Exact substring match.
+	if strings.Contains(pattern, query) {
+		return true
+	}
+	// Try glob: query is a pattern, pattern is the "filename".
+	if matched, _ := filepath.Match(query, pattern); matched {
+		return true
+	}
+	// Try reverse: pattern is a pattern, query is the "filename".
+	if matched, _ := filepath.Match(pattern, query); matched {
+		return true
+	}
+	return false
+}
+
 func (cs *ConfigStore) thrallsDir() string { return filepath.Join(cs.dir, "thralls") }
 
 // modulesDir returns the path to the modules subdirectory.

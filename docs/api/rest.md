@@ -455,6 +455,46 @@ Trace config resolution for a hostname. Shows which node entry matched, how role
 
 If no entry matches, `matched` is `false` and other fields are omitted.
 
+### GET /api/v1/config/tree
+
+Returns the directory inheritance structure for visualization. Shows `common.hnb` files at each level, leaf entries with their match patterns, and accumulated module totals.
+
+**Response:** A tree of nodes with `dir`, `file`, `modules`, `roles`, `match`, `total`, `excluded`, and `children` fields.
+
+### GET /api/v1/config/search
+
+Search thrall entries by match pattern, module name, or var name. Returns matching entries with their full inheritance chain and accumulated modules.
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `match` | No | Glob pattern to match against thrall `match:` patterns (e.g., `*web*`) |
+| `module` | No | Module name — find entries that use this module (inherited or direct) |
+| `var` | No | Var name — find entries that define this var |
+
+At least one parameter is required.
+
+**Response:**
+
+```json
+{
+  "entries": [
+    {
+      "match": "web*.prod.example.com",
+      "dir": "production/web",
+      "inheritance": [
+        {"dir": "", "file": "common.hnb", "modules": ["sshd", "monitoring"]},
+        {"dir": "production", "file": "common.hnb", "modules": ["log-shipping"]}
+      ],
+      "own_modules": ["nginx"],
+      "total": ["sshd", "monitoring", "log-shipping", "nginx"],
+      "vars": {"log_level": "warn", "nginx_port": 443}
+    }
+  ]
+}
+```
+
 ---
 
 ## Audit

@@ -63,11 +63,23 @@ func cYellow() string {
 	}
 	return "\033[33m"
 }
+func cBlue() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[34m"
+}
 func cCyan() string {
 	if !useColor {
 		return ""
 	}
 	return "\033[36m"
+}
+func cStrike() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[9m"
 }
 
 // bold wraps text in bold.
@@ -87,6 +99,12 @@ func yellow(s string) string { return cYellow() + s + cReset() }
 
 // cyan wraps text in cyan.
 func cyan(s string) string { return cCyan() + s + cReset() }
+
+// blue wraps text in blue.
+func blue(s string) string { return cBlue() + s + cReset() }
+
+// strike wraps text in strikethrough red (for excluded items).
+func strike(s string) string { return cStrike() + cRed() + s + cReset() }
 
 // header wraps a table header in bold cyan.
 func header(s string) string { return cBold() + cCyan() + s + cReset() }
