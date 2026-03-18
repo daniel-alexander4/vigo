@@ -40,7 +40,7 @@ var thrallsPushCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Force push sent — %d thrall(s) notified\n", resp.ThrallsNotified)
+		fmt.Printf("%s Force push sent — %d thrall(s) notified\n", green("OK"), resp.ThrallsNotified)
 		return nil
 	},
 }

@@ -128,7 +128,7 @@ func writeExportOutput(raw json.RawMessage, outputPath string) error {
 		if err := os.WriteFile(outputPath, append(formatted, '\n'), 0644); err != nil {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
-		fmt.Printf("Written to %s\n", outputPath)
+		fmt.Printf("%s Written to %s\n", green("OK"), outputPath)
 		return nil
 	}
 

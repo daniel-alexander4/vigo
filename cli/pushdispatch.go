@@ -243,24 +243,24 @@ func fetchPush(client *apiClient, id string) (*pushResponse, error) {
 
 func printPushResults(resp *pushResponse) {
 	t := resp.Push
-	fmt.Printf("Push:     %s\n", t.ID)
-	fmt.Printf("Command:  %s\n", t.Command)
-	fmt.Printf("Target:   %s\n", t.Target)
-	fmt.Printf("Operator: %s\n", t.Operator)
-	fmt.Printf("Status:   %s\n", t.Status)
-	fmt.Printf("Targets:  %d\n", t.TotalTargets)
+	fmt.Printf("%s %s\n", bold("Push:"), dim(t.ID))
+	fmt.Printf("%s %s\n", bold("Command:"), t.Command)
+	fmt.Printf("%s %s\n", bold("Target:"), t.Target)
+	fmt.Printf("%s %s\n", bold("Operator:"), t.Operator)
+	fmt.Printf("%s %s\n", bold("Status:"), colorStatus(t.Status))
+	fmt.Printf("%s %d\n", bold("Targets:"), t.TotalTargets)
 	if t.BatchSize != "" {
-		fmt.Printf("Batch:    %s\n", t.BatchSize)
+		fmt.Printf("%s %s\n", bold("Batch:"), t.BatchSize)
 	}
 	if t.MaxFailures != "" {
-		fmt.Printf("MaxFail:  %s\n", t.MaxFailures)
+		fmt.Printf("%s %s\n", bold("MaxFail:"), t.MaxFailures)
 	}
-	fmt.Printf("Created:  %s\n", formatTimestamp(t.CreatedAt))
+	fmt.Printf("%s %s\n", bold("Created:"), dim(formatTimestamp(t.CreatedAt)))
 	if t.StartedAt != "" {
-		fmt.Printf("Started:  %s\n", formatTimestamp(t.StartedAt))
+		fmt.Printf("%s %s\n", bold("Started:"), dim(formatTimestamp(t.StartedAt)))
 	}
 	if t.FinishedAt != "" {
-		fmt.Printf("Finished: %s\n", formatTimestamp(t.FinishedAt))
+		fmt.Printf("%s %s\n", bold("Finished:"), dim(formatTimestamp(t.FinishedAt)))
 	}
 
 	if len(resp.Targets) == 0 {
@@ -269,12 +269,17 @@ func printPushResults(resp *pushResponse) {
 
 	fmt.Println()
 	for _, tgt := range resp.Targets {
-		fmt.Printf("--- %s [%s]", tgt.Hostname, tgt.Status)
+		fmt.Printf("--- %s [%s]", bold(tgt.Hostname), colorStatus(tgt.Status))
 		if tgt.ExitCode != nil {
-			fmt.Printf(" exit=%d", *tgt.ExitCode)
+			code := fmt.Sprintf("exit=%d", *tgt.ExitCode)
+			if *tgt.ExitCode == 0 {
+				fmt.Printf(" %s", green(code))
+			} else {
+				fmt.Printf(" %s", red(code))
+			}
 		}
 		if tgt.DurationMs != nil {
-			fmt.Printf(" %dms", *tgt.DurationMs)
+			fmt.Printf(" %s", dim(fmt.Sprintf("%dms", *tgt.DurationMs)))
 		}
 		fmt.Println()
 
@@ -289,13 +294,13 @@ func printPushResults(resp *pushResponse) {
 			}
 		}
 		if tgt.Stderr != "" {
-			fmt.Fprintf(os.Stderr, "%s", tgt.Stderr)
+			fmt.Fprintf(os.Stderr, "%s", red(tgt.Stderr))
 			if !strings.HasSuffix(tgt.Stderr, "\n") {
 				fmt.Fprintln(os.Stderr)
 			}
 		}
 		if tgt.ErrorMsg != "" {
-			fmt.Printf("error: %s\n", tgt.ErrorMsg)
+			fmt.Printf("%s %s\n", red("error:"), tgt.ErrorMsg)
 		}
 	}
 }

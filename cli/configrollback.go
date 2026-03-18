@@ -25,12 +25,12 @@ var configRollbackCmd = &cobra.Command{
 				return err
 			}
 			if len(resp.Versions) == 0 {
-				fmt.Println("No config snapshots available.")
+				fmt.Println(dim("No config snapshots available."))
 				return nil
 			}
-			fmt.Println("Available versions:")
+			fmt.Println(bold("Available versions:"))
 			for _, v := range resp.Versions {
-				fmt.Printf("  %s\n", v)
+				fmt.Printf("  %s\n", dim(v))
 			}
 			return nil
 		}
@@ -44,7 +44,7 @@ var configRollbackCmd = &cobra.Command{
 		if err := client.post("/api/v1/config/rollback/"+version, nil, nil); err != nil {
 			return err
 		}
-		fmt.Printf("Rolled back to version %s\n", version)
+		fmt.Printf("%s Rolled back to version %s\n", green("OK"), dim(version))
 		return nil
 	},
 }

@@ -51,36 +51,36 @@ var configTraceCmd = &cobra.Command{
 		}
 
 		if !trace.Matched {
-			fmt.Printf("No config entry matches hostname %q\n", hostname)
+			fmt.Printf("%s No config entry matches hostname %q\n", yellow("!"), hostname)
 			return nil
 		}
 
-		fmt.Printf("Hostname:      %s\n", trace.Hostname)
-		fmt.Printf("Match pattern: %s (%s)\n", trace.MatchPattern, trace.PatternType)
+		fmt.Printf("%s %s\n", bold("Hostname:"), trace.Hostname)
+		fmt.Printf("%s %s %s\n", bold("Match pattern:"), yellow(trace.MatchPattern), dim("("+trace.PatternType+")"))
 		if trace.Environment != "" {
-			fmt.Printf("Environment:   %s\n", trace.Environment)
+			fmt.Printf("%s %s\n", bold("Environment:"), trace.Environment)
 		}
-		fmt.Printf("Resources:     %d total\n", trace.ResourceCount)
+		fmt.Printf("%s %d total\n", bold("Resources:"), trace.ResourceCount)
 		fmt.Println()
 
 		// Roles
 		if len(trace.Roles) > 0 {
-			fmt.Println("Roles:")
+			fmt.Println(bold("Roles:"))
 			for _, re := range trace.RoleExpansion {
 				if len(re.Includes) > 0 {
-					fmt.Printf("  %s (includes: %s)\n", re.Role, strings.Join(re.Includes, ", "))
+					fmt.Printf("  %s %s\n", cyan(re.Role), dim("(includes: "+strings.Join(re.Includes, ", ")+")"))
 				} else {
-					fmt.Printf("  %s\n", re.Role)
+					fmt.Printf("  %s\n", cyan(re.Role))
 				}
 				for _, mod := range re.Modules {
-					fmt.Printf("    → %s\n", mod)
+					fmt.Printf("    %s %s\n", dim("→"), mod)
 				}
 			}
 			fmt.Println()
 		}
 
 		// Modules
-		fmt.Printf("Modules (%d):\n", len(trace.Modules))
+		fmt.Printf("%s\n", bold(fmt.Sprintf("Modules (%d):", len(trace.Modules))))
 		for _, mod := range trace.Modules {
 			fmt.Printf("  %s\n", mod)
 		}
@@ -88,7 +88,7 @@ var configTraceCmd = &cobra.Command{
 
 		// Vars
 		if len(trace.VarSources) > 0 {
-			fmt.Println("Vars:")
+			fmt.Println(bold("Vars:"))
 			maxKeyLen := 0
 			for _, v := range trace.VarSources {
 				if len(v.Key) > maxKeyLen {
@@ -100,18 +100,17 @@ var configTraceCmd = &cobra.Command{
 				if len(val) > 60 {
 					val = val[:57] + "..."
 				}
-				// Mask secret values
 				if strings.HasPrefix(val, "secret:") {
-					val = "secret:****"
+					val = red("secret:****")
 				}
-				fmt.Printf("  %-*s = %-30s  ← %s\n", maxKeyLen, v.Key, val, v.Source)
+				fmt.Printf("  %s = %-30s  %s\n", bold(fmt.Sprintf("%-*s", maxKeyLen, v.Key)), val, dim("← "+v.Source))
 			}
 			fmt.Println()
 		}
 
 		// Conditional vars
 		if len(trace.ConditionalVars) > 0 {
-			fmt.Printf("Conditional vars: %s\n", strings.Join(trace.ConditionalVars, ", "))
+			fmt.Printf("%s %s\n", bold("Conditional vars:"), cyan(strings.Join(trace.ConditionalVars, ", ")))
 		}
 
 		return nil

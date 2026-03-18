@@ -129,7 +129,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	fmt.Println(result.Answer)
 	if len(result.ToolsUsed) > 0 {
-		fmt.Fprintf(os.Stderr, "\n[tools: %s | tokens: %d]\n", strings.Join(result.ToolsUsed, ", "), result.TokensUsed)
+		fmt.Fprintf(os.Stderr, "\n%s\n", dim(fmt.Sprintf("[tools: %s | tokens: %d]", strings.Join(result.ToolsUsed, ", "), result.TokensUsed)))
 	}
 	return nil
 }
@@ -152,7 +152,7 @@ func streamSSE(body io.Reader) error {
 			switch event.Type {
 			case "status":
 				if len(event.ToolsCalled) > 0 {
-					fmt.Fprintf(os.Stderr, "[querying: %s]\n", strings.Join(event.ToolsCalled, ", "))
+					fmt.Fprintf(os.Stderr, "%s\n", dim("[querying: "+strings.Join(event.ToolsCalled, ", ")+"]"))
 				}
 			case "delta":
 				fmt.Print(event.Text)
@@ -167,7 +167,7 @@ func streamSSE(body io.Reader) error {
 
 	fmt.Println()
 	if len(toolsUsed) > 0 {
-		fmt.Fprintf(os.Stderr, "\n[tools: %s | tokens: %d]\n", strings.Join(toolsUsed, ", "), tokensUsed)
+		fmt.Fprintf(os.Stderr, "\n%s\n", dim(fmt.Sprintf("[tools: %s | tokens: %d]", strings.Join(toolsUsed, ", "), tokensUsed)))
 	}
 
 	return scanner.Err()
