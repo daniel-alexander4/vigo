@@ -1,4 +1,4 @@
-name: server-backup
+name: hobnob-server-backup
 
 vars:
   backup_dest: "/srv/backups.hobnob"

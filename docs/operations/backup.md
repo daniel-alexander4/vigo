@@ -191,11 +191,11 @@ Use cron for periodic snapshots. Litestream handles continuous replication; manu
 
 ## Built-in Filesystem Backup
 
-Hobnob ships a `server-backup` module that automatically backs up the entire `/srv/hobnob` directory to `/srv/backups.hobnob/` daily via rsync. This is the recommended baseline for filesystem protection.
+Hobnob ships a `hobnob-server-backup` module that automatically backs up the entire `/srv/hobnob` directory to `/srv/backups.hobnob/` daily via rsync. This is the recommended baseline for filesystem protection.
 
 ### How it works
 
-When the server host is enrolled as a thrall and the `server-backup` module is assigned to its hostname in your thrall mappings, the agent on the server host will:
+When the server host is enrolled as a thrall and the `hobnob-server-backup` module is assigned to its hostname in your thrall mappings, the agent on the server host will:
 
 1. Creates `/srv/backups.hobnob/` with mode `0555` (read-only)
 2. Installs `/usr/local/bin/hobnob-backup.sh` which:
@@ -207,12 +207,12 @@ When the server host is enrolled as a thrall and the `server-backup` module is a
 
 ### Setup
 
-Add the `server-backup` module to your server's thrall mapping:
+Add the `hobnob-server-backup` module to your server's thrall mapping:
 
 ```yaml
 thralls:
   - match: "my-hobnob-server"
-    modules: [server-backup]
+    modules: [hobnob-server-backup]
 ```
 
 The server's hostname (from `os.Hostname()`) is used for matching. The module uses sensible defaults but all paths are configurable via vars:
@@ -229,7 +229,7 @@ The backup directory is non-writable (`0555`) except during the brief backup win
 
 ## Additional Backup Recommendations
 
-Litestream covers the SQLite database with near-real-time replication. The built-in `server-backup` module covers the full filesystem. For maximum protection:
+Litestream covers the SQLite database with near-real-time replication. The built-in `hobnob-server-backup` module covers the full filesystem. For maximum protection:
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
@@ -241,7 +241,7 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 1. **Keep `hnb/proposed/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
-2. **Use the built-in `server-backup` module** for daily rsync to `/srv/backups.hobnob/`. This covers all critical files with a consistent DB snapshot.
+2. **Use the built-in `hobnob-server-backup` module** for daily rsync to `/srv/backups.hobnob/`. This covers all critical files with a consistent DB snapshot.
 
 3. **Configure Litestream for near-zero database RPO.** The daily rsync provides a recovery point but Litestream replicates WAL changes within seconds.
 
