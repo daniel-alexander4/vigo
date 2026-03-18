@@ -111,7 +111,7 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
         Some(pid) => pid as i32,
         None => {
             // Process already exited before we could get the PID.
-            return collect_child_output(&mut child, push_id, &start, "completed").await;
+            return collect_child_output(&mut child, push_id, &start, "complete").await;
         }
     };
 
@@ -126,7 +126,7 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
     let (wait_status, status_str) = tokio::select! {
         result = child.wait() => {
             match result {
-                Ok(status) => (Some(status), "completed"),
+                Ok(status) => (Some(status), "complete"),
                 Err(e) => {
                     return PushResult {
                         push_id: push_id.clone(),
@@ -157,7 +157,7 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
     let stderr = read_pipe(stderr_pipe, MAX_STDERR).await;
 
     let exit_code = wait_status.and_then(|s| s.code()).unwrap_or(-1);
-    let actual_status = if exit_code != 0 && status_str == "completed" {
+    let actual_status = if exit_code != 0 && status_str == "complete" {
         "failed"
     } else {
         status_str
@@ -187,7 +187,7 @@ async fn collect_child_output(
     let stdout = read_pipe(stdout_pipe, MAX_STDOUT).await;
     let stderr = read_pipe(stderr_pipe, MAX_STDERR).await;
     let exit_code = wait_status.and_then(|s| s.code()).unwrap_or(-1);
-    let actual_status = if exit_code != 0 && status == "completed" {
+    let actual_status = if exit_code != 0 && status == "complete" {
         "failed"
     } else {
         status
@@ -282,7 +282,7 @@ mod tests {
         let result = execute(&dispatch, &cancel).await;
         assert_eq!(result.push_id, "test-1");
         assert_eq!(result.exit_code, 0);
-        assert_eq!(result.status, "completed");
+        assert_eq!(result.status, "complete");
         assert_eq!(String::from_utf8_lossy(&result.stdout).trim(), "hello");
         assert!(result.duration_ms >= 0);
     }
@@ -389,6 +389,6 @@ mod tests {
 
         let result = execute(&dispatch, &cancel).await;
         assert_eq!(result.exit_code, 0);
-        assert_eq!(result.status, "completed");
+        assert_eq!(result.status, "complete");
     }
 }

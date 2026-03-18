@@ -179,6 +179,42 @@ CREATE TABLE IF NOT EXISTS push_run_targets (
 CREATE INDEX IF NOT EXISTS idx_push_run_targets_push_run_id ON push_run_targets (push_run_id);
 CREATE INDEX IF NOT EXISTS idx_push_run_targets_thrall_id ON push_run_targets (thrall_id);
 
+CREATE TABLE IF NOT EXISTS task_runs (
+    id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+    command       TEXT NOT NULL,
+    target_glob   TEXT NOT NULL,
+    operator      TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'cancelled')) DEFAULT 'pending',
+    total_targets INTEGER NOT NULL DEFAULT 0,
+    created_at    DATETIME NOT NULL DEFAULT (datetime('now')),
+    started_at    DATETIME,
+    finished_at   DATETIME,
+    timeout_secs  INTEGER NOT NULL DEFAULT 60,
+    batch_size    TEXT,
+    max_failures  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_runs_status ON task_runs (status);
+CREATE INDEX IF NOT EXISTS idx_task_runs_created_at ON task_runs (created_at);
+
+CREATE TABLE IF NOT EXISTS task_run_targets (
+    id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+    task_run_id  TEXT NOT NULL REFERENCES task_runs (id) ON DELETE CASCADE,
+    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    hostname     TEXT NOT NULL,
+    status       TEXT NOT NULL CHECK (status IN ('pending', 'dispatched', 'complete', 'failed', 'timeout', 'offline', 'rejected', 'skipped')) DEFAULT 'pending',
+    exit_code    INTEGER,
+    stdout       TEXT,
+    stderr       TEXT,
+    duration_ms  INTEGER,
+    error_msg    TEXT,
+    dispatched_at DATETIME,
+    finished_at  DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_task_run_id ON task_run_targets (task_run_id);
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_thrall_id ON task_run_targets (thrall_id);
+
 CREATE TABLE IF NOT EXISTS workflow_runs (
     id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
     workflow_name   TEXT NOT NULL,
