@@ -94,6 +94,14 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 				} else {
 					attrs[k] = string(jsonBytes)
 				}
+			case int:
+				// YAML parses bare octal (mode: 0644) as int.
+				// Coerce mode values to octal string for the agent.
+				if k == "mode" {
+					attrs[k] = fmt.Sprintf("%04o", val)
+				} else {
+					attrs[k] = fmt.Sprintf("%d", val)
+				}
 			default:
 				attrs[k] = fmt.Sprintf("%v", v)
 			}
