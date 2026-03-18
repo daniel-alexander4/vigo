@@ -253,8 +253,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	}
 
 	// Record agent version if reported.
-	if v := req.GetAgentVersion(); v != "" && s.fleetIndex != nil {
-		s.fleetIndex.SetAgentVersion(thrallID, v)
+	agentVersion := req.GetAgentVersion()
+	if agentVersion != "" && s.fleetIndex != nil {
+		s.fleetIndex.SetAgentVersion(thrallID, agentVersion)
 	}
 
 	configVersion := s.configStore.Version()
@@ -273,6 +274,15 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 			streamRequested = freshState.StreamRequested
 			forceUpdate = freshState.ForceUpdate
 		}
+	}
+
+	// Auto-update: if the agent reports a version that doesn't match the
+	// server's version, tell it to download the latest binary and restart.
+	// This ensures all agents stay current without manual intervention.
+	if !forceUpdate && agentVersion != "" && s.serverVersion != "" && agentVersion != s.serverVersion {
+		slog.Info("agent version mismatch, requesting update",
+			"thrall", thrallID, "agent", agentVersion, "server", s.serverVersion)
+		forceUpdate = true
 	}
 	// Clear the ephemeral flag so it's only sent once.
 	if forceUpdate && s.fleetIndex != nil {

@@ -477,6 +477,7 @@ func run() error {
 		BundleMaxAge:        bundleMaxAge,
 		FallbackServers:     fallbackServers,
 		AuditWriter:         auditWriter,
+		ServerVersion:       version,
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)

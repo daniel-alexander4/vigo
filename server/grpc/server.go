@@ -85,6 +85,7 @@ type ServerConfig struct {
 	RateLimit        config.RateLimitSection // rate limiting config
 	FallbackServers  []string          // peer server addresses returned to agents on registration
 	AuditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
+	ServerVersion    string            // server binary version — agents with different version get force_update
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -191,6 +192,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		jitterPercent:    cfg.JitterPercent,
 		fallbackServers:  cfg.FallbackServers,
 		auditWriter:      cfg.AuditWriter,
+		serverVersion:    cfg.ServerVersion,
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {
