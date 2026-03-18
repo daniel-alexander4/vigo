@@ -7,16 +7,15 @@ Manages cron jobs by writing configuration files to `/etc/cron.d/`.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | Yes | -- | Cron job name (used as the filename in `/etc/cron.d/`). |
-| `job` | Yes (for present) | -- | The command to execute. |
+| `command` | Yes (for present) | -- | The command to execute. Alias: `job`. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
-| `schedule` | No | -- | Complete cron schedule expression (e.g., `*/5 * * * *`). Takes precedence over individual time fields. |
+| `schedule` | No | -- | Cron schedule expression (e.g., `*/5 * * * *`) or special schedule (`@daily`, `@hourly`, `@reboot`, etc.). Takes precedence over individual time fields. |
 | `minute` | No | `*` | Minute field (0-59). |
 | `hour` | No | `*` | Hour field (0-23). |
 | `day` | No | `*` | Day of month field (1-31). |
 | `month` | No | `*` | Month field (1-12). |
 | `weekday` | No | `*` | Day of week field (0-7, where 0 and 7 are Sunday). |
 | `user` | No | `root` | User to run the job as. |
-| `special` | No | -- | Special schedule: `@reboot`, `@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`. Overrides `schedule` and individual fields. |
 | `environment` | No | -- | Comma-separated `KEY=VALUE` pairs written as env lines before the schedule. |
 
 ## States

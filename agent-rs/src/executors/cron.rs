@@ -43,9 +43,9 @@ impl Executor for CronExecutor {
             return result;
         }
 
-        let job = params.get("job").cloned().unwrap_or_default();
+        let job = params.get("job").or_else(|| params.get("command")).cloned().unwrap_or_default();
         if job.is_empty() {
-            result.error = Some("cron executor: job param is required when state=present".into());
+            result.error = Some("cron executor: job (or command) param is required when state=present".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -107,10 +107,11 @@ const VALID_SPECIALS: &[&str] = &[
 ];
 
 fn build_schedule(params: &HashMap<String, String>) -> Result<String, String> {
-    // Special schedule takes precedence over everything.
-    if let Some(s) = params.get("special") {
+    // Check schedule first (accepts both cron expressions and @specials),
+    // then fall back to special param for backward compat.
+    if let Some(s) = params.get("schedule") {
         if !s.is_empty() {
-            if !s.starts_with('@') || !VALID_SPECIALS.contains(&s.as_str()) {
+            if s.starts_with('@') && !VALID_SPECIALS.contains(&s.as_str()) {
                 return Err(format!(
                     "cron executor: invalid special schedule {:?} (valid: {})",
                     s,
@@ -120,8 +121,15 @@ fn build_schedule(params: &HashMap<String, String>) -> Result<String, String> {
             return Ok(s.clone());
         }
     }
-    if let Some(s) = params.get("schedule") {
+    if let Some(s) = params.get("special") {
         if !s.is_empty() {
+            if !s.starts_with('@') || !VALID_SPECIALS.contains(&s.as_str()) {
+                return Err(format!(
+                    "cron executor: invalid special schedule {:?} (valid: {})",
+                    s,
+                    VALID_SPECIALS.join(", ")
+                ));
+            }
             return Ok(s.clone());
         }
     }
@@ -179,7 +187,7 @@ mod tests {
         );
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("job param is required"),
+            result.error.as_deref().unwrap().contains("job (or command) param is required"),
             "unexpected error: {:?}",
             result.error
         );
