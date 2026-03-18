@@ -833,19 +833,11 @@ func globContains(pattern, query string) bool {
 	return false
 }
 
-func (cs *ConfigStore) thrallsDir() string { return filepath.Join(cs.dir, "thralls") }
-
 // modulesDir returns the path to the modules subdirectory.
 func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "modules") }
 
-// rolesDir returns the path to the roles subdirectory.
-func (cs *ConfigStore) rolesDir() string { return filepath.Join(cs.dir, "roles") }
-
 // templatesDir returns the path to the templates subdirectory.
 func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
-
-// varsDir returns the path to the vars subdirectory.
-func (cs *ConfigStore) varsDir() string { return filepath.Join(cs.dir, "vars") }
 
 // loadAll reads module defs, role defs, and thrall YAML files, resolves
 // all entries, and atomically swaps the config.
@@ -1546,72 +1538,19 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 	return defs, nil
 }
 
-// loadRoleDefs reads all config files from the roles directory.
-func loadRoleDefs(dir string) (map[string]*RoleDefinition, error) {
-	paths, err := walkConfigFiles(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading roles dir: %w", err)
-	}
-
-	defs := make(map[string]*RoleDefinition)
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", path, err)
-		}
-		var def RoleDefinition
-		if err := yaml.Unmarshal(data, &def); err != nil {
-			return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
-		}
-		if def.Name == "" {
-			return nil, fmt.Errorf("%s: missing required 'name' field", path)
-		}
-		if _, exists := defs[def.Name]; exists {
-			return nil, fmt.Errorf("duplicate role name %q in %s", def.Name, path)
-		}
-		defs[def.Name] = &def
-	}
-
-	// Validate includes: single level only — included roles must not
-	// themselves have includes.
-	for _, def := range defs {
-		for _, incName := range def.Includes {
-			inc, ok := defs[incName]
-			if !ok {
-				return nil, fmt.Errorf("role %q includes %q which does not exist", def.Name, incName)
-			}
-			if len(inc.Includes) > 0 {
-				return nil, fmt.Errorf("role %q includes %q which itself has includes — only single-level nesting is allowed", def.Name, incName)
-			}
-		}
-	}
-
-	return defs, nil
-}
-
-// loadRolesFile loads roles from a single roles.hnb file at the base dir,
-// falling back to the roles/ directory for backward compatibility.
+// loadRolesFile loads roles from a single roles.hnb file at the base dir.
+// The file must contain a top-level "roles:" list.
 func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
-	// Try roles.hnb at root first.
 	for _, name := range []string{"roles.hnb", "roles.yaml", "roles.yml"} {
 		path := filepath.Join(baseDir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		// roles.hnb contains a top-level "roles:" list.
 		var container struct {
 			Roles []RoleDefinition `yaml:"roles"`
 		}
 		if err := yaml.Unmarshal(data, &container); err != nil {
-			// Try as a single role definition (backward compat).
-			var single RoleDefinition
-			if err2 := yaml.Unmarshal(data, &single); err2 != nil {
-				return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
-			}
-			if single.Name != "" {
-				return map[string]*RoleDefinition{single.Name: &single}, nil
-			}
 			return nil, fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, err))
 		}
 
@@ -1642,8 +1581,8 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 		return defs, nil
 	}
 
-	// Fall back to roles/ directory.
-	return loadRoleDefs(filepath.Join(baseDir, "roles"))
+	// No roles.hnb found — return empty (roles are optional).
+	return make(map[string]*RoleDefinition), nil
 }
 
 // applyInheritance prepends inherited modules, roles, and vars from
@@ -1745,16 +1684,10 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 //   - common.hnb at any level = modules/roles/vars inherited by all subdirs
 //   - Any other .hnb file = leaf entry (must have match:)
 //   - Root-level common.hnb applies only to subdirectories
-//
-// This also supports the legacy thralls/ subdirectory layout: if a thralls/
-// subdir exists, it is loaded as the thrall hierarchy root instead.
+//   - modules/, templates/ are skipped (not part of thrall hierarchy)
+//   - roles.hnb at root is skipped (loaded separately by loadRolesFile)
 func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error) {
-	// Legacy support: if thralls/ subdir exists, use it as the hierarchy root.
 	thrallRoot := dir
-	thrallsSub := filepath.Join(dir, "thralls")
-	if info, err := os.Stat(thrallsSub); err == nil && info.IsDir() {
-		thrallRoot = thrallsSub
-	}
 
 	commons := make(map[string]*CommonConfig)
 	var allEntries []ThrallEntry

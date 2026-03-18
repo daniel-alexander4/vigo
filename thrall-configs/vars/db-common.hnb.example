@@ -1,9 +1,0 @@
-# Common vars for all database servers.
-
-pg_version: "16"
-pg_data_dir: "/var/lib/postgresql/16/main"
-pg_log_dir: "/var/log/postgresql"
-pg_max_connections: "100"
-pg_shared_buffers: "256MB"
-pg_effective_cache_size: "1GB"
-pg_work_mem: "16MB"

@@ -1,7 +1,0 @@
-# Host-specific vars for web01.
-# Overrides values from web-common.hnb when both are listed in vars_from.
-
-server_name: "web01.example.com"
-ssl_cert: "/etc/ssl/certs/web01.pem"
-ssl_key: "/etc/ssl/private/web01.key"
-worker_processes: "4"

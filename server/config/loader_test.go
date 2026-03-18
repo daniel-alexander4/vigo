@@ -36,11 +36,12 @@ func (m *mockProvider) Close() error { return nil }
 
 // --- helpers ---
 
-// setupDir creates a thrall-configs directory with thralls/, modules/, and roles/ subdirs.
+// setupDir creates a config directory with modules/ subdir and a default
+// subdirectory for thrall entries.
 func setupDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "thrall-configs")
-	for _, sub := range []string{"thralls", "modules", "roles"} {
+	for _, sub := range []string{"default", "modules"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -50,9 +51,27 @@ func setupDir(t *testing.T) string {
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// writeRoles writes a roles.hnb file at the base dir from individual role
+// YAML snippets. Each snippet is a single role definition (name: ..., modules: ...).
+// They are wrapped in a top-level "roles:" list.
+func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("roles:\n")
+	for _, snippet := range roleSnippets {
+		for _, line := range strings.Split(strings.TrimSpace(snippet), "\n") {
+			b.WriteString("  " + line + "\n")
+		}
+	}
+	writeFile(t, filepath.Join(dir, "roles.hnb"), b.String())
 }
 
 // --- Tests ---
@@ -69,7 +88,7 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "webservers.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "webservers.yaml"), `
 thralls:
   - match: "test.example.com"
     environment: production
@@ -112,11 +131,11 @@ resources:
     package: certbot
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
-name: webserver
-modules: [nginx, certbot]
+	writeRoles(t, dir, `
+- name: webserver
+  modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.example.com"
     environment: production
@@ -154,7 +173,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.example.com"
     environment: production
@@ -188,7 +207,7 @@ resources:
     target_path: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web.example.com"
     environment: production
@@ -219,7 +238,7 @@ func TestKnownSecretEnforcement(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "bad.example.com"
     environment: production
@@ -241,7 +260,7 @@ func TestHardFailUnresolvable(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "fail.example.com"
     environment: production
@@ -267,7 +286,7 @@ resources:
     path: /etc/app/config
     content: "secret:app/config/content"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web-*.prod.example.com"
     environment: production
@@ -357,7 +376,7 @@ resources: []
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "*.prod.example.com"
     environment: production
@@ -397,7 +416,7 @@ resources: []
 name: pattern
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.prod.example.com"
     environment: staging
@@ -433,13 +452,13 @@ name: postgres
 resources: []
 `)
 	// Two separate client files
-	writeFile(t, filepath.Join(dir, "thralls", "webservers.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "webservers.yaml"), `
 thralls:
   - match: "web-*"
     environment: production
     modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "databases.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "databases.yaml"), `
 thralls:
   - match: "db-*"
     environment: production
@@ -486,7 +505,7 @@ func TestEnvVarMerge(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "envtest.example.com"
     environment: production
@@ -538,7 +557,7 @@ resources: []
 	}
 
 	// Write a new thrall file and reload.
-	writeFile(t, filepath.Join(dir, "thralls", "new-hosts.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "new-hosts.yaml"), `
 thralls:
   - match: "new.example.com"
     environment: staging
@@ -562,7 +581,7 @@ func TestBadConfigKeepsOld(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "good.example.com"
     environment: production
@@ -579,7 +598,7 @@ thralls:
 	}
 
 	// Write invalid YAML and reload.
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   invalid yaml: [[[
 `)
@@ -598,7 +617,7 @@ thralls:
 func TestUnknownModuleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "bad.example.com"
     modules: [nonexistent]
@@ -613,7 +632,7 @@ thralls:
 func TestUnknownRoleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "bad.example.com"
     roles: [nonexistent]
@@ -628,9 +647,9 @@ thralls:
 func TestRoleReferencesUnknownModule(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "roles", "bad.yaml"), `
-name: bad
-modules: [nonexistent]
+	writeRoles(t, dir, `
+- name: bad
+  modules: [nonexistent]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -646,11 +665,11 @@ func TestDedupModules(t *testing.T) {
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "roles", "web.yaml"), `
-name: web
-modules: [nginx]
+	writeRoles(t, dir, `
+- name: web
+  modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "dup.example.com"
     roles: [web]
@@ -683,7 +702,7 @@ resources:
 name: other
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web-*"
     modules: [app]
@@ -732,7 +751,7 @@ resources:
     owner: root
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web.example.com"
     modules: [nginx]
@@ -779,7 +798,7 @@ resources:
     source: templates/test.tmpl
     content: "inline content"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "test.example.com"
     modules: [bad]
@@ -806,7 +825,7 @@ resources:
     target_path: /etc/test
     source: templates/nonexistent.tmpl
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "test.example.com"
     modules: [bad]
@@ -842,7 +861,7 @@ resources:
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web.example.com"
     modules: [nginx]
@@ -1018,7 +1037,7 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web.example.com"
     modules: [webserver]
@@ -1069,7 +1088,7 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "test.example.com"
     modules: [bad]
@@ -1096,7 +1115,7 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "test.example.com"
     modules: [bad]
@@ -1132,7 +1151,7 @@ vars:
     gte: 4096
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "multi.example.com"
     modules: [mod_a, mod_b]
@@ -1175,7 +1194,7 @@ vars:
     in: [debian, ubuntu]
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "override.example.com"
     modules: [mod]
@@ -1225,7 +1244,7 @@ resources:
           command: "apt-get update"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "deb.example.com"
     modules: [debian-tools]
@@ -1282,7 +1301,7 @@ resources:
     state: running
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "mix.example.com"
     modules: [mixed]
@@ -1340,7 +1359,7 @@ resources:
           depends_on: [setup-repo]
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "dep.example.com"
     modules: [cross-dep]
@@ -1385,7 +1404,7 @@ resources:
           when: "not is_container"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "dual.example.com"
     modules: [dual-cond]
@@ -1420,7 +1439,7 @@ resources:
       resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "bad.example.com"
     modules: [bad-block]
@@ -1456,14 +1475,14 @@ resources:
     package: certbot
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
-name: webserver
-modules:
-  - name: nginx
-    when: "is_debian"
-  - certbot
+	writeRoles(t, dir, `
+- name: webserver
+  modules:
+    - name: nginx
+      when: "is_debian"
+    - certbot
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web.example.com"
     roles: [webserver]
@@ -1501,7 +1520,7 @@ resources:
     package: redis
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "db.example.com"
     modules:
@@ -1534,14 +1553,14 @@ resources: []
 name: certbot
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "roles", "web.yaml"), `
-name: web
-modules:
-  - nginx
-  - name: certbot
-    when: "is_debian or is_ubuntu"
+	writeRoles(t, dir, `
+- name: web
+  modules:
+    - nginx
+    - name: certbot
+      when: "is_debian or is_ubuntu"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "mix.example.com"
     roles: [web]
@@ -1587,11 +1606,11 @@ resources:
     package: certbot
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
-name: webserver
-modules: [nginx, certbot]
+	writeRoles(t, dir, `
+- name: webserver
+  modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.example.com"
     roles: [webserver]
@@ -1631,7 +1650,7 @@ resources:
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
 thralls:
   - match: "test.example.com"
     modules: [bad]
@@ -1666,7 +1685,7 @@ resources:
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
 thralls:
   - match: "test.example.com"
     modules: [bad]
@@ -1693,7 +1712,7 @@ resources:
     command: "touch /tmp/done"
     creates: "/tmp/done"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
 thralls:
   - match: "test.example.com"
     modules: [good]
@@ -1716,11 +1735,11 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "roles", "web.hnb"), `
-name: web
-modules: [nginx]
+	writeRoles(t, dir, `
+- name: web
+  modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
 thralls:
   - match: "test.example.com"
     roles: [web]
@@ -1760,7 +1779,7 @@ resources:
     type: exec
     command: "echo three"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
 thralls:
   - match: "test.example.com"
     modules: [bad1, bad2]
@@ -1829,7 +1848,7 @@ resources:
 `, name, name, name))
 	}
 	// Duplicate modules: keys — should merge, not overwrite.
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
 thralls:
   - match: "danlap"
     environment: production
@@ -1881,15 +1900,14 @@ resources:
     state: present
 `, name, name, name))
 	}
-	writeFile(t, filepath.Join(dir, "roles", "web.hnb"), `
-name: web
-modules: [nginx]
+	writeRoles(t, dir, `
+- name: web
+  modules: [nginx]
+`, `
+- name: cache
+  modules: [redis]
 `)
-	writeFile(t, filepath.Join(dir, "roles", "cache.hnb"), `
-name: cache
-modules: [redis]
-`)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.hnb"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
 thralls:
   - match: "test"
     roles: [web]
@@ -1948,7 +1966,7 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "app.example.com"
     modules: [base-packages, app-config]
@@ -1993,7 +2011,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "app.example.com"
     modules: [base-packages]
@@ -2032,7 +2050,7 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "app.example.com"
     modules: [base-packages, app-config]
@@ -2070,7 +2088,7 @@ resources:
 server_name: "web01.example.com"
 port: "9090"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "web01.example.com"
     vars_from: "vars/web.hnb"
@@ -2115,7 +2133,7 @@ log_level: "info"
 port: "4000"
 server_name: "host1"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from:
@@ -2158,7 +2176,7 @@ resources:
 port: "3000"
 log_level: "info"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "vars/defaults.hnb"
@@ -2204,7 +2222,7 @@ a: "file"
 b: "file"
 d: "file"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "vars/data.hnb"
@@ -2245,7 +2263,7 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "vars/nonexistent.hnb"
@@ -2272,7 +2290,7 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "../../../etc/passwd"
@@ -2303,7 +2321,7 @@ resources:
     state: present
 `)
 	writeFile(t, filepath.Join(dir, "vars", "empty.hnb"), ``)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "vars/empty.hnb"
@@ -2338,7 +2356,7 @@ resources:
 api_key: "secret:app/api_key"
 debug: "false"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "vars/secrets.hnb"
@@ -2376,7 +2394,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "vars", "data.hnb"), `
 color: "blue"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "vars/data.hnb"
@@ -2412,7 +2430,7 @@ resources:
 b_file: "from_file"
 a_file: "from_file"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1.example.com"
     vars_from: "vars/data.hnb"
@@ -2460,7 +2478,7 @@ resources:
 `)
 	// Two glob patterns that both match "web01.prod.example.com".
 	// First match should win.
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web*.prod.example.com"
     modules: [nginx]
@@ -2520,7 +2538,7 @@ resources:
     package: myapp
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "app01.example.com"
     environment: production
@@ -2565,7 +2583,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.example.com"
     modules: [webserver]
@@ -2598,7 +2616,7 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.example.com"
     modules: [app]
@@ -2626,7 +2644,7 @@ resources:
     target_path: /etc/app/config
     source: "../../etc/shadow"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.example.com"
     modules: [app]
@@ -2652,7 +2670,7 @@ resources:
     target_path: /etc/app/config
     source: "/etc/passwd"
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "web01.example.com"
     modules: [app]
@@ -2675,7 +2693,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "*.example.com"
     modules: [nginx]
@@ -2728,7 +2746,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "*.example.com"
     modules: [nginx]
@@ -2761,7 +2779,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "*.example.com"
     modules: [nginx]
@@ -2778,7 +2796,7 @@ thralls:
 	}
 
 	// Write invalid module reference.
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "*.example.com"
     modules: [nonexistent_module_xyz]
@@ -2854,7 +2872,7 @@ resources:
     target_path: /etc/evil.conf
     source: templates/evil.conf
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "thralls.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
 thralls:
   - match: "test.example.com"
     modules: [evil]
@@ -2896,20 +2914,19 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "roles", "base-security.yaml"), `
-name: base-security
-modules:
-  - firewall
-  - sshd
+	writeRoles(t, dir, `
+- name: base-security
+  modules:
+    - firewall
+    - sshd
+`, `
+- name: webserver
+  includes:
+    - base-security
+  modules:
+    - nginx
 `)
-	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
-name: webserver
-includes:
-  - base-security
-modules:
-  - nginx
-`)
-	writeFile(t, filepath.Join(dir, "thralls", "web.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "web.yaml"), `
 thralls:
   - match: "web01.example.com"
     roles: [webserver]
@@ -2945,21 +2962,20 @@ resources:
     type: file
     target_path: /tmp/a
 `)
-	writeFile(t, filepath.Join(dir, "roles", "inner.yaml"), `
-name: inner
-includes:
-  - outer
-modules:
-  - a
+	writeRoles(t, dir, `
+- name: inner
+  includes:
+    - outer
+  modules:
+    - a
+`, `
+- name: outer
+  includes:
+    - inner
+  modules:
+    - a
 `)
-	writeFile(t, filepath.Join(dir, "roles", "outer.yaml"), `
-name: outer
-includes:
-  - inner
-modules:
-  - a
-`)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "x"
     roles: [outer]
@@ -2991,20 +3007,19 @@ resources:
     type: file
     target_path: /tmp/web
 `)
-	writeFile(t, filepath.Join(dir, "roles", "base.yaml"), `
-name: base
-modules:
-  - shared
+	writeRoles(t, dir, `
+- name: base
+  modules:
+    - shared
+`, `
+- name: webserver
+  includes:
+    - base
+  modules:
+    - shared
+    - web
 `)
-	writeFile(t, filepath.Join(dir, "roles", "webserver.yaml"), `
-name: webserver
-includes:
-  - base
-modules:
-  - shared
-  - web
-`)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "x"
     roles: [webserver]
@@ -3050,7 +3065,7 @@ resources:
 port: "9090"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "web.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "web.yaml"), `
 thralls:
   - match: "web01.example.com"
     modules: [app]
@@ -3088,7 +3103,7 @@ resources:
 key: val
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "host1"
     modules: [app]
@@ -3132,19 +3147,18 @@ resources:
     type: file
     target_path: /etc/iptables/rules.v4
 `)
-	writeFile(t, filepath.Join(dir, "roles", "base.yaml"), `
-name: base
-modules:
-  - firewall
+	writeRoles(t, dir, `
+- name: base
+  modules:
+    - firewall
+`, `
+- name: web
+  includes:
+    - base
+  modules:
+    - nginx
 `)
-	writeFile(t, filepath.Join(dir, "roles", "web.yaml"), `
-name: web
-includes:
-  - base
-modules:
-  - nginx
-`)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "web01.example.com"
     environment: production
@@ -3209,7 +3223,7 @@ resources:
     type: file
     target_path: /tmp/a
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "other"
     modules: [a]
@@ -3235,7 +3249,7 @@ resources:
     type: file
     target_path: /tmp/app
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
 thralls:
   - match: "web-*.example.com"
     modules: [app]
@@ -3490,7 +3504,9 @@ thralls:
 	}
 }
 
-func TestInheritance_RootEntryNoInheritance(t *testing.T) {
+func TestInheritance_SubdirInheritsFromRoot(t *testing.T) {
+	// Entries in subdirectories inherit from root common.hnb.
+	// Entries in any subdirectory (including one named "thralls") inherit.
 	dir := setupInheritanceDir(t)
 
 	writeFile(t, filepath.Join(dir, "modules", "sshd.hnb"), `
@@ -3500,25 +3516,23 @@ resources:
     type: package
     package: openssh-server
 `)
-	writeFile(t, filepath.Join(dir, "modules", "legacy.hnb"), `
-name: legacy
+	writeFile(t, filepath.Join(dir, "modules", "app.hnb"), `
+name: app
 resources:
-  - name: install-legacy
+  - name: install-app
     type: package
-    package: legacy-app
+    package: myapp
 `)
 
 	writeFile(t, filepath.Join(dir, "common.hnb"), `
 modules: [sshd]
 `)
 
-	// Entry at root level (in thralls/ subdir, but not in a subdirectory
-	// below the hierarchy root) should NOT inherit from common.hnb.
-	os.MkdirAll(filepath.Join(dir, "thralls"), 0o755)
-	writeFile(t, filepath.Join(dir, "thralls", "legacy.hnb"), `
+	os.MkdirAll(filepath.Join(dir, "servers"), 0o755)
+	writeFile(t, filepath.Join(dir, "servers", "all.hnb"), `
 thralls:
-  - match: "old*.example.com"
-    modules: [legacy]
+  - match: "srv*.example.com"
+    modules: [app]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -3526,7 +3540,7 @@ thralls:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	cfg := cs.Get("old01.example.com")
+	cfg := cs.Get("srv01.example.com")
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
@@ -3535,40 +3549,15 @@ thralls:
 	for _, m := range cfg.Modules {
 		names = append(names, m.Name)
 	}
-	// Should only have legacy, not sshd from common.
-	if len(names) != 1 || names[0] != "legacy" {
-		t.Errorf("modules = %v, want [legacy]", names)
+	// Should have inherited sshd + own app.
+	want := []string{"sshd", "app"}
+	if len(names) != len(want) {
+		t.Fatalf("modules = %v, want %v", names, want)
 	}
-}
-
-func TestInheritance_BackwardCompatLegacyLayout(t *testing.T) {
-	// The legacy layout with thralls/ subdir should still work.
-	dir := setupDir(t)
-
-	writeFile(t, filepath.Join(dir, "modules", "nginx.hnb"), `
-name: nginx
-resources:
-  - name: install-nginx
-    type: package
-    package: nginx
-`)
-	writeFile(t, filepath.Join(dir, "thralls", "all.hnb"), `
-thralls:
-  - match: "web*.example.com"
-    modules: [nginx]
-`)
-
-	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
-
-	cfg := cs.Get("web01.example.com")
-	if cfg == nil {
-		t.Fatal("expected config")
-	}
-	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "nginx" {
-		t.Errorf("expected [nginx], got %v", cfg.Modules)
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("module[%d] = %q, want %q", i, names[i], w)
+		}
 	}
 }
 
