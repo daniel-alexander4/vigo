@@ -167,6 +167,48 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 - Module referenced in a role but not defined in `modules/`
 - Circular dependency in `depends_on`
 
+### Thrall Reports Compliant but Resources Not Applied
+
+**Symptoms:** A thrall shows `compliant` with `CHANGED 0, FAILED 0`, but the expected changes (files, users, sudoers, etc.) are not present on the machine.
+
+**Cause:** The agent binary is too old to understand newer resource parameters. The agent sees the resource, checks the fields it knows about (e.g., user exists, shell correct), reports "already compliant," and silently ignores parameters it doesn't recognize (e.g., `sudo_nopasswd`, `password`, `authorized_keys`).
+
+**Diagnosis:**
+
+1. Check the agent version:
+   ```bash
+   hobnobcli thralls show <hostname>
+   ```
+   Look at the `Agent:` line. Compare with the version the server is distributing.
+
+2. Verify the resource is in the resolved config:
+   ```bash
+   hobnobcli config trace <hostname>
+   ```
+   If the module is listed but resources aren't being applied, it's an agent version mismatch.
+
+3. Check the run result for the specific thrall:
+   ```bash
+   hobnobcli runs list --thrall <thrall-uuid> --limit 1
+   ```
+
+**Fix:** Update the agent binary. If you can push through the existing agent:
+
+```bash
+# Re-bootstrap via push — downloads and installs the latest agent binary
+hobnobcli push run "curl -sSfk https://<server>:8443/bootstrap | sh" --target "<hostname>"
+```
+
+If you can SSH with a key (no sudo needed to connect):
+
+```bash
+make build-agent
+scp bin/hobnob user@hostname:/tmp/hobnob
+ssh user@hostname "sudo mv /tmp/hobnob /usr/local/sbin/hobnob && sudo systemctl restart hobnob-thrall"
+```
+
+If you're completely locked out (can't sudo, can't push), you'll need console or physical access to the machine.
+
 ### Thralls Showing as Stale
 
 **Symptoms:** Thralls appear as "stale" in the UI or CLI despite being online.
