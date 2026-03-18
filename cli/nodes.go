@@ -239,18 +239,22 @@ func formatTraitValue(v any) string {
 }
 
 var thrallsTagCmd = &cobra.Command{
-	Use:     "tag <id> <tag1,tag2,...>",
+	Use:     "tag <id-or-hostname> <tag1,tag2,...>",
 	Short:   "Apply classification tags to a thrall for use in task targeting",
-	Example: "  hobnobcli thralls tag 2e66cb50-... web,production,us-west",
-	Args:    requireArgs(2, "a thrall ID and comma-separated tags"),
+	Example: "  hobnobcli thralls tag web01.example.com web,production,us-west",
+	Args:    requireArgs(2, "a thrall ID/hostname and comma-separated tags"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
+		thrallID, err := resolveThrall(client, args[0])
+		if err != nil {
+			return err
+		}
 		tags := strings.Split(args[1], ",")
 		for i := range tags {
 			tags[i] = strings.TrimSpace(tags[i])
 		}
 		req := map[string]any{"tags": tags}
-		if err := client.put("/api/v1/thralls/"+args[0]+"/tags", req, nil); err != nil {
+		if err := client.put("/api/v1/thralls/"+thrallID+"/tags", req, nil); err != nil {
 			return err
 		}
 		fmt.Printf("Tags set: %s\n", strings.Join(tags, ", "))
@@ -259,17 +263,21 @@ var thrallsTagCmd = &cobra.Command{
 }
 
 var thrallsUntagCmd = &cobra.Command{
-	Use:   "untag <id> <tag1,tag2,...>",
+	Use:   "untag <id-or-hostname> <tag1,tag2,...>",
 	Short: "Remove classification tags from a thrall",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
+		thrallID, err := resolveThrall(client, args[0])
+		if err != nil {
+			return err
+		}
 
 		// Get current tags.
 		var resp struct {
 			Tags []string `json:"tags"`
 		}
-		if err := client.get("/api/v1/thralls/"+args[0]+"/tags", &resp); err != nil {
+		if err := client.get("/api/v1/thralls/"+thrallID+"/tags", &resp); err != nil {
 			return err
 		}
 
@@ -286,7 +294,7 @@ var thrallsUntagCmd = &cobra.Command{
 		}
 
 		req := map[string]any{"tags": remaining}
-		if err := client.put("/api/v1/thralls/"+args[0]+"/tags", req, nil); err != nil {
+		if err := client.put("/api/v1/thralls/"+thrallID+"/tags", req, nil); err != nil {
 			return err
 		}
 		fmt.Printf("Tags updated: %s\n", strings.Join(remaining, ", "))
