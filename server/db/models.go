@@ -40,14 +40,14 @@ type AuditEntry struct {
 }
 
 type ComplianceHistory struct {
-	ID         string `json:"id"`
-	RecordedAt string `json:"recorded_at"`
-	Total      int64  `json:"total"`
-	Compliant  int64  `json:"compliant"`
-	Drifted    int64  `json:"drifted"`
-	Failing    int64  `json:"failing"`
-	Stale      int64  `json:"stale"`
-	Unknown    int64  `json:"unknown"`
+	ID             string `json:"id"`
+	RecordedAt     string `json:"recorded_at"`
+	Total          int64  `json:"total"`
+	Compliant      int64  `json:"compliant"`
+	RecurringDrift int64  `json:"recurring_drift"`
+	Errors         int64  `json:"errors"`
+	LostContact    int64  `json:"lost_contact"`
+	NoData         int64  `json:"no_data"`
 }
 
 type ConfigChange struct {

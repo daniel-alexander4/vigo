@@ -1,16 +1,16 @@
 -- name: ListComplianceHistory :many
-SELECT id, recorded_at, total, compliant, drifted, failing, stale, unknown
+SELECT id, recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data
 FROM compliance_history
 ORDER BY recorded_at DESC
 LIMIT ?;
 
 -- name: UpsertComplianceSnapshot :exec
-INSERT INTO compliance_history (recorded_at, total, compliant, drifted, failing, stale, unknown)
+INSERT INTO compliance_history (recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data)
 VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT(recorded_at) DO UPDATE SET
-  total     = excluded.total,
-  compliant = excluded.compliant,
-  drifted   = excluded.drifted,
-  failing   = excluded.failing,
-  stale     = excluded.stale,
-  unknown   = excluded.unknown;
+  total           = excluded.total,
+  compliant       = excluded.compliant,
+  recurring_drift = excluded.recurring_drift,
+  errors          = excluded.errors,
+  lost_contact    = excluded.lost_contact,
+  no_data         = excluded.no_data;

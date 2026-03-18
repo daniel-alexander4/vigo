@@ -123,10 +123,10 @@ CREATE TABLE IF NOT EXISTS compliance_history (
     recorded_at TEXT NOT NULL DEFAULT (date('now')),
     total       INTEGER NOT NULL DEFAULT 0,
     compliant   INTEGER NOT NULL DEFAULT 0,
-    drifted     INTEGER NOT NULL DEFAULT 0,
-    failing     INTEGER NOT NULL DEFAULT 0,
-    stale       INTEGER NOT NULL DEFAULT 0,
-    unknown     INTEGER NOT NULL DEFAULT 0,
+    recurring_drift  INTEGER NOT NULL DEFAULT 0,
+    errors           INTEGER NOT NULL DEFAULT 0,
+    lost_contact     INTEGER NOT NULL DEFAULT 0,
+    no_data          INTEGER NOT NULL DEFAULT 0,
     UNIQUE(recorded_at)
 );
 

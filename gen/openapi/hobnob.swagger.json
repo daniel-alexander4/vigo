@@ -817,19 +817,19 @@
           "type": "integer",
           "format": "int32"
         },
-        "drifted": {
+        "recurringDrift": {
           "type": "integer",
           "format": "int32"
         },
-        "failing": {
+        "errors": {
           "type": "integer",
           "format": "int32"
         },
-        "stale": {
+        "lostContact": {
           "type": "integer",
           "format": "int32"
         },
-        "unknown": {
+        "noData": {
           "type": "integer",
           "format": "int32"
         }
@@ -893,19 +893,19 @@
           "type": "integer",
           "format": "int32"
         },
-        "drifted": {
+        "recurringDrift": {
           "type": "integer",
           "format": "int32"
         },
-        "failing": {
+        "errors": {
           "type": "integer",
           "format": "int32"
         },
-        "stale": {
+        "lostContact": {
           "type": "integer",
           "format": "int32"
         },
-        "unknown": {
+        "noData": {
           "type": "integer",
           "format": "int32"
         },

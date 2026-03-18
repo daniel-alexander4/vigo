@@ -10,7 +10,7 @@ import (
 )
 
 const listComplianceHistory = `-- name: ListComplianceHistory :many
-SELECT id, recorded_at, total, compliant, drifted, failing, stale, unknown
+SELECT id, recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data
 FROM compliance_history
 ORDER BY recorded_at DESC
 LIMIT ?
@@ -30,10 +30,10 @@ func (q *Queries) ListComplianceHistory(ctx context.Context, limit int64) ([]Com
 			&i.RecordedAt,
 			&i.Total,
 			&i.Compliant,
-			&i.Drifted,
-			&i.Failing,
-			&i.Stale,
-			&i.Unknown,
+			&i.RecurringDrift,
+			&i.Errors,
+			&i.LostContact,
+			&i.NoData,
 		); err != nil {
 			return nil, err
 		}
@@ -49,34 +49,34 @@ func (q *Queries) ListComplianceHistory(ctx context.Context, limit int64) ([]Com
 }
 
 const upsertComplianceSnapshot = `-- name: UpsertComplianceSnapshot :exec
-INSERT INTO compliance_history (recorded_at, total, compliant, drifted, failing, stale, unknown)
+INSERT INTO compliance_history (recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data)
 VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT(recorded_at) DO UPDATE SET
-  total     = excluded.total,
-  compliant = excluded.compliant,
-  drifted   = excluded.drifted,
-  failing   = excluded.failing,
-  stale     = excluded.stale,
-  unknown   = excluded.unknown
+  total           = excluded.total,
+  compliant       = excluded.compliant,
+  recurring_drift = excluded.recurring_drift,
+  errors          = excluded.errors,
+  lost_contact    = excluded.lost_contact,
+  no_data         = excluded.no_data
 `
 
 type UpsertComplianceSnapshotParams struct {
-	Total     int64 `json:"total"`
-	Compliant int64 `json:"compliant"`
-	Drifted   int64 `json:"drifted"`
-	Failing   int64 `json:"failing"`
-	Stale     int64 `json:"stale"`
-	Unknown   int64 `json:"unknown"`
+	Total          int64 `json:"total"`
+	Compliant      int64 `json:"compliant"`
+	RecurringDrift int64 `json:"recurring_drift"`
+	Errors         int64 `json:"errors"`
+	LostContact    int64 `json:"lost_contact"`
+	NoData         int64 `json:"no_data"`
 }
 
 func (q *Queries) UpsertComplianceSnapshot(ctx context.Context, arg UpsertComplianceSnapshotParams) error {
 	_, err := q.db.ExecContext(ctx, upsertComplianceSnapshot,
 		arg.Total,
 		arg.Compliant,
-		arg.Drifted,
-		arg.Failing,
-		arg.Stale,
-		arg.Unknown,
+		arg.RecurringDrift,
+		arg.Errors,
+		arg.LostContact,
+		arg.NoData,
 	)
 	return err
 }

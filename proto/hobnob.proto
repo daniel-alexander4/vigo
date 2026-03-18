@@ -715,10 +715,10 @@ message GetComplianceSummaryRequest {}
 message GetComplianceSummaryResponse {
   int32 total = 1;
   int32 compliant = 2;
-  int32 drifted = 3;
-  int32 failing = 4;
-  int32 stale = 5;
-  int32 unknown = 6;
+  int32 recurring_drift = 3;
+  int32 errors = 4;
+  int32 lost_contact = 5;
+  int32 no_data = 6;
   float compliance_pct = 7;
 }
 
@@ -736,10 +736,10 @@ message ComplianceSnapshot {
   string date = 1;
   int32 total = 2;
   int32 compliant = 3;
-  int32 drifted = 4;
-  int32 failing = 5;
-  int32 stale = 6;
-  int32 unknown = 7;
+  int32 recurring_drift = 4;
+  int32 errors = 5;
+  int32 lost_contact = 6;
+  int32 no_data = 7;
 }
 
 // =============================================================================
@@ -874,10 +874,10 @@ message SpokeStatusReport {
   string spoke_id = 1;
   int32 thrall_count = 2;
   int32 compliant = 3;
-  int32 drifted = 4;
-  int32 failing = 5;
-  int32 stale = 6;
-  int32 unknown = 7;
+  int32 recurring_drift = 4;
+  int32 errors = 5;
+  int32 lost_contact = 6;
+  int32 no_data = 7;
   float compliance_pct = 8;
 }
 

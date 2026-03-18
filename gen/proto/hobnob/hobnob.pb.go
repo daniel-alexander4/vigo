@@ -4617,16 +4617,16 @@ func (*GetComplianceSummaryRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetComplianceSummaryResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
-	Compliant     int32                  `protobuf:"varint,2,opt,name=compliant,proto3" json:"compliant,omitempty"`
-	Drifted       int32                  `protobuf:"varint,3,opt,name=drifted,proto3" json:"drifted,omitempty"`
-	Failing       int32                  `protobuf:"varint,4,opt,name=failing,proto3" json:"failing,omitempty"`
-	Stale         int32                  `protobuf:"varint,5,opt,name=stale,proto3" json:"stale,omitempty"`
-	Unknown       int32                  `protobuf:"varint,6,opt,name=unknown,proto3" json:"unknown,omitempty"`
-	CompliancePct float32                `protobuf:"fixed32,7,opt,name=compliance_pct,json=compliancePct,proto3" json:"compliance_pct,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Total          int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
+	Compliant      int32                  `protobuf:"varint,2,opt,name=compliant,proto3" json:"compliant,omitempty"`
+	RecurringDrift int32                  `protobuf:"varint,3,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
+	Errors         int32                  `protobuf:"varint,4,opt,name=errors,proto3" json:"errors,omitempty"`
+	LostContact    int32                  `protobuf:"varint,5,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
+	NoData         int32                  `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
+	CompliancePct  float32                `protobuf:"fixed32,7,opt,name=compliance_pct,json=compliancePct,proto3" json:"compliance_pct,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetComplianceSummaryResponse) Reset() {
@@ -4673,30 +4673,30 @@ func (x *GetComplianceSummaryResponse) GetCompliant() int32 {
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetDrifted() int32 {
+func (x *GetComplianceSummaryResponse) GetRecurringDrift() int32 {
 	if x != nil {
-		return x.Drifted
+		return x.RecurringDrift
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetFailing() int32 {
+func (x *GetComplianceSummaryResponse) GetErrors() int32 {
 	if x != nil {
-		return x.Failing
+		return x.Errors
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetStale() int32 {
+func (x *GetComplianceSummaryResponse) GetLostContact() int32 {
 	if x != nil {
-		return x.Stale
+		return x.LostContact
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetUnknown() int32 {
+func (x *GetComplianceSummaryResponse) GetNoData() int32 {
 	if x != nil {
-		return x.Unknown
+		return x.NoData
 	}
 	return 0
 }
@@ -4813,16 +4813,16 @@ func (x *GetThrallComplianceResponse) GetHistory() []*ComplianceSnapshot {
 }
 
 type ComplianceSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Compliant     int32                  `protobuf:"varint,3,opt,name=compliant,proto3" json:"compliant,omitempty"`
-	Drifted       int32                  `protobuf:"varint,4,opt,name=drifted,proto3" json:"drifted,omitempty"`
-	Failing       int32                  `protobuf:"varint,5,opt,name=failing,proto3" json:"failing,omitempty"`
-	Stale         int32                  `protobuf:"varint,6,opt,name=stale,proto3" json:"stale,omitempty"`
-	Unknown       int32                  `protobuf:"varint,7,opt,name=unknown,proto3" json:"unknown,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Date           string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	Total          int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	Compliant      int32                  `protobuf:"varint,3,opt,name=compliant,proto3" json:"compliant,omitempty"`
+	RecurringDrift int32                  `protobuf:"varint,4,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
+	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
+	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
+	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ComplianceSnapshot) Reset() {
@@ -4876,30 +4876,30 @@ func (x *ComplianceSnapshot) GetCompliant() int32 {
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetDrifted() int32 {
+func (x *ComplianceSnapshot) GetRecurringDrift() int32 {
 	if x != nil {
-		return x.Drifted
+		return x.RecurringDrift
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetFailing() int32 {
+func (x *ComplianceSnapshot) GetErrors() int32 {
 	if x != nil {
-		return x.Failing
+		return x.Errors
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetStale() int32 {
+func (x *ComplianceSnapshot) GetLostContact() int32 {
 	if x != nil {
-		return x.Stale
+		return x.LostContact
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetUnknown() int32 {
+func (x *ComplianceSnapshot) GetNoData() int32 {
 	if x != nil {
-		return x.Unknown
+		return x.NoData
 	}
 	return 0
 }
@@ -5969,17 +5969,17 @@ func (*SyncConfigResponse) Descriptor() ([]byte, []int) {
 }
 
 type SpokeStatusReport struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SpokeId       string                 `protobuf:"bytes,1,opt,name=spoke_id,json=spokeId,proto3" json:"spoke_id,omitempty"`
-	ThrallCount   int32                  `protobuf:"varint,2,opt,name=thrall_count,json=thrallCount,proto3" json:"thrall_count,omitempty"`
-	Compliant     int32                  `protobuf:"varint,3,opt,name=compliant,proto3" json:"compliant,omitempty"`
-	Drifted       int32                  `protobuf:"varint,4,opt,name=drifted,proto3" json:"drifted,omitempty"`
-	Failing       int32                  `protobuf:"varint,5,opt,name=failing,proto3" json:"failing,omitempty"`
-	Stale         int32                  `protobuf:"varint,6,opt,name=stale,proto3" json:"stale,omitempty"`
-	Unknown       int32                  `protobuf:"varint,7,opt,name=unknown,proto3" json:"unknown,omitempty"`
-	CompliancePct float32                `protobuf:"fixed32,8,opt,name=compliance_pct,json=compliancePct,proto3" json:"compliance_pct,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SpokeId        string                 `protobuf:"bytes,1,opt,name=spoke_id,json=spokeId,proto3" json:"spoke_id,omitempty"`
+	ThrallCount    int32                  `protobuf:"varint,2,opt,name=thrall_count,json=thrallCount,proto3" json:"thrall_count,omitempty"`
+	Compliant      int32                  `protobuf:"varint,3,opt,name=compliant,proto3" json:"compliant,omitempty"`
+	RecurringDrift int32                  `protobuf:"varint,4,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
+	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
+	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
+	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
+	CompliancePct  float32                `protobuf:"fixed32,8,opt,name=compliance_pct,json=compliancePct,proto3" json:"compliance_pct,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SpokeStatusReport) Reset() {
@@ -6033,30 +6033,30 @@ func (x *SpokeStatusReport) GetCompliant() int32 {
 	return 0
 }
 
-func (x *SpokeStatusReport) GetDrifted() int32 {
+func (x *SpokeStatusReport) GetRecurringDrift() int32 {
 	if x != nil {
-		return x.Drifted
+		return x.RecurringDrift
 	}
 	return 0
 }
 
-func (x *SpokeStatusReport) GetFailing() int32 {
+func (x *SpokeStatusReport) GetErrors() int32 {
 	if x != nil {
-		return x.Failing
+		return x.Errors
 	}
 	return 0
 }
 
-func (x *SpokeStatusReport) GetStale() int32 {
+func (x *SpokeStatusReport) GetLostContact() int32 {
 	if x != nil {
-		return x.Stale
+		return x.LostContact
 	}
 	return 0
 }
 
-func (x *SpokeStatusReport) GetUnknown() int32 {
+func (x *SpokeStatusReport) GetNoData() int32 {
 	if x != nil {
-		return x.Unknown
+		return x.NoData
 	}
 	return 0
 }
@@ -6936,29 +6936,29 @@ const file_hobnob_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
 	"\x06active\x18\x05 \x01(\bR\x06active\"\x1d\n" +
-	"\x1bGetComplianceSummaryRequest\"\xdd\x01\n" +
+	"\x1bGetComplianceSummaryRequest\"\xf6\x01\n" +
 	"\x1cGetComplianceSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1c\n" +
-	"\tcompliant\x18\x02 \x01(\x05R\tcompliant\x12\x18\n" +
-	"\adrifted\x18\x03 \x01(\x05R\adrifted\x12\x18\n" +
-	"\afailing\x18\x04 \x01(\x05R\afailing\x12\x14\n" +
-	"\x05stale\x18\x05 \x01(\x05R\x05stale\x12\x18\n" +
-	"\aunknown\x18\x06 \x01(\x05R\aunknown\x12%\n" +
+	"\tcompliant\x18\x02 \x01(\x05R\tcompliant\x12'\n" +
+	"\x0frecurring_drift\x18\x03 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
+	"\x06errors\x18\x04 \x01(\x05R\x06errors\x12!\n" +
+	"\flost_contact\x18\x05 \x01(\x05R\vlostContact\x12\x17\n" +
+	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12%\n" +
 	"\x0ecompliance_pct\x18\a \x01(\x02R\rcompliancePct\",\n" +
 	"\x1aGetThrallComplianceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x99\x01\n" +
 	"\x1bGetThrallComplianceResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12)\n" +
 	"\blast_run\x18\x02 \x01(\v2\x0e.hobnob.v1.RunR\alastRun\x127\n" +
-	"\ahistory\x18\x03 \x03(\v2\x1d.hobnob.v1.ComplianceSnapshotR\ahistory\"\xc0\x01\n" +
+	"\ahistory\x18\x03 \x03(\v2\x1d.hobnob.v1.ComplianceSnapshotR\ahistory\"\xd9\x01\n" +
 	"\x12ComplianceSnapshot\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1c\n" +
-	"\tcompliant\x18\x03 \x01(\x05R\tcompliant\x12\x18\n" +
-	"\adrifted\x18\x04 \x01(\x05R\adrifted\x12\x18\n" +
-	"\afailing\x18\x05 \x01(\x05R\afailing\x12\x14\n" +
-	"\x05stale\x18\x06 \x01(\x05R\x05stale\x12\x18\n" +
-	"\aunknown\x18\a \x01(\x05R\aunknown\"b\n" +
+	"\tcompliant\x18\x03 \x01(\x05R\tcompliant\x12'\n" +
+	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
+	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
+	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
+	"\ano_data\x18\a \x01(\x05R\x06noData\"b\n" +
 	"\x0fRollbackRequest\x12\x1b\n" +
 	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1b\n" +
@@ -7030,15 +7030,15 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x06errors\x18\x03 \x03(\tR\x06errors\":\n" +
 	"\x11SyncConfigRequest\x12%\n" +
 	"\x0econfig_archive\x18\x01 \x01(\fR\rconfigArchive\"\x14\n" +
-	"\x12SyncConfigResponse\"\xfa\x01\n" +
+	"\x12SyncConfigResponse\"\x93\x02\n" +
 	"\x11SpokeStatusReport\x12\x19\n" +
 	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12!\n" +
 	"\fthrall_count\x18\x02 \x01(\x05R\vthrallCount\x12\x1c\n" +
-	"\tcompliant\x18\x03 \x01(\x05R\tcompliant\x12\x18\n" +
-	"\adrifted\x18\x04 \x01(\x05R\adrifted\x12\x18\n" +
-	"\afailing\x18\x05 \x01(\x05R\afailing\x12\x14\n" +
-	"\x05stale\x18\x06 \x01(\x05R\x05stale\x12\x18\n" +
-	"\aunknown\x18\a \x01(\x05R\aunknown\x12%\n" +
+	"\tcompliant\x18\x03 \x01(\x05R\tcompliant\x12'\n" +
+	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
+	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
+	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
+	"\ano_data\x18\a \x01(\x05R\x06noData\x12%\n" +
 	"\x0ecompliance_pct\x18\b \x01(\x02R\rcompliancePct\"\x10\n" +
 	"\x0eSpokeStatusAck\"\xbe\x01\n" +
 	"\x0fPeerSyncMessage\x12<\n" +
