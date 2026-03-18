@@ -66,7 +66,9 @@ var thrallsListCmd = &cobra.Command{
 var thrallsShowCmd = &cobra.Command{
 	Use:   "show <id-or-hostname>",
 	Short: "Show enrollment details, compliance status, and recent runs for a thrall",
-	Args:  cobra.ExactArgs(1),
+	Example: `  hobnobcli thralls show web01.example.com
+  hobnobcli thralls show 2e66cb50-4e75-4859-bf24-c16588dd4f3e`,
+	Args: requireArgs(1, "a hostname or UUID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		thrallID, err := resolveThrall(client, args[0])
@@ -122,9 +124,10 @@ var thrallsShowCmd = &cobra.Command{
 }
 
 var thrallsRevokeCmd = &cobra.Command{
-	Use:   "revoke <id>",
-	Short: "Block a thrall from checking in and receiving policy updates",
-	Args:  cobra.ExactArgs(1),
+	Use:     "revoke <id>",
+	Short:   "Block a thrall from checking in and receiving policy updates",
+	Example: "  hobnobcli thralls revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Args:    requireArgs(1, "a thrall ID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !confirmAction("Revoke this thrall? It will be blocked from checking in.") {
 			fmt.Println("Cancelled.")
@@ -141,9 +144,10 @@ var thrallsRevokeCmd = &cobra.Command{
 }
 
 var thrallsDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "Permanently remove a thrall, its run history, and traits from the server",
-	Args:  cobra.ExactArgs(1),
+	Use:     "delete <id>",
+	Short:   "Permanently remove a thrall, its run history, and traits from the server",
+	Example: "  hobnobcli thralls delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Args:    requireArgs(1, "a thrall ID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !confirmAction("Delete this thrall and all its history? This cannot be undone.") {
 			fmt.Println("Cancelled.")
@@ -162,7 +166,12 @@ var thrallsDeleteCmd = &cobra.Command{
 var thrallsTraitsCmd = &cobra.Command{
 	Use:   "traits <hostname> [dot.path]",
 	Short: "View auto-discovered system facts (OS, hardware, network, packages) for a thrall",
-	Args:  cobra.RangeArgs(1, 2),
+	Long: `View the traits (auto-discovered system facts) for a thrall. Returns the full
+trait tree as JSON, or a specific value when a dot-path is provided.`,
+	Example: `  hobnobcli thralls traits web01.example.com
+  hobnobcli thralls traits web01.example.com os.distro
+  hobnobcli thralls traits web01.example.com hardware.memory_mb`,
+	Args: requireArgs(1, "a hostname"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hostname := args[0]
 		client := newAPIClient()
@@ -230,9 +239,10 @@ func formatTraitValue(v any) string {
 }
 
 var thrallsTagCmd = &cobra.Command{
-	Use:   "tag <id> <tag1,tag2,...>",
-	Short: "Apply classification tags to a thrall for use in task targeting",
-	Args:  cobra.ExactArgs(2),
+	Use:     "tag <id> <tag1,tag2,...>",
+	Short:   "Apply classification tags to a thrall for use in task targeting",
+	Example: "  hobnobcli thralls tag 2e66cb50-... web,production,us-west",
+	Args:    requireArgs(2, "a thrall ID and comma-separated tags"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		tags := strings.Split(args[1], ",")

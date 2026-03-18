@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 // ---------------------------------------------------------------------------
@@ -143,6 +145,21 @@ func formatTimestamp(ts string) string {
 	}
 	// Return raw if unparseable, trimming any trailing Zs
 	return strings.TrimSpace(ts)
+}
+
+// requireArgs returns a cobra.PositionalArgs validator that shows usage + examples
+// when not enough args are provided, instead of the default terse error.
+func requireArgs(min int, noun string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < min {
+			msg := fmt.Sprintf("requires %s", noun)
+			if cmd.Example != "" {
+				return fmt.Errorf("%s\n\nUsage:\n  %s\n\nExamples:\n%s", msg, cmd.UseLine(), cmd.Example)
+			}
+			return fmt.Errorf("%s\n\nUsage:\n  %s", msg, cmd.UseLine())
+		}
+		return nil
+	}
 }
 
 // confirmAction prompts the user for confirmation before a destructive operation.
