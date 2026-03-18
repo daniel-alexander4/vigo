@@ -362,8 +362,25 @@ func (cs *ConfigStore) Get(hostname string) *ThrallConfig {
 		return cfg
 	}
 
+	// No explicit match — apply root common.hnb inheritance so every
+	// enrolled thrall gets the baseline config without needing match: "*".
+	if cc, ok := cs.commonConfigs[""]; ok && (len(cc.Modules) > 0 || len(cc.Roles) > 0) {
+		entry := ThrallEntry{Modules: cc.Modules, Roles: cc.Roles}
+		if cc.Vars != nil {
+			entry.Vars = make(map[string]any, len(cc.Vars))
+			for k, v := range cc.Vars {
+				entry.Vars[k] = v
+			}
+		}
+		if cfg, err := cs.resolveEntry(entry, cs.moduleDefs, cs.roleDefs); err == nil {
+			resolved := cloneThrallConfig(cfg)
+			resolved.Thrall = hostname
+			return resolved
+		}
+	}
+
 	return &ThrallConfig{
-		Thrall:    hostname,
+		Thrall:  hostname,
 		Modules: []ModuleConfig{},
 	}
 }
