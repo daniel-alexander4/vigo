@@ -16,12 +16,12 @@
         {{end}}
     </div>
     <button class="btn btn--sm"
-            hx-get="/api/v1/audit/verify"
+            hx-get="/audit/verify"
             hx-target="#chain-verify-result"
             hx-swap="innerHTML">
         Verify Chain
     </button>
-    <span id="chain-verify-result"></span>
+    <div id="chain-verify-result"></div>
 </div>
 
 <div class="filter-bar mb-2">

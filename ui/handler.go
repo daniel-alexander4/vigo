@@ -152,6 +152,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
 	mux.HandleFunc("GET /query", h.Query)
 	mux.HandleFunc("GET /audit", h.Audit)
+	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
@@ -2010,6 +2011,45 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "audit", data)
+}
+
+// AuditVerify returns an HTML fragment showing the hash chain verification
+// result with individual entries. Called via HTMX from the Verify Chain button.
+func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	result, err := audit.Verify(ctx, h.queries)
+	if err != nil {
+		fmt.Fprintf(w, `<span class="badge badge--failure">Verification error: %s</span>`, err.Error())
+		return
+	}
+
+	if !result.Valid {
+		fmt.Fprintf(w, `<div class="mt-1"><span class="badge badge--failure">CHAIN BROKEN at entry #%d</span><p class="text-muted mt-1">%s</p></div>`, result.FirstBroken, result.Error)
+		return
+	}
+
+	// Chain is valid — show the entries.
+	entries, err := h.queries.ListAuditEntries(ctx, 50)
+	if err != nil {
+		fmt.Fprintf(w, `<span class="badge badge--success">Chain valid (%d entries)</span>`, result.EntryCount)
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf(`<div class="mt-1"><span class="badge badge--success">Chain valid — %d entries verified</span>`, result.EntryCount))
+	b.WriteString(`<table class="table mt-1"><thead><tr><th>#</th><th>Timestamp</th><th>Type</th><th>Actor</th><th>Summary</th><th>Hash</th></tr></thead><tbody>`)
+	for _, e := range entries {
+		hash := e.Hash
+		if len(hash) > 12 {
+			hash = hash[:12] + "..."
+		}
+		b.WriteString(fmt.Sprintf(`<tr><td>%d</td><td>%s</td><td><span class="badge badge--info">%s</span></td><td>%s</td><td>%s</td><td class="text-muted">%s</td></tr>`,
+			e.ID, e.Timestamp.Format("2006-01-02 15:04:05"), e.EventType, e.Actor, e.Summary, hash))
+	}
+	b.WriteString(`</tbody></table></div>`)
+	w.Header().Set("Content-Type", "text/html")
+	fmt.Fprint(w, b.String())
 }
 
 // pushRowFromDB converts a DB PushRun to a PushRow.
