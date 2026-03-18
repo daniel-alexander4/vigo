@@ -41,8 +41,10 @@ func setTestDirs(proposed, live string) {
 	LiveDir = live
 }
 
-// Subdirectories that make up a config tree.
-var configDirs = []string{"modules", "roles", "thralls", "templates", "vars"}
+// skipDirs are directories that should not be synced from proposed to .live.
+var skipDirs = map[string]bool{
+	".git": true, ".live": true, ".publish-tmp": true, ".publish-backup": true,
+}
 
 // stubProvider accepts all secret refs so validation focuses on structure.
 type stubProvider struct{}
@@ -201,36 +203,58 @@ func diffTrees(proposed, live string) (allFiles, changed, removed []string, err 
 }
 
 // hashTree walks a config directory and returns a map of relative path → SHA-256 hex.
+// Walks the entire directory tree, skipping hidden dirs and known non-config dirs.
 func hashTree(root string) (map[string]string, error) {
-	files := make(map[string]string)
-
-	for _, sub := range configDirs {
-		dir := filepath.Join(root, sub)
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			continue
-		}
-		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			rel, err := filepath.Rel(root, path)
-			if err != nil {
-				return err
-			}
-			h := sha256.Sum256(data)
-			files[rel] = fmt.Sprintf("%x", h)
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		return nil, nil
 	}
 
-	return files, nil
+	files := make(map[string]string)
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// Don't skip the root directory itself.
+			if path == root {
+				return nil
+			}
+			name := d.Name()
+			// Skip hidden dirs and known non-config dirs.
+			if strings.HasPrefix(name, ".") || skipDirs[name] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Skip non-config files (binaries, temp files, etc.) but include
+		// .hnb, .yaml, .yml, .tmpl, and .example files.
+		if !isPublishableFile(d.Name()) {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		h := sha256.Sum256(data)
+		files[rel] = fmt.Sprintf("%x", h)
+		return nil
+	})
+	return files, err
+}
+
+// isPublishableFile returns true if a file should be included in the
+// publish diff and sync. Includes config files and templates.
+func isPublishableFile(name string) bool {
+	ext := filepath.Ext(name)
+	switch ext {
+	case ".hnb", ".yaml", ".yml", ".tmpl", ".conf", ".j2":
+		return true
+	}
+	return false
 }
 
 // filterBySubdir returns only paths whose first component matches subdir.
@@ -395,8 +419,9 @@ func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error)
 
 // --- Atomic sync ---
 
-// atomicSync copies each subdirectory from proposed to live using a
-// tmp+rename strategy. Returns total files copied.
+// atomicSync copies the entire config tree from proposed to live.
+// Root-level files are copied directly. Subdirectories use a
+// tmp+rename strategy for atomicity. Returns total files copied.
 func atomicSync(proposed, live string) (int, error) {
 	// Ensure live parent exists.
 	if err := os.MkdirAll(filepath.Dir(live), 0o755); err != nil {
@@ -408,24 +433,56 @@ func atomicSync(proposed, live string) (int, error) {
 
 	totalFiles := 0
 
-	for _, sub := range configDirs {
-		src := filepath.Join(proposed, sub)
-		if _, err := os.Stat(src); os.IsNotExist(err) {
-			// Proposed doesn't have this subdir — remove it from live if present.
-			dst := filepath.Join(live, sub)
-			if _, statErr := os.Stat(dst); statErr == nil {
-				if err := os.RemoveAll(dst); err != nil {
-					return totalFiles, fmt.Errorf("remove %s: %w", sub, err)
-				}
-			}
+	// Discover top-level entries in proposed.
+	proposedEntries, err := os.ReadDir(proposed)
+	if err != nil {
+		return 0, fmt.Errorf("reading proposed dir: %w", err)
+	}
+
+	proposedNames := make(map[string]bool)
+	for _, entry := range proposedEntries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") || skipDirs[name] {
 			continue
 		}
+		proposedNames[name] = true
 
-		n, err := syncSubdir(proposed, live, sub)
-		if err != nil {
-			return totalFiles, err
+		if entry.IsDir() {
+			n, syncErr := syncSubdir(proposed, live, name)
+			if syncErr != nil {
+				return totalFiles, syncErr
+			}
+			totalFiles += n
+		} else if isPublishableFile(name) {
+			// Copy root-level files only if content changed.
+			srcData, readErr := os.ReadFile(filepath.Join(proposed, name))
+			if readErr != nil {
+				return totalFiles, fmt.Errorf("reading %s: %w", name, readErr)
+			}
+			dstPath := filepath.Join(live, name)
+			dstData, _ := os.ReadFile(dstPath)
+			if string(srcData) != string(dstData) {
+				if writeErr := os.WriteFile(dstPath, srcData, 0o640); writeErr != nil {
+					return totalFiles, fmt.Errorf("writing %s: %w", name, writeErr)
+				}
+				totalFiles++
+			}
 		}
-		totalFiles += n
+	}
+
+	// Remove entries in live that are not in proposed.
+	liveEntries, err := os.ReadDir(live)
+	if err != nil {
+		return totalFiles, nil // best-effort
+	}
+	for _, entry := range liveEntries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		if !proposedNames[name] {
+			os.RemoveAll(filepath.Join(live, name))
+		}
 	}
 
 	return totalFiles, nil
