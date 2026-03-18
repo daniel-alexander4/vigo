@@ -467,7 +467,7 @@ func validateCron(base Finding, res Resource) []Finding {
 
 	// Require an explicit schedule. Either the "schedule" field (full cron expression)
 	// or all five individual fields (minute, hour, day, month, weekday).
-	hasSchedule := attrString(res.Attributes, "schedule") != ""
+	hasSchedule := attrString(res.Attributes, "schedule") != "" || attrString(res.Attributes, "special") != ""
 	if !hasSchedule {
 		hasAll := true
 		for _, field := range []string{"minute", "hour", "day", "month", "weekday"} {
@@ -607,6 +607,10 @@ func requireAbsolutePath(base Finding, res Resource, field string) []Finding {
 	if v == "" {
 		return nil
 	}
+	// Skip validation on templated values — they resolve at check-in time.
+	if strings.Contains(v, "{{") {
+		return nil
+	}
 	if !filepath.IsAbs(v) {
 		f := base
 		f.Severity = SeverityError
@@ -617,9 +621,25 @@ func requireAbsolutePath(base Finding, res Resource, field string) []Finding {
 }
 
 // requireValidMode emits an error if the mode attribute is present but not a
-// valid octal string (3-4 digits, 0-7 each).
+// valid octal string (3-4 digits, 0-7 each). Handles YAML's octal-to-int
+// coercion (mode: 0644 → int 420 → "0644").
 func requireValidMode(base Finding, res Resource, field string) []Finding {
-	v := attrString(res.Attributes, field)
+	raw, ok := res.Attributes[field]
+	if !ok {
+		return nil
+	}
+	// Coerce YAML int (octal parsed as decimal) back to octal string.
+	var v string
+	switch t := raw.(type) {
+	case string:
+		v = t
+	case int:
+		v = fmt.Sprintf("%04o", t)
+	case int64:
+		v = fmt.Sprintf("%04o", t)
+	default:
+		v = fmt.Sprintf("%v", raw)
+	}
 	if v == "" {
 		return nil
 	}
