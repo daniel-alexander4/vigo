@@ -33,13 +33,13 @@ run_test() {
     local output
     if output=$("$@" 2>&1); then
         echo -e "  ${GREEN}PASS${NC}  $name"
-        ((PASS++))
+        PASS=$((PASS + 1))
         return 0
     else
         local rc=$?
         echo -e "  ${RED}FAIL${NC}  $name (exit $rc)"
         echo "        $output" | head -3
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
         FAILURES+=("$name")
         return 1
     fi
@@ -52,12 +52,12 @@ run_test_expect_fail() {
     local output
     if output=$("$@" 2>&1); then
         echo -e "  ${RED}FAIL${NC}  $name (expected failure, got success)"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
         FAILURES+=("$name")
         return 1
     else
         echo -e "  ${GREEN}PASS${NC}  $name (correctly rejected)"
-        ((PASS++))
+        PASS=$((PASS + 1))
         return 0
     fi
 }
@@ -66,7 +66,7 @@ skip_test() {
     local name="$1"
     local reason="$2"
     echo -e "  ${YELLOW}SKIP${NC}  $name ($reason)"
-    ((SKIP++))
+    SKIP=$((SKIP + 1))
 }
 
 # Check that output contains expected string.
@@ -78,12 +78,12 @@ run_test_grep() {
     if output=$("$@" 2>&1); then
         if echo "$output" | grep -qi "$pattern"; then
             echo -e "  ${GREEN}PASS${NC}  $name"
-            ((PASS++))
+            PASS=$((PASS + 1))
             return 0
         else
             echo -e "  ${RED}FAIL${NC}  $name (missing: $pattern)"
             echo "        $output" | head -3
-            ((FAIL++))
+            FAIL=$((FAIL + 1))
             FAILURES+=("$name")
             return 1
         fi
@@ -91,7 +91,7 @@ run_test_grep() {
         local rc=$?
         echo -e "  ${RED}FAIL${NC}  $name (exit $rc)"
         echo "        $output" | head -3
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
         FAILURES+=("$name")
         return 1
     fi
@@ -190,12 +190,12 @@ if [[ -n "$TOKEN" ]]; then
     ADD_OUT=$($CLI approved add "test-cli-*.example.com" --token "$TOKEN" --server "$SERVER" 2>&1 || true)
     if echo "$ADD_OUT" | grep -qi "added\|created\|success\|id"; then
         echo -e "  ${GREEN}PASS${NC}  approved add"
-        ((PASS++))
+        PASS=$((PASS + 1))
         PATTERN_ID=$(echo "$ADD_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
     else
         echo -e "  ${RED}FAIL${NC}  approved add"
         echo "        $ADD_OUT" | head -3
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
         FAILURES+=("approved add")
     fi
 
@@ -239,7 +239,7 @@ if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
     PUSH_OUT=$($CLI push run "echo hobnob-cli-test" --target "$FIRST_THRALL" --timeout 15 --server "$SERVER" 2>&1 || true)
     if echo "$PUSH_OUT" | grep -qiE "dispatched|push_id|run_id|complete"; then
         echo -e "  ${GREEN}PASS${NC}  push run (echo)"
-        ((PASS++))
+        PASS=$((PASS + 1))
         PUSH_ID=$(echo "$PUSH_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
         if [[ -n "$PUSH_ID" ]]; then
             sleep 3
@@ -248,7 +248,7 @@ if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
     else
         echo -e "  ${RED}FAIL${NC}  push run (echo)"
         echo "        $PUSH_OUT" | head -3
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
         FAILURES+=("push run")
     fi
 else
@@ -286,12 +286,12 @@ run_test "webusers list" $CLI webusers list --server "$SERVER"
 CREATE_OUT=$($CLI webusers create --username "cli-test-user" --role viewer --server "$SERVER" 2>&1 || true)
 if echo "$CREATE_OUT" | grep -qiE "created|success|cli-test-user"; then
     echo -e "  ${GREEN}PASS${NC}  webusers create"
-    ((PASS++))
+    PASS=$((PASS + 1))
     run_test "webusers delete" $CLI webusers delete --username "cli-test-user" --server "$SERVER"
 else
     echo -e "  ${RED}FAIL${NC}  webusers create"
     echo "        $CREATE_OUT" | head -3
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
     FAILURES+=("webusers create")
     # Try cleanup anyway.
     $CLI webusers delete --username "cli-test-user" --server "$SERVER" 2>/dev/null || true
@@ -316,12 +316,12 @@ WH_OUT=$($CLI webhooks add "https://httpbin.org/post" --secret "test-secret-123"
 WH_ID=$(echo "$WH_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
 if [[ -n "$WH_ID" ]]; then
     echo -e "  ${GREEN}PASS${NC}  webhooks add"
-    ((PASS++))
+    PASS=$((PASS + 1))
     run_test "webhooks delete" $CLI webhooks delete "$WH_ID" --server "$SERVER"
 else
     echo -e "  ${RED}FAIL${NC}  webhooks add"
     echo "        $WH_OUT" | head -3
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
     FAILURES+=("webhooks add")
 fi
 echo ""
