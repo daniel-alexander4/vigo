@@ -195,7 +195,7 @@ Hobnob ships a `server-backup` module that automatically backs up the entire `/s
 
 ### How it works
 
-The server auto-enrolls itself as its own thrall on startup (self-managing server). When the `server-backup` module is assigned to the server's hostname in your thrall mappings, it:
+When the server host is enrolled as a thrall and the `server-backup` module is assigned to its hostname in your thrall mappings, the agent on the server host will:
 
 1. Creates `/srv/backups.hobnob/` with mode `0555` (read-only)
 2. Installs `/usr/local/bin/hobnob-backup.sh` which:

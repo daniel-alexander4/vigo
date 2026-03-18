@@ -431,8 +431,6 @@ func run() error {
 
 	// Self-enroll: the server registers itself as its own thrall so it can
 	// manage its own state (backups, monitoring, etc.) via standard modules.
-	selfEnroll(ctx, queries, fleetIndex)
-
 	// Create async run batcher for delta events.
 	runBatcher := fleet.NewRunBatcher(runStore)
 
@@ -1329,41 +1327,3 @@ func buildPeerTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
 	}, nil
 }
 
-// selfEnroll ensures the server is registered as its own thrall so it can
-// manage its own state (backups, monitoring, etc.) via standard modules.
-// Idempotent: skips if an active thrall with this hostname already exists.
-func selfEnroll(ctx context.Context, queries *db.Queries, fleetIndex *fleet.FleetIndex) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		slog.Warn("self-enrollment: unable to determine hostname", "error", err)
-		return
-	}
-
-	// Check if already enrolled (FleetIndex is authoritative after rehydration).
-	if id := fleetIndex.GetByHostname(hostname); id != "" {
-		slog.Debug("self-enrollment: server already enrolled", "hostname", hostname, "thrall_id", id)
-		return
-	}
-
-	// Create thrall record directly — no token or pubkey needed because the
-	// server manages itself locally, not via gRPC check-in.
-	thrall, err := queries.CreateThrall(ctx, db.CreateThrallParams{
-		Hostname:  hostname,
-		IpAddress: "127.0.0.1",
-	})
-	if err != nil {
-		slog.Warn("self-enrollment failed", "hostname", hostname, "error", err)
-		return
-	}
-
-	// Add to FleetIndex for immediate availability.
-	fleetIndex.AddThrall(fleet.ThrallState{
-		ID:               thrall.ID,
-		Hostname:         hostname,
-		IP:               "127.0.0.1",
-		EnrolledAt:       time.Now(),
-		ComplianceStatus: "unknown",
-	}, nil)
-
-	slog.Info("server self-enrolled as thrall", "hostname", hostname, "thrall_id", thrall.ID)
-}
