@@ -29,6 +29,7 @@ func withTestDirs(t *testing.T) (stage, live string) {
 	setTestDirs(stage, live)
 
 	t.Cleanup(func() {
+		unlockLiveDir(live) // ensure temp dir cleanup can remove read-only files
 		setTestDirs(origStage, origLive)
 	})
 

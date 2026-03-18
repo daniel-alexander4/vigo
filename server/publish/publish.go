@@ -151,8 +151,10 @@ func Publish(opts Options) (*Result, error) {
 		res.DiffSummary = ComputeAllDiffs(StageDir, LiveDir, res.Changed, res.Removed)
 	}
 
+	unlockLiveDir(LiveDir)
 	files, err := atomicSync(StageDir, LiveDir)
 	if err != nil {
+		lockdownLiveDir(LiveDir) // re-lock even on failure
 		return nil, fmt.Errorf("sync failed: %w", err)
 	}
 	res.Files = files
@@ -561,10 +563,28 @@ func copyDir(src, dst string) (int, error) {
 	return count, err
 }
 
-// lockdownLiveDir sets restrictive permissions on .live and all contents.
-// Directories get 0750 (owner rwx, group rx), files get 0640 (owner rw, group r).
-// This prevents operators from bypassing config publish by writing directly.
+// lockdownLiveDir sets read-only permissions on .live and all contents.
+// Directories get 0500 (owner rx), files get 0400 (owner r).
+// This prevents any writes to .live outside of the publish command,
+// which calls unlockLiveDir before syncing.
 func lockdownLiveDir(live string) {
+	_ = os.Chmod(live, 0o500)
+	_ = filepath.WalkDir(live, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // best-effort
+		}
+		if d.IsDir() {
+			_ = os.Chmod(path, 0o500)
+		} else {
+			_ = os.Chmod(path, 0o400)
+		}
+		return nil
+	})
+}
+
+// unlockLiveDir temporarily sets writable permissions on .live so
+// atomicSync can write. Called before sync, lockdownLiveDir after.
+func unlockLiveDir(live string) {
 	_ = os.Chmod(live, 0o750)
 	_ = filepath.WalkDir(live, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -604,6 +624,10 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Unlock .live/ for writing, re-lock after.
+	unlockLiveDir(LiveDir)
+	defer lockdownLiveDir(LiveDir)
 
 	// Ensure the target subdirectory exists in .live/.
 	destPath := filepath.Join(LiveDir, relPath)
