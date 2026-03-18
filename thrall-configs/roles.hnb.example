@@ -1,0 +1,30 @@
+# Role definitions — group modules into reusable profiles.
+# Assign roles to thrall entries instead of listing modules individually.
+#
+# Roles can include other roles (single level):
+#   - name: webserver
+#     includes: [bastion]
+#     modules: [nginx, certbot]
+
+roles:
+  - name: webserver
+    includes: [bastion]
+    modules: [nginx]
+
+  - name: database
+    modules: [postgresql]
+
+  - name: monitoring
+    modules: [prometheus, node-exporter, grafana]
+
+  - name: bastion
+    modules: [openssh, fail2ban]
+
+  - name: mediaserver
+    modules: [plex]
+
+  - name: network-switch
+    modules: [switch-base, switch-vlans]
+
+  - name: network-router
+    modules: [router-base]

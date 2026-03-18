@@ -1,0 +1,11 @@
+# Modules and vars inherited by ALL thrall entries in subdirectories.
+# This file has no match: entries — it defines what every machine gets.
+#
+# Subdirectories can have their own common.hnb to add environment-specific
+# inheritance (e.g., production/common.hnb adds monitoring to all prod hosts).
+
+modules: [standard-users, diag-tools, motd]
+
+vars:
+  org_name: "ACME Corp"
+  contact_email: "ops@example.com"

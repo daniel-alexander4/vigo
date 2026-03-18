@@ -5,36 +5,33 @@ Configuration files that define the desired state of managed thralls. These YAML
 ## Summary
 
 - YAML syntax with `.hnb` file extension
-- Directory hierarchy defines thrall inheritance via `common.hnb` files
-- Modules (reusable resource sets), roles (module groups in `roles.hnb`), thrall entries (hostname-to-module mapping)
+- Three concepts: modules (reusable resource sets), roles (module groups), thrall entries (hostname-to-role mapping)
+- Directory structure defines inheritance via `common.hnb` files
 - Single source of truth: edit files, publish to reload the server
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Secret references use `secret:` prefix, resolved at server load time
 
 ## Directory Structure
 
-The directory layout is both a file organization and an inheritance tree. `common.hnb` at any level defines modules/roles/vars inherited by everything in subdirectories.
-
 ```
 thrall-configs/
+  common.hnb            # Modules/vars inherited by ALL thrall entries
+  roles.hnb             # All role definitions in one file
   modules/              # Reusable resource definitions
     nginx.hnb
     openssh.hnb
-    monitoring.hnb
-  templates/            # Template files for source: references
-  roles.hnb             # All role definitions in one file
-  common.hnb            # Modules/vars inherited by ALL subdirs
+  templates/            # Template files referenced by source:
+  default/
+    all.hnb             # Thrall entries (match: patterns -> roles/modules)
   production/
-    common.hnb          # Additional modules/vars for production
+    common.hnb          # Extra modules/vars for all prod thralls
     web/
-      web.hnb           # Leaf entry: match: "web*.prod.example.com"
-    db/
-      db.hnb            # Leaf entry: match: "db*.prod.example.com"
+      web.hnb           # match: "web*.prod.example.com"
   staging/
-    staging.hnb         # Leaf entry: match: "*.staging.example.com"
+    common.hnb          # match: "*.staging.example.com"
 ```
 
-The `modules/` directory supports subdirectories for organization:
+Module subdirectories are supported for organization:
 
 ```
 modules/
@@ -44,21 +41,29 @@ modules/
   security/
     openssh.hnb
     fail2ban.hnb
-  monitoring/
-    prometheus.hnb
 ```
 
 ## Quickstart
 
-1. Copy the example files to create your own configs:
+1. Copy the example files:
 
 ```bash
-cp modules/openssh.hnb.example modules/openssh.hnb
-cp roles/webserver.hnb.example roles/webserver.hnb
-cp thralls.hnb.example thralls/thralls.hnb
+cp common.hnb.example common.hnb
+cp roles.hnb.example roles.hnb
+mkdir -p default
+cp default/all.hnb.example default/all.hnb
 ```
 
-2. Edit `thralls/thralls.hnb` to map your hostnames to roles:
+2. Edit `common.hnb` to set modules every machine gets:
+
+```yaml
+modules: [standard-users, diag-tools]
+
+vars:
+  org_name: "My Company"
+```
+
+3. Edit `default/all.hnb` to map hostnames to roles/modules:
 
 ```yaml
 thralls:
@@ -66,29 +71,66 @@ thralls:
     roles: [webserver]
 
   - match: "*.example.com"
-    roles: [base]
+    modules: [monitoring]
 ```
 
-3. The server detects changes automatically -- no restart needed.
+4. The server detects changes automatically -- no restart needed.
 
-4. Validate your configs before deploying:
+## File Types
 
-```bash
-hobnobcli validate modules/openssh.hnb
+### common.hnb (inheritance)
+
+A `common.hnb` at any directory level defines modules, roles, and vars inherited by all thrall entries in that directory and its subdirectories. No `match:` or `thralls:` keys.
+
+```yaml
+modules: [standard-users, diag-tools]
+
+vars:
+  ntp_server: "pool.ntp.org"
 ```
 
-## Examples
+Root-level `common.hnb` applies to entries in subdirectories only. A `common.hnb` in `production/` applies to all entries under `production/`.
 
-### Module File
+### roles.hnb (role definitions)
 
-A module defines a set of resources with optional default variables:
+Single file at the root. Groups modules into named profiles.
+
+```yaml
+roles:
+  - name: webserver
+    includes: [bastion]
+    modules: [nginx, certbot]
+
+  - name: bastion
+    modules: [openssh, fail2ban]
+```
+
+### Thrall entry files (leaf files with match:)
+
+Any `.hnb` file that is not `common.hnb` or `roles.hnb`. Must have `thralls:` with `match:` entries.
+
+```yaml
+thralls:
+  - match: "web-*.prod.example.com"
+    environment: production
+    roles: [webserver]
+    vars:
+      worker_count: "auto"
+
+  - match: "db-*.example.com"
+    roles: [database]
+    modules: [monitoring]
+```
+
+### Module files (modules/)
+
+Reusable resource definitions with optional default vars.
 
 ```yaml
 name: openssh
 
 vars:
   ssh_port: "22"
-  ssh_permit_root: "no"
 
 resources:
   - name: install-openssh
@@ -101,12 +143,9 @@ resources:
     target_path: /etc/ssh/sshd_config
     content: |
       Port {{ .Vars.ssh_port }}
-      PermitRootLogin {{ .Vars.ssh_permit_root }}
-      PasswordAuthentication no
-      ChallengeResponseAuthentication no
-      UsePAM yes
     mode: "0600"
     owner: root
+    group: root
     depends_on: [install-openssh]
     notify: [sshd-service]
 
@@ -117,166 +156,40 @@ resources:
     enabled: true
 ```
 
-### Role File
+## Inheritance
 
-A role groups modules together:
+Directory structure defines what modules/vars thrall entries inherit:
 
-```yaml
-name: webserver
-modules:
-  - nginx
-  - openssh
-  - fail2ban
+```
+common.hnb              -> modules: [standard-users]     # ALL entries get this
+production/
+  common.hnb            -> modules: [monitoring]          # prod entries also get this
+  web/
+    web.hnb             -> match: "web*.prod.example.com" # inherits standard-users + monitoring
 ```
 
-### Thrall Mapping
-
-Map hostnames (globs supported) to roles, modules, and variables. First match wins -- put specific patterns before broad ones.
-
-```yaml
-thralls:
-  - match: "web-*.prod.example.com"
-    environment: production
-    roles: [webserver]
-    vars:
-      ssh_port: "2222"
-    environment_overrides:
-      production:
-        worker_count: "auto"
-      staging:
-        worker_count: "2"
-
-  - match: "db-*.example.com"
-    roles: [database]
-    modules: [monitoring]
-
-  - match: "*.example.com"
-    roles: [base]
-```
+- Parent modules come before child modules in the DAG
+- Child vars override parent vars
+- `exclude_modules:` allows entries to opt out of inherited modules
 
 ## Variable Precedence
 
 1. Module default vars (lowest priority)
-2. Thrall-level vars
-3. environment_overrides for the thrall's environment (highest priority)
+2. Inherited vars from `common.hnb` (root to leaf order)
+3. Thrall-level vars
+4. `environment_overrides` for the thrall's environment (highest priority)
 
 ## Templates
 
-Go template syntax is available in resource attributes:
+Go template syntax is available in `content:` attributes:
 
 ```yaml
 content: |
   server_name {{ .Traits.network.hostname }};
   listen {{ .Vars.port }};
-  worker_processes {{ .Vars.worker_count }};
-  # OS: {{ .Traits.os.distro }} {{ .Traits.os.version }}
 ```
 
-Available namespaces:
-
-- `.Vars` -- merged variables (module defaults + thrall overrides + environment_overrides)
-- `.Traits` -- thrall's collected traits (os, hardware, network, etc.)
-
-## Stream Edit
-
-Pipe file content through a script (or chain of scripts) on the thrall before writing. The script reads stdin and writes the transformed result to stdout:
-
-```yaml
-resources:
-  - name: strip-comments-script
-    type: file
-    target_path: /usr/local/bin/strip-comments.sh
-    content: |
-      #!/bin/sh
-      grep -v '^[[:space:]]*#'
-    mode: "0755"
-
-  - name: clean-config
-    type: file
-    target_path: /etc/myapp/config.conf
-    content: |
-      # database settings
-      host = localhost
-      port = 5432
-    stream_edit: /usr/local/bin/strip-comments.sh
-    depends_on: [strip-comments-script]
-```
-
-For chained transforms, pass a list:
-
-```yaml
-    stream_edit:
-      - /usr/local/bin/strip-comments.sh
-      - /usr/local/bin/sort-dedup.sh
-```
-
-Pipeline results are cached across convergence cycles — scripts only re-run when input content, script files, or the target file change. Non-zero exit fails the resource (no file written). See [file executor docs](../docs/executors/file.md#stream-edit).
-
-## Conditional Variables
-
-Define variables whose value depends on a thrall's traits:
-
-```yaml
-vars:
-  is_debian:
-    trait: os.family
-    in: [debian]
-
-  has_gpu:
-    trait: gpu.count
-    gt: 0
-
-  is_prod:
-    trait: os.hostname
-    regex: ".*\\.prod\\..*"
-```
-
-Results are `"true"` or `"false"` strings. Use them in conditional fields or templates.
-
-## Dependencies and Triggers
-
-```yaml
-resources:
-  - name: install-pkg
-    type: package
-    package: nginx
-    state: present
-
-  - name: config-file
-    type: file
-    target_path: /etc/nginx/nginx.conf
-    content: "..."
-    depends_on: [install-pkg]    # runs after install-pkg
-    notify: [restart-svc]        # triggers restart-svc if changed
-
-  - name: restart-svc
-    type: service
-    service: nginx
-    state: restarted
-    subscribes: [config-file]    # also listens for config-file changes
-```
-
-`before` is reverse `depends_on` — listed resources run after this one.
-
-## Conditional Execution
-
-Conditional vars are evaluated on the agent and available as `"true"`/`"false"` in `when` expressions:
-
-```yaml
-  - name: apt-setup
-    type: exec
-    command: apt-get update
-    when: "is_debian"
-```
-
-Built-in functions for runtime checks:
-
-```yaml
-  - name: weekday-task
-    type: exec
-    command: /usr/local/bin/daily-report
-    when: "day_of_week('monday') && hour_range('9','17')"
-```
+Available namespaces: `.Vars` (merged variables), `.Traits` (collected traits).
 
 ## Secrets
 
@@ -285,67 +198,34 @@ Reference secrets with the `secret:` prefix -- resolved by the server at config 
 ```yaml
 vars:
   db_dsn: "secret:myapp/db/dsn"
-
-resources:
-  - name: db-config
-    type: file
-    target_path: /etc/app/db.conf
-    content: |
-      dsn={{ .Vars.db_dsn }}
 ```
 
-Secrets never appear in plaintext in logs, API responses, or gRPC payloads.
-
-## Validation and Linting
-
-```bash
-# Validate a config file
-hobnobcli validate modules/nginx.hnb
-
-# Edit with auto-validation on save
-hobnobcli vi modules/nginx.hnb
-
-# Full validation + linting (dry run)
-hobnobcli config publish --dry-run
-```
-
-When you run `hobnobcli config publish`, the **module linter** automatically processes changed modules:
-
-- **Repairs** YAML issues (tabs→spaces, unquoted booleans like `yes`→`true`, trailing whitespace)
-- **Normalizes** key ordering and indentation
-- **Validates** required fields, cross-references, dependency cycles, and idempotency guards
-- **Adds `#~` comments** describing each resource (regenerated every publish)
-
-Hand-written `#` comments are never touched. Only `#~` prefixed comments are auto-generated:
+## Dependencies and Triggers
 
 ```yaml
-#~ Manages package, file, service
-name: openssh
-
 resources:
-  #~ Install openssh-server package
-  - name: install-openssh
-    type: package
-    package: openssh-server
-
-  # We lock down root login for PCI compliance
-  #~ Deploy /etc/ssh/sshd_config
-  - name: sshd-config
+  - name: config-file
     type: file
-    target_path: /etc/ssh/sshd_config
-    content: |
-      Port {{ .Vars.ssh_port }}
-      PermitRootLogin {{ .Vars.ssh_permit_root }}
-    owner: root
-    group: root
-    mode: "0600"
-    depends_on: [install-openssh]
-    notify: [sshd-service]
+    target_path: /etc/nginx/nginx.conf
+    content: "..."
+    depends_on: [install-pkg]
+    notify: [restart-svc]
+```
 
-  #~ Ensure sshd is running and enabled
-  - name: sshd-service
-    type: service
-    service: sshd
-    state: running
-    enabled: true
+Aliases: `require` = `depends_on`. `before` = reverse `depends_on`.
+
+## Conditional Execution
+
+```yaml
+  - name: apt-setup
+    type: exec
+    command: apt-get update
+    when: "os_family('debian')"
+```
+
+## Validation
+
+```bash
+hobnobcli validate modules/nginx.hnb
+hobnobcli vi modules/nginx.hnb
 ```
