@@ -1,0 +1,64 @@
+#~ Manages directory, file, exec resources for scheduled directory backup
+name: directory-backup
+
+vars:
+  backup_src: "/srv/myapp"
+  backup_dest: "/srv/backups/myapp"
+  backup_db: ""
+  backup_hour_start: "2"
+  backup_hour_end: "4"
+
+resources:
+  #~ Create backup destination directory
+  - name: backup-dir
+    type: directory
+    target_path: "{{ .Vars.backup_dest }}"
+    owner: root
+    group: root
+    mode: "0555"
+
+  #~ Deploy backup script
+  - name: backup-script
+    type: file
+    target_path: /usr/local/bin/directory-backup.sh
+    owner: root
+    group: root
+    mode: "0700"
+    content: |
+      #!/bin/sh
+      set -e
+      SRC="{{ .Vars.backup_src }}"
+      DEST="{{ .Vars.backup_dest }}"
+      DB="{{ .Vars.backup_db }}"
+      STAMP="/tmp/.directory-backup-$(echo "$DEST" | tr / _)-$(date +%Y%m%d)"
+
+      EXCLUDES=""
+
+      # Optional: consistent SQLite snapshot before rsync.
+      if [ -n "$DB" ] && [ -f "$DB" ]; then
+        SNAP_DIR="$DEST/db"
+        mkdir -p "$SNAP_DIR"
+        sqlite3 "$DB" "VACUUM INTO '$SNAP_DIR/$(basename "$DB")'"
+        EXCLUDES="--exclude $(basename "$DB") --exclude $(basename "$DB")-wal --exclude $(basename "$DB")-shm"
+      fi
+
+      # Unlock backup dir.
+      chmod 755 "$DEST"
+
+      # Rsync source to destination.
+      rsync -a --delete $EXCLUDES "$SRC/" "$DEST/"
+
+      # Lock backup dir.
+      chmod 555 "$DEST"
+
+      # Write daily sentinel so we only run once per day.
+      touch "$STAMP"
+    depends_on: [backup-dir]
+
+  #~ Run backup once daily during the configured hour window
+  - name: run-backup
+    type: exec
+    command: /usr/local/bin/directory-backup.sh
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    onlyif: "! test -f /tmp/.directory-backup-$(echo '{{ .Vars.backup_dest }}' | tr / _)-$(date +%Y%m%d)"
+    depends_on: [backup-script]
