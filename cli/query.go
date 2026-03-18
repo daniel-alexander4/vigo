@@ -65,7 +65,7 @@ var queryCmd = &cobra.Command{
 
 		if len(resp.Responded) > 0 {
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "HOSTNAME\tVALUE\tSTATUS")
+			fmt.Fprintf(w, "%s\t%s\t%s\n", header("HOSTNAME"), header("VALUE"), header("STATUS"))
 			for _, r := range resp.Responded {
 				val := r.Value
 				if !r.Found {
@@ -81,7 +81,7 @@ var queryCmd = &cobra.Command{
 				fmt.Println()
 			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "HOSTNAME\tVALUE\tSTATUS")
+			fmt.Fprintf(w, "%s\t%s\t%s\n", header("HOSTNAME"), header("VALUE"), header("STATUS"))
 			for _, o := range resp.Offline {
 				val := o.Value
 				if !o.Found {
@@ -101,7 +101,7 @@ var queryCmd = &cobra.Command{
 				fmt.Println()
 			}
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "HOSTNAME\tSTATUS")
+			fmt.Fprintf(w, "%s\t%s\n", header("HOSTNAME"), header("STATUS"))
 			for _, t := range resp.TimedOut {
 				fmt.Fprintf(w, "%s\ttimed_out\n", t.Hostname)
 			}

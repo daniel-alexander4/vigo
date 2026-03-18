@@ -61,9 +61,9 @@ func runServerPromote(cmd *cobra.Command, args []string) error {
 	}
 
 	if resp.Success {
-		fmt.Printf("  %sPromoted to primary.%s\n", colorGreen, colorReset)
+		fmt.Printf("  %s\n", green("Promoted to primary."))
 	} else {
-		fmt.Printf("  %sPromotion failed:%s %s\n", colorRed, colorReset, resp.Message)
+		fmt.Printf("  %s %s\n", red("Promotion failed:"), resp.Message)
 	}
 
 	if resp.Message != "" {
@@ -88,12 +88,12 @@ func runServerStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
-	roleColor := colorGreen
+	roleStr := green(resp.Role)
 	if resp.Role == "peer" {
-		roleColor = colorYellow
+		roleStr = yellow(resp.Role)
 	}
 
-	fmt.Printf("  Role:           %s%s%s\n", roleColor, resp.Role, colorReset)
+	fmt.Printf("  Role:           %s\n", roleStr)
 
 	if resp.PrimaryAddr != "" {
 		fmt.Printf("  Primary:        %s\n", resp.PrimaryAddr)

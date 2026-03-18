@@ -36,7 +36,7 @@ var configHistoryCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tOPERATOR\tPUBLISHED AT\tCHANGED\tREMOVED")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("OPERATOR"), header("PUBLISHED AT"), header("CHANGED"), header("REMOVED"))
 		for _, p := range resp.Publishes {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\n",
 				p.ID, p.Operator, formatTimestamp(p.PublishedAt),

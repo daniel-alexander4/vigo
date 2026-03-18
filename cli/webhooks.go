@@ -72,7 +72,7 @@ var webhooksListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tURL\tEVENTS\tACTIVE")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("ID"), header("URL"), header("EVENTS"), header("ACTIVE"))
 		for _, wh := range resp.Webhooks {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%v\n",
 				wh.ID, wh.URL, strings.Join(wh.Events, ","), wh.Active)

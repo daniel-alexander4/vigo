@@ -42,7 +42,7 @@ var packagesListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "THRALL\tPACKAGE\tINSTALLED\tDESIRED")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("THRALL"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"))
 		for _, p := range resp.Packages {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 				p.Hostname, p.PackageName, p.InstalledVersion, p.DesiredVersion)
@@ -76,7 +76,7 @@ var packagesDriftCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "THRALL\tPACKAGE\tINSTALLED\tDESIRED\tDETECTED")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("THRALL"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"), header("DETECTED"))
 		for _, d := range resp.Drifts {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				d.Hostname, d.PackageName, d.InstalledVersion,

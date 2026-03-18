@@ -54,12 +54,12 @@ var runsListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tTHRALL\tSTARTED\tSTATUS\tCHANGED\tFAILED")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("THRALL"), header("STARTED"), header("STATUS"), header("CHANGED"), header("FAILED"))
 		for _, r := range resp.Runs {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%d\n",
-				r.ID, r.ThrallID,
-				formatTimestamp(r.StartedAt),
-				r.Status, r.ChangedCount, r.FailedCount)
+				dim(r.ID), r.ThrallID,
+				dim(formatTimestamp(r.StartedAt)),
+				colorStatus(r.Status), r.ChangedCount, r.FailedCount)
 		}
 		return w.Flush()
 	},
@@ -102,22 +102,22 @@ var runsShowCmd = &cobra.Command{
 		fmt.Printf("Thrall:     %s\n", r.ThrallID)
 		fmt.Printf("Started:  %s\n", formatTimestamp(r.StartedAt))
 		fmt.Printf("Finished: %s\n", formatTimestamp(r.FinishedAt))
-		fmt.Printf("Status:   %s\n", r.Status)
-		fmt.Printf("Modules:  %d total, %d changed, %d failed, %d skipped\n",
-			r.ModuleCount, r.ChangedCount, r.FailedCount, r.SkippedCount)
+		fmt.Printf("Status:   %s\n", colorStatus(r.Status))
+		fmt.Printf("Modules:  %d total, %s changed, %s failed, %s skipped\n",
+			r.ModuleCount, yellow(fmt.Sprintf("%d", r.ChangedCount)), red(fmt.Sprintf("%d", r.FailedCount)), dim(fmt.Sprintf("%d", r.SkippedCount)))
 
 		if len(resp.Results) > 0 {
 			fmt.Println()
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "MODULE\tTYPE\tRESOURCE\tACTION\tCHANGED\tERROR")
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("MODULE"), header("TYPE"), header("RESOURCE"), header("ACTION"), header("CHANGED"), header("ERROR"))
 			for _, res := range resp.Results {
-				errStr := "-"
+				errStr := dim("-")
 				if res.ErrorMessage != "" {
-					errStr = res.ErrorMessage
+					errStr = red(res.ErrorMessage)
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\n",
-					res.ModuleName, res.ResourceType, res.ResourceName,
-					res.ActionTaken, res.Changed, errStr)
+					res.ModuleName, dim(res.ResourceType), res.ResourceName,
+					colorAction(res.ActionTaken), res.Changed, errStr)
 			}
 			w.Flush()
 		}

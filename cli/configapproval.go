@@ -36,12 +36,12 @@ var configPendingCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tSTATUS\tREQUESTED BY\tREQUESTED AT\tEXPIRES AT")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("STATUS"), header("REQUESTED BY"), header("REQUESTED AT"), header("EXPIRES AT"))
 		for _, c := range resp.Changes {
 			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n",
-				c.ID, c.Status, c.RequestedBy,
-				formatTimestamp(c.RequestedAt),
-				formatTimestamp(c.ExpiresAt))
+				c.ID, colorStatus(c.Status), c.RequestedBy,
+				dim(formatTimestamp(c.RequestedAt)),
+				dim(formatTimestamp(c.ExpiresAt)))
 		}
 		return w.Flush()
 	},

@@ -35,9 +35,9 @@ var usersListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tUSERNAME\tDISPLAY NAME\tEMAIL\tROLE")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("USERNAME"), header("DISPLAY NAME"), header("EMAIL"), header("ROLE"))
 		for _, u := range users {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", u.ID, u.Username, u.DisplayName, u.Email, u.Role)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", dim(u.ID), u.Username, u.DisplayName, u.Email, u.Role)
 		}
 		return w.Flush()
 	},

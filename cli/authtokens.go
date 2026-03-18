@@ -72,7 +72,7 @@ var authListTokensCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tPREFIX\tCREATED\tEXPIRES")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("NAME"), header("PREFIX"), header("CREATED"), header("EXPIRES"))
 		for _, t := range tokens {
 			expires := "never"
 			if t.ExpiresAt != nil {

@@ -40,8 +40,6 @@ func init() {
 	doctorCmd.Flags().StringVar(&doctorConfigFile, "config", "server.yaml", "Path to server.yaml (for --pre-start)")
 }
 
-// colorDim is not declared in preview.go, so we add it here.
-const colorDim = "\033[2m"
 
 func runDoctor(cmd *cobra.Command, args []string) error {
 	if doctorPreStart {
@@ -72,14 +70,7 @@ func runDoctorRuntime() error {
 	}
 
 	fmt.Println()
-	statusColor := colorGreen
-	switch resp.Status {
-	case "degraded":
-		statusColor = colorYellow
-	case "unhealthy":
-		statusColor = colorRed
-	}
-	fmt.Printf("  Status: %s%s%s\n", statusColor, resp.Status, colorReset)
+	fmt.Printf("  Status: %s\n", colorStatus(resp.Status))
 
 	if resp.Status == "unhealthy" {
 		return fmt.Errorf("server is unhealthy")
@@ -177,7 +168,7 @@ func runDoctorPreStart() error {
 
 	fmt.Println()
 	if hasFailure {
-		fmt.Printf("  Status: %sunhealthy%s\n", colorRed, colorReset)
+		fmt.Printf("  Status: %s\n", red("unhealthy"))
 		return fmt.Errorf("pre-start checks failed")
 	}
 
@@ -189,9 +180,9 @@ func runDoctorPreStart() error {
 		}
 	}
 	if hasWarn {
-		fmt.Printf("  Status: %sdegraded%s\n", colorYellow, colorReset)
+		fmt.Printf("  Status: %s\n", colorStatus("degraded"))
 	} else {
-		fmt.Printf("  Status: %shealthy%s\n", colorGreen, colorReset)
+		fmt.Printf("  Status: %s\n", colorStatus("healthy"))
 	}
 
 	return nil
@@ -366,13 +357,13 @@ func printCheck(name, status, message string) {
 	var statusStr string
 	switch status {
 	case "pass":
-		statusStr = colorGreen + "OK" + colorReset
+		statusStr = green("OK")
 	case "warn":
-		statusStr = colorYellow + "WARN" + colorReset
+		statusStr = yellow("WARN")
 	case "fail":
-		statusStr = colorRed + "FAIL" + colorReset
+		statusStr = red("FAIL")
 	case "skip":
-		statusStr = colorDim + "SKIP" + colorReset
+		statusStr = dim("SKIP")
 	default:
 		statusStr = status
 	}

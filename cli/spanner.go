@@ -118,7 +118,7 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
-	fmt.Printf("  Role: %s%s%s\n", colorBold, resp.Role, colorReset)
+	fmt.Printf("  Role: %s\n", bold(resp.Role))
 
 	if resp.SpokeID != "" {
 		fmt.Printf("  Spoke ID: %s\n", resp.SpokeID)
@@ -147,11 +147,11 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Total Thralls: %d\n\n", totalThralls)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  ID\tADDRESS\tTHRALLS\tCOMPLIANT\tCOMPLIANCE\tLATENCY\tPATTERNS\tSTATUS")
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ADDRESS"), header("THRALLS"), header("COMPLIANT"), header("COMPLIANCE"), header("LATENCY"), header("PATTERNS"), header("STATUS"))
 	for _, s := range resp.Spokes {
-		status := colorGreen + "healthy" + colorReset
+		status := colorStatus("healthy")
 		if !s.Healthy {
-			status = colorRed + "unreachable" + colorReset
+			status = colorStatus("unreachable")
 		}
 		patterns := strings.Join(s.Patterns, ", ")
 		compliant := fmt.Sprintf("%d/%d", s.Compliant, s.ThrallCount)
@@ -189,11 +189,11 @@ func runSpannerSpokes(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  ID\tADDRESS\tTHRALLS\tCOMPLIANCE\tLATENCY\tSTATUS")
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ADDRESS"), header("THRALLS"), header("COMPLIANCE"), header("LATENCY"), header("STATUS"))
 	for _, s := range resp.Spokes {
-		status := colorGreen + "healthy" + colorReset
+		status := colorStatus("healthy")
 		if !s.Healthy {
-			status = colorRed + "unreachable" + colorReset
+			status = colorStatus("unreachable")
 		}
 		fmt.Fprintf(w, "  %s\t%s\t%d\t%.1f%%\t%dms\t%s\n",
 			s.ID, s.Addr, s.ThrallCount, s.CompliancePct, s.LatencyMs, status)
@@ -226,12 +226,12 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("spoke %q not found or unreachable: %w", spokeID, err)
 	}
 
-	status := colorGreen + "healthy" + colorReset
+	status := colorStatus("healthy")
 	if !resp.Healthy {
-		status = colorRed + "unreachable" + colorReset
+		status = colorStatus("unreachable")
 	}
 
-	fmt.Printf("  Spoke: %s%s%s\n", colorBold, resp.ID, colorReset)
+	fmt.Printf("  Spoke: %s\n", bold(resp.ID))
 	fmt.Printf("  Address: %s\n", resp.Addr)
 	fmt.Printf("  Status: %s\n", status)
 	fmt.Printf("  Latency: %dms\n", resp.LatencyMs)
@@ -239,14 +239,14 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Printf("  Thralls: %d\n", resp.ThrallCount)
 	fmt.Printf("  Compliance: %.1f%%\n", resp.CompliancePct)
-	fmt.Printf("    Compliant: %s%d%s\n", colorGreen, resp.Compliant, colorReset)
-	fmt.Printf("    Drifted:   %s%d%s\n", colorYellow, resp.Drifted, colorReset)
-	fmt.Printf("    Failing:   %s%d%s\n", colorRed, resp.Failing, colorReset)
+	fmt.Printf("    Compliant: %s\n", green(fmt.Sprintf("%d", resp.Compliant)))
+	fmt.Printf("    Drifted:   %s\n", yellow(fmt.Sprintf("%d", resp.Drifted)))
+	fmt.Printf("    Failing:   %s\n", red(fmt.Sprintf("%d", resp.Failing)))
 	fmt.Printf("    Stale:     %d\n", resp.Stale)
 	fmt.Printf("    Unknown:   %d\n", resp.Unknown)
 
 	if resp.Error != "" {
-		fmt.Printf("\n  Error: %s%s%s\n", colorRed, resp.Error, colorReset)
+		fmt.Printf("\n  Error: %s\n", red(resp.Error))
 	}
 
 	return nil
@@ -276,11 +276,11 @@ func runSpannerSpokeThralls(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  ID\tHOSTNAME\tIP ADDRESS\tREVOKED")
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP ADDRESS"), header("REVOKED"))
 	for _, t := range resp.Thralls {
 		revoked := ""
 		if t.Revoked {
-			revoked = colorRed + "yes" + colorReset
+			revoked = red("yes")
 		}
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", t.ID, t.Hostname, t.IPAddress, revoked)
 	}
@@ -314,7 +314,7 @@ func runSpannerSpokeRuns(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  ID\tTHRALL\tSTATUS\tMODULES\tCHANGED\tFAILED")
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("THRALL"), header("STATUS"), header("MODULES"), header("CHANGED"), header("FAILED"))
 	for _, r := range resp.Runs {
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%d\t%d\t%d\n",
 			r.ID, r.ThrallID, r.Status, r.ModuleCount, r.ChangedCount, r.FailedCount)
@@ -408,10 +408,9 @@ func runSpannerDrain(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Spoke %s drained: %d moved, %d failed.\n", spokeID, resp.Moved, resp.Failed)
 
 	for _, e := range resp.Errors {
-		fmt.Printf("  %sError:%s %s\n", colorRed, colorReset, e)
+		fmt.Printf("  %s %s\n", red("Error:"), e)
 	}
 
 	return nil
 }
 
-const colorBold = "\033[1m"

@@ -63,13 +63,13 @@ var approvedListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tPATTERN\tCREATED\tUSED")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("ID"), header("PATTERN"), header("CREATED"), header("USED"))
 		for _, p := range resp.Patterns {
-			used := "no"
+			used := dim("no")
 			if p.Used {
 				used = fmt.Sprintf("yes (%s)", p.UsedBy)
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.ID, p.Pattern, formatTimestamp(p.CreatedAt), used)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", dim(p.ID), p.Pattern, dim(formatTimestamp(p.CreatedAt)), used)
 		}
 		return w.Flush()
 	},

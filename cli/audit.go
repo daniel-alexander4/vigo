@@ -57,10 +57,10 @@ var auditListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "TIMESTAMP\tTYPE\tOPERATOR\tSUMMARY")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("TIMESTAMP"), header("TYPE"), header("OPERATOR"), header("SUMMARY"))
 		for _, e := range resp.Events {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-				formatTimestamp(e.Timestamp), e.Type, e.Operator, e.Summary)
+				dim(formatTimestamp(e.Timestamp)), e.Type, e.Operator, e.Summary)
 		}
 		return w.Flush()
 	},

@@ -249,7 +249,7 @@ func runSecretsList(cmd *cobra.Command, _ []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  KEY")
+	fmt.Fprintf(w, "  %s\n", header("KEY"))
 	for _, k := range keys {
 		fmt.Fprintf(w, "  %s\n", k)
 	}

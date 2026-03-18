@@ -11,6 +11,102 @@ import (
 	"time"
 )
 
+// ---------------------------------------------------------------------------
+// Color helpers — centralized ANSI output for all CLI commands.
+// Respects NO_COLOR env var (https://no-color.org) and non-terminal stdout.
+// ---------------------------------------------------------------------------
+
+var useColor = func() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}()
+
+func cReset() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[0m"
+}
+func cBold() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[1m"
+}
+func cDim() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[2m"
+}
+func cRed() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[31m"
+}
+func cGreen() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[32m"
+}
+func cYellow() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[33m"
+}
+func cCyan() string {
+	if !useColor {
+		return ""
+	}
+	return "\033[36m"
+}
+
+// bold wraps text in bold.
+func bold(s string) string { return cBold() + s + cReset() }
+
+// dim wraps text in dim.
+func dim(s string) string { return cDim() + s + cReset() }
+
+// green wraps text in green.
+func green(s string) string { return cGreen() + s + cReset() }
+
+// red wraps text in red.
+func red(s string) string { return cRed() + s + cReset() }
+
+// yellow wraps text in yellow.
+func yellow(s string) string { return cYellow() + s + cReset() }
+
+// cyan wraps text in cyan.
+func cyan(s string) string { return cCyan() + s + cReset() }
+
+// header wraps a table header in bold cyan.
+func header(s string) string { return cBold() + cCyan() + s + cReset() }
+
+// colorStatus applies color to compliance/run status strings.
+func colorStatus(s string) string {
+	switch strings.ToLower(s) {
+	case "compliant", "ok", "success", "complete", "healthy", "present", "running":
+		return green(s)
+	case "drifted", "warn", "warning", "degraded", "pending", "dispatched":
+		return yellow(s)
+	case "failing", "fail", "failed", "error", "unreachable", "timeout", "rejected":
+		return red(s)
+	case "stale", "unknown", "offline", "skipped", "skip":
+		return dim(s)
+	default:
+		return s
+	}
+}
+
 // formatTimestamp formats an RFC3339 or ISO8601 timestamp to short form.
 func formatTimestamp(ts string) string {
 	if ts == "" {

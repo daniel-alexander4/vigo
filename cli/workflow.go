@@ -125,12 +125,12 @@ var workflowListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tSTATUS\tSTEPS\tCREATED")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("NAME"), header("STATUS"), header("STEPS"), header("CREATED"))
 		for _, wf := range resp.Workflows {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\t%s\n",
-				wf.ID, wf.WorkflowName, wf.Status,
+				dim(wf.ID), wf.WorkflowName, colorStatus(wf.Status),
 				wf.CurrentStep, wf.TotalSteps,
-				formatTimestamp(wf.CreatedAt))
+				dim(formatTimestamp(wf.CreatedAt)))
 		}
 		return w.Flush()
 	},
@@ -215,13 +215,13 @@ func printWorkflowResults(resp *workflowResponse) {
 
 	fmt.Println()
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "STEP\tNAME\tSTATUS\tPUSH RUN")
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("STEP"), header("NAME"), header("STATUS"), header("PUSH RUN"))
 	for _, s := range resp.Steps {
-		pushID := "-"
+		pushID := dim("-")
 		if s.PushRunID != "" {
 			pushID = s.PushRunID
 		}
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", s.StepIndex, s.StepName, s.Status, pushID)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", s.StepIndex, s.StepName, colorStatus(s.Status), pushID)
 	}
 	w.Flush()
 }

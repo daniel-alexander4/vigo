@@ -47,17 +47,17 @@ var thrallsListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tHOSTNAME\tIP\tENROLLED\tLAST SEEN\tSTATUS")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP"), header("ENROLLED"), header("LAST SEEN"), header("STATUS"))
 		for _, c := range resp.Thralls {
 			status := "active"
 			if c.Revoked {
 				status = "revoked"
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				c.ID, c.Hostname, c.IPAddress,
-				formatTimestamp(c.EnrolledAt),
-				formatTimestamp(c.LastSeen),
-				status)
+				dim(c.ID), c.Hostname, c.IPAddress,
+				dim(formatTimestamp(c.EnrolledAt)),
+				dim(formatTimestamp(c.LastSeen)),
+				colorStatus(status))
 		}
 		return w.Flush()
 	},
@@ -383,14 +383,14 @@ Use --dry-run to preview what would be deleted without making changes.`,
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tHOSTNAME\tIP\tLAST SEEN\tSTATUS")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP"), header("LAST SEEN"), header("STATUS"))
 		for _, d := range toDelete {
 			status := "active"
 			if d.Revoked {
 				status = "revoked"
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-				d.ID, d.Hostname, d.IPAddress, formatTimestamp(d.LastSeen), status)
+				dim(d.ID), d.Hostname, d.IPAddress, dim(formatTimestamp(d.LastSeen)), colorStatus(status))
 		}
 		w.Flush()
 		fmt.Printf("\n%d duplicate thrall(s) will be deleted.\n", len(toDelete))

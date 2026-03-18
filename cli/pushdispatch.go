@@ -190,7 +190,7 @@ var pushListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tCOMMAND\tTARGET\tSTATUS\tTARGETS\tCREATED")
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("COMMAND"), header("TARGET"), header("STATUS"), header("TARGETS"), header("CREATED"))
 		for _, t := range resp.PushRuns {
 			// Truncate long commands for display.
 			command := t.Command
@@ -198,8 +198,8 @@ var pushListCmd = &cobra.Command{
 				command = command[:37] + "..."
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
-				t.ID, command, t.Target, t.Status,
-				t.TotalTargets, formatTimestamp(t.CreatedAt))
+				dim(t.ID), command, t.Target, colorStatus(t.Status),
+				t.TotalTargets, dim(formatTimestamp(t.CreatedAt)))
 		}
 		return w.Flush()
 	},

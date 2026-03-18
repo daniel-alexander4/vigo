@@ -11,26 +11,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ANSI color codes for action types
-const (
-	colorReset  = "\033[0m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorRed    = "\033[31m"
-)
-
 func colorAction(action string) string {
-	// Only colorize if stdout is a terminal
-	if fileInfo, _ := os.Stdout.Stat(); fileInfo != nil && fileInfo.Mode()&os.ModeCharDevice == 0 {
-		return action
-	}
 	switch action {
 	case "create":
-		return colorGreen + action + colorReset
+		return green(action)
 	case "update":
-		return colorYellow + action + colorReset
+		return yellow(action)
 	case "delete":
-		return colorRed + action + colorReset
+		return red(action)
 	default:
 		return action
 	}
