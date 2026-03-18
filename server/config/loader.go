@@ -216,6 +216,11 @@ func (cs *ConfigStore) SetOnReloadFailure(fn func(err error)) {
 //
 // By default, all resources must pass idempotency validation. Set dangerous
 // to true to allow non-idempotent resources (e.g., exec without guards).
+//
+// Idempotency validation errors are non-fatal: the store starts with zero
+// modules loaded and the error is stored in LastReloadError() for surfacing
+// via doctor/dashboard. Structural errors (YAML syntax, missing name,
+// dangling role→module refs, secret resolution) remain fatal.
 func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (*ConfigStore, error) {
 	cs := &ConfigStore{
 		dir:       baseDir,
@@ -223,6 +228,18 @@ func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (
 		dangerous: dangerous,
 	}
 	if err := cs.loadAll(); err != nil {
+		// Idempotency errors are non-fatal at startup — start with empty
+		// config so the REST API, UI, and gRPC remain available for
+		// diagnosis. The error is stored in lastReloadErr and surfaced
+		// via LastReloadError(), doctor, and the dashboard.
+		var ie *IdempotencyErrors
+		if errors.As(err, &ie) {
+			slog.Error("config loaded with validation errors — starting with empty config\n" + ie.Format())
+			cs.mu.Lock()
+			cs.lastReloadErr = err
+			cs.mu.Unlock()
+			return cs, nil
+		}
 		return nil, err
 	}
 	return cs, nil

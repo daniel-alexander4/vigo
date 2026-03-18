@@ -1637,12 +1637,22 @@ thralls:
     modules: [bad]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
-	if err == nil {
-		t.Fatal("expected error for unguarded exec, got nil")
+	// Idempotency errors are non-fatal at startup — the store starts with
+	// empty config and the error is stored in LastReloadError().
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("idempotency errors should be non-fatal at startup, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "idempotency") {
-		t.Errorf("error should mention idempotency, got: %v", err)
+	if cs.LastReloadError() == nil {
+		t.Fatal("expected LastReloadError to be set for unguarded exec")
+	}
+	if !strings.Contains(cs.LastReloadError().Error(), "idempotency") {
+		t.Errorf("LastReloadError should mention idempotency, got: %v", cs.LastReloadError())
+	}
+	// Store should have zero modules loaded.
+	stats := cs.Stats()
+	if stats.Modules != 0 {
+		t.Errorf("expected 0 modules loaded, got %d", stats.Modules)
 	}
 }
 
@@ -1756,14 +1766,20 @@ thralls:
     modules: [bad1, bad2]
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
-	if err == nil {
-		t.Fatal("expected idempotency errors, got nil")
+	// Idempotency errors are non-fatal — store starts with empty config.
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("idempotency errors should be non-fatal, got: %v", err)
+	}
+
+	lastErr := cs.LastReloadError()
+	if lastErr == nil {
+		t.Fatal("expected LastReloadError to be set")
 	}
 
 	var ie *IdempotencyErrors
-	if !errors.As(err, &ie) {
-		t.Fatalf("expected *IdempotencyErrors, got %T: %v", err, err)
+	if !errors.As(lastErr, &ie) {
+		t.Fatalf("expected *IdempotencyErrors, got %T: %v", lastErr, lastErr)
 	}
 
 	// Should collect errors from both modules.
@@ -1790,6 +1806,12 @@ thralls:
 	}
 	if !strings.Contains(formatted, "validation failed") {
 		t.Error("formatted output should mention validation failed")
+	}
+
+	// Store should have zero modules loaded.
+	stats := cs.Stats()
+	if stats.Modules != 0 {
+		t.Errorf("expected 0 modules loaded, got %d", stats.Modules)
 	}
 }
 

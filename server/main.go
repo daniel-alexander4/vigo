@@ -63,13 +63,9 @@ var version = "dev"
 func main() {
 	if err := run(); err != nil {
 		var se *config.SecretErrors
-		var ie *config.IdempotencyErrors
-		switch {
-		case errors.As(err, &se):
+		if errors.As(err, &se) {
 			fmt.Fprint(os.Stderr, se.Format())
-		case errors.As(err, &ie):
-			fmt.Fprint(os.Stderr, ie.Format())
-		default:
+		} else {
 			slog.Error("server failed", "error", err)
 		}
 		os.Exit(1)
