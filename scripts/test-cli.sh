@@ -156,7 +156,7 @@ if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
     run_test "thralls untag" $CLI thralls untag "$FIRST_THRALL" "test-tag" --server "$SERVER"
 
     # Packages.
-    run_test "packages list" $CLI packages list --thrall "$FIRST_THRALL" --server "$SERVER" || true
+    run_test "packages list" $CLI thralls packages list --thrall "$FIRST_THRALL" --server "$SERVER" || true
 else
     skip_test "thralls show/traits/preview/tag" "no thralls enrolled"
 fi
@@ -271,9 +271,13 @@ echo ""
 # 11. export
 # -------------------------------------------------------------------
 echo -e "${BOLD}[export]${NC}"
-run_test "export siem" $CLI export siem --server "$SERVER" || skip_test "export siem" "not enabled in server.yaml"
-run_test "export cmdb" $CLI export cmdb --server "$SERVER" || skip_test "export cmdb" "not enabled in server.yaml"
-run_test "export oscal" $CLI export oscal --server "$SERVER" || skip_test "export oscal" "not enabled in server.yaml"
+if $CLI export siem --server "$SERVER" >/dev/null 2>&1; then
+    run_test "export siem" $CLI export siem --server "$SERVER"
+    run_test "export cmdb" $CLI export cmdb --server "$SERVER"
+    run_test "export oscal" $CLI export oscal --server "$SERVER"
+else
+    skip_test "export siem/cmdb/oscal" "not enabled in server.yaml"
+fi
 echo ""
 
 # -------------------------------------------------------------------

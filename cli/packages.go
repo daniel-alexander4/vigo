@@ -20,14 +20,17 @@ var packagesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List managed packages with installed and desired versions per thrall",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		thrallID, _ := cmd.Flags().GetString("thrall")
-
-		path := "/api/v1/packages"
-		if thrallID != "" {
-			path += "?thrall_id=" + thrallID
-		}
+		thrallFilter, _ := cmd.Flags().GetString("thrall")
 
 		client := newAPIClient()
+		path := "/api/v1/packages"
+		if thrallFilter != "" {
+			resolved, err := resolveThrall(client, thrallFilter)
+			if err != nil {
+				return err
+			}
+			path += "?thrall_id=" + resolved
+		}
 		var resp struct {
 			Packages []struct {
 				ThrallID           string `json:"thrallId"`
