@@ -85,6 +85,15 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [Testing](operations/testing.md) — CLI integration tests and unit tests for verifying server health
 - [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
 
+## Compliance
+
+- [Database Encryption at Rest](compliance/database-encryption.md) — LUKS/dm-crypt for SQLite, TDE for PostgreSQL
+- [HIPAA Compliance Checklist](operations/hipaa-checklist.md) — 164.312 requirement mapping and verification
+- [BAA Template](operations/baa-template.md) — Business Associate Agreement template
+- [Incident Response Plan](operations/incident-response.md) — Detection, containment, and recovery
+- [Emergency Access](operations/emergency-access.md) — Break-glass procedure
+- [Decommissioning](operations/decommissioning.md) — Secure node and server retirement
+
 ## Reference
 
 - [Executors](executors/_index.md) — 72 resource types across all platforms
