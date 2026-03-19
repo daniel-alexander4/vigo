@@ -53,20 +53,29 @@ impl Executor for CustomExecutor {
             }
         };
 
-        let child = Command::new(&self.script_path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn();
-
-        let mut child = match child {
-            Ok(c) => c,
-            Err(e) => {
-                result.error = Some(format!("running {}: {}", self.script_path, e));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
+        // Retry spawn on ETXTBSY — a kernel race on tmpfs where the
+        // executable inode is briefly held after a recent write/rename.
+        let mut child = None;
+        for attempt in 0..5 {
+            match Command::new(&self.script_path)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+            {
+                Ok(c) => { child = Some(c); break; }
+                Err(e) if e.raw_os_error() == Some(26) && attempt < 4 => {
+                    // ETXTBSY (26) — brief retry.
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(e) => {
+                    result.error = Some(format!("running {}: {}", self.script_path, e));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
             }
-        };
+        }
+        let mut child = child.unwrap();
 
         if let Some(ref mut stdin) = child.stdin {
             let _ = stdin.write_all(&input_json);
@@ -154,7 +163,6 @@ mod tests {
         f.sync_all().unwrap();
         drop(f);
         std::fs::rename(&tmp_path, &final_path).unwrap();
-        // Set executable after rename — file handle is fully closed.
         std::fs::set_permissions(&final_path, std::fs::Permissions::from_mode(0o755)).unwrap();
         final_path.to_str().unwrap().to_string()
     }
