@@ -77,6 +77,9 @@ Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDi
 				return err
 			}
 			printFileList(res)
+			if res.URLWarning != "" {
+				fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
+			}
 			fmt.Printf("\nValidation passed: %d modules, %d roles, %d envoy entries\n",
 				res.Modules, res.Roles, res.Entries)
 			return nil
@@ -88,6 +91,9 @@ Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDi
 			return err
 		}
 		printFileList(res)
+		if res.URLWarning != "" {
+			fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
+		}
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
 			fmt.Println("\nNothing to publish — stage matches live.")
 			return nil

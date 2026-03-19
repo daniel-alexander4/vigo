@@ -348,9 +348,12 @@ envoys:
     modules: [download]
 `)
 
-	_, err := ValidateSource(Options{CheckURLs: true, URLTimeout: 5 * time.Second})
-	if err == nil {
-		t.Fatal("expected 404 URL to fail validation")
+	res, err := ValidateSource(Options{CheckURLs: true, URLTimeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("URL check should warn, not fail: %v", err)
+	}
+	if res.URLWarning == "" {
+		t.Fatal("expected URL warning for 404")
 	}
 }
 
@@ -450,9 +453,12 @@ envoys:
     modules: [repo]
 `)
 
-	_, err := ValidateSource(Options{CheckURLs: true, URLTimeout: 5 * time.Second})
-	if err == nil {
-		t.Fatal("expected 404 key_url to fail validation")
+	res, err := ValidateSource(Options{CheckURLs: true, URLTimeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("URL check should warn, not fail: %v", err)
+	}
+	if res.URLWarning == "" {
+		t.Fatal("expected URL warning for 404 key_url")
 	}
 }
 

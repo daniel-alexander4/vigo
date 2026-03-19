@@ -74,6 +74,7 @@ type Result struct {
 	Changed     []string // files that are new or changed vs .live
 	Removed     []string // files in .live not present in stage
 	DiffSummary string   // unified diff of changed files
+	URLWarning  string   // non-fatal URL check warnings (empty if all OK)
 }
 
 // ValidateSource runs full config validation against the stage directory.
@@ -117,20 +118,25 @@ func ValidateSource(opts Options) (*Result, error) {
 		return nil, err
 	}
 
+	var urlWarning string
 	if opts.CheckURLs && len(changedModules) > 0 {
 		if err := checkURLs(StageDir, changedModules, opts.URLTimeout); err != nil {
-			return nil, err
+			// URL failures are warnings, not fatal — the config structure
+			// is valid, and the URL may work at check-in time (e.g., behind
+			// a VPN, or the server was temporarily down).
+			urlWarning = err.Error()
 		}
 	}
 
 	stats := store.Stats()
 	return &Result{
-		Modules:  stats.Modules,
-		Roles:    len(store.ListRoleNames()),
-		Entries:  stats.Entries,
-		AllFiles: allFiles,
-		Changed:  changed,
-		Removed:  removed,
+		Modules:    stats.Modules,
+		Roles:      len(store.ListRoleNames()),
+		Entries:    stats.Entries,
+		AllFiles:   allFiles,
+		Changed:    changed,
+		Removed:    removed,
+		URLWarning: urlWarning,
 	}, nil
 }
 
@@ -413,6 +419,11 @@ func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error)
 					continue
 				}
 				if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
+					continue
+				}
+				// Skip templated URLs — they contain Go template syntax
+				// that gets rendered at check-in time with real trait values.
+				if strings.Contains(urlStr, "{{") {
 					continue
 				}
 				refs = append(refs, urlRef{
