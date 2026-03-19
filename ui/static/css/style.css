@@ -983,6 +983,41 @@ body {
     color: var(--color-info, #4299e1);
 }
 
+/* Clickable stat boxes */
+.sec-stat-click {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.sec-stat-click:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Collapsible detail panels */
+.sec-detail {
+    display: none;
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-bg-subtle, rgba(0, 0, 0, 0.02));
+}
+.sec-detail h4 {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin: 0 0 6px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Host links in per-host table */
+.sec-host-link {
+    color: var(--color-link);
+    text-decoration: none;
+}
+.sec-host-link:hover {
+    text-decoration: underline;
+}
+
 .ask-drift-table-wrap {
     max-height: 200px;
     overflow-y: auto;
