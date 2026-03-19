@@ -29,7 +29,7 @@ The Audit page (`/audit`) shows a filterable table of events with auto-refresh.
 
 ## Tamper-Evident Trail
 
-Security-sensitive events (config changes, enrollment, revocation, push dispatch) are also recorded in a [tamper-evident hash chain](tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `vigogo audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
+Security-sensitive events (config changes, enrollment, revocation, push dispatch) are also recorded in a [tamper-evident hash chain](../compliance/tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `vigogo audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
 
 ## Event Types
 

@@ -123,4 +123,4 @@ The agent runs the executor on every check-in. If the script always returns `cha
 ## Related
 
 - [Custom Traits](custom-traits.md) — Custom fact collection
-- [Executors](../executors/_index.md) — Built-in executor reference
+- [Executors](../reference/executors/_index.md) — Built-in executor reference

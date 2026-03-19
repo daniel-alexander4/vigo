@@ -396,6 +396,6 @@ The web UI dashboard shows device compliance alongside servers. Drifted devices 
 ## Related
 
 - [Network Device Concepts](../concepts/network-devices.md) — Architecture, gateway proxy, device types
-- [Executor Reference](../executors/_index.md) — All network executors
-- [ssh_exec](../executors/ssh_exec.md) — Ad-hoc command execution
-- [network_config](../executors/network_config.md) — Raw config block management
+- [Executor Reference](../reference/executors/_index.md) — All network executors
+- [ssh_exec](../reference/executors/ssh_exec.md) — Ad-hoc command execution
+- [network_config](../reference/executors/network_config.md) — Raw config block management

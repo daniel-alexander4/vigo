@@ -220,7 +220,7 @@ resources:
     depends_on: [deploy-filter]
 ```
 
-Each script reads stdin and writes to stdout. Non-zero exit fails the resource. See [file executor: stream_edit](../executors/file.md#stream-edit) for full reference.
+Each script reads stdin and writes to stdout. Non-zero exit fails the resource. See [file executor: stream_edit](../reference/executors/file.md#stream-edit) for full reference.
 
 ## timeout
 

@@ -435,9 +435,10 @@ type PlanDetailPageData struct {
 
 // DocsNavSection represents a section in the docs navigation tree.
 type DocsNavSection struct {
-	Title string
-	Path  string // e.g. "getting-started"
-	Pages []DocsNavPage
+	Title       string
+	Path        string // e.g. "getting-started"
+	Pages       []DocsNavPage
+	Subsections []DocsNavSection // nested sections (e.g. reference/executors)
 }
 
 // DocsNavPage represents a single page within a docs section.
@@ -533,12 +534,11 @@ var docsSectionOrder = []string{
 	"getting-started",
 	"platforms",
 	"concepts",
+	"use-cases",
 	"ai",
 	"operations",
-	"executors",
-	"traits",
-	"cli",
-	"api",
+	"compliance",
+	"reference",
 	"ui",
 	"examples",
 	"migration",
@@ -578,8 +578,18 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 		}
 
 		var pages []DocsNavPage
+		var subsections []DocsNavSection
 		for _, pf := range pageFiles {
-			if pf.IsDir() || !strings.HasSuffix(pf.Name(), ".md") || pf.Name() == "_index.md" {
+			if pf.IsDir() {
+				if strings.HasPrefix(pf.Name(), ".") {
+					continue
+				}
+				// Build a subsection for nested directories.
+				sub := buildSubsection(docsDir, sectionPath, pf.Name())
+				subsections = append(subsections, sub)
+				continue
+			}
+			if !strings.HasSuffix(pf.Name(), ".md") || pf.Name() == "_index.md" {
 				continue
 			}
 
@@ -608,9 +618,10 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 		})
 
 		sectionMap[sectionPath] = DocsNavSection{
-			Title: sectionTitle,
-			Path:  sectionPath,
-			Pages: pages,
+			Title:       sectionTitle,
+			Path:        sectionPath,
+			Pages:       pages,
+			Subsections: subsections,
 		}
 	}
 
@@ -630,6 +641,56 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 	}
 
 	return nav
+}
+
+// buildSubsection builds a DocsNavSection for a nested directory within a section.
+func buildSubsection(docsDir, parentPath, dirName string) DocsNavSection {
+	subPath := parentPath + "/" + dirName
+	subTitle := extractMDTitle(filepath.Join(docsDir, subPath, "_index.md"))
+	if subTitle == "" {
+		subTitle = strings.ReplaceAll(dirName, "-", " ")
+		subTitle = strings.Title(subTitle)
+	}
+
+	pageFiles, err := os.ReadDir(filepath.Join(docsDir, subPath))
+	if err != nil {
+		return DocsNavSection{Title: subTitle, Path: subPath}
+	}
+
+	var pages []DocsNavPage
+	for _, pf := range pageFiles {
+		if pf.IsDir() || !strings.HasSuffix(pf.Name(), ".md") || pf.Name() == "_index.md" {
+			continue
+		}
+
+		pageName := strings.TrimSuffix(pf.Name(), ".md")
+		pageTitle := extractMDTitle(filepath.Join(docsDir, subPath, pf.Name()))
+		if pageTitle == "" {
+			pageTitle = strings.ReplaceAll(pageName, "-", " ")
+			pageTitle = strings.ReplaceAll(pageTitle, "_", " ")
+		}
+
+		var plainText string
+		if raw, err := os.ReadFile(filepath.Join(docsDir, subPath, pf.Name())); err == nil {
+			plainText = stripMarkdown(string(raw))
+		}
+
+		pages = append(pages, DocsNavPage{
+			Title: pageTitle,
+			Path:  subPath + "/" + pageName,
+			Text:  plainText,
+		})
+	}
+
+	sort.Slice(pages, func(i, j int) bool {
+		return pages[i].Title < pages[j].Title
+	})
+
+	return DocsNavSection{
+		Title: subTitle,
+		Path:  subPath,
+		Pages: pages,
+	}
 }
 
 // extractMDTitle reads a markdown file and returns the first # heading.
@@ -843,6 +904,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		title := strings.ReplaceAll(part, "-", " ")
 		title = strings.ReplaceAll(title, "_", " ")
 		// Try to find a better title from the nav tree.
+		crumbPath := strings.Join(parts[:i+1], "/")
 		if i == 0 {
 			for _, sec := range h.docsNav {
 				if sec.Path == part {
@@ -850,11 +912,24 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
+		} else if i == 1 {
+			// Check subsections for a better title.
+			for _, sec := range h.docsNav {
+				if sec.Path == parts[0] {
+					for _, sub := range sec.Subsections {
+						if sub.Path == crumbPath {
+							title = sub.Title
+							break
+						}
+					}
+					break
+				}
+			}
 		}
 		if i < len(parts)-1 {
 			breadcrumbs = append(breadcrumbs, DocsCrumb{
 				Title: title,
-				Path:  strings.Join(parts[:i+1], "/"),
+				Path:  crumbPath,
 			})
 		} else {
 			breadcrumbs = append(breadcrumbs, DocsCrumb{Title: title})

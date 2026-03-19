@@ -46,7 +46,7 @@ vigogo envoys list
 Sudden compliance drops across multiple nodes may indicate configuration tampering.
 
 **Webhook/SMTP alerts:**
-Configure webhooks or SMTP notifications for compliance threshold violations. See [Drift Alerting](drift-alerting.md).
+Configure webhooks or SMTP notifications for compliance threshold violations. See [Drift Alerting](../operations/drift-alerting.md).
 
 ### Manual Detection
 
@@ -165,4 +165,4 @@ Test this incident response plan at least annually:
 - NIST SP 800-61 — Computer Security Incident Handling Guide
 - [Emergency Access Procedure](emergency-access.md)
 - [Tamper-Evident Audit Trail](tamper-evident-audit.md)
-- [Backup & Recovery](backup.md)
+- [Backup & Recovery](../operations/backup.md)

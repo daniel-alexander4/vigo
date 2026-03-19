@@ -129,5 +129,5 @@ Items that require organizational policies (not technical controls):
 - [Decommissioning Procedures](decommissioning.md)
 - [BAA Template](baa-template.md)
 - [Incident Response Plan](incident-response.md)
-- [Authentication](authentication.md)
+- [Authentication](../operations/authentication.md)
 - [Tamper-Evident Audit Trail](tamper-evident-audit.md)

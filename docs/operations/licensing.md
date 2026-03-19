@@ -50,4 +50,4 @@ vigogo license fingerprint     # Display machine fingerprint
 GET /api/v1/license
 ```
 
-Returns current license status including stage, tier, envoy counts, and expiration. See [REST API](../api/rest.md#license).
+Returns current license status including stage, tier, envoy counts, and expiration. See [REST API](../reference/api/rest.md#license).

@@ -161,4 +161,4 @@ When a resource fails:
 
 - [Config Format](config-format.md) — Module and resource structure
 - [Resource Language](resource-language.md) — defaults, foreach, case/match
-- [Executors](../executors/_index.md) — Available resource types
+- [Executors](../reference/executors/_index.md) — Available resource types

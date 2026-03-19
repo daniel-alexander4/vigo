@@ -267,12 +267,12 @@ vigogo export cmdb --status compliant --output fleet.json
 vigogo export oscal --output assessment.json
 ```
 
-See [CLI export reference](../cli/export.md) for full flag documentation.
+See [CLI export reference](../reference/cli/export.md) for full flag documentation.
 
 ---
 
 ## Related
 
-- [Prometheus Metrics](metrics.md) -- runtime observability
-- [CLI export](../cli/export.md) -- CLI reference for export commands
-- [REST API export endpoints](../api/rest.md#export) -- API reference
+- [Prometheus Metrics](../operations/metrics.md) -- runtime observability
+- [CLI export](../reference/cli/export.md) -- CLI reference for export commands
+- [REST API export endpoints](../reference/api/rest.md#export) -- API reference

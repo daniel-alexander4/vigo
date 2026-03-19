@@ -78,8 +78,6 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Maintenance Windows](operations/maintenance-windows.md) — Per-envoy and global change freeze
 - [Drift Alerting](operations/drift-alerting.md) — Fleet compliance threshold monitoring
 - [Audit Log](operations/audit.md) — Unified audit trail
-- [Tamper-Evident Audit](operations/tamper-evident-audit.md) — SHA-256 hash chain for tamper detection
-- [Compliance Export](operations/compliance-export.md) — SIEM, CMDB, OSCAL feeds
 - [Peer Replication](operations/peer-replication.md) — Primary/peer file sync and automatic failover
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
 - [Testing](operations/testing.md) — CLI integration tests and unit tests for verifying server health
@@ -98,19 +96,22 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [NERC CIP](compliance/nerc-cip.md) — 18 energy sector requirements
 - [Remediation Workflow](compliance/remediation.md) — Automated drift detection, fix, verification
 - [Database Encryption at Rest](compliance/database-encryption.md) — LUKS/dm-crypt for SQLite, TDE for PostgreSQL
-- [HIPAA Compliance Checklist](operations/hipaa-checklist.md) — 164.312 requirement mapping and verification
-- [BAA Template](operations/baa-template.md) — Business Associate Agreement template
-- [Incident Response Plan](operations/incident-response.md) — Detection, containment, and recovery
-- [Emergency Access](operations/emergency-access.md) — Break-glass procedure
-- [Decommissioning](operations/decommissioning.md) — Secure node and server retirement
+- [HIPAA Compliance Checklist](compliance/hipaa-checklist.md) — 164.312 requirement mapping and verification
+- [BAA Template](compliance/baa-template.md) — Business Associate Agreement template
+- [Incident Response Plan](compliance/incident-response.md) — Detection, containment, and recovery
+- [Emergency Access](compliance/emergency-access.md) — Break-glass procedure
+- [Decommissioning](compliance/decommissioning.md) — Secure node and server retirement
+- [Tamper-Evident Audit](compliance/tamper-evident-audit.md) — SHA-256 hash chain for tamper detection
+- [Compliance Export](compliance/compliance-export.md) — SIEM, CMDB, OSCAL feeds
+- [Security Scanning](compliance/security-scanning.md) — CVE scanning, hardening audits, rootkit detection
 
 ## Reference
 
-- [Executors](executors/_index.md) — 72 resource types across all platforms
-- [Trait Collectors](traits/_index.md) — System fact collectors
-- [Agent CLI](cli/agent.md) — vigo agent commands (daemon, status, traits, run)
-- [CLI Reference](cli/_index.md) — vigogo admin commands
-- [API Reference](api/_index.md) — gRPC and REST APIs
+- [Executors](reference/executors/_index.md) — 72 resource types across all platforms
+- [Trait Collectors](reference/traits/_index.md) — System fact collectors
+- [Agent CLI](reference/cli/agent.md) — vigo agent commands (daemon, status, traits, run)
+- [CLI Reference](reference/cli/_index.md) — vigogo admin commands
+- [API Reference](reference/api/_index.md) — gRPC and REST APIs
 
 ## Web UI
 

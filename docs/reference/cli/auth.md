@@ -108,4 +108,4 @@ The event is recorded as `emergency.access` in the SHA-256 hash chain and cannot
 |------|-------------|
 | `--reason` | Required. The reason for emergency access. |
 
-See [Emergency Access Procedure](../operations/emergency-access.md) for the full procedure.
+See [Emergency Access Procedure](../../compliance/emergency-access.md) for the full procedure.

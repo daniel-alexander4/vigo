@@ -205,4 +205,4 @@ vigogo envoys show web1.example.com
 - [Resource DAG](../concepts/resource-dag.md) — depends_on, notify, subscribes in depth
 - [When Expressions](../concepts/when-expressions.md) — Conditional logic reference
 - [Templates](../concepts/templates.md) — Go template syntax for content: attributes
-- [File Executor: stream_edit](../executors/file.md#stream-edit) — Pipe file content through transform scripts before writing
+- [File Executor: stream_edit](../reference/executors/file.md#stream-edit) — Pipe file content through transform scripts before writing

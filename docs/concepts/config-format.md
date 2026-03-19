@@ -288,7 +288,7 @@ Every resource has these common fields:
 | `subscribes` | no | Resources to watch — re-apply self when they change |
 | `watch_secret` | no | Secret paths to watch — re-apply when rotated |
 
-Plus type-specific attributes (see [Executors](../executors/_index.md)).
+Plus type-specific attributes (see [Executors](../reference/executors/_index.md)).
 
 ## Auto-Comments (`#~`)
 

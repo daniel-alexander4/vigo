@@ -106,7 +106,7 @@ Manage Windows Registry keys and values.
 
 **Supported hives:** `HKLM:\`, `HKCU:\`, `HKCR:\`, `HKU:\`, `HKCC:\`
 
-See [registry executor](../executors/registry_windows.md) for full reference.
+See [registry executor](../reference/executors/registry_windows.md) for full reference.
 
 ### firewall (Windows)
 
@@ -140,7 +140,7 @@ Manage Windows Firewall rules via `netsh advfirewall`.
   state: absent
 ```
 
-See [firewall_windows executor](../executors/firewall_windows.md) for full reference.
+See [firewall_windows executor](../reference/executors/firewall_windows.md) for full reference.
 
 ### cron (Windows)
 
@@ -181,7 +181,7 @@ Manage scheduled tasks via `schtasks.exe`. Accepts standard cron syntax — the 
 | `0 H * * D` | `/SC WEEKLY /D D /ST HH:00` |
 | `0 H D * *` | `/SC MONTHLY /D D /ST HH:00` |
 
-See [cron_windows executor](../executors/cron_windows.md) for full reference.
+See [cron_windows executor](../reference/executors/cron_windows.md) for full reference.
 
 ### hostname (Windows)
 
@@ -231,7 +231,7 @@ Manage Windows Features (IIS, Hyper-V, .NET Framework). Automatically uses the c
   state: absent
 ```
 
-See [windows_feature executor](../executors/windows_feature.md) for full reference.
+See [windows_feature executor](../reference/executors/windows_feature.md) for full reference.
 
 ### acl
 
@@ -265,7 +265,7 @@ Manage NTFS ACL permissions on files and directories via PowerShell `Get-Acl`/`S
   state: absent
 ```
 
-See [acl_windows executor](../executors/acl_windows.md) for full reference.
+See [acl_windows executor](../reference/executors/acl_windows.md) for full reference.
 
 ### windows_env
 
@@ -295,7 +295,7 @@ Manage persistent environment variables via the .NET `[Environment]::SetEnvironm
 
 **Scopes:** `Machine` (default, system-wide) or `User` (current user). Machine scope requires administrator privileges.
 
-See [windows_env executor](../executors/windows_env.md) for full reference.
+See [windows_env executor](../reference/executors/windows_env.md) for full reference.
 
 ### reboot_windows
 
@@ -323,7 +323,7 @@ Manage pending reboots. Checks well-known registry keys for pending reboot state
 
 The executor checks `RebootPending`, `RebootRequired`, and `PendingFileRenameOperations` registry keys. If none are set, the resource is skipped.
 
-See [reboot_windows executor](../executors/reboot_windows.md) for full reference.
+See [reboot_windows executor](../reference/executors/reboot_windows.md) for full reference.
 
 ### powershell
 
@@ -353,7 +353,7 @@ Run PowerShell scripts with `$ErrorActionPreference = 'Stop'` and idempotency gu
 
 Always use at least one guard (`creates`, `unless`, `onlyif`) to maintain idempotency.
 
-See [powershell executor](../executors/powershell.md) for full reference.
+See [powershell executor](../reference/executors/powershell.md) for full reference.
 
 ### iis_site
 
@@ -384,7 +384,7 @@ Manage IIS websites with bindings, application pools, and SSL certificates.
 
 Requires the IIS-WebServer feature. Application pools are auto-created using the site name (or `app_pool` if specified).
 
-See [iis_site executor](../executors/iis_site.md) for full reference.
+See [iis_site executor](../reference/executors/iis_site.md) for full reference.
 
 ### iis_app_pool
 
@@ -415,7 +415,7 @@ Manage IIS application pools with fine-grained control over .NET runtime, pipeli
 
 **Identity types:** `ApplicationPoolIdentity` (default), `LocalSystem`, `LocalService`, `NetworkService`, `SpecificUser`.
 
-See [iis_app_pool executor](../executors/iis_app_pool.md) for full reference.
+See [iis_app_pool executor](../reference/executors/iis_app_pool.md) for full reference.
 
 ### certificate_windows
 
@@ -442,7 +442,7 @@ Manage certificates in Windows certificate stores. Import PFX/CER/CRT files and 
 
 **Common stores:** `Cert:\LocalMachine\My` (default, personal), `Cert:\LocalMachine\Root` (trusted root CAs), `Cert:\LocalMachine\CA` (intermediate CAs).
 
-See [certificate_windows executor](../executors/certificate_windows.md) for full reference.
+See [certificate_windows executor](../reference/executors/certificate_windows.md) for full reference.
 
 ### domain_membership
 
@@ -466,7 +466,7 @@ Manage Active Directory domain join and leave operations.
 
 By default, the machine restarts after join/leave. Set `restart: "false"` to defer the reboot and use `reboot_windows` with `depends_on` for controlled restarts.
 
-See [domain_membership executor](../executors/domain_membership.md) for full reference.
+See [domain_membership executor](../reference/executors/domain_membership.md) for full reference.
 
 ### local_security_policy
 
@@ -493,7 +493,7 @@ Manage local security policies (passwords, lockout, auditing) via `secedit`.
 **Lockout policies:** `LockoutBadCount`, `LockoutDuration`, `ResetLockoutCount`.
 **Audit policies:** `AuditLogonEvents`, `AuditObjectAccess`, `AuditPrivilegeUse`, `AuditPolicyChange`, `AuditAccountManage`.
 
-See [local_security_policy executor](../executors/local_security_policy.md) for full reference.
+See [local_security_policy executor](../reference/executors/local_security_policy.md) for full reference.
 
 ### windows_update
 
@@ -522,7 +522,7 @@ Manage Windows Update and WSUS configuration via registry policies.
 
 **Auto-update modes:** `enabled` (auto-install), `disabled`, `notify` (notify before download), `download` (download only), `scheduled` (install on schedule).
 
-See [windows_update executor](../executors/windows_update.md) for full reference.
+See [windows_update executor](../reference/executors/windows_update.md) for full reference.
 
 ### windows_defender
 
@@ -552,7 +552,7 @@ Manage Windows Defender exclusions, real-time protection, and scheduled scan set
 
 **Scan schedule days:** `0` = daily, `1` = Sunday, `2` = Monday, ..., `7` = Saturday.
 
-See [windows_defender executor](../executors/windows_defender.md) for full reference.
+See [windows_defender executor](../reference/executors/windows_defender.md) for full reference.
 
 ### smb_share
 
@@ -583,7 +583,7 @@ Manage SMB file shares with granular access control for users and groups.
 
 **Access levels:** `full_access` (full control), `change_access` (read + write), `read_access` (read only), `no_access` (deny). All accept comma-separated users/groups.
 
-See [smb_share executor](../executors/smb_share.md) for full reference.
+See [smb_share executor](../reference/executors/smb_share.md) for full reference.
 
 ### service_recovery_windows
 
@@ -614,7 +614,7 @@ Manage per-service failure recovery actions -- what happens when a Windows servi
 
 **Failure actions:** `restart` (restart the service), `run` (execute a command), `reboot` (reboot the machine), `none` (take no action). The `run` action requires the `command` parameter.
 
-See [service_recovery_windows executor](../executors/service_recovery_windows.md) for full reference.
+See [service_recovery_windows executor](../reference/executors/service_recovery_windows.md) for full reference.
 
 ## Windows Trait Collectors
 
@@ -747,6 +747,6 @@ resources:
 ## Related
 
 - [Bootstrap](../getting-started/bootstrap.md) — Agent installation on all platforms
-- [Executors index](../executors/_index.md) — All executor reference docs
-- [Traits index](../traits/_index.md) — All trait collector reference docs
+- [Executors index](../reference/executors/_index.md) — All executor reference docs
+- [Traits index](../reference/traits/_index.md) — All trait collector reference docs
 - [When Expressions](../concepts/when-expressions.md) — Conditional logic

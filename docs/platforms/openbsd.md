@@ -183,5 +183,5 @@ resources:
 - [Bootstrap](../getting-started/bootstrap.md) — Agent installation on all platforms
 - [FreeBSD Support](freebsd.md) — Similar BSD platform (shared executors)
 - [NetBSD Support](netbsd.md) — Similar BSD platform (shared executors)
-- [Executors](../executors/_index.md) — Full executor reference
-- [Traits](../traits/_index.md) — Full trait collector reference
+- [Executors](../reference/executors/_index.md) — Full executor reference
+- [Traits](../reference/traits/_index.md) — Full trait collector reference

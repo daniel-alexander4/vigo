@@ -131,4 +131,4 @@ If you need to prune old entries while preserving chain integrity, export the en
 
 ## Relationship to the Audit Log
 
-The [Audit Log](audit.md) page provides a unified view of all auditable events (config publishes, push runs, workflow runs). The tamper-evident trail is a subset of these events -- specifically, the security-sensitive operations that are hash-chained in the `audit_entries` table. The unified audit view combines hash-chained entries with non-chained operational records (push runs, workflow runs) from their respective tables.
+The [Audit Log](../operations/audit.md) page provides a unified view of all auditable events (config publishes, push runs, workflow runs). The tamper-evident trail is a subset of these events -- specifically, the security-sensitive operations that are hash-chained in the `audit_entries` table. The unified audit view combines hash-chained entries with non-chained operational records (push runs, workflow runs) from their respective tables.

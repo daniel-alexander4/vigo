@@ -1916,6 +1916,29 @@ body {
     font-weight: 600;
 }
 
+.docs-nav__subsection {
+    margin-top: 6px;
+}
+
+.docs-nav__subsection-title {
+    display: block;
+    padding: 3px 20px 3px 24px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.docs-nav__subsection-title:hover {
+    color: var(--color-brand);
+}
+
+.docs-nav__subpages .docs-nav__page {
+    padding-left: 40px;
+}
+
 .docs-content {
     padding: 32px 48px;
     max-width: 900px;

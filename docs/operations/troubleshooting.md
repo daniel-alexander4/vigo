@@ -20,7 +20,7 @@ Useful for verifying:
 - Whether offline results are queued (`Pending results` count)
 - Whether the agent has the server's bundle-signing key (`Server pubkey`)
 
-See [Agent CLI](../cli/agent.md#status) for full output examples.
+See [Agent CLI](../reference/cli/agent.md#status) for full output examples.
 
 ### vigogo doctor
 

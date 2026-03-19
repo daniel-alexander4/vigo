@@ -82,4 +82,4 @@ If you need to update the agent or server, use the standard upgrade mechanism (b
 ## Related
 
 - [Config Format](config-format.md) — Resource definitions
-- [Executors](../executors/_index.md) — Resource types
+- [Executors](../reference/executors/_index.md) — Resource types

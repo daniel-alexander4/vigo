@@ -428,6 +428,6 @@ make dist-agent-macos
 ## Related
 
 - [Bootstrap](../getting-started/bootstrap.md) -- Agent installation on all platforms
-- [Executors](../executors/_index.md) -- Full executor reference
-- [Traits](../traits/_index.md) -- Full trait collector reference
+- [Executors](../reference/executors/_index.md) -- Full executor reference
+- [Traits](../reference/traits/_index.md) -- Full trait collector reference
 - [When Expressions](../concepts/when-expressions.md) -- Conditional logic

@@ -109,5 +109,5 @@ vigogo export oscal --output assessment.json
 
 ## Related
 
-- [Compliance Export](../operations/compliance-export.md) -- configuration and integration guide
+- [Compliance Export](../../compliance/compliance-export.md) -- configuration and integration guide
 - [REST API export endpoints](../api/rest.md#export) -- API reference

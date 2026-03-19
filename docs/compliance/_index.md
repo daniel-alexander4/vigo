@@ -19,11 +19,13 @@ Guides for deploying Vigo in regulated environments.
 - [NERC CIP](nerc-cip.md) -- 18 requirements across 8 CIP standards (energy sector)
 - [Remediation Workflow](remediation.md) -- Automated drift detection, fix, and verification
 - [Database Encryption at Rest](database-encryption.md) -- LUKS/dm-crypt for SQLite, TDE for PostgreSQL
-- [HIPAA Compliance Checklist](../operations/hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification
-- [BAA Template](../operations/baa-template.md) -- Business Associate Agreement template for ePHI environments
-- [Incident Response Plan](../operations/incident-response.md) -- Security incident detection, containment, and recovery
-- [Emergency Access Procedure](../operations/emergency-access.md) -- Break-glass procedure (HIPAA 164.312(a)(2)(ii))
-- [Decommissioning Procedures](../operations/decommissioning.md) -- Secure node and server retirement
-- [Tamper-Evident Audit Trail](../operations/tamper-evident-audit.md) -- SHA-256 hash chain for tamper detection
+- [HIPAA Compliance Checklist](hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification
+- [BAA Template](baa-template.md) -- Business Associate Agreement template for ePHI environments
+- [Incident Response Plan](incident-response.md) -- Security incident detection, containment, and recovery
+- [Emergency Access Procedure](emergency-access.md) -- Break-glass procedure (HIPAA 164.312(a)(2)(ii))
+- [Decommissioning Procedures](decommissioning.md) -- Secure node and server retirement
+- [Tamper-Evident Audit Trail](tamper-evident-audit.md) -- SHA-256 hash chain for tamper detection
+- [Compliance Export](compliance-export.md) -- SIEM, CMDB, OSCAL feeds
+- [Security Scanning](security-scanning.md) -- CVE scanning, hardening audits, rootkit and malware detection
 - [Authentication](../operations/authentication.md) -- Session timeout, password policy, audit logging
 - [Backup & Recovery](../operations/backup.md) -- Encrypted backups with SHA-256 integrity verification

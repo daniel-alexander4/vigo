@@ -208,4 +208,4 @@ envoys:
 
 - [Resource Language](resource-language.md) — conditional_block for grouping
 - [Config Format](config-format.md) — Conditional vars
-- [Trait Collectors](../traits/_index.md) — Available trait data for expressions
+- [Trait Collectors](../reference/traits/_index.md) — Available trait data for expressions

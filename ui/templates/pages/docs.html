@@ -20,6 +20,16 @@
                 {{range .Pages}}
                 <a href="/docs/{{.Path}}" class="docs-nav__page{{if eq $.CurrentPath .Path}} docs-nav__page--active{{end}}">{{.Title}}</a>
                 {{end}}
+                {{range .Subsections}}
+                <div class="docs-nav__subsection">
+                    <a href="/docs/{{.Path}}" class="docs-nav__subsection-title">{{.Title}}</a>
+                    <div class="docs-nav__subpages">
+                        {{range .Pages}}
+                        <a href="/docs/{{.Path}}" class="docs-nav__page{{if eq $.CurrentPath .Path}} docs-nav__page--active{{end}}">{{.Title}}</a>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
             </div>
             {{end}}
         </div>
@@ -45,7 +55,8 @@
 (function() {
     var pages = [
         {{range .NavTree}}{{range .Pages}}{t:{{.Title}},p:{{.Path}},x:{{.Text}}},
-        {{end}}{{end}}
+        {{end}}{{range .Subsections}}{{range .Pages}}{t:{{.Title}},p:{{.Path}},x:{{.Text}}},
+        {{end}}{{end}}{{end}}
     ];
     var input = document.getElementById('docs-search');
     var results = document.getElementById('docs-search-results');
