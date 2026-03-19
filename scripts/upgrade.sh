@@ -359,12 +359,11 @@ if $NEED_HOST_UPDATE; then
         cp "$REPO_DIR/bin/hobnobcli" /usr/local/bin/hobnobcli
         ln -sf hobnobcli /usr/local/bin/hnbvi
 
-        # Hot-swap server binary inside the container.
+        # Inject and restart server binary inside the container.
         docker cp "$REPO_DIR/bin/hobd" hobnob:/usr/local/sbin/hobd
         docker cp "$REPO_DIR/bin/hobnobcli" hobnob:/usr/local/bin/hobnobcli
-
-        echo "Injected Go binaries into container — restart container to activate hobd."
-        echo "  (hobnobcli is active immediately on the host)"
+        docker compose restart hobnob
+        echo "Injected Go binaries and restarted container."
     else
         # Pull or full rebuild: extract from the new container.
         docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
