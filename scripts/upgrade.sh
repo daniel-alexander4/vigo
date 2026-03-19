@@ -2,15 +2,23 @@
 set -euo pipefail
 
 # Upgrade the Hobnob server to the latest container image.
-# Preserves: server.yaml, .env, db/, secrets/, tls/, license/, hnb/, config-history/
-# Replaces:  container image, docs/, examples/, docker-compose.yml (if unchanged)
+# Preserves: server.yaml, .env, db/, secrets/, tls/, license/, config-history/
+# Replaces:  container image, docs/, examples/, scripts/
 #
 # Usage:
-#   sudo scripts/upgrade.sh                        # pull latest and restart
-#   sudo scripts/upgrade.sh --build                # build from source and restart (dev)
-#   sudo scripts/upgrade.sh --build --cross        # build + cross-compile agent (linux amd64+arm64)
-#   sudo scripts/upgrade.sh --build --cross arm64  # build + cross-compile specific platform(s)
-#   sudo scripts/upgrade.sh --build --cross all --push  # build all platforms and push to GHCR
+#   sudo scripts/upgrade.sh                  # pull latest image and restart
+#   sudo scripts/upgrade.sh --build          # rebuild everything from source
+#   sudo scripts/upgrade.sh --server         # rebuild Go (server+CLI) only, fast
+#   sudo scripts/upgrade.sh --agent          # rebuild Rust agent only
+#   sudo scripts/upgrade.sh --cross          # cross-compile agent (linux amd64+arm64)
+#   sudo scripts/upgrade.sh --cross all      # cross-compile all platforms
+#   sudo scripts/upgrade.sh --push           # push image to GHCR after build
+#   sudo scripts/upgrade.sh --test           # run test suite after upgrade
+#
+# Flags can be combined:
+#   sudo scripts/upgrade.sh --server --test  # rebuild Go, test, restart
+#   sudo scripts/upgrade.sh --build --push   # full rebuild + push
+#   sudo scripts/upgrade.sh --cross arm64 freebsd --push
 #
 # Cross-compile targets:
 #   amd64      Linux x86_64 (musl static)
@@ -28,22 +36,32 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Resolve repo path before cd (needed for --build).
+# Resolve repo path before cd (needed for builds).
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "$DATA_DIR"
 
-# Parse flags.
-BUILD=false
-PUSH=false
+# ---------------------------------------------------------------------------
+# Parse flags
+# ---------------------------------------------------------------------------
+
+BUILD_ALL=false      # --build: full Docker image rebuild (Go + Rust + image)
+BUILD_SERVER=false   # --server: rebuild Go binaries only, inject into container
+BUILD_AGENT=false    # --agent: rebuild Rust agent only
+PUSH=false           # --push: push image to GHCR
+RUN_TESTS=false      # --test: run test-cli.sh after upgrade
 CROSS_TARGETS=()
 parsing_cross=false
+
 for arg in "$@"; do
     case "$arg" in
-        --build) BUILD=true; parsing_cross=false ;;
-        --push) PUSH=true; parsing_cross=false ;;
-        --cross) parsing_cross=true ;;
+        --build)   BUILD_ALL=true; parsing_cross=false ;;
+        --server)  BUILD_SERVER=true; parsing_cross=false ;;
+        --agent)   BUILD_AGENT=true; parsing_cross=false ;;
+        --push)    PUSH=true; parsing_cross=false ;;
+        --test)    RUN_TESTS=true; parsing_cross=false ;;
+        --cross)   BUILD_AGENT=true; parsing_cross=true ;;
         *)
             if $parsing_cross; then
                 CROSS_TARGETS+=("$arg")
@@ -59,7 +77,7 @@ fi
 
 # Expand "all".
 expanded=()
-for t in "${CROSS_TARGETS[@]}"; do
+for t in "${CROSS_TARGETS[@]+"${CROSS_TARGETS[@]}"}"; do
     if [ "$t" = "all" ]; then
         expanded=(amd64 arm64 darwin freebsd windows)
         break
@@ -68,113 +86,174 @@ for t in "${CROSS_TARGETS[@]}"; do
 done
 CROSS_TARGETS=("${expanded[@]+"${expanded[@]}"}")
 
-echo "Stopping containers..."
-docker compose down --remove-orphans 2>/dev/null || true
+# --build implies both --server and --agent.
+if $BUILD_ALL; then
+    BUILD_SERVER=true
+    BUILD_AGENT=true
+fi
 
-if $BUILD; then
-    # Cross-compile agent binaries inside Docker (no local Rust toolchain needed).
-    if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
-        echo "Cross-compiling agent for: ${CROSS_TARGETS[*]}"
+# Determine what kind of upgrade this is.
+NEED_IMAGE_REBUILD=false
+NEED_CONTAINER_RESTART=false
+NEED_HOST_UPDATE=false
 
-        # Determine which targets to pass into the container.
-        RUST_TARGETS=""
-        APT_PACKAGES="musl-tools protobuf-compiler"
-        BUILD_SCRIPT=""
+if $BUILD_ALL; then
+    NEED_IMAGE_REBUILD=true
+    NEED_CONTAINER_RESTART=true
+    NEED_HOST_UPDATE=true
+elif $BUILD_SERVER || $BUILD_AGENT; then
+    NEED_CONTAINER_RESTART=true
+    NEED_HOST_UPDATE=true
+elif [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
+    NEED_HOST_UPDATE=true
+else
+    # Pull mode — pull latest image, restart.
+    NEED_IMAGE_REBUILD=false
+    NEED_CONTAINER_RESTART=true
+    NEED_HOST_UPDATE=true
+fi
 
-        for t in "${CROSS_TARGETS[@]}"; do
-            case "$t" in
-                amd64)
-                    RUST_TARGETS="$RUST_TARGETS x86_64-unknown-linux-musl"
-                    BUILD_SCRIPT="$BUILD_SCRIPT
+# ---------------------------------------------------------------------------
+# Stop containers
+# ---------------------------------------------------------------------------
+
+if $NEED_CONTAINER_RESTART; then
+    echo "Stopping containers..."
+    docker compose down --remove-orphans 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Cross-compile agent binaries (before Docker build so dist/ is populated)
+# ---------------------------------------------------------------------------
+
+if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
+    echo "Cross-compiling agent for: ${CROSS_TARGETS[*]}"
+
+    RUST_TARGETS=""
+    APT_PACKAGES="musl-tools protobuf-compiler"
+    BUILD_SCRIPT=""
+
+    for t in "${CROSS_TARGETS[@]}"; do
+        case "$t" in
+            amd64)
+                RUST_TARGETS="$RUST_TARGETS x86_64-unknown-linux-musl"
+                BUILD_SCRIPT="$BUILD_SCRIPT
 echo 'Building linux/amd64...'
 CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/amd64
 cp target/x86_64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/amd64/hobnob"
-                    ;;
-                arm64)
-                    RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
-                    APT_PACKAGES="$APT_PACKAGES gcc-aarch64-linux-gnu"
-                    BUILD_SCRIPT="$BUILD_SCRIPT
+                ;;
+            arm64)
+                RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
+                APT_PACKAGES="$APT_PACKAGES gcc-aarch64-linux-gnu"
+                BUILD_SCRIPT="$BUILD_SCRIPT
 echo 'Building linux/arm64...'
 CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc \
 CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
     cargo build --release --target aarch64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/arm64
 cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm64/hobnob"
-                    ;;
-                freebsd)
-                    echo "  freebsd: requires 'cross' tool — using cargo-cross container"
-                    (cd "$REPO_DIR" && \
-                        docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
-                        ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
-                            cargo build --release --target x86_64-unknown-freebsd 2>&1
-                            mkdir -p /build/dist/agent/freebsd/amd64
-                            cp target/x86_64-unknown-freebsd/release/hobnob /build/dist/agent/freebsd/amd64/hobnob
-                        ') || echo "  WARN: freebsd cross-compile failed (install cross: cargo install cross)"
-                    ;;
-                windows)
-                    echo "  windows: requires 'cross' tool — using cargo-cross container"
-                    (cd "$REPO_DIR" && \
-                        docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
-                        ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
-                            cargo build --release --target x86_64-pc-windows-msvc 2>&1
-                            mkdir -p /build/dist/agent/windows/amd64
-                            cp target/x86_64-pc-windows-msvc/release/hobnob.exe /build/dist/agent/windows/amd64/hobnob.exe
-                        ') || echo "  WARN: windows cross-compile failed (install cross: cargo install cross)"
-                    ;;
-                darwin)
-                    echo "  darwin: requires osxcross — skipping unless available in PATH"
-                    if command -v x86_64-apple-darwin-gcc > /dev/null 2>&1 || command -v o64-clang > /dev/null 2>&1; then
-                        (cd "$REPO_DIR" && make dist-agent-macos) || echo "  WARN: darwin cross-compile failed"
-                    else
-                        echo "  SKIP: osxcross not found — build natively on macOS or install osxcross"
-                    fi
-                    ;;
-                *)
-                    echo "  Unknown target: $t (valid: amd64, arm64, freebsd, windows, darwin, all)"
-                    ;;
-            esac
-        done
+                ;;
+            freebsd)
+                echo "  freebsd: using cargo-cross container"
+                (cd "$REPO_DIR" && \
+                    docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
+                    ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
+                        cargo build --release --target x86_64-unknown-freebsd 2>&1
+                        mkdir -p /build/dist/agent/freebsd/amd64
+                        cp target/x86_64-unknown-freebsd/release/hobnob /build/dist/agent/freebsd/amd64/hobnob
+                    ') || echo "  WARN: freebsd cross-compile failed"
+                ;;
+            windows)
+                echo "  windows: using cargo-cross container"
+                (cd "$REPO_DIR" && \
+                    docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
+                    ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
+                        cargo build --release --target x86_64-pc-windows-msvc 2>&1
+                        mkdir -p /build/dist/agent/windows/amd64
+                        cp target/x86_64-pc-windows-msvc/release/hobnob.exe /build/dist/agent/windows/amd64/hobnob.exe
+                    ') || echo "  WARN: windows cross-compile failed"
+                ;;
+            darwin)
+                echo "  darwin: requires osxcross"
+                if command -v x86_64-apple-darwin-gcc > /dev/null 2>&1 || command -v o64-clang > /dev/null 2>&1; then
+                    (cd "$REPO_DIR" && make dist-agent-macos) || echo "  WARN: darwin cross-compile failed"
+                else
+                    echo "  SKIP: osxcross not found"
+                fi
+                ;;
+            *)
+                echo "  Unknown target: $t (valid: amd64, arm64, freebsd, windows, darwin, all)"
+                ;;
+        esac
+    done
 
-        # Run the Linux builds (amd64/arm64) together in a single container.
-        if [ -n "$BUILD_SCRIPT" ]; then
-            docker run --rm \
-                -v "$REPO_DIR/agent-rs:/build/agent-rs" \
-                -v "$REPO_DIR/proto:/build/proto" \
-                -v "$REPO_DIR/dist:/build/dist" \
-                -w /build/agent-rs \
-                rust:bookworm sh -c "
-                    set -e
-                    apt-get update -qq && apt-get install -y -qq $APT_PACKAGES > /dev/null 2>&1
-                    rustup target add $RUST_TARGETS
-                    $BUILD_SCRIPT
-                    echo 'Linux builds complete.'
-                "
-        fi
-
-        # Show results.
-        echo ""
-        echo "Agent binaries:"
-        find "$REPO_DIR/dist/agent" -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null | while read -r f; do
-            platform="${f#$REPO_DIR/dist/agent/}"
-            platform="${platform%/hobnob*}"
-            size=$(ls -lh "$f" | awk '{print $5}')
-            echo "  $platform  $size"
-        done
-        echo ""
+    # Run Linux builds (amd64/arm64) together in a single container.
+    if [ -n "$BUILD_SCRIPT" ]; then
+        docker run --rm \
+            -v "$REPO_DIR/agent-rs:/build/agent-rs" \
+            -v "$REPO_DIR/proto:/build/proto" \
+            -v "$REPO_DIR/dist:/build/dist" \
+            -w /build/agent-rs \
+            rust:bookworm sh -c "
+                set -e
+                apt-get update -qq && apt-get install -y -qq $APT_PACKAGES > /dev/null 2>&1
+                rustup target add $RUST_TARGETS
+                $BUILD_SCRIPT
+                echo 'Linux agent builds complete.'
+            "
     fi
 
-    # Touch source files to bust Docker layer cache for proto and Rust source.
-    # Without this, COPY layers may be cached from a prior build even when
-    # file contents have changed (Docker caches by content hash of the COPY
-    # context, but the Rust dependency-caching layer uses a dummy main.rs
-    # that doesn't change, so proto changes can be missed).
+    echo ""
+    echo "Agent binaries:"
+    find "$REPO_DIR/dist/agent" -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null | while read -r f; do
+        platform="${f#$REPO_DIR/dist/agent/}"
+        platform="${platform%/hobnob*}"
+        size=$(ls -lh "$f" | awk '{print $5}')
+        echo "  $platform  $size"
+    done
+    echo ""
+fi
+
+# ---------------------------------------------------------------------------
+# Build Go binaries locally (--server or --build)
+# ---------------------------------------------------------------------------
+
+if $BUILD_SERVER; then
+    echo "Building Go binaries..."
+    cd "$REPO_DIR"
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/hobd ./server
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/hobnobcli ./cli
+    echo "  hobd:       $(ls -lh bin/hobd | awk '{print $5}')"
+    echo "  hobnobcli:  $(ls -lh bin/hobnobcli | awk '{print $5}')"
+    cd "$DATA_DIR"
+fi
+
+# ---------------------------------------------------------------------------
+# Build Rust agent locally (--agent without --cross)
+# ---------------------------------------------------------------------------
+
+if $BUILD_AGENT && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
+    echo "Building Rust agent..."
+    cd "$REPO_DIR/agent-rs"
+    cargo build --release
+    mkdir -p "$REPO_DIR/bin"
+    cp target/release/hobnob "$REPO_DIR/bin/hobnob"
+    echo "  hobnob:     $(ls -lh "$REPO_DIR/bin/hobnob" | awk '{print $5}')"
+    cd "$DATA_DIR"
+fi
+
+# ---------------------------------------------------------------------------
+# Docker image: full rebuild or pull
+# ---------------------------------------------------------------------------
+
+if $NEED_IMAGE_REBUILD && $BUILD_ALL; then
+    # Bust all caches to ensure fresh binaries in the runtime image.
     touch "$REPO_DIR/proto/hobnob.proto" "$REPO_DIR/agent-rs/src/main.rs" 2>/dev/null || true
 
-    echo "Building image from source..."
+    echo "Building Docker image from source..."
     DOCKER_BUILDKIT=1 docker build \
-        --build-arg CACHEBUST="$(date +%s)" \
-        --no-cache-filter go-builder \
+        --no-cache \
         -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
 
     if $PUSH; then
@@ -182,50 +261,93 @@ cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm6
         docker push "$IMAGE"
         echo "Pushed $IMAGE"
     fi
-else
+elif ! $BUILD_SERVER && ! $BUILD_AGENT && ! $BUILD_ALL; then
+    # Pull mode.
     echo "Pulling latest image..."
     docker compose pull hobnob
 fi
 
-# Re-seed docs, examples, and scripts from the new image.
+# ---------------------------------------------------------------------------
+# Seed docs, examples, and scripts from the image (or repo for --server)
+# ---------------------------------------------------------------------------
+
 echo "Updating docs, examples, and scripts..."
-docker run --rm -v "$DATA_DIR:$DATA_DIR" "$IMAGE" --seed-only 2>/dev/null || true
-
-echo "Starting containers..."
-docker compose up -d
-
-echo ""
-echo "Waiting for server..."
-timeout 60 docker compose logs -f hobnob 2>&1 | grep -m1 "server ready" || true
-
-# Update host binaries from the new container.
-echo "Updating host binaries..."
-docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
-ln -sf hobnobcli /usr/local/bin/hnbvi
-
-# Copy the agent binary matching the host architecture.
-HOST_ARCH=$(uname -m)
-case "$HOST_ARCH" in
-    x86_64)  AGENT_ARCH="amd64" ;;
-    aarch64) AGENT_ARCH="arm64" ;;
-    *)       AGENT_ARCH="$HOST_ARCH" ;;
-esac
-HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-
-if docker exec hobnob test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" 2>/dev/null; then
-    docker cp "hobnob:/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/sbin/hobnob
-    echo "Installed agent binary: $HOST_OS/$AGENT_ARCH"
-    systemctl restart hobnob-thrall 2>/dev/null || true
+if $BUILD_SERVER || $BUILD_AGENT; then
+    # Copy directly from repo — faster than spinning up a container.
+    cp -r "$REPO_DIR/docs/." "$DATA_DIR/docs/"
+    cp -r "$REPO_DIR/scripts/." "$DATA_DIR/scripts/"
+    chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
 else
-    echo "WARNING: No agent binary for $HOST_OS/$AGENT_ARCH in container"
+    # Pull mode or full rebuild — seed from the image.
+    docker run --rm -v "$DATA_DIR:$DATA_DIR" "$IMAGE" --seed-only 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Start containers
+# ---------------------------------------------------------------------------
+
+if $NEED_CONTAINER_RESTART; then
+    echo "Starting containers..."
+    docker compose up -d
+
+    echo ""
+    echo "Waiting for server..."
+    timeout 60 docker compose logs -f hobnob 2>&1 | grep -m1 "server ready" || true
+fi
+
+# ---------------------------------------------------------------------------
+# Install binaries to host
+# ---------------------------------------------------------------------------
+
+if $NEED_HOST_UPDATE; then
+    echo "Updating host binaries..."
+
+    if $BUILD_SERVER; then
+        # --server: inject locally-built binaries into running container + host.
+        cp "$REPO_DIR/bin/hobnobcli" /usr/local/bin/hobnobcli
+        ln -sf hobnobcli /usr/local/bin/hnbvi
+
+        # Hot-swap server binary inside the container.
+        docker cp "$REPO_DIR/bin/hobd" hobnob:/usr/local/sbin/hobd
+        docker cp "$REPO_DIR/bin/hobnobcli" hobnob:/usr/local/bin/hobnobcli
+
+        echo "Injected Go binaries into container — restart container to activate hobd."
+        echo "  (hobnobcli is active immediately on the host)"
+    else
+        # Pull or full rebuild: extract from the new container.
+        docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
+        ln -sf hobnobcli /usr/local/bin/hnbvi
+    fi
+
+    # Agent binary for the host.
+    HOST_ARCH=$(uname -m)
+    case "$HOST_ARCH" in
+        x86_64)  AGENT_ARCH="amd64" ;;
+        aarch64) AGENT_ARCH="arm64" ;;
+        *)       AGENT_ARCH="$HOST_ARCH" ;;
+    esac
+    HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+    if $BUILD_AGENT && [ -f "$REPO_DIR/bin/hobnob" ]; then
+        cp "$REPO_DIR/bin/hobnob" /usr/local/sbin/hobnob
+        echo "Installed agent binary from local build"
+        systemctl restart hobnob-thrall 2>/dev/null || true
+    elif docker exec hobnob test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" 2>/dev/null; then
+        docker cp "hobnob:/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/sbin/hobnob
+        echo "Installed agent binary: $HOST_OS/$AGENT_ARCH"
+        systemctl restart hobnob-thrall 2>/dev/null || true
+    else
+        echo "WARNING: No agent binary for $HOST_OS/$AGENT_ARCH"
+    fi
 fi
 
 echo ""
 docker compose ps
 
-# ── Freshness check ────────────────────────────────────────────────────
-# Compare binaries and key files between the container and the host/repo
-# to flag anything that didn't get updated.
+# ---------------------------------------------------------------------------
+# Freshness check
+# ---------------------------------------------------------------------------
+
 echo ""
 echo "Checking freshness..."
 
@@ -243,57 +365,40 @@ if [ -f /usr/local/bin/hobnobcli ]; then
     fi
 fi
 
-# Compare container binaries against repo source (--build mode only).
-if $BUILD && [ -d "$REPO_DIR" ]; then
-    # Check server binary build time vs latest source modification.
-    NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
+# Compare container binaries against repo source (build modes only).
+if ($BUILD_SERVER || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
+    NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_GO=${NEWEST_GO%.*}
     CTR_HOBD=$(docker exec hobnob stat -c '%Y' /usr/local/sbin/hobd 2>/dev/null || echo 0)
     if [ -n "$NEWEST_GO" ] && [ "$NEWEST_GO" -gt "$CTR_HOBD" ]; then
-        echo "  STALE  hobd in container (source is newer than binary)"
+        echo "  STALE  hobd in container (source is newer — restart container to activate)"
         STALE=1
     else
         echo "  OK     hobd"
     fi
+fi
 
-    # Check CLI binary.
-    NEWEST_CLI=$(find "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
-    NEWEST_CLI=${NEWEST_CLI%.*}
-    CTR_CLI=$(docker exec hobnob stat -c '%Y' /usr/local/bin/hobnobcli 2>/dev/null || echo 0)
-    if [ -n "$NEWEST_CLI" ] && [ "$NEWEST_CLI" -gt "$CTR_CLI" ]; then
-        echo "  STALE  hobnobcli in container (source is newer than binary)"
-        STALE=1
-    else
-        echo "  OK     hobnobcli"
+# Agent freshness.
+if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
+    NEWEST_RS=$(find "$REPO_DIR/agent-rs/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
+    NEWEST_RS=${NEWEST_RS%.*}
+    AGENT_PLATFORMS=$(docker exec hobnob find /dist/agent -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null || true)
+    if [ -n "$AGENT_PLATFORMS" ]; then
+        for agent_path in $AGENT_PLATFORMS; do
+            CTR_AGENT=$(docker exec hobnob stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
+            platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/hobnob.*||')
+            if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
+                echo "  STALE  agent $platform (source is newer than binary)"
+                STALE=1
+            else
+                echo "  OK     agent $platform"
+            fi
+        done
     fi
+fi
 
-    # Check agent binaries in container.
-    if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
-        # Cross-compile just ran — binaries are fresh by definition.
-        echo "  OK     agent binaries (just cross-compiled)"
-    else
-        # No cross-compile: compare source mtime against binary mtime.
-        NEWEST_RS=$(find "$REPO_DIR/agent-rs/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
-        NEWEST_RS=${NEWEST_RS%.*}
-        AGENT_PLATFORMS=$(docker exec hobnob find /dist/agent -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null)
-        if [ -n "$AGENT_PLATFORMS" ]; then
-            for agent_path in $AGENT_PLATFORMS; do
-                CTR_AGENT=$(docker exec hobnob stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
-                platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/hobnob.*||')
-                if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
-                    echo "  STALE  agent $platform (source is newer than binary)"
-                    STALE=1
-                else
-                    echo "  OK     agent $platform"
-                fi
-            done
-        else
-            echo "  WARN   no agent binaries found in container"
-            STALE=1
-        fi
-    fi
-
-    # Check entrypoint.sh.
+# Check entrypoint.sh and Dockerfile.
+if ($BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     REPO_EP_MD5=$(md5sum "$REPO_DIR/entrypoint.sh" 2>/dev/null | awk '{print $1}')
     CTR_EP_MD5=$(docker exec hobnob md5sum /entrypoint.sh 2>/dev/null | awk '{print $1}')
     if [ "$REPO_EP_MD5" != "$CTR_EP_MD5" ]; then
@@ -302,35 +407,23 @@ if $BUILD && [ -d "$REPO_DIR" ]; then
     else
         echo "  OK     entrypoint.sh"
     fi
-
-    # Check Dockerfile itself (was the image built from the current Dockerfile?).
-    DOCKERFILE_TIME=$(stat -c '%Y' "$REPO_DIR/Dockerfile.server" 2>/dev/null || echo 0)
-    IMAGE_TIME=$(docker inspect --format='{{.Created}}' "$IMAGE" 2>/dev/null | xargs -I{} date -d {} +%s 2>/dev/null || echo 0)
-    if [ "$DOCKERFILE_TIME" -gt "$IMAGE_TIME" ]; then
-        echo "  STALE  Dockerfile.server (modified after image was built)"
-        STALE=1
-    else
-        echo "  OK     Dockerfile.server"
-    fi
-fi
-
-# Check docker-compose.yml.
-if [ -f "$DATA_DIR/docker-compose.yml" ] && [ -f "$REPO_DIR/docker-compose.yml" ]; then
-    DATA_DC_MD5=$(md5sum "$DATA_DIR/docker-compose.yml" 2>/dev/null | awk '{print $1}')
-    REPO_DC_MD5=$(md5sum "$REPO_DIR/docker-compose.yml" 2>/dev/null | awk '{print $1}')
-    if [ "$DATA_DC_MD5" != "$REPO_DC_MD5" ]; then
-        echo "  STALE  docker-compose.yml ($DATA_DIR differs from repo)"
-        STALE=1
-    else
-        echo "  OK     docker-compose.yml"
-    fi
 fi
 
 echo ""
 if [ "$STALE" -eq 0 ]; then
     echo "All files are fresh."
 else
-    echo "WARNING: Stale files detected. Re-run with --build to update."
+    echo "NOTE: Some files are stale. Use --build for a full image rebuild."
+fi
+
+# ---------------------------------------------------------------------------
+# Run tests if requested
+# ---------------------------------------------------------------------------
+
+if $RUN_TESTS; then
+    echo ""
+    echo "Running CLI test suite..."
+    "$DATA_DIR/scripts/test-cli.sh" --server "https://localhost:8443"
 fi
 
 echo ""
