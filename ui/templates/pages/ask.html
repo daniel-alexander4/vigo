@@ -298,19 +298,26 @@ function fetchSecDetail(hostname, thrallId) {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.responded && data.responded.length && data.responded[0].found) {
-            var detail = JSON.parse(data.responded[0].value);
-            renderSecDetail(detail, tabs, content);
-        } else if (data.timedOut && data.timedOut.length) {
-            content.innerHTML = '<p class="text-danger">Agent did not respond in time. Is the daemon running?</p>';
-        } else if (data.offline && data.offline.length) {
-            content.innerHTML = '<p class="text-warning">Agent is offline. Start the daemon and try again.</p>';
-        } else {
-            content.innerHTML = '<p class="text-muted">No security scan data available on this host.</p>';
+        try {
+            if (data.responded && data.responded.length && data.responded[0].found) {
+                var val = data.responded[0].value;
+                var detail = typeof val === 'string' ? JSON.parse(val) : val;
+                renderSecDetail(detail, tabs, content);
+            } else if (data.timedOut && data.timedOut.length) {
+                content.innerHTML = '<p class="text-danger">Agent did not respond in time. Is the daemon running?</p>';
+            } else if (data.offline && data.offline.length) {
+                content.innerHTML = '<p class="text-warning">Agent is offline. Start the daemon and try again.</p>';
+            } else {
+                content.innerHTML = '<p class="text-muted">No security scan data available on this host.</p>' +
+                    '<pre class="text-muted" style="font-size:11px">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
+            }
+        } catch(e) {
+            content.innerHTML = '<p class="text-danger">Parse error: ' + esc(e.message) + '</p>' +
+                '<pre class="text-muted" style="font-size:11px">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
         }
     })
     .catch(function(err) {
-        content.innerHTML = '<p class="text-danger">Error: ' + err.message + '</p>';
+        content.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
     });
 }
 
