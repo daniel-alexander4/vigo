@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Run all Go and Rust unit tests with a summary.
 #
+# Must be run from the repo root (or the script resolves its own repo).
+# Requires Go and Rust toolchains installed.
+#
 # Usage:
 #   ./scripts/test-unit.sh              # Go + Rust
 #   ./scripts/test-unit.sh --go         # Go only
@@ -8,6 +11,22 @@
 #   ./scripts/test-unit.sh --windows    # Include Windows-only Rust tests (requires cross)
 
 set -uo pipefail
+
+# Resolve repo directory from script location.
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Ensure we're in the repo.
+if [ ! -f "$REPO_DIR/go.mod" ]; then
+    echo "ERROR: Cannot find repo. Run from the repo directory or ensure the script is in <repo>/scripts/."
+    exit 1
+fi
+
+cd "$REPO_DIR"
+
+# Ensure toolchains are in PATH (sudo strips user PATH).
+export PATH="/usr/local/go/bin:$HOME/.cargo/bin:/home/dan/.cargo/bin:$PATH"
+export GOPATH="${GOPATH:-/home/dan/go}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,6 +65,11 @@ echo ""
 # -------------------------------------------------------------------
 if $RUN_GO; then
     echo -e "${BOLD}[go tests]${NC}"
+    if ! command -v go > /dev/null 2>&1; then
+        echo "  go not found in PATH — install Go or run as a user with Go installed"
+        GO_FAIL=1
+        FAILURES+=("go: go not found")
+    else
     GO_OUTPUT=$(go test ./... -count=1 -race 2>&1)
     GO_EXIT=$?
 
@@ -76,6 +100,8 @@ if $RUN_GO; then
     echo ""
     echo -e "  Go: ${GREEN}$GO_PASS${NC} packages pass, ${RED}$GO_FAIL${NC} fail ($GO_TEST_COUNT test functions)"
     echo ""
+
+    fi # end go check
 fi
 
 # -------------------------------------------------------------------
@@ -83,8 +109,17 @@ fi
 # -------------------------------------------------------------------
 if $RUN_RUST; then
     echo -e "${BOLD}[rust tests]${NC}"
-    pushd agent-rs > /dev/null 2>&1 || { echo "  agent-rs/ not found"; exit 1; }
+    if [ ! -d "$REPO_DIR/agent-rs" ]; then
+        echo "  agent-rs/ not found"
+        RUST_FAIL=1
+        FAILURES+=("rust: agent-rs/ directory not found")
+    elif ! command -v cargo > /dev/null 2>&1; then
+        echo "  cargo not found in PATH — install Rust or run as a user with Rust installed"
+        RUST_FAIL=1
+        FAILURES+=("rust: cargo not found")
+    else
 
+    cd "$REPO_DIR/agent-rs"
     RUST_OUTPUT=$(cargo test --lib 2>&1)
     RUST_EXIT=$?
 
@@ -113,8 +148,10 @@ if $RUN_RUST; then
         echo "$RUST_OUTPUT" | tail -10
     fi
 
-    popd > /dev/null 2>&1
+    cd "$REPO_DIR"
     echo ""
+
+    fi # end cargo/agent-rs check
 fi
 
 # -------------------------------------------------------------------
@@ -122,24 +159,28 @@ fi
 # -------------------------------------------------------------------
 if $RUN_WINDOWS; then
     echo -e "${BOLD}[windows rust tests]${NC}"
-    pushd agent-rs > /dev/null 2>&1
+    if [ -d "$REPO_DIR/agent-rs" ] && command -v cargo > /dev/null 2>&1; then
+        cd "$REPO_DIR/agent-rs"
 
-    # Check if the Windows target can compile (tests can't run on Linux).
-    WIN_OUTPUT=$(cargo check --target x86_64-pc-windows-msvc 2>&1)
-    WIN_EXIT=$?
+        # Check if the Windows target can compile (tests can't run on Linux).
+        WIN_OUTPUT=$(cargo check --target x86_64-pc-windows-msvc 2>&1)
+        WIN_EXIT=$?
 
-    if [[ $WIN_EXIT -eq 0 ]]; then
-        echo -e "  ${GREEN}PASS${NC}  Windows cross-compile check"
-        WIN_PASS=1
+        if [[ $WIN_EXIT -eq 0 ]]; then
+            echo -e "  ${GREEN}PASS${NC}  Windows cross-compile check"
+            WIN_PASS=1
+        else
+            echo -e "  ${RED}FAIL${NC}  Windows cross-compile check"
+            WIN_FAIL=1
+            FAILURES+=("windows: cross-compile failed")
+            echo "$WIN_OUTPUT" | tail -10
+        fi
+
+        WIN_TOTAL=$((WIN_PASS + WIN_FAIL))
+        cd "$REPO_DIR"
     else
-        echo -e "  ${RED}FAIL${NC}  Windows cross-compile check"
-        WIN_FAIL=1
-        FAILURES+=("windows: cross-compile failed")
-        echo "$WIN_OUTPUT" | tail -10
+        echo "  cargo or agent-rs/ not found — skipping"
     fi
-
-    WIN_TOTAL=$((WIN_PASS + WIN_FAIL))
-    popd > /dev/null 2>&1
     echo ""
 fi
 
