@@ -46,12 +46,12 @@ resources:
     mode: "0644"
     when: "os_family('debian')"
     depends_on: [trivy-repo-key-debian]
-    notify: [trivy-apt-update]
 
   - name: trivy-apt-update
     type: exec
     command: "apt-get update -qq"
     when: "os_family('debian')"
+    onlyif: "! dpkg -s trivy >/dev/null 2>&1"
     depends_on: [trivy-repo-debian]
 
   - name: trivy-repo-rhel
@@ -226,7 +226,7 @@ resources:
 
   - name: aide-init
     type: exec
-    command: "aideinit || true"
+    command: "sh -c 'if command -v aideinit >/dev/null 2>&1; then aideinit; else aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}; fi'"
     onlyif: "! test -f {{ .Vars.aide_db_path }}"
     depends_on: [install-aide]
 
