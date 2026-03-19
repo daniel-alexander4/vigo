@@ -187,8 +187,8 @@ else
     docker compose pull hobnob
 fi
 
-# Re-seed docs and examples from the new image (non-destructive to user files).
-echo "Updating docs and examples..."
+# Re-seed docs, examples, and scripts from the new image.
+echo "Updating docs, examples, and scripts..."
 docker run --rm -v "$DATA_DIR:$DATA_DIR" "$IMAGE" --seed-only 2>/dev/null || true
 
 echo "Starting containers..."
