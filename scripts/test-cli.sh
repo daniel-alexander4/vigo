@@ -548,8 +548,8 @@ run_test_expect_fail "config reject bad-id" $CLI config reject 999999 --server "
 run_test_expect_fail "validate nonexistent" $CLI config validate "/tmp/nonexistent-file.hnb"
 run_test_expect_fail "thralls revoke bad-id" bash -c "echo y | $CLI thralls revoke 'nonexistent-000' --server '$SERVER'"
 run_test_expect_fail "thralls delete bad-id" bash -c "echo y | $CLI thralls delete 'nonexistent-000' --server '$SERVER'"
-run_test_expect_fail "spanner reassign bad-id" $CLI spanner reassign "nonexistent-000" --from "a" --to "b" --server "$SERVER"
-run_test_expect_fail "db reset (no --force)" $CLI db reset --server "$SERVER"
+run_test_expect_fail "spanner reassign bad-id" bash -c "echo y | $CLI spanner reassign 'nonexistent-000' --from 'a' --to 'b' --server '$SERVER'"
+run_test_expect_fail "db reset (denied)" bash -c "echo n | $CLI db reset --server '$SERVER'"
 echo ""
 
 # -------------------------------------------------------------------
