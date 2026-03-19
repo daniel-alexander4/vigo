@@ -245,7 +245,8 @@
                 document.querySelectorAll('.sec-detail').forEach(function(d) {
                     if (d.id !== id) d.style.display = 'none';
                 });
-                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                var isHidden = getComputedStyle(el).display === 'none';
+                el.style.display = isHidden ? 'block' : 'none';
                 if (el.style.display === 'block') {
                     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
