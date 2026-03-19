@@ -94,7 +94,7 @@ func ResolveMatchVars(
 // Supports:
 //   - Conditional var references: "is_debian" → looks up in vars
 //   - Builtin functions: distro('ubuntu'), arch('amd64'), os_family('debian')
-//   - Boolean operators: &&, ||, !
+//   - Boolean operators: and, or, not/!
 //
 // First tries full server-side evaluation via EvaluateResourceWhen.
 // If that passes through builtins (returns agentWhen != ""), falls back
@@ -119,13 +119,13 @@ func evalMatchWhen(when string, vars map[string]any, traits map[string]any) bool
 // functions by looking up trait values directly. Handles the common cases
 // needed for match vars (distro, arch, os_family, version_ge).
 //
-// Supports && (AND), || (OR), and ! (NOT). For complex expressions with
-// mixed vars and builtins, this may not cover all cases — use simpler
-// expressions in match var when clauses.
+// Supports "and" (AND), "or" (OR), and "!" / "not" (NOT). Uses the same
+// keyword operators as the main parser and the Rust agent parser.
 func evalBuiltinsServerSide(when string, traits map[string]any) bool {
-	// Handle && — all parts must be true.
-	if strings.Contains(when, "&&") {
-		parts := strings.Split(when, "&&")
+	// Handle "and" — all parts must be true.
+	// Use word-boundary-aware split to avoid matching "and" inside identifiers.
+	if containsWord(when, " and ") {
+		parts := strings.Split(when, " and ")
 		for _, part := range parts {
 			if !evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
 				return false
@@ -134,9 +134,9 @@ func evalBuiltinsServerSide(when string, traits map[string]any) bool {
 		return true
 	}
 
-	// Handle || — any part true is enough.
-	if strings.Contains(when, "||") {
-		parts := strings.Split(when, "||")
+	// Handle "or" — any part true is enough.
+	if containsWord(when, " or ") {
+		parts := strings.Split(when, " or ")
 		for _, part := range parts {
 			if evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
 				return true
@@ -145,10 +145,13 @@ func evalBuiltinsServerSide(when string, traits map[string]any) bool {
 		return false
 	}
 
-	// Handle ! prefix.
+	// Handle "!" or "not " prefix.
 	trimmed := strings.TrimSpace(when)
 	if strings.HasPrefix(trimmed, "!") {
 		return !evalBuiltinsServerSide(strings.TrimPrefix(trimmed, "!"), traits)
+	}
+	if strings.HasPrefix(trimmed, "not ") {
+		return !evalBuiltinsServerSide(strings.TrimPrefix(trimmed, "not "), traits)
 	}
 
 	// Extract function call: name('arg')
@@ -219,4 +222,9 @@ func RenderVars(vars map[string]any, traits map[string]any, varOrder []string) (
 		result[k] = rendered
 	}
 	return result, nil
+}
+
+// containsWord checks if s contains the exact substring sub.
+func containsWord(s, sub string) bool {
+	return strings.Contains(s, sub)
 }
