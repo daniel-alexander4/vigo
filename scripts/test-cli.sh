@@ -146,6 +146,7 @@ run_test "db tables" $CLI db tables --server "$SERVER"
 run_test "db integrity" $CLI db integrity --server "$SERVER"
 run_test "db checkpoint" $CLI db checkpoint --server "$SERVER"
 run_test "db vacuum" $CLI db vacuum --force --server "$SERVER"
+run_test "db query" $CLI db query "SELECT count(*) FROM thralls" --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
@@ -171,6 +172,9 @@ if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
     # Maintenance: set and immediately clear.
     run_test "thralls maintenance set" $CLI thralls maintenance "$FIRST_THRALL" --until "2099-01-01T00:00:00Z" --server "$SERVER"
     run_test "thralls maintenance clear" $CLI thralls maintenance "$FIRST_THRALL" --clear --server "$SERVER"
+
+    # Force push (triggers immediate check-in).
+    run_test "thralls push" $CLI thralls push "$FIRST_THRALL" --server "$SERVER" || true
 else
     skip_test "thralls show/traits/preview/tag/maintenance" "no thralls enrolled"
 fi
@@ -242,6 +246,17 @@ fi
 run_test "config tree" $CLI config tree --server "$SERVER"
 run_test "config pending" $CLI config pending --server "$SERVER"
 run_test "config search --module" $CLI config search --module "hobnob-server-backup" --server "$SERVER" || true
+
+# History show: grab first publish ID.
+FIRST_PUBLISH=$($CLI config history --server "$SERVER" 2>/dev/null | awk 'NR==2{print $1}' || true)
+if [[ -n "$FIRST_PUBLISH" && "$FIRST_PUBLISH" =~ ^[0-9]+$ ]]; then
+    run_test "config history show" $CLI config history show "$FIRST_PUBLISH" --server "$SERVER"
+else
+    skip_test "config history show" "no publishes found"
+fi
+
+# Config rollback (list versions, don't actually rollback).
+run_test "config rollback list" $CLI config rollback --server "$SERVER" || true
 echo ""
 
 # -------------------------------------------------------------------
@@ -346,6 +361,19 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[auth]${NC}"
 run_test "auth status" $CLI auth status --server "$SERVER"
+
+# API token lifecycle: create → list → revoke.
+TOKEN_OUT=$($CLI auth create-token --server "$SERVER" 2>&1 || true)
+API_TOKEN_ID=$(echo "$TOKEN_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
+if [[ -n "$API_TOKEN_ID" ]]; then
+    echo -e "  ${GREEN}PASS${NC}  auth create-token"
+    PASS=$((PASS + 1))
+    run_test "auth list-tokens" $CLI auth list-tokens --server "$SERVER"
+    run_test "auth revoke-token" bash -c "echo y | $CLI auth revoke-token '$API_TOKEN_ID' --server '$SERVER'"
+else
+    # create-token may need auth mode enabled.
+    skip_test "auth create-token/list-tokens/revoke-token" "auth not enabled or token creation failed"
+fi
 echo ""
 
 # -------------------------------------------------------------------
@@ -403,6 +431,9 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[workflow]${NC}"
 run_test "workflow list" $CLI workflow list --server "$SERVER"
+# Workflow status/abort with bad ID (error handling).
+run_test_expect_fail "workflow status bad-id" $CLI workflow status "nonexistent-wf-000" --server "$SERVER"
+run_test_expect_fail "workflow abort bad-id" $CLI workflow abort "nonexistent-wf-000" --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
@@ -414,6 +445,7 @@ if [[ $(id -u) -eq 0 ]]; then
     run_test "backup create" $CLI backup create "$BACKUP_FILE"
     if [[ -f "$BACKUP_FILE" ]]; then
         run_test "backup inspect" $CLI backup inspect "$BACKUP_FILE"
+        run_test "backup restore --dry-run" $CLI backup restore "$BACKUP_FILE" --dry-run
     fi
 else
     skip_test "backup create" "requires root (reads server.yaml and secrets)"
@@ -444,6 +476,11 @@ if $CLI server status --server "$SERVER" >/dev/null 2>&1; then
 else
     skip_test "server status" "peer replication not configured"
 fi
+
+# Generate TLS certs to a temp dir.
+CERT_TMPDIR=$(mktemp -d)
+run_test "server generate-certs" $CLI server generate-certs --output "$CERT_TMPDIR"
+rm -rf "$CERT_TMPDIR"
 echo ""
 
 # -------------------------------------------------------------------
@@ -506,6 +543,10 @@ run_test_expect_fail "push run missing --target" $CLI push run "echo hi" --serve
 run_test_expect_fail "config approve bad-id" $CLI config approve 999999 --server "$SERVER"
 run_test_expect_fail "config reject bad-id" $CLI config reject 999999 --server "$SERVER"
 run_test_expect_fail "validate nonexistent" $CLI config validate "/tmp/nonexistent-file.hnb"
+run_test_expect_fail "thralls revoke bad-id" bash -c "echo y | $CLI thralls revoke 'nonexistent-000' --server '$SERVER'"
+run_test_expect_fail "thralls delete bad-id" bash -c "echo y | $CLI thralls delete 'nonexistent-000' --server '$SERVER'"
+run_test_expect_fail "spanner reassign bad-id" $CLI spanner reassign "nonexistent-000" --from "a" --to "b" --server "$SERVER"
+run_test_expect_fail "db reset (no --force)" $CLI db reset --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
