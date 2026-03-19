@@ -272,6 +272,16 @@
 <div class="sec-drawer-overlay" id="sec-drawer-overlay" onclick="closeSecDrawer()"></div>
 
 <script>
+var SEC_CACHE_VER = '{{.Version}}';
+function secCacheKey(thrallId) { return 'sec_detail_' + SEC_CACHE_VER + '_' + thrallId; }
+
+function secCacheGet(thrallId) {
+    try { return JSON.parse(sessionStorage.getItem(secCacheKey(thrallId))); } catch(e) { return null; }
+}
+function secCacheSet(thrallId, data) {
+    try { sessionStorage.setItem(secCacheKey(thrallId), JSON.stringify(data)); } catch(e) {}
+}
+
 function fetchSecDetail(hostname, thrallId) {
     var drawer = document.getElementById('sec-drawer');
     var overlay = document.getElementById('sec-drawer-overlay');
@@ -282,12 +292,25 @@ function fetchSecDetail(hostname, thrallId) {
 
     title.textContent = hostname + ' — Security Details';
     link.href = '/thralls/' + thrallId;
-    content.innerHTML = '<p class="text-muted">Loading scan data...</p>';
     tabs.innerHTML = '';
     drawer.classList.add('sec-drawer--open');
     overlay.classList.add('sec-drawer-overlay--open');
 
-    // Phase 1: Show cached trait summary from FleetIndex (instant, no stream needed).
+    // Check for cached live detail first.
+    var cached = secCacheGet(thrallId);
+    if (cached) {
+        renderSecDetail(cached, tabs, content);
+        // Add refresh button at the bottom.
+        content.insertAdjacentHTML('beforeend',
+            '<div style="margin-top:12px; padding-top:8px; border-top:1px solid var(--color-border)">' +
+            '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(thrallId) + '\')">Refresh from Agent</button> ' +
+            '<span class="text-muted" style="font-size:11px">Cached from previous query</span></div>');
+        return;
+    }
+
+    content.innerHTML = '<p class="text-muted">Loading scan data...</p>';
+
+    // Show cached trait summary from FleetIndex (instant, no stream needed).
     fetch('/ui/api/thralls/' + thrallId + '/security')
     .then(function(r) { return r.json(); })
     .then(function(traits) {
@@ -300,6 +323,11 @@ function fetchSecDetail(hostname, thrallId) {
     .catch(function(err) {
         content.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
     });
+}
+
+function secClearAndRefresh(hostname, thrallId) {
+    try { sessionStorage.removeItem(secCacheKey(thrallId)); } catch(e) {}
+    fetchSecDetail(hostname, thrallId);
 }
 
 function fetchLiveDetail(hostname, thrallId) {
@@ -324,6 +352,7 @@ function fetchLiveDetail(hostname, thrallId) {
         if (data.responded && data.responded.length && data.responded[0].found) {
             var val = data.responded[0].value;
             var detail = typeof val === 'string' ? JSON.parse(val) : val;
+            secCacheSet(thrallId, detail);
             var tabs = document.getElementById('sec-drawer-tabs');
             var content = document.getElementById('sec-drawer-content');
             renderSecDetail(detail, tabs, content);
