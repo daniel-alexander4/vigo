@@ -298,8 +298,22 @@ function fetchSecDetail(hostname, thrallId) {
         renderCachedTraits(traits, tabs, content);
 
         // Phase 2: Try live query for full detail (CVE descriptions, findings).
-        content.insertAdjacentHTML('beforeend',
-            '<p class="text-muted sec-live-status" id="sec-live-status">Fetching live scan detail from agent...</p>');
+        var timeoutSec = {{.QueryTimeoutSec}};
+        var statusHtml = '<div class="sec-live-status" id="sec-live-status">' +
+            '<p><strong>Fetching full scan detail from agent...</strong></p>' +
+            '<p class="text-muted" style="font-size:11px">The agent is in polling mode. Waiting for it to check in ' +
+            '(up to ~' + Math.round(timeoutSec/60) + ' min), open a stream, read scan files, and respond. ' +
+            'The summary above is from the last check-in.</p>' +
+            '<div class="sec-progress" id="sec-progress"><div class="sec-progress__bar" id="sec-progress-bar"></div></div>' +
+            '</div>';
+        content.insertAdjacentHTML('beforeend', statusHtml);
+
+        // Animate progress bar.
+        var bar = document.getElementById('sec-progress-bar');
+        if (bar) {
+            bar.style.transition = 'width ' + timeoutSec + 's linear';
+            requestAnimationFrame(function() { bar.style.width = '100%'; });
+        }
 
         return fetch('/api/v1/query', {
             method: 'POST',
