@@ -1002,6 +1002,53 @@ body {
     text-decoration: underline;
 }
 
+/* Security finding cards */
+.sec-card {
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-left: 4px solid var(--color-border);
+    background: var(--color-bg);
+}
+.sec-card--critical { border-left-color: var(--color-danger); background: rgba(220, 53, 69, 0.04); }
+.sec-card--high { border-left-color: var(--color-warning); background: rgba(255, 193, 7, 0.04); }
+.sec-card--medium { border-left-color: #17a2b8; background: rgba(23, 162, 184, 0.04); }
+.sec-card--low { border-left-color: var(--color-muted); }
+.sec-card--info { border-left-color: var(--color-link); background: rgba(13, 110, 253, 0.04); }
+.sec-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.sec-card__cve {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-link);
+    text-decoration: none;
+}
+.sec-card__cve:hover { text-decoration: underline; }
+.sec-card__sev {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    color: var(--color-muted);
+}
+.sec-card--critical .sec-card__sev { color: var(--color-danger); }
+.sec-card--high .sec-card__sev { color: var(--color-warning); }
+.sec-card__body {
+    margin-top: 4px;
+    font-size: 12px;
+}
+.sec-card__desc {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--color-muted);
+}
+
 /* Security detail drawer */
 .sec-drawer {
     position: fixed;

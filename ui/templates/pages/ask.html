@@ -357,9 +357,13 @@ function renderCachedTraits(traits, tabsEl, contentEl) {
             }
         }
         if (cves.length) {
-            h += '<h4>CVEs</h4><div class="sec-cve-list">';
-            cves.forEach(function(c) { h += '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-cve-link">' + c + '</a> '; });
-            h += '</div>';
+            h += '<h4>CVEs (' + cves.length + ')</h4>';
+            cves.forEach(function(c) {
+                h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
+                    '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-card__cve">' + c + '</a>' +
+                    '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-card__sev">View on NVD &rarr;</a>' +
+                '</div></div>';
+            });
         }
     }
 
@@ -424,47 +428,60 @@ function switchSecTab(id) {
     document.getElementById('sec-pane-' + id).classList.add('sec-tab-pane--active');
 }
 
+function sevClass(s) { return s==='CRITICAL'||s==='high'?'sec-card--critical':s==='HIGH'?'sec-card--high':s==='MEDIUM'||s==='medium'?'sec-card--medium':'sec-card--low'; }
+function sevLabel(s) { return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); }
+
 function renderTrivy(t) {
     if (!t.vulnerabilities || !t.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + (t.truncated?' (truncated)':'') + '</p>';
-    h += '<table class="ask-drift-table"><thead><tr><th>Severity</th><th>CVE</th><th>Package</th><th>Installed</th><th>Fixed</th><th>Title</th></tr></thead><tbody>';
+    var h = '<p class="text-muted">' + t.vulnerabilities.length + ' vulnerabilities' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
     t.vulnerabilities.forEach(function(v) {
-        var cls = v.severity==='CRITICAL'?'text-danger':v.severity==='HIGH'?'text-warning':'';
-        h += '<tr><td class="'+cls+'">'+v.severity+'</td>';
-        h += '<td><a href="https://nvd.nist.gov/vuln/detail/'+v.cve_id+'" target="_blank" rel="noopener" class="sec-cve-link">'+v.cve_id+'</a></td>';
-        h += '<td class="mono">'+v.package+'</td><td class="mono">'+v.installed+'</td><td class="mono">'+(v.fixed||'-')+'</td>';
-        h += '<td>'+esc(v.title)+'</td></tr>';
+        h += '<div class="sec-card ' + sevClass(v.severity) + '">' +
+            '<div class="sec-card__header">' +
+                '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
+                '<span class="sec-card__sev">' + v.severity + '</span>' +
+            '</div>' +
+            '<div class="sec-card__body">' +
+                '<span class="mono">' + esc(v.package) + '</span> ' +
+                '<span class="text-danger">' + esc(v.installed) + '</span>' +
+                (v.fixed ? ' <span class="text-muted">&rarr;</span> <span class="text-success">' + esc(v.fixed) + '</span>' : '') +
+            '</div>' +
+            (v.title ? '<div class="sec-card__desc">' + esc(v.title) + '</div>' : '') +
+        '</div>';
     });
-    h += '</tbody></table>';
     return h;
 }
 
 function renderDebsecan(d) {
     if (!d.vulnerabilities || !d.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    h += '<table class="ask-drift-table"><thead><tr><th>Urgency</th><th>CVE</th><th>Package</th></tr></thead><tbody>';
+    var h = '<p class="text-muted">' + d.vulnerabilities.length + ' vulnerabilities &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
     d.vulnerabilities.forEach(function(v) {
-        var cls = v.urgency==='high'?'text-danger':v.urgency==='medium'?'text-warning':'';
-        h += '<tr><td class="'+cls+'">'+v.urgency+'</td>';
-        h += '<td><a href="https://nvd.nist.gov/vuln/detail/'+v.cve_id+'" target="_blank" rel="noopener" class="sec-cve-link">'+v.cve_id+'</a></td>';
-        h += '<td class="mono">'+esc(v.package)+'</td></tr>';
+        h += '<div class="sec-card ' + sevClass(v.urgency) + '">' +
+            '<div class="sec-card__header">' +
+                '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
+                '<span class="sec-card__sev">' + sevLabel(v.urgency) + '</span>' +
+            '</div>' +
+            '<div class="sec-card__body"><span class="mono">' + esc(v.package) + '</span></div>' +
+        '</div>';
     });
-    h += '</tbody></table>';
     return h;
 }
 
 function renderLynis(l) {
-    var h = '<p><strong>Hardening Score:</strong> ' + l.score + '</p>';
+    var h = '<div class="sec-card sec-card--info"><div class="sec-card__header"><span class="sec-card__cve">Hardening Score</span><span class="sec-card__sev">' + l.score + '/100</span></div></div>';
     h += '<p class="text-muted">Last scan: ' + (l.last_scan||'unknown') + '</p>';
     if (l.warnings && l.warnings.length) {
-        h += '<h4>Warnings (' + l.warnings.length + ')</h4><ul class="sec-findings">';
-        l.warnings.forEach(function(w) { h += '<li><code>' + esc(w.id) + '</code> ' + esc(w.text) + '</li>'; });
-        h += '</ul>';
+        h += '<h4>Warnings (' + l.warnings.length + ')</h4>';
+        l.warnings.forEach(function(w) {
+            h += '<div class="sec-card sec-card--high"><div class="sec-card__header"><span class="sec-card__cve">' + esc(w.id) + '</span><span class="sec-card__sev">Warning</span></div>' +
+                '<div class="sec-card__desc">' + esc(w.text) + '</div></div>';
+        });
     }
     if (l.suggestions && l.suggestions.length) {
-        h += '<h4>Suggestions (' + l.suggestions.length + ')</h4><ul class="sec-findings">';
-        l.suggestions.forEach(function(s) { h += '<li><code>' + esc(s.id) + '</code> ' + esc(s.text) + '</li>'; });
-        h += '</ul>';
+        h += '<h4>Suggestions (' + l.suggestions.length + ')</h4>';
+        l.suggestions.forEach(function(s) {
+            h += '<div class="sec-card sec-card--low"><div class="sec-card__header"><span class="sec-card__cve">' + esc(s.id) + '</span><span class="sec-card__sev">Suggestion</span></div>' +
+                '<div class="sec-card__desc">' + esc(s.text) + '</div></div>';
+        });
     }
     return h;
 }
@@ -472,27 +489,36 @@ function renderLynis(l) {
 function renderList(label, items, lastScan) {
     var h = '<p class="text-muted">Last scan: ' + (lastScan||'unknown') + '</p>';
     if (!items || !items.length) return h + '<p class="text-success">Clean — no ' + label.toLowerCase() + ' found.</p>';
-    h += '<h4>' + label + ' (' + items.length + ')</h4><ul class="sec-findings">';
-    items.forEach(function(i) { h += '<li><code>' + esc(typeof i === 'string' ? i : JSON.stringify(i)) + '</code></li>'; });
-    h += '</ul>';
+    h += '<h4>' + label + ' (' + items.length + ')</h4>';
+    items.forEach(function(i) {
+        var text = typeof i === 'string' ? i : JSON.stringify(i);
+        h += '<div class="sec-card sec-card--high"><div class="sec-card__desc mono">' + esc(text) + '</div></div>';
+    });
     return h;
 }
 
 function renderClamav(c) {
     var h = '<p class="text-muted">Last scan: ' + (c.last_scan||'unknown') + '</p>';
     if (!c.findings || !c.findings.length) return h + '<p class="text-success">Clean — no malware found.</p>';
-    h += '<table class="ask-drift-table"><thead><tr><th>File</th><th>Signature</th></tr></thead><tbody>';
-    c.findings.forEach(function(f) { h += '<tr><td class="mono">'+esc(f.path)+'</td><td>'+esc(f.signature)+'</td></tr>'; });
-    h += '</tbody></table>';
+    c.findings.forEach(function(f) {
+        h += '<div class="sec-card sec-card--critical"><div class="sec-card__header"><span class="sec-card__cve mono">' + esc(f.path) + '</span></div>' +
+            '<div class="sec-card__desc">Signature: ' + esc(f.signature) + '</div></div>';
+    });
     return h;
 }
 
 function renderAide(a) {
     var h = '<p class="text-muted">Last scan: ' + (a.last_scan||'unknown') + '</p>';
     if (a.clean) return h + '<p class="text-success">Clean — no integrity changes detected.</p>';
-    if (a.added && a.added.length) { h += '<h4>Added (' + a.added.length + ')</h4><ul class="sec-findings">'; a.added.forEach(function(f) { h += '<li class="mono">' + esc(f) + '</li>'; }); h += '</ul>'; }
-    if (a.removed && a.removed.length) { h += '<h4>Removed (' + a.removed.length + ')</h4><ul class="sec-findings">'; a.removed.forEach(function(f) { h += '<li class="mono text-danger">' + esc(f) + '</li>'; }); h += '</ul>'; }
-    if (a.changed && a.changed.length) { h += '<h4>Changed (' + a.changed.length + ')</h4><ul class="sec-findings">'; a.changed.forEach(function(f) { h += '<li class="mono text-warning">' + esc(f) + '</li>'; }); h += '</ul>'; }
+    function fileCards(files, label, cls) {
+        if (!files || !files.length) return '';
+        var out = '<h4>' + label + ' (' + files.length + ')</h4>';
+        files.forEach(function(f) { out += '<div class="sec-card ' + cls + '"><div class="sec-card__desc mono">' + esc(f) + '</div></div>'; });
+        return out;
+    }
+    h += fileCards(a.added, 'Added', 'sec-card--medium');
+    h += fileCards(a.removed, 'Removed', 'sec-card--critical');
+    h += fileCards(a.changed, 'Changed', 'sec-card--high');
     return h;
 }
 
