@@ -172,7 +172,10 @@ cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm6
     touch "$REPO_DIR/proto/hobnob.proto" "$REPO_DIR/agent-rs/src/main.rs" 2>/dev/null || true
 
     echo "Building image from source..."
-    docker build --build-arg CACHEBUST="$(date +%s)" -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
+    DOCKER_BUILDKIT=1 docker build \
+        --build-arg CACHEBUST="$(date +%s)" \
+        --no-cache-filter go-builder \
+        -f "$REPO_DIR/Dockerfile.server" -t "$IMAGE" "$REPO_DIR"
 
     if $PUSH; then
         echo "Pushing image to registry..."

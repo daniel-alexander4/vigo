@@ -28,6 +28,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 ARG CACHEBUST=0
+RUN echo "$CACHEBUST" > /dev/null
 COPY . .
 RUN CGO_ENABLED=1 go build -o hobd ./server
 RUN CGO_ENABLED=1 go build -o hobnobcli ./cli
