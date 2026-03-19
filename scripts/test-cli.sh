@@ -292,7 +292,7 @@ echo ""
 # 10. packages
 # -------------------------------------------------------------------
 echo -e "${BOLD}[packages]${NC}"
-run_test "packages drift" $CLI packages drift --server "$SERVER"
+run_test "packages drift" $CLI thralls packages drift --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
@@ -447,37 +447,25 @@ fi
 echo ""
 
 # -------------------------------------------------------------------
-# 21. preview
-# -------------------------------------------------------------------
-echo -e "${BOLD}[preview]${NC}"
-if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
-    run_test "preview" $CLI preview "$FIRST_THRALL" --server "$SERVER"
-else
-    skip_test "preview" "no thralls enrolled"
-fi
-echo ""
-
-# -------------------------------------------------------------------
-# 22. validate
+# 21. validate
 # -------------------------------------------------------------------
 echo -e "${BOLD}[validate]${NC}"
 if [[ -d "thrall-configs/modules" ]]; then
-    # Validate the first .hnb file found.
     HNB_FILE=$(find thrall-configs/modules -name '*.hnb' -o -name '*.hnb.example' 2>/dev/null | head -1)
     if [[ -n "$HNB_FILE" ]]; then
-        run_test "validate" $CLI validate "$HNB_FILE"
+        run_test "config validate" $CLI config validate "$HNB_FILE"
     else
-        skip_test "validate" "no .hnb files found"
+        skip_test "config validate" "no .hnb files found"
     fi
 elif [[ -d "/srv/hobnob/policy/stage/modules" ]]; then
     HNB_FILE=$(find /srv/hobnob/policy/stage/modules -name '*.hnb' 2>/dev/null | head -1)
     if [[ -n "$HNB_FILE" ]]; then
-        run_test "validate" $CLI validate "$HNB_FILE"
+        run_test "config validate" $CLI config validate "$HNB_FILE"
     else
-        skip_test "validate" "no .hnb files found"
+        skip_test "config validate" "no .hnb files found"
     fi
 else
-    skip_test "validate" "no config dir found"
+    skip_test "config validate" "no config dir found"
 fi
 echo ""
 
@@ -517,7 +505,7 @@ run_test_expect_fail "runs show bad-id" $CLI runs show "nonexistent-id-000" --se
 run_test_expect_fail "push run missing --target" $CLI push run "echo hi" --server "$SERVER"
 run_test_expect_fail "config approve bad-id" $CLI config approve 999999 --server "$SERVER"
 run_test_expect_fail "config reject bad-id" $CLI config reject 999999 --server "$SERVER"
-run_test_expect_fail "validate nonexistent" $CLI validate "/tmp/nonexistent-file.hnb"
+run_test_expect_fail "validate nonexistent" $CLI config validate "/tmp/nonexistent-file.hnb"
 echo ""
 
 # -------------------------------------------------------------------
