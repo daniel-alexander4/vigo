@@ -30,8 +30,8 @@ RUN go mod download
 ARG CACHEBUST=0
 RUN echo "$CACHEBUST" > /dev/null
 COPY . .
-RUN CGO_ENABLED=1 go build -o vigosrv ./server
-RUN CGO_ENABLED=1 go build -o vigogo ./cli
+RUN CGO_ENABLED=1 go build -ldflags="-X main.version=$(cat VERSION 2>/dev/null || echo dev)" -o vigosrv ./server
+RUN CGO_ENABLED=1 go build -ldflags="-X main.version=$(cat VERSION 2>/dev/null || echo dev)" -o vigogo ./cli
 RUN CGO_ENABLED=1 go build -o vigo-license-manager ./license-manager
 
 # --- Runtime image ---

@@ -58,7 +58,8 @@ import (
 )
 
 // version is set at build time via -ldflags="-X main.version=1.2.3".
-var version = "dev"
+// The default should match the VERSION file at the repo root.
+var version = "0.1.3"
 
 func main() {
 	if err := run(); err != nil {

@@ -3,7 +3,7 @@
        dist-sign dist-sign-agent \
        proto certs migrate sqlc up down logs clean
 
-VERSION ?= dev
+VERSION ?= $(shell cat VERSION 2>/dev/null || echo dev)
 
 # --- Primary build: server + CLI (Go), agent (Rust) ---
 

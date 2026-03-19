@@ -231,8 +231,9 @@ fi
 if $BUILD_SERVER; then
     echo "Building Go binaries..."
     cd "$REPO_DIR"
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/vigosrv ./server
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/vigogo ./cli
+    VIGO_VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo dev)
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigosrv ./server
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigogo ./cli
     echo "  vigosrv:       $(ls -lh bin/vigosrv | awk '{print $5}')"
     echo "  vigogo:  $(ls -lh bin/vigogo | awk '{print $5}')"
     cd "$DATA_DIR"
