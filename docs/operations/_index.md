@@ -24,4 +24,5 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Peer Replication](peer-replication.md) -- Primary/peer file sync and automatic failover
 - [Regression Tests](regression-tests.md) -- Automated tests for doc drift, missing docs, ignored errors
 - [Testing](testing.md) -- CLI integration tests and unit tests for verifying server health
+- [Geo-Distributed Deployments](geo-distributed.md) -- Multi-region fleets across US, Europe, and beyond
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics
