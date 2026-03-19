@@ -57,10 +57,12 @@ impl RepoManager for AptRepoManager {
             };
             if downloaded {
                 // Dearmor: convert ASCII-armored key to binary GPG format.
-                // If gpg --dearmor fails (key might already be binary), copy as-is.
+                // Use --batch --yes to avoid interactive prompts and overwrite
+                // existing files. If dearmor fails (key might already be binary),
+                // copy as-is.
                 let dearmor = self.runner.run("sh", &["-c",
-                    &format!("gpg --dearmor < '{}' > '{}' 2>/dev/null || cp '{}' '{}'",
-                        tmp_key, key_path, tmp_key, key_path)]);
+                    &format!("gpg --batch --yes --dearmor -o '{}' '{}' 2>/dev/null || cp '{}' '{}'",
+                        key_path, tmp_key, tmp_key, key_path)]);
                 let _ = std::fs::remove_file(&tmp_key);
                 if let Err(e) = dearmor {
                     return Err(format!("dearmor GPG key: {}", e));
