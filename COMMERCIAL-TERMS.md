@@ -93,6 +93,14 @@ For guaranteed delivery of a specific feature, custom development is
 available as a separate engagement, scoped and quoted individually.
 Contact us for details.
 
+## Prohibited Use
+
+This software may not be used by, for, or on behalf of any military
+organization, department of defense, armed forces, defense contractor,
+intelligence agency, or any entity primarily engaged in military or
+weapons-related activities. No license — free or paid — will be granted
+for such use. This prohibition is absolute and non-negotiable.
+
 ## Right to Refuse
 
 Alexander4, LLC reserves the right to decline or terminate any commercial
