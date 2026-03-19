@@ -206,6 +206,68 @@ Two roles are supported:
 | Create/download backups | Yes | No |
 | Create/revoke API tokens | Yes | Yes (own only) |
 
+### Fine-Grained Permissions
+
+Beyond the admin/viewer roles, each user has a set of permissions stored as a JSON array. Admins always have all permissions regardless of stored values. Viewer permissions default to `fleet.read` and `audit.read`.
+
+| Permission | Description | Admin | Viewer |
+|------------|-------------|-------|--------|
+| `fleet.read` | View thralls, runs, compliance | Yes | Yes |
+| `fleet.write` | Modify thrall tags, maintenance | Yes | No |
+| `config.publish` | Publish configuration | Yes | No |
+| `config.rollback` | Rollback configuration | Yes | No |
+| `push.execute` | Dispatch ad-hoc pushes | Yes | No |
+| `query.execute` | Execute live queries | Yes | No |
+| `workflow.execute` | Run workflows | Yes | No |
+| `users.manage` | Create/delete/modify users | Yes | No |
+| `tokens.manage` | Manage API tokens | Yes | No |
+| `webhooks.manage` | Manage webhooks | Yes | No |
+| `backup.manage` | Create/download backups | Yes | No |
+| `enrollment.manage` | Manage enrollment patterns | Yes | No |
+| `audit.read` | View audit trail | Yes | Yes |
+
+Custom permission sets can be assigned per-user via the REST API to create roles between viewer and admin (e.g., an operator who can push but not manage users).
+
+## Two-Factor Authentication (TOTP)
+
+TOTP (Time-based One-Time Password) adds a second factor to basic authentication (HIPAA 164.312(d)). When enabled, users must enter a 6-digit code from an authenticator app after their password.
+
+### Setup
+
+1. Log in to the web UI with your password
+2. Call the TOTP setup API:
+   ```bash
+   curl -X POST https://hobnob:8443/api/v1/users/totp/setup \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+3. Scan the returned `url` as a QR code in your authenticator app (Google Authenticator, Authy, 1Password, etc.)
+4. Confirm with a valid code:
+   ```bash
+   curl -X POST https://hobnob:8443/api/v1/users/totp/confirm \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"code": "123456"}'
+   ```
+5. Save the returned recovery codes in a secure location
+
+### Recovery Codes
+
+Eight recovery codes are generated when TOTP is enabled. Each code can only be used once. If you lose access to your authenticator app, enter a recovery code instead of a TOTP code at the login prompt.
+
+### Disabling TOTP
+
+```bash
+curl -X POST https://hobnob:8443/api/v1/users/totp/disable \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### TOTP Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/users/totp/setup` | POST | Generate TOTP secret (returns secret + otpauth URL) |
+| `/api/v1/users/totp/confirm` | POST | Confirm setup with valid code, enables TOTP |
+| `/api/v1/users/totp/disable` | POST | Disable TOTP for your account |
 
 ## API Tokens
 

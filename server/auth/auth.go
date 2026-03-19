@@ -30,12 +30,14 @@ type Provider interface {
 
 // User represents an authenticated user.
 type User struct {
-	ID           string `json:"id"`
-	Username     string `json:"username"`
-	DisplayName  string `json:"display_name"`
-	Email        string `json:"email"`
-	Role         string `json:"role"`
-	SSHPublicKey string `json:"ssh_public_key,omitempty"`
+	ID           string   `json:"id"`
+	Username     string   `json:"username"`
+	DisplayName  string   `json:"display_name"`
+	Email        string   `json:"email"`
+	Role         string   `json:"role"`
+	Permissions  []string `json:"permissions,omitempty"`
+	SSHPublicKey string   `json:"ssh_public_key,omitempty"`
+	TOTPEnabled  bool     `json:"totp_enabled,omitempty"`
 }
 
 // IsAdmin returns true if the user has the admin role.
@@ -76,6 +78,7 @@ var publicPaths = map[string]bool{
 	"/metrics":            true,
 	"/healthz":            true,
 	"/login":              true,
+	"/totp":               true,
 	"/setup":              true,
 	"/api/v1/bootstrap":   true,
 	"/api/v1/config/reload":  true,
@@ -126,8 +129,9 @@ func isLocalRequest(r *http.Request) bool {
 
 // loopbackAdmin is the synthetic admin user injected for localhost API requests.
 var loopbackAdmin = &User{
-	ID:       "localhost",
-	Username: "localhost",
-	Role:     "admin",
+	ID:          "localhost",
+	Username:    "localhost",
+	Role:        "admin",
+	Permissions: AllPermissions,
 }
 

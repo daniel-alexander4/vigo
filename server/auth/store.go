@@ -6,6 +6,7 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 
 	"github.com/hobnob/hobnob/server/db"
@@ -23,13 +24,23 @@ func NewUserStore(queries *db.Queries) *UserStore {
 
 // dbToUser converts a sqlc-generated db.User to an auth.User.
 func dbToUser(u db.User) *User {
+	var perms []string
+	if u.Permissions != "" {
+		_ = json.Unmarshal([]byte(u.Permissions), &perms)
+	}
+	// Fall back to role-based defaults if no explicit permissions stored.
+	if len(perms) == 0 {
+		perms = DefaultPermissions(u.Role)
+	}
 	return &User{
 		ID:           u.ID,
 		Username:     u.Username,
 		DisplayName:  u.DisplayName,
 		Email:        u.Email,
 		Role:         u.Role,
+		Permissions:  perms,
 		SSHPublicKey: u.SshPublicKey,
+		TOTPEnabled:  u.TotpEnabled != 0,
 	}
 }
 
@@ -109,4 +120,28 @@ func (s *UserStore) CountUsers(ctx context.Context) (int64, error) {
 // CountAdmins returns the number of admin users.
 func (s *UserStore) CountAdmins(ctx context.Context) (int64, error) {
 	return s.queries.CountAdminUsers(ctx)
+}
+
+// EnableTOTP marks a user as TOTP-enabled and stores hashed recovery codes.
+func (s *UserStore) EnableTOTP(ctx context.Context, id, recoveryJSON string) error {
+	return s.queries.EnableTOTP(ctx, db.EnableTOTPParams{TotpRecovery: recoveryJSON, ID: id})
+}
+
+// DisableTOTP removes TOTP from a user.
+func (s *UserStore) DisableTOTP(ctx context.Context, id string) error {
+	return s.queries.DisableTOTP(ctx, id)
+}
+
+// GetRecoveryCodes returns the raw recovery JSON for a user.
+func (s *UserStore) GetRecoveryCodes(ctx context.Context, id string) (string, error) {
+	u, err := s.queries.GetUserByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return u.TotpRecovery, nil
+}
+
+// UpdateRecoveryCodes updates the recovery codes JSON.
+func (s *UserStore) UpdateRecoveryCodes(ctx context.Context, id, recoveryJSON string) error {
+	return s.queries.UpdateTOTPRecovery(ctx, db.UpdateTOTPRecoveryParams{TotpRecovery: recoveryJSON, ID: id})
 }

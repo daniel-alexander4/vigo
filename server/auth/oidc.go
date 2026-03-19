@@ -228,6 +228,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 			DisplayName: claims.Name,
 			Email:       claims.Email,
 			Role:        user.Role,
+			Permissions: PermissionsJSON(user.Role),
 		})
 		user.DisplayName = claims.Name
 		user.Email = claims.Email

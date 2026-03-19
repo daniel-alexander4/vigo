@@ -140,10 +140,12 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 	}))
 }
 
-// RegisterRoutes mounts /login, /logout, and /setup.
+// RegisterRoutes mounts /login, /logout, /totp, and /setup.
 func (p *BasicProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /login", p.handleLoginPage)
 	mux.HandleFunc("POST /login", p.handleLogin)
+	mux.HandleFunc("GET /totp", p.handleTOTPPage)
+	mux.HandleFunc("POST /totp", p.handleTOTPVerify)
 	mux.HandleFunc("POST /logout", p.handleLogout)
 	mux.HandleFunc("GET /setup", p.handleSetupPage)
 }
@@ -212,7 +214,18 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create session.
+	// If TOTP is enabled, park credentials in session and redirect to challenge.
+	if user.TOTPEnabled {
+		if err := p.sessions.RenewToken(r.Context()); err != nil {
+			slog.Error("session renewal failed", "error", err)
+		}
+		p.sessions.Put(r.Context(), "totp_pending_user_id", user.ID)
+		p.sessions.Put(r.Context(), "totp_pending_username", user.Username)
+		http.Redirect(w, r, "/totp", http.StatusFound)
+		return
+	}
+
+	// Create session (no TOTP).
 	if err := p.sessions.RenewToken(r.Context()); err != nil {
 		slog.Error("session renewal failed", "error", err)
 	}
@@ -220,6 +233,78 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	recordAudit(r.Context(), p.auditWriter, "auth.login", username, "basic login", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (p *BasicProvider) handleTOTPPage(w http.ResponseWriter, r *http.Request) {
+	// Only accessible if TOTP challenge is pending.
+	userID := p.sessions.GetString(r.Context(), "totp_pending_user_id")
+	if userID == "" {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	serveTOTPPage(w, "")
+}
+
+func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		serveTOTPPage(w, "Invalid request")
+		return
+	}
+
+	userID := p.sessions.GetString(r.Context(), "totp_pending_user_id")
+	username := p.sessions.GetString(r.Context(), "totp_pending_username")
+	if userID == "" {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+
+	code := r.FormValue("code")
+	if code == "" {
+		serveTOTPPage(w, "Code is required")
+		return
+	}
+
+	// Look up user and TOTP secret.
+	user, err := p.userStore.GetByID(r.Context(), userID)
+	if err != nil || user == nil {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+
+	// Get TOTP secret from secrets provider.
+	totpSecret, err := p.secrets.Get(r.Context(), fmt.Sprintf("hobnob/web/auth/totp/%s", user.Username))
+	if err != nil || totpSecret == "" {
+		slog.Error("totp secret not found", "username", user.Username, "error", err)
+		serveTOTPPage(w, "TOTP configuration error")
+		return
+	}
+
+	// Try TOTP code first.
+	if ValidateTOTPCode(code, totpSecret) {
+		// Clear TOTP pending state and complete login.
+		p.sessions.Remove(r.Context(), "totp_pending_user_id")
+		p.sessions.Remove(r.Context(), "totp_pending_username")
+		p.sessions.PutUser(r.Context(), user)
+		recordAudit(r.Context(), p.auditWriter, "auth.login", username, "basic login (totp)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+
+	// Try recovery code.
+	recoveryJSON, _ := p.userStore.GetRecoveryCodes(r.Context(), userID)
+	if valid, updatedJSON := ValidateRecoveryCode(code, recoveryJSON); valid {
+		// Update recovery codes (remove used one).
+		_ = p.userStore.UpdateRecoveryCodes(r.Context(), userID, updatedJSON)
+		p.sessions.Remove(r.Context(), "totp_pending_user_id")
+		p.sessions.Remove(r.Context(), "totp_pending_username")
+		p.sessions.PutUser(r.Context(), user)
+		recordAudit(r.Context(), p.auditWriter, "auth.login", username, "basic login (recovery code)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+
+	recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "bad totp code", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+	serveTOTPPage(w, "Invalid code")
 }
 
 func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +359,44 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
                 </div>
                 <button type="submit" class="btn btn--primary btn--full">Sign In</button>
             </form>
+        </div>
+    </div>
+</body>
+</html>`))
+}
+
+// serveTOTPPage renders the TOTP challenge form.
+func serveTOTPPage(w http.ResponseWriter, errMsg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hobnob - Two-Factor Authentication</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <img src="/static/img/logo.svg" alt="Hobnob" style="height:36px;margin-bottom:0.5rem">
+            <p class="login-subtitle">Two-factor authentication</p>`))
+	if errMsg != "" {
+		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + html.EscapeString(errMsg) + `</p>`))
+	}
+	w.Write([]byte(`
+            <form method="POST" action="/totp">
+                <div class="form-group">
+                    <label for="code">Authentication code</label>
+                    <input type="text" id="code" name="code" required autofocus
+                           class="form-input" placeholder="6-digit code or recovery code"
+                           autocomplete="one-time-code" inputmode="numeric" pattern="[0-9A-Fa-f]*">
+                </div>
+                <button type="submit" class="btn btn--primary btn--full">Verify</button>
+            </form>
+            <p style="color:#6c757d;text-align:center;font-size:0.85rem;margin-top:1rem">
+                Enter the code from your authenticator app, or a recovery code.
+            </p>
         </div>
     </div>
 </body>

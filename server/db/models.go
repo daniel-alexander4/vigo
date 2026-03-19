@@ -243,8 +243,11 @@ type User struct {
 	DisplayName  string    `json:"display_name"`
 	Email        string    `json:"email"`
 	Role         string    `json:"role"`
+	Permissions  string    `json:"permissions"`
 	SshPublicKey string    `json:"ssh_public_key"`
 	OidcSubject  string    `json:"oidc_subject"`
+	TotpEnabled  int64     `json:"totp_enabled"`
+	TotpRecovery string    `json:"totp_recovery"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

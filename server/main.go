@@ -707,6 +707,7 @@ func run() error {
 	tokenStore := hobnobauth.NewTokenStore(queries)
 	usersHandler := api.NewUsersHandler(userStore, authMethod)
 	usersHandler.SetAuditWriter(auditWriter)
+	usersHandler.SetSecretsProvider(provider)
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 	tokensHandler.SetAuditWriter(auditWriter)
 

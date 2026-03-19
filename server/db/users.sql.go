@@ -40,8 +40,33 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 	return err
 }
 
+const disableTOTP = `-- name: DisableTOTP :exec
+UPDATE users SET totp_enabled = 0, totp_recovery = '', updated_at = datetime('now')
+WHERE id = ?
+`
+
+func (q *Queries) DisableTOTP(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, disableTOTP, id)
+	return err
+}
+
+const enableTOTP = `-- name: EnableTOTP :exec
+UPDATE users SET totp_enabled = 1, totp_recovery = ?, updated_at = datetime('now')
+WHERE id = ?
+`
+
+type EnableTOTPParams struct {
+	TotpRecovery string `json:"totp_recovery"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) error {
+	_, err := q.db.ExecContext(ctx, enableTOTP, arg.TotpRecovery, arg.ID)
+	return err
+}
+
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, display_name, email, role, ssh_public_key, oidc_subject, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE id = ?
 `
 
@@ -54,8 +79,11 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.DisplayName,
 		&i.Email,
 		&i.Role,
+		&i.Permissions,
 		&i.SshPublicKey,
 		&i.OidcSubject,
+		&i.TotpEnabled,
+		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -63,7 +91,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 }
 
 const getUserByOIDCSubject = `-- name: GetUserByOIDCSubject :one
-SELECT id, username, display_name, email, role, ssh_public_key, oidc_subject, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE oidc_subject = ?
 `
 
@@ -76,8 +104,11 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 		&i.DisplayName,
 		&i.Email,
 		&i.Role,
+		&i.Permissions,
 		&i.SshPublicKey,
 		&i.OidcSubject,
+		&i.TotpEnabled,
+		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -85,7 +116,7 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, display_name, email, role, ssh_public_key, oidc_subject, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE username = ?
 `
 
@@ -98,8 +129,11 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.DisplayName,
 		&i.Email,
 		&i.Role,
+		&i.Permissions,
 		&i.SshPublicKey,
 		&i.OidcSubject,
+		&i.TotpEnabled,
+		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -109,7 +143,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject)
 VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, username, display_name, email, role, ssh_public_key, oidc_subject, created_at, updated_at
+RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 `
 
 type InsertUserParams struct {
@@ -137,8 +171,11 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.DisplayName,
 		&i.Email,
 		&i.Role,
+		&i.Permissions,
 		&i.SshPublicKey,
 		&i.OidcSubject,
+		&i.TotpEnabled,
+		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -146,7 +183,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, display_name, email, role, ssh_public_key, oidc_subject, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users ORDER BY username
 `
 
@@ -165,8 +202,11 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.DisplayName,
 			&i.Email,
 			&i.Role,
+			&i.Permissions,
 			&i.SshPublicKey,
 			&i.OidcSubject,
+			&i.TotpEnabled,
+			&i.TotpRecovery,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -183,11 +223,27 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const updateTOTPRecovery = `-- name: UpdateTOTPRecovery :exec
+UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
+WHERE id = ?
+`
+
+type UpdateTOTPRecoveryParams struct {
+	TotpRecovery string `json:"totp_recovery"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) UpdateTOTPRecovery(ctx context.Context, arg UpdateTOTPRecoveryParams) error {
+	_, err := q.db.ExecContext(ctx, updateTOTPRecovery, arg.TotpRecovery, arg.ID)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :exec
 UPDATE users SET
     display_name = ?,
     email = ?,
     role = ?,
+    permissions = ?,
     ssh_public_key = ?,
     oidc_subject = ?,
     updated_at = datetime('now')
@@ -198,6 +254,7 @@ type UpdateUserParams struct {
 	DisplayName  string `json:"display_name"`
 	Email        string `json:"email"`
 	Role         string `json:"role"`
+	Permissions  string `json:"permissions"`
 	SshPublicKey string `json:"ssh_public_key"`
 	OidcSubject  string `json:"oidc_subject"`
 	ID           string `json:"id"`
@@ -208,6 +265,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 		arg.DisplayName,
 		arg.Email,
 		arg.Role,
+		arg.Permissions,
 		arg.SshPublicKey,
 		arg.OidcSubject,
 		arg.ID,

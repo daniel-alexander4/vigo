@@ -11,6 +11,7 @@ import (
 
 	"github.com/hobnob/hobnob/server/auth"
 	"github.com/hobnob/hobnob/server/db"
+	"github.com/hobnob/hobnob/server/secrets"
 )
 
 // UsersHandler provides REST endpoints for user management.
@@ -18,10 +19,14 @@ type UsersHandler struct {
 	store       *auth.UserStore
 	authMethod  string
 	auditWriter auditRecorder
+	secrets     secrets.Provider
 }
 
 // SetAuditWriter sets the audit writer for recording user management events.
 func (h *UsersHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
+
+// SetSecretsProvider sets the secrets provider for TOTP secret storage.
+func (h *UsersHandler) SetSecretsProvider(p secrets.Provider) { h.secrets = p }
 
 // NewUsersHandler creates a users API handler.
 func NewUsersHandler(store *auth.UserStore, authMethod string) *UsersHandler {
@@ -31,10 +36,14 @@ func NewUsersHandler(store *auth.UserStore, authMethod string) *UsersHandler {
 // RegisterRoutes mounts user management endpoints.
 func (h *UsersHandler) RegisterRoutes(mux *http.ServeMux) {
 	adminMW := auth.RequireAdmin(h.authMethod)
+	authMW := auth.RequireAuth(h.authMethod)
 	mux.Handle("GET /api/v1/users", adminMW(http.HandlerFunc(h.handleList)))
 	mux.Handle("POST /api/v1/users", http.HandlerFunc(h.handleCreate)) // special: first-user bootstrap
 	mux.Handle("PUT /api/v1/users/{id}", adminMW(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("DELETE /api/v1/users/{id}", adminMW(http.HandlerFunc(h.handleDelete)))
+	mux.Handle("POST /api/v1/users/totp/setup", authMW(http.HandlerFunc(h.handleTOTPSetup)))
+	mux.Handle("POST /api/v1/users/totp/confirm", authMW(http.HandlerFunc(h.handleTOTPConfirm)))
+	mux.Handle("POST /api/v1/users/totp/disable", authMW(http.HandlerFunc(h.handleTOTPDisable)))
 }
 
 func (h *UsersHandler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -138,11 +147,22 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		role = req.Role
 	}
 
+	// Recalculate permissions when role changes; preserve existing otherwise.
+	var perms string
+	if req.Role != "" && req.Role != existing.Role {
+		perms = auth.PermissionsJSON(role)
+	} else {
+		// Keep existing permissions as JSON.
+		data, _ := json.Marshal(existing.Permissions)
+		perms = string(data)
+	}
+
 	if err := h.store.Update(r.Context(), db.UpdateUserParams{
 		ID:           id,
 		DisplayName:  req.DisplayName,
 		Email:        req.Email,
 		Role:         role,
+		Permissions:  perms,
 		SshPublicKey: req.SSHPublicKey,
 	}); err != nil {
 		slog.Error("updating user", "error", err)
@@ -190,6 +210,117 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		deletedName = deleted.Username
 	}
 	recordAudit(r.Context(), h.auditWriter, "user.delete", actor, fmt.Sprintf("deleted user %s", deletedName), "")
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleTOTPSetup generates a TOTP secret and returns the otpauth URL.
+// The secret is stored in the secrets provider but TOTP is not yet enabled —
+// the user must confirm with a valid code via /totp/confirm.
+func (h *UsersHandler) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.secrets == nil {
+		writeJSONError(w, http.StatusInternalServerError, "secrets provider not configured")
+		return
+	}
+
+	secret, url, err := auth.GenerateTOTPSecret(u.Username)
+	if err != nil {
+		slog.Error("generating totp secret", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to generate TOTP secret")
+		return
+	}
+
+	// Store the secret (not yet enabled — must confirm first).
+	secretKey := fmt.Sprintf("hobnob/web/auth/totp/%s", u.Username)
+	if err := h.secrets.(interface{ Set(string, string) error }).Set(secretKey, secret); err != nil {
+		slog.Error("storing totp secret", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to store TOTP secret")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"secret": secret,
+		"url":    url,
+	})
+}
+
+// handleTOTPConfirm verifies a TOTP code and enables TOTP for the user.
+// This is the second step after /totp/setup — the user must prove they
+// configured their authenticator app correctly.
+func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request) {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Get the pending secret.
+	secretKey := fmt.Sprintf("hobnob/web/auth/totp/%s", u.Username)
+	secret, err := h.secrets.Get(r.Context(), secretKey)
+	if err != nil || secret == "" {
+		writeJSONError(w, http.StatusBadRequest, "no TOTP setup pending — call /totp/setup first")
+		return
+	}
+
+	// Validate the code.
+	if !auth.ValidateTOTPCode(req.Code, secret) {
+		writeJSONError(w, http.StatusBadRequest, "invalid code — check your authenticator app")
+		return
+	}
+
+	// Generate recovery codes.
+	plainCodes, hashedJSON, err := auth.GenerateRecoveryCodes()
+	if err != nil {
+		slog.Error("generating recovery codes", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to generate recovery codes")
+		return
+	}
+
+	// Enable TOTP in DB.
+	if err := h.store.EnableTOTP(r.Context(), u.ID, hashedJSON); err != nil {
+		slog.Error("enabling totp", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to enable TOTP")
+		return
+	}
+
+	recordAudit(r.Context(), h.auditWriter, "user.totp_enable", u.Username, fmt.Sprintf("TOTP enabled for %s", u.Username), "")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":         "enabled",
+		"recovery_codes": plainCodes,
+	})
+}
+
+// handleTOTPDisable disables TOTP for the authenticated user.
+func (h *UsersHandler) handleTOTPDisable(w http.ResponseWriter, r *http.Request) {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if err := h.store.DisableTOTP(r.Context(), u.ID); err != nil {
+		slog.Error("disabling totp", "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to disable TOTP")
+		return
+	}
+
+	recordAudit(r.Context(), h.auditWriter, "user.totp_disable", u.Username, fmt.Sprintf("TOTP disabled for %s", u.Username), "")
 
 	w.WriteHeader(http.StatusNoContent)
 }
