@@ -30,6 +30,7 @@ NC='\033[0m'
 run_test() {
     local name="$1"
     shift
+    echo -ne "  ${YELLOW} RUN${NC}  $name\r"
     local output
     if output=$("$@" 2>&1); then
         echo -e "  ${GREEN}PASS${NC}  $name"
@@ -49,6 +50,7 @@ run_test() {
 run_test_expect_fail() {
     local name="$1"
     shift
+    echo -ne "  ${YELLOW} RUN${NC}  $name\r"
     local output
     if output=$("$@" 2>&1); then
         echo -e "  ${RED}FAIL${NC}  $name (expected failure, got success)"
@@ -74,6 +76,7 @@ run_test_grep() {
     local name="$1"
     local pattern="$2"
     shift 2
+    echo -ne "  ${YELLOW} RUN${NC}  $name\r"
     local output
     if output=$("$@" 2>&1); then
         if echo "$output" | grep -qi "$pattern"; then
@@ -433,7 +436,7 @@ echo -e "${BOLD}[workflow]${NC}"
 run_test "workflow list" $CLI workflow list --server "$SERVER"
 # Workflow status/abort with bad ID (error handling).
 run_test_expect_fail "workflow status bad-id" $CLI workflow status "nonexistent-wf-000" --server "$SERVER"
-run_test_expect_fail "workflow abort bad-id" $CLI workflow abort "nonexistent-wf-000" --server "$SERVER"
+run_test_expect_fail "workflow abort bad-id" bash -c "echo y | $CLI workflow abort 'nonexistent-wf-000' --server '$SERVER'"
 echo ""
 
 # -------------------------------------------------------------------
