@@ -63,10 +63,30 @@ var authClearCmd = &cobra.Command{
 	},
 }
 
+var authEmergencyAccessCmd = &cobra.Command{
+	Use:   "emergency-access --reason <reason>",
+	Short: "Record an emergency access event in the tamper-evident audit trail (HIPAA 164.312(a)(2)(ii))",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		reason, _ := cmd.Flags().GetString("reason")
+		if reason == "" {
+			return fmt.Errorf("--reason is required")
+		}
+		client := newAPIClient()
+		var resp map[string]string
+		if err := client.post("/api/v1/emergency-access", map[string]string{"reason": reason}, &resp); err != nil {
+			return fmt.Errorf("recording emergency access: %w", err)
+		}
+		fmt.Println("Emergency access recorded in audit trail.")
+		return nil
+	},
+}
+
 func init() {
+	authEmergencyAccessCmd.Flags().String("reason", "", "Reason for emergency access (required)")
 	authCmd.AddCommand(authSetTokenCmd)
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authClearCmd)
+	authCmd.AddCommand(authEmergencyAccessCmd)
 }
 
 // tokenFilePath returns the path to the stored API token.

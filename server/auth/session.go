@@ -19,12 +19,20 @@ type SessionManager struct {
 	*scs.SessionManager
 }
 
+// DefaultIdleTimeout is the default session idle timeout (HIPAA 164.312(a)(2)(iii)).
+const DefaultIdleTimeout = 15 * time.Minute
+
 // NewSessionManager creates a session manager backed by SQLite (sharing the
-// existing *sql.DB). Sessions expire after 24 hours.
-func NewSessionManager(sqlDB *sql.DB) *SessionManager {
+// existing *sql.DB). Sessions expire after 24 hours with idle timeout.
+// Pass 0 for idleTimeout to use the default (15 minutes).
+func NewSessionManager(sqlDB *sql.DB, idleTimeout time.Duration) *SessionManager {
+	if idleTimeout == 0 {
+		idleTimeout = DefaultIdleTimeout
+	}
 	sm := scs.New()
 	sm.Store = sqlite3store.New(sqlDB)
 	sm.Lifetime = 24 * time.Hour
+	sm.IdleTimeout = idleTimeout
 	sm.Cookie.Name = "hobnob_session"
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteLaxMode

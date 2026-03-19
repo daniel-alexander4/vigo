@@ -1288,15 +1288,25 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		method = "basic"
 	}
 
+	// Parse idle timeout (default 15m per HIPAA 164.312(a)(2)(iii)).
+	var idleTimeout time.Duration
+	if cfg.Auth.SessionIdleTimeout != "" {
+		d, err := time.ParseDuration(cfg.Auth.SessionIdleTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("parsing session_idle_timeout: %w", err)
+		}
+		idleTimeout = d
+	}
+
 	switch method {
 	case "basic":
-		sessions := hobnobauth.NewSessionManager(sqlDB)
+		sessions := hobnobauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := hobnobauth.NewUserStore(queries)
 		tokenStore := hobnobauth.NewTokenStore(queries)
 		return hobnobauth.NewBasicProvider(sessions, userStore, tokenStore, secretsProvider), nil
 
 	case "oidc":
-		sessions := hobnobauth.NewSessionManager(sqlDB)
+		sessions := hobnobauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := hobnobauth.NewUserStore(queries)
 		tokenStore := hobnobauth.NewTokenStore(queries)
 		return hobnobauth.NewOIDCProvider(ctx, hobnobauth.OIDCConfig{
@@ -1308,7 +1318,7 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		}, sessions, userStore, tokenStore)
 
 	case "isowebauth":
-		sessions := hobnobauth.NewSessionManager(sqlDB)
+		sessions := hobnobauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := hobnobauth.NewUserStore(queries)
 		tokenStore := hobnobauth.NewTokenStore(queries)
 		return hobnobauth.NewIsowebauthProvider(hobnobauth.IsowebauthConfig{

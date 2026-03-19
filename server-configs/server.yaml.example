@@ -76,6 +76,7 @@ bootstrap:
 
 # auth:
 #   method: basic                              # basic | none | oidc | isowebauth
+#   session_idle_timeout: "15m"                # idle timeout (default 15m, HIPAA compliant)
 #
 # --- Disable auth (development only) ---
 # auth:

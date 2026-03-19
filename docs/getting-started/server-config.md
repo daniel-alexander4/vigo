@@ -121,6 +121,7 @@ auth:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `method` | `basic` | Authentication method: `basic`, `oidc`, `isowebauth` |
+| `session_idle_timeout` | `15m` | Session idle timeout (HIPAA compliant default) |
 | `oidc.issuer` | — | OIDC provider URL (required for `oidc`) |
 | `oidc.client_id` | — | OIDC client ID (required for `oidc`) |
 | `oidc.client_secret` | — | OIDC client secret (supports `secret:` prefix) |

@@ -19,9 +19,21 @@ Set `auth.method` in `server.yaml`:
 ```yaml
 auth:
   method: basic   # or: oidc, isowebauth
+  session_idle_timeout: "15m"   # default, HIPAA 164.312(a)(2)(iii)
 ```
 
 When `method` is omitted, basic authentication is enabled by default.
+
+### Session Idle Timeout
+
+Sessions automatically expire after 15 minutes of inactivity (HIPAA 164.312(a)(2)(iii) — automatic logoff). The absolute session lifetime is 24 hours regardless of activity. Configure with `session_idle_timeout`:
+
+```yaml
+auth:
+  session_idle_timeout: "30m"   # 30 minutes; use "15m" for HIPAA
+```
+
+Set to `"0s"` to disable idle timeout (not recommended for regulated environments).
 
 ## Basic (Username/Password)
 

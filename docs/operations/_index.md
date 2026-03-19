@@ -25,4 +25,6 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Regression Tests](regression-tests.md) -- Automated tests for doc drift, missing docs, ignored errors
 - [Testing](testing.md) -- CLI integration tests and unit tests for verifying server health
 - [Geo-Distributed Deployments](geo-distributed.md) -- Multi-region fleets across US, Europe, and beyond
+- [Emergency Access Procedure](emergency-access.md) -- Break-glass procedure for when normal auth is unavailable (HIPAA)
+- [Decommissioning Procedures](decommissioning.md) -- Secure node and server retirement (HIPAA)
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics

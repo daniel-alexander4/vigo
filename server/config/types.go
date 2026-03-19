@@ -123,9 +123,10 @@ type PathsSection struct {
 // Default method is "basic" — username/password with bcrypt hashes in the
 // local secrets store at hobnob/web/auth/<username>.
 type AuthSection struct {
-	Method     string           `yaml:"method"`      // "basic" (default), "oidc", "isowebauth"
-	OIDC       OIDCAuthConfig   `yaml:"oidc"`
-	Isowebauth IsowebauthAuthConfig `yaml:"isowebauth"`
+	Method             string           `yaml:"method"`               // "basic" (default), "oidc", "isowebauth"
+	SessionIdleTimeout string           `yaml:"session_idle_timeout"` // duration, e.g. "15m" (default)
+	OIDC               OIDCAuthConfig   `yaml:"oidc"`
+	Isowebauth         IsowebauthAuthConfig `yaml:"isowebauth"`
 }
 
 // OIDCAuthConfig holds OIDC provider settings.

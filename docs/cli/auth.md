@@ -91,3 +91,21 @@ Revoke an API token by ID. The token is immediately invalidated.
 ```bash
 hobnobcli auth revoke-token tok_a1b2c3d4
 ```
+
+### emergency-access
+
+Record an emergency access event in the tamper-evident audit trail (HIPAA 164.312(a)(2)(ii)). Use this when invoking break-glass procedures — e.g., during an IdP outage, account lockout, or incident response.
+
+```bash
+hobnobcli auth emergency-access --reason "OIDC provider outage, reviewing compliance status"
+```
+
+The event is recorded as `emergency.access` in the SHA-256 hash chain and cannot be retroactively modified.
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--reason` | Required. The reason for emergency access. |
+
+See [Emergency Access Procedure](../operations/emergency-access.md) for the full procedure.

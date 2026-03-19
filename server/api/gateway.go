@@ -105,6 +105,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	// Mount audit endpoint.
 	auditHandler := NewAuditHandler(queries)
+	auditHandler.SetAuditWriter(aw)
 	auditHandler.RegisterRoutes(mux)
 
 	// Mount preview endpoint.

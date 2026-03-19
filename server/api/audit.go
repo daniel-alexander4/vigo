@@ -13,12 +13,14 @@ import (
 	"time"
 
 	"github.com/hobnob/hobnob/server/audit"
+	hobnobauth "github.com/hobnob/hobnob/server/auth"
 	"github.com/hobnob/hobnob/server/db"
 )
 
 // AuditHandler provides a unified audit view across event types.
 type AuditHandler struct {
-	queries *db.Queries
+	queries     *db.Queries
+	auditWriter auditRecorder
 }
 
 // NewAuditHandler creates an AuditHandler.
@@ -26,10 +28,14 @@ func NewAuditHandler(queries *db.Queries) *AuditHandler {
 	return &AuditHandler{queries: queries}
 }
 
+// SetAuditWriter sets the audit writer for recording emergency access events.
+func (h *AuditHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
+
 // RegisterRoutes registers audit endpoints.
 func (h *AuditHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/audit", h.ListAuditEvents)
 	mux.HandleFunc("GET /api/v1/audit/verify", h.VerifyChain)
+	mux.HandleFunc("POST /api/v1/emergency-access", h.RecordEmergencyAccess)
 }
 
 type auditEvent struct {
@@ -175,4 +181,30 @@ func (h *AuditHandler) VerifyChain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// RecordEmergencyAccess records an emergency access event in the tamper-evident
+// audit chain (HIPAA 164.312(a)(2)(ii)). This endpoint is called by
+// `hobnobcli auth emergency-access` when an operator invokes emergency access
+// procedures (e.g., break-glass scenarios, account lockouts, system failures).
+func (h *AuditHandler) RecordEmergencyAccess(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Reason == "" {
+		writeJSONError(w, http.StatusBadRequest, "reason is required")
+		return
+	}
+
+	actor := "localhost"
+	if u := hobnobauth.UserFromContext(r.Context()); u != nil {
+		actor = u.Username
+	}
+
+	recordAudit(r.Context(), h.auditWriter, "emergency.access", actor, req.Reason, fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "recorded"})
 }
