@@ -70,8 +70,11 @@ COPY server-configs/push/ /seed/push/
 # Documentation — seeded into /srv/hobnob/docs/ by entrypoint.
 COPY docs/ /seed/docs/
 
-# Test scripts — seeded into /srv/hobnob/scripts/ by entrypoint.
-COPY scripts/ /seed/scripts/
+# CLI test script — seeded into /srv/hobnob/scripts/ by entrypoint.
+# Only scripts that work without the source tree belong here.
+# test-unit.sh requires the repo and should be run from the checkout.
+RUN mkdir -p /seed/scripts
+COPY scripts/test-cli.sh /seed/scripts/
 
 COPY entrypoint.sh /entrypoint.sh
 

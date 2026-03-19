@@ -274,12 +274,13 @@ fi
 # Seed docs, examples, and scripts from the image (or repo for --server)
 # ---------------------------------------------------------------------------
 
-echo "Updating docs, examples, and scripts..."
+echo "Updating docs and scripts..."
 if $BUILD_SERVER || $BUILD_AGENT || $BUILD_ALL; then
     # Copy directly from repo — faster than spinning up a container.
     mkdir -p "$DATA_DIR/docs" "$DATA_DIR/scripts"
     cp -r "$REPO_DIR/docs/." "$DATA_DIR/docs/"
-    cp -r "$REPO_DIR/scripts/." "$DATA_DIR/scripts/"
+    # Only copy scripts that work without the source tree.
+    cp "$REPO_DIR/scripts/test-cli.sh" "$DATA_DIR/scripts/"
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
 else
     # Pull mode — seed from the image.

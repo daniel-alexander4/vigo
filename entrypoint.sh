@@ -122,7 +122,7 @@ if [ -d "${SEED_DIR}/docs" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Seed test scripts into bind-mounted volume
+# Seed CLI test script into bind-mounted volume
 # ---------------------------------------------------------------------------
 
 if [ -d "${SEED_DIR}/scripts" ]; then

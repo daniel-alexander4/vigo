@@ -1,6 +1,9 @@
 # Testing
 
-Hobnob ships with two automated test suites that verify server health, CLI functionality, and internal correctness. Both scripts are installed to `/srv/hobnob/scripts/` and can be run by administrators at any time.
+Hobnob ships with two test suites:
+
+- **`test-cli.sh`** — CLI integration tests. Installed to `/srv/hobnob/scripts/` on every server. Requires only a running server and `hobnobcli`.
+- **`test-unit.sh`** — Go and Rust unit tests. Requires the source tree and build toolchains. Run from the repo checkout only.
 
 ## CLI Integration Tests
 
@@ -102,18 +105,14 @@ Any `FAIL` result indicates a real problem. Failed tests show the exit code and 
 ### Running
 
 ```bash
-# Run all unit tests (Go + Rust):
-/srv/hobnob/scripts/test-unit.sh
-
-# Go tests only:
-/srv/hobnob/scripts/test-unit.sh --go
-
-# Rust tests only:
-/srv/hobnob/scripts/test-unit.sh --rust
-
-# Include Windows cross-compile check:
-/srv/hobnob/scripts/test-unit.sh --windows
+# From the repo checkout:
+./scripts/test-unit.sh              # Go + Rust
+./scripts/test-unit.sh --go         # Go only
+./scripts/test-unit.sh --rust       # Rust only
+./scripts/test-unit.sh --windows    # Include Windows cross-compile check
 ```
+
+This script is **not** installed to `/srv/hobnob/scripts/` — it requires the source tree and Go/Rust toolchains.
 
 ### What It Tests
 
