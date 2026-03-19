@@ -175,6 +175,18 @@ vars:
 
 Each tool runs once per day. The sentinel file pattern (`/tmp/.hobnob-<tool>-YYYYMMDD`) prevents repeated scans within the same day.
 
+## Customizing Timeouts
+
+Heavy scans (Trivy, Lynis, rkhunter, ClamAV, AIDE) have configurable timeouts. The defaults are generous enough for most systems, but low-powered hosts (Raspberry Pi, small VMs) may need more time:
+
+```yaml
+vars:
+  trivy_timeout: "900"   # default 600s — Trivy gets its own timeout
+  scan_timeout: "1200"   # default 900s — all other heavy scans
+```
+
+The agent's default exec timeout is 300s. The security-scanning module overrides this per resource.
+
 ## Customizing Trivy Severity
 
 By default, Trivy scans for all severities. To limit:

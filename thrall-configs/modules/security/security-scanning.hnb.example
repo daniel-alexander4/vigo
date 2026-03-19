@@ -13,6 +13,8 @@ vars:
   scan_hour_end: "5"
   scan_dir: "/var/lib/hobnob/security"
   trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"
+  trivy_timeout: "600"
+  scan_timeout: "900"
   aide_db_path: "/var/lib/aide/aide.db"
   aide_db_new_path: "/var/lib/aide/aide.db.new"
 
@@ -78,7 +80,10 @@ resources:
     type: exec
     command: >-
       trivy rootfs --format json --severity {{ .Vars.trivy_severity }}
+      --scanners vuln --skip-files '*.log'
+      --timeout {{ .Vars.trivy_timeout }}s
       --output {{ .Vars.scan_dir }}/trivy.json /
+    timeout: "{{ .Vars.trivy_timeout }}"
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-trivy-$(date +%Y%m%d)"
     depends_on: [install-trivy, scan-dir]
@@ -103,6 +108,7 @@ resources:
       lynis audit system --no-colors --quiet
       --logfile {{ .Vars.scan_dir }}/lynis.log
       --report-file {{ .Vars.scan_dir }}/lynis-report.dat
+    timeout: "{{ .Vars.scan_timeout }}"
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-lynis-$(date +%Y%m%d)"
     depends_on: [install-lynis, scan-dir]
@@ -147,6 +153,7 @@ resources:
     command: >-
       rkhunter --check --skip-keypress --report-warnings-only
       --logfile {{ .Vars.scan_dir }}/rkhunter.log || true
+    timeout: "{{ .Vars.scan_timeout }}"
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-rkhunter-$(date +%Y%m%d)"
     depends_on: [install-rkhunter, scan-dir]
@@ -206,6 +213,7 @@ resources:
       clamscan --recursive --infected --no-summary
       --log={{ .Vars.scan_dir }}/clamav.log
       /etc /usr/bin /usr/sbin /usr/local/bin || true
+    timeout: "{{ .Vars.scan_timeout }}"
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-clamscan-$(date +%Y%m%d)"
     depends_on: [freshclam-update, scan-dir]
@@ -234,6 +242,7 @@ resources:
     type: exec
     command: >-
       aide --check --config /etc/aide/aide.conf > {{ .Vars.scan_dir }}/aide.log 2>&1 || true
+    timeout: "{{ .Vars.scan_timeout }}"
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-aide-$(date +%Y%m%d)"
     depends_on: [aide-init, scan-dir]
