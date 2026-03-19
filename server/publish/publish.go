@@ -739,8 +739,16 @@ func normalizeWhitespace(dir string) error {
 			return err
 		}
 
-		lines := strings.Split(string(data), "\n")
+		text := string(data)
 		changed := false
+
+		// Strip UTF-8 BOM if present.
+		if strings.HasPrefix(text, "\xef\xbb\xbf") {
+			text = strings.TrimPrefix(text, "\xef\xbb\xbf")
+			changed = true
+		}
+
+		lines := strings.Split(text, "\n")
 		for i, line := range lines {
 			trimmed := strings.TrimRight(line, " \t\r")
 			if trimmed != line {

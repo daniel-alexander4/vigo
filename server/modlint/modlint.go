@@ -107,6 +107,11 @@ type resource struct {
 func repair(input []byte, r *Result) []byte {
 	text := string(input)
 
+	// Strip UTF-8 BOM if present — editors and file transfers can inject
+	// this invisible prefix, which causes the YAML parser to see a scalar
+	// instead of a mapping node.
+	text = strings.TrimPrefix(text, "\xef\xbb\xbf")
+
 	// Normalize line endings.
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
