@@ -6,7 +6,12 @@ package backup
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +24,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/argon2"
 )
 
 // Manifest describes a backup archive.
@@ -29,6 +35,8 @@ type Manifest struct {
 	DBDriver      string   `json:"db_driver"`
 	DBDSN         string   `json:"db_dsn"`
 	Files         []string `json:"files"`
+	SHA256        string   `json:"sha256,omitempty"` // hex-encoded hash of the archive
+	Encrypted     bool     `json:"encrypted,omitempty"`
 }
 
 // CreateOptions configures what goes into a backup archive.
@@ -535,4 +543,136 @@ func copyTree(srcDir, dstDir string) ([]string, error) {
 	})
 
 	return copied, err
+}
+
+// HashFile computes the SHA-256 hex digest of a file.
+func HashFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// WriteHashFile writes a SHA-256 sidecar file (archive.tar.gz.sha256).
+func WriteHashFile(archivePath, hash string) error {
+	name := filepath.Base(archivePath)
+	content := hash + "  " + name + "\n"
+	return os.WriteFile(archivePath+".sha256", []byte(content), 0600)
+}
+
+// VerifyHashFile checks a SHA-256 sidecar file against the archive.
+// Returns the hash if valid, or an error if the file is missing or mismatched.
+func VerifyHashFile(archivePath string) (string, error) {
+	actual, err := HashFile(archivePath)
+	if err != nil {
+		return "", fmt.Errorf("computing hash: %w", err)
+	}
+	sidecar := archivePath + ".sha256"
+	data, err := os.ReadFile(sidecar)
+	if err != nil {
+		return actual, fmt.Errorf("reading %s: %w (actual hash: %s)", sidecar, err, actual)
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return actual, fmt.Errorf("empty hash file")
+	}
+	if fields[0] != actual {
+		return actual, fmt.Errorf("hash mismatch: expected %s, got %s", fields[0], actual)
+	}
+	return actual, nil
+}
+
+// Argon2 parameters for password-based key derivation.
+const (
+	argon2Time    = 3
+	argon2Memory  = 64 * 1024 // 64 MB
+	argon2Threads = 4
+	argon2KeyLen  = 32 // AES-256
+	saltLen       = 16
+)
+
+// EncryptFile encrypts a file in place using AES-256-GCM with a password-derived
+// key (Argon2id). The file format is: salt (16 bytes) || nonce (12 bytes) || ciphertext.
+func EncryptFile(path, password string) error {
+	plaintext, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading file: %w", err)
+	}
+
+	salt := make([]byte, saltLen)
+	if _, err := rand.Read(salt); err != nil {
+		return fmt.Errorf("generating salt: %w", err)
+	}
+
+	key := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return fmt.Errorf("creating cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("creating GCM: %w", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return fmt.Errorf("generating nonce: %w", err)
+	}
+
+	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
+
+	// Write: salt || nonce || ciphertext
+	out := make([]byte, 0, saltLen+len(nonce)+len(ciphertext))
+	out = append(out, salt...)
+	out = append(out, nonce...)
+	out = append(out, ciphertext...)
+
+	return os.WriteFile(path, out, 0600)
+}
+
+// DecryptFile decrypts a file in place that was encrypted with EncryptFile.
+func DecryptFile(path, password string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading file: %w", err)
+	}
+
+	if len(data) < saltLen+12 { // salt + minimum nonce
+		return fmt.Errorf("file too small to be encrypted")
+	}
+
+	salt := data[:saltLen]
+	key := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return fmt.Errorf("creating cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("creating GCM: %w", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(data) < saltLen+nonceSize {
+		return fmt.Errorf("file too small for nonce")
+	}
+
+	nonce := data[saltLen : saltLen+nonceSize]
+	ciphertext := data[saltLen+nonceSize:]
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return fmt.Errorf("decryption failed (wrong password?): %w", err)
+	}
+
+	return os.WriteFile(path, plaintext, 0600)
 }

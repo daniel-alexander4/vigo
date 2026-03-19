@@ -187,6 +187,14 @@ func (s *AdminService) DeleteThrall(ctx context.Context, req *pb.DeleteThrallReq
 		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
 	}
 
+	// Look up hostname before deleting for the audit trail.
+	hostname := req.Id
+	if s.fleetIndex != nil {
+		if t := s.fleetIndex.GetThrall(req.Id); t != nil {
+			hostname = t.Hostname
+		}
+	}
+
 	if err := s.queries.DeleteThrall(ctx, req.Id); err != nil {
 		return nil, status.Errorf(codes.Internal, "deleting thrall: %v", err)
 	}
@@ -196,7 +204,10 @@ func (s *AdminService) DeleteThrall(ctx context.Context, req *pb.DeleteThrallReq
 		s.fleetIndex.RemoveThrall(req.Id)
 	}
 
-	slog.Warn("thrall deleted", "thrall_id", req.Id)
+	slog.Warn("thrall deleted", "thrall_id", req.Id, "hostname", hostname)
+
+	// Record tamper-evident audit event (CASCADE deletes traits, runs, snapshots).
+	recordAudit(ctx, s.auditWriter, "thrall.delete", "admin", hostname+" deleted (cascade)", "")
 
 	return &pb.DeleteThrallResponse{}, nil
 }

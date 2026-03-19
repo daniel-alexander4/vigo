@@ -20,13 +20,19 @@ The SQLite database is snapshotted using `VACUUM INTO`, which is safe with concu
 |------|---------|-------------|
 | `--server-yaml` | `/srv/hobnob/server.yaml` | Path to server.yaml (used to find DB settings) |
 | `--server-root` | `/srv/hobnob` | Root directory containing policy/, secrets/, tls/ |
+| `--encrypt` | `false` | Encrypt with AES-256-GCM (prompts for password) |
 
 **Examples:**
 
 ```bash
 hobnobcli backup create /tmp/hobnob-backup.tar.gz
 hobnobcli backup create /backup/hobnob-$(date +%Y%m%d).tar.gz --server-yaml /opt/hobnob/server.yaml
+
+# Encrypted backup (HIPAA compliant)
+hobnobcli backup create /tmp/hobnob-backup.tar.gz --encrypt
 ```
+
+A SHA-256 checksum sidecar file (`.sha256`) is written alongside the archive for integrity verification.
 
 ### restore
 
@@ -43,6 +49,7 @@ hobnobcli backup restore <path>
 | `--target` | `/srv/hobnob` | Root directory to restore into |
 | `--db-only` | `false` | Restore only the database, skip config/secrets/tls |
 | `--dry-run` | `false` | Show what would be restored without writing |
+| `--decrypt` | `false` | Decrypt the archive before restoring (prompts for password) |
 
 **Examples:**
 

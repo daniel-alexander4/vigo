@@ -251,6 +251,13 @@ resources:
 
 Hash a plaintext password with bcrypt and store it as an encrypted secret. Used for Hobnob web UI login accounts (basic auth).
 
+Password complexity requirements (HIPAA 164.308(a)(5)(ii)(D)):
+- Minimum 12 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one digit
+- At least one special character
+
 ```bash
 hobnobcli secrets set-web-password <key>
 ```

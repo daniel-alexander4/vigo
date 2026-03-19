@@ -14,6 +14,7 @@ import (
 	"github.com/hobnob/hobnob/server/backup"
 	"github.com/hobnob/hobnob/server/secrets"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -108,16 +109,51 @@ Examples:
 			return fmt.Errorf("creating backup: %w", err)
 		}
 
-		// Print manifest summary.
-		m, err := backup.ReadManifest(archivePath)
+		// Compute SHA-256 and write sidecar file.
+		hash, err := backup.HashFile(archivePath)
 		if err != nil {
-			return fmt.Errorf("reading manifest: %w", err)
+			return fmt.Errorf("computing hash: %w", err)
+		}
+		if err := backup.WriteHashFile(archivePath, hash); err != nil {
+			return fmt.Errorf("writing hash file: %w", err)
 		}
 
-		fmt.Printf("\nBackup created successfully.\n")
-		fmt.Printf("  Files: %d\n", len(m.Files))
-		fmt.Printf("  Version: %s\n", m.HobnobVersion)
-		fmt.Printf("  Created: %s\n", m.CreatedAt.Format("2006-01-02T15:04:05Z"))
+		// Encrypt if requested.
+		encrypt, _ := cmd.Flags().GetBool("encrypt")
+		if encrypt {
+			pw, err := promptBackupPassword("Enter encryption password: ")
+			if err != nil {
+				return err
+			}
+			fmt.Println("Encrypting archive...")
+			if err := backup.EncryptFile(archivePath, pw); err != nil {
+				return fmt.Errorf("encrypting archive: %w", err)
+			}
+			// Recompute hash of encrypted file and update sidecar.
+			hash, err = backup.HashFile(archivePath)
+			if err != nil {
+				return fmt.Errorf("computing encrypted hash: %w", err)
+			}
+			if err := backup.WriteHashFile(archivePath, hash); err != nil {
+				return fmt.Errorf("writing hash file: %w", err)
+			}
+		}
+
+		// Print manifest summary.
+		if !encrypt {
+			m, err := backup.ReadManifest(archivePath)
+			if err != nil {
+				return fmt.Errorf("reading manifest: %w", err)
+			}
+			fmt.Printf("\nBackup created successfully.\n")
+			fmt.Printf("  Files: %d\n", len(m.Files))
+			fmt.Printf("  Version: %s\n", m.HobnobVersion)
+			fmt.Printf("  Created: %s\n", m.CreatedAt.Format("2006-01-02T15:04:05Z"))
+		} else {
+			fmt.Printf("\nEncrypted backup created successfully.\n")
+		}
+		fmt.Printf("  SHA-256: %s\n", hash)
+		fmt.Printf("  Hash file: %s.sha256\n", archivePath)
 		return nil
 	},
 }
@@ -145,6 +181,27 @@ Examples:
 		targetDir, _ := cmd.Flags().GetString("target")
 		dbOnly, _ := cmd.Flags().GetBool("db-only")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		decrypt, _ := cmd.Flags().GetBool("decrypt")
+
+		// Verify SHA-256 if sidecar file exists.
+		if hash, err := backup.VerifyHashFile(archivePath); err == nil {
+			fmt.Printf("SHA-256 verified: %s\n", hash)
+		} else if !os.IsNotExist(err) {
+			fmt.Printf("WARNING: %s\n", err)
+		}
+
+		// Decrypt if requested.
+		if decrypt {
+			pw, err := promptBackupPassword("Enter decryption password: ")
+			if err != nil {
+				return err
+			}
+			fmt.Println("Decrypting archive...")
+			if err := backup.DecryptFile(archivePath, pw); err != nil {
+				return fmt.Errorf("decrypting archive: %w", err)
+			}
+			fmt.Println("Archive decrypted.")
+		}
 
 		// Read manifest first for display.
 		m, err := backup.ReadManifest(archivePath)
@@ -225,11 +282,27 @@ func isDBFile(path string) bool {
 	return path == "db/hobnob.db" || path == "db/dump.sql"
 }
 
+// promptBackupPassword reads a password for backup encryption/decryption.
+func promptBackupPassword(prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("reading password: %w", err)
+	}
+	if len(pw) == 0 {
+		return "", fmt.Errorf("password cannot be empty")
+	}
+	return string(pw), nil
+}
+
 func init() {
 	backupCreateCmd.Flags().String("server-yaml", "/srv/hobnob/server.yaml",
 		"Path to server.yaml (used to find DB settings)")
 	backupCreateCmd.Flags().String("server-root", "/srv/hobnob",
 		"Server root directory containing policy/, secrets/, tls/")
+	backupCreateCmd.Flags().Bool("encrypt", false,
+		"Encrypt the archive with AES-256-GCM (prompts for password)")
 
 	backupRestoreCmd.Flags().String("target", "/srv/hobnob",
 		"Root directory to restore into")
@@ -237,6 +310,8 @@ func init() {
 		"Restore only the database, skip config/secrets/tls")
 	backupRestoreCmd.Flags().Bool("dry-run", false,
 		"Show what would be restored without writing")
+	backupRestoreCmd.Flags().Bool("decrypt", false,
+		"Decrypt the archive before restoring (prompts for password)")
 
 	backupCmd.AddCommand(backupCreateCmd, backupRestoreCmd, backupInspectCmd)
 }

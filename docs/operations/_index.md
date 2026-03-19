@@ -27,4 +27,7 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Geo-Distributed Deployments](geo-distributed.md) -- Multi-region fleets across US, Europe, and beyond
 - [Emergency Access Procedure](emergency-access.md) -- Break-glass procedure for when normal auth is unavailable (HIPAA)
 - [Decommissioning Procedures](decommissioning.md) -- Secure node and server retirement (HIPAA)
+- [Incident Response Plan](incident-response.md) -- Security incident detection, containment, and recovery (HIPAA)
+- [HIPAA Compliance Checklist](hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification
+- [BAA Template](baa-template.md) -- Business Associate Agreement template for ePHI environments
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics

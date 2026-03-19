@@ -169,6 +169,7 @@ Typical key: hobnob/web/auth/<username>`,
 }
 
 // promptPassword reads a password interactively with confirmation.
+// Enforces HIPAA-grade complexity: 12+ chars, uppercase, lowercase, digit, special.
 func promptPassword() ([]byte, error) {
 	fmt.Fprint(os.Stderr, "Enter password: ")
 	pw1, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -176,8 +177,8 @@ func promptPassword() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading password: %w", err)
 	}
-	if len(pw1) < 8 {
-		return nil, fmt.Errorf("password must be at least 8 characters")
+	if err := validatePasswordComplexity(string(pw1)); err != nil {
+		return nil, err
 	}
 
 	fmt.Fprint(os.Stderr, "Confirm password: ")
@@ -191,6 +192,44 @@ func promptPassword() ([]byte, error) {
 	}
 
 	return pw1, nil
+}
+
+// validatePasswordComplexity checks password meets HIPAA complexity requirements:
+// minimum 12 characters, at least one uppercase, one lowercase, one digit, one special character.
+func validatePasswordComplexity(pw string) error {
+	if len(pw) < 12 {
+		return fmt.Errorf("password must be at least 12 characters (got %d)", len(pw))
+	}
+	var hasUpper, hasLower, hasDigit, hasSpecial bool
+	for _, c := range pw {
+		switch {
+		case c >= 'A' && c <= 'Z':
+			hasUpper = true
+		case c >= 'a' && c <= 'z':
+			hasLower = true
+		case c >= '0' && c <= '9':
+			hasDigit = true
+		default:
+			hasSpecial = true
+		}
+	}
+	var missing []string
+	if !hasUpper {
+		missing = append(missing, "uppercase letter")
+	}
+	if !hasLower {
+		missing = append(missing, "lowercase letter")
+	}
+	if !hasDigit {
+		missing = append(missing, "digit")
+	}
+	if !hasSpecial {
+		missing = append(missing, "special character")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("password must contain at least one %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func init() {

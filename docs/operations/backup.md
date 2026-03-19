@@ -110,12 +110,29 @@ The command reads `server.yaml` to find the database path, then:
 5. Copies `server.yaml`
 6. Writes a `manifest.json` with metadata
 
+Every backup automatically generates a SHA-256 checksum sidecar file (`.sha256`) for integrity verification.
+
 **Flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--server-yaml` | `/srv/hobnob/server.yaml` | Path to server.yaml |
 | `--server-root` | `/srv/hobnob` | Root directory containing policy/, secrets/, tls/ |
+| `--encrypt` | `false` | Encrypt the archive with AES-256-GCM (prompts for password) |
+
+### Encrypted Backups
+
+For HIPAA-compliant environments, encrypt backups at rest:
+
+```bash
+# Create an encrypted backup (prompts for password)
+hobnobcli backup create /tmp/hobnob-backup.tar.gz --encrypt
+
+# Restore an encrypted backup (prompts for password)
+hobnobcli backup restore /tmp/hobnob-backup.tar.gz --decrypt
+```
+
+Encryption uses AES-256-GCM with an Argon2id-derived key. The password is never stored — keep it in a secure location (e.g., a password manager or HSM).
 
 ### Inspect a Backup
 
