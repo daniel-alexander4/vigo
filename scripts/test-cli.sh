@@ -374,11 +374,13 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[backup]${NC}"
 BACKUP_FILE=$(mktemp /tmp/hobnob-test-backup-XXXXXX.tar.gz)
-if $CLI backup create "$BACKUP_FILE" --server "$SERVER" >/dev/null 2>&1; then
-    echo -e "  ${GREEN}PASS${NC}  backup create"
-    PASS=$((PASS + 1))
+if [[ $(id -u) -eq 0 ]]; then
+    run_test "backup create" $CLI backup create "$BACKUP_FILE"
+    if [[ -f "$BACKUP_FILE" ]]; then
+        run_test "backup inspect" $CLI backup inspect "$BACKUP_FILE"
+    fi
 else
-    skip_test "backup create" "requires secret resolution for DB path"
+    skip_test "backup create" "requires root (reads server.yaml and secrets)"
 fi
 rm -f "$BACKUP_FILE"
 echo ""

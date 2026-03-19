@@ -4,11 +4,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/hobnob/hobnob/server/backup"
+	"github.com/hobnob/hobnob/server/secrets"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -70,6 +74,22 @@ Examples:
 		}
 
 		serverRoot, _ := cmd.Flags().GetString("server-root")
+
+		// Resolve secret: references via the local secrets provider.
+		if strings.HasPrefix(dbDSN, "secret:") {
+			secretPath := strings.TrimPrefix(dbDSN, "secret:")
+			secretsDir := filepath.Join(serverRoot, "secrets")
+			provider, provErr := secrets.NewLocalProvider("", secretsDir)
+			if provErr != nil {
+				return fmt.Errorf("initializing secrets provider: %w", provErr)
+			}
+			defer provider.Close()
+			resolved, getErr := provider.Get(context.Background(), secretPath)
+			if getErr != nil {
+				return fmt.Errorf("resolving %s: %w", dbDSN, getErr)
+			}
+			dbDSN = resolved
+		}
 
 		// version is set at package level via -ldflags at build time.
 
