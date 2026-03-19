@@ -2392,30 +2392,38 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 
 	secData := h.dataSource.SecurityScanData()
 
+	// Query timeout = 2.5× check-in interval (agent needs to poll, promote, respond).
+	queryTimeoutSec := int(h.baseInterval.Seconds()*2.5 + 10)
+	if queryTimeoutSec < 30 {
+		queryTimeoutSec = 30
+	}
+
 	data := struct {
 		PageData
-		CompliancePct  float64
-		Total          int64
-		Compliant      int64
-		RecurringDrift int64
-		Errors         int64
-		LostContact    int64
-		NoData         int64
-		DriftCount     int
-		DriftRows      []AskDriftRow
-		Security       SecurityScanPageData
+		CompliancePct    float64
+		Total            int64
+		Compliant        int64
+		RecurringDrift   int64
+		Errors           int64
+		LostContact      int64
+		NoData           int64
+		DriftCount       int
+		DriftRows        []AskDriftRow
+		Security         SecurityScanPageData
+		QueryTimeoutSec  int
 	}{
-		PageData:      PageData{Title: "Compliance & Security", ActiveNav: "ask"},
-		CompliancePct: compData.CompliancePct,
-		Total:         compData.Total,
-		Compliant:     compData.Compliant,
-		RecurringDrift: compData.RecurringDrift,
-		Errors:         compData.Errors,
-		LostContact:    compData.LostContact,
-		NoData:         compData.NoData,
-		DriftCount:    len(driftRows),
-		DriftRows:     driftRows,
-		Security:      secData,
+		PageData:        PageData{Title: "Compliance & Security", ActiveNav: "ask"},
+		CompliancePct:   compData.CompliancePct,
+		Total:           compData.Total,
+		Compliant:       compData.Compliant,
+		RecurringDrift:  compData.RecurringDrift,
+		Errors:          compData.Errors,
+		LostContact:     compData.LostContact,
+		NoData:          compData.NoData,
+		DriftCount:      len(driftRows),
+		DriftRows:       driftRows,
+		Security:        secData,
+		QueryTimeoutSec: queryTimeoutSec,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "ask", data)

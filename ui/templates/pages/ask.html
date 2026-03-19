@@ -304,7 +304,7 @@ function fetchSecDetail(hostname, thrallId) {
         return fetch('/api/v1/query', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: 30})
+            body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: {{.QueryTimeoutSec}} })
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
