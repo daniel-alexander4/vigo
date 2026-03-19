@@ -79,6 +79,7 @@
 
     window.aiDrawerSuggest = function(btn) {
         var q = btn.getAttribute('data-question') || btn.textContent;
+        if (!open) toggleAIChat();
         var input = document.getElementById('ai-drawer-input');
         if (input) input.value = q;
         aiDrawerSubmit(new Event('submit'));

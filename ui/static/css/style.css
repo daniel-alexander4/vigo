@@ -811,31 +811,15 @@ body {
 /* === Chat === */
 /* === Ask Dashboard Layout === */
 .ask-dashboard {
-    display: grid;
-    grid-template-columns: 380px 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 24px;
-    height: calc(100vh - 160px);
-    min-height: 500px;
-}
-@media (max-width: 960px) {
-    .ask-dashboard {
-        grid-template-columns: 1fr;
-        height: auto;
-    }
-    .ask-chat { height: 60vh; }
 }
 
 .ask-panel {
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 20px;
-}
-
-.ask-chat {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
 }
 
 .ask-section {
@@ -1829,11 +1813,6 @@ body {
     height: 24px;
 }
 
-/* Hide FAB on the Security page which has its own full chat */
-body:has(.ask-dashboard) .ai-fab,
-body:has(.ask-dashboard) .ai-drawer {
-    display: none;
-}
 
 /* === AI Drawer === */
 .ai-drawer {

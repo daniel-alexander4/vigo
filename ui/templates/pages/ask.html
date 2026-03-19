@@ -39,12 +39,12 @@
         <div class="ask-section">
             <h3>Reports</h3>
             <div class="ask-reports">
-                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Give me a drift summary: which thralls have drifted and what changed?">Drift Summary</button>
-                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show compliance status for every thrall. List each hostname with its status.">Per-Thrall Status</button>
-                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show me the compliance trend over the last 30 days. Is it improving or degrading?">Compliance Trend</button>
-                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show all failing thralls with their last run details. What failed and why?">Failure Analysis</button>
-                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="List all stale thralls that haven't checked in recently. How long has each been offline?">Stale Thralls</button>
-                <button class="ask-report-btn" onclick="askSuggestion(this)" data-question="Show the recent run history across the fleet. Highlight any patterns in failures.">Run History</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Give me a drift summary: which thralls have drifted and what changed?">Drift Summary</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show compliance status for every thrall. List each hostname with its status.">Per-Thrall Status</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show me the compliance trend over the last 30 days. Is it improving or degrading?">Compliance Trend</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show all failing thralls with their last run details. What failed and why?">Failure Analysis</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="List all stale thralls that haven't checked in recently. How long has each been offline?">Stale Thralls</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show the recent run history across the fleet. Highlight any patterns in failures.">Run History</button>
             </div>
         </div>
 
@@ -69,7 +69,7 @@
                     </tbody>
                 </table>
             </div>
-            <button class="ask-report-btn ask-report-btn--full" onclick="askSuggestion(this)"
+            <button class="ask-report-btn ask-report-btn--full" onclick="aiDrawerSuggest(this)"
                 data-question="Analyze the current package drift across the fleet. For each drifted package, suggest a hobnob module or remediation step to fix it.">
                 Analyze & Remediate Drift
             </button>
@@ -255,30 +255,6 @@
         {{end}}
     </div>
 
-    {{/* ── Right panel: AI chat ── */}}
-    <div class="ask-chat">
-        <div class="chat-container">
-            <div class="chat-messages" id="chat-messages">
-                <div class="chat-welcome">
-                    <h2>AI Diagnostics</h2>
-                    <p>Ask questions or click a report button to investigate.</p>
-                    <div class="chat-suggestions">
-                        <button class="chat-suggestion" onclick="askSuggestion(this)" data-question="How many thralls do I have?">How many thralls?</button>
-                        <button class="chat-suggestion" onclick="askSuggestion(this)" data-question="Which thralls are failing and why?">Failing thralls?</button>
-                        <button class="chat-suggestion" onclick="askSuggestion(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>
-                    </div>
-                </div>
-            </div>
-            <form class="chat-input-form" id="chat-form" hx-boost="false" onsubmit="return handleSubmit(event)">
-                <div class="chat-input-wrapper">
-                    <textarea class="chat-input" id="chat-input" placeholder="Ask a question..." rows="1"
-                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSubmit(event)}"></textarea>
-                    <button class="chat-send" type="submit" id="chat-send">Send</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
-<script src="/static/js/ask.js?v={{.Version}}"></script>
+</div>
 {{end}}
