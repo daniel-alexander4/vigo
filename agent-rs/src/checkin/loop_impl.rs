@@ -318,7 +318,7 @@ fn converge(
     strip_secret_triggers(&mut bundle);
 
     if modules.is_empty() {
-        warn!("server returned zero modules — check server logs for config errors (missing modules/roles) and verify this thrall is matched in thralls/");
+        warn!("server returned zero modules — check server logs for config errors (missing modules/roles) and verify this envoy is matched in envoys/");
         return Ok(RunResult {
             results: vec![],
             interval,
@@ -737,7 +737,7 @@ pub async fn daemon_loop(
         .await;
 
         // Poll mode: run one unary check-in cycle.
-        let lock_dir = data_dir.as_deref().unwrap_or(std::path::Path::new("/var/lib/hobnob"));
+        let lock_dir = data_dir.as_deref().unwrap_or(std::path::Path::new("/var/lib/vigo"));
         match run_once(
             client,
             executors,
@@ -1429,7 +1429,7 @@ fn parse_go_duration(s: &str) -> Option<Duration> {
 ///
 /// For each proxied device, evaluates its policy bundle and runs convergence
 /// using SSH-backed executors (ssh_exec, network_config). Results are reported
-/// to the server under the device's virtual thrall_id.
+/// to the server under the device's virtual envoy_id.
 async fn converge_proxied_devices(
     client: &mut Client,
     devices: &[ProxiedDevice],
@@ -1438,7 +1438,7 @@ async fn converge_proxied_devices(
     info!(count = devices.len(), "converging proxied network devices");
 
     for device in devices {
-        let device_id = &device.thrall_id;
+        let device_id = &device.envoy_id;
         let hostname = &device.hostname;
         let device_type = &device.device_type;
 
@@ -1487,7 +1487,7 @@ async fn converge_proxied_devices(
                 )
                 .await;
 
-                // Report traits to server under device's thrall_id.
+                // Report traits to server under device's envoy_id.
                 let traits_bytes = serde_json::to_vec(&traits).unwrap_or_default();
                 if !traits_bytes.is_empty() {
                     if let Err(e) = client.report_traits_for(device_id, &traits_bytes).await {
@@ -1557,7 +1557,7 @@ async fn converge_proxied_devices(
             "proxied device convergence complete"
         );
 
-        // Report results under the device's thrall_id.
+        // Report results under the device's envoy_id.
         if !results.is_empty() {
             let proto_results = results_to_proto(&results);
             if let Err(e) = client

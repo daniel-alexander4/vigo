@@ -1,10 +1,10 @@
 # Licensing
 
-Hobnob uses a built-in licensing system with a free tier and paid tiers. Licenses govern maximum thrall counts and feature access.
+Vigo uses a built-in licensing system with a free tier and paid tiers. Licenses govern maximum envoy counts and feature access.
 
 ## Tiers
 
-| Tier | Max Thralls | Spanner | Support |
+| Tier | Max Envoys | Spanner | Support |
 |------|-------------|---------|---------|
 | Free | 25 | No | Community |
 | Standard | 100 | No | Email |
@@ -24,24 +24,24 @@ This prevents license sharing across servers. If you migrate to a new machine, y
 Generate your server's fingerprint:
 
 ```bash
-hobnobcli license fingerprint
+vigogo license fingerprint
 ```
 
 ## Enforcement Stages
 
-When a license violation is detected (e.g., thrall count exceeds the license limit, license expired, or fingerprint mismatch), enforcement proceeds through three stages:
+When a license violation is detected (e.g., envoy count exceeds the license limit, license expired, or fingerprint mismatch), enforcement proceeds through three stages:
 
 1. **Grace Period (days 1-15)** — Full functionality. Warning logged on every check-in. Grace clock resets immediately when returning to compliance.
-2. **Enrollment Block (days 16-30)** — New thrall enrollments are rejected. Existing thralls continue to function normally and are never locked out.
+2. **Enrollment Block (days 16-30)** — New envoy enrollments are rejected. Existing envoys continue to function normally and are never locked out.
 3. **Service Stop (day 31+)** — Server refuses to start.
 
 ## CLI Commands
 
 ```bash
-hobnobcli license status          # View current license status
-hobnobcli license install <file>  # Install a license file
-hobnobcli license inspect [file]  # Inspect a license file without installing
-hobnobcli license fingerprint     # Display machine fingerprint
+vigogo license status          # View current license status
+vigogo license install <file>  # Install a license file
+vigogo license inspect [file]  # Inspect a license file without installing
+vigogo license fingerprint     # Display machine fingerprint
 ```
 
 ## API
@@ -50,4 +50,4 @@ hobnobcli license fingerprint     # Display machine fingerprint
 GET /api/v1/license
 ```
 
-Returns current license status including stage, tier, thrall counts, and expiration. See [REST API](../api/rest.md#license).
+Returns current license status including stage, tier, envoy counts, and expiration. See [REST API](../api/rest.md#license).

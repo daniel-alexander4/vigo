@@ -12,17 +12,17 @@ import (
 )
 
 const listAllPackageAudit = `-- name: ListAllPackageAudit :many
-SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+SELECT pa.id, pa.envoy_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname
 FROM package_audit pa
-JOIN thralls t ON t.id = pa.thrall_id
+JOIN envoys t ON t.id = pa.envoy_id
 ORDER BY pa.detected_at DESC
 LIMIT ?
 `
 
 type ListAllPackageAuditRow struct {
 	ID               string         `json:"id"`
-	ThrallID         string         `json:"thrall_id"`
+	EnvoyID          string         `json:"envoy_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -41,7 +41,7 @@ func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int64) ([]ListA
 		var i ListAllPackageAuditRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,
@@ -61,18 +61,18 @@ func (q *Queries) ListAllPackageAudit(ctx context.Context, limit int64) ([]ListA
 	return items, nil
 }
 
-const listPackageAuditByThrall = `-- name: ListPackageAuditByThrall :many
-SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+const listPackageAuditByEnvoy = `-- name: ListPackageAuditByEnvoy :many
+SELECT pa.id, pa.envoy_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname
 FROM package_audit pa
-JOIN thralls t ON t.id = pa.thrall_id
-WHERE pa.thrall_id = ?
+JOIN envoys t ON t.id = pa.envoy_id
+WHERE pa.envoy_id = ?
 ORDER BY pa.detected_at DESC
 `
 
-type ListPackageAuditByThrallRow struct {
+type ListPackageAuditByEnvoyRow struct {
 	ID               string         `json:"id"`
-	ThrallID         string         `json:"thrall_id"`
+	EnvoyID          string         `json:"envoy_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -80,18 +80,18 @@ type ListPackageAuditByThrallRow struct {
 	Hostname         string         `json:"hostname"`
 }
 
-func (q *Queries) ListPackageAuditByThrall(ctx context.Context, thrallID string) ([]ListPackageAuditByThrallRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPackageAuditByThrall, thrallID)
+func (q *Queries) ListPackageAuditByEnvoy(ctx context.Context, envoyID string) ([]ListPackageAuditByEnvoyRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPackageAuditByEnvoy, envoyID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPackageAuditByThrallRow{}
+	items := []ListPackageAuditByEnvoyRow{}
 	for rows.Next() {
-		var i ListPackageAuditByThrallRow
+		var i ListPackageAuditByEnvoyRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,
@@ -112,17 +112,17 @@ func (q *Queries) ListPackageAuditByThrall(ctx context.Context, thrallID string)
 }
 
 const listPackageDrift = `-- name: ListPackageDrift :many
-SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+SELECT pa.id, pa.envoy_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname
 FROM package_audit pa
-JOIN thralls t ON t.id = pa.thrall_id
+JOIN envoys t ON t.id = pa.envoy_id
 WHERE (pa.installed_version != pa.desired_version OR (pa.installed_version IS NULL AND pa.desired_version IS NOT NULL) OR (pa.installed_version IS NOT NULL AND pa.desired_version IS NULL))
 ORDER BY pa.detected_at DESC
 `
 
 type ListPackageDriftRow struct {
 	ID               string         `json:"id"`
-	ThrallID         string         `json:"thrall_id"`
+	EnvoyID          string         `json:"envoy_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -141,7 +141,7 @@ func (q *Queries) ListPackageDrift(ctx context.Context) ([]ListPackageDriftRow, 
 		var i ListPackageDriftRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.PackageName,
 			&i.InstalledVersion,
 			&i.DesiredVersion,

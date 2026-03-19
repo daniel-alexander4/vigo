@@ -14,7 +14,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/hobnob/hobnob/server/license"
+	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +28,7 @@ var (
 	createCustomer    string
 	createCustomerID  string
 	createTier        string
-	createMaxThralls  int
+	createMaxEnvoys  int
 	createExpires     string
 	createOut         string
 	createFingerprint string
@@ -53,17 +53,17 @@ var licenseRenewCmd = &cobra.Command{
 	RunE:  runLicenseRenew,
 }
 
-// Flags for license update-thralls.
+// Flags for license update-envoys.
 var (
 	updateLicenseID  string
-	updateMaxThralls int
+	updateMaxEnvoys int
 	updateOut        string
 )
 
-var licenseUpdateThrallsCmd = &cobra.Command{
-	Use:   "update-thralls",
-	Short: "Issue a new license with updated thrall count",
-	RunE:  runLicenseUpdateThralls,
+var licenseUpdateEnvoysCmd = &cobra.Command{
+	Use:   "update-envoys",
+	Short: "Issue a new license with updated envoy count",
+	RunE:  runLicenseUpdateEnvoys,
 }
 
 var licenseInspectCmd = &cobra.Command{
@@ -92,14 +92,14 @@ func init() {
 	licenseCreateCmd.Flags().StringVar(&createCustomer, "customer", "", "Customer name (required)")
 	licenseCreateCmd.Flags().StringVar(&createCustomerID, "customer-id", "", "Customer ID (required)")
 	licenseCreateCmd.Flags().StringVar(&createTier, "tier", "", "License tier: standard, growth, enterprise (required)")
-	licenseCreateCmd.Flags().IntVar(&createMaxThralls, "max-thralls", 0, "Maximum thrall count (required)")
+	licenseCreateCmd.Flags().IntVar(&createMaxEnvoys, "max-envoys", 0, "Maximum envoy count (required)")
 	licenseCreateCmd.Flags().StringVar(&createExpires, "expires", "", "Expiry date YYYY-MM-DD (required)")
 	licenseCreateCmd.Flags().StringVar(&createOut, "out", "", "Output file path (required)")
-	licenseCreateCmd.Flags().StringVar(&createFingerprint, "fingerprint", "", "Machine fingerprint to bind license to (from hobnobcli license fingerprint)")
+	licenseCreateCmd.Flags().StringVar(&createFingerprint, "fingerprint", "", "Machine fingerprint to bind license to (from vigogo license fingerprint)")
 	licenseCreateCmd.MarkFlagRequired("customer")
 	licenseCreateCmd.MarkFlagRequired("customer-id")
 	licenseCreateCmd.MarkFlagRequired("tier")
-	licenseCreateCmd.MarkFlagRequired("max-thralls")
+	licenseCreateCmd.MarkFlagRequired("max-envoys")
 	licenseCreateCmd.MarkFlagRequired("expires")
 	licenseCreateCmd.MarkFlagRequired("out")
 
@@ -110,18 +110,18 @@ func init() {
 	licenseRenewCmd.MarkFlagRequired("expires")
 	licenseRenewCmd.MarkFlagRequired("out")
 
-	licenseUpdateThrallsCmd.Flags().StringVar(&updateLicenseID, "license-id", "", "License ID to update (required)")
-	licenseUpdateThrallsCmd.Flags().IntVar(&updateMaxThralls, "max-thralls", 0, "New max thrall count (required)")
-	licenseUpdateThrallsCmd.Flags().StringVar(&updateOut, "out", "", "Output file path (required)")
-	licenseUpdateThrallsCmd.MarkFlagRequired("license-id")
-	licenseUpdateThrallsCmd.MarkFlagRequired("max-thralls")
-	licenseUpdateThrallsCmd.MarkFlagRequired("out")
+	licenseUpdateEnvoysCmd.Flags().StringVar(&updateLicenseID, "license-id", "", "License ID to update (required)")
+	licenseUpdateEnvoysCmd.Flags().IntVar(&updateMaxEnvoys, "max-envoys", 0, "New max envoy count (required)")
+	licenseUpdateEnvoysCmd.Flags().StringVar(&updateOut, "out", "", "Output file path (required)")
+	licenseUpdateEnvoysCmd.MarkFlagRequired("license-id")
+	licenseUpdateEnvoysCmd.MarkFlagRequired("max-envoys")
+	licenseUpdateEnvoysCmd.MarkFlagRequired("out")
 
 	licenseListCmd.Flags().IntVar(&listExpiringWithin, "expiring-within", 0, "Only show licenses expiring within N days")
 
 	licenseCmd.AddCommand(licenseCreateCmd)
 	licenseCmd.AddCommand(licenseRenewCmd)
-	licenseCmd.AddCommand(licenseUpdateThrallsCmd)
+	licenseCmd.AddCommand(licenseUpdateEnvoysCmd)
 	licenseCmd.AddCommand(licenseInspectCmd)
 	licenseCmd.AddCommand(licenseVerifyCmd)
 	licenseCmd.AddCommand(licenseListCmd)
@@ -166,7 +166,7 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 		CustomerID:   createCustomerID,
 		LicenseID:    licenseID,
 		Tier:         createTier,
-		MaxThralls:   createMaxThralls,
+		MaxEnvoys:   createMaxEnvoys,
 		Fingerprint:  createFingerprint,
 		IssuedAt:     issuedAt,
 		ExpiresAt:    createExpires,
@@ -184,8 +184,8 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 
 	// Record in database.
 	_, err = db.Exec(
-		`INSERT INTO licenses (license_id, customer_id, tier, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		licenseID, createCustomerID, createTier, createMaxThralls, issuedAt, createExpires, 1,
+		`INSERT INTO licenses (license_id, customer_id, tier, max_envoys, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		licenseID, createCustomerID, createTier, createMaxEnvoys, issuedAt, createExpires, 1,
 	)
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
@@ -195,7 +195,7 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  License ID:  %s\n", licenseID)
 	fmt.Printf("  Customer:    %s (%s)\n", createCustomer, createCustomerID)
 	fmt.Printf("  Tier:        %s\n", createTier)
-	fmt.Printf("  Max thralls: %d\n", createMaxThralls)
+	fmt.Printf("  Max envoys: %d\n", createMaxEnvoys)
 	fmt.Printf("  Expires:     %s\n", createExpires)
 	return nil
 }
@@ -213,12 +213,12 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 
 	// Look up existing license.
 	var customerID, customerName, tier string
-	var maxThralls, version int
+	var maxEnvoys, version int
 	err = db.QueryRow(
-		`SELECT l.customer_id, c.customer_name, l.tier, l.max_thralls, l.version
+		`SELECT l.customer_id, c.customer_name, l.tier, l.max_envoys, l.version
 		 FROM licenses l JOIN customers c ON l.customer_id = c.customer_id
 		 WHERE l.license_id = ?`, renewLicenseID,
-	).Scan(&customerID, &customerName, &tier, &maxThralls, &version)
+	).Scan(&customerID, &customerName, &tier, &maxEnvoys, &version)
 	if err != nil {
 		return fmt.Errorf("license %q not found in database", renewLicenseID)
 	}
@@ -232,7 +232,7 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 		CustomerID:   customerID,
 		LicenseID:    newLicenseID,
 		Tier:         tier,
-		MaxThralls:   maxThralls,
+		MaxEnvoys:   maxEnvoys,
 		IssuedAt:     issuedAt,
 		ExpiresAt:    renewExpires,
 		Version:      newVersion,
@@ -249,8 +249,8 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 
 	// Record new license and mark old as superseded.
 	_, err = db.Exec(
-		`INSERT INTO licenses (license_id, customer_id, tier, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		newLicenseID, customerID, tier, maxThralls, issuedAt, renewExpires, newVersion,
+		`INSERT INTO licenses (license_id, customer_id, tier, max_envoys, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		newLicenseID, customerID, tier, maxEnvoys, issuedAt, renewExpires, newVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
@@ -263,7 +263,7 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runLicenseUpdateThralls(cmd *cobra.Command, args []string) error {
+func runLicenseUpdateEnvoys(cmd *cobra.Command, args []string) error {
 	db, err := openDB()
 	if err != nil {
 		return err
@@ -290,7 +290,7 @@ func runLicenseUpdateThralls(cmd *cobra.Command, args []string) error {
 		CustomerID:   customerID,
 		LicenseID:    newLicenseID,
 		Tier:         tier,
-		MaxThralls:   updateMaxThralls,
+		MaxEnvoys:   updateMaxEnvoys,
 		IssuedAt:     issuedAt,
 		ExpiresAt:    expiresAt,
 		Version:      newVersion,
@@ -306,8 +306,8 @@ func runLicenseUpdateThralls(cmd *cobra.Command, args []string) error {
 	}
 
 	_, err = db.Exec(
-		`INSERT INTO licenses (license_id, customer_id, tier, max_thralls, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		newLicenseID, customerID, tier, updateMaxThralls, issuedAt, expiresAt, newVersion,
+		`INSERT INTO licenses (license_id, customer_id, tier, max_envoys, issued_at, expires_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		newLicenseID, customerID, tier, updateMaxEnvoys, issuedAt, expiresAt, newVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
@@ -316,7 +316,7 @@ func runLicenseUpdateThralls(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("License updated: %s\n", updateOut)
 	fmt.Printf("  New license ID: %s (supersedes %s)\n", newLicenseID, updateLicenseID)
-	fmt.Printf("  Max thralls:    %d\n", updateMaxThralls)
+	fmt.Printf("  Max envoys:    %d\n", updateMaxEnvoys)
 	return nil
 }
 
@@ -343,7 +343,7 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	fmt.Printf("License ID:    %s\n", p.LicenseID)
 	fmt.Printf("Customer:      %s (%s)\n", p.CustomerName, p.CustomerID)
 	fmt.Printf("Tier:          %s\n", p.TierDisplayName())
-	fmt.Printf("Max thralls:   %d\n", p.MaxThralls)
+	fmt.Printf("Max envoys:   %d\n", p.MaxEnvoys)
 	fmt.Printf("Issued:        %s\n", p.IssuedAt)
 	fmt.Printf("Expires:       %s\n", p.ExpiresAt)
 	fmt.Printf("Version:       %d\n", p.Version)
@@ -387,7 +387,7 @@ func runLicenseList(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	query := `SELECT l.license_id, c.customer_name, l.tier, l.max_thralls, l.issued_at, l.expires_at, l.superseded_by
+	query := `SELECT l.license_id, c.customer_name, l.tier, l.max_envoys, l.issued_at, l.expires_at, l.superseded_by
 		FROM licenses l JOIN customers c ON l.customer_id = c.customer_id`
 	queryArgs := []any{}
 
@@ -404,13 +404,13 @@ func runLicenseList(cmd *cobra.Command, args []string) error {
 	defer rows.Close()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "LICENSE_ID\tCUSTOMER\tTIER\tMAX_THRALLS\tISSUED\tEXPIRES\tSTATUS")
+	fmt.Fprintln(w, "LICENSE_ID\tCUSTOMER\tTIER\tMAX_ENVOYS\tISSUED\tEXPIRES\tSTATUS")
 
 	for rows.Next() {
 		var id, customer, tier, issued, expires string
-		var maxThralls int
+		var maxEnvoys int
 		var supersededBy *string
-		if err := rows.Scan(&id, &customer, &tier, &maxThralls, &issued, &expires, &supersededBy); err != nil {
+		if err := rows.Scan(&id, &customer, &tier, &maxEnvoys, &issued, &expires, &supersededBy); err != nil {
 			return err
 		}
 
@@ -421,7 +421,7 @@ func runLicenseList(cmd *cobra.Command, args []string) error {
 			status = "expired"
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", id, customer, tier, maxThralls, issued, expires, status)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n", id, customer, tier, maxEnvoys, issued, expires, status)
 	}
 	return w.Flush()
 }

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/hobnob/hobnob/server/config"
+	"github.com/daniel-alexander4/vigo/server/config"
 )
 
 // ConfigTraceHandler serves the config trace REST endpoint.
@@ -34,7 +34,7 @@ func (h *ConfigTraceHandler) HandleTree(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(tree)
 }
 
-// HandleSearch finds thrall entries matching the given criteria.
+// HandleSearch finds envoy entries matching the given criteria.
 func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("match")
 	module := r.URL.Query().Get("module")

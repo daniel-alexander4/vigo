@@ -1,6 +1,6 @@
 # Compliance Export
 
-Hobnob provides compliance evidence to external tools via three export endpoints: SIEM, CMDB, and OSCAL. Hobnob provides evidence; compliance tools evaluate it.
+Vigo provides compliance evidence to external tools via three export endpoints: SIEM, CMDB, and OSCAL. Vigo provides evidence; compliance tools evaluate it.
 
 ## Configuration
 
@@ -28,7 +28,7 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `since` | 24 hours ago | RFC 3339 timestamp. Only events after this time are returned |
-| `thrall` | (all) | Filter by hostname |
+| `envoy` | (all) | Filter by hostname |
 | `limit` | 1000 | Maximum events to return (max 10000) |
 
 ### Response
@@ -38,7 +38,7 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
   {
     "timestamp": "2026-03-13T10:05:00Z",
     "hostname": "web-01.example.com",
-    "thrall_id": "a1b2c3d4",
+    "envoy_id": "a1b2c3d4",
     "run_id": "run-5678",
     "module_name": "nginx",
     "resource_name": "nginx.conf",
@@ -47,7 +47,7 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
     "changed": true,
     "duration_ms": 42,
     "run_status": "compliant",
-    "source": "hobnob"
+    "source": "vigo"
   }
 ]
 ```
@@ -57,8 +57,8 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | string | RFC 3339 time of the resource action |
-| `hostname` | string | Thrall hostname |
-| `thrall_id` | string | Thrall UUID |
+| `hostname` | string | Envoy hostname |
+| `envoy_id` | string | Envoy UUID |
 | `run_id` | string | Convergence run ID |
 | `module_name` | string | Module that owns the resource |
 | `resource_name` | string | Resource name within the module |
@@ -68,14 +68,14 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
 | `error` | string | Error message (omitted when empty) |
 | `duration_ms` | int | Time spent on this resource in milliseconds |
 | `run_status` | string | Overall run status (compliant, drifted, failing) |
-| `source` | string | Always `"hobnob"` |
+| `source` | string | Always `"vigo"` |
 
 ### Integration Examples
 
 **Splunk HEC:**
 
 ```bash
-hobnobcli export siem --since 2026-03-13T00:00:00Z --output events.json
+vigogo export siem --since 2026-03-13T00:00:00Z --output events.json
 curl -k https://splunk:8088/services/collector \
   -H "Authorization: Splunk <token>" \
   -d @events.json
@@ -87,7 +87,7 @@ curl -k https://splunk:8088/services/collector \
 filebeat.inputs:
   - type: httpjson
     interval: 5m
-    request.url: "http://hobnob-server:8443/api/v1/export/siem?since={{.cursor.timestamp}}"
+    request.url: "http://vigo-server:8443/api/v1/export/siem?since={{.cursor.timestamp}}"
     cursor:
       timestamp:
         value: "{{.last_event.timestamp}}"
@@ -101,11 +101,11 @@ filebeat.inputs:
   port 9880
 </source>
 
-<match hobnob.**>
+<match vigo.**>
   @type elasticsearch
   host elastic-server
   port 9200
-  index_name hobnob-events
+  index_name vigo-events
 </match>
 ```
 
@@ -114,7 +114,7 @@ Poll the SIEM endpoint on an interval and POST results to Fluentd's HTTP input.
 ### Design Decisions
 
 - **No desired/actual state.** Events report what happened (action, changed, error), not what the desired or actual resource state was. This keeps events compact and avoids leaking configuration details into SIEM.
-- **No packages in v1.** Package audit data is available via `hobnobcli packages` but is not included in SIEM events.
+- **No packages in v1.** Package audit data is available via `vigogo packages` but is not included in SIEM events.
 
 ---
 
@@ -138,7 +138,7 @@ Returns a JSON array of `CMDBRecord` objects. Data is read from the FleetIndex (
   {
     "hostname": "web-01.example.com",
     "ip": "10.0.1.10",
-    "thrall_id": "a1b2c3d4",
+    "envoy_id": "a1b2c3d4",
     "os": "ubuntu",
     "os_version": "24.04",
     "architecture": "x86_64",
@@ -158,9 +158,9 @@ Returns a JSON array of `CMDBRecord` objects. Data is read from the FleetIndex (
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `hostname` | string | Thrall hostname |
+| `hostname` | string | Envoy hostname |
 | `ip` | string | IP address |
-| `thrall_id` | string | Thrall UUID |
+| `envoy_id` | string | Envoy UUID |
 | `os` | string | OS family (e.g., `ubuntu`, `centos`, `windows`) |
 | `os_version` | string | OS version |
 | `architecture` | string | CPU architecture (e.g., `x86_64`, `aarch64`) |
@@ -192,7 +192,7 @@ CMDB fields are derived from agent traits:
 **ServiceNow CMDB API:**
 
 ```bash
-hobnobcli export cmdb --status compliant --output cmdb.json
+vigogo export cmdb --status compliant --output cmdb.json
 # Transform and POST each record to ServiceNow Table API
 curl -X POST "https://instance.service-now.com/api/now/table/cmdb_ci_server" \
   -H "Content-Type: application/json" \
@@ -202,7 +202,7 @@ curl -X POST "https://instance.service-now.com/api/now/table/cmdb_ci_server" \
 
 **Generic REST-to-CMDB:**
 
-Poll the endpoint on a schedule and reconcile records against your CMDB. The `thrall_id` field serves as a stable identifier for upsert operations.
+Poll the endpoint on a schedule and reconcile records against your CMDB. The `envoy_id` field serves as a stable identifier for upsert operations.
 
 ### Design Decisions
 
@@ -224,7 +224,7 @@ Returns a minimal valid OSCAL Assessment Results JSON envelope conforming to the
   "assessment-results": {
     "uuid": "...",
     "metadata": {
-      "title": "Hobnob Assessment Results",
+      "title": "Vigo Assessment Results",
       "last-modified": "2026-03-13T10:00:00Z",
       "version": "1.0.0",
       "oscal-version": "1.1.2"
@@ -232,7 +232,7 @@ Returns a minimal valid OSCAL Assessment Results JSON envelope conforming to the
     "results": [
       {
         "uuid": "...",
-        "title": "Hobnob Compliance Assessment",
+        "title": "Vigo Compliance Assessment",
         "start": "2026-03-13T10:00:00Z",
         "findings": [],
         "remarks": "Stub: OSCAL findings mapping is not yet implemented. This envelope is valid OSCAL but contains no control findings."
@@ -242,29 +242,29 @@ Returns a minimal valid OSCAL Assessment Results JSON envelope conforming to the
 }
 ```
 
-The `findings` array is empty in the current implementation. Future versions will map Hobnob compliance data (resource drift, failing resources, convergence status) to OSCAL control findings.
+The `findings` array is empty in the current implementation. Future versions will map Vigo compliance data (resource drift, failing resources, convergence status) to OSCAL control findings.
 
 ---
 
 ## CLI
 
-All export endpoints are accessible via `hobnobcli export`:
+All export endpoints are accessible via `vigogo export`:
 
 ```bash
 # Export last 24h of SIEM events
-hobnobcli export siem
+vigogo export siem
 
-# Export events since a specific time for one thrall
-hobnobcli export siem --since 2026-03-13T00:00:00Z --thrall web-01.example.com
+# Export events since a specific time for one envoy
+vigogo export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
 
-# Export CMDB records for production thralls
-hobnobcli export cmdb --environment prod
+# Export CMDB records for production envoys
+vigogo export cmdb --environment prod
 
-# Export compliant thralls to a file
-hobnobcli export cmdb --status compliant --output fleet.json
+# Export compliant envoys to a file
+vigogo export cmdb --status compliant --output fleet.json
 
 # Export OSCAL envelope
-hobnobcli export oscal --output assessment.json
+vigogo export oscal --output assessment.json
 ```
 
 See [CLI export reference](../cli/export.md) for full flag documentation.

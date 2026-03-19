@@ -1,10 +1,10 @@
 -- name: CreatePlan :one
-INSERT INTO plans (thrall_id, modules)
+INSERT INTO plans (envoy_id, modules)
 VALUES (?, ?)
-RETURNING id, thrall_id, created_at, modules;
+RETURNING id, envoy_id, created_at, modules;
 
 -- name: GetPlanByID :one
-SELECT id, thrall_id, created_at, modules
+SELECT id, envoy_id, created_at, modules
 FROM plans
 WHERE id = ?;
 

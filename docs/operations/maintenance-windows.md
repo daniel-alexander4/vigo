@@ -1,30 +1,30 @@
 # Maintenance Windows
 
-Hobnob supports per-thrall maintenance windows and global change freezes to prevent configuration changes during planned outages.
+Vigo supports per-envoy maintenance windows and global change freezes to prevent configuration changes during planned outages.
 
-## Per-Thrall Maintenance
+## Per-Envoy Maintenance
 
-During a maintenance window, a thrall receives an empty policy on check-in. It skips convergence but still reports traits, maintaining visibility without making changes.
+During a maintenance window, a envoy receives an empty policy on check-in. It skips convergence but still reports traits, maintaining visibility without making changes.
 
 ### CLI
 
 ```bash
 # Set maintenance until 6 AM tomorrow
-hobnobcli thralls maintenance <id> --until 2026-03-14T06:00:00Z
+vigogo envoys maintenance <id> --until 2026-03-14T06:00:00Z
 
 # Clear maintenance
-hobnobcli thralls maintenance <id> --clear
+vigogo envoys maintenance <id> --clear
 ```
 
 ### API
 
 ```bash
 # Set maintenance
-curl -X PUT https://server:8443/api/v1/thralls/<id>/maintenance \
+curl -X PUT https://server:8443/api/v1/envoys/<id>/maintenance \
   -d '{"until": "2026-03-14T06:00:00Z"}'
 
 # Clear maintenance
-curl -X DELETE https://server:8443/api/v1/thralls/<id>/maintenance
+curl -X DELETE https://server:8443/api/v1/envoys/<id>/maintenance
 ```
 
 Maintenance windows expire automatically when the `until` timestamp passes.
@@ -37,13 +37,13 @@ A global freeze prevents all config publishes. Use this during release windows o
 
 ```bash
 # Freeze for 24 hours
-hobnobcli config freeze --until 24h
+vigogo config freeze --until 24h
 
 # Freeze until a specific time
-hobnobcli config freeze --until 2026-03-14T06:00:00Z
+vigogo config freeze --until 2026-03-14T06:00:00Z
 
 # Remove freeze
-hobnobcli config unfreeze
+vigogo config unfreeze
 ```
 
 ### API
@@ -57,4 +57,4 @@ curl -X POST https://server:8443/api/v1/config/freeze \
 curl -X POST https://server:8443/api/v1/config/unfreeze
 ```
 
-While frozen, `hobnobcli config publish` returns an error with the freeze expiry time.
+While frozen, `vigogo config publish` returns an error with the freeze expiry time.

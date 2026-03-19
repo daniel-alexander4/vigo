@@ -1,6 +1,6 @@
 # Secrets
 
-Hobnob never stores secrets in config files, environment variables, logs, or database records. All secret values use the `secret:` prefix and are resolved through a pluggable backend at runtime.
+Vigo never stores secrets in config files, environment variables, logs, or database records. All secret values use the `secret:` prefix and are resolved through a pluggable backend at runtime.
 
 ## The secret: Prefix
 
@@ -8,13 +8,13 @@ Any config value starting with `secret:` is resolved through the secrets provide
 
 ```yaml
 database:
-  dsn: "secret:hobnob/db/dsn"
+  dsn: "secret:vigo/db/dsn"
 
 smtp:
-  password: "secret:hobnob/smtp/password"
+  password: "secret:vigo/smtp/password"
 ```
 
-At startup, the server resolves `secret:hobnob/db/dsn` by calling `provider.Get("hobnob/db/dsn")`. The actual secret value is never written to disk in plaintext.
+At startup, the server resolves `secret:vigo/db/dsn` by calling `provider.Get("vigo/db/dsn")`. The actual secret value is never written to disk in plaintext.
 
 ## Two Backends
 
@@ -25,11 +25,11 @@ Secrets are stored as AES-256-GCM encrypted files on disk. The master key is a 3
 ```yaml
 secrets:
   backend: local
-  key_file: "/srv/hobnob/master.key"
-  secrets_dir: "/srv/hobnob/secrets"
+  key_file: "/srv/vigo/master.key"
+  secrets_dir: "/srv/vigo/secrets"
 ```
 
-Secret path mapping: `secret:hobnob/db/dsn` → file at `secrets_dir/hobnob/db/dsn`.
+Secret path mapping: `secret:vigo/db/dsn` → file at `secrets_dir/vigo/db/dsn`.
 
 On first start, the local backend auto-generates:
 - The master key (if `key_file` doesn't exist)
@@ -44,7 +44,7 @@ Resolves secrets from an external isopass API server. Supports versioning for ro
 secrets:
   backend: isopass
   url: "https://isopass.internal:8443"
-  token_file: "/srv/hobnob/isopass-token"   # 0600, contains bearer token
+  token_file: "/srv/vigo/isopass-token"   # 0600, contains bearer token
 ```
 
 The `token_file` is read at startup. The file should be owned by root with mode `0600`.
@@ -58,8 +58,8 @@ The `token_file` is read at startup. The file should be owned by root with mode 
 If the secrets provider is unreachable or a secret path doesn't exist, the server **refuses to start**. It never falls back to insecure defaults.
 
 ```
-$ hobd
-ERROR server failed error="loading server config: resolving secret 'hobnob/db/dsn': file not found"
+$ vigosrv
+ERROR server failed error="loading server config: resolving secret 'vigo/db/dsn': file not found"
 ```
 
 ## Secret Rotation
@@ -69,16 +69,16 @@ ERROR server failed error="loading server config: resolving secret 'hobnob/db/ds
 When you change a secret with the CLI, rotation is automatic:
 
 ```bash
-hobnobcli secrets set hobnob/grafana/admin-password "newpass"
-  Secret "hobnob/grafana/admin-password" stored.
-  Server notified — affected thralls will apply on next check-in.
+vigogo secrets set vigo/grafana/admin-password "newpass"
+  Secret "vigo/grafana/admin-password" stored.
+  Server notified — affected envoys will apply on next check-in.
 ```
 
 The CLI writes the encrypted file and notifies the server. The server:
 1. Reloads config to resolve the new value
-2. Finds thralls whose configs reference the secret
+2. Finds envoys whose configs reference the secret
 3. Queues `_secret_triggered=true` for resources with `watch_secret: ["path"]`
-4. Sets force-push on affected thralls
+4. Sets force-push on affected envoys
 
 On the next check-in, watch_secret resources re-execute with the new value.
 
@@ -99,25 +99,25 @@ When a version change is detected, the same rotation flow triggers automatically
 Modules reference secrets via vars:
 
 ```yaml
-# nodes.hnb
-thralls:
+# nodes.vgo
+envoys:
   - match: "db*.example.com"
     roles: [database]
     vars:
-      db_password: "secret:hobnob/db/password"
+      db_password: "secret:vigo/db/password"
 ```
 
 The `content:` template renders the resolved value:
 
 ```yaml
-# modules/database.hnb
+# modules/database.vgo
 resources:
   - name: pg-config
     type: file
     target_path: /etc/postgresql/conf.d/auth.conf
     content: |
       password = {{ .Vars.db_password }}
-    watch_secret: ["hobnob/db/password"]
+    watch_secret: ["vigo/db/password"]
     notify: [pg-service]
 ```
 
@@ -130,15 +130,15 @@ Never embed secrets in command strings (they appear in process listings). Use `s
 - name: set-grafana-password
   type: exec
   command: "grafana-cli admin reset-admin-password --password-from-stdin"
-  stdin: "secret:hobnob/grafana/admin_password"
-  watch_secret: ["hobnob/grafana/admin_password"]
+  stdin: "secret:vigo/grafana/admin_password"
+  watch_secret: ["vigo/grafana/admin_password"]
   when: "changed"
 
 # GOOD — temporary 0600 file
 - name: deploy-with-key
   type: exec
   command: "deploy.sh --key-file {{secret_file}}"
-  secret_file: "secret:hobnob/deploy/key"
+  secret_file: "secret:vigo/deploy/key"
 
 # BAD — secret visible in ps output
 - name: bad-example

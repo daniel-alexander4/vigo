@@ -1,15 +1,15 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! Systemd service installation for the Hobnob agent.
+//! Systemd service installation for the Vigo agent.
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
-const SERVICE_NAME: &str = "hobnob-thrall";
-const UNIT_PATH: &str = "/etc/systemd/system/hobnob-thrall.service";
+const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
+const SERVICE_NAME: &str = "vigo-envoy";
+const UNIT_PATH: &str = "/etc/systemd/system/vigo-envoy.service";
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
@@ -21,7 +21,7 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 fn unit_file() -> String {
     format!(
         "[Unit]\n\
-         Description=Hobnob Configuration Management Agent\n\
+         Description=Vigo Configuration Management Agent\n\
          After=network.target\n\
          Wants=network-online.target\n\
          \n\
@@ -51,7 +51,7 @@ pub async fn install_service(
 
     let grpc_addr = derive_grpc_addr(bootstrap_server, grpc_port);
 
-    // Copy running binary to /usr/local/sbin/hobnob.
+    // Copy running binary to /usr/local/sbin/vigo.
     let src_path = std::env::current_exe().context("resolve executable path")?;
     let src_path = std::fs::canonicalize(&src_path).context("resolve symlinks")?;
     if src_path.to_str() != Some(INSTALL_PATH) {
@@ -62,7 +62,7 @@ pub async fn install_service(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(INSTALL_PATH, std::fs::Permissions::from_mode(0o755))?;
         }
-        info!(path = INSTALL_PATH, "installed hobnob binary");
+        info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
     // Write unit file.
@@ -85,7 +85,7 @@ pub async fn install_service(
         }
     }
 
-    println!("Hobnob agent service installed and started.");
+    println!("Vigo agent service installed and started.");
     println!("  systemctl status {}    # check status", SERVICE_NAME);
     println!("  journalctl -u {} -f    # follow logs", SERVICE_NAME);
 
@@ -99,20 +99,20 @@ mod tests {
     #[test]
     fn test_derive_grpc_addr() {
         assert_eq!(
-            derive_grpc_addr("http://hobd.example.com:8443", "1530"),
-            "hobd.example.com:1530"
+            derive_grpc_addr("http://vigosrv.example.com:8443", "1530"),
+            "vigosrv.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("https://hobd.example.com:8443", "1530"),
-            "hobd.example.com:1530"
+            derive_grpc_addr("https://vigosrv.example.com:8443", "1530"),
+            "vigosrv.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("http://hobd.example.com", "1530"),
-            "hobd.example.com:1530"
+            derive_grpc_addr("http://vigosrv.example.com", "1530"),
+            "vigosrv.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("hobd.example.com:8443", "1530"),
-            "hobd.example.com:1530"
+            derive_grpc_addr("vigosrv.example.com:8443", "1530"),
+            "vigosrv.example.com:1530"
         );
         assert_eq!(
             derive_grpc_addr("http://10.0.0.1:8443", "1530"),
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn test_unit_file_content() {
         let unit = unit_file();
-        assert!(unit.contains("ExecStart=/usr/local/sbin/hobnob"));
+        assert!(unit.contains("ExecStart=/usr/local/sbin/vigo"));
         assert!(!unit.contains("--server"), "service should read config from file, not CLI flags");
         assert!(unit.contains("Restart=always"));
         assert!(unit.contains("WantedBy=multi-user.target"));

@@ -20,8 +20,8 @@ resources:
     command: "hostname core-sw01"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "netmgmt01.example.com"
     modules: []
 
@@ -75,8 +75,8 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "gw.example.com"
     modules: []
   - match: "sw01.example.com"
@@ -116,8 +116,8 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "sw01.example.com"
     device_type: cisco_ios
     gateway: "nonexistent.example.com"
@@ -147,8 +147,8 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "sw01.example.com"
     device_type: cisco_ios
     gateway: "sw02.example.com"
@@ -176,8 +176,8 @@ thralls:
 func TestConfigValidateDeviceTypeMissing(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "gw.example.com"
     modules: []
   - match: "sw01.example.com"
@@ -199,8 +199,8 @@ thralls:
 func TestConfigValidateUnsupportedDeviceType(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "gw.example.com"
     modules: []
   - match: "sw01.example.com"
@@ -223,8 +223,8 @@ thralls:
 func TestConfigValidateCredentialRequired(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "gw.example.com"
     modules: []
   - match: "sw01.example.com"
@@ -246,8 +246,8 @@ thralls:
 func TestConfigValidateCredentialSecretPrefix(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "gw.example.com"
     modules: []
   - match: "sw01.example.com"
@@ -285,8 +285,8 @@ resources:
     command: "set system host-name test"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "netmgmt01.example.com"
     modules: []
 
@@ -383,8 +383,8 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "thralls", "nodes.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "nodes.yaml"), `
+envoys:
   - match: "gw.example.com"
     modules: []
   - match: "sw01.example.com"
@@ -414,7 +414,7 @@ thralls:
 		t.Fatalf("AllDeviceEntries returned %d, want 2", len(entries))
 	}
 
-	// Verify only device entries are returned (not normal thralls).
+	// Verify only device entries are returned (not normal envoys).
 	for _, e := range entries {
 		if e.DeviceType == "" {
 			t.Errorf("AllDeviceEntries returned non-device entry: %s", e.Hostname)

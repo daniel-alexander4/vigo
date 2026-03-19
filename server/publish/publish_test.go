@@ -33,7 +33,7 @@ func withTestDirs(t *testing.T) (stage, live string) {
 		setTestDirs(origStage, origLive)
 	})
 
-	for _, sub := range []string{"modules", "roles", "thralls"} {
+	for _, sub := range []string{"modules", "roles", "envoys"} {
 		if err := os.MkdirAll(filepath.Join(stage, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -50,7 +50,7 @@ func writeFile(t *testing.T, path, content string) {
 
 func writeValidConfig(t *testing.T, dir string) {
 	t.Helper()
-	writeFile(t, filepath.Join(dir, "modules", "nginx.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -58,8 +58,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "thralls", "web.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "envoys", "web.vgo"), `
+envoys:
   - match: "web.example.com"
     modules: [nginx]
 `)
@@ -89,7 +89,7 @@ func TestValidateSource_Valid(t *testing.T) {
 
 func TestValidateSource_MissingModuleRef(t *testing.T) {
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "nginx.hnb"), `
+	writeFile(t, filepath.Join(stage, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -97,8 +97,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(stage, "thralls", "web.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "web.vgo"), `
+envoys:
   - match: "web.example.com"
     modules: [nginx, nonexistent]
 `)
@@ -111,15 +111,15 @@ thralls:
 
 func TestValidateSource_IdempotencyError(t *testing.T) {
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "risky.hnb"), `
+	writeFile(t, filepath.Join(stage, "modules", "risky.vgo"), `
 name: risky
 resources:
   - name: run-something
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [risky]
 `)
@@ -142,11 +142,11 @@ func TestPublish_SyncsFiles(t *testing.T) {
 		t.Error("expected files to be synced")
 	}
 
-	if _, err := os.Stat(filepath.Join(live, "modules", "nginx.hnb")); err != nil {
-		t.Error("nginx.hnb not synced to live modules/")
+	if _, err := os.Stat(filepath.Join(live, "modules", "nginx.vgo")); err != nil {
+		t.Error("nginx.vgo not synced to live modules/")
 	}
-	if _, err := os.Stat(filepath.Join(live, "thralls", "web.hnb")); err != nil {
-		t.Error("web.hnb not synced to live thralls/")
+	if _, err := os.Stat(filepath.Join(live, "envoys", "web.vgo")); err != nil {
+		t.Error("web.vgo not synced to live envoys/")
 	}
 }
 
@@ -156,34 +156,34 @@ func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 
 	// Pre-populate live with an extra file.
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
-	writeFile(t, filepath.Join(live, "modules", "old.hnb"), "old content")
+	writeFile(t, filepath.Join(live, "modules", "old.vgo"), "old content")
 
 	_, err := Publish(noURLOpts())
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(live, "modules", "old.hnb")); !os.IsNotExist(err) {
-		t.Error("old.hnb should have been removed from live")
+	if _, err := os.Stat(filepath.Join(live, "modules", "old.vgo")); !os.IsNotExist(err) {
+		t.Error("old.vgo should have been removed from live")
 	}
 }
 
 func TestPublish_LeavesLiveOnValidationFailure(t *testing.T) {
 	stage, live := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "thralls", "bad.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "bad.vgo"), `
+envoys:
   - match: "bad.example.com"
     modules: [nonexistent]
 `)
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
-	writeFile(t, filepath.Join(live, "modules", "existing.hnb"), "keep me")
+	writeFile(t, filepath.Join(live, "modules", "existing.vgo"), "keep me")
 
 	_, err := Publish(noURLOpts())
 	if err == nil {
 		t.Fatal("expected validation failure")
 	}
 
-	data, readErr := os.ReadFile(filepath.Join(live, "modules", "existing.hnb"))
+	data, readErr := os.ReadFile(filepath.Join(live, "modules", "existing.vgo"))
 	if readErr != nil {
 		t.Fatal("live file should still exist")
 	}
@@ -194,7 +194,7 @@ thralls:
 
 func TestPublish_SkipValidationAllowsCustomType(t *testing.T) {
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "custom.hnb"), `
+	writeFile(t, filepath.Join(stage, "modules", "custom.vgo"), `
 name: custom
 resources:
   - name: deploy-app
@@ -202,8 +202,8 @@ resources:
     skip_validation: true
     command: "cap deploy"
 `)
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [custom]
 `)
@@ -264,9 +264,9 @@ func TestDiff_DetectsChanges(t *testing.T) {
 
 	// Populate live with different content.
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
-	writeFile(t, filepath.Join(live, "modules", "nginx.hnb"), "old content")
+	writeFile(t, filepath.Join(live, "modules", "nginx.vgo"), "old content")
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
-	writeFile(t, filepath.Join(live, "modules", "deleted.hnb"), "will be removed")
+	writeFile(t, filepath.Join(live, "modules", "deleted.vgo"), "will be removed")
 
 	_, changed, removed, err := diffTrees(stage, live)
 	if err != nil {
@@ -307,7 +307,7 @@ func TestCheckURLs_ReachableURL(t *testing.T) {
 	defer srv.Close()
 
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -315,8 +315,8 @@ resources:
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [download]
 `)
@@ -334,7 +334,7 @@ func TestCheckURLs_404Fails(t *testing.T) {
 	defer srv.Close()
 
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -342,8 +342,8 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [download]
 `)
@@ -356,7 +356,7 @@ thralls:
 
 func TestCheckURLs_SkipsNonHTTPURLs(t *testing.T) {
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "gitmod.hnb"), `
+	writeFile(t, filepath.Join(stage, "modules", "gitmod.vgo"), `
 name: gitmod
 resources:
   - name: clone-repo
@@ -364,8 +364,8 @@ resources:
     repo: "git@github.com:example/repo.git"
     path: "/opt/repo"
 `)
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [gitmod]
 `)
@@ -378,7 +378,7 @@ thralls:
 
 func TestCheckURLs_SkippedWhenDisabled(t *testing.T) {
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), `
+	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), `
 name: download
 resources:
   - name: get-archive
@@ -386,8 +386,8 @@ resources:
     url: "http://nonexistent.invalid/file.tar.gz"
     target_path: "/opt/app"
 `)
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [download]
 `)
@@ -409,7 +409,7 @@ func TestCheckURLs_HEAD405FallsBackToGET(t *testing.T) {
 	defer srv.Close()
 
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -417,8 +417,8 @@ resources:
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [download]
 `)
@@ -436,7 +436,7 @@ func TestCheckURLs_KeyURLChecked(t *testing.T) {
 	defer srv.Close()
 
 	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "repo.hnb"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(stage, "modules", "repo.vgo"), fmt.Sprintf(`
 name: repo
 resources:
   - name: add-repo
@@ -444,8 +444,8 @@ resources:
     repo: "deb https://example.com/apt stable main"
     key_url: "%s/gpg.key"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [repo]
 `)
@@ -473,18 +473,18 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL)
-	writeFile(t, filepath.Join(stage, "modules", "download.hnb"), badModule)
+	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), badModule)
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
-	writeFile(t, filepath.Join(live, "modules", "download.hnb"), badModule) // same content
+	writeFile(t, filepath.Join(live, "modules", "download.vgo"), badModule) // same content
 
-	writeFile(t, filepath.Join(stage, "thralls", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [download]
 `)
-	os.MkdirAll(filepath.Join(live, "thralls"), 0o755)
-	writeFile(t, filepath.Join(live, "thralls", "all.hnb"), `
-thralls:
+	os.MkdirAll(filepath.Join(live, "envoys"), 0o755)
+	writeFile(t, filepath.Join(live, "envoys", "all.vgo"), `
+envoys:
   - match: "*.example.com"
     modules: [download]
 `)

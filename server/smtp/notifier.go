@@ -18,20 +18,20 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
 // Event mirrors webhook.EventPayload but is decoupled from that package.
 type Event struct {
 	Name      string
 	Timestamp time.Time
-	Thrall    *ThrallInfo
+	Envoy    *EnvoyInfo
 	Run       *RunInfo
 	Details   map[string]any
 }
 
-// ThrallInfo contains thrall metadata for email templates.
-type ThrallInfo struct {
+// EnvoyInfo contains envoy metadata for email templates.
+type EnvoyInfo struct {
 	ID       string
 	Hostname string
 	IP       string
@@ -48,13 +48,13 @@ type RunInfo struct {
 // AllEvents lists every event name the SMTP notifier recognises.
 // Used for documentation and config validation.
 var AllEvents = []string{
-	"thrall.enrolled",
+	"envoy.enrolled",
 	"run.success",
 	"run.failure",
 	"drift.detected",
 	"secret.rotated",
 	"config.reload.failure",
-	"thrall.stale",
+	"envoy.stale",
 	"compliance.threshold",
 }
 
@@ -283,7 +283,7 @@ func (n *Notifier) renderDigest(events []Event) (subject, body string) {
 
 	var buf bytes.Buffer
 	if err := n.tmpl.ExecuteTemplate(&buf, "digest", data); err != nil {
-		return fmt.Sprintf("[Hobnob] Digest: %d events", len(events)),
+		return fmt.Sprintf("[Vigo] Digest: %d events", len(events)),
 			fmt.Sprintf("%d events in this digest period.", len(events))
 	}
 

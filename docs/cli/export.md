@@ -1,11 +1,11 @@
-# hobnobcli export
+# vigogo export
 
-Export compliance data from the Hobnob server in formats suitable for SIEM, CMDB, and OSCAL tools.
+Export compliance data from the Vigo server in formats suitable for SIEM, CMDB, and OSCAL tools.
 
 ## Usage
 
 ```bash
-hobnobcli export <subcommand> [flags]
+vigogo export <subcommand> [flags]
 ```
 
 ## Subcommands
@@ -23,7 +23,7 @@ hobnobcli export <subcommand> [flags]
 Export run results as a JSON array of SIEM events.
 
 ```bash
-hobnobcli export siem [flags]
+vigogo export siem [flags]
 ```
 
 ### Flags
@@ -31,7 +31,7 @@ hobnobcli export siem [flags]
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--since` | | 24 hours ago | RFC 3339 timestamp. Only events after this time are returned |
-| `--thrall` | | (all) | Filter by hostname |
+| `--envoy` | | (all) | Filter by hostname |
 | `--limit` | | 1000 | Maximum events to return (max 10000) |
 | `--output` | | stdout | Write output to a file |
 
@@ -39,13 +39,13 @@ hobnobcli export siem [flags]
 
 ```bash
 # Last 24 hours of events
-hobnobcli export siem
+vigogo export siem
 
-# Events since midnight for a specific thrall
-hobnobcli export siem --since 2026-03-13T00:00:00Z --thrall web-01.example.com
+# Events since midnight for a specific envoy
+vigogo export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
 
 # Last 100 events, saved to a file
-hobnobcli export siem --limit 100 --output events.json
+vigogo export siem --limit 100 --output events.json
 ```
 
 ---
@@ -55,7 +55,7 @@ hobnobcli export siem --limit 100 --output events.json
 Export fleet inventory as a JSON array of CMDB records.
 
 ```bash
-hobnobcli export cmdb [flags]
+vigogo export cmdb [flags]
 ```
 
 ### Flags
@@ -69,14 +69,14 @@ hobnobcli export cmdb [flags]
 ### Examples
 
 ```bash
-# All thralls
-hobnobcli export cmdb
+# All envoys
+vigogo export cmdb
 
-# Only production thralls in compliant state
-hobnobcli export cmdb --status compliant --environment prod
+# Only production envoys in compliant state
+vigogo export cmdb --status compliant --environment prod
 
 # Save to file
-hobnobcli export cmdb --output fleet.json
+vigogo export cmdb --output fleet.json
 ```
 
 ---
@@ -86,7 +86,7 @@ hobnobcli export cmdb --output fleet.json
 Export an OSCAL Assessment Results envelope.
 
 ```bash
-hobnobcli export oscal [flags]
+vigogo export oscal [flags]
 ```
 
 ### Flags
@@ -99,10 +99,10 @@ hobnobcli export oscal [flags]
 
 ```bash
 # Print to stdout
-hobnobcli export oscal
+vigogo export oscal
 
 # Save to file
-hobnobcli export oscal --output assessment.json
+vigogo export oscal --output assessment.json
 ```
 
 ---

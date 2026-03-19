@@ -100,7 +100,7 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 			fmt.Printf("%s%s %s\n", exclPrefix, dim("Excluded:"), strings.Join(excluded, ", "))
 		}
 	} else {
-		// Directory with optional common.hnb.
+		// Directory with optional common.vgo.
 		dirName := blue(lastSegment(node.Dir) + "/")
 		if node.File != "" {
 			modules := formatModuleList(node.Modules, true)
@@ -122,7 +122,7 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 }
 
 // formatModuleList formats a module list with color.
-// inherited=true uses dim (for common.hnb modules), false uses bold white.
+// inherited=true uses dim (for common.vgo modules), false uses bold white.
 func formatModuleList(modules []string, inherited bool) string {
 	if len(modules) == 0 {
 		return dim("(none)")
@@ -142,7 +142,7 @@ func leafFileName(node *treeNode) string {
 	}
 	// Just show the filename part.
 	parts := strings.Split(dir, "/")
-	return parts[len(parts)-1] + ".hnb"
+	return parts[len(parts)-1] + ".vgo"
 }
 
 // lastSegment returns the last path segment.

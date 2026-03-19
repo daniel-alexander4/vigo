@@ -18,22 +18,22 @@ var packagesCmd = &cobra.Command{
 
 var packagesListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List managed packages with installed and desired versions per thrall",
+	Short: "List managed packages with installed and desired versions per envoy",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		thrallFilter, _ := cmd.Flags().GetString("thrall")
+		envoyFilter, _ := cmd.Flags().GetString("envoy")
 
 		client := newAPIClient()
 		path := "/api/v1/packages"
-		if thrallFilter != "" {
-			resolved, err := resolveThrall(client, thrallFilter)
+		if envoyFilter != "" {
+			resolved, err := resolveEnvoy(client, envoyFilter)
 			if err != nil {
 				return err
 			}
-			path += "?thrall_id=" + resolved
+			path += "?envoy_id=" + resolved
 		}
 		var resp struct {
 			Packages []struct {
-				ThrallID           string `json:"thrallId"`
+				EnvoyID           string `json:"envoyId"`
 				Hostname         string `json:"hostname"`
 				PackageName      string `json:"packageName"`
 				InstalledVersion string `json:"installedVersion"`
@@ -45,7 +45,7 @@ var packagesListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("THRALL"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("ENVOY"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"))
 		for _, p := range resp.Packages {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 				p.Hostname, p.PackageName, p.InstalledVersion, p.DesiredVersion)
@@ -61,7 +61,7 @@ var packagesDriftCmd = &cobra.Command{
 		client := newAPIClient()
 		var resp struct {
 			Drifts []struct {
-				ThrallID           string `json:"thrallId"`
+				EnvoyID           string `json:"envoyId"`
 				Hostname         string `json:"hostname"`
 				PackageName      string `json:"packageName"`
 				InstalledVersion string `json:"installedVersion"`
@@ -79,7 +79,7 @@ var packagesDriftCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("THRALL"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"), header("DETECTED"))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ENVOY"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"), header("DETECTED"))
 		for _, d := range resp.Drifts {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				d.Hostname, d.PackageName, d.InstalledVersion,
@@ -90,6 +90,6 @@ var packagesDriftCmd = &cobra.Command{
 }
 
 func init() {
-	packagesListCmd.Flags().String("thrall", "", "Filter by thrall ID")
+	packagesListCmd.Flags().String("envoy", "", "Filter by envoy ID")
 	packagesCmd.AddCommand(packagesListCmd, packagesDriftCmd)
 }

@@ -33,11 +33,11 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
-	"github.com/hobnob/hobnob/server/registry"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/registry"
 )
 
 var (
@@ -47,7 +47,7 @@ var (
 
 func TestMain(m *testing.M) {
 	// Create a temp dir for the SQLite DB file and certs.
-	tmpDir, err := os.MkdirTemp("", "hobnob-grpc-test-*")
+	tmpDir, err := os.MkdirTemp("", "vigo-grpc-test-*")
 	if err != nil {
 		log.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -106,7 +106,7 @@ func startTestServer(t *testing.T) (string, func()) {
 	t.Helper()
 	ctx := context.Background()
 	// Clean tables in correct order for FK constraints.
-	for _, table := range []string{"run_results", "runs", "thrall_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "thralls"} {
+	for _, table := range []string{"run_results", "runs", "envoy_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "envoys"} {
 		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("failed to delete from %s: %v", table, err)
 		}
@@ -115,9 +115,9 @@ func startTestServer(t *testing.T) (string, func()) {
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
-	// Create a minimal config store (empty thrall-configs dir with thralls/, modules/, and roles/ subdirs).
-	nodeConfigsDir := filepath.Join(t.TempDir(), "thrall-configs")
-	for _, sub := range []string{"thralls", "modules", "roles"} {
+	// Create a minimal config store (empty envoy-configs dir with envoys/, modules/, and roles/ subdirs).
+	nodeConfigsDir := filepath.Join(t.TempDir(), "envoy-configs")
+	for _, sub := range []string{"envoys", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(nodeConfigsDir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -201,7 +201,7 @@ func TestMTLSRequired(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewHobnobAgentClient(conn)
+	client := pb.NewVigoAgentClient(conn)
 	_, err = client.Register(context.Background(), &pb.RegisterRequest{
 		Hostname:  "test-host",
 		IpAddress: "10.0.0.1",
@@ -247,7 +247,7 @@ func TestRegisterFlow(t *testing.T) {
 	}
 
 	// Register via gRPC.
-	client := pb.NewHobnobAgentClient(conn)
+	client := pb.NewVigoAgentClient(conn)
 	resp, err := client.Register(ctx, &pb.RegisterRequest{
 		Hostname:  "web01.test.example.com",
 		IpAddress: "10.0.1.5",
@@ -260,14 +260,14 @@ func TestRegisterFlow(t *testing.T) {
 	if !resp.GetSuccess() {
 		t.Fatalf("Register returned success=false: %s", resp.GetMessage())
 	}
-	if resp.GetThrallId() == "" {
-		t.Fatal("expected non-empty thrall_id")
+	if resp.GetEnvoyId() == "" {
+		t.Fatal("expected non-empty envoy_id")
 	}
 
 	// Verify UUID is valid.
-	_, err = uuid.Parse(resp.GetThrallId())
+	_, err = uuid.Parse(resp.GetEnvoyId())
 	if err != nil {
-		t.Fatalf("thrall_id is not a valid UUID: %v", err)
+		t.Fatalf("envoy_id is not a valid UUID: %v", err)
 	}
 }
 
@@ -298,25 +298,25 @@ func TestCheckInRevoked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "node1.test.example.com", "10.0.1.1", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Revoke the thrall.
-	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
+	// Revoke the envoy.
+	if err := reg.RevokeEnvoy(ctx, envoyID); err != nil {
 		t.Fatal(err)
 	}
 
-	// CheckIn should fail for revoked thrall.
-	agentClient := pb.NewHobnobAgentClient(conn)
+	// CheckIn should fail for revoked envoy.
+	agentClient := pb.NewVigoAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("test-fingerprint")
 	sig := signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:           thrallID,
+		EnvoyId:           envoyID,
 		StateFingerprint: "test-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -361,20 +361,20 @@ func TestCheckInSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "active1.test.example.com", "10.0.1.2", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// CheckIn should succeed with valid signature.
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("some-fingerprint")
 	sig := signPayload(payload, tsStr, priv)
 
 	resp, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:           thrallID,
+		EnvoyId:           envoyID,
 		StateFingerprint: "some-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -415,7 +415,7 @@ func TestCheckInBadSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "badsig.test.example.com", "10.0.1.3", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,14 +426,14 @@ func TestCheckInBadSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
 	payload := []byte("fingerprint")
 	sig := signPayload(payload, tsStr, wrongPriv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:           thrallID,
+		EnvoyId:           envoyID,
 		StateFingerprint: "fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -610,7 +610,7 @@ func TestCheckInStaleTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "stale1.test.example.com", "10.0.1.10", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "stale1.test.example.com", "10.0.1.10", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,9 +621,9 @@ func TestCheckInStaleTimestamp(t *testing.T) {
 	payload := []byte("fp")
 	sig := signPayload(payload, tsStr, priv)
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -666,7 +666,7 @@ func TestCheckInFutureTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "future1.test.example.com", "10.0.1.11", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "future1.test.example.com", "10.0.1.11", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -677,9 +677,9 @@ func TestCheckInFutureTimestamp(t *testing.T) {
 	payload := []byte("fp")
 	sig := signPayload(payload, tsStr, priv)
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -722,12 +722,12 @@ func TestCheckInTimestampBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "boundary1.test.example.com", "10.0.1.12", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "boundary1.test.example.com", "10.0.1.12", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 
 	// 4min59s ago — should succeed (within the 5-minute window).
 	withinWindow := time.Now().Add(-4*time.Minute - 59*time.Second)
@@ -736,7 +736,7 @@ func TestCheckInTimestampBoundary(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp-ok",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(withinWindow),
@@ -752,7 +752,7 @@ func TestCheckInTimestampBoundary(t *testing.T) {
 	sig = signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp-fail",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(outsideWindow),
@@ -795,7 +795,7 @@ func TestCheckInTamperedSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "tampered1.test.example.com", "10.0.1.13", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "tampered1.test.example.com", "10.0.1.13", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -806,9 +806,9 @@ func TestCheckInTamperedSignature(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 	sig[len(sig)-1] ^= 0xff // flip last byte
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -851,7 +851,7 @@ func TestCheckInTruncatedSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "truncated1.test.example.com", "10.0.1.14", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "truncated1.test.example.com", "10.0.1.14", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -862,9 +862,9 @@ func TestCheckInTruncatedSignature(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 	sig = sig[:32] // truncate to 32 bytes (ED25519 signatures are 64 bytes)
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -907,7 +907,7 @@ func TestCheckInMissingTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "missingts1.test.example.com", "10.0.1.15", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "missingts1.test.example.com", "10.0.1.15", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -919,9 +919,9 @@ func TestCheckInMissingTimestamp(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 	_ = priv // used above
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        nil, // deliberately missing
@@ -948,9 +948,9 @@ func TestCheckInMalformedUUID(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	_, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         "not-a-uuid",
+		EnvoyId:         "not-a-uuid",
 		StateFingerprint: "fp",
 		Signature:        []byte("fake-sig"),
 		Timestamp:        timestamppb.New(now),
@@ -978,7 +978,7 @@ func TestRevokePreventReregistration(t *testing.T) {
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
-	// Register a thrall.
+	// Register a envoy.
 	token1 := "rereg-block-token-1"
 	_, err := reg.AddApprovedPattern(ctx, "*.test.example.com", token1)
 	if err != nil {
@@ -994,7 +994,7 @@ func TestRevokePreventReregistration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 	resp, err := agentClient.Register(ctx, &pb.RegisterRequest{
 		Hostname:  "reregfail.test.example.com",
 		IpAddress: "10.0.1.16",
@@ -1007,11 +1007,11 @@ func TestRevokePreventReregistration(t *testing.T) {
 	if !resp.GetSuccess() {
 		t.Fatalf("initial Register returned success=false: %s", resp.GetMessage())
 	}
-	thrallID := resp.GetThrallId()
+	envoyID := resp.GetEnvoyId()
 
-	// Revoke the thrall.
-	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
-		t.Fatalf("RevokeThrall failed: %v", err)
+	// Revoke the envoy.
+	if err := reg.RevokeEnvoy(ctx, envoyID); err != nil {
+		t.Fatalf("RevokeEnvoy failed: %v", err)
 	}
 
 	// Generate a new keypair and add a new approved pattern for re-registration.
@@ -1075,12 +1075,12 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, "revokeafter1.test.example.com", "10.0.1.17", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, "revokeafter1.test.example.com", "10.0.1.17", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	agentClient := pb.NewHobnobAgentClient(conn)
+	agentClient := pb.NewVigoAgentClient(conn)
 
 	// First CheckIn should succeed.
 	now := time.Now()
@@ -1089,7 +1089,7 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp-before-revoke",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -1098,9 +1098,9 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 		t.Fatalf("first CheckIn (before revoke) failed: %v", err)
 	}
 
-	// Revoke the thrall.
-	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
-		t.Fatalf("RevokeThrall failed: %v", err)
+	// Revoke the envoy.
+	if err := reg.RevokeEnvoy(ctx, envoyID); err != nil {
+		t.Fatalf("RevokeEnvoy failed: %v", err)
 	}
 
 	// Second CheckIn should fail with PermissionDenied.
@@ -1110,7 +1110,7 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 	sig2 := signPayload(payload2, tsStr2, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp-after-revoke",
 		Signature:        sig2,
 		Timestamp:        timestamppb.New(now2),

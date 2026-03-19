@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
-// StateFlusher reads dirty thralls from the FleetIndex and batch-writes their
+// StateFlusher reads dirty envoys from the FleetIndex and batch-writes their
 // state changes (last_seen, force_push, pending_rotated_secrets) to SQLite
 // periodically. It replaces the LastSeenBatcher with a more comprehensive
-// flush that covers all mutable thrall fields.
+// flush that covers all mutable envoy fields.
 type StateFlusher struct {
 	fleet   *FleetIndex
 	queries *db.Queries
@@ -32,7 +32,7 @@ func NewStateFlusher(fleet *FleetIndex, queries *db.Queries) *StateFlusher {
 	}
 }
 
-// Start runs the flush loop, writing dirty thrall state to SQLite every interval.
+// Start runs the flush loop, writing dirty envoy state to SQLite every interval.
 // Blocks until ctx is cancelled. Performs a final flush on shutdown. The offset
 // parameter staggers the start relative to other flushers to avoid SQLite write
 // lock contention.
@@ -60,7 +60,7 @@ func (sf *StateFlusher) Start(ctx context.Context, interval, offset time.Duratio
 	}
 }
 
-// Flush drains dirty thralls and writes their state to SQLite in batches.
+// Flush drains dirty envoys and writes their state to SQLite in batches.
 func (sf *StateFlusher) Flush(ctx context.Context) {
 	dirty := sf.fleet.DrainDirty()
 	if len(dirty) == 0 {
@@ -93,28 +93,28 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 		}
 	}
 
-	// Handle per-thrall flag updates.
+	// Handle per-envoy flag updates.
 	for id, ts := range dirty {
 		// Clear force_push if it was consumed (no longer set in index).
 		if !ts.ForcePush {
 			if err := sf.queries.ClearForcePush(ctx, id); err != nil {
-				slog.Error("state flusher: clear force_push failed", "thrall_id", id, "error", err)
+				slog.Error("state flusher: clear force_push failed", "envoy_id", id, "error", err)
 			}
 		}
 
 		// Clear rotated secrets if they were consumed.
 		if len(ts.PendingRotatedSecrets) == 0 {
 			if err := sf.queries.ClearRotatedSecrets(ctx, id); err != nil {
-				slog.Error("state flusher: clear rotated secrets failed", "thrall_id", id, "error", err)
+				slog.Error("state flusher: clear rotated secrets failed", "envoy_id", id, "error", err)
 			}
 		}
 
 		// Persist tags.
-		if err := sf.queries.UpdateThrallTags(ctx, db.UpdateThrallTagsParams{
+		if err := sf.queries.UpdateEnvoyTags(ctx, db.UpdateEnvoyTagsParams{
 			Tags: strings.Join(ts.Tags, ","),
 			ID:   id,
 		}); err != nil {
-			slog.Error("state flusher: update tags failed", "thrall_id", id, "error", err)
+			slog.Error("state flusher: update tags failed", "envoy_id", id, "error", err)
 		}
 
 		// Persist maintenance window.
@@ -122,15 +122,15 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 		if !ts.MaintenanceUntil.IsZero() {
 			maint = sql.NullTime{Time: ts.MaintenanceUntil, Valid: true}
 		}
-		if err := sf.queries.UpdateThrallMaintenance(ctx, db.UpdateThrallMaintenanceParams{
+		if err := sf.queries.UpdateEnvoyMaintenance(ctx, db.UpdateEnvoyMaintenanceParams{
 			MaintenanceUntil: maint,
 			ID:               id,
 		}); err != nil {
-			slog.Error("state flusher: update maintenance failed", "thrall_id", id, "error", err)
+			slog.Error("state flusher: update maintenance failed", "envoy_id", id, "error", err)
 		}
 	}
 
-	// Re-mark failed thralls as dirty for next flush.
+	// Re-mark failed envoys as dirty for next flush.
 	if lastSeenFailed {
 		for _, id := range lastSeenIDs {
 			sf.fleet.MarkDirty(id)

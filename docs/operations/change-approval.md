@@ -1,6 +1,6 @@
 # Change Approval
 
-The change approval workflow enforces a two-person rule for config changes. When enabled, `hobnobcli config publish` no longer triggers an immediate config reload. Instead, the change is submitted for approval and a second user must approve it before the server reloads.
+The change approval workflow enforces a two-person rule for config changes. When enabled, `vigogo config publish` no longer triggers an immediate config reload. Instead, the change is submitted for approval and a second user must approve it before the server reloads.
 
 ## Why
 
@@ -25,21 +25,21 @@ Authentication must be enabled (`auth.method: basic`, `oidc`, or `isowebauth`) f
 When `approval_required` is true, publishing files to `.live/` proceeds normally, but the server reload is blocked. The CLI detects this and automatically submits a pending change request:
 
 ```bash
-$ hobnobcli config publish
-  (changed)    modules/nginx.hnb
-  (ok)         thralls/web.hnb
+$ vigogo config publish
+  (changed)    modules/nginx.vgo
+  (ok)         envoys/web.vgo
 
-Published: 12 modules, 3 roles, 8 thrall entries (15 files synced)
+Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
 
 Approval required — change 42 submitted (expires 2026-03-17 14:30).
 A different user must approve it:
-  hobnobcli config approve 42
+  vigogo config approve 42
 ```
 
 ### 2. List pending changes
 
 ```bash
-$ hobnobcli config pending
+$ vigogo config pending
 ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 42  pending  alice         2026-03-16 14:30   2026-03-17 14:30
 ```
@@ -49,7 +49,7 @@ ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 A different user approves the change, which triggers the config reload:
 
 ```bash
-$ hobnobcli config approve 42
+$ vigogo config approve 42
 Change 42 approved by bob (requested by alice) — config reloaded.
 ```
 
@@ -58,7 +58,7 @@ Change 42 approved by bob (requested by alice) — config reloaded.
 To reject a change with an optional reason:
 
 ```bash
-$ hobnobcli config reject 42 --reason "nginx worker count too high for staging"
+$ vigogo config reject 42 --reason "nginx worker count too high for staging"
 Change 42 rejected.
 ```
 
@@ -67,7 +67,7 @@ Change 42 rejected.
 The approver must be a different user than the requester. If the same user tries to approve their own change, the server returns 403:
 
 ```
-$ hobnobcli config approve 42
+$ vigogo config approve 42
 Error: server returned 403: approver must be a different user than the requester
 ```
 
@@ -127,4 +127,4 @@ When a new change is submitted, any existing pending changes are automatically c
 
 ## When Approval Is Disabled
 
-When `approval_required` is false (the default), `hobnobcli config publish` triggers an immediate config reload as before. The approval endpoints are still registered but creating changes is optional.
+When `approval_required` is false (the default), `vigogo config publish` triggers an immediate config reload as before. The approval endpoints are still registered but creating changes is optional.

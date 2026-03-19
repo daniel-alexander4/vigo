@@ -65,7 +65,7 @@ impl Executor for RebootWindowsExecutor {
         let message = params
             .get("message")
             .cloned()
-            .unwrap_or_else(|| "Hobnob: scheduled reboot".to_string());
+            .unwrap_or_else(|| "Vigo: scheduled reboot".to_string());
         let delay_secs = params
             .get("delay_secs")
             .cloned()

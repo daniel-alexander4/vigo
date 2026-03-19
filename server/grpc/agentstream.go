@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/metrics"
-	"github.com/hobnob/hobnob/server/registry"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -26,7 +26,7 @@ import (
 // The first message must be a CheckInRequest (handshake). After that, the
 // agent can send check-in, report-result, or report-traits messages. The
 // server pushes policy changes and force-push signals asynchronously.
-func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) error {
+func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error {
 	// Read the first message — must be a check-in (handshake).
 	firstMsg, err := stream.Recv()
 	if err != nil {
@@ -38,52 +38,52 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 		return status.Error(codes.InvalidArgument, "first stream message must be check_in")
 	}
 
-	if _, err := uuid.Parse(checkin.GetThrallId()); err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
+	if _, err := uuid.Parse(checkin.GetEnvoyId()); err != nil {
+		return status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
-	thrallID := checkin.GetThrallId()
+	envoyID := checkin.GetEnvoyId()
 
-	// Validate thrall + look up state in one lock acquisition.
-	var thrall db.Thrall
+	// Validate envoy + look up state in one lock acquisition.
+	var envoy db.Envoy
 	if s.fleetIndex != nil {
-		ts, exists, revoked := s.fleetIndex.GetThrallLite(thrallID)
+		ts, exists, revoked := s.fleetIndex.GetEnvoyLite(envoyID)
 		if !exists {
-			return status.Error(codes.NotFound, "thrall not found")
+			return status.Error(codes.NotFound, "envoy not found")
 		}
 		if revoked {
-			return status.Error(codes.PermissionDenied, "thrall is revoked")
+			return status.Error(codes.PermissionDenied, "envoy is revoked")
 		}
-		thrall = fleetThrallToDB(ts)
+		envoy = fleetEnvoyToDB(ts)
 	} else {
-		if err := s.registry.ValidateThrall(stream.Context(), thrallID); err != nil {
-			if errors.Is(err, registry.ErrThrallRevoked) {
-				return status.Error(codes.PermissionDenied, "thrall is revoked")
+		if err := s.registry.ValidateEnvoy(stream.Context(), envoyID); err != nil {
+			if errors.Is(err, registry.ErrEnvoyRevoked) {
+				return status.Error(codes.PermissionDenied, "envoy is revoked")
 			}
-			if errors.Is(err, registry.ErrThrallNotFound) {
-				return status.Error(codes.NotFound, "thrall not found")
+			if errors.Is(err, registry.ErrEnvoyNotFound) {
+				return status.Error(codes.NotFound, "envoy not found")
 			}
-			return status.Errorf(codes.Internal, "validating thrall: %v", err)
+			return status.Errorf(codes.Internal, "validating envoy: %v", err)
 		}
 		var err error
-		thrall, err = s.lookupThrall(stream.Context(), thrallID)
+		envoy, err = s.lookupEnvoy(stream.Context(), envoyID)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Register the stream for push notifications.
-	as, cleanup := s.streamMgr.register(thrallID, thrall.Hostname)
+	as, cleanup := s.streamMgr.register(envoyID, envoy.Hostname)
 	defer cleanup()
 	// Persist final last_seen to DB when the stream closes so the timestamp
-	// survives server restart (streaming thralls skip DB writes mid-stream).
+	// survives server restart (streaming envoys skip DB writes mid-stream).
 	defer func() {
 		if s.fleetIndex != nil {
-			s.fleetIndex.MarkSeen(thrallID, time.Now())
+			s.fleetIndex.MarkSeen(envoyID, time.Now())
 		}
 	}()
 
 	// Send initial policy response.
-	resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, checkin, true)
+	resp, err := s.buildCheckInResponse(stream.Context(), envoyID, envoy, checkin, true)
 	if err != nil {
 		return err
 	}
@@ -97,8 +97,8 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 	metrics.CheckinsTotal.WithLabelValues("stream_connect").Inc()
 	slog.Info("agent stream established",
-		"thrall_id", thrallID,
-		"hostname", thrall.Hostname,
+		"envoy_id", envoyID,
+		"hostname", envoy.Hostname,
 	)
 
 	// Two goroutines: one reads from agent, one writes push messages.
@@ -138,9 +138,9 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
-				resp, err := s.buildCheckInResponse(stream.Context(), thrallID, thrall, m.CheckIn, true)
+				resp, err := s.buildCheckInResponse(stream.Context(), envoyID, envoy, m.CheckIn, true)
 				if err != nil {
-					slog.Error("stream check-in error", "thrall_id", thrallID, "error", err)
+					slog.Error("stream check-in error", "envoy_id", envoyID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -154,15 +154,15 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 			case *pb.AgentStreamMessage_ReportResult:
 				// Authorization check for proxied device results: if the
-				// result's thrall_id differs from the stream owner, verify
+				// result's envoy_id differs from the stream owner, verify
 				// the sender is the authorized gateway for that device.
-				resultThrallID := m.ReportResult.GetThrallId()
-				if resultThrallID != thrallID {
-					if !isAuthorizedGateway(s.configStore, resultThrallID, thrall.Hostname) {
+				resultEnvoyID := m.ReportResult.GetEnvoyId()
+				if resultEnvoyID != envoyID {
+					if !isAuthorizedGateway(s.configStore, resultEnvoyID, envoy.Hostname) {
 						slog.Warn("rejected proxied result from unauthorized gateway",
-							"device_thrall_id", resultThrallID,
-							"gateway_thrall_id", thrallID,
-							"gateway_hostname", thrall.Hostname,
+							"device_envoy_id", resultEnvoyID,
+							"gateway_envoy_id", envoyID,
+							"gateway_hostname", envoy.Hostname,
 						)
 						continue
 					}
@@ -170,7 +170,7 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 
 				resp, err := s.ReportResult(stream.Context(), m.ReportResult)
 				if err != nil {
-					slog.Error("stream report-result error", "thrall_id", thrallID, "error", err)
+					slog.Error("stream report-result error", "envoy_id", envoyID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -185,7 +185,7 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 			case *pb.AgentStreamMessage_ReportTraits:
 				resp, err := s.ReportTraits(stream.Context(), m.ReportTraits)
 				if err != nil {
-					slog.Error("stream report-traits error", "thrall_id", thrallID, "error", err)
+					slog.Error("stream report-traits error", "envoy_id", envoyID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -198,21 +198,21 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 				}
 
 			case *pb.AgentStreamMessage_PushAck:
-				s.pushRouter.handlePushAck(stream.Context(), thrallID, m.PushAck)
+				s.pushRouter.handlePushAck(stream.Context(), envoyID, m.PushAck)
 				if !m.PushAck.Accepted {
-					s.streamMgr.workCompleted(thrallID)
+					s.streamMgr.workCompleted(envoyID)
 				}
 
 			case *pb.AgentStreamMessage_PushResult:
-				s.pushRouter.handlePushResult(stream.Context(), thrallID, m.PushResult)
-				s.streamMgr.workCompleted(thrallID)
+				s.pushRouter.handlePushResult(stream.Context(), envoyID, m.PushResult)
+				s.streamMgr.workCompleted(envoyID)
 
 			case *pb.AgentStreamMessage_QueryResponse:
-				s.queryRouter.handleQueryResponse(thrallID, m.QueryResponse)
-				s.streamMgr.workCompleted(thrallID)
+				s.queryRouter.handleQueryResponse(envoyID, m.QueryResponse)
+				s.streamMgr.workCompleted(envoyID)
 
 			case *pb.AgentStreamMessage_Delta:
-				ack := s.handleDelta(thrallID, thrall.Hostname, m.Delta)
+				ack := s.handleDelta(envoyID, envoy.Hostname, m.Delta)
 				if err := stream.Send(&pb.ServerStreamMessage{
 					Msg: &pb.ServerStreamMessage_DeltaAck{DeltaAck: ack},
 				}); err != nil {
@@ -231,31 +231,31 @@ func (s *AgentService) AgentStream(stream pb.HobnobAgent_AgentStreamServer) erro
 // When streaming is true, last_seen is updated in-memory only (no DB write) since
 // the open gRPC stream already proves liveness. Unary RPCs set streaming=false to
 // ensure the timestamp is flushed to SQLite.
-func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string, thrall db.Thrall, req *pb.CheckInRequest, streaming bool) (*pb.CheckInResponse, error) {
-	// Update last-seen: streaming thralls skip the DB dirty flag since the open
+func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string, envoy db.Envoy, req *pb.CheckInRequest, streaming bool) (*pb.CheckInResponse, error) {
+	// Update last-seen: streaming envoys skip the DB dirty flag since the open
 	// stream already proves liveness. A final MarkSeen on disconnect persists it.
 	if s.fleetIndex != nil {
 		if streaming {
-			s.fleetIndex.MarkSeenInMemory(thrallID, time.Now())
+			s.fleetIndex.MarkSeenInMemory(envoyID, time.Now())
 		} else {
-			s.fleetIndex.MarkSeen(thrallID, time.Now())
+			s.fleetIndex.MarkSeen(envoyID, time.Now())
 		}
 	}
 	// Batch inline traits for periodic flush (hash-deduplicated).
 	inlineTraits := req.GetTraitsJson()
 	if len(inlineTraits) > 0 && json.Valid(inlineTraits) {
 		if s.traitsBatch != nil {
-			s.traitsBatch.Mark(thrallID, string(inlineTraits))
+			s.traitsBatch.Mark(envoyID, string(inlineTraits))
 		}
 		if s.traitsPruner != nil {
-			s.traitsPruner.Mark(thrallID)
+			s.traitsPruner.Mark(envoyID)
 		}
 	}
 
 	// Record agent version if reported.
 	agentVersion := req.GetAgentVersion()
 	if agentVersion != "" && s.fleetIndex != nil {
-		s.fleetIndex.SetAgentVersion(thrallID, agentVersion)
+		s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
 	}
 
 	configVersion := s.configStore.Version()
@@ -263,12 +263,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	// Short-circuit: agent has a cached bundle with matching config version
 	// AND there are no pending rotated secrets or force_push flags.
 	// When FleetIndex is available, check in-memory state for freshest flags.
-	forcePush := thrall.ForcePush != 0
-	hasPending := thrall.PendingRotatedSecrets != "" && thrall.PendingRotatedSecrets != "[]"
+	forcePush := envoy.ForcePush != 0
+	hasPending := envoy.PendingRotatedSecrets != "" && envoy.PendingRotatedSecrets != "[]"
 	streamRequested := false
 	forceUpdate := false
 	if s.fleetIndex != nil {
-		if freshState, ok, _ := s.fleetIndex.GetThrallLite(thrallID); ok {
+		if freshState, ok, _ := s.fleetIndex.GetEnvoyLite(envoyID); ok {
 			forcePush = freshState.ForcePush
 			hasPending = len(freshState.PendingRotatedSecrets) > 0
 			streamRequested = freshState.StreamRequested
@@ -281,12 +281,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	// This ensures all agents stay current without manual intervention.
 	if !forceUpdate && agentVersion != "" && s.serverVersion != "" && agentVersion != s.serverVersion {
 		slog.Info("agent version mismatch, requesting update",
-			"thrall", thrallID, "agent", agentVersion, "server", s.serverVersion)
+			"envoy", envoyID, "agent", agentVersion, "server", s.serverVersion)
 		forceUpdate = true
 	}
 	// Clear the ephemeral flag so it's only sent once.
 	if forceUpdate && s.fleetIndex != nil {
-		s.fleetIndex.SetForceUpdate(thrallID, false)
+		s.fleetIndex.SetForceUpdate(envoyID, false)
 	}
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
 		!forcePush && !hasPending {
@@ -302,13 +302,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		}
 		// Check for pending reassignment even on no-change cycles.
 		if s.reassignStore != nil {
-			if info, ok := s.reassignStore.Pop(thrallID); ok {
+			if info, ok := s.reassignStore.Pop(envoyID); ok {
 				resp.ReassignAddr = info.TargetAddr
-				resp.ReassignId = info.NewThrallID
+				resp.ReassignId = info.NewEnvoyID
 				slog.Info("returning reassignment (no-change path)",
-					"thrall_id", thrallID,
+					"envoy_id", envoyID,
 					"target_addr", info.TargetAddr,
-					"new_thrall_id", info.NewThrallID,
+					"new_envoy_id", info.NewEnvoyID,
 				)
 			}
 		}
@@ -316,23 +316,23 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	}
 
 	// Look up config using pattern index.
-	pattern, cfg := s.configStore.Match(thrall.Hostname)
+	pattern, cfg := s.configStore.Match(envoy.Hostname)
 	if cfg == nil {
-		cfg = &config.ThrallConfig{
-			Thrall:    thrall.Hostname,
+		cfg = &config.EnvoyConfig{
+			Envoy:    envoy.Hostname,
 			Modules: []config.ModuleConfig{},
 		}
 		pattern = ""
 	}
 
-	// If config has case resources, expand them per-thrall using traits.
-	// This bypasses the pattern-level policy cache since expansion varies per thrall.
+	// If config has case resources, expand them per-envoy using traits.
+	// This bypasses the pattern-level policy cache since expansion varies per envoy.
 	hasCaseRes := config.HasCaseResources(cfg)
 	if hasCaseRes {
 		var traits map[string]any
 		if len(inlineTraits) > 0 {
 			if err := json.Unmarshal(inlineTraits, &traits); err != nil {
-				slog.Warn("malformed inline traits JSON", "thrall", thrall.Hostname, "error", err)
+				slog.Warn("malformed inline traits JSON", "envoy", envoy.Hostname, "error", err)
 			}
 		}
 		if traits == nil {
@@ -354,7 +354,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	var traitsMap map[string]any
 	if len(inlineTraits) > 0 {
 		if err := json.Unmarshal(inlineTraits, &traitsMap); err != nil {
-			slog.Warn("malformed inline traits JSON for match vars", "thrall", thrall.Hostname, "error", err)
+			slog.Warn("malformed inline traits JSON for match vars", "envoy", envoy.Hostname, "error", err)
 		}
 	}
 
@@ -389,48 +389,48 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 
 	// Read fresh flags from FleetIndex (in-memory, O(1)) or DB fallback.
 	if s.fleetIndex != nil {
-		freshState, freshExists, _ := s.fleetIndex.GetThrallLite(thrallID)
+		freshState, freshExists, _ := s.fleetIndex.GetEnvoyLite(envoyID)
 		if freshExists {
 			// Inject secret rotation triggers.
 			if len(freshState.PendingRotatedSecrets) > 0 {
 				injectSecretTriggers(bundle, freshState.PendingRotatedSecrets)
-				s.fleetIndex.ClearPendingRotatedSecrets(thrallID)
+				s.fleetIndex.ClearPendingRotatedSecrets(envoyID)
 				slog.Info("delivered secret rotation triggers",
-					"thrall_id", thrallID,
+					"envoy_id", envoyID,
 					"secrets", strings.Join(freshState.PendingRotatedSecrets, ", "))
 			}
 
 			// Clear force_push flag now that the agent has received the fresh bundle.
 			if freshState.ForcePush {
-				s.fleetIndex.SetForcePush(thrallID, false)
+				s.fleetIndex.SetForcePush(envoyID, false)
 			}
 		}
 	} else {
-		freshThrall, freshErr := s.queries.GetThrallByID(ctx, thrallID)
+		freshEnvoy, freshErr := s.queries.GetEnvoyByID(ctx, envoyID)
 		if freshErr != nil {
-			slog.Warn("failed to re-read thrall for pending flags", "thrall_id", thrallID, "error", freshErr)
+			slog.Warn("failed to re-read envoy for pending flags", "envoy_id", envoyID, "error", freshErr)
 		} else {
 			// Inject _secret_triggered for resources subscribing to rotated secrets.
-			pending := freshThrall.PendingRotatedSecrets
+			pending := freshEnvoy.PendingRotatedSecrets
 			if pending != "" && pending != "[]" {
 				var rotatedPaths []string
 				if err := json.Unmarshal([]byte(pending), &rotatedPaths); err == nil && len(rotatedPaths) > 0 {
 					injectSecretTriggers(bundle, rotatedPaths)
-					if clearErr := s.queries.ClearRotatedSecrets(ctx, thrallID); clearErr != nil {
+					if clearErr := s.queries.ClearRotatedSecrets(ctx, envoyID); clearErr != nil {
 						slog.Error("failed to clear rotated secrets",
-							"thrall_id", thrallID, "error", clearErr)
+							"envoy_id", envoyID, "error", clearErr)
 					} else {
 						slog.Info("delivered secret rotation triggers",
-							"thrall_id", thrallID,
+							"envoy_id", envoyID,
 							"secrets", strings.Join(rotatedPaths, ", "))
 					}
 				}
 			}
 
 			// Clear force_push flag now that the agent has received the fresh bundle.
-			if freshThrall.ForcePush != 0 {
-				if err := s.queries.ClearForcePush(ctx, thrallID); err != nil {
-					slog.Warn("failed to clear force_push", "thrall_id", thrallID, "error", err)
+			if freshEnvoy.ForcePush != 0 {
+				if err := s.queries.ClearForcePush(ctx, envoyID); err != nil {
+					slog.Warn("failed to clear force_push", "envoy_id", envoyID, "error", err)
 				}
 			}
 		}
@@ -439,7 +439,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 	// Sign the bundle if a signer is configured.
 	if s.bundleSigner != nil {
 		if err := s.bundleSigner.Sign(bundle, s.bundleMaxAge); err != nil {
-			slog.Error("failed to sign policy bundle", "thrall_id", thrallID, "error", err)
+			slog.Error("failed to sign policy bundle", "envoy_id", envoyID, "error", err)
 		}
 	}
 
@@ -461,29 +461,29 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		resp.Warnings = append(resp.Warnings, "server config reload failed: "+reloadErr.Error())
 	}
 
-	// Check for pending reassignment (thrall moving to a different spoke).
+	// Check for pending reassignment (envoy moving to a different spoke).
 	if s.reassignStore != nil {
-		if info, ok := s.reassignStore.Pop(thrallID); ok {
+		if info, ok := s.reassignStore.Pop(envoyID); ok {
 			resp.ReassignAddr = info.TargetAddr
-			resp.ReassignId = info.NewThrallID
+			resp.ReassignId = info.NewEnvoyID
 			slog.Info("returning reassignment",
-				"thrall_id", thrallID,
+				"envoy_id", envoyID,
 				"target_addr", info.TargetAddr,
-				"new_thrall_id", info.NewThrallID,
+				"new_envoy_id", info.NewEnvoyID,
 			)
 		}
 	}
 
-	// Build ProxiedDevice list for gateway thralls. Network devices whose
-	// gateway field matches this thrall's hostname get their resolved config
+	// Build ProxiedDevice list for gateway envoys. Network devices whose
+	// gateway field matches this envoy's hostname get their resolved config
 	// included in the response so the gateway agent can converge them over SSH.
-	devices := s.configStore.DevicesForGateway(thrall.Hostname)
+	devices := s.configStore.DevicesForGateway(envoy.Hostname)
 	for _, dev := range devices {
 		devBundle, err := buildPolicyBundle(dev.Config, configVersion, nil, nil)
 		if err != nil {
 			slog.Error("failed to build policy bundle for proxied device",
 				"device", dev.Hostname,
-				"gateway", thrall.Hostname,
+				"gateway", envoy.Hostname,
 				"error", err,
 			)
 			continue
@@ -498,11 +498,11 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 			}
 		}
 
-		// Generate a stable virtual thrall ID from the device hostname.
+		// Generate a stable virtual envoy ID from the device hostname.
 		deviceID := DeviceVirtualID(dev.Hostname)
 
 		resp.ProxiedDevices = append(resp.ProxiedDevices, &pb.ProxiedDevice{
-			ThrallId:   deviceID,
+			EnvoyId:   deviceID,
 			Hostname:   dev.Hostname,
 			DeviceType: dev.DeviceType,
 			Credential: dev.Credential,
@@ -515,7 +515,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, thrallID string
 		slog.Debug("included proxied device in gateway response",
 			"device", dev.Hostname,
 			"device_id", deviceID,
-			"gateway", thrall.Hostname,
+			"gateway", envoy.Hostname,
 		)
 	}
 

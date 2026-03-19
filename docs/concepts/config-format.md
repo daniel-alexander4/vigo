@@ -1,35 +1,35 @@
 # Config Format
 
-All Hobnob configuration lives in YAML files with the `.hnb` extension under `policy/stage/`. The server reloads config when `hobnobcli config publish` syncs files to `.live/`.
+All Vigo configuration lives in YAML files with the `.vgo` extension under `policy/stage/`. The server reloads config when `vigogo config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
-The config directory doubles as a thrall hierarchy. Subdirectories define inheritance — `common.hnb` at any level defines modules, roles, and vars inherited by all entries in subdirectories below it.
+The config directory doubles as a envoy hierarchy. Subdirectories define inheritance — `common.vgo` at any level defines modules, roles, and vars inherited by all entries in subdirectories below it.
 
 ```
 policy/stage/
 ├── modules/              # Module definitions (unchanged)
-│   ├── nginx.hnb
-│   ├── postgres.hnb
-│   └── monitoring.hnb
+│   ├── nginx.vgo
+│   ├── postgres.vgo
+│   └── monitoring.vgo
 ├── templates/            # Template files for source: references
-├── roles.hnb             # All role definitions in one file
-├── common.hnb            # Modules/roles/vars inherited by ALL subdirs
+├── roles.vgo             # All role definitions in one file
+├── common.vgo            # Modules/roles/vars inherited by ALL subdirs
 ├── production/
-│   ├── common.hnb        # Inherited by all production subdirs
+│   ├── common.vgo        # Inherited by all production subdirs
 │   └── web/
-│       └── web.hnb       # Leaf entry: match: "web*.prod.example.com"
+│       └── web.vgo       # Leaf entry: match: "web*.prod.example.com"
 └── staging/
-    └── staging.hnb       # Leaf entry: match: "*.staging.example.com"
+    └── staging.vgo       # Leaf entry: match: "*.staging.example.com"
 ```
 
 **Key conventions:**
-- `common.hnb` at any directory level = inheritance definition (no `match:`). Applies only to subdirectories.
-- Any other `.hnb` file = leaf entry with `match:` patterns mapping hostnames to modules.
-- `roles.hnb` at root = single file containing all role definitions.
+- `common.vgo` at any directory level = inheritance definition (no `match:`). Applies only to subdirectories.
+- Any other `.vgo` file = leaf entry with `match:` patterns mapping hostnames to modules.
+- `roles.vgo` at root = single file containing all role definitions.
 - `modules/` and `templates/` = unchanged (modules are a flat library, templates are referenced by explicit `source:` path).
 
-The legacy layout with `thralls/`, `roles/`, and `vars/` directories is still supported for backward compatibility.
+The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still supported for backward compatibility.
 
 ## Modules
 
@@ -76,7 +76,7 @@ resources:
 
 ## Roles
 
-A role is a named list of modules. Roles provide a layer of abstraction — assign a role to a thrall instead of listing individual modules.
+A role is a named list of modules. Roles provide a layer of abstraction — assign a role to a envoy instead of listing individual modules.
 
 ```yaml
 name: webserver
@@ -104,12 +104,12 @@ modules:
 
 Included role modules are prepended before the role's own modules. Includes are **single level only** — an included role cannot itself have `includes:`. Duplicate modules across includes and the role's own list are automatically deduplicated (first occurrence wins).
 
-## Node Mappings (nodes.hnb)
+## Node Mappings (nodes.vgo)
 
-The `nodes.hnb` file maps thrall hostnames to roles and modules. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the thrall's hostname.
+The `nodes.vgo` file maps envoy hostnames to roles and modules. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the envoy's hostname.
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
@@ -145,25 +145,25 @@ thralls:
 
 ## Directory Inheritance
 
-Instead of listing every module on every thrall entry, define shared modules in `common.hnb` files at directory levels. Everything in subdirectories inherits automatically.
+Instead of listing every module on every envoy entry, define shared modules in `common.vgo` files at directory levels. Everything in subdirectories inherits automatically.
 
 ```yaml
-# common.hnb (at root) — all subdirs get these
+# common.vgo (at root) — all subdirs get these
 modules: [sshd, ntp, monitoring]
 vars:
   dns_server: "1.1.1.1"
 ```
 
 ```yaml
-# production/common.hnb — production subdirs also get these
+# production/common.vgo — production subdirs also get these
 modules: [log-shipping, auditd]
 vars:
   log_level: warn
 ```
 
 ```yaml
-# production/web/web.hnb — leaf entry
-thralls:
+# production/web/web.vgo — leaf entry
+envoys:
   - match: "web*.prod.example.com"
     modules: [nginx, certbot]
     vars:
@@ -177,15 +177,15 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
 - Child vars **override** parent vars of the same name.
 - `exclude_modules:` on a leaf entry removes specific inherited modules:
   ```yaml
-  thralls:
+  envoys:
     - match: "docker*.example.com"
       modules: [docker]
       exclude_modules: [ntp]  # containers use host clock
   ```
-- Root-level `common.hnb` applies only to subdirectories — leaf entries at the root level are self-contained.
-- Use `hobnobcli config trace <hostname>` to see the full inheritance chain for a specific host.
-- Use `hobnobcli config tree` to see the entire directory hierarchy at a glance.
-- Use `hobnobcli config search --module <name>` to find which entries use a specific module.
+- Root-level `common.vgo` applies only to subdirectories — leaf entries at the root level are self-contained.
+- Use `vigogo config trace <hostname>` to see the full inheritance chain for a specific host.
+- Use `vigogo config tree` to see the entire directory hierarchy at a glance.
+- Use `vigogo config search --module <name>` to find which entries use a specific module.
 
 ## Variable Resolution
 
@@ -206,7 +206,7 @@ Conditional vars (trait-based)
 Override variables per environment:
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.example.com"
     environment: production
     roles: [webserver]
@@ -226,18 +226,18 @@ thralls:
 Load variables from external files:
 
 ```yaml
-thralls:
+envoys:
   - match: "db*.example.com"
     roles: [database]
-    vars_from: ["vars/database-credentials.hnb"]
+    vars_from: ["vars/database-credentials.vgo"]
 ```
 
 The referenced file contains a flat YAML map:
 
 ```yaml
-# vars/database-credentials.hnb
+# vars/database-credentials.vgo
 db_user: postgres
-db_password: "secret:hobnob/db/password"
+db_password: "secret:vigo/db/password"
 db_port: 5432
 ```
 
@@ -246,19 +246,19 @@ db_port: 5432
 Use `{{ .Hostname }}` in `vars_from` paths to load host-specific var files:
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.example.com"
     roles: [webserver]
     vars_from:
-      - "vars/web-common.hnb"
-      - "vars/{{ .Hostname }}.hnb"
+      - "vars/web-common.vgo"
+      - "vars/{{ .Hostname }}.vgo"
 ```
 
-This lets a single node entry serve many thralls while each loads its own overrides. Missing var files are silently skipped — the thrall still gets all vars from other sources.
+This lets a single node entry serve many envoys while each loads its own overrides. Missing var files are silently skipped — the envoy still gets all vars from other sources.
 
 ### Conditional Vars
 
-Variables that evaluate based on thrall traits:
+Variables that evaluate based on envoy traits:
 
 ```yaml
 vars:
@@ -292,7 +292,7 @@ Plus type-specific attributes (see [Executors](../executors/_index.md)).
 
 ## Auto-Comments (`#~`)
 
-When you run `hobnobcli config publish`, the module linter automatically adds `#~` prefixed comments to changed modules:
+When you run `vigogo config publish`, the module linter automatically adds `#~` prefixed comments to changed modules:
 
 ```yaml
 #~ Manages package, file, service
@@ -333,7 +333,7 @@ resources:
 
 ## Config Reload
 
-After `hobnobcli config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:
+After `vigogo config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:
 1. Re-parses the entire config tree
 2. Rebuilds module definitions, role definitions, and node mappings
 3. The next agent check-in gets the updated config

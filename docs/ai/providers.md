@@ -1,6 +1,6 @@
 # AI Providers
 
-The Hobnob AI assistant supports four LLM providers. Configure the provider in the `ai:` section of `server.yaml`.
+The Vigo AI assistant supports four LLM providers. Configure the provider in the `ai:` section of `server.yaml`.
 
 ## Ollama (Default)
 
@@ -32,7 +32,7 @@ ai:
   enabled: true
   provider: claude
   model: claude-sonnet-4-20250514
-  api_key: "secret:hobnob/ai/claude_api_key"
+  api_key: "secret:vigo/ai/claude_api_key"
 ```
 
 | Field | Default | Description |
@@ -49,7 +49,7 @@ ai:
   enabled: true
   provider: openai
   model: gpt-4o
-  api_key: "secret:hobnob/ai/openai_api_key"
+  api_key: "secret:vigo/ai/openai_api_key"
 ```
 
 | Field | Default | Description |
@@ -67,7 +67,7 @@ ai:
   provider: openai-compat
   model: mixtral-8x7b
   base_url: https://my-inference-server.internal/v1
-  api_key: "secret:hobnob/ai/api_key"
+  api_key: "secret:vigo/ai/api_key"
 ```
 
 | Field | Default | Description |

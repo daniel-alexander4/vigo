@@ -1,6 +1,6 @@
 # Tamper-Evident Audit Trail
 
-Hobnob maintains a tamper-evident audit trail using a SHA-256 hash chain. Every recorded event includes the hash of the previous entry, making modifications, deletions, or out-of-order insertions detectable by anyone with read access to the database.
+Vigo maintains a tamper-evident audit trail using a SHA-256 hash chain. Every recorded event includes the hash of the previous entry, making modifications, deletions, or out-of-order insertions detectable by anyone with read access to the database.
 
 ## How It Works
 
@@ -36,8 +36,8 @@ Because each hash incorporates the previous entry's hash, modifying or deleting 
 | `config.reload` | Config publish or hot-reload | "config reloaded" |
 | `config.approve` | Two-person approval accepted | "approved by admin2" |
 | `config.reject` | Two-person approval rejected | "rejected by admin2" |
-| `thrall.enroll` | New agent enrolls via bootstrap | "web1.example.com enrolled" |
-| `thrall.revoke` | Admin revokes an agent | "web1.example.com revoked" |
+| `envoy.enroll` | New agent enrolls via bootstrap | "web1.example.com enrolled" |
+| `envoy.revoke` | Admin revokes an agent | "web1.example.com revoked" |
 | `push.dispatch` | Ad-hoc push dispatched | "uptime on *.web.*" |
 | `peer.promote` | Peer promoted to primary | "peer2 promoted" |
 
@@ -49,7 +49,7 @@ The audit trail is always on. There is no configuration to disable it.
 
 ```bash
 # Verify the entire hash chain
-hobnobcli audit verify
+vigogo audit verify
 ```
 
 Output on success:
@@ -106,11 +106,11 @@ A broken chain indicates that one or more entries in the `audit_entries` table h
 
 1. **Direct database tampering** -- someone modified a row with raw SQL
 2. **Database restore from backup** -- a partial restore replaced some entries but not others
-3. **Bug in the audit writer** -- a code defect produced an incorrect hash (check the Hobnob version)
+3. **Bug in the audit writer** -- a code defect produced an incorrect hash (check the Vigo version)
 
 ### What to Do
 
-1. **Identify the break point.** Run `hobnobcli audit verify` to find the first broken entry ID.
+1. **Identify the break point.** Run `vigogo audit verify` to find the first broken entry ID.
 2. **Inspect the entry.** Query the database directly: `SELECT * FROM audit_entries WHERE id = <N>`.
 3. **Check surrounding entries.** Compare the `prev_hash` of entry N with the `hash` of entry N-1.
 4. **Review access logs.** Determine who had write access to the database around the entry's timestamp.

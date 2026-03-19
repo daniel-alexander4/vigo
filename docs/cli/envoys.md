@@ -1,41 +1,41 @@
-# hobnobcli thralls
+# vigogo envoys
 
-Manage enrolled thralls (managed nodes). Also available as `hobnobcli nodes`.
+Manage enrolled envoys (managed nodes). Also available as `vigogo nodes`.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
-| `list` | List all enrolled thralls |
-| `show` | Show details for a thrall |
-| `revoke` | Revoke an enrolled thrall |
-| `delete` | Permanently delete a thrall and all its history |
-| `traits` | View collected traits for a thrall |
-| `tag` | Set tags on a thrall |
-| `untag` | Remove specific tags from a thrall |
+| `list` | List all enrolled envoys |
+| `show` | Show details for a envoy |
+| `revoke` | Revoke an enrolled envoy |
+| `delete` | Permanently delete a envoy and all its history |
+| `traits` | View collected traits for a envoy |
+| `tag` | Set tags on a envoy |
+| `untag` | Remove specific tags from a envoy |
 | `maintenance` | Set or clear maintenance mode |
-| `purge` | Delete stale duplicate thralls, keeping only the most recently seen per hostname |
+| `purge` | Delete stale duplicate envoys, keeping only the most recently seen per hostname |
 | `push` | Force immediate check-in and convergence |
-| `rebootstrap` | Signal thralls to download the latest agent binary and restart |
+| `rebootstrap` | Signal envoys to download the latest agent binary and restart |
 
 ## Usage
 
 ```bash
-hobnobcli thralls [subcommand] [flags]
+vigogo envoys [subcommand] [flags]
 ```
 
 ## list
 
-List active (non-revoked) thralls with their status. Pass `--all` to include revoked thralls.
+List active (non-revoked) envoys with their status. Pass `--all` to include revoked envoys.
 
 ```bash
-hobnobcli thralls list
-hobnobcli thralls list --all   # include revoked
+vigogo envoys list
+vigogo envoys list --all   # include revoked
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Include revoked thralls in the output |
+| `--all` | Include revoked envoys in the output |
 
 ### Example output
 
@@ -47,17 +47,17 @@ e5f6g7h8    db-01.internal.net    10.0.2.20      2026-03-02 09:15   2026-03-13 1
 
 ## show
 
-Show detailed information for a specific thrall, including compliance status and pending secret rotations. Accepts a full UUID, short UUID prefix, or hostname.
+Show detailed information for a specific envoy, including compliance status and pending secret rotations. Accepts a full UUID, short UUID prefix, or hostname.
 
 ```bash
-hobnobcli thralls show <id-or-hostname>
+vigogo envoys show <id-or-hostname>
 ```
 
 ### Example
 
 ```bash
-hobnobcli thralls show web-01.example.com
-hobnobcli thralls show a1b2c3d4
+vigogo envoys show web-01.example.com
+vigogo envoys show a1b2c3d4
 ```
 
 ```
@@ -72,46 +72,46 @@ Compliance: compliant
 
 ## revoke
 
-Revoke an enrolled thrall. The thrall will receive an error on its next check-in and cannot re-enroll with the same UUID.
+Revoke an enrolled envoy. The envoy will receive an error on its next check-in and cannot re-enroll with the same UUID.
 
 ```bash
-hobnobcli thralls revoke <id>
+vigogo envoys revoke <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli thralls revoke a1b2c3d4
+vigogo envoys revoke a1b2c3d4
 ```
 
 ```
-Revoked thrall a1b2c3d4
+Revoked envoy a1b2c3d4
 ```
 
 ## delete
 
-Permanently delete a thrall and all its associated history.
+Permanently delete a envoy and all its associated history.
 
 ```bash
-hobnobcli thralls delete <id>
+vigogo envoys delete <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli thralls delete a1b2c3d4
+vigogo envoys delete a1b2c3d4
 ```
 
 ```
-Deleted thrall a1b2c3d4
+Deleted envoy a1b2c3d4
 ```
 
 ## traits
 
-View collected traits for a thrall by hostname. Optionally drill into a specific trait using a dot-separated path.
+View collected traits for a envoy by hostname. Optionally drill into a specific trait using a dot-separated path.
 
 ```bash
-hobnobcli thralls traits <hostname> [dot.path]
+vigogo envoys traits <hostname> [dot.path]
 ```
 
 ### Examples
@@ -119,7 +119,7 @@ hobnobcli thralls traits <hostname> [dot.path]
 #### View all traits
 
 ```bash
-hobnobcli thralls traits web-01.example.com
+vigogo envoys traits web-01.example.com
 ```
 
 ```json
@@ -143,7 +143,7 @@ hobnobcli thralls traits web-01.example.com
 #### View a specific trait
 
 ```bash
-hobnobcli thralls traits web-01.example.com os.distro
+vigogo envoys traits web-01.example.com os.distro
 ```
 
 ```
@@ -152,16 +152,16 @@ ubuntu
 
 ## tag
 
-Set tags on a thrall for targeting.
+Set tags on a envoy for targeting.
 
 ```bash
-hobnobcli thralls tag <id> <tag1,tag2,...>
+vigogo envoys tag <id> <tag1,tag2,...>
 ```
 
 ### Example
 
 ```bash
-hobnobcli thralls tag a1b2c3d4 webserver,production
+vigogo envoys tag a1b2c3d4 webserver,production
 ```
 
 ```
@@ -172,16 +172,16 @@ Tags replace all existing tags. To add to existing tags, include the old ones.
 
 ## untag
 
-Remove specific tags from a thrall.
+Remove specific tags from a envoy.
 
 ```bash
-hobnobcli thralls untag <id> <tag1,tag2,...>
+vigogo envoys untag <id> <tag1,tag2,...>
 ```
 
 ### Example
 
 ```bash
-hobnobcli thralls untag a1b2c3d4 staging
+vigogo envoys untag a1b2c3d4 staging
 ```
 
 ```
@@ -190,11 +190,11 @@ Tags updated: webserver, production
 
 ## maintenance
 
-Set or clear maintenance mode for a thrall. While in maintenance, the thrall receives an empty policy on check-in (skips convergence) but still reports traits.
+Set or clear maintenance mode for a envoy. While in maintenance, the envoy receives an empty policy on check-in (skips convergence) but still reports traits.
 
 ```bash
-hobnobcli thralls maintenance <id> --until <RFC3339>
-hobnobcli thralls maintenance <id> --clear
+vigogo envoys maintenance <id> --until <RFC3339>
+vigogo envoys maintenance <id> --clear
 ```
 
 ### Flags
@@ -208,20 +208,20 @@ hobnobcli thralls maintenance <id> --clear
 
 ```bash
 # Set maintenance until 6 AM tomorrow
-hobnobcli thralls maintenance a1b2c3d4 --until 2026-03-14T06:00:00Z
+vigogo envoys maintenance a1b2c3d4 --until 2026-03-14T06:00:00Z
 
 # Clear maintenance
-hobnobcli thralls maintenance a1b2c3d4 --clear
+vigogo envoys maintenance a1b2c3d4 --clear
 ```
 
 ## purge
 
-Delete stale duplicate thralls. When a machine is rebuilt and re-enrolled with the same hostname, the old entry remains with a different UUID. `purge` finds all hostnames with multiple entries and deletes all but the most recently seen one.
+Delete stale duplicate envoys. When a machine is rebuilt and re-enrolled with the same hostname, the old entry remains with a different UUID. `purge` finds all hostnames with multiple entries and deletes all but the most recently seen one.
 
 Revoked entries always lose to active ones. Among entries with the same status, the most recent `last_seen` timestamp wins.
 
 ```bash
-hobnobcli thralls purge
+vigogo envoys purge
 ```
 
 ### Flags
@@ -234,10 +234,10 @@ hobnobcli thralls purge
 
 ```bash
 # Preview what would be deleted
-hobnobcli thralls purge --dry-run
+vigogo envoys purge --dry-run
 
 # Purge stale duplicates (prompts for confirmation)
-hobnobcli thralls purge
+vigogo envoys purge
 ```
 
 ```
@@ -245,35 +245,35 @@ ID          HOSTNAME              IP           LAST SEEN         STATUS
 e6ff73f8    raspberry             192.168.1.78 2026-03-15 12:17  active
 a1b2c3d4    raspberry             192.168.1.78 2026-03-14 09:30  revoked
 
-2 duplicate thrall(s) will be deleted.
-Purge these thralls? [y/N] y
+2 duplicate envoy(s) will be deleted.
+Purge these envoys? [y/N] y
   deleted e6ff73f8 (raspberry)
   deleted a1b2c3d4 (raspberry)
-Purged 2 stale thrall(s).
+Purged 2 stale envoy(s).
 ```
 
 ## push
 
-Force a thrall to check in and converge immediately, without waiting for its next polling interval. Sets a force-update flag on the server that the agent picks up on its next poll.
+Force a envoy to check in and converge immediately, without waiting for its next polling interval. Sets a force-update flag on the server that the agent picks up on its next poll.
 
 ```bash
-# Push a single thrall
-hobnobcli thralls push <hostname-or-uuid>
+# Push a single envoy
+vigogo envoys push <hostname-or-uuid>
 
-# Push all active thralls
-hobnobcli thralls push --all
+# Push all active envoys
+vigogo envoys push --all
 ```
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Force check-in for all active thralls |
+| `--all` | Force check-in for all active envoys |
 
 ### Example
 
 ```bash
-hobnobcli thralls push web-01.example.com
+vigogo envoys push web-01.example.com
 ```
 
 ```
@@ -282,25 +282,25 @@ OK Force update queued for web-01.example.com
 
 ## rebootstrap
 
-Signal thralls to download the latest agent binary and restart on their next check-in. No SSH required — the server sets a `force_update` flag that the agent picks up during its normal polling cycle.
+Signal envoys to download the latest agent binary and restart on their next check-in. No SSH required — the server sets a `force_update` flag that the agent picks up during its normal polling cycle.
 
 ```bash
-# Update specific thralls
-hobnobcli thralls rebootstrap plex raspberry
+# Update specific envoys
+vigogo envoys rebootstrap plex raspberry
 
-# Update all active thralls
-hobnobcli thralls rebootstrap --all
+# Update all active envoys
+vigogo envoys rebootstrap --all
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Signal every active thrall to update |
+| `--all` | Signal every active envoy to update |
 
 The agent downloads the latest binary from the server's `/api/v1/agent/download` endpoint, verifies the SHA256 checksum, atomically replaces its own binary, and exec-restarts. On systemd, this is seamless — the service continues running with the new binary.
 
 ## Related
 
 - [approved](approved.md) -- manage enrollment patterns
-- [runs](runs.md) -- view run history for thralls
-- [inventory](inventory.md) -- query thralls by traits
-- [push](push.md) -- dispatch ad-hoc commands to thralls
+- [runs](runs.md) -- view run history for envoys
+- [inventory](inventory.md) -- query envoys by traits
+- [push](push.md) -- dispatch ad-hoc commands to envoys

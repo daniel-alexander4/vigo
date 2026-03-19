@@ -53,4 +53,4 @@ resources:
 
 ## Platform
 
-This executor is available on all platforms. It runs on the gateway thrall and connects to the target Junos device over SSH.
+This executor is available on all platforms. It runs on the gateway envoy and connects to the target Junos device over SSH.

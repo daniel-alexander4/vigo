@@ -15,7 +15,7 @@ resources:
     type: file
     target_path: /etc/ntp.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       driftfile /var/lib/ntp/ntp.drift
 
       # Restrict default access

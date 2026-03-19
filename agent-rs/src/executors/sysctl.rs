@@ -29,7 +29,7 @@ impl SysctlExecutor {
 
     fn conf_path(key: &str) -> String {
         let safe = key.replace('.', "-");
-        format!("/etc/sysctl.d/99-hobnob-{}.conf", safe)
+        format!("/etc/sysctl.d/99-vigo-{}.conf", safe)
     }
 }
 

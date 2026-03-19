@@ -4,16 +4,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-KEY_DIR="/srv/hobnob/license-keys"
-SRV_DIR="/srv/hobnob"
-BIN_SRC="$REPO_DIR/bin/hobnob-license-manager"
-BIN_DST="/usr/local/sbin/hobnob-license-manager"
+KEY_DIR="/srv/vigo/license-keys"
+SRV_DIR="/srv/vigo"
+BIN_SRC="$REPO_DIR/bin/vigo-license-manager"
+BIN_DST="/usr/local/sbin/vigo-license-manager"
 README_SRC="$REPO_DIR/license-manager/README.md"
 README_DST="$SRV_DIR/README.md"
 
 # Build if not already built.
 if [ ! -f "$BIN_SRC" ]; then
-    echo "Building hobnob-license-manager..."
+    echo "Building vigo-license-manager..."
     (cd "$REPO_DIR" && go build -o "$BIN_SRC" ./license-manager)
 fi
 
@@ -40,5 +40,5 @@ echo "  Key dir:   $KEY_DIR"
 echo "  README:    $README_DST"
 echo ""
 echo "Next steps:"
-echo "  hobnob-license-manager keys generate"
-echo "  hobnob-license-manager keys inject"
+echo "  vigo-license-manager keys generate"
+echo "  vigo-license-manager keys inject"

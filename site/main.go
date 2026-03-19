@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Hobnob public website — static marketing + documentation browser.
+// Vigo public website — static marketing + documentation browser.
 // Embeds all content at build time for single-binary deployment.
 package main
 
@@ -37,7 +37,7 @@ var staticFS embed.FS
 var templateFS embed.FS
 
 // docsDir is the path to the docs directory. Embedded at build time via -ldflags
-// or read from HOBNOB_DOCS_DIR env var (defaults to ../docs for local dev).
+// or read from VIGO_DOCS_DIR env var (defaults to ../docs for local dev).
 var docsDir = ""
 
 // contentFiles maps URL slugs to markdown files relative to the docs directory.
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	if docsDir == "" {
-		docsDir = os.Getenv("HOBNOB_DOCS_DIR")
+		docsDir = os.Getenv("VIGO_DOCS_DIR")
 	}
 	if docsDir == "" {
 		docsDir = "../docs"
@@ -108,7 +108,7 @@ func main() {
 	docsTmpl := parsePage("docs.html")
 
 	// Content dir for top-level pages (OVERVIEW.md, etc.).
-	contentDir := os.Getenv("HOBNOB_CONTENT_DIR")
+	contentDir := os.Getenv("VIGO_CONTENT_DIR")
 	if contentDir == "" {
 		contentDir = filepath.Join(docsDir, "..")
 	}
@@ -130,7 +130,7 @@ func main() {
 			return
 		}
 		landingTmpl.ExecuteTemplate(w, "base", pageData{
-			Title:     "Hobnob — Distributed State Enforcement",
+			Title:     "Vigo — Distributed State Enforcement",
 			ActiveNav: "home",
 		})
 	})
@@ -153,10 +153,10 @@ func main() {
 		})
 	}
 
-	// Why Hobnob — custom template with styled differentiator cards.
+	// Why Vigo — custom template with styled differentiator cards.
 	mux.HandleFunc("/differentiators", func(w http.ResponseWriter, r *http.Request) {
 		diffTmpl.ExecuteTemplate(w, "base", pageData{
-			Title:     "Why Hobnob",
+			Title:     "Why Vigo",
 			ActiveNav: "differentiators",
 		})
 	})
@@ -263,7 +263,7 @@ func main() {
 		log.Fatalf("generating TLS cert: %v", err)
 	}
 
-	log.Printf("hobnob site listening on https://localhost:%s", port)
+	log.Printf("vigo site listening on https://localhost:%s", port)
 	log.Fatal(http.ListenAndServeTLS(":"+port, tlsCert, tlsKey, mux))
 }
 
@@ -277,7 +277,7 @@ func generateSelfSignedCert() (certPath, keyPath string, err error) {
 
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{Organization: []string{"Hobnob Dev"}},
+		Subject:      pkix.Name{Organization: []string{"Vigo Dev"}},
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
@@ -290,7 +290,7 @@ func generateSelfSignedCert() (certPath, keyPath string, err error) {
 		return "", "", err
 	}
 
-	certFile, err := os.CreateTemp("", "hobnob-site-cert-*.pem")
+	certFile, err := os.CreateTemp("", "vigo-site-cert-*.pem")
 	if err != nil {
 		return "", "", err
 	}
@@ -301,7 +301,7 @@ func generateSelfSignedCert() (certPath, keyPath string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	keyFile, err := os.CreateTemp("", "hobnob-site-key-*.pem")
+	keyFile, err := os.CreateTemp("", "vigo-site-key-*.pem")
 	if err != nil {
 		return "", "", err
 	}

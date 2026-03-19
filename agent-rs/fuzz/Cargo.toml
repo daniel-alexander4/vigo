@@ -1,5 +1,5 @@
 [package]
-name = "hobnob-fuzz"
+name = "vigo-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -19,5 +19,5 @@ doc = false
 
 [dependencies]
 libfuzzer-sys = "0.4"
-hobnob = { path = ".." }
+vigo = { path = ".." }
 serde_json = "1"

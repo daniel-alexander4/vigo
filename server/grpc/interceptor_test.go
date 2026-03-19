@@ -17,10 +17,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
 )
 
 // noopHandler is a grpc.UnaryHandler that records whether it was called and
@@ -31,7 +31,7 @@ func noopHandler(ctx context.Context, req any) (any, error) {
 }
 
 // ctxCheckHandler returns a handler that captures the context passed to it,
-// so tests can inspect context values (e.g. the thrall stored by the interceptor).
+// so tests can inspect context values (e.g. the envoy stored by the interceptor).
 func ctxCheckHandler(captured *context.Context) grpc.UnaryHandler {
 	return func(ctx context.Context, req any) (any, error) {
 		*captured = ctx
@@ -60,11 +60,11 @@ func genKeyPair(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, string) {
 }
 
 // signCheckIn builds a signed CheckInRequest.
-func signCheckIn(thrallID, fingerprint string, ts time.Time, priv ed25519.PrivateKey) *pb.CheckInRequest {
+func signCheckIn(envoyID, fingerprint string, ts time.Time, priv ed25519.PrivateKey) *pb.CheckInRequest {
 	tsStr := fmt.Sprintf("%d", ts.Unix())
 	sig := signPayload([]byte(fingerprint), tsStr, priv)
 	return &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: fingerprint,
 		Signature:        sig,
 		Timestamp:        timestamppb.New(ts),
@@ -72,11 +72,11 @@ func signCheckIn(thrallID, fingerprint string, ts time.Time, priv ed25519.Privat
 }
 
 // signReportResult builds a signed ReportResultRequest.
-func signReportResult(thrallID, runID string, ts time.Time, priv ed25519.PrivateKey) *pb.ReportResultRequest {
+func signReportResult(envoyID, runID string, ts time.Time, priv ed25519.PrivateKey) *pb.ReportResultRequest {
 	tsStr := fmt.Sprintf("%d", ts.Unix())
 	sig := signPayload([]byte(runID), tsStr, priv)
 	return &pb.ReportResultRequest{
-		ThrallId:  thrallID,
+		EnvoyId:  envoyID,
 		RunId:     runID,
 		Signature: sig,
 		Timestamp: timestamppb.New(ts),
@@ -84,11 +84,11 @@ func signReportResult(thrallID, runID string, ts time.Time, priv ed25519.Private
 }
 
 // signReportTraits builds a signed ReportTraitsRequest.
-func signReportTraits(thrallID string, traitsJSON []byte, ts time.Time, priv ed25519.PrivateKey) *pb.ReportTraitsRequest {
+func signReportTraits(envoyID string, traitsJSON []byte, ts time.Time, priv ed25519.PrivateKey) *pb.ReportTraitsRequest {
 	tsStr := fmt.Sprintf("%d", ts.Unix())
 	sig := signPayload(traitsJSON, tsStr, priv)
 	return &pb.ReportTraitsRequest{
-		ThrallId:   thrallID,
+		EnvoyId:   envoyID,
 		TraitsJson: traitsJSON,
 		Signature:  sig,
 		Timestamp:  timestamppb.New(ts),
@@ -116,7 +116,7 @@ func TestInterceptorRegisterBypasses(t *testing.T) {
 		Token:     "fake-token",
 	}
 
-	info := makeInfo(pb.HobnobAgent_Register_FullMethodName)
+	info := makeInfo(pb.VigoAgent_Register_FullMethodName)
 	_, err := interceptor(context.Background(), req, info, handler)
 	if err != nil {
 		t.Fatalf("Register should pass through interceptor, got error: %v", err)
@@ -127,14 +127,14 @@ func TestInterceptorRegisterBypasses(t *testing.T) {
 }
 
 // TestInterceptorCheckInValidSignature verifies that a properly signed
-// CheckInRequest passes verification when the thrall is in FleetIndex.
+// CheckInRequest passes verification when the envoy is in FleetIndex.
 func TestInterceptorCheckInValidSignature(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "web01.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -143,8 +143,8 @@ func TestInterceptorCheckInValidSignature(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	now := time.Now()
-	req := signCheckIn(thrallID, "fp-123", now, priv)
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	req := signCheckIn(envoyID, "fp-123", now, priv)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	var captured context.Context
 	_, err := interceptor(context.Background(), req, info, ctxCheckHandler(&captured))
@@ -152,34 +152,34 @@ func TestInterceptorCheckInValidSignature(t *testing.T) {
 		t.Fatalf("expected CheckIn to pass with valid signature, got: %v", err)
 	}
 
-	// Verify the interceptor stored the thrall in context.
-	thrall := db.ThrallFromContext(captured)
-	if thrall == nil {
-		t.Fatal("expected thrall to be stored in context")
+	// Verify the interceptor stored the envoy in context.
+	envoy := db.EnvoyFromContext(captured)
+	if envoy == nil {
+		t.Fatal("expected envoy to be stored in context")
 	}
-	if thrall.ID != thrallID {
-		t.Errorf("expected thrall ID %s, got %s", thrallID, thrall.ID)
+	if envoy.ID != envoyID {
+		t.Errorf("expected envoy ID %s, got %s", envoyID, envoy.ID)
 	}
 }
 
-// TestInterceptorCheckInUnknownThrall verifies that a CheckInRequest with a
+// TestInterceptorCheckInUnknownEnvoy verifies that a CheckInRequest with a
 // UUID not in FleetIndex or DB returns Unauthenticated.
-func TestInterceptorCheckInUnknownThrall(t *testing.T) {
+func TestInterceptorCheckInUnknownEnvoy(t *testing.T) {
 	_, priv, _ := genKeyPair(t)
 	unknownID := uuid.New().String()
 
-	fi := fleet.NewFleetIndex() // empty — thrall not present
+	fi := fleet.NewFleetIndex() // empty — envoy not present
 
 	queries := db.New(testDB)
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	now := time.Now()
 	req := signCheckIn(unknownID, "fp", now, priv)
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
-		t.Fatal("expected error for unknown thrall_id")
+		t.Fatal("expected error for unknown envoy_id")
 	}
 	st, ok := status.FromError(err)
 	if !ok {
@@ -194,11 +194,11 @@ func TestInterceptorCheckInUnknownThrall(t *testing.T) {
 // timestamp older than the signature window is rejected.
 func TestInterceptorCheckInExpiredTimestamp(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "stale.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -208,8 +208,8 @@ func TestInterceptorCheckInExpiredTimestamp(t *testing.T) {
 
 	// 10 minutes ago — well outside the 5-minute window.
 	staleTime := time.Now().Add(-10 * time.Minute)
-	req := signCheckIn(thrallID, "fp", staleTime, priv)
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	req := signCheckIn(envoyID, "fp", staleTime, priv)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -229,11 +229,11 @@ func TestInterceptorCheckInExpiredTimestamp(t *testing.T) {
 func TestInterceptorCheckInWrongKey(t *testing.T) {
 	pub, _, pubPEM := genKeyPair(t)       // key A — registered
 	_, wrongPriv, _ := genKeyPair(t) // key B — used for signing
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "wrongkey.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -242,8 +242,8 @@ func TestInterceptorCheckInWrongKey(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	now := time.Now()
-	req := signCheckIn(thrallID, "fp", now, wrongPriv) // signed with wrong key
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	req := signCheckIn(envoyID, "fp", now, wrongPriv) // signed with wrong key
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -262,11 +262,11 @@ func TestInterceptorCheckInWrongKey(t *testing.T) {
 // sending a different one causes verification failure.
 func TestInterceptorCheckInTamperedPayload(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "tampered.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -280,12 +280,12 @@ func TestInterceptorCheckInTamperedPayload(t *testing.T) {
 	sig := signPayload([]byte("original-fp"), tsStr, priv)
 
 	req := &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "tampered-fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
 	}
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -304,11 +304,11 @@ func TestInterceptorCheckInTamperedPayload(t *testing.T) {
 // ReportResultRequest passes verification.
 func TestInterceptorReportResultValidSignature(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "result.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -318,8 +318,8 @@ func TestInterceptorReportResultValidSignature(t *testing.T) {
 
 	now := time.Now()
 	runID := uuid.New().String()
-	req := signReportResult(thrallID, runID, now, priv)
-	info := makeInfo(pb.HobnobAgent_ReportResult_FullMethodName)
+	req := signReportResult(envoyID, runID, now, priv)
+	info := makeInfo(pb.VigoAgent_ReportResult_FullMethodName)
 
 	var captured context.Context
 	_, err := interceptor(context.Background(), req, info, ctxCheckHandler(&captured))
@@ -327,13 +327,13 @@ func TestInterceptorReportResultValidSignature(t *testing.T) {
 		t.Fatalf("expected ReportResult to pass with valid signature, got: %v", err)
 	}
 
-	// Verify the interceptor stored the thrall in context.
-	thrall := db.ThrallFromContext(captured)
-	if thrall == nil {
-		t.Fatal("expected thrall to be stored in context for ReportResult")
+	// Verify the interceptor stored the envoy in context.
+	envoy := db.EnvoyFromContext(captured)
+	if envoy == nil {
+		t.Fatal("expected envoy to be stored in context for ReportResult")
 	}
-	if thrall.ID != thrallID {
-		t.Errorf("expected thrall ID %s, got %s", thrallID, thrall.ID)
+	if envoy.ID != envoyID {
+		t.Errorf("expected envoy ID %s, got %s", envoyID, envoy.ID)
 	}
 }
 
@@ -341,11 +341,11 @@ func TestInterceptorReportResultValidSignature(t *testing.T) {
 // ReportTraitsRequest passes verification.
 func TestInterceptorReportTraitsValidSignature(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "traits.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -355,8 +355,8 @@ func TestInterceptorReportTraitsValidSignature(t *testing.T) {
 
 	now := time.Now()
 	traitsJSON := []byte(`{"os_family":"debian","hostname":"traits.example.com"}`)
-	req := signReportTraits(thrallID, traitsJSON, now, priv)
-	info := makeInfo(pb.HobnobAgent_ReportTraits_FullMethodName)
+	req := signReportTraits(envoyID, traitsJSON, now, priv)
+	info := makeInfo(pb.VigoAgent_ReportTraits_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err != nil {
@@ -364,28 +364,28 @@ func TestInterceptorReportTraitsValidSignature(t *testing.T) {
 	}
 }
 
-// TestInterceptorFleetIndexFastPath verifies that when a thrall is in the
+// TestInterceptorFleetIndexFastPath verifies that when a envoy is in the
 // FleetIndex (but NOT in the DB), the interceptor still works because it
 // uses the in-memory fast path.
 func TestInterceptorFleetIndexFastPath(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "fastpath.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
 
-	// Use the shared testDB — the thrall is NOT inserted into the DB.
+	// Use the shared testDB — the envoy is NOT inserted into the DB.
 	// The interceptor should succeed via FleetIndex alone.
 	queries := db.New(testDB)
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	now := time.Now()
-	req := signCheckIn(thrallID, "fp-fast", now, priv)
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	req := signCheckIn(envoyID, "fp-fast", now, priv)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err != nil {
@@ -393,31 +393,31 @@ func TestInterceptorFleetIndexFastPath(t *testing.T) {
 	}
 }
 
-// TestInterceptorDBFallback verifies that when a thrall is NOT in the
+// TestInterceptorDBFallback verifies that when a envoy is NOT in the
 // FleetIndex but IS in the DB, the interceptor falls back to the DB path.
 func TestInterceptorDBFallback(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
 
-	// Insert thrall directly into the DB via queries.
+	// Insert envoy directly into the DB via queries.
 	queries := db.New(testDB)
 	ctx := context.Background()
-	thrall, err := queries.CreateThrall(ctx, db.CreateThrallParams{
+	envoy, err := queries.CreateEnvoy(ctx, db.CreateEnvoyParams{
 		Hostname:  fmt.Sprintf("dbfallback-%s.example.com", uuid.New().String()[:8]),
 		IpAddress: "10.99.0.1",
 		PubkeyPem: pubPEM,
 	})
 	if err != nil {
-		t.Fatalf("CreateThrall: %v", err)
+		t.Fatalf("CreateEnvoy: %v", err)
 	}
 
-	// Empty FleetIndex — thrall is NOT here.
+	// Empty FleetIndex — envoy is NOT here.
 	fi := fleet.NewFleetIndex()
 
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	now := time.Now()
-	req := signCheckIn(thrall.ID, "fp-db-fallback", now, priv)
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	req := signCheckIn(envoy.ID, "fp-db-fallback", now, priv)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	var captured context.Context
 	_, err = interceptor(ctx, req, info, ctxCheckHandler(&captured))
@@ -425,13 +425,13 @@ func TestInterceptorDBFallback(t *testing.T) {
 		t.Fatalf("expected DB fallback to work, got: %v", err)
 	}
 
-	// Verify the interceptor stored the correct thrall in context.
-	ctxThrall := db.ThrallFromContext(captured)
-	if ctxThrall == nil {
-		t.Fatal("expected thrall to be stored in context from DB fallback")
+	// Verify the interceptor stored the correct envoy in context.
+	ctxEnvoy := db.EnvoyFromContext(captured)
+	if ctxEnvoy == nil {
+		t.Fatal("expected envoy to be stored in context from DB fallback")
 	}
-	if ctxThrall.ID != thrall.ID {
-		t.Errorf("expected thrall ID %s, got %s", thrall.ID, ctxThrall.ID)
+	if ctxEnvoy.ID != envoy.ID {
+		t.Errorf("expected envoy ID %s, got %s", envoy.ID, ctxEnvoy.ID)
 	}
 
 	_ = pub // used for PEM generation
@@ -444,21 +444,21 @@ func TestInterceptorNilFleetIndex(t *testing.T) {
 
 	queries := db.New(testDB)
 	ctx := context.Background()
-	thrall, err := queries.CreateThrall(ctx, db.CreateThrallParams{
+	envoy, err := queries.CreateEnvoy(ctx, db.CreateEnvoyParams{
 		Hostname:  fmt.Sprintf("nilfi-%s.example.com", uuid.New().String()[:8]),
 		IpAddress: "10.99.0.2",
 		PubkeyPem: pubPEM,
 	})
 	if err != nil {
-		t.Fatalf("CreateThrall: %v", err)
+		t.Fatalf("CreateEnvoy: %v", err)
 	}
 
 	// Pass nil for FleetIndex.
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 0, nil)
 
 	now := time.Now()
-	req := signCheckIn(thrall.ID, "fp-nil-fi", now, priv)
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	req := signCheckIn(envoy.ID, "fp-nil-fi", now, priv)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err = interceptor(ctx, req, info, noopHandler)
 	if err != nil {
@@ -471,11 +471,11 @@ func TestInterceptorNilFleetIndex(t *testing.T) {
 // should fail.
 func TestInterceptorDefaultSigWindow(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "sigwindow.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -483,11 +483,11 @@ func TestInterceptorDefaultSigWindow(t *testing.T) {
 	queries := db.New(testDB)
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 0, fi) // 0 → default 5min
 
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	// Within default window — should pass.
 	within := time.Now().Add(-4*time.Minute - 59*time.Second)
-	req := signCheckIn(thrallID, "fp-ok", within, priv)
+	req := signCheckIn(envoyID, "fp-ok", within, priv)
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err != nil {
 		t.Fatalf("expected request within default window to pass, got: %v", err)
@@ -495,7 +495,7 @@ func TestInterceptorDefaultSigWindow(t *testing.T) {
 
 	// Outside default window — should fail.
 	outside := time.Now().Add(-5*time.Minute - 1*time.Second)
-	req = signCheckIn(thrallID, "fp-fail", outside, priv)
+	req = signCheckIn(envoyID, "fp-fail", outside, priv)
 	_, err = interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
 		t.Fatal("expected request outside default window to fail")
@@ -513,11 +513,11 @@ func TestInterceptorDefaultSigWindow(t *testing.T) {
 // a timestamp is rejected with InvalidArgument.
 func TestInterceptorCheckInMissingTimestamp(t *testing.T) {
 	pub, _, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "nots.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -526,12 +526,12 @@ func TestInterceptorCheckInMissingTimestamp(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	req := &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp",
 		Signature:        []byte("fake"),
 		Timestamp:        nil, // deliberately missing
 	}
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -547,19 +547,19 @@ func TestInterceptorCheckInMissingTimestamp(t *testing.T) {
 }
 
 // TestInterceptorCheckInMalformedUUID verifies that a malformed UUID in
-// thrall_id is rejected with InvalidArgument.
+// envoy_id is rejected with InvalidArgument.
 func TestInterceptorCheckInMalformedUUID(t *testing.T) {
 	queries := db.New(testDB)
 	fi := fleet.NewFleetIndex()
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	req := &pb.CheckInRequest{
-		ThrallId:         "not-a-valid-uuid",
+		EnvoyId:         "not-a-valid-uuid",
 		StateFingerprint: "fp",
 		Signature:        []byte("fake"),
 		Timestamp:        timestamppb.Now(),
 	}
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -579,11 +579,11 @@ func TestInterceptorCheckInMalformedUUID(t *testing.T) {
 func TestInterceptorReportResultWrongKey(t *testing.T) {
 	pub, _, pubPEM := genKeyPair(t)     // key A — registered
 	_, wrongPriv, _ := genKeyPair(t) // key B — used for signing
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "result-wrong.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -592,8 +592,8 @@ func TestInterceptorReportResultWrongKey(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	now := time.Now()
-	req := signReportResult(thrallID, "run-123", now, wrongPriv)
-	info := makeInfo(pb.HobnobAgent_ReportResult_FullMethodName)
+	req := signReportResult(envoyID, "run-123", now, wrongPriv)
+	info := makeInfo(pb.VigoAgent_ReportResult_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -612,11 +612,11 @@ func TestInterceptorReportResultWrongKey(t *testing.T) {
 // rejects expired timestamps.
 func TestInterceptorReportTraitsExpiredTimestamp(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "traits-stale.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -626,8 +626,8 @@ func TestInterceptorReportTraitsExpiredTimestamp(t *testing.T) {
 
 	staleTime := time.Now().Add(-10 * time.Minute)
 	traitsJSON := []byte(`{"os":"linux"}`)
-	req := signReportTraits(thrallID, traitsJSON, staleTime, priv)
-	info := makeInfo(pb.HobnobAgent_ReportTraits_FullMethodName)
+	req := signReportTraits(envoyID, traitsJSON, staleTime, priv)
+	info := makeInfo(pb.VigoAgent_ReportTraits_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -656,7 +656,7 @@ func TestInterceptorAdminRPCPassesThrough(t *testing.T) {
 	}
 
 	// Use a fake admin method name.
-	info := makeInfo("/hobnob.v1.HobnobAdmin/ListThralls")
+	info := makeInfo("/vigo.v1.VigoAdmin/ListEnvoys")
 	_, err := interceptor(context.Background(), "admin-request", info, handler)
 	if err != nil {
 		t.Fatalf("admin RPC should pass through, got: %v", err)
@@ -670,11 +670,11 @@ func TestInterceptorAdminRPCPassesThrough(t *testing.T) {
 // future beyond the signature window is rejected.
 func TestInterceptorFutureTimestampRejected(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "future.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -684,8 +684,8 @@ func TestInterceptorFutureTimestampRejected(t *testing.T) {
 
 	// 10 minutes in the future.
 	futureTime := time.Now().Add(10 * time.Minute)
-	req := signCheckIn(thrallID, "fp-future", futureTime, priv)
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	req := signCheckIn(envoyID, "fp-future", futureTime, priv)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -704,11 +704,11 @@ func TestInterceptorFutureTimestampRejected(t *testing.T) {
 // respected. Uses a 1-second window.
 func TestInterceptorCustomSigWindow(t *testing.T) {
 	pub, priv, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "custom-window.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -716,11 +716,11 @@ func TestInterceptorCustomSigWindow(t *testing.T) {
 	queries := db.New(testDB)
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 1*time.Second, fi)
 
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	// Current time — should pass.
 	now := time.Now()
-	req := signCheckIn(thrallID, "fp-now", now, priv)
+	req := signCheckIn(envoyID, "fp-now", now, priv)
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err != nil {
 		t.Fatalf("expected current-time request to pass with 1s window, got: %v", err)
@@ -728,7 +728,7 @@ func TestInterceptorCustomSigWindow(t *testing.T) {
 
 	// 2 seconds ago — should fail.
 	old := time.Now().Add(-2 * time.Second)
-	req = signCheckIn(thrallID, "fp-old", old, priv)
+	req = signCheckIn(envoyID, "fp-old", old, priv)
 	_, err = interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
 		t.Fatal("expected 2s-old request to fail with 1s window")
@@ -746,11 +746,11 @@ func TestInterceptorCustomSigWindow(t *testing.T) {
 // without a timestamp is rejected.
 func TestInterceptorReportResultMissingTimestamp(t *testing.T) {
 	pub, _, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "rr-nots.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -759,12 +759,12 @@ func TestInterceptorReportResultMissingTimestamp(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	req := &pb.ReportResultRequest{
-		ThrallId:  thrallID,
+		EnvoyId:  envoyID,
 		RunId:     "run-1",
 		Signature: []byte("fake"),
 		Timestamp: nil,
 	}
-	info := makeInfo(pb.HobnobAgent_ReportResult_FullMethodName)
+	info := makeInfo(pb.VigoAgent_ReportResult_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -783,11 +783,11 @@ func TestInterceptorReportResultMissingTimestamp(t *testing.T) {
 // without a timestamp is rejected.
 func TestInterceptorReportTraitsMissingTimestamp(t *testing.T) {
 	pub, _, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "rt-nots.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -796,12 +796,12 @@ func TestInterceptorReportTraitsMissingTimestamp(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	req := &pb.ReportTraitsRequest{
-		ThrallId:   thrallID,
+		EnvoyId:   envoyID,
 		TraitsJson: []byte(`{}`),
 		Signature:  []byte("fake"),
 		Timestamp:  nil,
 	}
-	info := makeInfo(pb.HobnobAgent_ReportTraits_FullMethodName)
+	info := makeInfo(pb.VigoAgent_ReportTraits_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -824,12 +824,12 @@ func TestInterceptorReportResultMalformedUUID(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	req := &pb.ReportResultRequest{
-		ThrallId:  "bad-uuid",
+		EnvoyId:  "bad-uuid",
 		RunId:     "run-1",
 		Signature: []byte("fake"),
 		Timestamp: timestamppb.Now(),
 	}
-	info := makeInfo(pb.HobnobAgent_ReportResult_FullMethodName)
+	info := makeInfo(pb.VigoAgent_ReportResult_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -852,12 +852,12 @@ func TestInterceptorReportTraitsMalformedUUID(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	req := &pb.ReportTraitsRequest{
-		ThrallId:   "bad-uuid",
+		EnvoyId:   "bad-uuid",
 		TraitsJson: []byte(`{}`),
 		Signature:  []byte("fake"),
 		Timestamp:  timestamppb.Now(),
 	}
-	info := makeInfo(pb.HobnobAgent_ReportTraits_FullMethodName)
+	info := makeInfo(pb.VigoAgent_ReportTraits_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {
@@ -879,13 +879,13 @@ func TestInterceptorDBFallbackReportResult(t *testing.T) {
 
 	queries := db.New(testDB)
 	ctx := context.Background()
-	thrall, err := queries.CreateThrall(ctx, db.CreateThrallParams{
+	envoy, err := queries.CreateEnvoy(ctx, db.CreateEnvoyParams{
 		Hostname:  fmt.Sprintf("dbfb-rr-%s.example.com", uuid.New().String()[:8]),
 		IpAddress: "10.99.0.3",
 		PubkeyPem: pubPEM,
 	})
 	if err != nil {
-		t.Fatalf("CreateThrall: %v", err)
+		t.Fatalf("CreateEnvoy: %v", err)
 	}
 
 	fi := fleet.NewFleetIndex() // empty
@@ -893,8 +893,8 @@ func TestInterceptorDBFallbackReportResult(t *testing.T) {
 
 	now := time.Now()
 	runID := "run-db-fallback"
-	req := signReportResult(thrall.ID, runID, now, priv)
-	info := makeInfo(pb.HobnobAgent_ReportResult_FullMethodName)
+	req := signReportResult(envoy.ID, runID, now, priv)
+	info := makeInfo(pb.VigoAgent_ReportResult_FullMethodName)
 
 	var captured context.Context
 	_, err = interceptor(ctx, req, info, ctxCheckHandler(&captured))
@@ -902,23 +902,23 @@ func TestInterceptorDBFallbackReportResult(t *testing.T) {
 		t.Fatalf("expected DB fallback to work for ReportResult, got: %v", err)
 	}
 
-	ctxThrall := db.ThrallFromContext(captured)
-	if ctxThrall == nil {
-		t.Fatal("expected thrall in context from DB fallback for ReportResult")
+	ctxEnvoy := db.EnvoyFromContext(captured)
+	if ctxEnvoy == nil {
+		t.Fatal("expected envoy in context from DB fallback for ReportResult")
 	}
-	if ctxThrall.ID != thrall.ID {
-		t.Errorf("expected thrall ID %s, got %s", thrall.ID, ctxThrall.ID)
+	if ctxEnvoy.ID != envoy.ID {
+		t.Errorf("expected envoy ID %s, got %s", envoy.ID, ctxEnvoy.ID)
 	}
 }
 
 // TestInterceptorEmptySignature verifies that an empty signature is rejected.
 func TestInterceptorEmptySignature(t *testing.T) {
 	pub, _, pubPEM := genKeyPair(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
-		ID:        thrallID,
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID:        envoyID,
 		Hostname:  "emptysig.example.com",
 		PubkeyPEM: pubPEM,
 	}, pub)
@@ -927,12 +927,12 @@ func TestInterceptorEmptySignature(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
 
 	req := &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: "fp",
 		Signature:        nil, // empty signature
 		Timestamp:        timestamppb.Now(),
 	}
-	info := makeInfo(pb.HobnobAgent_CheckIn_FullMethodName)
+	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
 	_, err := interceptor(context.Background(), req, info, noopHandler)
 	if err == nil {

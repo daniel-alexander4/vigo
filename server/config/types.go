@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package config handles loading and resolving per-thrall configuration
+// Package config handles loading and resolving per-envoy configuration
 // from YAML files on disk. It integrates with the secrets provider to
 // resolve "secret:" prefixes and supports publish-triggered reload.
 package config
@@ -9,8 +9,8 @@ package config
 import (
 	"fmt"
 
-	"github.com/hobnob/hobnob/server/conditionals"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/conditionals"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,7 +24,7 @@ const (
 	// Handles UI, webhooks, bootstrap, and aggregates data from spokes.
 	RoleHub SpannerRole = "hub"
 	// RoleSpoke is a partition server handling agent check-ins for a
-	// subset of thralls. Disables webhooks, bootstrap, and secret watcher.
+	// subset of envoys. Disables webhooks, bootstrap, and secret watcher.
 	RoleSpoke SpannerRole = "spoke"
 )
 
@@ -116,12 +116,12 @@ type PathsSection struct {
 	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: "tasks")
 	Workflows    string `yaml:"workflows"`     // workflow definitions (default: "workflows")
 	AgentDist    string `yaml:"agent_dist"`    // agent binary distribution (default: "dist/agent")
-	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/srv/hobnob/license")
+	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/srv/vigo/license")
 }
 
 // AuthSection configures web UI and REST API authentication.
 // Default method is "basic" — username/password with bcrypt hashes in the
-// local secrets store at hobnob/web/auth/<username>.
+// local secrets store at vigo/web/auth/<username>.
 type AuthSection struct {
 	Method             string           `yaml:"method"`               // "basic" (default), "oidc", "isowebauth"
 	SessionIdleTimeout string           `yaml:"session_idle_timeout"` // duration, e.g. "15m" (default)
@@ -140,7 +140,7 @@ type OIDCAuthConfig struct {
 
 // IsowebauthAuthConfig holds isowebauth settings.
 type IsowebauthAuthConfig struct {
-	Namespace string `yaml:"namespace"` // default: "hobnob"
+	Namespace string `yaml:"namespace"` // default: "vigo"
 }
 
 // ExportSection configures compliance framework export endpoints.
@@ -213,7 +213,7 @@ type AISection struct {
 type SMTPSection struct {
 	Host       string                      `yaml:"host"`       // SMTP relay hostname (e.g. "smtp.example.com")
 	Port       int                         `yaml:"port"`       // SMTP port (default 587)
-	From       string                      `yaml:"from"`       // sender address (e.g. "hobnob@example.com")
+	From       string                      `yaml:"from"`       // sender address (e.g. "vigo@example.com")
 	Username   string                      `yaml:"username"`   // SMTP auth username (optional)
 	Password   string                      `yaml:"password"`   // SMTP auth password (supports secret: prefix)
 	TLS        bool                        `yaml:"tls"`        // use STARTTLS (default true)
@@ -244,7 +244,7 @@ type TuningSection struct {
 	MetricsInterval     string        `yaml:"metrics_interval"`      // default "30s"
 	TraitsScannerTTL    string        `yaml:"traits_scanner_ttl"`    // default "30s"
 	RunStore            string        `yaml:"run_store"`             // "database" (default) or "memory"
-	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-thrall run history depth for memory mode (default 20)
+	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-envoy run history depth for memory mode (default 20)
 	MaxConcurrentStreams uint32       `yaml:"max_concurrent_streams"` // gRPC bidirectional stream limit (default 5000)
 	Webhook             WebhookTuning `yaml:"webhook"`
 
@@ -273,7 +273,7 @@ type WebhookTuning struct {
 // RateLimitSection configures rate limiting for agent RPCs.
 type RateLimitSection struct {
 	Enabled         bool `yaml:"enabled"`           // enable rate limiting (default false)
-	CheckinPerThrall int  `yaml:"checkin_per_thrall"` // per-thrall check-in rate (requests/minute, default 6)
+	CheckinPerEnvoy int  `yaml:"checkin_per_envoy"` // per-envoy check-in rate (requests/minute, default 6)
 	CheckinGlobal    int  `yaml:"checkin_global"`     // global check-in rate (requests/second, default 500)
 }
 
@@ -305,7 +305,7 @@ type TLSConfig struct {
 }
 
 // TrustedEnrollment defines a hostname/CIDR pattern for token-free enrollment.
-// Thralls matching the pattern and originating from an allowed CIDR are enrolled
+// Envoys matching the pattern and originating from an allowed CIDR are enrolled
 // without a one-time token (trusted autosigning).
 type TrustedEnrollment struct {
 	Pattern string   `yaml:"pattern"`
@@ -339,11 +339,11 @@ type ConditionalBlock struct {
 	Resources []ResourceConfig `yaml:"resources"`
 }
 
-// ThrallConfig represents the resolved per-thrall configuration.
+// EnvoyConfig represents the resolved per-envoy configuration.
 // This is the output type returned by ConfigStore.Get().
-type ThrallConfig struct {
-	Thrall          string                    `yaml:"thrall"`
-	MatchPattern    string                    `yaml:"-"` // original match pattern from thralls.hnb
+type EnvoyConfig struct {
+	Envoy          string                    `yaml:"envoy"`
+	MatchPattern    string                    `yaml:"-"` // original match pattern from envoys.vgo
 	Environment     string                    `yaml:"environment"`
 	Roles           []string                  `yaml:"-"` // role names that were expanded
 	Modules         []ModuleConfig            `yaml:"modules"`
@@ -353,8 +353,8 @@ type ThrallConfig struct {
 	ConditionalVars      []conditionals.ConditionalVar `yaml:"-"`
 	MatchVars            map[string][]conditionals.MatchBranch `yaml:"-"` // string-valued conditional vars
 	MatchVarDefaults     map[string]string                     `yaml:"-"` // default values for match vars
-	// Network device fields — populated for virtual thralls managed via gateway proxy.
-	Gateway    string `yaml:"-"` // hostname of managing gateway thrall
+	// Network device fields — populated for virtual envoys managed via gateway proxy.
+	Gateway    string `yaml:"-"` // hostname of managing gateway envoy
 	DeviceType string `yaml:"-"` // cisco_ios, cisco_nxos, juniper_junos
 	Credential string `yaml:"-"` // resolved secret value for SSH auth
 	Username   string `yaml:"-"` // SSH username
@@ -362,9 +362,9 @@ type ThrallConfig struct {
 	IPAddress  string `yaml:"-"` // management IP
 }
 
-// Clone returns a deep-enough copy of the ThrallConfig. Safe to mutate
+// Clone returns a deep-enough copy of the EnvoyConfig. Safe to mutate
 // modules and vars without affecting the original.
-func (c *ThrallConfig) Clone() *ThrallConfig {
+func (c *EnvoyConfig) Clone() *EnvoyConfig {
 	clone := *c
 	clone.Modules = make([]ModuleConfig, len(c.Modules))
 	for i, mod := range c.Modules {
@@ -383,7 +383,7 @@ func (c *ThrallConfig) Clone() *ThrallConfig {
 	return &clone
 }
 
-// ModuleConfig describes a module assigned to a thrall.
+// ModuleConfig describes a module assigned to a envoy.
 type ModuleConfig struct {
 	Name        string           `yaml:"name"`
 	DependsOn   []string         `yaml:"depends_on"`
@@ -474,7 +474,7 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// ModuleRef is a reference to a module in a role or thrall entry. It supports
+// ModuleRef is a reference to a module in a role or envoy entry. It supports
 // two YAML forms:
 //
 //	modules: [nginx]               # plain string -> ModuleRef{Name: "nginx"}
@@ -526,15 +526,15 @@ var ValidDeviceTypes = map[string]bool{
 	"cisco_iosxr":    true,
 }
 
-// ThrallEntry is a single entry in thralls.hnb. It has a custom UnmarshalYAML
+// EnvoyEntry is a single entry in envoys.vgo. It has a custom UnmarshalYAML
 // that merges duplicate 'modules' and 'roles' keys (standard YAML would
 // silently keep only the last value).
-type ThrallEntry struct {
+type EnvoyEntry struct {
 	Match       string                    `yaml:"match"`
 	Environment string                    `yaml:"environment"`
 	Roles       []string                  `yaml:"roles"`
 	Modules     []ModuleRef               `yaml:"modules"`
-	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to thrall-configs/)
+	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to envoy-configs/)
 	Vars        map[string]any            `yaml:"vars"`
 	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	Tags                 []string `yaml:"tags"` // static tags for targeting
@@ -544,9 +544,9 @@ type ThrallEntry struct {
 	// this entry was loaded from. Set by the loader for inheritance resolution.
 	DirPath string `yaml:"-"`
 
-	// Network device fields — set when this entry is a virtual thrall managed
-	// through a gateway. Gateway must be a real compute thrall.
-	Gateway    string `yaml:"gateway"`     // hostname of managing gateway thrall
+	// Network device fields — set when this entry is a virtual envoy managed
+	// through a gateway. Gateway must be a real compute envoy.
+	Gateway    string `yaml:"gateway"`     // hostname of managing gateway envoy
 	DeviceType string `yaml:"device_type"` // cisco_ios, cisco_nxos, juniper_junos
 	Credential string `yaml:"credential"`  // secret: path for SSH auth
 	Username   string `yaml:"username"`    // SSH username (default: admin)
@@ -554,8 +554,8 @@ type ThrallEntry struct {
 	IPAddress  string `yaml:"ip_address"`  // management IP (if different from DNS)
 }
 
-// CommonConfig defines modules, roles, and vars inherited by all thrall
-// entries in subdirectories. Loaded from common.hnb files at each directory
+// CommonConfig defines modules, roles, and vars inherited by all envoy
+// entries in subdirectories. Loaded from common.vgo files at each directory
 // level. Files without match: entries are treated as common configs.
 type CommonConfig struct {
 	Modules  []ModuleRef    `yaml:"modules"`
@@ -565,12 +565,12 @@ type CommonConfig struct {
 	DirPath  string         `yaml:"-"` // relative dir path (e.g., "production/web")
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler for ThrallEntry. It walks the
+// UnmarshalYAML implements yaml.Unmarshaler for EnvoyEntry. It walks the
 // mapping manually so duplicate 'modules' and 'roles' keys are merged
 // instead of the last one winning.
-func (n *ThrallEntry) UnmarshalYAML(value *yaml.Node) error {
+func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("ThrallEntry: expected mapping, got %v", value.Kind)
+		return fmt.Errorf("EnvoyEntry: expected mapping, got %v", value.Kind)
 	}
 	for i := 0; i < len(value.Content)-1; i += 2 {
 		key := value.Content[i].Value
@@ -652,7 +652,7 @@ func (n *ThrallEntry) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// ThrallsConfig is the top-level structure of thralls.hnb.
-type ThrallsConfig struct {
-	Thralls []ThrallEntry `yaml:"thralls"`
+// EnvoysConfig is the top-level structure of envoys.vgo.
+type EnvoysConfig struct {
+	Envoys []EnvoyEntry `yaml:"envoys"`
 }

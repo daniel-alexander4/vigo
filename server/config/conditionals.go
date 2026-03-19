@@ -6,7 +6,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/hobnob/hobnob/server/conditionals"
+	"github.com/daniel-alexander4/vigo/server/conditionals"
 )
 
 // EvaluateResourceWhen evaluates a resource's When expression against the

@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 func TestHMACSigning(t *testing.T) {
@@ -121,25 +121,25 @@ func TestDispatchSendsCorrectHeaders(t *testing.T) {
 		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 
-	// Check X-Hobnob-Event.
-	if ev := receivedHeaders.Get("X-Hobnob-Event"); ev != "run.success" {
-		t.Errorf("X-Hobnob-Event = %q, want run.success", ev)
+	// Check X-Vigo-Event.
+	if ev := receivedHeaders.Get("X-Vigo-Event"); ev != "run.success" {
+		t.Errorf("X-Vigo-Event = %q, want run.success", ev)
 	}
 
-	// Check X-Hobnob-Signature format and correctness.
-	sig := receivedHeaders.Get("X-Hobnob-Signature")
+	// Check X-Vigo-Signature format and correctness.
+	sig := receivedHeaders.Get("X-Vigo-Signature")
 	if sig == "" {
-		t.Fatal("X-Hobnob-Signature header missing")
+		t.Fatal("X-Vigo-Signature header missing")
 	}
 
 	const prefix = "sha256="
 	if len(sig) <= len(prefix) || sig[:len(prefix)] != prefix {
-		t.Fatalf("X-Hobnob-Signature should start with %q, got %q", prefix, sig)
+		t.Fatalf("X-Vigo-Signature should start with %q, got %q", prefix, sig)
 	}
 
 	expectedSig := sign(secret, receivedBody)
 	if sig != prefix+expectedSig {
-		t.Errorf("X-Hobnob-Signature = %q, want %q", sig, prefix+expectedSig)
+		t.Errorf("X-Vigo-Signature = %q, want %q", sig, prefix+expectedSig)
 	}
 }
 
@@ -286,7 +286,7 @@ func TestDispatchRotation(t *testing.T) {
 		Event:     "secret.rotated",
 		Timestamp: time.Now().UTC(),
 		Details: map[string]any{
-			"secret_path":    "hobnob/db/dsn",
+			"secret_path":    "vigo/db/dsn",
 			"affected_nodes": 5,
 		},
 	}
@@ -312,8 +312,8 @@ func TestDispatchRotation(t *testing.T) {
 	if !ok {
 		t.Fatal("expected details to be a map")
 	}
-	if details["secret_path"] != "hobnob/db/dsn" {
-		t.Errorf("secret_path = %v, want hobnob/db/dsn", details["secret_path"])
+	if details["secret_path"] != "vigo/db/dsn" {
+		t.Errorf("secret_path = %v, want vigo/db/dsn", details["secret_path"])
 	}
 }
 

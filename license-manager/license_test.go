@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hobnob/hobnob/server/license"
+	"github.com/daniel-alexander4/vigo/server/license"
 )
 
 func TestSignAndVerifyRoundTrip(t *testing.T) {
@@ -27,7 +27,7 @@ func TestSignAndVerifyRoundTrip(t *testing.T) {
 		CustomerID:   "acme",
 		LicenseID:    "lic-test-acme",
 		Tier:         "standard",
-		MaxThralls:   100,
+		MaxEnvoys:   100,
 		IssuedAt:     "2026-01-01",
 		ExpiresAt:    "2027-01-01",
 		Version:      1,
@@ -64,7 +64,7 @@ func TestWriteAndLoadLicenseFile(t *testing.T) {
 		CustomerID:   "testco",
 		LicenseID:    "lic-test-testco",
 		Tier:         "standard",
-		MaxThralls:   50,
+		MaxEnvoys:   50,
 		IssuedAt:     "2026-03-01",
 		ExpiresAt:    "2027-03-01",
 		Version:      1,
@@ -88,8 +88,8 @@ func TestWriteAndLoadLicenseFile(t *testing.T) {
 	if loaded.Payload.CustomerName != "Test Co" {
 		t.Errorf("CustomerName = %q, want Test Co", loaded.Payload.CustomerName)
 	}
-	if loaded.Payload.MaxThralls != 50 {
-		t.Errorf("MaxThralls = %d, want 50", loaded.Payload.MaxThralls)
+	if loaded.Payload.MaxEnvoys != 50 {
+		t.Errorf("MaxEnvoys = %d, want 50", loaded.Payload.MaxEnvoys)
 	}
 	if loaded.Payload.LicenseID != "lic-test-testco" {
 		t.Errorf("LicenseID = %q, want lic-test-testco", loaded.Payload.LicenseID)
@@ -112,7 +112,7 @@ func TestVerifyCorruptSignature(t *testing.T) {
 		CustomerID:   "corrupt",
 		LicenseID:    "lic-test-corrupt",
 		Tier:         "standard",
-		MaxThralls:   10,
+		MaxEnvoys:   10,
 		IssuedAt:     "2026-01-01",
 		ExpiresAt:    "2027-01-01",
 		Version:      1,
@@ -148,7 +148,7 @@ func TestLicenseInspectFile(t *testing.T) {
 		CustomerID:   "inspect",
 		LicenseID:    "lic-test-inspect",
 		Tier:         "standard",
-		MaxThralls:   25,
+		MaxEnvoys:   25,
 		IssuedAt:     "2026-01-01",
 		ExpiresAt:    "2027-01-01",
 		Version:      1,

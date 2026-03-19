@@ -1,8 +1,8 @@
 # Regulated Environments Gap Analysis
 
-This document assesses Hobnob's readiness for regulated environments — healthcare (HIPAA, FDA), financial services (SOX, PCI-DSS), government (FedRAMP, NIST 800-53), and elections (EAC). It identifies what Hobnob already provides, what's missing, and what would be needed to close each gap.
+This document assesses Vigo's readiness for regulated environments — healthcare (HIPAA, FDA), financial services (SOX, PCI-DSS), government (FedRAMP, NIST 800-53), and elections (EAC). It identifies what Vigo already provides, what's missing, and what would be needed to close each gap.
 
-## What Hobnob Provides Today
+## What Vigo Provides Today
 
 ### Strong foundations
 
@@ -33,7 +33,7 @@ These capabilities satisfy the *technical controls* portion of many compliance f
 
 **For IT infrastructure management (workstations, servers, network equipment):**
 
-| Requirement | Hobnob Status | Gap |
+| Requirement | Vigo Status | Gap |
 |-------------|---------------|-----|
 | Access controls (HIPAA 164.312(a)) | Met — RBAC, session management, API tokens | None |
 | Audit controls (HIPAA 164.312(b)) | Met — SHA-256 hash chain, tamper-evident audit trail | None |
@@ -46,7 +46,7 @@ These capabilities satisfy the *technical controls* portion of many compliance f
 
 **For medical device management (infusion pumps, monitors, diagnostic instruments):**
 
-| Requirement | Hobnob Status | Gap |
+| Requirement | Vigo Status | Gap |
 |-------------|---------------|-----|
 | Software validation (FDA 21 CFR 820.70(i)) | Not met | No formal validation process, no test evidence packages |
 | Software lifecycle (IEC 62304) | Not met | No documented SDLC, no hazard analysis, no traceability matrix |
@@ -56,11 +56,11 @@ These capabilities satisfy the *technical controls* portion of many compliance f
 | Cybersecurity premarket (FDA guidance) | Partial | mTLS and signing are strong, but no SBOM, no vulnerability management process |
 | Production track record | Not met | Zero deployments, zero incident history |
 
-**Bottom line:** Hobnob can manage hospital IT infrastructure today (same role as Puppet/Ansible in healthcare). Managing medical devices requires FDA software validation and IEC 62304 compliance — years of process work, not just code changes.
+**Bottom line:** Vigo can manage hospital IT infrastructure today (same role as Puppet/Ansible in healthcare). Managing medical devices requires FDA software validation and IEC 62304 compliance — years of process work, not just code changes.
 
 ### Financial Services (SOX, PCI-DSS)
 
-| Requirement | Hobnob Status | Gap |
+| Requirement | Vigo Status | Gap |
 |-------------|---------------|-----|
 | PCI-DSS 1.x: Network security | Met — firewall executors, mTLS, network segmentation enforcement | None |
 | PCI-DSS 2.x: Secure configurations | Met — desired state enforcement, drift detection and correction | None |
@@ -72,11 +72,11 @@ These capabilities satisfy the *technical controls* portion of many compliance f
 | SOX IT general controls | Met — publish/rollback with two-person approval workflow | None |
 | Segregation of duties | Met — approval_required enforces maker/checker (different user must approve) | None |
 
-**Bottom line:** Hobnob meets all PCI-DSS and SOX technical control requirements for configuration management. The tamper-evident audit trail satisfies PCI-DSS 10.x, and the two-person approval workflow satisfies SOX segregation of duties.
+**Bottom line:** Vigo meets all PCI-DSS and SOX technical control requirements for configuration management. The tamper-evident audit trail satisfies PCI-DSS 10.x, and the two-person approval workflow satisfies SOX segregation of duties.
 
 ### Government (FedRAMP, NIST 800-53, FISMA)
 
-| Requirement | Hobnob Status | Gap |
+| Requirement | Vigo Status | Gap |
 |-------------|---------------|-----|
 | AC (Access Control) | Met — RBAC, session management, mTLS, OIDC | None |
 | AU (Audit and Accountability) | Met — SHA-256 hash chain, tamper-evident audit trail | Retention policy not yet configurable |
@@ -89,20 +89,20 @@ These capabilities satisfy the *technical controls* portion of many compliance f
 
 **FIPS 140-2 gap:** The agent uses ring (Rust) for cryptography and Go's stdlib for the server. Neither is FIPS 140-2 validated. FedRAMP Moderate and above requires FIPS-validated cryptographic modules. This would require swapping to FIPS-validated libraries (e.g., Go BoringCrypto, aws-lc-rs for Rust).
 
-**Bottom line:** Hobnob supports NIST 800-53 Low baseline for configuration management and audit controls. Moderate and above still need FIPS-validated crypto and SBOM.
+**Bottom line:** Vigo supports NIST 800-53 Low baseline for configuration management and audit controls. Moderate and above still need FIPS-validated crypto and SBOM.
 
 ### Elections (EAC, VVSG 2.0)
 
-| Requirement | Hobnob Status | Gap |
+| Requirement | Vigo Status | Gap |
 |-------------|---------------|-----|
-| Software independence | N/A — Hobnob manages infrastructure, not vote counting | Not applicable |
+| Software independence | N/A — Vigo manages infrastructure, not vote counting | Not applicable |
 | Configuration management | Met — enforces and monitors desired state | None |
 | Audit logging | Met — SHA-256 hash chain, tamper-evident audit trail | None |
 | Access control | Met — RBAC, OIDC, API tokens | None |
 | Cyber resilience | Strong — offline convergence, mTLS, signed bundles | None |
 | Testing and certification | Not met | No EAC certification, no VSTL testing |
 
-**Bottom line:** Hobnob could manage election IT infrastructure (workstations, tabulation servers, network equipment) but not voting machines themselves. EAC certification for voting-system components requires VSTL testing — a multi-year, multi-million-dollar process.
+**Bottom line:** Vigo could manage election IT infrastructure (workstations, tabulation servers, network equipment) but not voting machines themselves. EAC certification for voting-system components requires VSTL testing — a multi-year, multi-million-dollar process.
 
 ## Summary of Gaps
 
@@ -129,9 +129,9 @@ These capabilities satisfy the *technical controls* portion of many compliance f
 | Production track record | Deployments, incident history, customer references | Ongoing |
 | SBOM and supply chain docs | CycloneDX/SPDX generation, dependency auditing process | 1-3 months |
 
-## Where Hobnob Fits Today
+## Where Vigo Fits Today
 
-Hobnob can manage IT infrastructure in regulated organizations right now — the same role Puppet, Ansible, and Chef fill in hospitals, banks, and government agencies today. None of those tools have FDA validation or FIPS certification either. They're used for servers and workstations, not medical devices or voting machines.
+Vigo can manage IT infrastructure in regulated organizations right now — the same role Puppet, Ansible, and Chef fill in hospitals, banks, and government agencies today. None of those tools have FDA validation or FIPS certification either. They're used for servers and workstations, not medical devices or voting machines.
 
 The competitive advantage in regulated environments is:
 - **Continuous enforcement** at 15-30 second intervals (vs. Puppet's 30-minute default)
@@ -140,4 +140,4 @@ The competitive advantage in regulated environments is:
 - **Source-available agent** (auditable by compliance teams)
 - **Compliance export** (SIEM, CMDB, OSCAL endpoints)
 
-The tamper-evident audit trail and change approval workflow are both complete. For IT infrastructure management, Hobnob now meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, SOX IT general controls, and segregation of duties requirements. The remaining buildable gaps are agent-side resource restrictions, task dispatch allowlists, and platform code signing.
+The tamper-evident audit trail and change approval workflow are both complete. For IT infrastructure management, Vigo now meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, SOX IT general controls, and segregation of duties requirements. The remaining buildable gaps are agent-side resource restrictions, task dispatch allowlists, and platform code signing.

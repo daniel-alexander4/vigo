@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/metrics"
-	"github.com/hobnob/hobnob/server/push"
-	"github.com/hobnob/hobnob/server/validate"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/validate"
 )
 
 // pushRouter tracks in-flight push dispatches and routes incoming
@@ -24,10 +24,10 @@ type pushRouter struct {
 	mu      sync.Mutex
 	queries *db.Queries
 
-	// pushRunID → thrallID → push_run_target.ID
+	// pushRunID → envoyID → push_run_target.ID
 	pending map[string]map[string]string
 
-	// pushRunID → thrallID → done channel (closed on completion)
+	// pushRunID → envoyID → done channel (closed on completion)
 	notifiers map[string]map[string]chan struct{}
 }
 
@@ -40,7 +40,7 @@ func newPushRouter(queries *db.Queries) *pushRouter {
 }
 
 // trackTarget registers a push_run_target so incoming results can be routed.
-func (r *pushRouter) trackTarget(pushRunID, thrallID, targetID string) {
+func (r *pushRouter) trackTarget(pushRunID, envoyID, targetID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	targets, ok := r.pending[pushRunID]
@@ -48,30 +48,30 @@ func (r *pushRouter) trackTarget(pushRunID, thrallID, targetID string) {
 		targets = make(map[string]string)
 		r.pending[pushRunID] = targets
 	}
-	targets[thrallID] = targetID
+	targets[envoyID] = targetID
 }
 
-// lookupTarget returns the push_run_target ID for a given push+thrall.
-func (r *pushRouter) lookupTarget(pushRunID, thrallID string) (string, bool) {
+// lookupTarget returns the push_run_target ID for a given push+envoy.
+func (r *pushRouter) lookupTarget(pushRunID, envoyID string) (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	targets, ok := r.pending[pushRunID]
 	if !ok {
 		return "", false
 	}
-	targetID, ok := targets[thrallID]
+	targetID, ok := targets[envoyID]
 	return targetID, ok
 }
 
 // removeTarget removes a completed target from tracking.
-func (r *pushRouter) removeTarget(pushRunID, thrallID string) {
+func (r *pushRouter) removeTarget(pushRunID, envoyID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	targets, ok := r.pending[pushRunID]
 	if !ok {
 		return
 	}
-	delete(targets, thrallID)
+	delete(targets, envoyID)
 	if len(targets) == 0 {
 		delete(r.pending, pushRunID)
 	}
@@ -79,7 +79,7 @@ func (r *pushRouter) removeTarget(pushRunID, thrallID string) {
 
 // registerNotifier creates a channel that will be closed when the target
 // completes. Used by rolling execution to wait for batch completion.
-func (r *pushRouter) registerNotifier(pushRunID, thrallID string) chan struct{} {
+func (r *pushRouter) registerNotifier(pushRunID, envoyID string) chan struct{} {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	pushNotifiers, ok := r.notifiers[pushRunID]
@@ -88,19 +88,19 @@ func (r *pushRouter) registerNotifier(pushRunID, thrallID string) chan struct{} 
 		r.notifiers[pushRunID] = pushNotifiers
 	}
 	ch := make(chan struct{})
-	pushNotifiers[thrallID] = ch
+	pushNotifiers[envoyID] = ch
 	return ch
 }
 
 // removeNotifier removes a notifier channel for a target.
-func (r *pushRouter) removeNotifier(pushRunID, thrallID string) {
+func (r *pushRouter) removeNotifier(pushRunID, envoyID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	pushNotifiers, ok := r.notifiers[pushRunID]
 	if !ok {
 		return
 	}
-	delete(pushNotifiers, thrallID)
+	delete(pushNotifiers, envoyID)
 	if len(pushNotifiers) == 0 {
 		delete(r.notifiers, pushRunID)
 	}
@@ -108,25 +108,25 @@ func (r *pushRouter) removeNotifier(pushRunID, thrallID string) {
 
 // notifyCompletion signals that a target has completed (result received or
 // rejected). Closes the notifier channel if one is registered.
-func (r *pushRouter) notifyCompletion(pushRunID, thrallID string) {
+func (r *pushRouter) notifyCompletion(pushRunID, envoyID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	pushNotifiers, ok := r.notifiers[pushRunID]
 	if !ok {
 		return
 	}
-	if ch, ok := pushNotifiers[thrallID]; ok {
+	if ch, ok := pushNotifiers[envoyID]; ok {
 		close(ch)
-		delete(pushNotifiers, thrallID)
+		delete(pushNotifiers, envoyID)
 	}
 }
 
 // handlePushAck processes an incoming PushAck from an agent.
-func (r *pushRouter) handlePushAck(ctx context.Context, thrallID string, ack *pb.PushAck) {
-	targetID, ok := r.lookupTarget(ack.PushId, thrallID)
+func (r *pushRouter) handlePushAck(ctx context.Context, envoyID string, ack *pb.PushAck) {
+	targetID, ok := r.lookupTarget(ack.PushId, envoyID)
 	if !ok {
 		slog.Warn("received push ack for unknown target",
-			"push_id", ack.PushId, "thrall_id", thrallID)
+			"push_id", ack.PushId, "envoy_id", envoyID)
 		return
 	}
 
@@ -142,8 +142,8 @@ func (r *pushRouter) handlePushAck(ctx context.Context, thrallID string, ack *pb
 			slog.Error("failed to update rejected push target",
 				"target_id", targetID, "error", err)
 		}
-		r.removeTarget(ack.PushId, thrallID)
-		r.notifyCompletion(ack.PushId, thrallID)
+		r.removeTarget(ack.PushId, envoyID)
+		r.notifyCompletion(ack.PushId, envoyID)
 		r.maybeFinishPushRun(ctx, ack.PushId)
 		return
 	}
@@ -161,11 +161,11 @@ func (r *pushRouter) handlePushAck(ctx context.Context, thrallID string, ack *pb
 }
 
 // handlePushResult processes an incoming PushResult from an agent.
-func (r *pushRouter) handlePushResult(ctx context.Context, thrallID string, result *pb.PushResult) {
-	targetID, ok := r.lookupTarget(result.PushId, thrallID)
+func (r *pushRouter) handlePushResult(ctx context.Context, envoyID string, result *pb.PushResult) {
+	targetID, ok := r.lookupTarget(result.PushId, envoyID)
 	if !ok {
 		slog.Warn("received push result for unknown target",
-			"push_id", result.PushId, "thrall_id", thrallID)
+			"push_id", result.PushId, "envoy_id", envoyID)
 		return
 	}
 
@@ -186,14 +186,14 @@ func (r *pushRouter) handlePushResult(ctx context.Context, thrallID string, resu
 
 	slog.Info("push result received",
 		"push_id", result.PushId,
-		"thrall_id", thrallID,
+		"envoy_id", envoyID,
 		"status", result.Status,
 		"exit_code", result.ExitCode,
 		"duration_ms", result.DurationMs,
 	)
 
-	r.removeTarget(result.PushId, thrallID)
-	r.notifyCompletion(result.PushId, thrallID)
+	r.removeTarget(result.PushId, envoyID)
+	r.notifyCompletion(result.PushId, envoyID)
 	r.maybeFinishPushRun(ctx, result.PushId)
 }
 
@@ -275,7 +275,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		}
 	}
 
-	// Self-protection guardrails — reject commands that target hobnob infrastructure.
+	// Self-protection guardrails — reject commands that target vigo infrastructure.
 	if err := validate.ValidatePushCommand(params.Command); err != nil {
 		return nil, fmt.Errorf("guardrail violation: %s", err)
 	}
@@ -300,12 +300,12 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 	}
 
 	// Separate connected vs promotable vs offline targets.
-	connected := s.streamMgr.connectedThrallIDs()
+	connected := s.streamMgr.connectedEnvoyIDs()
 	var onlineTargets, promotableTargets, offlineTargets []targetInfo
 	for _, t := range targets {
-		if connected[t.ThrallID] {
+		if connected[t.EnvoyID] {
 			onlineTargets = append(onlineTargets, t)
-		} else if s.isRecentlyActive(t.ThrallID) {
+		} else if s.isRecentlyActive(t.EnvoyID) {
 			promotableTargets = append(promotableTargets, t)
 		} else {
 			offlineTargets = append(offlineTargets, t)
@@ -358,12 +358,12 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 	for _, t := range offlineTargets {
 		if _, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
 			PushRunID: pushRun.ID,
-			ThrallID:  t.ThrallID,
+			EnvoyID:  t.EnvoyID,
 			Hostname:  t.Hostname,
 			Status:    "offline",
 		}); err != nil {
 			slog.Error("failed to create offline push target",
-				"push_run_id", pushRun.ID, "thrall_id", t.ThrallID, "error", err)
+				"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
 		}
 	}
 
@@ -378,13 +378,13 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			for _, t := range batch {
 				target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
 					PushRunID: pushRun.ID,
-					ThrallID:  t.ThrallID,
+					EnvoyID:  t.EnvoyID,
 					Hostname:  t.Hostname,
 					Status:    "pending",
 				})
 				if err != nil {
 					slog.Error("failed to create push run target",
-						"push_run_id", pushRun.ID, "thrall_id", t.ThrallID, "error", err)
+						"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
 					continue
 				}
 				batchRecords[i] = append(batchRecords[i], targetRecord{info: t, targetID: target.ID})
@@ -406,17 +406,17 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		for _, t := range onlineTargets {
 			target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
 				PushRunID: pushRun.ID,
-				ThrallID:  t.ThrallID,
+				EnvoyID:  t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
 			})
 			if err != nil {
 				slog.Error("failed to create push run target",
-					"push_run_id", pushRun.ID, "thrall_id", t.ThrallID, "error", err)
+					"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
 				continue
 			}
 
-			s.pushRouter.trackTarget(pushRun.ID, t.ThrallID, target.ID)
+			s.pushRouter.trackTarget(pushRun.ID, t.EnvoyID, target.ID)
 
 			msg := &pb.ServerStreamMessage{
 				Msg: &pb.ServerStreamMessage_PushDispatch{
@@ -429,7 +429,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 				},
 			}
 
-			if s.streamMgr.dispatchPush(t.ThrallID, msg) {
+			if s.streamMgr.dispatchPush(t.EnvoyID, msg) {
 				dispatched++
 			} else {
 				// Stream closed between check and send — mark offline.
@@ -441,7 +441,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 					slog.Error("failed to mark target offline",
 						"target_id", target.ID, "error", err)
 				}
-				s.pushRouter.removeTarget(pushRun.ID, t.ThrallID)
+				s.pushRouter.removeTarget(pushRun.ID, t.EnvoyID)
 			}
 		}
 
@@ -449,17 +449,17 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		for _, t := range promotableTargets {
 			target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
 				PushRunID: pushRun.ID,
-				ThrallID:  t.ThrallID,
+				EnvoyID:  t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
 			})
 			if err != nil {
 				slog.Error("failed to create promotable push run target",
-					"push_run_id", pushRun.ID, "thrall_id", t.ThrallID, "error", err)
+					"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
 				continue
 			}
 
-			s.pushRouter.trackTarget(pushRun.ID, t.ThrallID, target.ID)
+			s.pushRouter.trackTarget(pushRun.ID, t.EnvoyID, target.ID)
 			dispatched++
 
 			msg := &pb.ServerStreamMessage{
@@ -474,9 +474,9 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			}
 
 			targetID := target.ID
-			thrallID := t.ThrallID
+			envoyID := t.EnvoyID
 			pushRunID := pushRun.ID
-			s.streamMgr.queueForPromotion(t.ThrallID, msg, func() {
+			s.streamMgr.queueForPromotion(t.EnvoyID, msg, func() {
 				if err := s.queries.UpdatePushRunTarget(context.Background(), db.UpdatePushRunTargetParams{
 					ID:         targetID,
 					Status:     "offline",
@@ -485,7 +485,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 					slog.Error("failed to mark promoted target offline",
 						"target_id", targetID, "error", err)
 				}
-				s.pushRouter.removeTarget(pushRunID, thrallID)
+				s.pushRouter.removeTarget(pushRunID, envoyID)
 				s.pushRouter.maybeFinishPushRun(context.Background(), pushRunID)
 			})
 		}

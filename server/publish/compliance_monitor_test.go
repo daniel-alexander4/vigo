@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 func TestComplianceMonitorNoRollbackWhenHealthy(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	// Add 10 compliant thralls.
+	// Add 10 compliant envoys.
 	for i := 0; i < 10; i++ {
 		id := "id-" + string(rune('a'+i))
-		fi.AddThrall(fleet.ThrallState{
+		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
 			Hostname:         "host-" + id,
 			ComplianceStatus: "compliant",
@@ -60,7 +60,7 @@ func TestComplianceMonitorTriggersRollback(t *testing.T) {
 	// Create a live dir with some content and take two snapshots.
 	// Snapshots use second-level timestamps so we must space them apart.
 	os.MkdirAll(filepath.Join(liveDir, "modules"), 0o755)
-	os.WriteFile(filepath.Join(liveDir, "modules", "good.hnb"), []byte("name: good"), 0o644)
+	os.WriteFile(filepath.Join(liveDir, "modules", "good.vgo"), []byte("name: good"), 0o644)
 	// Snapshot 1 (the "previous good" config).
 	v1, err := SnapshotLive(liveDir, histDir, 20)
 	if err != nil {
@@ -71,17 +71,17 @@ func TestComplianceMonitorTriggersRollback(t *testing.T) {
 	time.Sleep(1100 * time.Millisecond)
 
 	// Modify live dir and take another snapshot (the "bad" config that triggers rollback).
-	os.WriteFile(filepath.Join(liveDir, "modules", "bad.hnb"), []byte("name: bad"), 0o644)
+	os.WriteFile(filepath.Join(liveDir, "modules", "bad.vgo"), []byte("name: bad"), 0o644)
 	_, err = SnapshotLive(liveDir, histDir, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fi := fleet.NewFleetIndex()
-	// Add 10 thralls — 3 compliant, 7 failing (30% compliance).
+	// Add 10 envoys — 3 compliant, 7 failing (30% compliance).
 	for i := 0; i < 3; i++ {
 		id := "c-" + string(rune('a'+i))
-		fi.AddThrall(fleet.ThrallState{
+		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
 			Hostname:         "compliant-" + id,
 			ComplianceStatus: "compliant",
@@ -89,7 +89,7 @@ func TestComplianceMonitorTriggersRollback(t *testing.T) {
 	}
 	for i := 0; i < 7; i++ {
 		id := "f-" + string(rune('a'+i))
-		fi.AddThrall(fleet.ThrallState{
+		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
 			Hostname:         "failing-" + id,
 			ComplianceStatus: "failing",
@@ -112,19 +112,19 @@ func TestComplianceMonitorTriggersRollback(t *testing.T) {
 		t.Fatal("rollback should have been triggered when fleet compliance is below threshold")
 	}
 
-	// Verify rollback restored v1 content (good.hnb exists, bad.hnb does not).
+	// Verify rollback restored v1 content (good.vgo exists, bad.vgo does not).
 	_ = v1
-	if _, err := os.Stat(filepath.Join(liveDir, "modules", "good.hnb")); err != nil {
-		t.Fatalf("good.hnb should exist after rollback: %v", err)
+	if _, err := os.Stat(filepath.Join(liveDir, "modules", "good.vgo")); err != nil {
+		t.Fatalf("good.vgo should exist after rollback: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(liveDir, "modules", "bad.hnb")); err == nil {
-		t.Fatal("bad.hnb should not exist after rollback (it was only in the bad snapshot)")
+	if _, err := os.Stat(filepath.Join(liveDir, "modules", "bad.vgo")); err == nil {
+		t.Fatal("bad.vgo should not exist after rollback (it was only in the bad snapshot)")
 	}
 }
 
 func TestComplianceMonitorCancelsPrevious(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
+	fi.AddEnvoy(fleet.EnvoyState{
 		ID:               "a",
 		Hostname:         "a.example.com",
 		ComplianceStatus: "compliant",

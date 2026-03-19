@@ -1,4 +1,4 @@
-# hobnobcli tokens
+# vigogo tokens
 
 Manage enrollment tokens used for agent bootstrap.
 
@@ -11,7 +11,7 @@ Manage enrollment tokens used for agent bootstrap.
 ## Usage
 
 ```bash
-hobnobcli tokens [subcommand] [flags]
+vigogo tokens [subcommand] [flags]
 ```
 
 ## generate
@@ -19,23 +19,23 @@ hobnobcli tokens [subcommand] [flags]
 Generate a new one-time enrollment token and print the corresponding bootstrap command.
 
 ```bash
-hobnobcli tokens generate
+vigogo tokens generate
 ```
 
 ### Example
 
 ```bash
-hobnobcli tokens generate
+vigogo tokens generate
 ```
 
 ```
 Token: abc123def456
 
 Bootstrap command:
-  curl -fsSLk https://localhost:8443/bootstrap | HOBNOB_TOKEN=abc123def456 bash
+  curl -fsSLk https://localhost:8443/bootstrap | VIGO_TOKEN=abc123def456 bash
 ```
 
 ## Related
 
 - [approved](approved.md) -- manage approved enrollment patterns
-- [thralls](thralls.md) -- manage enrolled thralls
+- [envoys](envoys.md) -- manage enrolled envoys

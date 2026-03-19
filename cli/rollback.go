@@ -11,7 +11,7 @@ import (
 
 var rollbackCmd = &cobra.Command{
 	Use:   "rollback <hostname-or-uuid>",
-	Short: "Revert a thrall's file resources to a previous convergence run's state",
+	Short: "Revert a envoy's file resources to a previous convergence run's state",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runID, _ := cmd.Flags().GetString("run")
@@ -24,14 +24,14 @@ var rollbackCmd = &cobra.Command{
 			return fmt.Errorf("specify only one of --run or --file, not both")
 		}
 
-		if !confirmAction("Roll back this thrall's file resources to the previous state?") {
+		if !confirmAction("Roll back this envoy's file resources to the previous state?") {
 			fmt.Println("Cancelled.")
 			return nil
 		}
 
 		client := newAPIClient()
 		body := map[string]string{
-			"thrall_id": args[0],
+			"envoy_id": args[0],
 		}
 		if runID != "" {
 			body["run_id"] = runID
@@ -44,7 +44,7 @@ var rollbackCmd = &cobra.Command{
 			Success bool   `json:"success"`
 			Message string `json:"message"`
 		}
-		err := client.post("/api/v1/thralls/"+args[0]+"/rollback", body, &resp)
+		err := client.post("/api/v1/envoys/"+args[0]+"/rollback", body, &resp)
 		if err != nil {
 			return err
 		}

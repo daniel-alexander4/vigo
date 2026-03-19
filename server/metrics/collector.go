@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // Collector periodically queries the database to update gauge metrics.
@@ -25,18 +25,18 @@ func NewCollector(queries *db.Queries, sqlDB *sql.DB) *Collector {
 
 // UpdateGauges queries the database and updates all gauge metrics.
 func (c *Collector) UpdateGauges(ctx context.Context) error {
-	thralls, err := c.queries.ListThralls(ctx)
+	envoys, err := c.queries.ListEnvoys(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Single pass: compute all thrall metrics.
-	ThrallsTotal.Set(float64(len(thralls)))
+	// Single pass: compute all envoy metrics.
+	EnvoysTotal.Set(float64(len(envoys)))
 
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
 	var activeCount, totalNonRevoked, compliantCount int
-	for _, n := range thralls {
+	for _, n := range envoys {
 		recentlyActive := n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo)
 
 		if recentlyActive {
@@ -52,7 +52,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 			}
 		}
 	}
-	ThrallsActive.Set(float64(activeCount))
+	EnvoysActive.Set(float64(activeCount))
 
 	if totalNonRevoked > 0 {
 		CompliancePct.Set(float64(compliantCount) / float64(totalNonRevoked))

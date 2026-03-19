@@ -1,17 +1,17 @@
 -- name: CreateRun :one
-INSERT INTO runs (thrall_id, status, module_count)
+INSERT INTO runs (envoy_id, status, module_count)
 VALUES (?, ?, ?)
-RETURNING id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count;
+RETURNING id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count;
 
 -- name: GetRunByID :one
-SELECT id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 WHERE id = ?;
 
--- name: ListRunsByThrall :many
-SELECT id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+-- name: ListRunsByEnvoy :many
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE thrall_id = ?1
+WHERE envoy_id = ?1
 ORDER BY started_at DESC
 LIMIT ?2;
 
@@ -32,7 +32,7 @@ WHERE run_id = ?
 ORDER BY created_at ASC;
 
 -- name: ListAllRuns :many
-SELECT id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 ORDER BY started_at DESC
 LIMIT ?;
@@ -40,23 +40,23 @@ LIMIT ?;
 -- name: ListRunResultsSince :many
 SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
        rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
-       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       r.envoy_id, r.status AS run_status, r.started_at AS run_started_at,
        t.hostname
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
-JOIN thralls t ON t.id = r.thrall_id
+JOIN envoys t ON t.id = r.envoy_id
 WHERE rr.created_at >= ?1
 ORDER BY rr.created_at DESC
 LIMIT ?2;
 
--- name: ListRunResultsSinceByThrall :many
+-- name: ListRunResultsSinceByEnvoy :many
 SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
        rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
-       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       r.envoy_id, r.status AS run_status, r.started_at AS run_started_at,
        t.hostname
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
-JOIN thralls t ON t.id = r.thrall_id
+JOIN envoys t ON t.id = r.envoy_id
 WHERE rr.created_at >= ?1 AND t.hostname = ?2
 ORDER BY rr.created_at DESC
 LIMIT ?3;

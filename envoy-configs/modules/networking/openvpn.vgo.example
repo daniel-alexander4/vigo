@@ -46,7 +46,7 @@ resources:
     type: file
     target_path: /etc/openvpn/server/server.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       port {{ .Vars.vpn_port }}
       proto {{ .Vars.vpn_proto }}
       dev {{ .Vars.vpn_dev }}

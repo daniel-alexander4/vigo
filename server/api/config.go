@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/publish"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/publish"
 )
 
 // writeJSON writes a JSON response with the given status code.
@@ -93,7 +93,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/secrets/rotated", h.SecretRotated)
 }
 
-// ReloadConfig re-reads all config files from disk. Called by hobnobcli
+// ReloadConfig re-reads all config files from disk. Called by vigogo
 // after config publish syncs files to .live/. In hub mode, also pushes the
 // config to all spokes via gRPC (best-effort — spoke failures are logged
 // but do not fail the reload).
@@ -141,7 +141,7 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // SecretRotated marks a secret as rotated, triggering watch_secret resources
-// on affected thralls at their next check-in. Called by hobnobcli secrets set.
+// on affected envoys at their next check-in. Called by vigogo secrets set.
 func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Path string `json:"path"`
@@ -154,26 +154,26 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 	// Reload config so the new secret value is resolved.
 	_ = h.configStore.Reload()
 
-	// Find thralls referencing this secret via their match patterns.
-	patterns := h.configStore.ThrallsReferencingSecret(req.Path)
+	// Find envoys referencing this secret via their match patterns.
+	patterns := h.configStore.EnvoysReferencingSecret(req.Path)
 	affected := 0
 
 	for _, pattern := range patterns {
-		// Resolve pattern to actual thrall IDs via FleetIndex (handles globs).
+		// Resolve pattern to actual envoy IDs via FleetIndex (handles globs).
 		if h.fleetIndex != nil {
 			targets := h.fleetIndex.ListByGlob(pattern)
 			for _, t := range targets {
-				_ = h.queries.AppendRotatedSecret(r.Context(), t.ThrallID, req.Path)
-				h.fleetIndex.AppendPendingRotatedSecret(t.ThrallID, req.Path)
+				_ = h.queries.AppendRotatedSecret(r.Context(), t.EnvoyID, req.Path)
+				h.fleetIndex.AppendPendingRotatedSecret(t.EnvoyID, req.Path)
 				affected++
 			}
 		} else {
 			// Fallback: exact hostname lookup.
-			thrall, err := h.queries.GetThrallByHostname(r.Context(), pattern)
-			if err != nil || thrall.ID == "" {
+			envoy, err := h.queries.GetEnvoyByHostname(r.Context(), pattern)
+			if err != nil || envoy.ID == "" {
 				continue
 			}
-			_ = h.queries.AppendRotatedSecret(r.Context(), thrall.ID, req.Path)
+			_ = h.queries.AppendRotatedSecret(r.Context(), envoy.ID, req.Path)
 			affected++
 		}
 	}

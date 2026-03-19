@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package modlint validates, repairs, normalizes, and auto-comments Hobnob
-// module definitions (.hnb files). It is a standalone package with no server
-// dependencies, suitable for use in hobd, hobnobcli, and the community
+// Package modlint validates, repairs, normalizes, and auto-comments Vigo
+// module definitions (.vgo files). It is a standalone package with no server
+// dependencies, suitable for use in vigosrv, vigogo, and the community
 // website (Google Cloud Functions).
 //
 // The pipeline:
@@ -77,7 +77,7 @@ func Lint(input []byte, opts Options) *Result {
 
 // --- Module representation ---
 
-// module is the internal representation of a parsed .hnb module.
+// module is the internal representation of a parsed .vgo module.
 type module struct {
 	Name      string
 	DependsOn []string

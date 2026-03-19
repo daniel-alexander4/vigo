@@ -1,6 +1,6 @@
 # Users
 
-The Users page (`/admin/users`) provides admin-only user account management for the Hobnob web UI and API.
+The Users page (`/admin/users`) provides admin-only user account management for the Vigo web UI and API.
 
 ## Overview
 
@@ -18,10 +18,10 @@ This page is only visible when authentication is enabled (basic, OIDC, or isoweb
 | Role | Permissions |
 |------|-------------|
 | Admin | Full access to all pages, API endpoints, and user management |
-| Viewer | Read-only access to dashboards, thrall details, runs, and compliance data |
+| Viewer | Read-only access to dashboards, envoy details, runs, and compliance data |
 
 The first user created during initial setup automatically receives the admin role.
 
 ## API Tokens
 
-Users can create API tokens for programmatic access. Tokens use the `hbt_` prefix and are stored as bcrypt hashes. See [Authentication](../operations/authentication.md) for details.
+Users can create API tokens for programmatic access. Tokens use the `vgot_` prefix and are stored as bcrypt hashes. See [Authentication](../operations/authentication.md) for details.

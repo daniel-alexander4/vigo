@@ -3,7 +3,7 @@
 
 // Package spanner provides hub-spoke coordination for spanner deployments.
 // The Hub connects to spoke servers via gRPC and aggregates admin queries
-// (ListThralls, GetComplianceSummary, ListRuns, ForcePush) across all spokes.
+// (ListEnvoys, GetComplianceSummary, ListRuns, ForcePush) across all spokes.
 package spanner
 
 import (
@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/metrics"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -41,7 +41,7 @@ type spokeConn struct {
 	addr     string
 	patterns []string // hostname glob patterns routed to this spoke
 	conn     *grpc.ClientConn
-	admin    pb.HobnobAdminClient
+	admin    pb.VigoAdminClient
 }
 
 // NewHub creates a Hub that connects to each configured spoke via mTLS.
@@ -73,7 +73,7 @@ func NewHub(ctx context.Context, spokes []config.SpokeEntry, certFile, keyFile, 
 			addr:     s.Addr,
 			patterns: s.Patterns,
 			conn:     conn,
-			admin:    pb.NewHobnobAdminClient(conn),
+			admin:    pb.NewVigoAdminClient(conn),
 		})
 		slog.Info("connected to spoke", "spoke_id", s.ID, "addr", s.Addr)
 	}
@@ -95,28 +95,28 @@ func (h *Hub) SpokeCount() int {
 	return len(h.spokes)
 }
 
-// AggregateListThralls fans out ListThralls to all spokes and merges results.
-func (h *Hub) AggregateListThralls(ctx context.Context) ([]*pb.Thrall, error) {
+// AggregateListEnvoys fans out ListEnvoys to all spokes and merges results.
+func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	type result struct {
-		thralls []*pb.Thrall
+		envoys []*pb.Envoy
 		err   error
 	}
 
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
-		resp, err := sc.admin.ListThralls(ctx, &pb.ListThrallsRequest{})
+		resp, err := sc.admin.ListEnvoys(ctx, &pb.ListEnvoysRequest{})
 		if err != nil {
 			return nil, err
 		}
-		return resp.Thralls, nil
+		return resp.Envoys, nil
 	})
 
-	var allNodes []*pb.Thrall
+	var allNodes []*pb.Envoy
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("spoke ListThralls failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("spoke ListEnvoys failed", "spoke_id", r.spokeID, "error", r.err)
 			continue
 		}
-		allNodes = append(allNodes, r.value.([]*pb.Thrall)...)
+		allNodes = append(allNodes, r.value.([]*pb.Envoy)...)
 	}
 	return allNodes, nil
 }
@@ -145,7 +145,7 @@ func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetCompliance
 		spokeCount++
 	}
 
-	// Lost-contact thralls excluded from compliance percentage — they represent
+	// Lost-contact envoys excluded from compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := agg.Total - agg.LostContact
 	if activeTotal > 0 {
@@ -156,11 +156,11 @@ func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetCompliance
 }
 
 // AggregateListRuns fans out ListRuns to all spokes and merges results.
-// If thrallID is non-empty, only queries spokes (all of them — fan-out is cheap).
-func (h *Hub) AggregateListRuns(ctx context.Context, thrallID string, limit int32) ([]*pb.Run, error) {
+// If envoyID is non-empty, only queries spokes (all of them — fan-out is cheap).
+func (h *Hub) AggregateListRuns(ctx context.Context, envoyID string, limit int32) ([]*pb.Run, error) {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
 		resp, err := sc.admin.ListRuns(ctx, &pb.ListRunsRequest{
-			ThrallId: thrallID,
+			EnvoyId: envoyID,
 			Limit:  limit,
 		})
 		if err != nil {
@@ -180,15 +180,15 @@ func (h *Hub) AggregateListRuns(ctx context.Context, thrallID string, limit int3
 	return allRuns, nil
 }
 
-// ForwardForcePush sends a ForcePush to all spokes (or targeted if thrallID
-// is non-empty). Returns total thralls notified across all spokes.
-func (h *Hub) ForwardForcePush(ctx context.Context, thrallID string) (int32, error) {
+// ForwardForcePush sends a ForcePush to all spokes (or targeted if envoyID
+// is non-empty). Returns total envoys notified across all spokes.
+func (h *Hub) ForwardForcePush(ctx context.Context, envoyID string) (int32, error) {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
-		resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{ThrallId: thrallID})
+		resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{EnvoyId: envoyID})
 		if err != nil {
 			return nil, err
 		}
-		return resp.ThrallsNotified, nil
+		return resp.EnvoysNotified, nil
 	})
 
 	var total int32
@@ -222,8 +222,8 @@ func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
 	return "", false
 }
 
-// EnrollOnSpoke creates a thrall record on the target spoke via the EnrollThrall
-// admin RPC. Returns the thrall UUID assigned by the spoke.
+// EnrollOnSpoke creates a envoy record on the target spoke via the EnrollEnvoy
+// admin RPC. Returns the envoy UUID assigned by the spoke.
 func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress, pubkeyPEM string, force bool) (string, error) {
 	// Find the spoke connection by address.
 	var target *spokeConn
@@ -237,7 +237,7 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 		return "", fmt.Errorf("no spoke connection for address %s", spokeAddr)
 	}
 
-	resp, err := target.admin.EnrollThrall(ctx, &pb.EnrollThrallRequest{
+	resp, err := target.admin.EnrollEnvoy(ctx, &pb.EnrollEnvoyRequest{
 		Hostname:  hostname,
 		IpAddress: ipAddress,
 		PubkeyPem: pubkeyPEM,
@@ -247,8 +247,8 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 		return "", fmt.Errorf("enroll on spoke %s: %w", target.id, err)
 	}
 
-	slog.Info("enrolled thrall on spoke", "spoke_id", target.id, "hostname", hostname, "node_id", resp.ThrallId)
-	return resp.ThrallId, nil
+	slog.Info("enrolled envoy on spoke", "spoke_id", target.id, "hostname", hostname, "node_id", resp.EnvoyId)
+	return resp.EnvoyId, nil
 }
 
 // SpokeByID returns the spoke connection for the given ID, or nil if not found.
@@ -261,17 +261,17 @@ func (h *Hub) SpokeByID(id string) *spokeConn {
 	return nil
 }
 
-// SpokeListThralls queries a single spoke for its thrall list.
-func (h *Hub) SpokeListThralls(ctx context.Context, spokeID string) ([]*pb.Thrall, error) {
+// SpokeListEnvoys queries a single spoke for its envoy list.
+func (h *Hub) SpokeListEnvoys(ctx context.Context, spokeID string) ([]*pb.Envoy, error) {
 	sc := h.SpokeByID(spokeID)
 	if sc == nil {
 		return nil, fmt.Errorf("spoke %q not found", spokeID)
 	}
-	resp, err := sc.admin.ListThralls(ctx, &pb.ListThrallsRequest{})
+	resp, err := sc.admin.ListEnvoys(ctx, &pb.ListEnvoysRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("ListThralls on spoke %s: %w", spokeID, err)
+		return nil, fmt.Errorf("ListEnvoys on spoke %s: %w", spokeID, err)
 	}
-	return resp.Thralls, nil
+	return resp.Envoys, nil
 }
 
 // SpokeListRuns queries a single spoke for its run list.
@@ -297,16 +297,16 @@ func (h *Hub) SpokeComplianceSummary(ctx context.Context, spokeID string) (*pb.G
 }
 
 // SpokeForcePush sends a ForcePush to a single spoke.
-func (h *Hub) SpokeForcePush(ctx context.Context, spokeID, thrallID string) (int32, error) {
+func (h *Hub) SpokeForcePush(ctx context.Context, spokeID, envoyID string) (int32, error) {
 	sc := h.SpokeByID(spokeID)
 	if sc == nil {
 		return 0, fmt.Errorf("spoke %q not found", spokeID)
 	}
-	resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{ThrallId: thrallID})
+	resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{EnvoyId: envoyID})
 	if err != nil {
 		return 0, fmt.Errorf("ForcePush on spoke %s: %w", spokeID, err)
 	}
-	return resp.ThrallsNotified, nil
+	return resp.EnvoysNotified, nil
 }
 
 // SpokeStatus describes the health and summary of a single spoke.
@@ -315,7 +315,7 @@ type SpokeStatus struct {
 	Addr          string   `json:"addr"`
 	Patterns      []string `json:"patterns"`
 	Healthy       bool     `json:"healthy"`
-	ThrallCount   int32    `json:"thrall_count"`
+	EnvoyCount   int32    `json:"envoy_count"`
 	Compliant     int32    `json:"compliant"`
 	RecurringDrift int32   `json:"recurring_drift"`
 	Errors         int32   `json:"errors"`
@@ -368,7 +368,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			// If probe failed but we have a self-report from the spoke,
 			// populate compliance data so dashboards are not blank.
 			if report := h.getSpokeReport(sc.id); report != nil {
-				statuses[i].ThrallCount = report.ThrallCount
+				statuses[i].EnvoyCount = report.EnvoyCount
 				statuses[i].Compliant = report.Compliant
 				statuses[i].RecurringDrift = report.RecurringDrift
 				statuses[i].Errors = report.Errors
@@ -379,7 +379,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 		} else {
 			pr := r.value.(*probeResult)
 			statuses[i].Healthy = true
-			statuses[i].ThrallCount = pr.resp.Total
+			statuses[i].EnvoyCount = pr.resp.Total
 			statuses[i].Compliant = pr.resp.Compliant
 			statuses[i].RecurringDrift = pr.resp.RecurringDrift
 			statuses[i].Errors = pr.resp.Errors
@@ -438,17 +438,17 @@ func (h *Hub) fanOut(ctx context.Context, fn func(ctx context.Context, sc spokeC
 	return results
 }
 
-// ReassignResult holds the outcome of a single thrall reassignment.
+// ReassignResult holds the outcome of a single envoy reassignment.
 type ReassignResult struct {
-	NewThrallID string
+	NewEnvoyID string
 	TargetAddr  string
 }
 
-// ReassignThrall moves a thrall from one spoke to another.
-// 1. Gets thrall info from source spoke.
-// 2. Enrolls thrall on target spoke.
+// ReassignEnvoy moves a envoy from one spoke to another.
+// 1. Gets envoy info from source spoke.
+// 2. Enrolls envoy on target spoke.
 // 3. Sets reassignment on source spoke so agent reconnects.
-func (h *Hub) ReassignThrall(ctx context.Context, thrallID, fromSpokeID, toSpokeID string) (*ReassignResult, error) {
+func (h *Hub) ReassignEnvoy(ctx context.Context, envoyID, fromSpokeID, toSpokeID string) (*ReassignResult, error) {
 	from := h.SpokeByID(fromSpokeID)
 	if from == nil {
 		return nil, fmt.Errorf("source spoke %q not found", fromSpokeID)
@@ -458,38 +458,38 @@ func (h *Hub) ReassignThrall(ctx context.Context, thrallID, fromSpokeID, toSpoke
 		return nil, fmt.Errorf("target spoke %q not found", toSpokeID)
 	}
 
-	// Get thrall info from source.
-	resp, err := from.admin.GetThrall(ctx, &pb.GetThrallRequest{Id: thrallID})
+	// Get envoy info from source.
+	resp, err := from.admin.GetEnvoy(ctx, &pb.GetEnvoyRequest{Id: envoyID})
 	if err != nil {
-		return nil, fmt.Errorf("getting thrall from source spoke: %w", err)
+		return nil, fmt.Errorf("getting envoy from source spoke: %w", err)
 	}
-	thrall := resp.Thrall
+	envoy := resp.Envoy
 
 	// Enroll on target spoke.
-	newID, err := h.EnrollOnSpoke(ctx, to.addr, thrall.Hostname, thrall.IpAddress, "", true)
+	newID, err := h.EnrollOnSpoke(ctx, to.addr, envoy.Hostname, envoy.IpAddress, "", true)
 	if err != nil {
 		return nil, fmt.Errorf("enrolling on target spoke: %w", err)
 	}
 
 	// Set reassignment on source spoke so agent reconnects on next check-in.
 	_, err = from.admin.SetReassignment(ctx, &pb.SetReassignmentRequest{
-		ThrallId:    thrallID,
+		EnvoyId:    envoyID,
 		TargetAddr:  to.addr,
-		NewThrallId: newID,
+		NewEnvoyId: newID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("setting reassignment on source spoke: %w", err)
 	}
 
-	slog.Info("thrall reassigned",
-		"thrall_id", thrallID,
+	slog.Info("envoy reassigned",
+		"envoy_id", envoyID,
 		"from_spoke", fromSpokeID,
 		"to_spoke", toSpokeID,
-		"new_thrall_id", newID,
+		"new_envoy_id", newID,
 	)
 
 	return &ReassignResult{
-		NewThrallID: newID,
+		NewEnvoyID: newID,
 		TargetAddr:  to.addr,
 	}, nil
 }
@@ -501,23 +501,23 @@ type DrainResult struct {
 	Errors []string
 }
 
-// DrainSpoke moves all thralls from a spoke to other spokes.
-// If targetSpokeID is empty, routes each thrall by hostname pattern.
-// If targetSpokeID is set, all thralls go to that specific spoke.
+// DrainSpoke moves all envoys from a spoke to other spokes.
+// If targetSpokeID is empty, routes each envoy by hostname pattern.
+// If targetSpokeID is set, all envoys go to that specific spoke.
 func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*DrainResult, error) {
 	src := h.SpokeByID(spokeID)
 	if src == nil {
 		return nil, fmt.Errorf("spoke %q not found", spokeID)
 	}
 
-	// Get all thralls on source spoke.
-	thralls, err := h.SpokeListThralls(ctx, spokeID)
+	// Get all envoys on source spoke.
+	envoys, err := h.SpokeListEnvoys(ctx, spokeID)
 	if err != nil {
-		return nil, fmt.Errorf("listing thralls on spoke %s: %w", spokeID, err)
+		return nil, fmt.Errorf("listing envoys on spoke %s: %w", spokeID, err)
 	}
 
 	result := &DrainResult{}
-	for _, t := range thralls {
+	for _, t := range envoys {
 		if t.Revoked {
 			continue
 		}
@@ -551,7 +551,7 @@ func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*D
 			continue
 		}
 
-		_, err := h.ReassignThrall(ctx, t.Id, spokeID, target)
+		_, err := h.ReassignEnvoy(ctx, t.Id, spokeID, target)
 		if err != nil {
 			result.Failed++
 			result.Errors = append(result.Errors, fmt.Sprintf("reassign %s: %v", t.Hostname, err))

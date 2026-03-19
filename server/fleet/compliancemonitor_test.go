@@ -9,9 +9,9 @@ import (
 
 func TestComplianceMonitor_ThresholdBreach(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
-	fi.AddThrall(ThrallState{ID: "t2", Hostname: "h2", ComplianceStatus: "errors"}, nil)
-	fi.AddThrall(ThrallState{ID: "t3", Hostname: "h3", ComplianceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ComplianceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ComplianceStatus: "errors"}, nil)
 
 	// 33% compliant, threshold at 90%
 	monitor := NewComplianceMonitor(fi, 90.0, nil, nil)
@@ -30,7 +30,7 @@ func TestComplianceMonitor_ThresholdBreach(t *testing.T) {
 
 func TestComplianceMonitor_Recovery(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "errors"}, nil)
 
 	monitor := NewComplianceMonitor(fi, 90.0, nil, nil)
 	monitor.Check()
@@ -40,7 +40,7 @@ func TestComplianceMonitor_Recovery(t *testing.T) {
 	}
 
 	// Fix compliance
-	fi.UpdateRunStatus("t1", "success", 0, fi.thralls["t1"].LastSeen)
+	fi.UpdateRunStatus("t1", "success", 0, fi.envoys["t1"].LastSeen)
 
 	monitor.Check()
 	if monitor.alertActive {
@@ -50,7 +50,7 @@ func TestComplianceMonitor_Recovery(t *testing.T) {
 
 func TestComplianceMonitor_AboveThreshold(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
 
 	monitor := NewComplianceMonitor(fi, 90.0, nil, nil)
 	monitor.Check()

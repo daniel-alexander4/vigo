@@ -6,8 +6,8 @@
 //! output file exists — tools that aren't installed produce no data, no error.
 //!
 //! Cross-platform. Scan output directory:
-//!   Unix:    /var/lib/hobnob/security/
-//!   Windows: C:\ProgramData\Hobnob\security\
+//!   Unix:    /var/lib/vigo/security/
+//!   Windows: C:\ProgramData\Vigo\security\
 //!
 //! Supported tools (Unix):
 //!   trivy, lynis, chkrootkit, rkhunter, clamav, aide, debsecan
@@ -21,10 +21,10 @@ use std::fs;
 use std::path::Path;
 
 #[cfg(unix)]
-const SCAN_DIR: &str = "/var/lib/hobnob/security";
+const SCAN_DIR: &str = "/var/lib/vigo/security";
 
 #[cfg(windows)]
-const SCAN_DIR: &str = r"C:\ProgramData\Hobnob\security";
+const SCAN_DIR: &str = r"C:\ProgramData\Vigo\security";
 
 /// Maximum number of CVE IDs to include in traits (critical + high).
 const MAX_CVES: usize = 50;
@@ -741,7 +741,7 @@ mod tests {
     fn test_collect_returns_null_when_no_files() {
         // With no scan output files, collect should return Null.
         let val = collect().unwrap();
-        // On CI / dev machines without /var/lib/hobnob/security, this is Null.
+        // On CI / dev machines without /var/lib/vigo/security, this is Null.
         // On machines with scan output, it would be an object.
         assert!(val.is_null() || val.is_object());
     }

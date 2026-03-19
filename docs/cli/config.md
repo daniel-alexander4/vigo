@@ -8,7 +8,7 @@ Config inspection commands.
 |---------|-------------|
 | `config trace` | Trace config resolution for a hostname |
 | `config tree` | Show the directory inheritance hierarchy |
-| `config search` | Search thrall entries by match pattern, module, or var |
+| `config search` | Search envoy entries by match pattern, module, or var |
 | `config publish` | Validate and publish config from stage to live |
 | `config history` | View config publish history |
 | `config rollback` | Rollback to a previous config version |
@@ -20,18 +20,18 @@ Config inspection commands.
 
 ## config trace
 
-Shows which pattern matched a hostname, how roles expanded, where each variable came from, and the final module list. Useful for debugging why a thrall gets a particular configuration.
+Shows which pattern matched a hostname, how roles expanded, where each variable came from, and the final module list. Useful for debugging why a envoy gets a particular configuration.
 
 ### Usage
 
 ```bash
-hobnobcli config trace <hostname>
+vigogo config trace <hostname>
 ```
 
 ### Example
 
 ```
-$ hobnobcli config trace web01.prod.example.com
+$ vigogo config trace web01.prod.example.com
 
 Hostname:      web01.prod.example.com
 Match pattern: web*.prod.example.com (glob)
@@ -39,8 +39,8 @@ Environment:   production
 Resources:     14 total
 
 Inheritance:
-  common.hnb              → [sshd, monitoring]
-  production/common.hnb   → [log-shipping, auditd]
+  common.vgo              → [sshd, monitoring]
+  production/common.vgo   → [log-shipping, auditd]
 
 Roles:
   webserver (includes: base-security)
@@ -49,31 +49,31 @@ Roles:
     → logrotate
 
 Modules (6):
-  sshd           (inherited from common.hnb)
-  monitoring     (inherited from common.hnb)
-  log-shipping   (inherited from production/common.hnb)
-  auditd         (inherited from production/common.hnb)
+  sshd           (inherited from common.vgo)
+  monitoring     (inherited from common.vgo)
+  log-shipping   (inherited from production/common.vgo)
+  auditd         (inherited from production/common.vgo)
   firewall
   nginx
   logrotate
 
 Vars:
-  dns_server      = 1.1.1.1                          ← inherited:common.hnb
-  log_level       = warn                              ← inherited:production/common.hnb
+  dns_server      = 1.1.1.1                          ← inherited:common.vgo
+  log_level       = warn                              ← inherited:production/common.vgo
   nginx_port      = 443                               ← environment_overrides[production]
-  worker_procs    = 4                                 ← vars_from[vars/web01.hnb]
-  ssl_protocols   = TLSv1.2 TLSv1.3                  ← vars_from[vars/web-common.hnb]
-  db_password     = secret:****                       ← vars_from[vars/db-creds.hnb]
+  worker_procs    = 4                                 ← vars_from[vars/web01.vgo]
+  ssl_protocols   = TLSv1.2 TLSv1.3                  ← vars_from[vars/web-common.vgo]
+  db_password     = secret:****                       ← vars_from[vars/db-creds.vgo]
 
 Conditional vars: is_debian, has_enough_ram
 ```
 
-When directory inheritance is configured, the trace shows the full inheritance chain — which `common.hnb` files contributed which modules and vars.
+When directory inheritance is configured, the trace shows the full inheritance chain — which `common.vgo` files contributed which modules and vars.
 
 If no config entry matches the hostname:
 
 ```
-$ hobnobcli config trace unknown.example.com
+$ vigogo config trace unknown.example.com
 No config entry matches hostname "unknown.example.com"
 ```
 
@@ -85,28 +85,28 @@ No config entry matches hostname "unknown.example.com"
 
 ## config tree
 
-Displays the directory inheritance hierarchy as a colored tree. Shows `common.hnb` files at each level, leaf entries with their match patterns, and accumulated module totals.
+Displays the directory inheritance hierarchy as a colored tree. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated module totals.
 
 ### Usage
 
 ```bash
-hobnobcli config tree
+vigogo config tree
 ```
 
 ### Example
 
 ```
-common.hnb → [sshd, ntp, monitoring]
+common.vgo → [sshd, ntp, monitoring]
 ├── production/
-│   common.hnb → [log-shipping, auditd]
+│   common.vgo → [log-shipping, auditd]
 │   ├── web/
-│   │   └── web.hnb → web*.prod.example.com → [nginx, certbot]
+│   │   └── web.vgo → web*.prod.example.com → [nginx, certbot]
 │   │       Total: sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot
 │   └── db/
-│       └── db.hnb → db*.prod.example.com → [postgres, pg-backup]
+│       └── db.vgo → db*.prod.example.com → [postgres, pg-backup]
 │           Total: sshd, ntp, monitoring, log-shipping, auditd, postgres, pg-backup
 └── staging/
-    └── staging.hnb → *.staging.example.com → [debug-tools]
+    └── staging.vgo → *.staging.example.com → [debug-tools]
         Total: sshd, ntp, monitoring, debug-tools
         Excluded: monitoring
 ```
@@ -121,14 +121,14 @@ common.hnb → [sshd, ntp, monitoring]
 
 ## config search
 
-Search thrall entries by match pattern, module name, or var name. Shows the full inheritance chain, own modules, and accumulated totals.
+Search envoy entries by match pattern, module name, or var name. Shows the full inheritance chain, own modules, and accumulated totals.
 
 ### Usage
 
 ```bash
-hobnobcli config search --match <glob>
-hobnobcli config search --module <name>
-hobnobcli config search --var <name>
+vigogo config search --match <glob>
+vigogo config search --module <name>
+vigogo config search --var <name>
 ```
 
 At least one flag is required. Flags can be combined.
@@ -137,7 +137,7 @@ At least one flag is required. Flags can be combined.
 
 | Flag | Description |
 |------|-------------|
-| `--match` | Glob pattern to match against thrall `match:` patterns (e.g., `*web*`) |
+| `--match` | Glob pattern to match against envoy `match:` patterns (e.g., `*web*`) |
 | `--module` | Find entries that use this module (inherited or direct) |
 | `--var` | Find entries that define this var |
 
@@ -145,33 +145,33 @@ At least one flag is required. Flags can be combined.
 
 ```bash
 # Find all entries with "web" in their pattern
-$ hobnobcli config search --match "*web*"
+$ vigogo config search --match "*web*"
   web*.prod.example.com  production/web
   Chain:
-    (root)/common.hnb → sshd, ntp, monitoring
-    production/common.hnb → log-shipping, auditd
+    (root)/common.vgo → sshd, ntp, monitoring
+    production/common.vgo → log-shipping, auditd
   Own: nginx, certbot
   Total: sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot
 
 # Find every entry using the nginx module
-$ hobnobcli config search --module nginx
+$ vigogo config search --module nginx
   web*.prod.example.com  production/web
   ...
 
 # Find where log_level is defined
-$ hobnobcli config search --var log_level
+$ vigogo config search --var log_level
   web*.prod.example.com  production/web
   Var: log_level = warn
 ```
 
 ## config publish
 
-Validates `.hnb` files in `/srv/hobnob/policy/stage/` then atomically syncs to `/srv/hobnob/policy/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../operations/config-publish.md) for full details.
+Validates `.vgo` files in `/srv/vigo/policy/stage/` then atomically syncs to `/srv/vigo/policy/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../operations/config-publish.md) for full details.
 
 ### Usage
 
 ```bash
-hobnobcli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
+vigogo config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 ```
 
 ### Flags
@@ -189,19 +189,19 @@ hobnobcli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration
 
 ```bash
 # Validate without publishing
-$ hobnobcli config publish --dry-run
-Validation passed: 12 modules, 3 roles, 8 thrall entries
-  + modules/nginx.hnb
-  + thralls/web.hnb
+$ vigogo config publish --dry-run
+Validation passed: 12 modules, 3 roles, 8 envoy entries
+  + modules/nginx.vgo
+  + envoys/web.vgo
 
 # Publish
-$ hobnobcli config publish
-Published: 12 modules, 3 roles, 8 thrall entries (15 files synced)
-  + modules/nginx.hnb
-  + thralls/web.hnb
+$ vigogo config publish
+Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
+  + modules/nginx.vgo
+  + envoys/web.vgo
 
 # Nothing changed
-$ hobnobcli config publish
+$ vigogo config publish
 Nothing to publish — stage matches live.
 ```
 
@@ -210,7 +210,7 @@ Nothing to publish — stage matches live.
 View recent config publishes with operator and change details.
 
 ```bash
-hobnobcli config history
+vigogo config history
 ```
 
 ### Example
@@ -226,7 +226,7 @@ e5f6g7h8    deploy    2026-03-12 09:15   1        1
 View details for a specific publish:
 
 ```bash
-hobnobcli config history show <id>
+vigogo config history show <id>
 ```
 
 ## config rollback
@@ -235,22 +235,22 @@ Rollback config to a previous snapshot. List available versions if no argument g
 
 ```bash
 # List available versions
-hobnobcli config rollback
+vigogo config rollback
 
 # Rollback to a specific version
-hobnobcli config rollback 20260313T143000Z
+vigogo config rollback 20260313T143000Z
 ```
 
 ### Example
 
 ```
-$ hobnobcli config rollback
+$ vigogo config rollback
 Available versions:
   20260313T143000Z
   20260312T091500Z
   20260311T160000Z
 
-$ hobnobcli config rollback 20260312T091500Z
+$ vigogo config rollback 20260312T091500Z
 Rolled back to version 20260312T091500Z
 ```
 
@@ -259,13 +259,13 @@ Rolled back to version 20260312T091500Z
 List config changes awaiting approval. Only relevant when `publish.approval_required` is enabled in `server.yaml`.
 
 ```bash
-hobnobcli config pending
+vigogo config pending
 ```
 
 ### Example
 
 ```
-$ hobnobcli config pending
+$ vigogo config pending
 ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 42  pending  alice         2026-03-16 14:30   2026-03-17 14:30
 ```
@@ -275,13 +275,13 @@ ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 Approve a pending config change and trigger a config reload. The approver must be a different user than the requester (two-person rule).
 
 ```bash
-hobnobcli config approve <id>
+vigogo config approve <id>
 ```
 
 ### Example
 
 ```
-$ hobnobcli config approve 42
+$ vigogo config approve 42
 Change 42 approved by bob (requested by alice) — config reloaded.
 ```
 
@@ -290,7 +290,7 @@ Change 42 approved by bob (requested by alice) — config reloaded.
 Reject a pending config change with an optional reason.
 
 ```bash
-hobnobcli config reject <id> [--reason <text>]
+vigogo config reject <id> [--reason <text>]
 ```
 
 ### Flags
@@ -302,7 +302,7 @@ hobnobcli config reject <id> [--reason <text>]
 ### Example
 
 ```
-$ hobnobcli config reject 42 --reason "not ready for production"
+$ vigogo config reject 42 --reason "not ready for production"
 Change 42 rejected.
 ```
 
@@ -311,17 +311,17 @@ Change 42 rejected.
 Freeze config publishes until a specified time. Accepts either an RFC3339 timestamp or a duration.
 
 ```bash
-hobnobcli config freeze --until <RFC3339|duration>
+vigogo config freeze --until <RFC3339|duration>
 ```
 
 ### Examples
 
 ```bash
 # Freeze for 24 hours
-hobnobcli config freeze --until 24h
+vigogo config freeze --until 24h
 
 # Freeze until a specific time
-hobnobcli config freeze --until 2026-03-14T06:00:00Z
+vigogo config freeze --until 2026-03-14T06:00:00Z
 ```
 
 ## config unfreeze
@@ -329,5 +329,5 @@ hobnobcli config freeze --until 2026-03-14T06:00:00Z
 Remove the config publish freeze.
 
 ```bash
-hobnobcli config unfreeze
+vigogo config unfreeze
 ```

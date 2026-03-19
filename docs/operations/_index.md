@@ -1,6 +1,6 @@
 # Operations Guide
 
-This section covers the operational aspects of running a Hobnob server in production.
+This section covers the operational aspects of running a Vigo server in production.
 
 ## Topics
 
@@ -16,7 +16,7 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Change Approval](change-approval.md) -- Two-person rule for config changes
 - [Blast Radius Limits](blast-radius.md) -- Auto-rollback on compliance drop after config publish
 - [Rate Limiting](rate-limiting.md) -- Token-bucket rate limiting on check-in RPCs
-- [Maintenance Windows](maintenance-windows.md) -- Per-thrall and global change freeze
+- [Maintenance Windows](maintenance-windows.md) -- Per-envoy and global change freeze
 - [Drift Alerting](drift-alerting.md) -- Fleet compliance threshold monitoring
 - [Security Scanning](security-scanning.md) -- CVE scanning, hardening audits, rootkit and malware detection
 - [Audit Log](audit.md) -- Unified audit trail for config, tasks, and workflows

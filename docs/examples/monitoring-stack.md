@@ -4,9 +4,9 @@ This example sets up Prometheus node_exporter, Prometheus server, and Grafana us
 
 ## Node Exporter Module
 
-Deployed to every thrall for metrics collection.
+Deployed to every envoy for metrics collection.
 
-`policy/stage/modules/node-exporter.hnb`:
+`policy/stage/modules/node-exporter.vgo`:
 
 ```yaml
 name: node-exporter
@@ -47,7 +47,7 @@ resources:
 
 Deployed to monitoring servers.
 
-`policy/stage/modules/prometheus.hnb`:
+`policy/stage/modules/prometheus.vgo`:
 
 ```yaml
 name: prometheus
@@ -83,9 +83,9 @@ resources:
                 - /etc/prometheus/targets/*.json
               refresh_interval: 30s
 
-        - job_name: hobnob
+        - job_name: vigo
           static_configs:
-            - targets: ['{{ .Vars.hobnob_server }}:8443']
+            - targets: ['{{ .Vars.vigo_server }}:8443']
     notify:
       - prometheus-service
 
@@ -105,7 +105,7 @@ resources:
 
 ## Grafana Module
 
-`policy/stage/modules/grafana.hnb`:
+`policy/stage/modules/grafana.vgo`:
 
 ```yaml
 name: grafana
@@ -164,7 +164,7 @@ resources:
 
 ## Role Definition
 
-`policy/stage/roles/monitoring.hnb`:
+`policy/stage/roles/monitoring.vgo`:
 
 ```yaml
 name: monitoring
@@ -176,10 +176,10 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   # All servers get node_exporter
   - match: "*.example.com"
     modules:
@@ -190,7 +190,7 @@ thralls:
     environment: production
     roles: [monitoring]
     vars:
-      hobnob_server: hobnob.internal
+      vigo_server: vigo.internal
       prometheus_retention: 90d
       grafana_port: "3000"
 ```
@@ -201,6 +201,6 @@ thralls:
 2. **prometheus** -- no explicit dependency on node-exporter (it discovers targets via file_sd)
 3. **grafana** -- depends on prometheus (needs the datasource to be available)
 
-## Adding Hobnob Metrics
+## Adding Vigo Metrics
 
-Point Prometheus at the Hobnob server's `/metrics` endpoint to monitor the configuration management system itself. See [Prometheus Metrics](../operations/metrics.md) for available metrics and Grafana dashboard suggestions.
+Point Prometheus at the Vigo server's `/metrics` endpoint to monitor the configuration management system itself. See [Prometheus Metrics](../operations/metrics.md) for available metrics and Grafana dashboard suggestions.

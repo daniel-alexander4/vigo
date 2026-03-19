@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -172,7 +172,7 @@ func (r *Reporter) resetFailCount() {
 // recordFailure increments the failure counter and, if the threshold is reached,
 // rotates to the next hub address. Returns the new connection/client if a
 // rotation happened, or nil if no change.
-func (r *Reporter) recordFailure(ctx context.Context, tlsCreds credentials.TransportCredentials, conn **grpc.ClientConn, client *pb.HobnobAdminClient) (*grpc.ClientConn, pb.HobnobAdminClient) {
+func (r *Reporter) recordFailure(ctx context.Context, tlsCreds credentials.TransportCredentials, conn **grpc.ClientConn, client *pb.VigoAdminClient) (*grpc.ClientConn, pb.VigoAdminClient) {
 	r.mu.Lock()
 	r.failCount++
 	count := r.failCount
@@ -220,13 +220,13 @@ func (r *Reporter) recordFailure(ctx context.Context, tlsCreds credentials.Trans
 }
 
 // dial establishes a gRPC connection to the given address.
-func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.TransportCredentials) (*grpc.ClientConn, pb.HobnobAdminClient, error) {
+func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.TransportCredentials) (*grpc.ClientConn, pb.VigoAdminClient, error) {
 	if r.dialFunc != nil {
 		conn, err := r.dialFunc(ctx, addr, creds)
 		if err != nil {
 			return nil, nil, err
 		}
-		return conn, pb.NewHobnobAdminClient(conn), nil
+		return conn, pb.NewVigoAdminClient(conn), nil
 	}
 
 	conn, err := grpc.DialContext(ctx, addr,
@@ -235,14 +235,14 @@ func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.Tran
 	if err != nil {
 		return nil, nil, err
 	}
-	return conn, pb.NewHobnobAdminClient(conn), nil
+	return conn, pb.NewVigoAdminClient(conn), nil
 }
 
 // report sends a single status report to the hub. Returns true on success.
-func (r *Reporter) report(ctx context.Context, client pb.HobnobAdminClient) bool {
+func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 	total, compliant, recurringDrift, errors, lostContact, noData := r.compliance.ComplianceCounts()
 
-	// Lost-contact thralls excluded from compliance percentage.
+	// Lost-contact envoys excluded from compliance percentage.
 	activeTotal := total - lostContact
 	var compliancePct float32
 	if activeTotal > 0 {
@@ -251,7 +251,7 @@ func (r *Reporter) report(ctx context.Context, client pb.HobnobAdminClient) bool
 
 	req := &pb.SpokeStatusReport{
 		SpokeId:       r.spokeID,
-		ThrallCount:   int32(total),
+		EnvoyCount:   int32(total),
 		Compliant:     int32(compliant),
 		RecurringDrift: int32(recurringDrift),
 		Errors:         int32(errors),
@@ -276,7 +276,7 @@ func (r *Reporter) report(ctx context.Context, client pb.HobnobAdminClient) bool
 
 	slog.Debug("spoke status reported to hub",
 		"spoke_id", r.spokeID,
-		"thrall_count", total,
+		"envoy_count", total,
 		"compliant", compliant,
 	)
 	return true

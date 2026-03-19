@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Upgrade the Hobnob server to the latest container image.
+# Upgrade the Vigo server to the latest container image.
 # Preserves: server.yaml, .env, db/, secrets/, tls/, license/, config-history/
 # Replaces:  container image, docs/, examples/, scripts/
 #
@@ -28,8 +28,8 @@ set -euo pipefail
 #   windows    Windows x86_64 (via cross)
 #   all        All of the above
 
-DATA_DIR="/srv/hobnob"
-IMAGE="ghcr.io/daniel-alexander4/hobnob:latest"
+DATA_DIR="/srv/vigo"
+IMAGE="ghcr.io/daniel-alexander4/vigo:latest"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run as root: sudo $0" >&2
@@ -150,7 +150,7 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
 echo 'Building linux/amd64...'
 CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/amd64
-cp target/x86_64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/amd64/hobnob"
+cp target/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo"
                 ;;
             arm64)
                 RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
@@ -161,7 +161,7 @@ CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc \
 CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
     cargo build --release --target aarch64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/arm64
-cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm64/hobnob"
+cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/vigo"
                 ;;
             freebsd)
                 echo "  freebsd: using cargo-cross container"
@@ -170,7 +170,7 @@ cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm6
                     ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
-                        cp target/x86_64-unknown-freebsd/release/hobnob /build/dist/agent/freebsd/amd64/hobnob
+                        cp target/x86_64-unknown-freebsd/release/vigo /build/dist/agent/freebsd/amd64/vigo
                     ') || echo "  WARN: freebsd cross-compile failed"
                 ;;
             windows)
@@ -180,7 +180,7 @@ cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm6
                     ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
-                        cp target/x86_64-pc-windows-msvc/release/hobnob.exe /build/dist/agent/windows/amd64/hobnob.exe
+                        cp target/x86_64-pc-windows-msvc/release/vigo.exe /build/dist/agent/windows/amd64/vigo.exe
                     ') || echo "  WARN: windows cross-compile failed"
                 ;;
             darwin)
@@ -215,9 +215,9 @@ cp target/aarch64-unknown-linux-musl/release/hobnob /build/dist/agent/linux/arm6
 
     echo ""
     echo "Agent binaries:"
-    find "$REPO_DIR/dist/agent" -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null | while read -r f; do
+    find "$REPO_DIR/dist/agent" -name 'vigo' -o -name 'vigo.exe' 2>/dev/null | while read -r f; do
         platform="${f#$REPO_DIR/dist/agent/}"
-        platform="${platform%/hobnob*}"
+        platform="${platform%/vigo*}"
         size=$(ls -lh "$f" | awk '{print $5}')
         echo "  $platform  $size"
     done
@@ -231,10 +231,10 @@ fi
 if $BUILD_SERVER; then
     echo "Building Go binaries..."
     cd "$REPO_DIR"
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/hobd ./server
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/hobnobcli ./cli
-    echo "  hobd:       $(ls -lh bin/hobd | awk '{print $5}')"
-    echo "  hobnobcli:  $(ls -lh bin/hobnobcli | awk '{print $5}')"
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/vigosrv ./server
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" -o bin/vigogo ./cli
+    echo "  vigosrv:       $(ls -lh bin/vigosrv | awk '{print $5}')"
+    echo "  vigogo:  $(ls -lh bin/vigogo | awk '{print $5}')"
     cd "$DATA_DIR"
 fi
 
@@ -247,8 +247,8 @@ if $BUILD_AGENT && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
     cd "$REPO_DIR/agent-rs"
     cargo build --release
     mkdir -p "$REPO_DIR/bin"
-    cp target/release/hobnob "$REPO_DIR/bin/hobnob"
-    echo "  hobnob:     $(ls -lh "$REPO_DIR/bin/hobnob" | awk '{print $5}')"
+    cp target/release/vigo "$REPO_DIR/bin/vigo"
+    echo "  vigo:     $(ls -lh "$REPO_DIR/bin/vigo" | awk '{print $5}')"
     cd "$DATA_DIR"
 fi
 
@@ -258,7 +258,7 @@ fi
 
 if $NEED_IMAGE_REBUILD; then
     # Bust all caches to ensure fresh binaries in the runtime image.
-    touch "$REPO_DIR/proto/hobnob.proto" "$REPO_DIR/agent-rs/src/main.rs" 2>/dev/null || true
+    touch "$REPO_DIR/proto/vigo.proto" "$REPO_DIR/agent-rs/src/main.rs" 2>/dev/null || true
 
     echo "Building Docker image from source..."
     DOCKER_BUILDKIT=1 docker build \
@@ -273,7 +273,7 @@ if $NEED_IMAGE_REBUILD; then
 elif ! $BUILD_SERVER && ! $BUILD_AGENT && ! $BUILD_ALL; then
     # Pull mode.
     echo "Pulling latest image..."
-    docker compose pull hobnob
+    docker compose pull vigo
 fi
 
 # ---------------------------------------------------------------------------
@@ -303,48 +303,48 @@ if $NEED_CONTAINER_RESTART; then
 
     echo ""
     echo "Waiting for server..."
-    timeout 60 docker compose logs -f hobnob 2>&1 | grep -m1 "server ready" || true
+    timeout 60 docker compose logs -f vigo 2>&1 | grep -m1 "server ready" || true
 fi
 
 # Inject cross-compiled agent binaries into the running container so the
 # bootstrap endpoint serves the freshly built binaries (not stale ones baked
 # into the image). Must happen after the container starts.
-if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=hobnob | grep -q .; then
+if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=vigo | grep -q .; then
     echo "Injecting cross-compiled agent binaries into container..."
     for t in "${CROSS_TARGETS[@]}"; do
         case "$t" in
             amd64)
-                if [ -f "$REPO_DIR/dist/agent/linux/amd64/hobnob" ]; then
-                    docker cp "$REPO_DIR/dist/agent/linux/amd64/hobnob" hobnob:/dist/agent/linux/amd64/hobnob
+                if [ -f "$REPO_DIR/dist/agent/linux/amd64/vigo" ]; then
+                    docker cp "$REPO_DIR/dist/agent/linux/amd64/vigo" vigo:/dist/agent/linux/amd64/vigo
                     echo "  linux/amd64 → container"
                 fi
                 ;;
             arm64)
-                if [ -f "$REPO_DIR/dist/agent/linux/arm64/hobnob" ]; then
-                    docker exec hobnob mkdir -p /dist/agent/linux/arm64
-                    docker cp "$REPO_DIR/dist/agent/linux/arm64/hobnob" hobnob:/dist/agent/linux/arm64/hobnob
+                if [ -f "$REPO_DIR/dist/agent/linux/arm64/vigo" ]; then
+                    docker exec vigo mkdir -p /dist/agent/linux/arm64
+                    docker cp "$REPO_DIR/dist/agent/linux/arm64/vigo" vigo:/dist/agent/linux/arm64/vigo
                     echo "  linux/arm64 → container"
                 fi
                 ;;
             freebsd)
-                if [ -f "$REPO_DIR/dist/agent/freebsd/amd64/hobnob" ]; then
-                    docker exec hobnob mkdir -p /dist/agent/freebsd/amd64
-                    docker cp "$REPO_DIR/dist/agent/freebsd/amd64/hobnob" hobnob:/dist/agent/freebsd/amd64/hobnob
+                if [ -f "$REPO_DIR/dist/agent/freebsd/amd64/vigo" ]; then
+                    docker exec vigo mkdir -p /dist/agent/freebsd/amd64
+                    docker cp "$REPO_DIR/dist/agent/freebsd/amd64/vigo" vigo:/dist/agent/freebsd/amd64/vigo
                     echo "  freebsd/amd64 → container"
                 fi
                 ;;
             windows)
-                if [ -f "$REPO_DIR/dist/agent/windows/amd64/hobnob.exe" ]; then
-                    docker exec hobnob mkdir -p /dist/agent/windows/amd64
-                    docker cp "$REPO_DIR/dist/agent/windows/amd64/hobnob.exe" hobnob:/dist/agent/windows/amd64/hobnob.exe
+                if [ -f "$REPO_DIR/dist/agent/windows/amd64/vigo.exe" ]; then
+                    docker exec vigo mkdir -p /dist/agent/windows/amd64
+                    docker cp "$REPO_DIR/dist/agent/windows/amd64/vigo.exe" vigo:/dist/agent/windows/amd64/vigo.exe
                     echo "  windows/amd64 → container"
                 fi
                 ;;
             darwin)
                 for arch in amd64 arm64; do
-                    if [ -f "$REPO_DIR/dist/agent/darwin/$arch/hobnob" ]; then
-                        docker exec hobnob mkdir -p /dist/agent/darwin/$arch
-                        docker cp "$REPO_DIR/dist/agent/darwin/$arch/hobnob" hobnob:/dist/agent/darwin/$arch/hobnob
+                    if [ -f "$REPO_DIR/dist/agent/darwin/$arch/vigo" ]; then
+                        docker exec vigo mkdir -p /dist/agent/darwin/$arch
+                        docker cp "$REPO_DIR/dist/agent/darwin/$arch/vigo" vigo:/dist/agent/darwin/$arch/vigo
                         echo "  darwin/$arch → container"
                     fi
                 done
@@ -362,12 +362,12 @@ if $NEED_HOST_UPDATE; then
 
     if $BUILD_SERVER; then
         # --server: host CLI from local build, server binary from Docker image.
-        cp "$REPO_DIR/bin/hobnobcli" /usr/local/bin/hobnobcli
-        ln -sf hobnobcli /usr/local/bin/hnbvi
+        cp "$REPO_DIR/bin/vigogo" /usr/local/bin/vigogo
+        ln -sf vigogo /usr/local/bin/hnbvi
     else
         # Pull or full rebuild: extract from the new container.
-        docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
-        ln -sf hobnobcli /usr/local/bin/hnbvi
+        docker cp vigo:/usr/local/bin/vigogo /usr/local/bin/vigogo
+        ln -sf vigogo /usr/local/bin/hnbvi
     fi
 
     # Agent binary for the host.
@@ -380,20 +380,20 @@ if $NEED_HOST_UPDATE; then
     HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
     # Stop the agent service before overwriting the binary (avoids ETXTBSY).
-    systemctl stop hobnob-thrall 2>/dev/null || true
+    systemctl stop vigo-envoy 2>/dev/null || true
 
     AGENT_INSTALLED=false
     # Prefer host dist/ for cross-compiled binaries (fresher than what's in the container image).
-    if [ -f "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" ]; then
-        cp "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/sbin/hobnob
+    if [ -f "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" ]; then
+        cp "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" /usr/local/sbin/vigo
         echo "Installed agent binary from dist: $HOST_OS/$AGENT_ARCH"
         AGENT_INSTALLED=true
-    elif $BUILD_AGENT && [ -f "$REPO_DIR/bin/hobnob" ]; then
-        cp "$REPO_DIR/bin/hobnob" /usr/local/sbin/hobnob
+    elif $BUILD_AGENT && [ -f "$REPO_DIR/bin/vigo" ]; then
+        cp "$REPO_DIR/bin/vigo" /usr/local/sbin/vigo
         echo "Installed agent binary from local build"
         AGENT_INSTALLED=true
-    elif docker exec hobnob test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" 2>/dev/null; then
-        docker cp "hobnob:/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/sbin/hobnob
+    elif docker exec vigo test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" 2>/dev/null; then
+        docker cp "vigo:/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" /usr/local/sbin/vigo
         echo "Installed agent binary: $HOST_OS/$AGENT_ARCH"
         AGENT_INSTALLED=true
     else
@@ -401,7 +401,7 @@ if $NEED_HOST_UPDATE; then
     fi
 
     if $AGENT_INSTALLED; then
-        systemctl start hobnob-thrall 2>/dev/null || true
+        systemctl start vigo-envoy 2>/dev/null || true
     fi
 fi
 
@@ -418,14 +418,14 @@ echo "Checking freshness..."
 STALE=0
 
 # Compare host CLI against container CLI.
-if [ -f /usr/local/bin/hobnobcli ]; then
-    HOST_MD5=$(md5sum /usr/local/bin/hobnobcli 2>/dev/null | awk '{print $1}')
-    CTR_MD5=$(docker exec hobnob md5sum /usr/local/bin/hobnobcli 2>/dev/null | awk '{print $1}')
+if [ -f /usr/local/bin/vigogo ]; then
+    HOST_MD5=$(md5sum /usr/local/bin/vigogo 2>/dev/null | awk '{print $1}')
+    CTR_MD5=$(docker exec vigo md5sum /usr/local/bin/vigogo 2>/dev/null | awk '{print $1}')
     if [ "$HOST_MD5" != "$CTR_MD5" ]; then
-        echo "  STALE  /usr/local/bin/hobnobcli (host differs from container)"
+        echo "  STALE  /usr/local/bin/vigogo (host differs from container)"
         STALE=1
     else
-        echo "  OK     /usr/local/bin/hobnobcli"
+        echo "  OK     /usr/local/bin/vigogo"
     fi
 fi
 
@@ -433,12 +433,12 @@ fi
 if ($BUILD_SERVER || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_GO=${NEWEST_GO%.*}
-    CTR_HOBD=$(docker exec hobnob stat -c '%Y' /usr/local/sbin/hobd 2>/dev/null || echo 0)
+    CTR_HOBD=$(docker exec vigo stat -c '%Y' /usr/local/sbin/vigosrv 2>/dev/null || echo 0)
     if [ -n "$NEWEST_GO" ] && [ "$NEWEST_GO" -gt "$CTR_HOBD" ]; then
-        echo "  STALE  hobd in container (source is newer — restart container to activate)"
+        echo "  STALE  vigosrv in container (source is newer — restart container to activate)"
         STALE=1
     else
-        echo "  OK     hobd"
+        echo "  OK     vigosrv"
     fi
 fi
 
@@ -446,11 +446,11 @@ fi
 if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     NEWEST_RS=$(find "$REPO_DIR/agent-rs/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_RS=${NEWEST_RS%.*}
-    AGENT_PLATFORMS=$(docker exec hobnob find /dist/agent -name 'hobnob' -o -name 'hobnob.exe' 2>/dev/null || true)
+    AGENT_PLATFORMS=$(docker exec vigo find /dist/agent -name 'vigo' -o -name 'vigo.exe' 2>/dev/null || true)
     if [ -n "$AGENT_PLATFORMS" ]; then
         for agent_path in $AGENT_PLATFORMS; do
-            CTR_AGENT=$(docker exec hobnob stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
-            platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/hobnob.*||')
+            CTR_AGENT=$(docker exec vigo stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
+            platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/vigo.*||')
             if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
                 echo "  STALE  agent $platform (source is newer than binary)"
                 STALE=1
@@ -464,7 +464,7 @@ fi
 # Check entrypoint.sh and Dockerfile.
 if ($BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     REPO_EP_MD5=$(md5sum "$REPO_DIR/entrypoint.sh" 2>/dev/null | awk '{print $1}')
-    CTR_EP_MD5=$(docker exec hobnob md5sum /entrypoint.sh 2>/dev/null | awk '{print $1}')
+    CTR_EP_MD5=$(docker exec vigo md5sum /entrypoint.sh 2>/dev/null | awk '{print $1}')
     if [ "$REPO_EP_MD5" != "$CTR_EP_MD5" ]; then
         echo "  STALE  entrypoint.sh (repo differs from container)"
         STALE=1

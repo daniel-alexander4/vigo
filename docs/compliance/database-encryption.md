@@ -4,14 +4,14 @@ title: Database Encryption at Rest
 
 # Database Encryption at Rest
 
-HIPAA 164.312(a)(2)(iv) requires encryption of ePHI at rest. Hobnob already encrypts secrets (AES-256-GCM) and backup archives (AES-256-GCM with Argon2id), but the database file itself requires additional measures depending on your database driver.
+HIPAA 164.312(a)(2)(iv) requires encryption of ePHI at rest. Vigo already encrypts secrets (AES-256-GCM) and backup archives (AES-256-GCM with Argon2id), but the database file itself requires additional measures depending on your database driver.
 
 ## What's Already Encrypted
 
 | Component | Encryption | Details |
 |-----------|-----------|---------|
-| Secrets files | AES-256-GCM | All values in `/srv/hobnob/secrets/` encrypted with master key |
-| Backup archives | AES-256-GCM | Optional via `hobnobcli backup create --encrypt` |
+| Secrets files | AES-256-GCM | All values in `/srv/vigo/secrets/` encrypted with master key |
+| Backup archives | AES-256-GCM | Optional via `vigogo backup create --encrypt` |
 | Transport | mTLS (TLS 1.3) | All gRPC and REST traffic |
 | Agent communication | ED25519 + mTLS | Signed payloads over encrypted transport |
 | API tokens | bcrypt | Hashed at rest, never stored in plaintext |
@@ -21,7 +21,7 @@ HIPAA 164.312(a)(2)(iv) requires encryption of ePHI at rest. Hobnob already encr
 
 The database file contains:
 
-- Thrall enrollment records (hostname, IP, public key)
+- Envoy enrollment records (hostname, IP, public key)
 - Trait data (OS, hardware, network, packages)
 - Run results (convergence outcomes, resource states)
 - Audit trail entries (tamper-evident hash chain)
@@ -45,14 +45,14 @@ For SQLite deployments, we recommend encrypting the filesystem that contains the
 sudo cryptsetup luksFormat /dev/sdX
 
 # Open the encrypted volume
-sudo cryptsetup open /dev/sdX hobnob-data
+sudo cryptsetup open /dev/sdX vigo-data
 
 # Create a filesystem
-sudo mkfs.ext4 /dev/mapper/hobnob-data
+sudo mkfs.ext4 /dev/mapper/vigo-data
 
 # Mount it
-sudo mkdir -p /srv/hobnob
-sudo mount /dev/mapper/hobnob-data /srv/hobnob
+sudo mkdir -p /srv/vigo
+sudo mount /dev/mapper/vigo-data /srv/vigo
 ```
 
 #### 2. Auto-unlock on boot
@@ -63,17 +63,17 @@ For production servers, configure automatic unlocking using a key file or TPM:
 
 ```bash
 # Generate a key file
-sudo dd if=/dev/urandom of=/root/.hobnob-luks-key bs=512 count=1
-sudo chmod 600 /root/.hobnob-luks-key
+sudo dd if=/dev/urandom of=/root/.vigo-luks-key bs=512 count=1
+sudo chmod 600 /root/.vigo-luks-key
 
 # Add the key file to the LUKS volume
-sudo cryptsetup luksAddKey /dev/sdX /root/.hobnob-luks-key
+sudo cryptsetup luksAddKey /dev/sdX /root/.vigo-luks-key
 
 # Add to /etc/crypttab for auto-unlock
-echo "hobnob-data /dev/sdX /root/.hobnob-luks-key luks" | sudo tee -a /etc/crypttab
+echo "vigo-data /dev/sdX /root/.vigo-luks-key luks" | sudo tee -a /etc/crypttab
 
 # Add to /etc/fstab for auto-mount
-echo "/dev/mapper/hobnob-data /srv/hobnob ext4 defaults 0 2" | sudo tee -a /etc/fstab
+echo "/dev/mapper/vigo-data /srv/vigo ext4 defaults 0 2" | sudo tee -a /etc/fstab
 ```
 
 **TPM 2.0 (higher security, binds decryption to hardware):**
@@ -83,14 +83,14 @@ echo "/dev/mapper/hobnob-data /srv/hobnob ext4 defaults 0 2" | sudo tee -a /etc/
 sudo systemd-cryptenroll /dev/sdX --tpm2-device=auto
 
 # Update /etc/crypttab
-echo "hobnob-data /dev/sdX - tpm2-device=auto" | sudo tee -a /etc/crypttab
+echo "vigo-data /dev/sdX - tpm2-device=auto" | sudo tee -a /etc/crypttab
 ```
 
 #### 3. Verify encryption
 
 ```bash
 # Confirm the volume is encrypted
-sudo cryptsetup status hobnob-data
+sudo cryptsetup status vigo-data
 
 # Should show:
 #   type:    LUKS2
@@ -105,10 +105,10 @@ For Docker, mount the encrypted volume as a bind mount:
 ```yaml
 # docker-compose.yml
 services:
-  hobd:
-    image: ghcr.io/daniel-alexander4/hobnob:latest
+  vigosrv:
+    image: ghcr.io/daniel-alexander4/vigo:latest
     volumes:
-      - /srv/hobnob:/srv/hobnob    # LUKS-encrypted mount point
+      - /srv/vigo:/srv/vigo    # LUKS-encrypted mount point
 ```
 
 The container accesses the decrypted filesystem transparently. Ensure the LUKS volume is unlocked before starting the container.
@@ -119,11 +119,11 @@ For testing without a dedicated partition:
 
 ```bash
 # Create a 1 GB file-backed encrypted volume
-dd if=/dev/zero of=/var/lib/hobnob-encrypted.img bs=1M count=1024
-sudo cryptsetup luksFormat /var/lib/hobnob-encrypted.img
-sudo cryptsetup open /var/lib/hobnob-encrypted.img hobnob-data
-sudo mkfs.ext4 /dev/mapper/hobnob-data
-sudo mount /dev/mapper/hobnob-data /srv/hobnob
+dd if=/dev/zero of=/var/lib/vigo-encrypted.img bs=1M count=1024
+sudo cryptsetup luksFormat /var/lib/vigo-encrypted.img
+sudo cryptsetup open /var/lib/vigo-encrypted.img vigo-data
+sudo mkfs.ext4 /dev/mapper/vigo-data
+sudo mount /dev/mapper/vigo-data /srv/vigo
 ```
 
 ### Performance
@@ -154,11 +154,11 @@ PostgreSQL 16+ supports TDE via the `pg_tde` extension (Percona):
 CREATE EXTENSION pg_tde;
 
 -- Set the master key (store the key in a secure location)
-SELECT pg_tde_set_key('hobnob_master_key', 'your-256-bit-key-hex');
+SELECT pg_tde_set_key('vigo_master_key', 'your-256-bit-key-hex');
 
 -- Convert existing tables
-ALTER TABLE thralls SET ACCESS METHOD tde_heap;
-ALTER TABLE thrall_traits SET ACCESS METHOD tde_heap;
+ALTER TABLE envoys SET ACCESS METHOD tde_heap;
+ALTER TABLE envoy_traits SET ACCESS METHOD tde_heap;
 ALTER TABLE runs SET ACCESS METHOD tde_heap;
 ALTER TABLE run_results SET ACCESS METHOD tde_heap;
 ALTER TABLE audit_entries SET ACCESS METHOD tde_heap;
@@ -188,18 +188,18 @@ All major cloud providers offer encryption at rest by default:
 | GCP | Cloud SQL | AES-256, customer-managed keys optional |
 | Azure | Azure Database for PostgreSQL | AES-256, service-managed keys |
 
-### Hobnob PostgreSQL Configuration
+### Vigo PostgreSQL Configuration
 
 ```yaml
 # server.yaml
 database:
   driver: postgres
-  dsn: "secret:hobnob/db/dsn"
+  dsn: "secret:vigo/db/dsn"
 ```
 
 ```bash
 # Store the PostgreSQL DSN as an encrypted secret
-hobnobcli secrets set hobnob/db/dsn "host=db.example.com port=5432 user=hobnob password=secret dbname=hobnob sslmode=verify-full"
+vigogo secrets set vigo/db/dsn "host=db.example.com port=5432 user=vigo password=secret dbname=vigo sslmode=verify-full"
 ```
 
 ## Verification
@@ -208,7 +208,7 @@ hobnobcli secrets set hobnob/db/dsn "host=db.example.com port=5432 user=hobnob p
 
 ```bash
 # Find which mount point contains the database
-df /srv/hobnob/db/hobnob.db
+df /srv/vigo/db/vigo.db
 
 # Check if the underlying device is LUKS-encrypted
 lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINT | grep crypt
@@ -217,7 +217,7 @@ lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINT | grep crypt
 ### Confirm PostgreSQL TDE is active
 
 ```sql
-SELECT pg_tde_is_encrypted('thralls');
+SELECT pg_tde_is_encrypted('envoys');
 -- Should return true
 ```
 
@@ -238,7 +238,7 @@ Check your cloud provider's console or CLI for encryption status on the managed 
 
 | Deployment | Recommended Approach |
 |------------|---------------------|
-| Single server, SQLite | LUKS/dm-crypt on `/srv/hobnob` |
+| Single server, SQLite | LUKS/dm-crypt on `/srv/vigo` |
 | Docker, SQLite | LUKS on host, bind mount into container |
 | Cloud VM, SQLite | Cloud-provided disk encryption (e.g., AWS EBS encryption) |
 | Self-hosted PostgreSQL | LUKS on data directory + `pg_tde` extension |

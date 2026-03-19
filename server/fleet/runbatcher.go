@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // RunBatchResultParam holds per-resource result fields for deferred DB writes.
@@ -27,7 +27,7 @@ type RunBatchResultParam struct {
 // RunBatchEntry holds a single completed run to be persisted asynchronously.
 type RunBatchEntry struct {
 	RunID        string
-	ThrallID     string
+	EnvoyID     string
 	Hostname     string
 	Status       string
 	ModuleCount  int64
@@ -103,7 +103,7 @@ func (rb *RunBatcher) Flush(ctx context.Context) {
 		if err := rb.persistEntry(ctx, entry); err != nil {
 			slog.Error("run batcher: persist failed",
 				"run_id", entry.RunID,
-				"thrall_id", entry.ThrallID,
+				"envoy_id", entry.EnvoyID,
 				"error", err,
 			)
 		}
@@ -115,7 +115,7 @@ func (rb *RunBatcher) Flush(ctx context.Context) {
 // persistEntry writes a single run and its results to the database.
 func (rb *RunBatcher) persistEntry(ctx context.Context, entry RunBatchEntry) error {
 	run, err := rb.store.CreateRun(ctx, db.CreateRunParams{
-		ThrallID:    entry.ThrallID,
+		EnvoyID:    entry.EnvoyID,
 		Status:      "running",
 		ModuleCount: entry.ModuleCount,
 	})

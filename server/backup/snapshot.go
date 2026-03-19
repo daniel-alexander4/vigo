@@ -31,7 +31,7 @@ import (
 type Manifest struct {
 	Version       int       `json:"version"`
 	CreatedAt     time.Time `json:"created_at"`
-	HobnobVersion string   `json:"hobnob_version"`
+	VigoVersion string   `json:"vigo_version"`
 	DBDriver      string   `json:"db_driver"`
 	DBDSN         string   `json:"db_dsn"`
 	Files         []string `json:"files"`
@@ -43,19 +43,19 @@ type Manifest struct {
 type CreateOptions struct {
 	// ServerYAMLPath is the path to server.yaml.
 	ServerYAMLPath string
-	// ServerRoot is the base directory (default /srv/hobnob).
+	// ServerRoot is the base directory (default /srv/vigo).
 	ServerRoot string
 	// DBDriver is "sqlite" or "postgres".
 	DBDriver string
 	// DBDSN is the database connection string or file path.
 	DBDSN string
-	// HobnobVersion is the server version string.
-	HobnobVersion string
+	// VigoVersion is the server version string.
+	VigoVersion string
 }
 
 // RestoreOptions configures how a backup archive is restored.
 type RestoreOptions struct {
-	// TargetDir is the root directory to restore into (default /srv/hobnob).
+	// TargetDir is the root directory to restore into (default /srv/vigo).
 	TargetDir string
 	// DBOnly skips config/secrets/tls, restoring only the database.
 	DBOnly bool
@@ -144,11 +144,11 @@ func sanitizePgDSN(dsn string) (sanitized, password string) {
 func CreateArchive(archivePath string, opts CreateOptions) error {
 	serverRoot := opts.ServerRoot
 	if serverRoot == "" {
-		serverRoot = "/srv/hobnob"
+		serverRoot = "/srv/vigo"
 	}
 
 	// Create a temp dir for staging.
-	tmpDir, err := os.MkdirTemp("", "hobnob-backup-*")
+	tmpDir, err := os.MkdirTemp("", "vigo-backup-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
@@ -167,11 +167,11 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 	}
 
 	if dbDriver == "sqlite" {
-		dstDB := filepath.Join(dbDir, "hobnob.db")
+		dstDB := filepath.Join(dbDir, "vigo.db")
 		if err := SnapshotSQLite(opts.DBDSN, dstDB); err != nil {
 			return fmt.Errorf("sqlite snapshot: %w", err)
 		}
-		files = append(files, "db/hobnob.db")
+		files = append(files, "db/vigo.db")
 	} else {
 		dstDump := filepath.Join(dbDir, "dump.sql")
 		if err := SnapshotPostgres(opts.DBDSN, dstDump); err != nil {
@@ -219,7 +219,7 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 	manifest := Manifest{
 		Version:       1,
 		CreatedAt:     time.Now().UTC(),
-		HobnobVersion: opts.HobnobVersion,
+		VigoVersion: opts.VigoVersion,
 		DBDriver:      dbDriver,
 		DBDSN:         opts.DBDSN,
 		Files:         files,
@@ -240,11 +240,11 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) {
 	targetDir := opts.TargetDir
 	if targetDir == "" {
-		targetDir = "/srv/hobnob"
+		targetDir = "/srv/vigo"
 	}
 
 	// Extract to a temp dir first.
-	tmpDir, err := os.MkdirTemp("", "hobnob-restore-*")
+	tmpDir, err := os.MkdirTemp("", "vigo-restore-*")
 	if err != nil {
 		return nil, fmt.Errorf("creating temp dir: %w", err)
 	}
@@ -271,10 +271,10 @@ func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) 
 
 	// Restore database.
 	if manifest.DBDriver == "sqlite" {
-		srcDB := filepath.Join(tmpDir, "db", "hobnob.db")
+		srcDB := filepath.Join(tmpDir, "db", "vigo.db")
 		if _, err := os.Stat(srcDB); err == nil {
 			// Always restore to target dir; the original DSN path may not exist.
-			dstDB := filepath.Join(targetDir, "db", "hobnob.db")
+			dstDB := filepath.Join(targetDir, "db", "vigo.db")
 			if err := os.MkdirAll(filepath.Dir(dstDB), 0700); err != nil {
 				return nil, fmt.Errorf("creating db directory: %w", err)
 			}

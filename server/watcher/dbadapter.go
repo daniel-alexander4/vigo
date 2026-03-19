@@ -7,7 +7,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // DBAdapter wraps *db.Queries to satisfy the watcher.DB interface,
@@ -26,12 +26,12 @@ func (a *DBAdapter) SetForcePush(ctx context.Context, id string) error {
 	return a.q.SetForcePush(ctx, id)
 }
 
-func (a *DBAdapter) GetThrallByHostname(ctx context.Context, hostname string) (string, error) {
-	thrall, err := a.q.GetThrallByHostname(ctx, hostname)
+func (a *DBAdapter) GetEnvoyByHostname(ctx context.Context, hostname string) (string, error) {
+	envoy, err := a.q.GetEnvoyByHostname(ctx, hostname)
 	if err != nil {
 		return "", err
 	}
-	return thrall.ID, nil
+	return envoy.ID, nil
 }
 
 func (a *DBAdapter) AppendRotatedSecret(ctx context.Context, id, secretPath string) error {
@@ -43,7 +43,7 @@ func (a *DBAdapter) CreateSecretRotationEvent(ctx context.Context, params Rotati
 		SecretPath:    params.SecretPath,
 		OldVersion:    sql.NullString{String: params.OldVersion, Valid: true},
 		NewVersion:    sql.NullString{String: params.NewVersion, Valid: true},
-		AffectedThralls: int64(params.AffectedThralls),
+		AffectedEnvoys: int64(params.AffectedEnvoys),
 	})
 	return err
 }

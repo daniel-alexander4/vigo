@@ -1,14 +1,14 @@
 # Geo-Distributed Deployments
 
-Running Hobnob across geographic regions — US and Europe, multiple data centers, or any WAN-separated fleet. This guide covers single-server and hub-spoke topologies, latency characteristics, and configuration for distributed fleets up to 500 nodes.
+Running Vigo across geographic regions — US and Europe, multiple data centers, or any WAN-separated fleet. This guide covers single-server and hub-spoke topologies, latency characteristics, and configuration for distributed fleets up to 500 nodes.
 
 ## Single Server, Distributed Fleet
 
-The simplest topology: one Hobnob server (US or Europe), agents everywhere.
+The simplest topology: one Vigo server (US or Europe), agents everywhere.
 
 ```
 ┌──────────────┐
-│  hobd server │  (US-East)
+│  vigosrv server │  (US-East)
 │  :1530 :8443 │
 └──────┬───────┘
        │ gRPC over mTLS
@@ -125,7 +125,7 @@ spanner:
 
 ### What Each Spoke Handles
 
-- Agent check-ins for its assigned thralls
+- Agent check-ins for its assigned envoys
 - Local run history, traits, and results storage
 - Ad-hoc push dispatch (local latency)
 - Responds to admin queries from the hub
@@ -148,7 +148,7 @@ If the WAN link between hub and spoke drops:
 - **Spoke operates independently** — runs, traits, and results are stored locally
 - **Admin queries from the hub** return partial results (the disconnected spoke is skipped)
 - **Config sync** is queued — the spoke runs its last-synced config until the link recovers
-- **Auto-failover** (if enabled) can drain thralls to a reachable spoke after the threshold is exceeded
+- **Auto-failover** (if enabled) can drain envoys to a reachable spoke after the threshold is exceeded
 
 ## Bandwidth and Connection Overhead
 
@@ -184,7 +184,7 @@ cache01.us-west.example.com
 This maps directly to spanner spoke patterns and to config node matching:
 
 ```yaml
-# nodes.hnb
+# nodes.vgo
 nodes:
   - match: "*.eu-west.*"
     roles: [base, eu-compliance]
@@ -205,7 +205,7 @@ Region-specific modules can enforce local compliance requirements (GDPR modules 
 
 ### Start Simple
 
-For fewer than 500 nodes: **use a single server.** The architecture handles transatlantic latency gracefully. Agents cache policy, converge offline, and queue results. The FleetIndex serves the entire fleet from memory. You can always add spokes later without re-enrolling agents — just configure the hub, stand up spokes, and use `hobnobcli spanner reassign` to move thralls.
+For fewer than 500 nodes: **use a single server.** The architecture handles transatlantic latency gracefully. Agents cache policy, converge offline, and queue results. The FleetIndex serves the entire fleet from memory. You can always add spokes later without re-enrolling agents — just configure the hub, stand up spokes, and use `vigogo spanner reassign` to move envoys.
 
 ### When to Add Spokes
 
@@ -231,10 +231,10 @@ Increase `bundle_max_age` proportional to how long sites might be disconnected:
 
 Use [Prometheus metrics](metrics.md) to track geographic health:
 
-- `hobnob_checkin_duration_seconds` — histogram by thrall; spot WAN-induced outliers
-- `hobnob_stale_thralls` — gauge; a spike in one region suggests WAN trouble
-- `hobnob_spoke_latency_seconds` — histogram per spoke (hub-spoke only)
-- Per-spoke compliance breakdown visible in the [Spanner UI](../ui/spanner.md) and via `hobnobcli spanner status`
+- `vigo_checkin_duration_seconds` — histogram by envoy; spot WAN-induced outliers
+- `vigo_stale_envoys` — gauge; a spike in one region suggests WAN trouble
+- `vigo_spoke_latency_seconds` — histogram per spoke (hub-spoke only)
+- Per-spoke compliance breakdown visible in the [Spanner UI](../ui/spanner.md) and via `vigogo spanner status`
 
 ## Related
 

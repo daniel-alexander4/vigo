@@ -1,6 +1,6 @@
 # Runs
 
-The Runs page displays convergence run history across all thralls. Available at `/runs`.
+The Runs page displays convergence run history across all envoys. Available at `/runs`.
 
 ## Layout
 
@@ -18,20 +18,20 @@ Status filter buttons:
 | Column | Description |
 |--------|-------------|
 | Run | Truncated run UUID, clickable link to run detail (`/runs/{id}`) |
-| Hostname | Thrall that executed the run |
+| Hostname | Envoy that executed the run |
 | Status | Color-coded badge: success (green), failure (red), partial (yellow) |
 | Modules | Total module count |
 | Changed | Number of modules that made changes |
 | Failed | Number of modules that failed |
 | Time | Run start timestamp |
 
-The page header shows "{N} runs across all thralls".
+The page header shows "{N} runs across all envoys".
 
 ## Key Actions
 
 - **Filter by status**: Click a status button to narrow the list
 - **View run detail**: Click a run ID to see per-resource results including action taken, errors, and duration for each resource
-- **Identify failing thralls**: Sort by failure count to find problematic nodes
+- **Identify failing envoys**: Sort by failure count to find problematic nodes
 
 ## Data Sources
 

@@ -101,7 +101,7 @@ All builtins are evaluated on the agent using local system state and traits.
 
 | Function | Args | Description |
 |----------|------|-------------|
-| `flag_set(flag)` | 1 | True if `/var/lib/hobnob/flags/<flag>` exists |
+| `flag_set(flag)` | 1 | True if `/var/lib/vigo/flags/<flag>` exists |
 | `in_group(group)` | 1 | True if the system group exists |
 
 ```yaml
@@ -113,8 +113,8 @@ All builtins are evaluated on the agent using local system state and traits.
 
 Flags are a simple feature-gate mechanism. Create a flag:
 ```bash
-mkdir -p /var/lib/hobnob/flags
-touch /var/lib/hobnob/flags/beta-features
+mkdir -p /var/lib/vigo/flags
+touch /var/lib/vigo/flags/beta-features
 ```
 
 ### Network
@@ -194,10 +194,10 @@ modules:
     when: "!is_container"
 ```
 
-Or in nodes.hnb:
+Or in nodes.vgo:
 
 ```yaml
-thralls:
+envoys:
   - match: "*"
     modules:
       - name: monitoring

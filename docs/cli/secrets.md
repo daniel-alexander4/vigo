@@ -1,4 +1,4 @@
-# hobnobcli secrets
+# vigogo secrets
 
 Manage secrets stored as AES-256-GCM encrypted files in the local secrets provider.
 
@@ -18,7 +18,7 @@ Manage secrets stored as AES-256-GCM encrypted files in the local secrets provid
 ## Usage
 
 ```bash
-hobnobcli secrets [subcommand] [flags]
+vigogo secrets [subcommand] [flags]
 ```
 
 ## Persistent Flags
@@ -28,19 +28,19 @@ These flags apply to all subcommands:
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--key-file` | | | Path to master encryption key (omit to auto-generate) |
-| `--secrets-dir` | | `/srv/hobnob/secrets` | Directory for secret files |
+| `--secrets-dir` | | `/srv/vigo/secrets` | Directory for secret files |
 
 ## set
 
 Encrypt and store a secret value. The value can be provided in four ways (in priority order):
 
 1. `--from-file <path>` -- read value from a file
-2. Positional argument -- `hobnobcli secrets set mykey myvalue`
-3. Piped stdin -- `echo "myvalue" | hobnobcli secrets set mykey`
+2. Positional argument -- `vigogo secrets set mykey myvalue`
+3. Piped stdin -- `echo "myvalue" | vigogo secrets set mykey`
 4. Interactive prompt -- reads from terminal with echo disabled (default)
 
 ```bash
-hobnobcli secrets set <key> [value] [flags]
+vigogo secrets set <key> [value] [flags]
 ```
 
 ### Flags
@@ -54,36 +54,36 @@ hobnobcli secrets set <key> [value] [flags]
 #### Store from a file (recommended for sensitive values)
 
 ```bash
-hobnobcli secrets set hobnob/db/dsn --from-file /tmp/dsn.txt
+vigogo secrets set vigo/db/dsn --from-file /tmp/dsn.txt
 ```
 
 ```
-  Secret "hobnob/db/dsn" stored.
-  Server notified — affected thralls will apply on next check-in.
+  Secret "vigo/db/dsn" stored.
+  Server notified — affected envoys will apply on next check-in.
 ```
 
 #### Interactive prompt (echo disabled)
 
 ```bash
-hobnobcli secrets set hobnob/db/password
+vigogo secrets set vigo/db/password
 ```
 
 ```
 Enter secret value:
-  Secret "hobnob/db/password" stored.
-  Server notified — affected thralls will apply on next check-in.
+  Secret "vigo/db/password" stored.
+  Server notified — affected envoys will apply on next check-in.
 ```
 
 #### Store from stdin pipe
 
 ```bash
-echo "s3cret" | hobnobcli secrets set hobnob/api/key
+echo "s3cret" | vigogo secrets set vigo/api/key
 ```
 
 #### Store from positional argument (exposes value in shell history)
 
 ```bash
-hobnobcli secrets set hobnob/test/key testvalue
+vigogo secrets set vigo/test/key testvalue
 ```
 
 ## reveal
@@ -91,17 +91,17 @@ hobnobcli secrets set hobnob/test/key testvalue
 Decrypt and display a secret value.
 
 ```bash
-hobnobcli secrets reveal <key>
+vigogo secrets reveal <key>
 ```
 
 ### Example
 
 ```bash
-hobnobcli secrets reveal hobnob/db/dsn
+vigogo secrets reveal vigo/db/dsn
 ```
 
 ```
-postgres://hobnob:secret@localhost:5432/hobnob?sslmode=disable
+postgres://vigo:secret@localhost:5432/vigo?sslmode=disable
 ```
 
 ## delete
@@ -109,17 +109,17 @@ postgres://hobnob:secret@localhost:5432/hobnob?sslmode=disable
 Remove an encrypted secret.
 
 ```bash
-hobnobcli secrets delete <key>
+vigogo secrets delete <key>
 ```
 
 ### Example
 
 ```bash
-hobnobcli secrets delete hobnob/test/key
+vigogo secrets delete vigo/test/key
 ```
 
 ```
-  Secret "hobnob/test/key" deleted.
+  Secret "vigo/test/key" deleted.
 ```
 
 ## list
@@ -127,19 +127,19 @@ hobnobcli secrets delete hobnob/test/key
 List all stored secret keys (values are not shown).
 
 ```bash
-hobnobcli secrets list
+vigogo secrets list
 ```
 
 ### Example
 
 ```bash
-hobnobcli secrets list
+vigogo secrets list
 ```
 
 ```
   KEY
-  hobnob/db/dsn
-  hobnob/db/password
+  vigo/db/dsn
+  vigo/db/password
 ```
 
 ## init
@@ -147,7 +147,7 @@ hobnobcli secrets list
 Generate a new 256-bit master encryption key file.
 
 ```bash
-hobnobcli secrets init --key-file <path>
+vigogo secrets init --key-file <path>
 ```
 
 ### Flags
@@ -159,11 +159,11 @@ hobnobcli secrets init --key-file <path>
 ### Example
 
 ```bash
-hobnobcli secrets init --key-file /srv/hobnob/master.key
+vigogo secrets init --key-file /srv/vigo/master.key
 ```
 
 ```
-  Master key written to /srv/hobnob/master.key (mode 0600).
+  Master key written to /srv/vigo/master.key (mode 0600).
   Keep this file safe — losing it means losing access to all encrypted secrets.
 ```
 
@@ -174,14 +174,14 @@ The command refuses to overwrite an existing key file.
 Generate a self-signed CA keypair and server TLS certificate as plain PEM files. Uses ECDSA P-256 keys.
 
 ```bash
-hobnobcli secrets generate-certs [flags]
+vigogo secrets generate-certs [flags]
 ```
 
 ### Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--tls-dir` | | `/srv/hobnob/tls` | Directory for TLS certificate files |
+| `--tls-dir` | | `/srv/vigo/tls` | Directory for TLS certificate files |
 | `--san` | | | Additional SANs (DNS names or IPs), repeatable |
 | `--ca-days` | | `3650` | CA certificate validity in days |
 | `--server-days` | | `365` | Server certificate validity in days |
@@ -201,17 +201,17 @@ The server certificate automatically includes SANs for `localhost`, `127.0.0.1`,
 ### Example
 
 ```bash
-hobnobcli secrets generate-certs --san hobnob.example.com --san 10.0.1.5
+vigogo secrets generate-certs --san vigo.example.com --san 10.0.1.5
 ```
 
 ```
-  CA certificate       -> /srv/hobnob/tls/ca
-  CA private key       -> /srv/hobnob/tls/ca_key
-  Server certificate   -> /srv/hobnob/tls/cert
-  Server private key   -> /srv/hobnob/tls/key
+  CA certificate       -> /srv/vigo/tls/ca
+  CA private key       -> /srv/vigo/tls/ca_key
+  Server certificate   -> /srv/vigo/tls/cert
+  Server private key   -> /srv/vigo/tls/key
 
   CA valid for 3650 days, server cert valid for 365 days.
-  SANs: localhost, myhost, hobnob.example.com
+  SANs: localhost, myhost, vigo.example.com
   IPs:  127.0.0.1, 10.0.1.5
 ```
 
@@ -222,19 +222,19 @@ Hash a plaintext password with SHA-512 crypt (`$6$...`) and store it as an encry
 Requires `openssl` to be installed on the machine running the CLI.
 
 ```bash
-hobnobcli secrets set-os-password <key>
+vigogo secrets set-os-password <key>
 ```
 
 ### Example
 
 ```bash
-hobnobcli secrets set-os-password hobnob/users/dan-password
+vigogo secrets set-os-password vigo/users/dan-password
 ```
 
 ```
 Enter password:
 Confirm password:
-SHA-512 password hash stored at hobnob/users/dan-password
+SHA-512 password hash stored at vigo/users/dan-password
 ```
 
 Then reference it in a user resource:
@@ -244,12 +244,12 @@ resources:
   - name: dan
     type: user
     username: dan
-    password: "secret:hobnob/users/dan-password"
+    password: "secret:vigo/users/dan-password"
 ```
 
 ## set-web-password
 
-Hash a plaintext password with bcrypt and store it as an encrypted secret. Used for Hobnob web UI login accounts (basic auth).
+Hash a plaintext password with bcrypt and store it as an encrypted secret. Used for Vigo web UI login accounts (basic auth).
 
 Password complexity requirements (HIPAA 164.308(a)(5)(ii)(D)):
 - Minimum 12 characters
@@ -259,22 +259,22 @@ Password complexity requirements (HIPAA 164.308(a)(5)(ii)(D)):
 - At least one special character
 
 ```bash
-hobnobcli secrets set-web-password <key>
+vigogo secrets set-web-password <key>
 ```
 
 ### Example
 
 ```bash
-hobnobcli secrets set-web-password hobnob/web/auth/admin
+vigogo secrets set-web-password vigo/web/auth/admin
 ```
 
 ```
 Enter password:
 Confirm password:
-Bcrypt password hash stored at hobnob/web/auth/admin
+Bcrypt password hash stored at vigo/web/auth/admin
 ```
 
-The key must follow the pattern `hobnob/web/auth/<username>` to match the account created with `hobnobcli webusers create`.
+The key must follow the pattern `vigo/web/auth/<username>` to match the account created with `vigogo webusers create`.
 
 ## Related
 

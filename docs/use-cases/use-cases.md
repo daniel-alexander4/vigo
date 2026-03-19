@@ -1,6 +1,6 @@
 # Use Cases
 
-Hobnob is a general-purpose distributed state enforcement engine. Its core pattern — central authority defines desired state, distributed agents enforce it idempotently, report back with collected traits, all over authenticated channels with offline resilience — applies across many domains.
+Vigo is a general-purpose distributed state enforcement engine. Its core pattern — central authority defines desired state, distributed agents enforce it idempotently, report back with collected traits, all over authenticated channels with offline resilience — applies across many domains.
 
 Every use case below works at any check-in interval. The difference is operator experience: how quickly drift is corrected, how fast stale machines are flagged, and whether the dashboard feels like a live terminal or a batch report. The tiers below reflect where each use case starts to feel *right*.
 
@@ -12,7 +12,7 @@ These use cases are inherently asynchronous. The work happens in the background,
 
 The foundational use case. Define desired state for packages, files, services, users, firewall rules, and repositories. Agents check before acting, apply only what's drifted, and report results. Notify/subscribes triggers handle cascading changes (e.g., config file change restarts the service).
 
-Drift correction at 5-minute intervals is fine — the machine was misconfigured for hours or days before Hobnob was deployed. Another 5 minutes is irrelevant.
+Drift correction at 5-minute intervals is fine — the machine was misconfigured for hours or days before Vigo was deployed. Another 5 minutes is irrelevant.
 
 ### Software Distribution & Update Management
 
@@ -35,7 +35,7 @@ These use cases work at longer intervals but start to feel sluggish. At 30-secon
 
 ### Security & Compliance Enforcement
 
-- **CIS/STIG hardening** — Desired state isn't just "install nginx" but "ensure `/etc/ssh/sshd_config` has `PermitRootLogin no`." The agent checks before acting and reports drift. A compliance module library turns Hobnob into a continuous audit engine that fixes what it finds.
+- **CIS/STIG hardening** — Desired state isn't just "install nginx" but "ensure `/etc/ssh/sshd_config` has `PermitRootLogin no`." The agent checks before acting and reports drift. A compliance module library turns Vigo into a continuous audit engine that fixes what it finds.
 - **Zero-trust endpoint posture** — Every 30 seconds, the server knows every machine's patch level, open ports, running processes, and firewall rules. Tie trait data to network access decisions. Stale machines get quarantined.
 - **Supply chain integrity** — Agents verify binary checksums, package signatures, and running process hashes against a golden manifest. Drift means someone changed something they shouldn't have.
 
@@ -43,7 +43,7 @@ At 5-minute intervals, a compromised machine could run unauthorized binaries for
 
 ### Network Device Management
 
-With 16 built-in network device executors, Hobnob is a full network automation platform. Switch configs, firewall rules, VLAN assignments, and ACLs defined as desired state.
+With 16 built-in network device executors, Vigo is a full network automation platform. Switch configs, firewall rules, VLAN assignments, and ACLs defined as desired state.
 
 At 30-second intervals, a switch going dark is detected within 90 seconds (3x interval stale threshold). At 5 minutes, a dead switch goes unnoticed for 15 minutes. For network operations teams watching a dashboard, 90-second stale detection is the difference between "we caught it" and "a user called to tell us."
 
@@ -102,4 +102,4 @@ The primitives that make all of this possible:
 | Hub-spoke sharding | Scales horizontally. Maps to organizational or geographic boundaries. |
 | `when:` conditionals | Same policy, different behavior per OS, environment, role, or any trait. |
 
-Hobnob is not a configuration management tool that happens to do other things. It is a distributed state enforcement engine whose first application is configuration management.
+Vigo is not a configuration management tool that happens to do other things. It is a distributed state enforcement engine whose first application is configuration management.

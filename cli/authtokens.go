@@ -45,7 +45,7 @@ var authCreateTokenCmd = &cobra.Command{
 		fmt.Printf("  Token: %s\n", resp.Token)
 		fmt.Println()
 		fmt.Println("Save this token — it will not be shown again.")
-		fmt.Printf("To use it: hobnobcli auth set-token %s\n", resp.Token)
+		fmt.Printf("To use it: vigogo auth set-token %s\n", resp.Token)
 		return nil
 	},
 }

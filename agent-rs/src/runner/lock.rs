@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Elastic-2.0
 
 //! File-based convergence lock using flock(2). Prevents two agent processes
-//! (e.g. daemon + manual `hobnob run`) from converging simultaneously.
+//! (e.g. daemon + manual `vigo run`) from converging simultaneously.
 //!
 //! The lock is automatically released when the guard is dropped or the
 //! process exits (including crashes).

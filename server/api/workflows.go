@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/workflows"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/workflows"
 )
 
 // WorkflowHandler serves REST endpoints for workflow execution and status.

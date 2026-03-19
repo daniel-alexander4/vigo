@@ -59,7 +59,7 @@ resources:
     target_path: /etc/sysctl.d/99-pci-hardening.conf
     content: |
       # PCI DSS v4.0 Req 2.2.5 — Network security parameters
-      # Managed by Hobnob
+      # Managed by Vigo
 
       # Disable IP forwarding (unless this is a router)
       net.ipv4.ip_forward = 0
@@ -108,7 +108,7 @@ resources:
     target_path: /etc/security/faillock.conf
     content: |
       # PCI DSS v4.0 Req 8.3.4 — Account lockout
-      # Managed by Hobnob
+      # Managed by Vigo
       deny = {{ .Vars.pam_deny_count }}
       unlock_time = {{ .Vars.pam_unlock_time }}
       audit
@@ -134,7 +134,7 @@ resources:
     target_path: /etc/profile.d/pci-timeout.sh
     content: |
       # PCI DSS v4.0 Req 8.2.8 — Idle session timeout
-      # Managed by Hobnob
+      # Managed by Vigo
       TMOUT={{ .Vars.tmout_seconds }}
       readonly TMOUT
       export TMOUT

@@ -10,8 +10,8 @@ Manages marked blocks of text within a file, delimited by BEGIN/END markers. Use
 | `block_content` | Yes (for present) | -- | The content to place between the markers. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `label` | No | `managed` | Label used in marker comments to distinguish multiple blocks. |
-| `marker_begin` | No | `# BEGIN {label} - managed by hobnob` | Custom begin marker. `{label}` is replaced with the label value. |
-| `marker_end` | No | `# END {label} - managed by hobnob` | Custom end marker. |
+| `marker_begin` | No | `# BEGIN {label} - managed by vigo` | Custom begin marker. `{label}` is replaced with the label value. |
+| `marker_end` | No | `# END {label} - managed by vigo` | Custom end marker. |
 | `create` | No | `false` | If `true`, create the file if it does not exist. |
 | `mode` | No | -- | File permission mode when creating a new file. |
 
@@ -74,7 +74,7 @@ Cross-platform.
 
 ## Notes
 
-- The default markers look like `# BEGIN managed - managed by hobnob` and `# END managed - managed by hobnob`. Customize with `label`, `marker_begin`, and `marker_end`.
+- The default markers look like `# BEGIN managed - managed by vigo` and `# END managed - managed by vigo`. Customize with `label`, `marker_begin`, and `marker_end`.
 - When `create: true` and the file does not exist, it is created with the block and markers.
 - Multiple blocks can coexist in the same file using different `label` values.
 

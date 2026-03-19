@@ -6,31 +6,31 @@ All tool results pass through secret redaction before being included in the LLM 
 
 ## Tool Reference
 
-### list_thralls
+### list_envoys
 
-List enrolled thralls (managed machines).
+List enrolled envoys (managed machines).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `status` | string | No | Filter by status: `active`, `revoked`, `stale` |
-| `limit` | integer | No | Max thralls to return (default 50) |
+| `limit` | integer | No | Max envoys to return (default 50) |
 
-### get_thrall
+### get_envoy
 
-Get details for a single thrall by hostname or ID.
+Get details for a single envoy by hostname or ID.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `hostname` | string | No | Thrall hostname |
-| `id` | string | No | Thrall UUID |
+| `hostname` | string | No | Envoy hostname |
+| `id` | string | No | Envoy UUID |
 
 ### get_traits
 
-Get the latest discovered traits (facts) for a thrall -- OS, hardware, network, packages, etc.
+Get the latest discovered traits (facts) for a envoy -- OS, hardware, network, packages, etc.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `hostname` | string | Yes | Thrall hostname |
+| `hostname` | string | Yes | Envoy hostname |
 
 ### list_runs
 
@@ -38,7 +38,7 @@ List convergence runs.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `hostname` | string | No | Filter runs by thrall hostname |
+| `hostname` | string | No | Filter runs by envoy hostname |
 | `limit` | integer | No | Max runs to return (default 20) |
 
 ### get_run
@@ -51,23 +51,23 @@ Get full details for a single run including per-resource results (action taken, 
 
 ### get_compliance
 
-Get compliance status. If hostname is provided, returns status for that thrall. Otherwise returns fleet-wide summary.
+Get compliance status. If hostname is provided, returns status for that envoy. Otherwise returns fleet-wide summary.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `hostname` | string | No | Thrall hostname (omit for fleet summary) |
+| `hostname` | string | No | Envoy hostname (omit for fleet summary) |
 
 ### get_config
 
-Get the effective resolved configuration for a thrall (secrets redacted). Shows modules, resources, vars.
+Get the effective resolved configuration for a envoy (secrets redacted). Shows modules, resources, vars.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `hostname` | string | Yes | Thrall hostname |
+| `hostname` | string | Yes | Envoy hostname |
 
 ### query_inventory
 
-Query thralls by trait values.
+Query envoys by trait values.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -76,11 +76,11 @@ Query thralls by trait values.
 
 ### list_package_drift
 
-List packages that differ across thralls (installed on some but not others, or different versions). Takes no parameters.
+List packages that differ across envoys (installed on some but not others, or different versions). Takes no parameters.
 
 ### get_module_definition
 
-Read the raw `.hnb` definition of a module (resources, vars, depends_on).
+Read the raw `.vgo` definition of a module (resources, vars, depends_on).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -96,11 +96,11 @@ List all available role names. Takes no parameters.
 
 ### dry_run
 
-Compute a dry-run plan for a thrall -- shows what would change without applying.
+Compute a dry-run plan for a envoy -- shows what would change without applying.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `hostname` | string | Yes | Thrall hostname |
+| `hostname` | string | Yes | Envoy hostname |
 
 ### get_compliance_history
 

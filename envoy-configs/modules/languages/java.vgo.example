@@ -36,7 +36,7 @@ resources:
     type: file
     target_path: /etc/profile.d/java.sh
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       export JAVA_HOME="{{ .Vars.java_home }}"
       export PATH="$JAVA_HOME/bin:$PATH"
     owner: root

@@ -1,27 +1,27 @@
-# hobnobcli push
+# vigogo push
 
-Dispatch and monitor ad-hoc commands or named pushes on thralls.
+Dispatch and monitor ad-hoc commands or named pushes on envoys.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
-| `run` | Run a command or named push on targeted thralls |
+| `run` | Run a command or named push on targeted envoys |
 | `status` | Show status and results for a push run |
 | `list` | List recent push runs |
 
 ## Usage
 
 ```bash
-hobnobcli push [subcommand] [flags]
+vigogo push [subcommand] [flags]
 ```
 
 ## run
 
-Run an ad-hoc command or a named push on targeted thralls. The CLI polls until the push completes, then displays results.
+Run an ad-hoc command or a named push on targeted envoys. The CLI polls until the push completes, then displays results.
 
 ```bash
-hobnobcli push run <command-or-push-name> [flags]
+vigogo push run <command-or-push-name> [flags]
 ```
 
 ### Flags
@@ -42,7 +42,7 @@ hobnobcli push run <command-or-push-name> [flags]
 #### Run an ad-hoc command
 
 ```bash
-hobnobcli push run "uptime" --target "*.web.*"
+vigogo push run "uptime" --target "*.web.*"
 ```
 
 ```
@@ -56,13 +56,13 @@ Push t1a2b3c4 dispatched
 #### Run a named push with parameters
 
 ```bash
-hobnobcli push run restart-app --target "*.web.*" --param env=staging
+vigogo push run restart-app --target "*.web.*" --param env=staging
 ```
 
 #### Rolling execution with batch control
 
 ```bash
-hobnobcli push run "systemctl restart nginx" --target "*.web.*" \
+vigogo push run "systemctl restart nginx" --target "*.web.*" \
   --batch-size 25% --max-failures 2 \
   --health-check-url "http://lb.example.com/health"
 ```
@@ -70,7 +70,7 @@ hobnobcli push run "systemctl restart nginx" --target "*.web.*" \
 #### Dry-run to preview batch plan
 
 ```bash
-hobnobcli push run "uptime" --target "*.web.*" --batch-size 2 --dry-run
+vigogo push run "uptime" --target "*.web.*" --batch-size 2 --dry-run
 ```
 
 ```
@@ -87,13 +87,13 @@ Dry-run batch plan:
 Show status and results for an existing push run.
 
 ```bash
-hobnobcli push status <id>
+vigogo push status <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli push status t1a2b3c4
+vigogo push status t1a2b3c4
 ```
 
 ```
@@ -116,7 +116,7 @@ Finished: 2026-03-13 12:30
 List recent push runs.
 
 ```bash
-hobnobcli push list [flags]
+vigogo push list [flags]
 ```
 
 ### Flags
@@ -128,7 +128,7 @@ hobnobcli push list [flags]
 ### Example
 
 ```bash
-hobnobcli push list --limit 5
+vigogo push list --limit 5
 ```
 
 ```
@@ -140,5 +140,5 @@ t5e6f7g8    systemctl resta... *.web.*     complete   4        2026-03-13 11:00
 ## Related
 
 - [workflow](workflow.md) -- multi-step workflow orchestration
-- [query](query.md) -- query trait values from thralls
+- [query](query.md) -- query trait values from envoys
 - [runs](runs.md) -- view convergence run history

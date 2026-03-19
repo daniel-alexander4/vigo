@@ -32,7 +32,7 @@ Runs `wmic logicaldisk get DeviceID,FileSystem,Size,FreeSpace,Description /value
 ```yaml
 - name: disk-report
   type: file
-  target_path: C:\ProgramData\hobnob\disks.txt
+  target_path: C:\ProgramData\vigo\disks.txt
   content: |
     {{ range $drive, $mount := .Traits.mountpoints.mounts }}{{ $drive }} {{ $mount.filesystem }}: {{ $mount.percent_used }}% used
     {{ end }}

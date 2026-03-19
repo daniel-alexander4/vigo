@@ -1,9 +1,9 @@
-# Example test: verify that the danlap thrall gets the expected modules.
-# Run with: hobnobcli test --config-dir /srv/hobnob/hnb/proposed
-# Or:       hobnobcli test tests/example.test.hnb
+# Example test: verify that the danlap envoy gets the expected modules.
+# Run with: vigogo test --config-dir /srv/vigo/hnb/proposed
+# Or:       vigogo test tests/example.test.vgo
 
 name: danlap gets monitoring role modules
-thrall: danlap
+envoy: danlap
 
 expect:
   modules:

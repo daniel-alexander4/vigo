@@ -1,10 +1,10 @@
-Hobnob Server and CLI — Proprietary License
+Vigo Server and CLI — Proprietary License
 
 Copyright (c) 2026 Alexander4, LLC. All rights reserved.
 
 This software and associated documentation files (the "Software") are the
 proprietary and confidential property of Alexander4, LLC. The Software
-includes the Hobnob server (hobd), the Hobnob CLI (hobnobcli), and all
+includes the Vigo server (vigosrv), the Vigo CLI (vigogo), and all
 supporting code, libraries, migrations, protobuf definitions, templates,
 documentation, and configuration files outside of the agent-rs/ directory.
 
@@ -68,4 +68,4 @@ in your possession.
 ## Contact
 
 Alexander4, LLC
-hobnob.licensing@alexander4.org
+vigo.licensing@alexander4.org

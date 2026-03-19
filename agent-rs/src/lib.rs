@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! Hobnob agent library crate — re-exports modules for use by fuzz targets
+//! Vigo agent library crate — re-exports modules for use by fuzz targets
 //! and integration tests.
 
 pub mod auth;
@@ -22,5 +22,5 @@ pub mod transport;
 pub mod update;
 
 pub mod proto {
-    tonic::include_proto!("hobnob.v1");
+    tonic::include_proto!("vigo.v1");
 }

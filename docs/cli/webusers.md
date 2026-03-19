@@ -1,4 +1,4 @@
-# hobnobcli webusers
+# vigogo webusers
 
 Manage web UI and API user accounts.
 
@@ -9,7 +9,7 @@ Manage web UI and API user accounts.
 List all user accounts.
 
 ```bash
-hobnobcli webusers list
+vigogo webusers list
 ```
 
 ```
@@ -24,14 +24,14 @@ Create a new user account. The first user created is always promoted to admin.
 
 ```bash
 # Create an admin account
-hobnobcli webusers create --username admin --role admin
+vigogo webusers create --username admin --role admin
 
 # Create a viewer with details
-hobnobcli webusers create --username alice --role viewer \
+vigogo webusers create --username alice --role viewer \
   --display-name "Alice Smith" --email alice@example.com
 
 # Create a user with an SSH key (for isowebauth)
-hobnobcli webusers create --username bob --role viewer \
+vigogo webusers create --username bob --role viewer \
   --ssh-key-file ~/.ssh/id_ed25519.pub
 ```
 
@@ -48,17 +48,17 @@ hobnobcli webusers create --username bob --role viewer \
 Web UI passwords are managed via the secrets system:
 
 ```bash
-hobnobcli secrets set-web-password hobnob/web/auth/admin
+vigogo secrets set-web-password vigo/web/auth/admin
 ```
 
-See [hobnobcli secrets](secrets.md) for details.
+See [vigogo secrets](secrets.md) for details.
 
 ### delete
 
 Permanently remove a user account.
 
 ```bash
-hobnobcli webusers delete --username alice
+vigogo webusers delete --username alice
 ```
 
 | Flag | Default | Description |

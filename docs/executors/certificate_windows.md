@@ -47,7 +47,7 @@ resources:
   - name: import-app-cert
     type: certificate_windows
     source_path: "C:\\certs\\app.pfx"
-    password: "secret:hobnob/certs/app-pfx-password"
+    password: "secret:vigo/certs/app-pfx-password"
     thumbprint: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
 ```
 
@@ -88,7 +88,7 @@ resources:
   - name: iis-ssl-cert
     type: certificate_windows
     source_path: "C:\\certs\\webserver.pfx"
-    password: "secret:hobnob/certs/webserver-password"
+    password: "secret:vigo/certs/webserver-password"
     thumbprint: "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3"
     exportable: "true"
 ```

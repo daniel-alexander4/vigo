@@ -85,10 +85,10 @@ Populated automatically during bootstrap from the server's peer list. Agents try
 
 ### New gRPC Service: PeerSync
 
-Add to `proto/hobnob.proto`:
+Add to `proto/vigo.proto`:
 
 ```protobuf
-service HobnobPeer {
+service VigoPeer {
   // SyncStream is a bidirectional stream between primary and peer.
   // Primary pushes file changes; peer acknowledges.
   rpc SyncStream(stream PeerSyncMessage) returns (stream PeerSyncMessage);
@@ -109,7 +109,7 @@ message PeerSyncMessage {
 }
 
 message FileChange {
-  string path = 1;                    // relative to /srv/hobnob (e.g., "policy/stage/modules/nginx.hnb")
+  string path = 1;                    // relative to /srv/vigo (e.g., "policy/stage/modules/nginx.vgo")
   bytes content = 2;                  // file contents (empty = deletion)
   int64 mtime = 3;                    // modification time (unix nanos)
   uint32 mode = 4;                    // file permissions
@@ -158,7 +158,7 @@ message PeerStatusResponse {
 
 1. On startup, if `peer_role: peer`:
    - Accept `SyncStream` connections from the primary
-   - On `FullSync`: write all files to local `/srv/hobnob`, trigger config reload
+   - On `FullSync`: write all files to local `/srv/vigo`, trigger config reload
    - On `FileChange`: write/delete the file, trigger config reload if in `policy/`
    - Set file permissions and mtime to match primary
 
@@ -187,7 +187,7 @@ message PeerStatusResponse {
    - Server includes peer addresses in `RegisterResponse` (new field: `fallback_servers`)
    - Bootstrap script writes them to agent config
 
-**No re-enrollment on failover.** The agent uses the same UUID, keypair, and TLS certs. The peer has the same CA cert (synced from primary), so mTLS works. The peer's FleetIndex won't have the thrall's record initially, but the check-in interceptor can fall back to the synced SQLite database (or the agent can re-register with `--force` if needed).
+**No re-enrollment on failover.** The agent uses the same UUID, keypair, and TLS certs. The peer has the same CA cert (synced from primary), so mTLS works. The peer's FleetIndex won't have the envoy's record initially, but the check-in interceptor can fall back to the synced SQLite database (or the agent can re-register with `--force` if needed).
 
 ### Promotion
 
@@ -195,7 +195,7 @@ message PeerStatusResponse {
 
 ```bash
 # On the peer server, or remotely:
-hobnobcli server promote --target standby1.example.com:1530
+vigogo server promote --target standby1.example.com:1530
 ```
 
 **What promotion does:**
@@ -221,7 +221,7 @@ hobnobcli server promote --target standby1.example.com:1530
 | `secrets/` | Yes | Needed for config resolution |
 | `tls/` | Yes | Needed for mTLS (same CA) |
 | `server.yaml` | Yes | Server configuration |
-| `db/hobnob.db` | **No** | Rebuilt from agent check-ins on promotion |
+| `db/vigo.db` | **No** | Rebuilt from agent check-ins on promotion |
 | FleetIndex | **No** | Rebuilt from check-ins (or from synced DB on startup) |
 | Run history | **No** | Lost on failover — acceptable trade-off |
 | Audit log | **No** | Lost on failover — future: replicate audit entries |
@@ -246,7 +246,7 @@ Peer replication works at any level of the spanner topology:
 
 - **Standalone server**: `peers:` adds redundancy to a single-server deployment
 - **Hub**: `peers:` on the hub gives hub redundancy. Spokes reconnect to the new hub.
-- **Spoke**: `peers:` on a spoke gives spoke redundancy. Thralls assigned to that spoke fail over to the spoke's peer.
+- **Spoke**: `peers:` on a spoke gives spoke redundancy. Envoys assigned to that spoke fail over to the spoke's peer.
 
 Spanner config (`spanner:` section) is part of `server.yaml` and is synced to peers automatically. A promoted hub-peer inherits the spoke connections.
 
@@ -286,8 +286,8 @@ spanner:
 
 ### Phase 3: Promotion (3 days)
 - `Promote` and `Status` RPCs in PeerSync service
-- `hobnobcli server promote` CLI command
-- `hobnobcli server status` CLI command (shows role, sync state, peers)
+- `vigogo server promote` CLI command
+- `vigogo server status` CLI command (shows role, sync state, peers)
 - Peer-to-primary role switch logic
 - Split-brain resolution (higher config version wins)
 - Tests: promotion, demotion, split-brain resolution
@@ -310,7 +310,7 @@ spanner:
 
 ### 1. Peer serves a read-only dashboard
 
-Yes. The peer shows the dashboard with whatever data it has. Synced config (modules, roles, thrall mappings) is immediately available. Fleet status fills in as agents check in. A banner at the top reads: "Standby server — fleet data is partial until promoted."
+Yes. The peer shows the dashboard with whatever data it has. Synced config (modules, roles, envoy mappings) is immediately available. Fleet status fills in as agents check in. A banner at the top reads: "Standby server — fleet data is partial until promoted."
 
 A blank page is worse than a partial page. The config browser alone is valuable for troubleshooting during an outage.
 

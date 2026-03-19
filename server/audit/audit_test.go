@@ -10,7 +10,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, *db.Queries) {

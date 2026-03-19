@@ -31,7 +31,7 @@ pub fn atomic_write(path: &str, new_content: &str) -> Result<bool, String> {
     // Write to a temp file in the same directory (same filesystem for rename).
     let parent = target.parent().unwrap_or(Path::new("/tmp"));
     let tmp_path = parent.join(format!(
-        ".hobnob-tmp-{}",
+        ".vigo-tmp-{}",
         std::process::id()
     ));
 

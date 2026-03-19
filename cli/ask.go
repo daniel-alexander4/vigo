@@ -18,28 +18,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var askThrall string
+var askEnvoy string
 
 var askCmd = &cobra.Command{
 	Use:   "ask [question]",
 	Short: "Ask the AI assistant a natural language question about fleet state, configs, or compliance",
-	Long: `Ask the Hobnob AI assistant a natural language question about your
-infrastructure. The assistant can query thralls, runs, traits, compliance,
+	Long: `Ask the Vigo AI assistant a natural language question about your
+infrastructure. The assistant can query envoys, runs, traits, compliance,
 configs, modules, and packages to answer questions.
 
 If no question argument is given, reads from stdin (useful for piping config
 files for review).
 
 Examples:
-  hobnobcli ask "how many thralls do I have?"
-  hobnobcli ask --thrall web-03 "why is it failing?"
-  hobnobcli ask "write a module for nginx with TLS"
-  hobnobcli ask < module.hnb`,
+  vigogo ask "how many envoys do I have?"
+  vigogo ask --envoy web-03 "why is it failing?"
+  vigogo ask "write a module for nginx with TLS"
+  vigogo ask < module.vgo`,
 	RunE: runAsk,
 }
 
 func init() {
-	askCmd.Flags().StringVar(&askThrall, "thrall", "", "Thrall hostname context for the question")
+	askCmd.Flags().StringVar(&askEnvoy, "envoy", "", "Envoy hostname context for the question")
 }
 
 type askRequest struct {
@@ -48,7 +48,7 @@ type askRequest struct {
 }
 
 type askContext struct {
-	Thrall string `json:"thrall,omitempty"`
+	Envoy string `json:"envoy,omitempty"`
 }
 
 type askResponse struct {
@@ -84,7 +84,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	req := askRequest{
 		Question: question,
-		Context:  askContext{Thrall: askThrall},
+		Context:  askContext{Envoy: askEnvoy},
 	}
 
 	body, err := json.Marshal(req)

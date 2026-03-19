@@ -1,11 +1,11 @@
-# hobnobcli inventory
+# vigogo inventory
 
-Query enrolled thralls by their collected traits with flexible filtering and column display.
+Query enrolled envoys by their collected traits with flexible filtering and column display.
 
 ## Usage
 
 ```bash
-hobnobcli inventory [flags]
+vigogo inventory [flags]
 ```
 
 ## Flags
@@ -20,13 +20,13 @@ hobnobcli inventory [flags]
 ### Filter by a single trait
 
 ```bash
-hobnobcli inventory --where os.distro=ubuntu
+vigogo inventory --where os.distro=ubuntu
 ```
 
 ```json
 {
   "count": 3,
-  "thralls": [
+  "envoys": [
     {
       "hostname": "web-01.example.com",
       "ip_address": "10.0.1.10",
@@ -40,7 +40,7 @@ hobnobcli inventory --where os.distro=ubuntu
 ### Filter and display specific columns
 
 ```bash
-hobnobcli inventory --where os.distro=ubuntu --show network.ip
+vigogo inventory --where os.distro=ubuntu --show network.ip
 ```
 
 ```
@@ -49,13 +49,13 @@ web-01.example.com    10.0.1.10
 web-02.example.com    10.0.1.11
 web-03.example.com    10.0.1.12
 
-3 thralls
+3 envoys
 ```
 
 ### Multiple filters with multiple columns
 
 ```bash
-hobnobcli inventory --where os.family=debian --where virtual.type=kvm \
+vigogo inventory --where os.family=debian --where virtual.type=kvm \
   --show os.distro,os.version
 ```
 
@@ -65,17 +65,17 @@ web-01.example.com    ubuntu     24.04
 web-02.example.com    ubuntu     24.04
 db-01.internal.net    debian     12
 
-3 thralls
+3 envoys
 ```
 
 ### No matches
 
 ```bash
-hobnobcli inventory --where os.distro=centos
+vigogo inventory --where os.distro=centos
 ```
 
 ```
-No matching thralls found.
+No matching envoys found.
 ```
 
 ## Output Format
@@ -85,5 +85,5 @@ No matching thralls found.
 
 ## Related
 
-- [thralls](thralls.md) -- manage enrolled thralls and view traits
+- [envoys](envoys.md) -- manage enrolled envoys and view traits
 - [query](query.md) -- query trait values in real time

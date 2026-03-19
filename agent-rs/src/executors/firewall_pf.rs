@@ -84,7 +84,7 @@ impl Executor for FirewallPfExecutor {
                             match self.runner.run_with_stdin(
                                 rule.as_bytes(),
                                 "pfctl",
-                                &["-a", "hobnob", "-f", "-"],
+                                &["-a", "vigo", "-f", "-"],
                             ) {
                                 Ok(o) if o.status.success() => {}
                                 Ok(o) => {
@@ -103,8 +103,8 @@ impl Executor for FirewallPfExecutor {
                         result.action = Action::Deleted;
                         result.changed = true;
                         if !dry_run {
-                            // Flush the hobnob anchor to remove the rule.
-                            match self.runner.run("pfctl", &["-a", "hobnob", "-F", "rules"]) {
+                            // Flush the vigo anchor to remove the rule.
+                            match self.runner.run("pfctl", &["-a", "vigo", "-F", "rules"]) {
                                 Ok(o) if o.status.success() => {}
                                 Ok(o) => {
                                     let stderr = String::from_utf8_lossy(&o.stderr);

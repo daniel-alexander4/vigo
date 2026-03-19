@@ -9,50 +9,50 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// perThrallEntry holds a per-thrall rate limiter and the last time it was used.
-type perThrallEntry struct {
+// perEnvoyEntry holds a per-envoy rate limiter and the last time it was used.
+type perEnvoyEntry struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
 }
 
 // RateLimitInterceptor returns a unary server interceptor that enforces
-// per-thrall and global rate limits on check-in RPCs. Non-check-in RPCs
+// per-envoy and global rate limits on check-in RPCs. Non-check-in RPCs
 // pass through without rate limiting.
 func RateLimitInterceptor(cfg config.RateLimitSection) grpc.UnaryServerInterceptor {
-	perThrallRate := cfg.CheckinPerThrall
-	if perThrallRate <= 0 {
-		perThrallRate = 6 // 6 per minute default
+	perEnvoyRate := cfg.CheckinPerEnvoy
+	if perEnvoyRate <= 0 {
+		perEnvoyRate = 6 // 6 per minute default
 	}
 	globalRate := cfg.CheckinGlobal
 	if globalRate <= 0 {
 		globalRate = 500 // 500 per second default
 	}
 
-	// Per-thrall: tokens per minute → rate.Limit is tokens per second.
-	perThrallLimit := rate.Limit(float64(perThrallRate) / 60.0)
+	// Per-envoy: tokens per minute → rate.Limit is tokens per second.
+	perEnvoyLimit := rate.Limit(float64(perEnvoyRate) / 60.0)
 	globalLimiter := rate.NewLimiter(rate.Limit(globalRate), globalRate)
 
 	var mu sync.Mutex
-	thrallLimiters := make(map[string]*perThrallEntry)
+	envoyLimiters := make(map[string]*perEnvoyEntry)
 
-	// Evict stale per-thrall entries every 10 minutes.
+	// Evict stale per-envoy entries every 10 minutes.
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			mu.Lock()
 			cutoff := time.Now().Add(-30 * time.Minute)
-			for id, entry := range thrallLimiters {
+			for id, entry := range envoyLimiters {
 				if entry.lastSeen.Before(cutoff) {
-					delete(thrallLimiters, id)
+					delete(envoyLimiters, id)
 				}
 			}
 			mu.Unlock()
@@ -66,7 +66,7 @@ func RateLimitInterceptor(cfg config.RateLimitSection) grpc.UnaryServerIntercept
 		handler grpc.UnaryHandler,
 	) (any, error) {
 		// Only rate-limit CheckIn RPCs.
-		if info.FullMethod != pb.HobnobAgent_CheckIn_FullMethodName {
+		if info.FullMethod != pb.VigoAgent_CheckIn_FullMethodName {
 			return handler(ctx, req)
 		}
 
@@ -76,27 +76,27 @@ func RateLimitInterceptor(cfg config.RateLimitSection) grpc.UnaryServerIntercept
 			return nil, status.Error(codes.ResourceExhausted, "global check-in rate limit exceeded")
 		}
 
-		// Per-thrall rate limit.
+		// Per-envoy rate limit.
 		if r, ok := req.(*pb.CheckInRequest); ok {
-			thrallID := r.GetThrallId()
-			if thrallID != "" {
+			envoyID := r.GetEnvoyId()
+			if envoyID != "" {
 				mu.Lock()
-				entry, exists := thrallLimiters[thrallID]
+				entry, exists := envoyLimiters[envoyID]
 				if !exists {
-					entry = &perThrallEntry{
-						limiter: rate.NewLimiter(perThrallLimit, perThrallRate),
+					entry = &perEnvoyEntry{
+						limiter: rate.NewLimiter(perEnvoyLimit, perEnvoyRate),
 					}
-					thrallLimiters[thrallID] = entry
+					envoyLimiters[envoyID] = entry
 				}
 				entry.lastSeen = time.Now()
 				limiter := entry.limiter
 				mu.Unlock()
 
 				if !limiter.Allow() {
-					slog.Warn("rate limit: per-thrall check-in limit exceeded",
-						"thrall_id", thrallID)
+					slog.Warn("rate limit: per-envoy check-in limit exceeded",
+						"envoy_id", envoyID)
 					return nil, status.Error(codes.ResourceExhausted,
-						"per-thrall check-in rate limit exceeded")
+						"per-envoy check-in rate limit exceeded")
 				}
 			}
 		}

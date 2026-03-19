@@ -22,15 +22,15 @@ After submitting a query, three sections appear:
 
 | Card | Color | Description |
 |------|-------|-------------|
-| Responded | Green | Thralls that responded within the timeout |
-| Timed Out | Yellow | Connected thralls that did not respond in time |
-| Offline | Gray | Thralls that were not connected (may show cached values) |
+| Responded | Green | Envoys that responded within the timeout |
+| Timed Out | Yellow | Connected envoys that did not respond in time |
+| Offline | Gray | Envoys that were not connected (may show cached values) |
 
 #### Results Table
 
 | Column | Description |
 |--------|-------------|
-| Hostname | Thrall hostname |
+| Hostname | Envoy hostname |
 | Value | Trait value (monospaced), or "(not found)" if the trait does not exist |
 | Status | Badge: responded, offline (with "cached" suffix if stale data), timed_out |
 
@@ -44,5 +44,5 @@ After submitting a query, three sections appear:
 ## Data Sources
 
 - Live query: Dispatched via `POST /api/v1/query` to connected agents over the bidirectional gRPC stream
-- Offline thralls: Cached trait values from the database (if available), with `collectedAt` timestamp
-- The query targets thralls using FleetIndex for glob/trait matching, then dispatches to connected agents
+- Offline envoys: Cached trait values from the database (if available), with `collectedAt` timestamp
+- The query targets envoys using FleetIndex for glob/trait matching, then dispatches to connected agents

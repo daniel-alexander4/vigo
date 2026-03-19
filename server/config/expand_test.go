@@ -364,7 +364,7 @@ func TestExpandCase_PassthroughNonCaseResources(t *testing.T) {
 // --- HasCaseResources tests ---
 
 func TestHasCaseResources_True(t *testing.T) {
-	cfg := &ThrallConfig{
+	cfg := &EnvoyConfig{
 		Modules: []ModuleConfig{
 			{Resources: []ResourceConfig{{Name: "a"}}},
 			{Resources: []ResourceConfig{{Name: "b", Case: "{{ .Traits.os }}"}}},
@@ -376,7 +376,7 @@ func TestHasCaseResources_True(t *testing.T) {
 }
 
 func TestHasCaseResources_False(t *testing.T) {
-	cfg := &ThrallConfig{
+	cfg := &EnvoyConfig{
 		Modules: []ModuleConfig{
 			{Resources: []ResourceConfig{{Name: "a"}, {Name: "b"}}},
 		},

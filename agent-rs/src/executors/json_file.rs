@@ -227,7 +227,7 @@ mod tests {
         let params = make_params(&[
             ("target_path", path.to_str().unwrap()),
             ("key", "app.name"),
-            ("value", "\"hobnob\""),
+            ("value", "\"vigo\""),
             ("state", "present"),
         ]);
         let result = exec.execute(&params, false);
@@ -237,7 +237,7 @@ mod tests {
 
         let content = std::fs::read_to_string(&path).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&content).unwrap();
-        assert_eq!(doc["app"]["name"], "hobnob");
+        assert_eq!(doc["app"]["name"], "vigo");
     }
 
     #[test]

@@ -9,8 +9,8 @@
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__value">{{.ThrallCount}}</div>
-        <div class="stat-card__label">Thralls</div>
+        <div class="stat-card__value">{{.EnvoyCount}}</div>
+        <div class="stat-card__label">Envoys</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-{{if ge .CompliancePct 90.0}}success{{else if ge .CompliancePct 50.0}}warning{{else}}danger{{end}}">{{printf "%.1f%%" .CompliancePct}}</div>
@@ -56,7 +56,7 @@
 </div>
 
 <div class="table-container mb-2">
-    <h3>Thralls</h3>
+    <h3>Envoys</h3>
     <table class="table">
         <thead>
             <tr>
@@ -67,7 +67,7 @@
             </tr>
         </thead>
         <tbody>
-            {{range .Thralls}}
+            {{range .Envoys}}
             <tr>
                 <td><strong>{{.Hostname}}</strong></td>
                 <td class="mono">{{.IPAddress}}</td>
@@ -81,9 +81,9 @@
                 </td>
             </tr>
             {{end}}
-            {{if not .Thralls}}
+            {{if not .Envoys}}
             <tr>
-                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No thralls on this spoke.</td>
+                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No envoys on this spoke.</td>
             </tr>
             {{end}}
         </tbody>
@@ -96,7 +96,7 @@
         <thead>
             <tr>
                 <th>Run</th>
-                <th>Thrall</th>
+                <th>Envoy</th>
                 <th>Status</th>
                 <th>Modules</th>
                 <th>Changed</th>
@@ -108,7 +108,7 @@
             {{range .Runs}}
             <tr>
                 <td class="mono">{{truncUUID .ID}}</td>
-                <td class="mono">{{truncUUID .ThrallID}}</td>
+                <td class="mono">{{truncUUID .EnvoyID}}</td>
                 <td>{{template "status-badge" dict "Status" .Status}}</td>
                 <td>{{.ModuleCount}}</td>
                 <td>{{.ChangedCount}}</td>

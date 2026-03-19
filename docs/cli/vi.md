@@ -1,35 +1,35 @@
-# hobnobcli vi
+# vigogo vi
 
-Edit a `.hnb` file in vim with Hobnob-aware syntax highlighting and automatic validation on save.
+Edit a `.vgo` file in vim with Vigo-aware syntax highlighting and automatic validation on save.
 
 Can also be invoked directly as `hnbvi` for convenience.
 
 ## Usage
 
 ```bash
-hobnobcli vi <file.hnb>
+vigogo vi <file.vgo>
 ```
 
 or
 
 ```bash
-hnbvi <file.hnb>
+hnbvi <file.vgo>
 ```
 
-Files must be within `/srv/hobnob/policy/`. Relative paths are resolved against `/srv/hobnob/policy/stage/`, so you can use short names:
+Files must be within `/srv/vigo/policy/`. Relative paths are resolved against `/srv/vigo/policy/stage/`, so you can use short names:
 
 ```bash
-hnbvi modules/nginx.hnb           # opens /srv/hobnob/policy/stage/modules/nginx.hnb
-hnbvi thralls/web-servers.hnb     # opens /srv/hobnob/policy/stage/thralls/web-servers.hnb
+hnbvi modules/nginx.vgo           # opens /srv/vigo/policy/stage/modules/nginx.vgo
+hnbvi envoys/web-servers.vgo     # opens /srv/vigo/policy/stage/envoys/web-servers.vgo
 ```
 
 ## Features
 
 ### Syntax highlighting
 
-The editor provides YAML-based syntax highlighting with Hobnob-specific enhancements:
+The editor provides YAML-based syntax highlighting with Vigo-specific enhancements:
 
-- **Top-level keys** (`name`, `vars`, `resources`, `modules`, `roles`, `thralls`, `depends_on`, `when`, `environment`, `environment_overrides`, `match`, `conditional_vars`) -- bold blue
+- **Top-level keys** (`name`, `vars`, `resources`, `modules`, `roles`, `envoys`, `depends_on`, `when`, `environment`, `environment_overrides`, `match`, `conditional_vars`) -- bold blue
 - **Resource attributes** (`type`, `state`, `targetpath`, `content`, `package`, `service`, `command`, etc.) -- blue
 - **Resource type values** (`file`, `package`, `service`, `user`, `exec`, `repository`, `archive`, `cron`) -- bold orange
 - **State values** (`present`, `absent`, `running`, `stopped`, `restarted`, `reloaded`, `directory`) -- green
@@ -41,7 +41,7 @@ The editor provides YAML-based syntax highlighting with Hobnob-specific enhancem
 
 ### Validation on save
 
-When saving a file, the editor automatically runs `hobnobcli validate` against the buffer. If validation fails:
+When saving a file, the editor automatically runs `vigogo validate` against the buffer. If validation fails:
 
 - Error messages are displayed in the editor
 - The write is aborted
@@ -63,16 +63,16 @@ The editor is pre-configured with:
 ### Edit a module file
 
 ```bash
-hnbvi modules/nginx.hnb
+hnbvi modules/nginx.vgo
 ```
 
 ### Edit with full path
 
 ```bash
-hobnobcli vi /srv/hobnob/policy/stage/modules/nginx.hnb
+vigogo vi /srv/vigo/policy/stage/modules/nginx.vgo
 ```
 
 ## Related
 
-- [validate](validate.md) -- validate .hnb files from the command line
+- [validate](validate.md) -- validate .vgo files from the command line
 - [preview](preview.md) -- preview planned changes after editing

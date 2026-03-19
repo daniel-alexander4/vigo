@@ -18,7 +18,7 @@ The UI is served on the REST API port (default 8443). Start the server and open:
 https://localhost:8443/
 ```
 
-No separate build step is needed -- all assets are compiled into the `hobd` binary.
+No separate build step is needed -- all assets are compiled into the `vigosrv` binary.
 
 Authentication is required for all UI and API access. See `server/auth/` for the pluggable provider system (basic, OIDC, isowebauth).
 

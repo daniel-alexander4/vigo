@@ -27,7 +27,7 @@ resources:
     target_path: /etc/ssh/sshd_config.d/cis-hardening.conf
     content: |
       # CIS Ubuntu 22.04 — SSH Hardening
-      # Managed by Hobnob
+      # Managed by Vigo
 
       # 5.2.4 — Use SSH Protocol 2
       Protocol 2

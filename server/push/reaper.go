@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // Reaper periodically scans for push runs that have exceeded their

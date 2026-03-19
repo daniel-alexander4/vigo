@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: hobnob.proto
+// source: vigo.proto
 
-package hobnob
+package vigo
 
 import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
@@ -29,14 +29,14 @@ type RegisterRequest struct {
 	IpAddress     string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	PubkeyPem     string                 `protobuf:"bytes,3,opt,name=pubkey_pem,json=pubkeyPem,proto3" json:"pubkey_pem,omitempty"`
 	Token         string                 `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
-	Force         bool                   `protobuf:"varint,5,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active thrall with same hostname and re-enroll
+	Force         bool                   `protobuf:"varint,5,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active envoy with same hostname and re-enroll
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_hobnob_proto_msgTypes[0]
+	mi := &file_vigo_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +48,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[0]
+	mi := &file_vigo_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61,7 +61,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{0}
+	return file_vigo_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *RegisterRequest) GetHostname() string {
@@ -102,7 +102,7 @@ func (x *RegisterRequest) GetForce() bool {
 type RegisterResponse struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Success         bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	ThrallId        string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // UUID assigned by the server
+	EnvoyId         string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"` // UUID assigned by the server
 	Message         string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	SpokeAddr       string                 `protobuf:"bytes,4,opt,name=spoke_addr,json=spokeAddr,proto3" json:"spoke_addr,omitempty"`                     // if set, agent should connect to this spoke for check-ins
 	ServerPubkeyPem string                 `protobuf:"bytes,5,opt,name=server_pubkey_pem,json=serverPubkeyPem,proto3" json:"server_pubkey_pem,omitempty"` // server's ED25519 public key for bundle signature verification
@@ -113,7 +113,7 @@ type RegisterResponse struct {
 
 func (x *RegisterResponse) Reset() {
 	*x = RegisterResponse{}
-	mi := &file_hobnob_proto_msgTypes[1]
+	mi := &file_vigo_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -125,7 +125,7 @@ func (x *RegisterResponse) String() string {
 func (*RegisterResponse) ProtoMessage() {}
 
 func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[1]
+	mi := &file_vigo_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -138,7 +138,7 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{1}
+	return file_vigo_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RegisterResponse) GetSuccess() bool {
@@ -148,9 +148,9 @@ func (x *RegisterResponse) GetSuccess() bool {
 	return false
 }
 
-func (x *RegisterResponse) GetThrallId() string {
+func (x *RegisterResponse) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -185,7 +185,7 @@ func (x *RegisterResponse) GetFallbackServers() []string {
 
 type CheckInRequest struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId           string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId            string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	StateFingerprint   string                 `protobuf:"bytes,2,opt,name=state_fingerprint,json=stateFingerprint,proto3" json:"state_fingerprint,omitempty"`
 	Signature          []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -201,7 +201,7 @@ type CheckInRequest struct {
 
 func (x *CheckInRequest) Reset() {
 	*x = CheckInRequest{}
-	mi := &file_hobnob_proto_msgTypes[2]
+	mi := &file_vigo_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -213,7 +213,7 @@ func (x *CheckInRequest) String() string {
 func (*CheckInRequest) ProtoMessage() {}
 
 func (x *CheckInRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[2]
+	mi := &file_vigo_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -226,12 +226,12 @@ func (x *CheckInRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckInRequest.ProtoReflect.Descriptor instead.
 func (*CheckInRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{2}
+	return file_vigo_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CheckInRequest) GetThrallId() string {
+func (x *CheckInRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -322,7 +322,7 @@ type CheckInResponse struct {
 
 func (x *CheckInResponse) Reset() {
 	*x = CheckInResponse{}
-	mi := &file_hobnob_proto_msgTypes[3]
+	mi := &file_vigo_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -334,7 +334,7 @@ func (x *CheckInResponse) String() string {
 func (*CheckInResponse) ProtoMessage() {}
 
 func (x *CheckInResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[3]
+	mi := &file_vigo_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -347,7 +347,7 @@ func (x *CheckInResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckInResponse.ProtoReflect.Descriptor instead.
 func (*CheckInResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{3}
+	return file_vigo_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CheckInResponse) GetModules() []*Module {
@@ -455,13 +455,13 @@ func (x *CheckInResponse) GetForceUpdate() bool {
 	return false
 }
 
-// ProxiedDevice describes a network device managed through a gateway thrall.
+// ProxiedDevice describes a network device managed through a gateway envoy.
 // The gateway agent receives these alongside its own policy and converges
 // each device over SSH during its convergence cycle.
 type ProxiedDevice struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`       // server-assigned UUID for this virtual thrall
-	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`                       // device hostname (from nodes.hnb match pattern)
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`          // server-assigned UUID for this virtual envoy
+	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`                       // device hostname (from nodes.vgo match pattern)
 	DeviceType    string                 `protobuf:"bytes,3,opt,name=device_type,json=deviceType,proto3" json:"device_type,omitempty"` // cisco_ios, cisco_nxos, juniper_junos
 	Credential    string                 `protobuf:"bytes,4,opt,name=credential,proto3" json:"credential,omitempty"`                   // resolved secret value (SSH key or password)
 	Username      string                 `protobuf:"bytes,5,opt,name=username,proto3" json:"username,omitempty"`                       // SSH username
@@ -474,7 +474,7 @@ type ProxiedDevice struct {
 
 func (x *ProxiedDevice) Reset() {
 	*x = ProxiedDevice{}
-	mi := &file_hobnob_proto_msgTypes[4]
+	mi := &file_vigo_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -486,7 +486,7 @@ func (x *ProxiedDevice) String() string {
 func (*ProxiedDevice) ProtoMessage() {}
 
 func (x *ProxiedDevice) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[4]
+	mi := &file_vigo_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -499,12 +499,12 @@ func (x *ProxiedDevice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxiedDevice.ProtoReflect.Descriptor instead.
 func (*ProxiedDevice) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{4}
+	return file_vigo_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *ProxiedDevice) GetThrallId() string {
+func (x *ProxiedDevice) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -569,7 +569,7 @@ type CustomTraitEntry struct {
 
 func (x *CustomTraitEntry) Reset() {
 	*x = CustomTraitEntry{}
-	mi := &file_hobnob_proto_msgTypes[5]
+	mi := &file_vigo_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -581,7 +581,7 @@ func (x *CustomTraitEntry) String() string {
 func (*CustomTraitEntry) ProtoMessage() {}
 
 func (x *CustomTraitEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[5]
+	mi := &file_vigo_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -594,7 +594,7 @@ func (x *CustomTraitEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CustomTraitEntry.ProtoReflect.Descriptor instead.
 func (*CustomTraitEntry) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{5}
+	return file_vigo_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CustomTraitEntry) GetName() string {
@@ -621,7 +621,7 @@ type DownloadCustomTraitRequest struct {
 
 func (x *DownloadCustomTraitRequest) Reset() {
 	*x = DownloadCustomTraitRequest{}
-	mi := &file_hobnob_proto_msgTypes[6]
+	mi := &file_vigo_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -633,7 +633,7 @@ func (x *DownloadCustomTraitRequest) String() string {
 func (*DownloadCustomTraitRequest) ProtoMessage() {}
 
 func (x *DownloadCustomTraitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[6]
+	mi := &file_vigo_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -646,7 +646,7 @@ func (x *DownloadCustomTraitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadCustomTraitRequest.ProtoReflect.Descriptor instead.
 func (*DownloadCustomTraitRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{6}
+	return file_vigo_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DownloadCustomTraitRequest) GetName() string {
@@ -666,7 +666,7 @@ type DownloadCustomTraitResponse struct {
 
 func (x *DownloadCustomTraitResponse) Reset() {
 	*x = DownloadCustomTraitResponse{}
-	mi := &file_hobnob_proto_msgTypes[7]
+	mi := &file_vigo_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -678,7 +678,7 @@ func (x *DownloadCustomTraitResponse) String() string {
 func (*DownloadCustomTraitResponse) ProtoMessage() {}
 
 func (x *DownloadCustomTraitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[7]
+	mi := &file_vigo_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -691,7 +691,7 @@ func (x *DownloadCustomTraitResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadCustomTraitResponse.ProtoReflect.Descriptor instead.
 func (*DownloadCustomTraitResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{7}
+	return file_vigo_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DownloadCustomTraitResponse) GetData() []byte {
@@ -715,7 +715,7 @@ type Module struct {
 
 func (x *Module) Reset() {
 	*x = Module{}
-	mi := &file_hobnob_proto_msgTypes[8]
+	mi := &file_vigo_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -727,7 +727,7 @@ func (x *Module) String() string {
 func (*Module) ProtoMessage() {}
 
 func (x *Module) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[8]
+	mi := &file_vigo_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -740,7 +740,7 @@ func (x *Module) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Module.ProtoReflect.Descriptor instead.
 func (*Module) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{8}
+	return file_vigo_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Module) GetName() string {
@@ -797,7 +797,7 @@ type Resource struct {
 
 func (x *Resource) Reset() {
 	*x = Resource{}
-	mi := &file_hobnob_proto_msgTypes[9]
+	mi := &file_vigo_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +809,7 @@ func (x *Resource) String() string {
 func (*Resource) ProtoMessage() {}
 
 func (x *Resource) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[9]
+	mi := &file_vigo_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +822,7 @@ func (x *Resource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Resource.ProtoReflect.Descriptor instead.
 func (*Resource) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{9}
+	return file_vigo_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Resource) GetName() string {
@@ -865,7 +865,7 @@ type PolicyBundle struct {
 	ConditionalVars []*ConditionalVarDef   `protobuf:"bytes,5,rep,name=conditional_vars,json=conditionalVars,proto3" json:"conditional_vars,omitempty"`
 	CustomTraits    []*CustomTraitEntry    `protobuf:"bytes,6,rep,name=custom_traits,json=customTraits,proto3" json:"custom_traits,omitempty"`
 	// Trace fields for dry-run resolution visibility.
-	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // thrall entry match pattern from thralls.hnb
+	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // envoy entry match pattern from envoys.vgo
 	Environment    string   `protobuf:"bytes,8,opt,name=environment,proto3" json:"environment,omitempty"`                             // resolved environment
 	Roles          []string `protobuf:"bytes,9,rep,name=roles,proto3" json:"roles,omitempty"`                                         // role names that were expanded
 	// Bundle signing (compiled promises).
@@ -878,7 +878,7 @@ type PolicyBundle struct {
 
 func (x *PolicyBundle) Reset() {
 	*x = PolicyBundle{}
-	mi := &file_hobnob_proto_msgTypes[10]
+	mi := &file_vigo_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -890,7 +890,7 @@ func (x *PolicyBundle) String() string {
 func (*PolicyBundle) ProtoMessage() {}
 
 func (x *PolicyBundle) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[10]
+	mi := &file_vigo_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -903,7 +903,7 @@ func (x *PolicyBundle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyBundle.ProtoReflect.Descriptor instead.
 func (*PolicyBundle) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{10}
+	return file_vigo_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PolicyBundle) GetPolicyVersion() uint64 {
@@ -1007,7 +1007,7 @@ type PolicyModule struct {
 
 func (x *PolicyModule) Reset() {
 	*x = PolicyModule{}
-	mi := &file_hobnob_proto_msgTypes[11]
+	mi := &file_vigo_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1019,7 +1019,7 @@ func (x *PolicyModule) String() string {
 func (*PolicyModule) ProtoMessage() {}
 
 func (x *PolicyModule) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[11]
+	mi := &file_vigo_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1032,7 +1032,7 @@ func (x *PolicyModule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyModule.ProtoReflect.Descriptor instead.
 func (*PolicyModule) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{11}
+	return file_vigo_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PolicyModule) GetName() string {
@@ -1093,7 +1093,7 @@ type PolicyResource struct {
 
 func (x *PolicyResource) Reset() {
 	*x = PolicyResource{}
-	mi := &file_hobnob_proto_msgTypes[12]
+	mi := &file_vigo_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1105,7 +1105,7 @@ func (x *PolicyResource) String() string {
 func (*PolicyResource) ProtoMessage() {}
 
 func (x *PolicyResource) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[12]
+	mi := &file_vigo_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1118,7 +1118,7 @@ func (x *PolicyResource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyResource.ProtoReflect.Descriptor instead.
 func (*PolicyResource) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{12}
+	return file_vigo_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PolicyResource) GetName() string {
@@ -1183,7 +1183,7 @@ type ConditionalVarDef struct {
 
 func (x *ConditionalVarDef) Reset() {
 	*x = ConditionalVarDef{}
-	mi := &file_hobnob_proto_msgTypes[13]
+	mi := &file_vigo_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1195,7 +1195,7 @@ func (x *ConditionalVarDef) String() string {
 func (*ConditionalVarDef) ProtoMessage() {}
 
 func (x *ConditionalVarDef) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[13]
+	mi := &file_vigo_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1208,7 +1208,7 @@ func (x *ConditionalVarDef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConditionalVarDef.ProtoReflect.Descriptor instead.
 func (*ConditionalVarDef) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{13}
+	return file_vigo_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ConditionalVarDef) GetName() string {
@@ -1242,7 +1242,7 @@ func (x *ConditionalVarDef) GetOperandJson() string {
 type ReportResultRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	ThrallId      string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	Results       []*ModuleResult        `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	Signature     []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -1252,7 +1252,7 @@ type ReportResultRequest struct {
 
 func (x *ReportResultRequest) Reset() {
 	*x = ReportResultRequest{}
-	mi := &file_hobnob_proto_msgTypes[14]
+	mi := &file_vigo_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1264,7 +1264,7 @@ func (x *ReportResultRequest) String() string {
 func (*ReportResultRequest) ProtoMessage() {}
 
 func (x *ReportResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[14]
+	mi := &file_vigo_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1277,7 +1277,7 @@ func (x *ReportResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResultRequest.ProtoReflect.Descriptor instead.
 func (*ReportResultRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{14}
+	return file_vigo_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ReportResultRequest) GetRunId() string {
@@ -1287,9 +1287,9 @@ func (x *ReportResultRequest) GetRunId() string {
 	return ""
 }
 
-func (x *ReportResultRequest) GetThrallId() string {
+func (x *ReportResultRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -1333,7 +1333,7 @@ type ModuleResult struct {
 
 func (x *ModuleResult) Reset() {
 	*x = ModuleResult{}
-	mi := &file_hobnob_proto_msgTypes[15]
+	mi := &file_vigo_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1345,7 +1345,7 @@ func (x *ModuleResult) String() string {
 func (*ModuleResult) ProtoMessage() {}
 
 func (x *ModuleResult) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[15]
+	mi := &file_vigo_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1358,7 +1358,7 @@ func (x *ModuleResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModuleResult.ProtoReflect.Descriptor instead.
 func (*ModuleResult) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{15}
+	return file_vigo_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ModuleResult) GetModuleName() string {
@@ -1440,7 +1440,7 @@ type ReportResultResponse struct {
 
 func (x *ReportResultResponse) Reset() {
 	*x = ReportResultResponse{}
-	mi := &file_hobnob_proto_msgTypes[16]
+	mi := &file_vigo_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1452,7 +1452,7 @@ func (x *ReportResultResponse) String() string {
 func (*ReportResultResponse) ProtoMessage() {}
 
 func (x *ReportResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[16]
+	mi := &file_vigo_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1465,7 +1465,7 @@ func (x *ReportResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResultResponse.ProtoReflect.Descriptor instead.
 func (*ReportResultResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{16}
+	return file_vigo_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ReportResultResponse) GetAcknowledged() bool {
@@ -1477,7 +1477,7 @@ func (x *ReportResultResponse) GetAcknowledged() bool {
 
 type ReportTraitsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	TraitsJson    []byte                 `protobuf:"bytes,2,opt,name=traits_json,json=traitsJson,proto3" json:"traits_json,omitempty"` // JSON-encoded traits map
 	Signature     []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -1487,7 +1487,7 @@ type ReportTraitsRequest struct {
 
 func (x *ReportTraitsRequest) Reset() {
 	*x = ReportTraitsRequest{}
-	mi := &file_hobnob_proto_msgTypes[17]
+	mi := &file_vigo_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1499,7 +1499,7 @@ func (x *ReportTraitsRequest) String() string {
 func (*ReportTraitsRequest) ProtoMessage() {}
 
 func (x *ReportTraitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[17]
+	mi := &file_vigo_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1512,12 +1512,12 @@ func (x *ReportTraitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportTraitsRequest.ProtoReflect.Descriptor instead.
 func (*ReportTraitsRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{17}
+	return file_vigo_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ReportTraitsRequest) GetThrallId() string {
+func (x *ReportTraitsRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -1552,7 +1552,7 @@ type ReportTraitsResponse struct {
 
 func (x *ReportTraitsResponse) Reset() {
 	*x = ReportTraitsResponse{}
-	mi := &file_hobnob_proto_msgTypes[18]
+	mi := &file_vigo_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1564,7 +1564,7 @@ func (x *ReportTraitsResponse) String() string {
 func (*ReportTraitsResponse) ProtoMessage() {}
 
 func (x *ReportTraitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[18]
+	mi := &file_vigo_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1577,7 +1577,7 @@ func (x *ReportTraitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportTraitsResponse.ProtoReflect.Descriptor instead.
 func (*ReportTraitsResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{18}
+	return file_vigo_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ReportTraitsResponse) GetAcknowledged() bool {
@@ -1606,7 +1606,7 @@ type AgentStreamMessage struct {
 
 func (x *AgentStreamMessage) Reset() {
 	*x = AgentStreamMessage{}
-	mi := &file_hobnob_proto_msgTypes[19]
+	mi := &file_vigo_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1618,7 +1618,7 @@ func (x *AgentStreamMessage) String() string {
 func (*AgentStreamMessage) ProtoMessage() {}
 
 func (x *AgentStreamMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[19]
+	mi := &file_vigo_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1631,7 +1631,7 @@ func (x *AgentStreamMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentStreamMessage.ProtoReflect.Descriptor instead.
 func (*AgentStreamMessage) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{19}
+	return file_vigo_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AgentStreamMessage) GetMsg() isAgentStreamMessage_Msg {
@@ -1771,7 +1771,7 @@ type ServerStreamMessage struct {
 
 func (x *ServerStreamMessage) Reset() {
 	*x = ServerStreamMessage{}
-	mi := &file_hobnob_proto_msgTypes[20]
+	mi := &file_vigo_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1783,7 +1783,7 @@ func (x *ServerStreamMessage) String() string {
 func (*ServerStreamMessage) ProtoMessage() {}
 
 func (x *ServerStreamMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[20]
+	mi := &file_vigo_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1796,7 +1796,7 @@ func (x *ServerStreamMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerStreamMessage.ProtoReflect.Descriptor instead.
 func (*ServerStreamMessage) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{20}
+	return file_vigo_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ServerStreamMessage) GetMsg() isServerStreamMessage_Msg {
@@ -1955,7 +1955,7 @@ type StreamRelease struct {
 
 func (x *StreamRelease) Reset() {
 	*x = StreamRelease{}
-	mi := &file_hobnob_proto_msgTypes[21]
+	mi := &file_vigo_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1967,7 +1967,7 @@ func (x *StreamRelease) String() string {
 func (*StreamRelease) ProtoMessage() {}
 
 func (x *StreamRelease) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[21]
+	mi := &file_vigo_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1980,7 +1980,7 @@ func (x *StreamRelease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamRelease.ProtoReflect.Descriptor instead.
 func (*StreamRelease) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{21}
+	return file_vigo_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StreamRelease) GetReason() string {
@@ -2002,7 +2002,7 @@ type StreamPolicyPush struct {
 
 func (x *StreamPolicyPush) Reset() {
 	*x = StreamPolicyPush{}
-	mi := &file_hobnob_proto_msgTypes[22]
+	mi := &file_vigo_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2014,7 +2014,7 @@ func (x *StreamPolicyPush) String() string {
 func (*StreamPolicyPush) ProtoMessage() {}
 
 func (x *StreamPolicyPush) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[22]
+	mi := &file_vigo_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2027,7 +2027,7 @@ func (x *StreamPolicyPush) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPolicyPush.ProtoReflect.Descriptor instead.
 func (*StreamPolicyPush) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{22}
+	return file_vigo_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *StreamPolicyPush) GetPolicyBundle() *PolicyBundle {
@@ -2053,7 +2053,7 @@ type StreamForcePush struct {
 
 func (x *StreamForcePush) Reset() {
 	*x = StreamForcePush{}
-	mi := &file_hobnob_proto_msgTypes[23]
+	mi := &file_vigo_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2065,7 +2065,7 @@ func (x *StreamForcePush) String() string {
 func (*StreamForcePush) ProtoMessage() {}
 
 func (x *StreamForcePush) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[23]
+	mi := &file_vigo_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2078,7 +2078,7 @@ func (x *StreamForcePush) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamForcePush.ProtoReflect.Descriptor instead.
 func (*StreamForcePush) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{23}
+	return file_vigo_proto_rawDescGZIP(), []int{23}
 }
 
 // DeltaEvent is sent by the agent on the bidi stream to report state changes
@@ -2098,7 +2098,7 @@ type DeltaEvent struct {
 
 func (x *DeltaEvent) Reset() {
 	*x = DeltaEvent{}
-	mi := &file_hobnob_proto_msgTypes[24]
+	mi := &file_vigo_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2110,7 +2110,7 @@ func (x *DeltaEvent) String() string {
 func (*DeltaEvent) ProtoMessage() {}
 
 func (x *DeltaEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[24]
+	mi := &file_vigo_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2123,7 +2123,7 @@ func (x *DeltaEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeltaEvent.ProtoReflect.Descriptor instead.
 func (*DeltaEvent) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{24}
+	return file_vigo_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DeltaEvent) GetSequence() int64 {
@@ -2207,7 +2207,7 @@ type RunCompleted struct {
 
 func (x *RunCompleted) Reset() {
 	*x = RunCompleted{}
-	mi := &file_hobnob_proto_msgTypes[25]
+	mi := &file_vigo_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2219,7 +2219,7 @@ func (x *RunCompleted) String() string {
 func (*RunCompleted) ProtoMessage() {}
 
 func (x *RunCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[25]
+	mi := &file_vigo_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2232,7 +2232,7 @@ func (x *RunCompleted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunCompleted.ProtoReflect.Descriptor instead.
 func (*RunCompleted) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{25}
+	return file_vigo_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RunCompleted) GetRunId() string {
@@ -2302,7 +2302,7 @@ type TraitsDelta struct {
 
 func (x *TraitsDelta) Reset() {
 	*x = TraitsDelta{}
-	mi := &file_hobnob_proto_msgTypes[26]
+	mi := &file_vigo_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2314,7 +2314,7 @@ func (x *TraitsDelta) String() string {
 func (*TraitsDelta) ProtoMessage() {}
 
 func (x *TraitsDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[26]
+	mi := &file_vigo_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2327,7 +2327,7 @@ func (x *TraitsDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraitsDelta.ProtoReflect.Descriptor instead.
 func (*TraitsDelta) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{26}
+	return file_vigo_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *TraitsDelta) GetChanged() map[string]string {
@@ -2353,7 +2353,7 @@ type HeartbeatDelta struct {
 
 func (x *HeartbeatDelta) Reset() {
 	*x = HeartbeatDelta{}
-	mi := &file_hobnob_proto_msgTypes[27]
+	mi := &file_vigo_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2365,7 +2365,7 @@ func (x *HeartbeatDelta) String() string {
 func (*HeartbeatDelta) ProtoMessage() {}
 
 func (x *HeartbeatDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[27]
+	mi := &file_vigo_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2378,7 +2378,7 @@ func (x *HeartbeatDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatDelta.ProtoReflect.Descriptor instead.
 func (*HeartbeatDelta) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{27}
+	return file_vigo_proto_rawDescGZIP(), []int{27}
 }
 
 // DeltaAck acknowledges receipt of a DeltaEvent by sequence number.
@@ -2391,7 +2391,7 @@ type DeltaAck struct {
 
 func (x *DeltaAck) Reset() {
 	*x = DeltaAck{}
-	mi := &file_hobnob_proto_msgTypes[28]
+	mi := &file_vigo_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2403,7 +2403,7 @@ func (x *DeltaAck) String() string {
 func (*DeltaAck) ProtoMessage() {}
 
 func (x *DeltaAck) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[28]
+	mi := &file_vigo_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2416,7 +2416,7 @@ func (x *DeltaAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeltaAck.ProtoReflect.Descriptor instead.
 func (*DeltaAck) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{28}
+	return file_vigo_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DeltaAck) GetAckedSequence() int64 {
@@ -2437,7 +2437,7 @@ type StreamCapabilities struct {
 
 func (x *StreamCapabilities) Reset() {
 	*x = StreamCapabilities{}
-	mi := &file_hobnob_proto_msgTypes[29]
+	mi := &file_vigo_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2449,7 +2449,7 @@ func (x *StreamCapabilities) String() string {
 func (*StreamCapabilities) ProtoMessage() {}
 
 func (x *StreamCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[29]
+	mi := &file_vigo_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2462,7 +2462,7 @@ func (x *StreamCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamCapabilities.ProtoReflect.Descriptor instead.
 func (*StreamCapabilities) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{29}
+	return file_vigo_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *StreamCapabilities) GetSupportsDelta() bool {
@@ -2479,7 +2479,7 @@ func (x *StreamCapabilities) GetLastAckedSequence() int64 {
 	return 0
 }
 
-// PushDispatch is sent server→agent to execute a command on the thrall.
+// PushDispatch is sent server→agent to execute a command on the envoy.
 type PushDispatch struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	PushId         string                 `protobuf:"bytes,1,opt,name=push_id,json=pushId,proto3" json:"push_id,omitempty"`                                                       // unique ID for this push execution
@@ -2492,7 +2492,7 @@ type PushDispatch struct {
 
 func (x *PushDispatch) Reset() {
 	*x = PushDispatch{}
-	mi := &file_hobnob_proto_msgTypes[30]
+	mi := &file_vigo_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2504,7 +2504,7 @@ func (x *PushDispatch) String() string {
 func (*PushDispatch) ProtoMessage() {}
 
 func (x *PushDispatch) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[30]
+	mi := &file_vigo_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2517,7 +2517,7 @@ func (x *PushDispatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushDispatch.ProtoReflect.Descriptor instead.
 func (*PushDispatch) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{30}
+	return file_vigo_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *PushDispatch) GetPushId() string {
@@ -2560,7 +2560,7 @@ type PushAck struct {
 
 func (x *PushAck) Reset() {
 	*x = PushAck{}
-	mi := &file_hobnob_proto_msgTypes[31]
+	mi := &file_vigo_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2572,7 +2572,7 @@ func (x *PushAck) String() string {
 func (*PushAck) ProtoMessage() {}
 
 func (x *PushAck) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[31]
+	mi := &file_vigo_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2585,7 +2585,7 @@ func (x *PushAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushAck.ProtoReflect.Descriptor instead.
 func (*PushAck) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{31}
+	return file_vigo_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *PushAck) GetPushId() string {
@@ -2625,7 +2625,7 @@ type PushResult struct {
 
 func (x *PushResult) Reset() {
 	*x = PushResult{}
-	mi := &file_hobnob_proto_msgTypes[32]
+	mi := &file_vigo_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2637,7 +2637,7 @@ func (x *PushResult) String() string {
 func (*PushResult) ProtoMessage() {}
 
 func (x *PushResult) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[32]
+	mi := &file_vigo_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2650,7 +2650,7 @@ func (x *PushResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushResult.ProtoReflect.Descriptor instead.
 func (*PushResult) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{32}
+	return file_vigo_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PushResult) GetPushId() string {
@@ -2713,7 +2713,7 @@ type QueryRequest struct {
 
 func (x *QueryRequest) Reset() {
 	*x = QueryRequest{}
-	mi := &file_hobnob_proto_msgTypes[33]
+	mi := &file_vigo_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2725,7 +2725,7 @@ func (x *QueryRequest) String() string {
 func (*QueryRequest) ProtoMessage() {}
 
 func (x *QueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[33]
+	mi := &file_vigo_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2738,7 +2738,7 @@ func (x *QueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
 func (*QueryRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{33}
+	return file_vigo_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *QueryRequest) GetQueryId() string {
@@ -2768,7 +2768,7 @@ type QueryResponse struct {
 
 func (x *QueryResponse) Reset() {
 	*x = QueryResponse{}
-	mi := &file_hobnob_proto_msgTypes[34]
+	mi := &file_vigo_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2780,7 +2780,7 @@ func (x *QueryResponse) String() string {
 func (*QueryResponse) ProtoMessage() {}
 
 func (x *QueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[34]
+	mi := &file_vigo_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2793,7 +2793,7 @@ func (x *QueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
 func (*QueryResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{34}
+	return file_vigo_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *QueryResponse) GetQueryId() string {
@@ -2834,7 +2834,7 @@ type AddApprovedPatternRequest struct {
 
 func (x *AddApprovedPatternRequest) Reset() {
 	*x = AddApprovedPatternRequest{}
-	mi := &file_hobnob_proto_msgTypes[35]
+	mi := &file_vigo_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2846,7 +2846,7 @@ func (x *AddApprovedPatternRequest) String() string {
 func (*AddApprovedPatternRequest) ProtoMessage() {}
 
 func (x *AddApprovedPatternRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[35]
+	mi := &file_vigo_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2859,7 +2859,7 @@ func (x *AddApprovedPatternRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddApprovedPatternRequest.ProtoReflect.Descriptor instead.
 func (*AddApprovedPatternRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{35}
+	return file_vigo_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AddApprovedPatternRequest) GetPattern() string {
@@ -2887,7 +2887,7 @@ type AddApprovedPatternResponse struct {
 
 func (x *AddApprovedPatternResponse) Reset() {
 	*x = AddApprovedPatternResponse{}
-	mi := &file_hobnob_proto_msgTypes[36]
+	mi := &file_vigo_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2899,7 +2899,7 @@ func (x *AddApprovedPatternResponse) String() string {
 func (*AddApprovedPatternResponse) ProtoMessage() {}
 
 func (x *AddApprovedPatternResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[36]
+	mi := &file_vigo_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2912,7 +2912,7 @@ func (x *AddApprovedPatternResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddApprovedPatternResponse.ProtoReflect.Descriptor instead.
 func (*AddApprovedPatternResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{36}
+	return file_vigo_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *AddApprovedPatternResponse) GetId() string {
@@ -2944,7 +2944,7 @@ type ListApprovedPatternsRequest struct {
 
 func (x *ListApprovedPatternsRequest) Reset() {
 	*x = ListApprovedPatternsRequest{}
-	mi := &file_hobnob_proto_msgTypes[37]
+	mi := &file_vigo_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2956,7 +2956,7 @@ func (x *ListApprovedPatternsRequest) String() string {
 func (*ListApprovedPatternsRequest) ProtoMessage() {}
 
 func (x *ListApprovedPatternsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[37]
+	mi := &file_vigo_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2969,7 +2969,7 @@ func (x *ListApprovedPatternsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovedPatternsRequest.ProtoReflect.Descriptor instead.
 func (*ListApprovedPatternsRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{37}
+	return file_vigo_proto_rawDescGZIP(), []int{37}
 }
 
 type ListApprovedPatternsResponse struct {
@@ -2981,7 +2981,7 @@ type ListApprovedPatternsResponse struct {
 
 func (x *ListApprovedPatternsResponse) Reset() {
 	*x = ListApprovedPatternsResponse{}
-	mi := &file_hobnob_proto_msgTypes[38]
+	mi := &file_vigo_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2993,7 +2993,7 @@ func (x *ListApprovedPatternsResponse) String() string {
 func (*ListApprovedPatternsResponse) ProtoMessage() {}
 
 func (x *ListApprovedPatternsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[38]
+	mi := &file_vigo_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3006,7 +3006,7 @@ func (x *ListApprovedPatternsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovedPatternsResponse.ProtoReflect.Descriptor instead.
 func (*ListApprovedPatternsResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{38}
+	return file_vigo_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListApprovedPatternsResponse) GetPatterns() []*ApprovedPattern {
@@ -3022,14 +3022,14 @@ type ApprovedPattern struct {
 	Pattern       string                 `protobuf:"bytes,2,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	Used          bool                   `protobuf:"varint,4,opt,name=used,proto3" json:"used,omitempty"`
-	UsedBy        string                 `protobuf:"bytes,5,opt,name=used_by,json=usedBy,proto3" json:"used_by,omitempty"` // thrall UUID if used
+	UsedBy        string                 `protobuf:"bytes,5,opt,name=used_by,json=usedBy,proto3" json:"used_by,omitempty"` // envoy UUID if used
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ApprovedPattern) Reset() {
 	*x = ApprovedPattern{}
-	mi := &file_hobnob_proto_msgTypes[39]
+	mi := &file_vigo_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3041,7 +3041,7 @@ func (x *ApprovedPattern) String() string {
 func (*ApprovedPattern) ProtoMessage() {}
 
 func (x *ApprovedPattern) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[39]
+	mi := &file_vigo_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3054,7 +3054,7 @@ func (x *ApprovedPattern) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovedPattern.ProtoReflect.Descriptor instead.
 func (*ApprovedPattern) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{39}
+	return file_vigo_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ApprovedPattern) GetId() string {
@@ -3101,7 +3101,7 @@ type RevokeApprovedPatternRequest struct {
 
 func (x *RevokeApprovedPatternRequest) Reset() {
 	*x = RevokeApprovedPatternRequest{}
-	mi := &file_hobnob_proto_msgTypes[40]
+	mi := &file_vigo_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3113,7 +3113,7 @@ func (x *RevokeApprovedPatternRequest) String() string {
 func (*RevokeApprovedPatternRequest) ProtoMessage() {}
 
 func (x *RevokeApprovedPatternRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[40]
+	mi := &file_vigo_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3126,7 +3126,7 @@ func (x *RevokeApprovedPatternRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApprovedPatternRequest.ProtoReflect.Descriptor instead.
 func (*RevokeApprovedPatternRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{40}
+	return file_vigo_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *RevokeApprovedPatternRequest) GetId() string {
@@ -3144,7 +3144,7 @@ type RevokeApprovedPatternResponse struct {
 
 func (x *RevokeApprovedPatternResponse) Reset() {
 	*x = RevokeApprovedPatternResponse{}
-	mi := &file_hobnob_proto_msgTypes[41]
+	mi := &file_vigo_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3156,7 +3156,7 @@ func (x *RevokeApprovedPatternResponse) String() string {
 func (*RevokeApprovedPatternResponse) ProtoMessage() {}
 
 func (x *RevokeApprovedPatternResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[41]
+	mi := &file_vigo_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3169,31 +3169,31 @@ func (x *RevokeApprovedPatternResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApprovedPatternResponse.ProtoReflect.Descriptor instead.
 func (*RevokeApprovedPatternResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{41}
+	return file_vigo_proto_rawDescGZIP(), []int{41}
 }
 
-type ListThrallsRequest struct {
+type ListEnvoysRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	IncludeRevoked bool                   `protobuf:"varint,1,opt,name=include_revoked,json=includeRevoked,proto3" json:"include_revoked,omitempty"` // if true, include revoked thralls in the response
+	IncludeRevoked bool                   `protobuf:"varint,1,opt,name=include_revoked,json=includeRevoked,proto3" json:"include_revoked,omitempty"` // if true, include revoked envoys in the response
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *ListThrallsRequest) Reset() {
-	*x = ListThrallsRequest{}
-	mi := &file_hobnob_proto_msgTypes[42]
+func (x *ListEnvoysRequest) Reset() {
+	*x = ListEnvoysRequest{}
+	mi := &file_vigo_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListThrallsRequest) String() string {
+func (x *ListEnvoysRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListThrallsRequest) ProtoMessage() {}
+func (*ListEnvoysRequest) ProtoMessage() {}
 
-func (x *ListThrallsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[42]
+func (x *ListEnvoysRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3204,40 +3204,40 @@ func (x *ListThrallsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListThrallsRequest.ProtoReflect.Descriptor instead.
-func (*ListThrallsRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{42}
+// Deprecated: Use ListEnvoysRequest.ProtoReflect.Descriptor instead.
+func (*ListEnvoysRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{42}
 }
 
-func (x *ListThrallsRequest) GetIncludeRevoked() bool {
+func (x *ListEnvoysRequest) GetIncludeRevoked() bool {
 	if x != nil {
 		return x.IncludeRevoked
 	}
 	return false
 }
 
-type ListThrallsResponse struct {
+type ListEnvoysResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Thralls       []*Thrall              `protobuf:"bytes,1,rep,name=thralls,proto3" json:"thralls,omitempty"`
+	Envoys        []*Envoy               `protobuf:"bytes,1,rep,name=envoys,proto3" json:"envoys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListThrallsResponse) Reset() {
-	*x = ListThrallsResponse{}
-	mi := &file_hobnob_proto_msgTypes[43]
+func (x *ListEnvoysResponse) Reset() {
+	*x = ListEnvoysResponse{}
+	mi := &file_vigo_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListThrallsResponse) String() string {
+func (x *ListEnvoysResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListThrallsResponse) ProtoMessage() {}
+func (*ListEnvoysResponse) ProtoMessage() {}
 
-func (x *ListThrallsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[43]
+func (x *ListEnvoysResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3248,19 +3248,19 @@ func (x *ListThrallsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListThrallsResponse.ProtoReflect.Descriptor instead.
-func (*ListThrallsResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{43}
+// Deprecated: Use ListEnvoysResponse.ProtoReflect.Descriptor instead.
+func (*ListEnvoysResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{43}
 }
 
-func (x *ListThrallsResponse) GetThralls() []*Thrall {
+func (x *ListEnvoysResponse) GetEnvoys() []*Envoy {
 	if x != nil {
-		return x.Thralls
+		return x.Envoys
 	}
 	return nil
 }
 
-type Thrall struct {
+type Envoy struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	Id                    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Hostname              string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
@@ -3275,21 +3275,21 @@ type Thrall struct {
 	sizeCache             protoimpl.SizeCache
 }
 
-func (x *Thrall) Reset() {
-	*x = Thrall{}
-	mi := &file_hobnob_proto_msgTypes[44]
+func (x *Envoy) Reset() {
+	*x = Envoy{}
+	mi := &file_vigo_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Thrall) String() string {
+func (x *Envoy) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Thrall) ProtoMessage() {}
+func (*Envoy) ProtoMessage() {}
 
-func (x *Thrall) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[44]
+func (x *Envoy) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3300,96 +3300,96 @@ func (x *Thrall) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Thrall.ProtoReflect.Descriptor instead.
-func (*Thrall) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{44}
+// Deprecated: Use Envoy.ProtoReflect.Descriptor instead.
+func (*Envoy) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{44}
 }
 
-func (x *Thrall) GetId() string {
+func (x *Envoy) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *Thrall) GetHostname() string {
+func (x *Envoy) GetHostname() string {
 	if x != nil {
 		return x.Hostname
 	}
 	return ""
 }
 
-func (x *Thrall) GetIpAddress() string {
+func (x *Envoy) GetIpAddress() string {
 	if x != nil {
 		return x.IpAddress
 	}
 	return ""
 }
 
-func (x *Thrall) GetEnrolledAt() *timestamppb.Timestamp {
+func (x *Envoy) GetEnrolledAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.EnrolledAt
 	}
 	return nil
 }
 
-func (x *Thrall) GetLastSeen() *timestamppb.Timestamp {
+func (x *Envoy) GetLastSeen() *timestamppb.Timestamp {
 	if x != nil {
 		return x.LastSeen
 	}
 	return nil
 }
 
-func (x *Thrall) GetRevoked() bool {
+func (x *Envoy) GetRevoked() bool {
 	if x != nil {
 		return x.Revoked
 	}
 	return false
 }
 
-func (x *Thrall) GetRevokedAt() *timestamppb.Timestamp {
+func (x *Envoy) GetRevokedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.RevokedAt
 	}
 	return nil
 }
 
-func (x *Thrall) GetPendingRotatedSecrets() []string {
+func (x *Envoy) GetPendingRotatedSecrets() []string {
 	if x != nil {
 		return x.PendingRotatedSecrets
 	}
 	return nil
 }
 
-func (x *Thrall) GetAgentVersion() string {
+func (x *Envoy) GetAgentVersion() string {
 	if x != nil {
 		return x.AgentVersion
 	}
 	return ""
 }
 
-type GetThrallRequest struct {
+type GetEnvoyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetThrallRequest) Reset() {
-	*x = GetThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[45]
+func (x *GetEnvoyRequest) Reset() {
+	*x = GetEnvoyRequest{}
+	mi := &file_vigo_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetThrallRequest) String() string {
+func (x *GetEnvoyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetThrallRequest) ProtoMessage() {}
+func (*GetEnvoyRequest) ProtoMessage() {}
 
-func (x *GetThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[45]
+func (x *GetEnvoyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3400,40 +3400,40 @@ func (x *GetThrallRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetThrallRequest.ProtoReflect.Descriptor instead.
-func (*GetThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{45}
+// Deprecated: Use GetEnvoyRequest.ProtoReflect.Descriptor instead.
+func (*GetEnvoyRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{45}
 }
 
-func (x *GetThrallRequest) GetId() string {
+func (x *GetEnvoyRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type GetThrallResponse struct {
+type GetEnvoyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Thrall        *Thrall                `protobuf:"bytes,1,opt,name=thrall,proto3" json:"thrall,omitempty"`
+	Envoy         *Envoy                 `protobuf:"bytes,1,opt,name=envoy,proto3" json:"envoy,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetThrallResponse) Reset() {
-	*x = GetThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[46]
+func (x *GetEnvoyResponse) Reset() {
+	*x = GetEnvoyResponse{}
+	mi := &file_vigo_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetThrallResponse) String() string {
+func (x *GetEnvoyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetThrallResponse) ProtoMessage() {}
+func (*GetEnvoyResponse) ProtoMessage() {}
 
-func (x *GetThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[46]
+func (x *GetEnvoyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3444,40 +3444,40 @@ func (x *GetThrallResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetThrallResponse.ProtoReflect.Descriptor instead.
-func (*GetThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{46}
+// Deprecated: Use GetEnvoyResponse.ProtoReflect.Descriptor instead.
+func (*GetEnvoyResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{46}
 }
 
-func (x *GetThrallResponse) GetThrall() *Thrall {
+func (x *GetEnvoyResponse) GetEnvoy() *Envoy {
 	if x != nil {
-		return x.Thrall
+		return x.Envoy
 	}
 	return nil
 }
 
-type RevokeThrallRequest struct {
+type RevokeEnvoyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RevokeThrallRequest) Reset() {
-	*x = RevokeThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[47]
+func (x *RevokeEnvoyRequest) Reset() {
+	*x = RevokeEnvoyRequest{}
+	mi := &file_vigo_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RevokeThrallRequest) String() string {
+func (x *RevokeEnvoyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RevokeThrallRequest) ProtoMessage() {}
+func (*RevokeEnvoyRequest) ProtoMessage() {}
 
-func (x *RevokeThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[47]
+func (x *RevokeEnvoyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3488,39 +3488,39 @@ func (x *RevokeThrallRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RevokeThrallRequest.ProtoReflect.Descriptor instead.
-func (*RevokeThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{47}
+// Deprecated: Use RevokeEnvoyRequest.ProtoReflect.Descriptor instead.
+func (*RevokeEnvoyRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{47}
 }
 
-func (x *RevokeThrallRequest) GetId() string {
+func (x *RevokeEnvoyRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type RevokeThrallResponse struct {
+type RevokeEnvoyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RevokeThrallResponse) Reset() {
-	*x = RevokeThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[48]
+func (x *RevokeEnvoyResponse) Reset() {
+	*x = RevokeEnvoyResponse{}
+	mi := &file_vigo_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RevokeThrallResponse) String() string {
+func (x *RevokeEnvoyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RevokeThrallResponse) ProtoMessage() {}
+func (*RevokeEnvoyResponse) ProtoMessage() {}
 
-func (x *RevokeThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[48]
+func (x *RevokeEnvoyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3531,33 +3531,33 @@ func (x *RevokeThrallResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RevokeThrallResponse.ProtoReflect.Descriptor instead.
-func (*RevokeThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{48}
+// Deprecated: Use RevokeEnvoyResponse.ProtoReflect.Descriptor instead.
+func (*RevokeEnvoyResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{48}
 }
 
-type DeleteThrallRequest struct {
+type DeleteEnvoyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteThrallRequest) Reset() {
-	*x = DeleteThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[49]
+func (x *DeleteEnvoyRequest) Reset() {
+	*x = DeleteEnvoyRequest{}
+	mi := &file_vigo_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteThrallRequest) String() string {
+func (x *DeleteEnvoyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteThrallRequest) ProtoMessage() {}
+func (*DeleteEnvoyRequest) ProtoMessage() {}
 
-func (x *DeleteThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[49]
+func (x *DeleteEnvoyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3568,39 +3568,39 @@ func (x *DeleteThrallRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteThrallRequest.ProtoReflect.Descriptor instead.
-func (*DeleteThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{49}
+// Deprecated: Use DeleteEnvoyRequest.ProtoReflect.Descriptor instead.
+func (*DeleteEnvoyRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{49}
 }
 
-func (x *DeleteThrallRequest) GetId() string {
+func (x *DeleteEnvoyRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type DeleteThrallResponse struct {
+type DeleteEnvoyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteThrallResponse) Reset() {
-	*x = DeleteThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[50]
+func (x *DeleteEnvoyResponse) Reset() {
+	*x = DeleteEnvoyResponse{}
+	mi := &file_vigo_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteThrallResponse) String() string {
+func (x *DeleteEnvoyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteThrallResponse) ProtoMessage() {}
+func (*DeleteEnvoyResponse) ProtoMessage() {}
 
-func (x *DeleteThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[50]
+func (x *DeleteEnvoyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3611,21 +3611,21 @@ func (x *DeleteThrallResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteThrallResponse.ProtoReflect.Descriptor instead.
-func (*DeleteThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{50}
+// Deprecated: Use DeleteEnvoyResponse.ProtoReflect.Descriptor instead.
+func (*DeleteEnvoyResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{50}
 }
 
 type ForcePushRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // empty = all thralls
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"` // empty = all envoys
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ForcePushRequest) Reset() {
 	*x = ForcePushRequest{}
-	mi := &file_hobnob_proto_msgTypes[51]
+	mi := &file_vigo_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3637,7 +3637,7 @@ func (x *ForcePushRequest) String() string {
 func (*ForcePushRequest) ProtoMessage() {}
 
 func (x *ForcePushRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[51]
+	mi := &file_vigo_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3650,26 +3650,26 @@ func (x *ForcePushRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForcePushRequest.ProtoReflect.Descriptor instead.
 func (*ForcePushRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{51}
+	return file_vigo_proto_rawDescGZIP(), []int{51}
 }
 
-func (x *ForcePushRequest) GetThrallId() string {
+func (x *ForcePushRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
 
 type ForcePushResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ThrallsNotified int32                  `protobuf:"varint,1,opt,name=thralls_notified,json=thrallsNotified,proto3" json:"thralls_notified,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	EnvoysNotified int32                  `protobuf:"varint,1,opt,name=envoys_notified,json=envoysNotified,proto3" json:"envoys_notified,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ForcePushResponse) Reset() {
 	*x = ForcePushResponse{}
-	mi := &file_hobnob_proto_msgTypes[52]
+	mi := &file_vigo_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3681,7 +3681,7 @@ func (x *ForcePushResponse) String() string {
 func (*ForcePushResponse) ProtoMessage() {}
 
 func (x *ForcePushResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[52]
+	mi := &file_vigo_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3694,26 +3694,26 @@ func (x *ForcePushResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForcePushResponse.ProtoReflect.Descriptor instead.
 func (*ForcePushResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{52}
+	return file_vigo_proto_rawDescGZIP(), []int{52}
 }
 
-func (x *ForcePushResponse) GetThrallsNotified() int32 {
+func (x *ForcePushResponse) GetEnvoysNotified() int32 {
 	if x != nil {
-		return x.ThrallsNotified
+		return x.EnvoysNotified
 	}
 	return 0
 }
 
 type DryRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DryRunRequest) Reset() {
 	*x = DryRunRequest{}
-	mi := &file_hobnob_proto_msgTypes[53]
+	mi := &file_vigo_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3725,7 +3725,7 @@ func (x *DryRunRequest) String() string {
 func (*DryRunRequest) ProtoMessage() {}
 
 func (x *DryRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[53]
+	mi := &file_vigo_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3738,12 +3738,12 @@ func (x *DryRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DryRunRequest.ProtoReflect.Descriptor instead.
 func (*DryRunRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{53}
+	return file_vigo_proto_rawDescGZIP(), []int{53}
 }
 
-func (x *DryRunRequest) GetThrallId() string {
+func (x *DryRunRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -3757,7 +3757,7 @@ type DryRunResponse struct {
 
 func (x *DryRunResponse) Reset() {
 	*x = DryRunResponse{}
-	mi := &file_hobnob_proto_msgTypes[54]
+	mi := &file_vigo_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3769,7 +3769,7 @@ func (x *DryRunResponse) String() string {
 func (*DryRunResponse) ProtoMessage() {}
 
 func (x *DryRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[54]
+	mi := &file_vigo_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3782,7 +3782,7 @@ func (x *DryRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DryRunResponse.ProtoReflect.Descriptor instead.
 func (*DryRunResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{54}
+	return file_vigo_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *DryRunResponse) GetActions() []*PlannedAction {
@@ -3804,7 +3804,7 @@ type PlannedAction struct {
 
 func (x *PlannedAction) Reset() {
 	*x = PlannedAction{}
-	mi := &file_hobnob_proto_msgTypes[55]
+	mi := &file_vigo_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3816,7 +3816,7 @@ func (x *PlannedAction) String() string {
 func (*PlannedAction) ProtoMessage() {}
 
 func (x *PlannedAction) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[55]
+	mi := &file_vigo_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3829,7 +3829,7 @@ func (x *PlannedAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedAction.ProtoReflect.Descriptor instead.
 func (*PlannedAction) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{55}
+	return file_vigo_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *PlannedAction) GetModuleName() string {
@@ -3862,15 +3862,15 @@ func (x *PlannedAction) GetPlannedAction() string {
 
 type ListRunsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // optional filter
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                      // default 20
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"` // optional filter
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                   // default 20
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListRunsRequest) Reset() {
 	*x = ListRunsRequest{}
-	mi := &file_hobnob_proto_msgTypes[56]
+	mi := &file_vigo_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3882,7 +3882,7 @@ func (x *ListRunsRequest) String() string {
 func (*ListRunsRequest) ProtoMessage() {}
 
 func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[56]
+	mi := &file_vigo_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3895,12 +3895,12 @@ func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListRunsRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{56}
+	return file_vigo_proto_rawDescGZIP(), []int{56}
 }
 
-func (x *ListRunsRequest) GetThrallId() string {
+func (x *ListRunsRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -3921,7 +3921,7 @@ type ListRunsResponse struct {
 
 func (x *ListRunsResponse) Reset() {
 	*x = ListRunsResponse{}
-	mi := &file_hobnob_proto_msgTypes[57]
+	mi := &file_vigo_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3933,7 +3933,7 @@ func (x *ListRunsResponse) String() string {
 func (*ListRunsResponse) ProtoMessage() {}
 
 func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[57]
+	mi := &file_vigo_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3946,7 +3946,7 @@ func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListRunsResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{57}
+	return file_vigo_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ListRunsResponse) GetRuns() []*Run {
@@ -3959,7 +3959,7 @@ func (x *ListRunsResponse) GetRuns() []*Run {
 type Run struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	ThrallId      string                 `protobuf:"bytes,2,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // running, success, failure, partial
@@ -3973,7 +3973,7 @@ type Run struct {
 
 func (x *Run) Reset() {
 	*x = Run{}
-	mi := &file_hobnob_proto_msgTypes[58]
+	mi := &file_vigo_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3985,7 +3985,7 @@ func (x *Run) String() string {
 func (*Run) ProtoMessage() {}
 
 func (x *Run) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[58]
+	mi := &file_vigo_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3998,7 +3998,7 @@ func (x *Run) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Run.ProtoReflect.Descriptor instead.
 func (*Run) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{58}
+	return file_vigo_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *Run) GetId() string {
@@ -4008,9 +4008,9 @@ func (x *Run) GetId() string {
 	return ""
 }
 
-func (x *Run) GetThrallId() string {
+func (x *Run) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -4073,7 +4073,7 @@ type GetRunRequest struct {
 
 func (x *GetRunRequest) Reset() {
 	*x = GetRunRequest{}
-	mi := &file_hobnob_proto_msgTypes[59]
+	mi := &file_vigo_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4085,7 +4085,7 @@ func (x *GetRunRequest) String() string {
 func (*GetRunRequest) ProtoMessage() {}
 
 func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[59]
+	mi := &file_vigo_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4098,7 +4098,7 @@ func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
 func (*GetRunRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{59}
+	return file_vigo_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *GetRunRequest) GetId() string {
@@ -4118,7 +4118,7 @@ type GetRunResponse struct {
 
 func (x *GetRunResponse) Reset() {
 	*x = GetRunResponse{}
-	mi := &file_hobnob_proto_msgTypes[60]
+	mi := &file_vigo_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4130,7 +4130,7 @@ func (x *GetRunResponse) String() string {
 func (*GetRunResponse) ProtoMessage() {}
 
 func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[60]
+	mi := &file_vigo_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4143,7 +4143,7 @@ func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
 func (*GetRunResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{60}
+	return file_vigo_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *GetRunResponse) GetRun() *Run {
@@ -4168,7 +4168,7 @@ type GenerateTokenRequest struct {
 
 func (x *GenerateTokenRequest) Reset() {
 	*x = GenerateTokenRequest{}
-	mi := &file_hobnob_proto_msgTypes[61]
+	mi := &file_vigo_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4180,7 +4180,7 @@ func (x *GenerateTokenRequest) String() string {
 func (*GenerateTokenRequest) ProtoMessage() {}
 
 func (x *GenerateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[61]
+	mi := &file_vigo_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4193,7 +4193,7 @@ func (x *GenerateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateTokenRequest.ProtoReflect.Descriptor instead.
 func (*GenerateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{61}
+	return file_vigo_proto_rawDescGZIP(), []int{61}
 }
 
 type GenerateTokenResponse struct {
@@ -4205,7 +4205,7 @@ type GenerateTokenResponse struct {
 
 func (x *GenerateTokenResponse) Reset() {
 	*x = GenerateTokenResponse{}
-	mi := &file_hobnob_proto_msgTypes[62]
+	mi := &file_vigo_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4217,7 +4217,7 @@ func (x *GenerateTokenResponse) String() string {
 func (*GenerateTokenResponse) ProtoMessage() {}
 
 func (x *GenerateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[62]
+	mi := &file_vigo_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4230,7 +4230,7 @@ func (x *GenerateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateTokenResponse.ProtoReflect.Descriptor instead.
 func (*GenerateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{62}
+	return file_vigo_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *GenerateTokenResponse) GetToken() string {
@@ -4251,7 +4251,7 @@ type AddWebhookRequest struct {
 
 func (x *AddWebhookRequest) Reset() {
 	*x = AddWebhookRequest{}
-	mi := &file_hobnob_proto_msgTypes[63]
+	mi := &file_vigo_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4263,7 +4263,7 @@ func (x *AddWebhookRequest) String() string {
 func (*AddWebhookRequest) ProtoMessage() {}
 
 func (x *AddWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[63]
+	mi := &file_vigo_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4276,7 +4276,7 @@ func (x *AddWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddWebhookRequest.ProtoReflect.Descriptor instead.
 func (*AddWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{63}
+	return file_vigo_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *AddWebhookRequest) GetUrl() string {
@@ -4309,7 +4309,7 @@ type AddWebhookResponse struct {
 
 func (x *AddWebhookResponse) Reset() {
 	*x = AddWebhookResponse{}
-	mi := &file_hobnob_proto_msgTypes[64]
+	mi := &file_vigo_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4321,7 +4321,7 @@ func (x *AddWebhookResponse) String() string {
 func (*AddWebhookResponse) ProtoMessage() {}
 
 func (x *AddWebhookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[64]
+	mi := &file_vigo_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4334,7 +4334,7 @@ func (x *AddWebhookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddWebhookResponse.ProtoReflect.Descriptor instead.
 func (*AddWebhookResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{64}
+	return file_vigo_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *AddWebhookResponse) GetWebhook() *WebhookInfo {
@@ -4352,7 +4352,7 @@ type ListWebhooksRequest struct {
 
 func (x *ListWebhooksRequest) Reset() {
 	*x = ListWebhooksRequest{}
-	mi := &file_hobnob_proto_msgTypes[65]
+	mi := &file_vigo_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4364,7 +4364,7 @@ func (x *ListWebhooksRequest) String() string {
 func (*ListWebhooksRequest) ProtoMessage() {}
 
 func (x *ListWebhooksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[65]
+	mi := &file_vigo_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4377,7 +4377,7 @@ func (x *ListWebhooksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebhooksRequest.ProtoReflect.Descriptor instead.
 func (*ListWebhooksRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{65}
+	return file_vigo_proto_rawDescGZIP(), []int{65}
 }
 
 type ListWebhooksResponse struct {
@@ -4389,7 +4389,7 @@ type ListWebhooksResponse struct {
 
 func (x *ListWebhooksResponse) Reset() {
 	*x = ListWebhooksResponse{}
-	mi := &file_hobnob_proto_msgTypes[66]
+	mi := &file_vigo_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4401,7 +4401,7 @@ func (x *ListWebhooksResponse) String() string {
 func (*ListWebhooksResponse) ProtoMessage() {}
 
 func (x *ListWebhooksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[66]
+	mi := &file_vigo_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4414,7 +4414,7 @@ func (x *ListWebhooksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebhooksResponse.ProtoReflect.Descriptor instead.
 func (*ListWebhooksResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{66}
+	return file_vigo_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ListWebhooksResponse) GetWebhooks() []*WebhookInfo {
@@ -4433,7 +4433,7 @@ type DeleteWebhookRequest struct {
 
 func (x *DeleteWebhookRequest) Reset() {
 	*x = DeleteWebhookRequest{}
-	mi := &file_hobnob_proto_msgTypes[67]
+	mi := &file_vigo_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4445,7 +4445,7 @@ func (x *DeleteWebhookRequest) String() string {
 func (*DeleteWebhookRequest) ProtoMessage() {}
 
 func (x *DeleteWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[67]
+	mi := &file_vigo_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4458,7 +4458,7 @@ func (x *DeleteWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWebhookRequest.ProtoReflect.Descriptor instead.
 func (*DeleteWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{67}
+	return file_vigo_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *DeleteWebhookRequest) GetId() string {
@@ -4476,7 +4476,7 @@ type DeleteWebhookResponse struct {
 
 func (x *DeleteWebhookResponse) Reset() {
 	*x = DeleteWebhookResponse{}
-	mi := &file_hobnob_proto_msgTypes[68]
+	mi := &file_vigo_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4488,7 +4488,7 @@ func (x *DeleteWebhookResponse) String() string {
 func (*DeleteWebhookResponse) ProtoMessage() {}
 
 func (x *DeleteWebhookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[68]
+	mi := &file_vigo_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4501,7 +4501,7 @@ func (x *DeleteWebhookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWebhookResponse.ProtoReflect.Descriptor instead.
 func (*DeleteWebhookResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{68}
+	return file_vigo_proto_rawDescGZIP(), []int{68}
 }
 
 type WebhookInfo struct {
@@ -4517,7 +4517,7 @@ type WebhookInfo struct {
 
 func (x *WebhookInfo) Reset() {
 	*x = WebhookInfo{}
-	mi := &file_hobnob_proto_msgTypes[69]
+	mi := &file_vigo_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4529,7 +4529,7 @@ func (x *WebhookInfo) String() string {
 func (*WebhookInfo) ProtoMessage() {}
 
 func (x *WebhookInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[69]
+	mi := &file_vigo_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4542,7 +4542,7 @@ func (x *WebhookInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebhookInfo.ProtoReflect.Descriptor instead.
 func (*WebhookInfo) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{69}
+	return file_vigo_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *WebhookInfo) GetId() string {
@@ -4588,7 +4588,7 @@ type GetComplianceSummaryRequest struct {
 
 func (x *GetComplianceSummaryRequest) Reset() {
 	*x = GetComplianceSummaryRequest{}
-	mi := &file_hobnob_proto_msgTypes[70]
+	mi := &file_vigo_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4600,7 +4600,7 @@ func (x *GetComplianceSummaryRequest) String() string {
 func (*GetComplianceSummaryRequest) ProtoMessage() {}
 
 func (x *GetComplianceSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[70]
+	mi := &file_vigo_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4613,7 +4613,7 @@ func (x *GetComplianceSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetComplianceSummaryRequest.ProtoReflect.Descriptor instead.
 func (*GetComplianceSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{70}
+	return file_vigo_proto_rawDescGZIP(), []int{70}
 }
 
 type GetComplianceSummaryResponse struct {
@@ -4631,7 +4631,7 @@ type GetComplianceSummaryResponse struct {
 
 func (x *GetComplianceSummaryResponse) Reset() {
 	*x = GetComplianceSummaryResponse{}
-	mi := &file_hobnob_proto_msgTypes[71]
+	mi := &file_vigo_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4643,7 +4643,7 @@ func (x *GetComplianceSummaryResponse) String() string {
 func (*GetComplianceSummaryResponse) ProtoMessage() {}
 
 func (x *GetComplianceSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[71]
+	mi := &file_vigo_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4656,7 +4656,7 @@ func (x *GetComplianceSummaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetComplianceSummaryResponse.ProtoReflect.Descriptor instead.
 func (*GetComplianceSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{71}
+	return file_vigo_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetComplianceSummaryResponse) GetTotal() int32 {
@@ -4708,28 +4708,28 @@ func (x *GetComplianceSummaryResponse) GetCompliancePct() float32 {
 	return 0
 }
 
-type GetThrallComplianceRequest struct {
+type GetEnvoyComplianceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetThrallComplianceRequest) Reset() {
-	*x = GetThrallComplianceRequest{}
-	mi := &file_hobnob_proto_msgTypes[72]
+func (x *GetEnvoyComplianceRequest) Reset() {
+	*x = GetEnvoyComplianceRequest{}
+	mi := &file_vigo_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetThrallComplianceRequest) String() string {
+func (x *GetEnvoyComplianceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetThrallComplianceRequest) ProtoMessage() {}
+func (*GetEnvoyComplianceRequest) ProtoMessage() {}
 
-func (x *GetThrallComplianceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[72]
+func (x *GetEnvoyComplianceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4740,19 +4740,19 @@ func (x *GetThrallComplianceRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetThrallComplianceRequest.ProtoReflect.Descriptor instead.
-func (*GetThrallComplianceRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{72}
+// Deprecated: Use GetEnvoyComplianceRequest.ProtoReflect.Descriptor instead.
+func (*GetEnvoyComplianceRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{72}
 }
 
-func (x *GetThrallComplianceRequest) GetId() string {
+func (x *GetEnvoyComplianceRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type GetThrallComplianceResponse struct {
+type GetEnvoyComplianceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	LastRun       *Run                   `protobuf:"bytes,2,opt,name=last_run,json=lastRun,proto3" json:"last_run,omitempty"`
@@ -4761,21 +4761,21 @@ type GetThrallComplianceResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetThrallComplianceResponse) Reset() {
-	*x = GetThrallComplianceResponse{}
-	mi := &file_hobnob_proto_msgTypes[73]
+func (x *GetEnvoyComplianceResponse) Reset() {
+	*x = GetEnvoyComplianceResponse{}
+	mi := &file_vigo_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetThrallComplianceResponse) String() string {
+func (x *GetEnvoyComplianceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetThrallComplianceResponse) ProtoMessage() {}
+func (*GetEnvoyComplianceResponse) ProtoMessage() {}
 
-func (x *GetThrallComplianceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[73]
+func (x *GetEnvoyComplianceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4786,26 +4786,26 @@ func (x *GetThrallComplianceResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetThrallComplianceResponse.ProtoReflect.Descriptor instead.
-func (*GetThrallComplianceResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{73}
+// Deprecated: Use GetEnvoyComplianceResponse.ProtoReflect.Descriptor instead.
+func (*GetEnvoyComplianceResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{73}
 }
 
-func (x *GetThrallComplianceResponse) GetStatus() string {
+func (x *GetEnvoyComplianceResponse) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *GetThrallComplianceResponse) GetLastRun() *Run {
+func (x *GetEnvoyComplianceResponse) GetLastRun() *Run {
 	if x != nil {
 		return x.LastRun
 	}
 	return nil
 }
 
-func (x *GetThrallComplianceResponse) GetHistory() []*ComplianceSnapshot {
+func (x *GetEnvoyComplianceResponse) GetHistory() []*ComplianceSnapshot {
 	if x != nil {
 		return x.History
 	}
@@ -4827,7 +4827,7 @@ type ComplianceSnapshot struct {
 
 func (x *ComplianceSnapshot) Reset() {
 	*x = ComplianceSnapshot{}
-	mi := &file_hobnob_proto_msgTypes[74]
+	mi := &file_vigo_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4839,7 +4839,7 @@ func (x *ComplianceSnapshot) String() string {
 func (*ComplianceSnapshot) ProtoMessage() {}
 
 func (x *ComplianceSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[74]
+	mi := &file_vigo_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4852,7 +4852,7 @@ func (x *ComplianceSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComplianceSnapshot.ProtoReflect.Descriptor instead.
 func (*ComplianceSnapshot) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{74}
+	return file_vigo_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ComplianceSnapshot) GetDate() string {
@@ -4906,7 +4906,7 @@ func (x *ComplianceSnapshot) GetNoData() int32 {
 
 type RollbackRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	RunId         string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`          // optional: rollback to specific run
 	FilePath      string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"` // optional: rollback a single file
 	unknownFields protoimpl.UnknownFields
@@ -4915,7 +4915,7 @@ type RollbackRequest struct {
 
 func (x *RollbackRequest) Reset() {
 	*x = RollbackRequest{}
-	mi := &file_hobnob_proto_msgTypes[75]
+	mi := &file_vigo_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4927,7 +4927,7 @@ func (x *RollbackRequest) String() string {
 func (*RollbackRequest) ProtoMessage() {}
 
 func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[75]
+	mi := &file_vigo_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4940,12 +4940,12 @@ func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackRequest.ProtoReflect.Descriptor instead.
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{75}
+	return file_vigo_proto_rawDescGZIP(), []int{75}
 }
 
-func (x *RollbackRequest) GetThrallId() string {
+func (x *RollbackRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -4974,7 +4974,7 @@ type RollbackResponse struct {
 
 func (x *RollbackResponse) Reset() {
 	*x = RollbackResponse{}
-	mi := &file_hobnob_proto_msgTypes[76]
+	mi := &file_vigo_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4986,7 +4986,7 @@ func (x *RollbackResponse) String() string {
 func (*RollbackResponse) ProtoMessage() {}
 
 func (x *RollbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[76]
+	mi := &file_vigo_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4999,7 +4999,7 @@ func (x *RollbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackResponse.ProtoReflect.Descriptor instead.
 func (*RollbackResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{76}
+	return file_vigo_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *RollbackResponse) GetSuccess() bool {
@@ -5018,14 +5018,14 @@ func (x *RollbackResponse) GetMessage() string {
 
 type ListPackagesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"` // optional filter
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"` // optional filter
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListPackagesRequest) Reset() {
 	*x = ListPackagesRequest{}
-	mi := &file_hobnob_proto_msgTypes[77]
+	mi := &file_vigo_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5037,7 +5037,7 @@ func (x *ListPackagesRequest) String() string {
 func (*ListPackagesRequest) ProtoMessage() {}
 
 func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[77]
+	mi := &file_vigo_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5050,12 +5050,12 @@ func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesRequest.ProtoReflect.Descriptor instead.
 func (*ListPackagesRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{77}
+	return file_vigo_proto_rawDescGZIP(), []int{77}
 }
 
-func (x *ListPackagesRequest) GetThrallId() string {
+func (x *ListPackagesRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -5069,7 +5069,7 @@ type ListPackagesResponse struct {
 
 func (x *ListPackagesResponse) Reset() {
 	*x = ListPackagesResponse{}
-	mi := &file_hobnob_proto_msgTypes[78]
+	mi := &file_vigo_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5081,7 +5081,7 @@ func (x *ListPackagesResponse) String() string {
 func (*ListPackagesResponse) ProtoMessage() {}
 
 func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[78]
+	mi := &file_vigo_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5094,7 +5094,7 @@ func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesResponse.ProtoReflect.Descriptor instead.
 func (*ListPackagesResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{78}
+	return file_vigo_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *ListPackagesResponse) GetPackages() []*PackageInfo {
@@ -5112,7 +5112,7 @@ type ListPackageDriftRequest struct {
 
 func (x *ListPackageDriftRequest) Reset() {
 	*x = ListPackageDriftRequest{}
-	mi := &file_hobnob_proto_msgTypes[79]
+	mi := &file_vigo_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5124,7 +5124,7 @@ func (x *ListPackageDriftRequest) String() string {
 func (*ListPackageDriftRequest) ProtoMessage() {}
 
 func (x *ListPackageDriftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[79]
+	mi := &file_vigo_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5137,7 +5137,7 @@ func (x *ListPackageDriftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageDriftRequest.ProtoReflect.Descriptor instead.
 func (*ListPackageDriftRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{79}
+	return file_vigo_proto_rawDescGZIP(), []int{79}
 }
 
 type ListPackageDriftResponse struct {
@@ -5149,7 +5149,7 @@ type ListPackageDriftResponse struct {
 
 func (x *ListPackageDriftResponse) Reset() {
 	*x = ListPackageDriftResponse{}
-	mi := &file_hobnob_proto_msgTypes[80]
+	mi := &file_vigo_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5161,7 +5161,7 @@ func (x *ListPackageDriftResponse) String() string {
 func (*ListPackageDriftResponse) ProtoMessage() {}
 
 func (x *ListPackageDriftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[80]
+	mi := &file_vigo_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5174,7 +5174,7 @@ func (x *ListPackageDriftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageDriftResponse.ProtoReflect.Descriptor instead.
 func (*ListPackageDriftResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{80}
+	return file_vigo_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *ListPackageDriftResponse) GetDrifts() []*PackageDrift {
@@ -5186,7 +5186,7 @@ func (x *ListPackageDriftResponse) GetDrifts() []*PackageDrift {
 
 type PackageInfo struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId         string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId          string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	PackageName      string                 `protobuf:"bytes,3,opt,name=package_name,json=packageName,proto3" json:"package_name,omitempty"`
 	InstalledVersion string                 `protobuf:"bytes,4,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"`
@@ -5197,7 +5197,7 @@ type PackageInfo struct {
 
 func (x *PackageInfo) Reset() {
 	*x = PackageInfo{}
-	mi := &file_hobnob_proto_msgTypes[81]
+	mi := &file_vigo_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5209,7 +5209,7 @@ func (x *PackageInfo) String() string {
 func (*PackageInfo) ProtoMessage() {}
 
 func (x *PackageInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[81]
+	mi := &file_vigo_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5222,12 +5222,12 @@ func (x *PackageInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageInfo.ProtoReflect.Descriptor instead.
 func (*PackageInfo) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{81}
+	return file_vigo_proto_rawDescGZIP(), []int{81}
 }
 
-func (x *PackageInfo) GetThrallId() string {
+func (x *PackageInfo) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -5262,7 +5262,7 @@ func (x *PackageInfo) GetDesiredVersion() string {
 
 type PackageDrift struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId         string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId          string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	PackageName      string                 `protobuf:"bytes,3,opt,name=package_name,json=packageName,proto3" json:"package_name,omitempty"`
 	InstalledVersion string                 `protobuf:"bytes,4,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"`
@@ -5274,7 +5274,7 @@ type PackageDrift struct {
 
 func (x *PackageDrift) Reset() {
 	*x = PackageDrift{}
-	mi := &file_hobnob_proto_msgTypes[82]
+	mi := &file_vigo_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5286,7 +5286,7 @@ func (x *PackageDrift) String() string {
 func (*PackageDrift) ProtoMessage() {}
 
 func (x *PackageDrift) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[82]
+	mi := &file_vigo_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5299,12 +5299,12 @@ func (x *PackageDrift) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageDrift.ProtoReflect.Descriptor instead.
 func (*PackageDrift) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{82}
+	return file_vigo_proto_rawDescGZIP(), []int{82}
 }
 
-func (x *PackageDrift) GetThrallId() string {
+func (x *PackageDrift) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -5355,7 +5355,7 @@ type PromoteEnvRequest struct {
 
 func (x *PromoteEnvRequest) Reset() {
 	*x = PromoteEnvRequest{}
-	mi := &file_hobnob_proto_msgTypes[83]
+	mi := &file_vigo_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5367,7 +5367,7 @@ func (x *PromoteEnvRequest) String() string {
 func (*PromoteEnvRequest) ProtoMessage() {}
 
 func (x *PromoteEnvRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[83]
+	mi := &file_vigo_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5380,7 +5380,7 @@ func (x *PromoteEnvRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteEnvRequest.ProtoReflect.Descriptor instead.
 func (*PromoteEnvRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{83}
+	return file_vigo_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *PromoteEnvRequest) GetModuleName() string {
@@ -5414,7 +5414,7 @@ type PromoteEnvResponse struct {
 
 func (x *PromoteEnvResponse) Reset() {
 	*x = PromoteEnvResponse{}
-	mi := &file_hobnob_proto_msgTypes[84]
+	mi := &file_vigo_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5426,7 +5426,7 @@ func (x *PromoteEnvResponse) String() string {
 func (*PromoteEnvResponse) ProtoMessage() {}
 
 func (x *PromoteEnvResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[84]
+	mi := &file_vigo_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5439,7 +5439,7 @@ func (x *PromoteEnvResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteEnvResponse.ProtoReflect.Descriptor instead.
 func (*PromoteEnvResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{84}
+	return file_vigo_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *PromoteEnvResponse) GetPromotionId() string {
@@ -5456,31 +5456,31 @@ func (x *PromoteEnvResponse) GetDiff() map[string]string {
 	return nil
 }
 
-type EnrollThrallRequest struct {
+type EnrollEnvoyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	IpAddress     string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	PubkeyPem     string                 `protobuf:"bytes,3,opt,name=pubkey_pem,json=pubkeyPem,proto3" json:"pubkey_pem,omitempty"`
-	Force         bool                   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active thrall with same hostname and re-enroll
+	Force         bool                   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active envoy with same hostname and re-enroll
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EnrollThrallRequest) Reset() {
-	*x = EnrollThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[85]
+func (x *EnrollEnvoyRequest) Reset() {
+	*x = EnrollEnvoyRequest{}
+	mi := &file_vigo_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EnrollThrallRequest) String() string {
+func (x *EnrollEnvoyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EnrollThrallRequest) ProtoMessage() {}
+func (*EnrollEnvoyRequest) ProtoMessage() {}
 
-func (x *EnrollThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[85]
+func (x *EnrollEnvoyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5491,61 +5491,61 @@ func (x *EnrollThrallRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EnrollThrallRequest.ProtoReflect.Descriptor instead.
-func (*EnrollThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{85}
+// Deprecated: Use EnrollEnvoyRequest.ProtoReflect.Descriptor instead.
+func (*EnrollEnvoyRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{85}
 }
 
-func (x *EnrollThrallRequest) GetHostname() string {
+func (x *EnrollEnvoyRequest) GetHostname() string {
 	if x != nil {
 		return x.Hostname
 	}
 	return ""
 }
 
-func (x *EnrollThrallRequest) GetIpAddress() string {
+func (x *EnrollEnvoyRequest) GetIpAddress() string {
 	if x != nil {
 		return x.IpAddress
 	}
 	return ""
 }
 
-func (x *EnrollThrallRequest) GetPubkeyPem() string {
+func (x *EnrollEnvoyRequest) GetPubkeyPem() string {
 	if x != nil {
 		return x.PubkeyPem
 	}
 	return ""
 }
 
-func (x *EnrollThrallRequest) GetForce() bool {
+func (x *EnrollEnvoyRequest) GetForce() bool {
 	if x != nil {
 		return x.Force
 	}
 	return false
 }
 
-type EnrollThrallResponse struct {
+type EnrollEnvoyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EnrollThrallResponse) Reset() {
-	*x = EnrollThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[86]
+func (x *EnrollEnvoyResponse) Reset() {
+	*x = EnrollEnvoyResponse{}
+	mi := &file_vigo_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EnrollThrallResponse) String() string {
+func (x *EnrollEnvoyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EnrollThrallResponse) ProtoMessage() {}
+func (*EnrollEnvoyResponse) ProtoMessage() {}
 
-func (x *EnrollThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[86]
+func (x *EnrollEnvoyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5556,30 +5556,30 @@ func (x *EnrollThrallResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EnrollThrallResponse.ProtoReflect.Descriptor instead.
-func (*EnrollThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{86}
+// Deprecated: Use EnrollEnvoyResponse.ProtoReflect.Descriptor instead.
+func (*EnrollEnvoyResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{86}
 }
 
-func (x *EnrollThrallResponse) GetThrallId() string {
+func (x *EnrollEnvoyResponse) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
 
 type SetReassignmentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	TargetAddr    string                 `protobuf:"bytes,2,opt,name=target_addr,json=targetAddr,proto3" json:"target_addr,omitempty"`
-	NewThrallId   string                 `protobuf:"bytes,3,opt,name=new_thrall_id,json=newThrallId,proto3" json:"new_thrall_id,omitempty"`
+	NewEnvoyId    string                 `protobuf:"bytes,3,opt,name=new_envoy_id,json=newEnvoyId,proto3" json:"new_envoy_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SetReassignmentRequest) Reset() {
 	*x = SetReassignmentRequest{}
-	mi := &file_hobnob_proto_msgTypes[87]
+	mi := &file_vigo_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5591,7 +5591,7 @@ func (x *SetReassignmentRequest) String() string {
 func (*SetReassignmentRequest) ProtoMessage() {}
 
 func (x *SetReassignmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[87]
+	mi := &file_vigo_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5604,12 +5604,12 @@ func (x *SetReassignmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReassignmentRequest.ProtoReflect.Descriptor instead.
 func (*SetReassignmentRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{87}
+	return file_vigo_proto_rawDescGZIP(), []int{87}
 }
 
-func (x *SetReassignmentRequest) GetThrallId() string {
+func (x *SetReassignmentRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
@@ -5621,9 +5621,9 @@ func (x *SetReassignmentRequest) GetTargetAddr() string {
 	return ""
 }
 
-func (x *SetReassignmentRequest) GetNewThrallId() string {
+func (x *SetReassignmentRequest) GetNewEnvoyId() string {
 	if x != nil {
-		return x.NewThrallId
+		return x.NewEnvoyId
 	}
 	return ""
 }
@@ -5636,7 +5636,7 @@ type SetReassignmentResponse struct {
 
 func (x *SetReassignmentResponse) Reset() {
 	*x = SetReassignmentResponse{}
-	mi := &file_hobnob_proto_msgTypes[88]
+	mi := &file_vigo_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5648,7 +5648,7 @@ func (x *SetReassignmentResponse) String() string {
 func (*SetReassignmentResponse) ProtoMessage() {}
 
 func (x *SetReassignmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[88]
+	mi := &file_vigo_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5661,33 +5661,33 @@ func (x *SetReassignmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReassignmentResponse.ProtoReflect.Descriptor instead.
 func (*SetReassignmentResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{88}
+	return file_vigo_proto_rawDescGZIP(), []int{88}
 }
 
-type ReassignThrallRequest struct {
+type ReassignEnvoyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ThrallId      string                 `protobuf:"bytes,1,opt,name=thrall_id,json=thrallId,proto3" json:"thrall_id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
 	FromSpokeId   string                 `protobuf:"bytes,2,opt,name=from_spoke_id,json=fromSpokeId,proto3" json:"from_spoke_id,omitempty"`
 	ToSpokeId     string                 `protobuf:"bytes,3,opt,name=to_spoke_id,json=toSpokeId,proto3" json:"to_spoke_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ReassignThrallRequest) Reset() {
-	*x = ReassignThrallRequest{}
-	mi := &file_hobnob_proto_msgTypes[89]
+func (x *ReassignEnvoyRequest) Reset() {
+	*x = ReassignEnvoyRequest{}
+	mi := &file_vigo_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ReassignThrallRequest) String() string {
+func (x *ReassignEnvoyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ReassignThrallRequest) ProtoMessage() {}
+func (*ReassignEnvoyRequest) ProtoMessage() {}
 
-func (x *ReassignThrallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[89]
+func (x *ReassignEnvoyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5698,55 +5698,55 @@ func (x *ReassignThrallRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ReassignThrallRequest.ProtoReflect.Descriptor instead.
-func (*ReassignThrallRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{89}
+// Deprecated: Use ReassignEnvoyRequest.ProtoReflect.Descriptor instead.
+func (*ReassignEnvoyRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{89}
 }
 
-func (x *ReassignThrallRequest) GetThrallId() string {
+func (x *ReassignEnvoyRequest) GetEnvoyId() string {
 	if x != nil {
-		return x.ThrallId
+		return x.EnvoyId
 	}
 	return ""
 }
 
-func (x *ReassignThrallRequest) GetFromSpokeId() string {
+func (x *ReassignEnvoyRequest) GetFromSpokeId() string {
 	if x != nil {
 		return x.FromSpokeId
 	}
 	return ""
 }
 
-func (x *ReassignThrallRequest) GetToSpokeId() string {
+func (x *ReassignEnvoyRequest) GetToSpokeId() string {
 	if x != nil {
 		return x.ToSpokeId
 	}
 	return ""
 }
 
-type ReassignThrallResponse struct {
+type ReassignEnvoyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NewThrallId   string                 `protobuf:"bytes,1,opt,name=new_thrall_id,json=newThrallId,proto3" json:"new_thrall_id,omitempty"`
+	NewEnvoyId    string                 `protobuf:"bytes,1,opt,name=new_envoy_id,json=newEnvoyId,proto3" json:"new_envoy_id,omitempty"`
 	TargetAddr    string                 `protobuf:"bytes,2,opt,name=target_addr,json=targetAddr,proto3" json:"target_addr,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ReassignThrallResponse) Reset() {
-	*x = ReassignThrallResponse{}
-	mi := &file_hobnob_proto_msgTypes[90]
+func (x *ReassignEnvoyResponse) Reset() {
+	*x = ReassignEnvoyResponse{}
+	mi := &file_vigo_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ReassignThrallResponse) String() string {
+func (x *ReassignEnvoyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ReassignThrallResponse) ProtoMessage() {}
+func (*ReassignEnvoyResponse) ProtoMessage() {}
 
-func (x *ReassignThrallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[90]
+func (x *ReassignEnvoyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5757,19 +5757,19 @@ func (x *ReassignThrallResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ReassignThrallResponse.ProtoReflect.Descriptor instead.
-func (*ReassignThrallResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{90}
+// Deprecated: Use ReassignEnvoyResponse.ProtoReflect.Descriptor instead.
+func (*ReassignEnvoyResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{90}
 }
 
-func (x *ReassignThrallResponse) GetNewThrallId() string {
+func (x *ReassignEnvoyResponse) GetNewEnvoyId() string {
 	if x != nil {
-		return x.NewThrallId
+		return x.NewEnvoyId
 	}
 	return ""
 }
 
-func (x *ReassignThrallResponse) GetTargetAddr() string {
+func (x *ReassignEnvoyResponse) GetTargetAddr() string {
 	if x != nil {
 		return x.TargetAddr
 	}
@@ -5786,7 +5786,7 @@ type DrainSpokeRequest struct {
 
 func (x *DrainSpokeRequest) Reset() {
 	*x = DrainSpokeRequest{}
-	mi := &file_hobnob_proto_msgTypes[91]
+	mi := &file_vigo_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5798,7 +5798,7 @@ func (x *DrainSpokeRequest) String() string {
 func (*DrainSpokeRequest) ProtoMessage() {}
 
 func (x *DrainSpokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[91]
+	mi := &file_vigo_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5811,7 +5811,7 @@ func (x *DrainSpokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSpokeRequest.ProtoReflect.Descriptor instead.
 func (*DrainSpokeRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{91}
+	return file_vigo_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *DrainSpokeRequest) GetSpokeId() string {
@@ -5839,7 +5839,7 @@ type DrainSpokeResponse struct {
 
 func (x *DrainSpokeResponse) Reset() {
 	*x = DrainSpokeResponse{}
-	mi := &file_hobnob_proto_msgTypes[92]
+	mi := &file_vigo_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5851,7 +5851,7 @@ func (x *DrainSpokeResponse) String() string {
 func (*DrainSpokeResponse) ProtoMessage() {}
 
 func (x *DrainSpokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[92]
+	mi := &file_vigo_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5864,7 +5864,7 @@ func (x *DrainSpokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSpokeResponse.ProtoReflect.Descriptor instead.
 func (*DrainSpokeResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{92}
+	return file_vigo_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *DrainSpokeResponse) GetMoved() int32 {
@@ -5897,7 +5897,7 @@ type SyncConfigRequest struct {
 
 func (x *SyncConfigRequest) Reset() {
 	*x = SyncConfigRequest{}
-	mi := &file_hobnob_proto_msgTypes[93]
+	mi := &file_vigo_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5909,7 +5909,7 @@ func (x *SyncConfigRequest) String() string {
 func (*SyncConfigRequest) ProtoMessage() {}
 
 func (x *SyncConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[93]
+	mi := &file_vigo_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5922,7 +5922,7 @@ func (x *SyncConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncConfigRequest.ProtoReflect.Descriptor instead.
 func (*SyncConfigRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{93}
+	return file_vigo_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *SyncConfigRequest) GetConfigArchive() []byte {
@@ -5940,7 +5940,7 @@ type SyncConfigResponse struct {
 
 func (x *SyncConfigResponse) Reset() {
 	*x = SyncConfigResponse{}
-	mi := &file_hobnob_proto_msgTypes[94]
+	mi := &file_vigo_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5952,7 +5952,7 @@ func (x *SyncConfigResponse) String() string {
 func (*SyncConfigResponse) ProtoMessage() {}
 
 func (x *SyncConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[94]
+	mi := &file_vigo_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5965,13 +5965,13 @@ func (x *SyncConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncConfigResponse.ProtoReflect.Descriptor instead.
 func (*SyncConfigResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{94}
+	return file_vigo_proto_rawDescGZIP(), []int{94}
 }
 
 type SpokeStatusReport struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SpokeId        string                 `protobuf:"bytes,1,opt,name=spoke_id,json=spokeId,proto3" json:"spoke_id,omitempty"`
-	ThrallCount    int32                  `protobuf:"varint,2,opt,name=thrall_count,json=thrallCount,proto3" json:"thrall_count,omitempty"`
+	EnvoyCount     int32                  `protobuf:"varint,2,opt,name=envoy_count,json=envoyCount,proto3" json:"envoy_count,omitempty"`
 	Compliant      int32                  `protobuf:"varint,3,opt,name=compliant,proto3" json:"compliant,omitempty"`
 	RecurringDrift int32                  `protobuf:"varint,4,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
 	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
@@ -5984,7 +5984,7 @@ type SpokeStatusReport struct {
 
 func (x *SpokeStatusReport) Reset() {
 	*x = SpokeStatusReport{}
-	mi := &file_hobnob_proto_msgTypes[95]
+	mi := &file_vigo_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5996,7 +5996,7 @@ func (x *SpokeStatusReport) String() string {
 func (*SpokeStatusReport) ProtoMessage() {}
 
 func (x *SpokeStatusReport) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[95]
+	mi := &file_vigo_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6009,7 +6009,7 @@ func (x *SpokeStatusReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpokeStatusReport.ProtoReflect.Descriptor instead.
 func (*SpokeStatusReport) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{95}
+	return file_vigo_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *SpokeStatusReport) GetSpokeId() string {
@@ -6019,9 +6019,9 @@ func (x *SpokeStatusReport) GetSpokeId() string {
 	return ""
 }
 
-func (x *SpokeStatusReport) GetThrallCount() int32 {
+func (x *SpokeStatusReport) GetEnvoyCount() int32 {
 	if x != nil {
-		return x.ThrallCount
+		return x.EnvoyCount
 	}
 	return 0
 }
@@ -6076,7 +6076,7 @@ type SpokeStatusAck struct {
 
 func (x *SpokeStatusAck) Reset() {
 	*x = SpokeStatusAck{}
-	mi := &file_hobnob_proto_msgTypes[96]
+	mi := &file_vigo_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6088,7 +6088,7 @@ func (x *SpokeStatusAck) String() string {
 func (*SpokeStatusAck) ProtoMessage() {}
 
 func (x *SpokeStatusAck) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[96]
+	mi := &file_vigo_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6101,7 +6101,7 @@ func (x *SpokeStatusAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpokeStatusAck.ProtoReflect.Descriptor instead.
 func (*SpokeStatusAck) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{96}
+	return file_vigo_proto_rawDescGZIP(), []int{96}
 }
 
 type PeerSyncMessage struct {
@@ -6118,7 +6118,7 @@ type PeerSyncMessage struct {
 
 func (x *PeerSyncMessage) Reset() {
 	*x = PeerSyncMessage{}
-	mi := &file_hobnob_proto_msgTypes[97]
+	mi := &file_vigo_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6130,7 +6130,7 @@ func (x *PeerSyncMessage) String() string {
 func (*PeerSyncMessage) ProtoMessage() {}
 
 func (x *PeerSyncMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[97]
+	mi := &file_vigo_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6143,7 +6143,7 @@ func (x *PeerSyncMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerSyncMessage.ProtoReflect.Descriptor instead.
 func (*PeerSyncMessage) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{97}
+	return file_vigo_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *PeerSyncMessage) GetPayload() isPeerSyncMessage_Payload {
@@ -6204,7 +6204,7 @@ func (*PeerSyncMessage_FullSync) isPeerSyncMessage_Payload() {}
 
 type PeerFileChange struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`                             // relative to /srv/hobnob (e.g., "hnb/proposed/modules/nginx.hnb")
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`                             // relative to /srv/vigo (e.g., "hnb/proposed/modules/nginx.vgo")
 	Content       []byte                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`                       // file contents (empty = deletion)
 	MtimeUnix     int64                  `protobuf:"varint,3,opt,name=mtime_unix,json=mtimeUnix,proto3" json:"mtime_unix,omitempty"` // modification time (unix seconds)
 	Mode          uint32                 `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`                            // file permissions
@@ -6214,7 +6214,7 @@ type PeerFileChange struct {
 
 func (x *PeerFileChange) Reset() {
 	*x = PeerFileChange{}
-	mi := &file_hobnob_proto_msgTypes[98]
+	mi := &file_vigo_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6226,7 +6226,7 @@ func (x *PeerFileChange) String() string {
 func (*PeerFileChange) ProtoMessage() {}
 
 func (x *PeerFileChange) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[98]
+	mi := &file_vigo_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6239,7 +6239,7 @@ func (x *PeerFileChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerFileChange.ProtoReflect.Descriptor instead.
 func (*PeerFileChange) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{98}
+	return file_vigo_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *PeerFileChange) GetPath() string {
@@ -6281,7 +6281,7 @@ type PeerSyncAck struct {
 
 func (x *PeerSyncAck) Reset() {
 	*x = PeerSyncAck{}
-	mi := &file_hobnob_proto_msgTypes[99]
+	mi := &file_vigo_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6293,7 +6293,7 @@ func (x *PeerSyncAck) String() string {
 func (*PeerSyncAck) ProtoMessage() {}
 
 func (x *PeerSyncAck) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[99]
+	mi := &file_vigo_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6306,7 +6306,7 @@ func (x *PeerSyncAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerSyncAck.ProtoReflect.Descriptor instead.
 func (*PeerSyncAck) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{99}
+	return file_vigo_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *PeerSyncAck) GetPath() string {
@@ -6339,7 +6339,7 @@ type PeerFullSync struct {
 
 func (x *PeerFullSync) Reset() {
 	*x = PeerFullSync{}
-	mi := &file_hobnob_proto_msgTypes[100]
+	mi := &file_vigo_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6351,7 +6351,7 @@ func (x *PeerFullSync) String() string {
 func (*PeerFullSync) ProtoMessage() {}
 
 func (x *PeerFullSync) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[100]
+	mi := &file_vigo_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6364,7 +6364,7 @@ func (x *PeerFullSync) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerFullSync.ProtoReflect.Descriptor instead.
 func (*PeerFullSync) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{100}
+	return file_vigo_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *PeerFullSync) GetFiles() []*PeerFileChange {
@@ -6382,7 +6382,7 @@ type PeerPromoteRequest struct {
 
 func (x *PeerPromoteRequest) Reset() {
 	*x = PeerPromoteRequest{}
-	mi := &file_hobnob_proto_msgTypes[101]
+	mi := &file_vigo_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6394,7 +6394,7 @@ func (x *PeerPromoteRequest) String() string {
 func (*PeerPromoteRequest) ProtoMessage() {}
 
 func (x *PeerPromoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[101]
+	mi := &file_vigo_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6407,7 +6407,7 @@ func (x *PeerPromoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerPromoteRequest.ProtoReflect.Descriptor instead.
 func (*PeerPromoteRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{101}
+	return file_vigo_proto_rawDescGZIP(), []int{101}
 }
 
 type PeerPromoteResponse struct {
@@ -6420,7 +6420,7 @@ type PeerPromoteResponse struct {
 
 func (x *PeerPromoteResponse) Reset() {
 	*x = PeerPromoteResponse{}
-	mi := &file_hobnob_proto_msgTypes[102]
+	mi := &file_vigo_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6432,7 +6432,7 @@ func (x *PeerPromoteResponse) String() string {
 func (*PeerPromoteResponse) ProtoMessage() {}
 
 func (x *PeerPromoteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[102]
+	mi := &file_vigo_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6445,7 +6445,7 @@ func (x *PeerPromoteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerPromoteResponse.ProtoReflect.Descriptor instead.
 func (*PeerPromoteResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{102}
+	return file_vigo_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *PeerPromoteResponse) GetSuccess() bool {
@@ -6470,7 +6470,7 @@ type PeerStatusRequest struct {
 
 func (x *PeerStatusRequest) Reset() {
 	*x = PeerStatusRequest{}
-	mi := &file_hobnob_proto_msgTypes[103]
+	mi := &file_vigo_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6482,7 +6482,7 @@ func (x *PeerStatusRequest) String() string {
 func (*PeerStatusRequest) ProtoMessage() {}
 
 func (x *PeerStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[103]
+	mi := &file_vigo_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6495,7 +6495,7 @@ func (x *PeerStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerStatusRequest.ProtoReflect.Descriptor instead.
 func (*PeerStatusRequest) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{103}
+	return file_vigo_proto_rawDescGZIP(), []int{103}
 }
 
 type PeerStatusResponse struct {
@@ -6511,7 +6511,7 @@ type PeerStatusResponse struct {
 
 func (x *PeerStatusResponse) Reset() {
 	*x = PeerStatusResponse{}
-	mi := &file_hobnob_proto_msgTypes[104]
+	mi := &file_vigo_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6523,7 +6523,7 @@ func (x *PeerStatusResponse) String() string {
 func (*PeerStatusResponse) ProtoMessage() {}
 
 func (x *PeerStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hobnob_proto_msgTypes[104]
+	mi := &file_vigo_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6536,7 +6536,7 @@ func (x *PeerStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerStatusResponse.ProtoReflect.Descriptor instead.
 func (*PeerStatusResponse) Descriptor() ([]byte, []int) {
-	return file_hobnob_proto_rawDescGZIP(), []int{104}
+	return file_vigo_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *PeerStatusResponse) GetRole() string {
@@ -6574,11 +6574,12 @@ func (x *PeerStatusResponse) GetConfigVersion() uint64 {
 	return 0
 }
 
-var File_hobnob_proto protoreflect.FileDescriptor
+var File_vigo_proto protoreflect.FileDescriptor
 
-const file_hobnob_proto_rawDesc = "" +
+const file_vigo_proto_rawDesc = "" +
 	"\n" +
-	"\fhobnob.proto\x12\thobnob.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/api/annotations.proto\"\x97\x01\n" +
+	"\n" +
+	"vigo.proto\x12\avigo.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/api/annotations.proto\"\x97\x01\n" +
 	"\x0fRegisterRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
@@ -6586,17 +6587,17 @@ const file_hobnob_proto_rawDesc = "" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
 	"\x05token\x18\x04 \x01(\tR\x05token\x12\x14\n" +
-	"\x05force\x18\x05 \x01(\bR\x05force\"\xd9\x01\n" +
+	"\x05force\x18\x05 \x01(\bR\x05force\"\xd7\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1b\n" +
-	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
+	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1d\n" +
 	"\n" +
 	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xaf\x04\n" +
-	"\x0eCheckInRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12+\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xa9\x04\n" +
+	"\x0eCheckInRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x1f\n" +
@@ -6604,34 +6605,34 @@ const file_hobnob_proto_rawDesc = "" +
 	"traitsJson\x12%\n" +
 	"\x0epolicy_version\x18\x06 \x01(\x04R\rpolicyVersion\x12\x1f\n" +
 	"\vpolicy_mode\x18\a \x01(\bR\n" +
-	"policyMode\x12c\n" +
-	"\x14cached_module_hashes\x18\b \x03(\v21.hobnob.v1.CheckInRequest.CachedModuleHashesEntryR\x12cachedModuleHashes\x12A\n" +
-	"\fcapabilities\x18\t \x01(\v2\x1d.hobnob.v1.StreamCapabilitiesR\fcapabilities\x12#\n" +
+	"policyMode\x12a\n" +
+	"\x14cached_module_hashes\x18\b \x03(\v2/.vigo.v1.CheckInRequest.CachedModuleHashesEntryR\x12cachedModuleHashes\x12?\n" +
+	"\fcapabilities\x18\t \x01(\v2\x1b.vigo.v1.StreamCapabilitiesR\fcapabilities\x12#\n" +
 	"\ragent_version\x18\n" +
 	" \x01(\tR\fagentVersion\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x97\x05\n" +
-	"\x0fCheckInResponse\x12+\n" +
-	"\amodules\x18\x01 \x03(\v2\x11.hobnob.v1.ModuleR\amodules\x12\x1a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8f\x05\n" +
+	"\x0fCheckInResponse\x12)\n" +
+	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
-	"\x0ejitter_percent\x18\x03 \x01(\x05R\rjitterPercent\x12@\n" +
-	"\rcustom_traits\x18\x04 \x03(\v2\x1b.hobnob.v1.CustomTraitEntryR\fcustomTraits\x12\x1b\n" +
+	"\x0ejitter_percent\x18\x03 \x01(\x05R\rjitterPercent\x12>\n" +
+	"\rcustom_traits\x18\x04 \x03(\v2\x19.vigo.v1.CustomTraitEntryR\fcustomTraits\x12\x1b\n" +
 	"\tno_change\x18\x05 \x01(\bR\bnoChange\x121\n" +
-	"\x14response_fingerprint\x18\x06 \x01(\tR\x13responseFingerprint\x12<\n" +
-	"\rpolicy_bundle\x18\a \x01(\v2\x17.hobnob.v1.PolicyBundleR\fpolicyBundle\x12%\n" +
+	"\x14response_fingerprint\x18\x06 \x01(\tR\x13responseFingerprint\x12:\n" +
+	"\rpolicy_bundle\x18\a \x01(\v2\x15.vigo.v1.PolicyBundleR\fpolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\b \x01(\x04R\rpolicyVersion\x12#\n" +
 	"\rreassign_addr\x18\t \x01(\tR\freassignAddr\x12\x1f\n" +
 	"\vreassign_id\x18\n" +
 	" \x01(\tR\n" +
 	"reassignId\x12)\n" +
 	"\x10stream_requested\x18\v \x01(\bR\x0fstreamRequested\x12\x1a\n" +
-	"\bwarnings\x18\f \x03(\tR\bwarnings\x12A\n" +
-	"\x0fproxied_devices\x18\r \x03(\v2\x18.hobnob.v1.ProxiedDeviceR\x0eproxiedDevices\x12*\n" +
+	"\bwarnings\x18\f \x03(\tR\bwarnings\x12?\n" +
+	"\x0fproxied_devices\x18\r \x03(\v2\x16.vigo.v1.ProxiedDeviceR\x0eproxiedDevices\x12*\n" +
 	"\x11server_pubkey_pem\x18\x0e \x01(\tR\x0fserverPubkeyPem\x12!\n" +
-	"\fforce_update\x18\x0f \x01(\bR\vforceUpdate\"\x89\x02\n" +
-	"\rProxiedDevice\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1a\n" +
+	"\fforce_update\x18\x0f \x01(\bR\vforceUpdate\"\x85\x02\n" +
+	"\rProxiedDevice\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1f\n" +
 	"\vdevice_type\x18\x03 \x01(\tR\n" +
 	"deviceType\x12\x1e\n" +
@@ -6641,60 +6642,60 @@ const file_hobnob_proto_rawDesc = "" +
 	"\busername\x18\x05 \x01(\tR\busername\x12\x12\n" +
 	"\x04port\x18\x06 \x01(\rR\x04port\x12\x1d\n" +
 	"\n" +
-	"ip_address\x18\a \x01(\tR\tipAddress\x12/\n" +
-	"\x06policy\x18\b \x01(\v2\x17.hobnob.v1.PolicyBundleR\x06policy\">\n" +
+	"ip_address\x18\a \x01(\tR\tipAddress\x12-\n" +
+	"\x06policy\x18\b \x01(\v2\x15.vigo.v1.PolicyBundleR\x06policy\">\n" +
 	"\x10CustomTraitEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"0\n" +
 	"\x1aDownloadCustomTraitRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"1\n" +
 	"\x1bDownloadCustomTraitResponse\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"\xcb\x01\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"\xc9\x01\n" +
 	"\x06Module\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
-	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x121\n" +
-	"\tresources\x18\x03 \x03(\v2\x13.hobnob.v1.ResourceR\tresources\x12\x1d\n" +
+	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12/\n" +
+	"\tresources\x18\x03 \x03(\v2\x11.vigo.v1.ResourceR\tresources\x12\x1d\n" +
 	"\n" +
 	"depends_on\x18\x04 \x03(\tR\tdependsOn\x12\x16\n" +
 	"\x06notify\x18\x05 \x03(\tR\x06notify\x12\x1e\n" +
 	"\n" +
 	"subscribes\x18\x06 \x03(\tR\n" +
-	"subscribes\"\xba\x01\n" +
+	"subscribes\"\xb8\x01\n" +
 	"\bResource\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\x127\n" +
-	"\x06params\x18\x03 \x03(\v2\x1f.hobnob.v1.Resource.ParamsEntryR\x06params\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x125\n" +
+	"\x06params\x18\x03 \x03(\v2\x1d.vigo.v1.Resource.ParamsEntryR\x06params\x12\x12\n" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfe\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf8\x03\n" +
 	"\fPolicyBundle\x12%\n" +
-	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x121\n" +
-	"\amodules\x18\x02 \x03(\v2\x17.hobnob.v1.PolicyModuleR\amodules\x12\x1b\n" +
+	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x12/\n" +
+	"\amodules\x18\x02 \x03(\v2\x15.vigo.v1.PolicyModuleR\amodules\x12\x1b\n" +
 	"\tvars_json\x18\x03 \x01(\fR\bvarsJson\x12\x1b\n" +
-	"\tvar_order\x18\x04 \x03(\tR\bvarOrder\x12G\n" +
-	"\x10conditional_vars\x18\x05 \x03(\v2\x1c.hobnob.v1.ConditionalVarDefR\x0fconditionalVars\x12@\n" +
-	"\rcustom_traits\x18\x06 \x03(\v2\x1b.hobnob.v1.CustomTraitEntryR\fcustomTraits\x12'\n" +
+	"\tvar_order\x18\x04 \x03(\tR\bvarOrder\x12E\n" +
+	"\x10conditional_vars\x18\x05 \x03(\v2\x1a.vigo.v1.ConditionalVarDefR\x0fconditionalVars\x12>\n" +
+	"\rcustom_traits\x18\x06 \x03(\v2\x19.vigo.v1.CustomTraitEntryR\fcustomTraits\x12'\n" +
 	"\x0fmatched_pattern\x18\a \x01(\tR\x0ematchedPattern\x12 \n" +
 	"\venvironment\x18\b \x01(\tR\venvironment\x12\x14\n" +
 	"\x05roles\x18\t \x03(\tR\x05roles\x12\x1c\n" +
 	"\tsignature\x18\n" +
 	" \x01(\fR\tsignature\x12(\n" +
 	"\x10server_pubkey_id\x18\v \x01(\tR\x0eserverPubkeyId\x12&\n" +
-	"\x0fmax_age_seconds\x18\f \x01(\rR\rmaxAgeSeconds\"\xc5\x01\n" +
+	"\x0fmax_age_seconds\x18\f \x01(\rR\rmaxAgeSeconds\"\xc3\x01\n" +
 	"\fPolicyModule\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x127\n" +
-	"\tresources\x18\x02 \x03(\v2\x19.hobnob.v1.PolicyResourceR\tresources\x12\x1d\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
+	"\tresources\x18\x02 \x03(\v2\x17.vigo.v1.PolicyResourceR\tresources\x12\x1d\n" +
 	"\n" +
 	"depends_on\x18\x03 \x03(\tR\tdependsOn\x12\x12\n" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x12!\n" +
 	"\fcontent_hash\x18\x05 \x01(\tR\vcontentHash\x12\x12\n" +
-	"\x04stub\x18\x06 \x01(\bR\x04stub\"\xb1\x02\n" +
+	"\x04stub\x18\x06 \x01(\bR\x04stub\"\xaf\x02\n" +
 	"\x0ePolicyResource\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\x12I\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12G\n" +
 	"\n" +
-	"attributes\x18\x03 \x03(\v2).hobnob.v1.PolicyResource.AttributesEntryR\n" +
+	"attributes\x18\x03 \x03(\v2'.vigo.v1.PolicyResource.AttributesEntryR\n" +
 	"attributes\x12\x12\n" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x12\x16\n" +
 	"\x06notify\x18\x05 \x03(\tR\x06notify\x12\x1e\n" +
@@ -6709,11 +6710,11 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05trait\x18\x02 \x01(\tR\x05trait\x12\x1a\n" +
 	"\boperator\x18\x03 \x01(\tR\boperator\x12!\n" +
-	"\foperand_json\x18\x04 \x01(\tR\voperandJson\"\xd4\x01\n" +
+	"\foperand_json\x18\x04 \x01(\tR\voperandJson\"\xd0\x01\n" +
 	"\x13ReportResultRequest\x12\x15\n" +
-	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1b\n" +
-	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x121\n" +
-	"\aresults\x18\x03 \x03(\v2\x17.hobnob.v1.ModuleResultR\aresults\x12\x1c\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x19\n" +
+	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x12/\n" +
+	"\aresults\x18\x03 \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\xe7\x02\n" +
 	"\fModuleResult\x12\x1f\n" +
@@ -6731,51 +6732,51 @@ const file_hobnob_proto_rawDesc = "" +
 	"\tfile_path\x18\n" +
 	" \x01(\tR\bfilePath\":\n" +
 	"\x14ReportResultResponse\x12\"\n" +
-	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xab\x01\n" +
-	"\x13ReportTraitsRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1f\n" +
+	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xa9\x01\n" +
+	"\x13ReportTraitsRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1f\n" +
 	"\vtraits_json\x18\x02 \x01(\fR\n" +
 	"traitsJson\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\":\n" +
 	"\x14ReportTraitsResponse\x12\"\n" +
-	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xbe\x03\n" +
-	"\x12AgentStreamMessage\x126\n" +
-	"\bcheck_in\x18\x01 \x01(\v2\x19.hobnob.v1.CheckInRequestH\x00R\acheckIn\x12E\n" +
-	"\rreport_result\x18\x02 \x01(\v2\x1e.hobnob.v1.ReportResultRequestH\x00R\freportResult\x12E\n" +
-	"\rreport_traits\x18\x03 \x01(\v2\x1e.hobnob.v1.ReportTraitsRequestH\x00R\freportTraits\x128\n" +
-	"\vpush_result\x18\x04 \x01(\v2\x15.hobnob.v1.PushResultH\x00R\n" +
-	"pushResult\x12/\n" +
-	"\bpush_ack\x18\x05 \x01(\v2\x12.hobnob.v1.PushAckH\x00R\apushAck\x12A\n" +
-	"\x0equery_response\x18\x06 \x01(\v2\x18.hobnob.v1.QueryResponseH\x00R\rqueryResponse\x12-\n" +
-	"\x05delta\x18\a \x01(\v2\x15.hobnob.v1.DeltaEventH\x00R\x05deltaB\x05\n" +
-	"\x03msg\"\xf8\x04\n" +
-	"\x13ServerStreamMessage\x12H\n" +
-	"\x11check_in_response\x18\x01 \x01(\v2\x1a.hobnob.v1.CheckInResponseH\x00R\x0fcheckInResponse\x12M\n" +
-	"\x11report_result_ack\x18\x02 \x01(\v2\x1f.hobnob.v1.ReportResultResponseH\x00R\x0freportResultAck\x12M\n" +
-	"\x11report_traits_ack\x18\x03 \x01(\v2\x1f.hobnob.v1.ReportTraitsResponseH\x00R\x0freportTraitsAck\x12>\n" +
-	"\vpolicy_push\x18\x04 \x01(\v2\x1b.hobnob.v1.StreamPolicyPushH\x00R\n" +
-	"policyPush\x12;\n" +
+	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xb0\x03\n" +
+	"\x12AgentStreamMessage\x124\n" +
+	"\bcheck_in\x18\x01 \x01(\v2\x17.vigo.v1.CheckInRequestH\x00R\acheckIn\x12C\n" +
+	"\rreport_result\x18\x02 \x01(\v2\x1c.vigo.v1.ReportResultRequestH\x00R\freportResult\x12C\n" +
+	"\rreport_traits\x18\x03 \x01(\v2\x1c.vigo.v1.ReportTraitsRequestH\x00R\freportTraits\x126\n" +
+	"\vpush_result\x18\x04 \x01(\v2\x13.vigo.v1.PushResultH\x00R\n" +
+	"pushResult\x12-\n" +
+	"\bpush_ack\x18\x05 \x01(\v2\x10.vigo.v1.PushAckH\x00R\apushAck\x12?\n" +
+	"\x0equery_response\x18\x06 \x01(\v2\x16.vigo.v1.QueryResponseH\x00R\rqueryResponse\x12+\n" +
+	"\x05delta\x18\a \x01(\v2\x13.vigo.v1.DeltaEventH\x00R\x05deltaB\x05\n" +
+	"\x03msg\"\xe6\x04\n" +
+	"\x13ServerStreamMessage\x12F\n" +
+	"\x11check_in_response\x18\x01 \x01(\v2\x18.vigo.v1.CheckInResponseH\x00R\x0fcheckInResponse\x12K\n" +
+	"\x11report_result_ack\x18\x02 \x01(\v2\x1d.vigo.v1.ReportResultResponseH\x00R\x0freportResultAck\x12K\n" +
+	"\x11report_traits_ack\x18\x03 \x01(\v2\x1d.vigo.v1.ReportTraitsResponseH\x00R\x0freportTraitsAck\x12<\n" +
+	"\vpolicy_push\x18\x04 \x01(\v2\x19.vigo.v1.StreamPolicyPushH\x00R\n" +
+	"policyPush\x129\n" +
 	"\n" +
-	"force_push\x18\x05 \x01(\v2\x1a.hobnob.v1.StreamForcePushH\x00R\tforcePush\x12>\n" +
-	"\rpush_dispatch\x18\x06 \x01(\v2\x17.hobnob.v1.PushDispatchH\x00R\fpushDispatch\x12>\n" +
-	"\rquery_request\x18\a \x01(\v2\x17.hobnob.v1.QueryRequestH\x00R\fqueryRequest\x122\n" +
-	"\tdelta_ack\x18\b \x01(\v2\x13.hobnob.v1.DeltaAckH\x00R\bdeltaAck\x12A\n" +
-	"\x0estream_release\x18\t \x01(\v2\x18.hobnob.v1.StreamReleaseH\x00R\rstreamReleaseB\x05\n" +
+	"force_push\x18\x05 \x01(\v2\x18.vigo.v1.StreamForcePushH\x00R\tforcePush\x12<\n" +
+	"\rpush_dispatch\x18\x06 \x01(\v2\x15.vigo.v1.PushDispatchH\x00R\fpushDispatch\x12<\n" +
+	"\rquery_request\x18\a \x01(\v2\x15.vigo.v1.QueryRequestH\x00R\fqueryRequest\x120\n" +
+	"\tdelta_ack\x18\b \x01(\v2\x11.vigo.v1.DeltaAckH\x00R\bdeltaAck\x12?\n" +
+	"\x0estream_release\x18\t \x01(\v2\x16.vigo.v1.StreamReleaseH\x00R\rstreamReleaseB\x05\n" +
 	"\x03msg\"'\n" +
 	"\rStreamRelease\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"w\n" +
-	"\x10StreamPolicyPush\x12<\n" +
-	"\rpolicy_bundle\x18\x01 \x01(\v2\x17.hobnob.v1.PolicyBundleR\fpolicyBundle\x12%\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"u\n" +
+	"\x10StreamPolicyPush\x12:\n" +
+	"\rpolicy_bundle\x18\x01 \x01(\v2\x15.vigo.v1.PolicyBundleR\fpolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x02 \x01(\x04R\rpolicyVersion\"\x11\n" +
-	"\x0fStreamForcePush\"\xcb\x01\n" +
+	"\x0fStreamForcePush\"\xc5\x01\n" +
 	"\n" +
 	"DeltaEvent\x12\x1a\n" +
-	"\bsequence\x18\x01 \x01(\x03R\bsequence\x12+\n" +
-	"\x03run\x18\x02 \x01(\v2\x17.hobnob.v1.RunCompletedH\x00R\x03run\x120\n" +
-	"\x06traits\x18\x03 \x01(\v2\x16.hobnob.v1.TraitsDeltaH\x00R\x06traits\x129\n" +
-	"\theartbeat\x18\x04 \x01(\v2\x19.hobnob.v1.HeartbeatDeltaH\x00R\theartbeatB\a\n" +
-	"\x05event\"\xa5\x02\n" +
+	"\bsequence\x18\x01 \x01(\x03R\bsequence\x12)\n" +
+	"\x03run\x18\x02 \x01(\v2\x15.vigo.v1.RunCompletedH\x00R\x03run\x12.\n" +
+	"\x06traits\x18\x03 \x01(\v2\x14.vigo.v1.TraitsDeltaH\x00R\x06traits\x127\n" +
+	"\theartbeat\x18\x04 \x01(\v2\x17.vigo.v1.HeartbeatDeltaH\x00R\theartbeatB\a\n" +
+	"\x05event\"\xa3\x02\n" +
 	"\fRunCompleted\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
@@ -6783,11 +6784,11 @@ const file_hobnob_proto_rawDesc = "" +
 	"totalCount\x12#\n" +
 	"\rchanged_count\x18\x04 \x01(\x05R\fchangedCount\x12!\n" +
 	"\ffailed_count\x18\x05 \x01(\x05R\vfailedCount\x12#\n" +
-	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x121\n" +
-	"\aresults\x18\a \x03(\v2\x17.hobnob.v1.ModuleResultR\aresults\x12%\n" +
-	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\"\xa2\x01\n" +
-	"\vTraitsDelta\x12=\n" +
-	"\achanged\x18\x01 \x03(\v2#.hobnob.v1.TraitsDelta.ChangedEntryR\achanged\x12\x18\n" +
+	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x12/\n" +
+	"\aresults\x18\a \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\x12%\n" +
+	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\"\xa0\x01\n" +
+	"\vTraitsDelta\x12;\n" +
+	"\achanged\x18\x01 \x03(\v2!.vigo.v1.TraitsDelta.ChangedEntryR\achanged\x12\x18\n" +
 	"\aremoved\x18\x02 \x03(\tR\aremoved\x1a:\n" +
 	"\fChangedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -6797,12 +6798,12 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x0eacked_sequence\x18\x01 \x01(\x03R\rackedSequence\"k\n" +
 	"\x12StreamCapabilities\x12%\n" +
 	"\x0esupports_delta\x18\x01 \x01(\bR\rsupportsDelta\x12.\n" +
-	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\xd6\x01\n" +
+	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\xd4\x01\n" +
 	"\fPushDispatch\x12\x17\n" +
 	"\apush_id\x18\x01 \x01(\tR\x06pushId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12'\n" +
-	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\x122\n" +
-	"\x03env\x18\x04 \x03(\v2 .hobnob.v1.PushDispatch.EnvEntryR\x03env\x1a6\n" +
+	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\x120\n" +
+	"\x03env\x18\x04 \x03(\v2\x1e.vigo.v1.PushDispatch.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"c\n" +
@@ -6838,9 +6839,9 @@ const file_hobnob_proto_rawDesc = "" +
 	"\apattern\x18\x02 \x01(\tR\apattern\x129\n" +
 	"\n" +
 	"created_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x1d\n" +
-	"\x1bListApprovedPatternsRequest\"V\n" +
-	"\x1cListApprovedPatternsResponse\x126\n" +
-	"\bpatterns\x18\x01 \x03(\v2\x1a.hobnob.v1.ApprovedPatternR\bpatterns\"\xa3\x01\n" +
+	"\x1bListApprovedPatternsRequest\"T\n" +
+	"\x1cListApprovedPatternsResponse\x124\n" +
+	"\bpatterns\x18\x01 \x03(\v2\x18.vigo.v1.ApprovedPatternR\bpatterns\"\xa3\x01\n" +
 	"\x0fApprovedPattern\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\apattern\x18\x02 \x01(\tR\apattern\x129\n" +
@@ -6850,12 +6851,12 @@ const file_hobnob_proto_rawDesc = "" +
 	"\aused_by\x18\x05 \x01(\tR\x06usedBy\".\n" +
 	"\x1cRevokeApprovedPatternRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x1f\n" +
-	"\x1dRevokeApprovedPatternResponse\"=\n" +
-	"\x12ListThrallsRequest\x12'\n" +
-	"\x0finclude_revoked\x18\x01 \x01(\bR\x0eincludeRevoked\"B\n" +
-	"\x13ListThrallsResponse\x12+\n" +
-	"\athralls\x18\x01 \x03(\v2\x11.hobnob.v1.ThrallR\athralls\"\xfb\x02\n" +
-	"\x06Thrall\x12\x0e\n" +
+	"\x1dRevokeApprovedPatternResponse\"<\n" +
+	"\x11ListEnvoysRequest\x12'\n" +
+	"\x0finclude_revoked\x18\x01 \x01(\bR\x0eincludeRevoked\"<\n" +
+	"\x12ListEnvoysResponse\x12&\n" +
+	"\x06envoys\x18\x01 \x03(\v2\x0e.vigo.v1.EnvoyR\x06envoys\"\xfa\x02\n" +
+	"\x05Envoy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
@@ -6867,39 +6868,39 @@ const file_hobnob_proto_rawDesc = "" +
 	"\n" +
 	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x126\n" +
 	"\x17pending_rotated_secrets\x18\b \x03(\tR\x15pendingRotatedSecrets\x12#\n" +
-	"\ragent_version\x18\t \x01(\tR\fagentVersion\"\"\n" +
-	"\x10GetThrallRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
-	"\x11GetThrallResponse\x12)\n" +
-	"\x06thrall\x18\x01 \x01(\v2\x11.hobnob.v1.ThrallR\x06thrall\"%\n" +
-	"\x13RevokeThrallRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x16\n" +
-	"\x14RevokeThrallResponse\"%\n" +
-	"\x13DeleteThrallRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x16\n" +
-	"\x14DeleteThrallResponse\"/\n" +
-	"\x10ForcePushRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\">\n" +
-	"\x11ForcePushResponse\x12)\n" +
-	"\x10thralls_notified\x18\x01 \x01(\x05R\x0fthrallsNotified\",\n" +
-	"\rDryRunRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\"D\n" +
-	"\x0eDryRunResponse\x122\n" +
-	"\aactions\x18\x01 \x03(\v2\x18.hobnob.v1.PlannedActionR\aactions\"\xa1\x01\n" +
+	"\ragent_version\x18\t \x01(\tR\fagentVersion\"!\n" +
+	"\x0fGetEnvoyRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"8\n" +
+	"\x10GetEnvoyResponse\x12$\n" +
+	"\x05envoy\x18\x01 \x01(\v2\x0e.vigo.v1.EnvoyR\x05envoy\"$\n" +
+	"\x12RevokeEnvoyRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
+	"\x13RevokeEnvoyResponse\"$\n" +
+	"\x12DeleteEnvoyRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
+	"\x13DeleteEnvoyResponse\"-\n" +
+	"\x10ForcePushRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\"<\n" +
+	"\x11ForcePushResponse\x12'\n" +
+	"\x0fenvoys_notified\x18\x01 \x01(\x05R\x0eenvoysNotified\"*\n" +
+	"\rDryRunRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\"B\n" +
+	"\x0eDryRunResponse\x120\n" +
+	"\aactions\x18\x01 \x03(\v2\x16.vigo.v1.PlannedActionR\aactions\"\xa1\x01\n" +
 	"\rPlannedAction\x12\x1f\n" +
 	"\vmodule_name\x18\x01 \x01(\tR\n" +
 	"moduleName\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12#\n" +
 	"\rresource_name\x18\x03 \x01(\tR\fresourceName\x12%\n" +
-	"\x0eplanned_action\x18\x04 \x01(\tR\rplannedAction\"D\n" +
-	"\x0fListRunsRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\"6\n" +
-	"\x10ListRunsResponse\x12\"\n" +
-	"\x04runs\x18\x01 \x03(\v2\x0e.hobnob.v1.RunR\x04runs\"\xd2\x02\n" +
+	"\x0eplanned_action\x18\x04 \x01(\tR\rplannedAction\"B\n" +
+	"\x0fListRunsRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"4\n" +
+	"\x10ListRunsResponse\x12 \n" +
+	"\x04runs\x18\x01 \x03(\v2\f.vigo.v1.RunR\x04runs\"\xd0\x02\n" +
 	"\x03Run\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\tthrall_id\x18\x02 \x01(\tR\bthrallId\x129\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x129\n" +
 	"\n" +
 	"started_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
@@ -6910,22 +6911,22 @@ const file_hobnob_proto_rawDesc = "" +
 	"\ffailed_count\x18\b \x01(\x05R\vfailedCount\x12#\n" +
 	"\rskipped_count\x18\t \x01(\x05R\fskippedCount\"\x1f\n" +
 	"\rGetRunRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"e\n" +
-	"\x0eGetRunResponse\x12 \n" +
-	"\x03run\x18\x01 \x01(\v2\x0e.hobnob.v1.RunR\x03run\x121\n" +
-	"\aresults\x18\x02 \x03(\v2\x17.hobnob.v1.ModuleResultR\aresults\"\x16\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"a\n" +
+	"\x0eGetRunResponse\x12\x1e\n" +
+	"\x03run\x18\x01 \x01(\v2\f.vigo.v1.RunR\x03run\x12/\n" +
+	"\aresults\x18\x02 \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\"\x16\n" +
 	"\x14GenerateTokenRequest\"-\n" +
 	"\x15GenerateTokenResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"U\n" +
 	"\x11AddWebhookRequest\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x16\n" +
 	"\x06secret\x18\x02 \x01(\tR\x06secret\x12\x16\n" +
-	"\x06events\x18\x03 \x03(\tR\x06events\"F\n" +
-	"\x12AddWebhookResponse\x120\n" +
-	"\awebhook\x18\x01 \x01(\v2\x16.hobnob.v1.WebhookInfoR\awebhook\"\x15\n" +
-	"\x13ListWebhooksRequest\"J\n" +
-	"\x14ListWebhooksResponse\x122\n" +
-	"\bwebhooks\x18\x01 \x03(\v2\x16.hobnob.v1.WebhookInfoR\bwebhooks\"&\n" +
+	"\x06events\x18\x03 \x03(\tR\x06events\"D\n" +
+	"\x12AddWebhookResponse\x12.\n" +
+	"\awebhook\x18\x01 \x01(\v2\x14.vigo.v1.WebhookInfoR\awebhook\"\x15\n" +
+	"\x13ListWebhooksRequest\"H\n" +
+	"\x14ListWebhooksResponse\x120\n" +
+	"\bwebhooks\x18\x01 \x03(\v2\x14.vigo.v1.WebhookInfoR\bwebhooks\"&\n" +
 	"\x14DeleteWebhookRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x17\n" +
 	"\x15DeleteWebhookResponse\"\x9a\x01\n" +
@@ -6944,13 +6945,13 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x06errors\x18\x04 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x05 \x01(\x05R\vlostContact\x12\x17\n" +
 	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12%\n" +
-	"\x0ecompliance_pct\x18\a \x01(\x02R\rcompliancePct\",\n" +
-	"\x1aGetThrallComplianceRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x99\x01\n" +
-	"\x1bGetThrallComplianceResponse\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\x12)\n" +
-	"\blast_run\x18\x02 \x01(\v2\x0e.hobnob.v1.RunR\alastRun\x127\n" +
-	"\ahistory\x18\x03 \x03(\v2\x1d.hobnob.v1.ComplianceSnapshotR\ahistory\"\xd9\x01\n" +
+	"\x0ecompliance_pct\x18\a \x01(\x02R\rcompliancePct\"+\n" +
+	"\x19GetEnvoyComplianceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x94\x01\n" +
+	"\x1aGetEnvoyComplianceResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12'\n" +
+	"\blast_run\x18\x02 \x01(\v2\f.vigo.v1.RunR\alastRun\x125\n" +
+	"\ahistory\x18\x03 \x03(\v2\x1b.vigo.v1.ComplianceSnapshotR\ahistory\"\xd9\x01\n" +
 	"\x12ComplianceSnapshot\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1c\n" +
@@ -6958,29 +6959,29 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
 	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
-	"\ano_data\x18\a \x01(\x05R\x06noData\"b\n" +
-	"\x0fRollbackRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x15\n" +
+	"\ano_data\x18\a \x01(\x05R\x06noData\"`\n" +
+	"\x0fRollbackRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1b\n" +
 	"\tfile_path\x18\x03 \x01(\tR\bfilePath\"F\n" +
 	"\x10RollbackResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"2\n" +
-	"\x13ListPackagesRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\"J\n" +
-	"\x14ListPackagesResponse\x122\n" +
-	"\bpackages\x18\x01 \x03(\v2\x16.hobnob.v1.PackageInfoR\bpackages\"\x19\n" +
-	"\x17ListPackageDriftRequest\"K\n" +
-	"\x18ListPackageDriftResponse\x12/\n" +
-	"\x06drifts\x18\x01 \x03(\v2\x17.hobnob.v1.PackageDriftR\x06drifts\"\xbf\x01\n" +
-	"\vPackageInfo\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1a\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"0\n" +
+	"\x13ListPackagesRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\"H\n" +
+	"\x14ListPackagesResponse\x120\n" +
+	"\bpackages\x18\x01 \x03(\v2\x14.vigo.v1.PackageInfoR\bpackages\"\x19\n" +
+	"\x17ListPackageDriftRequest\"I\n" +
+	"\x18ListPackageDriftResponse\x12-\n" +
+	"\x06drifts\x18\x01 \x03(\v2\x15.vigo.v1.PackageDriftR\x06drifts\"\xbd\x01\n" +
+	"\vPackageInfo\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12!\n" +
 	"\fpackage_name\x18\x03 \x01(\tR\vpackageName\x12+\n" +
 	"\x11installed_version\x18\x04 \x01(\tR\x10installedVersion\x12'\n" +
-	"\x0fdesired_version\x18\x05 \x01(\tR\x0edesiredVersion\"\xfd\x01\n" +
-	"\fPackageDrift\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1a\n" +
+	"\x0fdesired_version\x18\x05 \x01(\tR\x0edesiredVersion\"\xfb\x01\n" +
+	"\fPackageDrift\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12!\n" +
 	"\fpackage_name\x18\x03 \x01(\tR\vpackageName\x12+\n" +
 	"\x11installed_version\x18\x04 \x01(\tR\x10installedVersion\x12'\n" +
@@ -6991,34 +6992,36 @@ const file_hobnob_proto_rawDesc = "" +
 	"\vmodule_name\x18\x01 \x01(\tR\n" +
 	"moduleName\x12\x19\n" +
 	"\bfrom_env\x18\x02 \x01(\tR\afromEnv\x12\x15\n" +
-	"\x06to_env\x18\x03 \x01(\tR\x05toEnv\"\xad\x01\n" +
+	"\x06to_env\x18\x03 \x01(\tR\x05toEnv\"\xab\x01\n" +
 	"\x12PromoteEnvResponse\x12!\n" +
-	"\fpromotion_id\x18\x01 \x01(\tR\vpromotionId\x12;\n" +
-	"\x04diff\x18\x02 \x03(\v2'.hobnob.v1.PromoteEnvResponse.DiffEntryR\x04diff\x1a7\n" +
+	"\fpromotion_id\x18\x01 \x01(\tR\vpromotionId\x129\n" +
+	"\x04diff\x18\x02 \x03(\v2%.vigo.v1.PromoteEnvResponse.DiffEntryR\x04diff\x1a7\n" +
 	"\tDiffEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x85\x01\n" +
-	"\x13EnrollThrallRequest\x12\x1a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x84\x01\n" +
+	"\x12EnrollEnvoyRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1d\n" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
-	"\x05force\x18\x04 \x01(\bR\x05force\"3\n" +
-	"\x14EnrollThrallResponse\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\"z\n" +
-	"\x16SetReassignmentRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\x1f\n" +
+	"\x05force\x18\x04 \x01(\bR\x05force\"0\n" +
+	"\x13EnrollEnvoyResponse\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\"v\n" +
+	"\x16SetReassignmentRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1f\n" +
 	"\vtarget_addr\x18\x02 \x01(\tR\n" +
-	"targetAddr\x12\"\n" +
-	"\rnew_thrall_id\x18\x03 \x01(\tR\vnewThrallId\"\x19\n" +
-	"\x17SetReassignmentResponse\"x\n" +
-	"\x15ReassignThrallRequest\x12\x1b\n" +
-	"\tthrall_id\x18\x01 \x01(\tR\bthrallId\x12\"\n" +
+	"targetAddr\x12 \n" +
+	"\fnew_envoy_id\x18\x03 \x01(\tR\n" +
+	"newEnvoyId\"\x19\n" +
+	"\x17SetReassignmentResponse\"u\n" +
+	"\x14ReassignEnvoyRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\"\n" +
 	"\rfrom_spoke_id\x18\x02 \x01(\tR\vfromSpokeId\x12\x1e\n" +
-	"\vto_spoke_id\x18\x03 \x01(\tR\ttoSpokeId\"]\n" +
-	"\x16ReassignThrallResponse\x12\"\n" +
-	"\rnew_thrall_id\x18\x01 \x01(\tR\vnewThrallId\x12\x1f\n" +
+	"\vto_spoke_id\x18\x03 \x01(\tR\ttoSpokeId\"Z\n" +
+	"\x15ReassignEnvoyResponse\x12 \n" +
+	"\fnew_envoy_id\x18\x01 \x01(\tR\n" +
+	"newEnvoyId\x12\x1f\n" +
 	"\vtarget_addr\x18\x02 \x01(\tR\n" +
 	"targetAddr\"V\n" +
 	"\x11DrainSpokeRequest\x12\x19\n" +
@@ -7030,22 +7033,23 @@ const file_hobnob_proto_rawDesc = "" +
 	"\x06errors\x18\x03 \x03(\tR\x06errors\":\n" +
 	"\x11SyncConfigRequest\x12%\n" +
 	"\x0econfig_archive\x18\x01 \x01(\fR\rconfigArchive\"\x14\n" +
-	"\x12SyncConfigResponse\"\x93\x02\n" +
+	"\x12SyncConfigResponse\"\x91\x02\n" +
 	"\x11SpokeStatusReport\x12\x19\n" +
-	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12!\n" +
-	"\fthrall_count\x18\x02 \x01(\x05R\vthrallCount\x12\x1c\n" +
+	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12\x1f\n" +
+	"\venvoy_count\x18\x02 \x01(\x05R\n" +
+	"envoyCount\x12\x1c\n" +
 	"\tcompliant\x18\x03 \x01(\x05R\tcompliant\x12'\n" +
 	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
 	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
 	"\ano_data\x18\a \x01(\x05R\x06noData\x12%\n" +
 	"\x0ecompliance_pct\x18\b \x01(\x02R\rcompliancePct\"\x10\n" +
-	"\x0eSpokeStatusAck\"\xbe\x01\n" +
-	"\x0fPeerSyncMessage\x12<\n" +
-	"\vfile_change\x18\x01 \x01(\v2\x19.hobnob.v1.PeerFileChangeH\x00R\n" +
-	"fileChange\x12*\n" +
-	"\x03ack\x18\x02 \x01(\v2\x16.hobnob.v1.PeerSyncAckH\x00R\x03ack\x126\n" +
-	"\tfull_sync\x18\x03 \x01(\v2\x17.hobnob.v1.PeerFullSyncH\x00R\bfullSyncB\t\n" +
+	"\x0eSpokeStatusAck\"\xb8\x01\n" +
+	"\x0fPeerSyncMessage\x12:\n" +
+	"\vfile_change\x18\x01 \x01(\v2\x17.vigo.v1.PeerFileChangeH\x00R\n" +
+	"fileChange\x12(\n" +
+	"\x03ack\x18\x02 \x01(\v2\x14.vigo.v1.PeerSyncAckH\x00R\x03ack\x124\n" +
+	"\tfull_sync\x18\x03 \x01(\v2\x15.vigo.v1.PeerFullSyncH\x00R\bfullSyncB\t\n" +
 	"\apayload\"q\n" +
 	"\x0ePeerFileChange\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
@@ -7056,9 +7060,9 @@ const file_hobnob_proto_rawDesc = "" +
 	"\vPeerSyncAck\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"?\n" +
-	"\fPeerFullSync\x12/\n" +
-	"\x05files\x18\x01 \x03(\v2\x19.hobnob.v1.PeerFileChangeR\x05files\"\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"=\n" +
+	"\fPeerFullSync\x12-\n" +
+	"\x05files\x18\x01 \x03(\v2\x17.vigo.v1.PeerFileChangeR\x05files\"\x14\n" +
 	"\x12PeerPromoteRequest\"I\n" +
 	"\x13PeerPromoteResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
@@ -7069,314 +7073,314 @@ const file_hobnob_proto_rawDesc = "" +
 	"\fprimary_addr\x18\x02 \x01(\tR\vprimaryAddr\x12$\n" +
 	"\x0elast_sync_unix\x18\x03 \x01(\x03R\flastSyncUnix\x12!\n" +
 	"\ffiles_synced\x18\x04 \x01(\x03R\vfilesSynced\x12%\n" +
-	"\x0econfig_version\x18\x05 \x01(\x04R\rconfigVersion2\xee\x03\n" +
-	"\vHobnobAgent\x12C\n" +
-	"\bRegister\x12\x1a.hobnob.v1.RegisterRequest\x1a\x1b.hobnob.v1.RegisterResponse\x12@\n" +
-	"\aCheckIn\x12\x19.hobnob.v1.CheckInRequest\x1a\x1a.hobnob.v1.CheckInResponse\x12O\n" +
-	"\fReportResult\x12\x1e.hobnob.v1.ReportResultRequest\x1a\x1f.hobnob.v1.ReportResultResponse\x12O\n" +
-	"\fReportTraits\x12\x1e.hobnob.v1.ReportTraitsRequest\x1a\x1f.hobnob.v1.ReportTraitsResponse\x12d\n" +
-	"\x13DownloadCustomTrait\x12%.hobnob.v1.DownloadCustomTraitRequest\x1a&.hobnob.v1.DownloadCustomTraitResponse\x12P\n" +
-	"\vAgentStream\x12\x1d.hobnob.v1.AgentStreamMessage\x1a\x1e.hobnob.v1.ServerStreamMessage(\x010\x012\xaf\x15\n" +
-	"\vHobnobAdmin\x12~\n" +
-	"\x12AddApprovedPattern\x12$.hobnob.v1.AddApprovedPatternRequest\x1a%.hobnob.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12\x81\x01\n" +
-	"\x14ListApprovedPatterns\x12&.hobnob.v1.ListApprovedPatternsRequest\x1a'.hobnob.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x89\x01\n" +
-	"\x15RevokeApprovedPattern\x12'.hobnob.v1.RevokeApprovedPatternRequest\x1a(.hobnob.v1.RevokeApprovedPatternResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/approved/{id}\x12e\n" +
-	"\vListThralls\x12\x1d.hobnob.v1.ListThrallsRequest\x1a\x1e.hobnob.v1.ListThrallsResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/api/v1/thralls\x12d\n" +
-	"\tGetThrall\x12\x1b.hobnob.v1.GetThrallRequest\x1a\x1c.hobnob.v1.GetThrallResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/thralls/{id}\x12w\n" +
-	"\fRevokeThrall\x12\x1e.hobnob.v1.RevokeThrallRequest\x1a\x1f.hobnob.v1.RevokeThrallResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/v1/thralls/{id}/revoke\x12m\n" +
-	"\fDeleteThrall\x12\x1e.hobnob.v1.DeleteThrallRequest\x1a\x1f.hobnob.v1.DeleteThrallResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/api/v1/thralls/{id}\x12_\n" +
-	"\tForcePush\x12\x1b.hobnob.v1.ForcePushRequest\x1a\x1c.hobnob.v1.ForcePushResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/api/v1/push\x12m\n" +
-	"\x06DryRun\x12\x18.hobnob.v1.DryRunRequest\x1a\x19.hobnob.v1.DryRunResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/api/v1/thralls/{thrall_id}/dry-run\x12Y\n" +
-	"\bListRuns\x12\x1a.hobnob.v1.ListRunsRequest\x1a\x1b.hobnob.v1.ListRunsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/api/v1/runs\x12X\n" +
-	"\x06GetRun\x12\x18.hobnob.v1.GetRunRequest\x1a\x19.hobnob.v1.GetRunResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/runs/{id}\x12m\n" +
-	"\rGenerateToken\x12\x1f.hobnob.v1.GenerateTokenRequest\x1a .hobnob.v1.GenerateTokenResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/api/v1/tokens\x12f\n" +
+	"\x0econfig_version\x18\x05 \x01(\x04R\rconfigVersion2\xd4\x03\n" +
+	"\tVigoAgent\x12?\n" +
+	"\bRegister\x12\x18.vigo.v1.RegisterRequest\x1a\x19.vigo.v1.RegisterResponse\x12<\n" +
+	"\aCheckIn\x12\x17.vigo.v1.CheckInRequest\x1a\x18.vigo.v1.CheckInResponse\x12K\n" +
+	"\fReportResult\x12\x1c.vigo.v1.ReportResultRequest\x1a\x1d.vigo.v1.ReportResultResponse\x12K\n" +
+	"\fReportTraits\x12\x1c.vigo.v1.ReportTraitsRequest\x1a\x1d.vigo.v1.ReportTraitsResponse\x12`\n" +
+	"\x13DownloadCustomTrait\x12#.vigo.v1.DownloadCustomTraitRequest\x1a$.vigo.v1.DownloadCustomTraitResponse\x12L\n" +
+	"\vAgentStream\x12\x1b.vigo.v1.AgentStreamMessage\x1a\x1c.vigo.v1.ServerStreamMessage(\x010\x012\xac\x14\n" +
+	"\tVigoAdmin\x12z\n" +
+	"\x12AddApprovedPattern\x12\".vigo.v1.AddApprovedPatternRequest\x1a#.vigo.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12}\n" +
+	"\x14ListApprovedPatterns\x12$.vigo.v1.ListApprovedPatternsRequest\x1a%.vigo.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x85\x01\n" +
+	"\x15RevokeApprovedPattern\x12%.vigo.v1.RevokeApprovedPatternRequest\x1a&.vigo.v1.RevokeApprovedPatternResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/approved/{id}\x12]\n" +
 	"\n" +
-	"AddWebhook\x12\x1c.hobnob.v1.AddWebhookRequest\x1a\x1d.hobnob.v1.AddWebhookResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/webhooks\x12i\n" +
-	"\fListWebhooks\x12\x1e.hobnob.v1.ListWebhooksRequest\x1a\x1f.hobnob.v1.ListWebhooksResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/webhooks\x12q\n" +
-	"\rDeleteWebhook\x12\x1f.hobnob.v1.DeleteWebhookRequest\x1a .hobnob.v1.DeleteWebhookResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/webhooks/{id}\x12\x83\x01\n" +
-	"\x14GetComplianceSummary\x12&.hobnob.v1.GetComplianceSummaryRequest\x1a'.hobnob.v1.GetComplianceSummaryResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/compliance\x12\x8d\x01\n" +
-	"\x13GetThrallCompliance\x12%.hobnob.v1.GetThrallComplianceRequest\x1a&.hobnob.v1.GetThrallComplianceResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/thralls/{id}/compliance\x12t\n" +
-	"\bRollback\x12\x1a.hobnob.v1.RollbackRequest\x1a\x1b.hobnob.v1.RollbackResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/api/v1/thralls/{thrall_id}/rollback\x12i\n" +
-	"\fListPackages\x12\x1e.hobnob.v1.ListPackagesRequest\x1a\x1f.hobnob.v1.ListPackagesResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/packages\x12{\n" +
-	"\x10ListPackageDrift\x12\".hobnob.v1.ListPackageDriftRequest\x1a#.hobnob.v1.ListPackageDriftResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/packages/drift\x12i\n" +
+	"ListEnvoys\x12\x1a.vigo.v1.ListEnvoysRequest\x1a\x1b.vigo.v1.ListEnvoysResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/v1/envoys\x12\\\n" +
+	"\bGetEnvoy\x12\x18.vigo.v1.GetEnvoyRequest\x1a\x19.vigo.v1.GetEnvoyResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/api/v1/envoys/{id}\x12o\n" +
+	"\vRevokeEnvoy\x12\x1b.vigo.v1.RevokeEnvoyRequest\x1a\x1c.vigo.v1.RevokeEnvoyResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/api/v1/envoys/{id}/revoke\x12e\n" +
+	"\vDeleteEnvoy\x12\x1b.vigo.v1.DeleteEnvoyRequest\x1a\x1c.vigo.v1.DeleteEnvoyResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/api/v1/envoys/{id}\x12[\n" +
+	"\tForcePush\x12\x19.vigo.v1.ForcePushRequest\x1a\x1a.vigo.v1.ForcePushResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/api/v1/push\x12g\n" +
+	"\x06DryRun\x12\x16.vigo.v1.DryRunRequest\x1a\x17.vigo.v1.DryRunResponse\",\x82\xd3\xe4\x93\x02&:\x01*\"!/api/v1/envoys/{envoy_id}/dry-run\x12U\n" +
+	"\bListRuns\x12\x18.vigo.v1.ListRunsRequest\x1a\x19.vigo.v1.ListRunsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/api/v1/runs\x12T\n" +
+	"\x06GetRun\x12\x16.vigo.v1.GetRunRequest\x1a\x17.vigo.v1.GetRunResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/v1/runs/{id}\x12i\n" +
+	"\rGenerateToken\x12\x1d.vigo.v1.GenerateTokenRequest\x1a\x1e.vigo.v1.GenerateTokenResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/api/v1/tokens\x12b\n" +
 	"\n" +
-	"PromoteEnv\x12\x1c.hobnob.v1.PromoteEnvRequest\x1a\x1d.hobnob.v1.PromoteEnvResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/v1/env/promote\x12O\n" +
-	"\fEnrollThrall\x12\x1e.hobnob.v1.EnrollThrallRequest\x1a\x1f.hobnob.v1.EnrollThrallResponse\x12X\n" +
-	"\x0fSetReassignment\x12!.hobnob.v1.SetReassignmentRequest\x1a\".hobnob.v1.SetReassignmentResponse\x12I\n" +
+	"AddWebhook\x12\x1a.vigo.v1.AddWebhookRequest\x1a\x1b.vigo.v1.AddWebhookResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/webhooks\x12e\n" +
+	"\fListWebhooks\x12\x1c.vigo.v1.ListWebhooksRequest\x1a\x1d.vigo.v1.ListWebhooksResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/webhooks\x12m\n" +
+	"\rDeleteWebhook\x12\x1d.vigo.v1.DeleteWebhookRequest\x1a\x1e.vigo.v1.DeleteWebhookResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/webhooks/{id}\x12\x7f\n" +
+	"\x14GetComplianceSummary\x12$.vigo.v1.GetComplianceSummaryRequest\x1a%.vigo.v1.GetComplianceSummaryResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/compliance\x12\x85\x01\n" +
+	"\x12GetEnvoyCompliance\x12\".vigo.v1.GetEnvoyComplianceRequest\x1a#.vigo.v1.GetEnvoyComplianceResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/v1/envoys/{id}/compliance\x12n\n" +
+	"\bRollback\x12\x18.vigo.v1.RollbackRequest\x1a\x19.vigo.v1.RollbackResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/api/v1/envoys/{envoy_id}/rollback\x12e\n" +
+	"\fListPackages\x12\x1c.vigo.v1.ListPackagesRequest\x1a\x1d.vigo.v1.ListPackagesResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/packages\x12w\n" +
+	"\x10ListPackageDrift\x12 .vigo.v1.ListPackageDriftRequest\x1a!.vigo.v1.ListPackageDriftResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/packages/drift\x12e\n" +
 	"\n" +
-	"SyncConfig\x12\x1c.hobnob.v1.SyncConfigRequest\x1a\x1d.hobnob.v1.SyncConfigResponse\x12L\n" +
-	"\x11ReportSpokeStatus\x12\x1c.hobnob.v1.SpokeStatusReport\x1a\x19.hobnob.v1.SpokeStatusAck2\xe7\x01\n" +
+	"PromoteEnv\x12\x1a.vigo.v1.PromoteEnvRequest\x1a\x1b.vigo.v1.PromoteEnvResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/v1/env/promote\x12H\n" +
+	"\vEnrollEnvoy\x12\x1b.vigo.v1.EnrollEnvoyRequest\x1a\x1c.vigo.v1.EnrollEnvoyResponse\x12T\n" +
+	"\x0fSetReassignment\x12\x1f.vigo.v1.SetReassignmentRequest\x1a .vigo.v1.SetReassignmentResponse\x12E\n" +
 	"\n" +
-	"HobnobPeer\x12H\n" +
+	"SyncConfig\x12\x1a.vigo.v1.SyncConfigRequest\x1a\x1b.vigo.v1.SyncConfigResponse\x12H\n" +
+	"\x11ReportSpokeStatus\x12\x1a.vigo.v1.SpokeStatusReport\x1a\x17.vigo.v1.SpokeStatusAck2\xd9\x01\n" +
+	"\bVigoPeer\x12D\n" +
 	"\n" +
-	"SyncStream\x12\x1a.hobnob.v1.PeerSyncMessage\x1a\x1a.hobnob.v1.PeerSyncMessage(\x010\x01\x12H\n" +
-	"\aPromote\x12\x1d.hobnob.v1.PeerPromoteRequest\x1a\x1e.hobnob.v1.PeerPromoteResponse\x12E\n" +
-	"\x06Status\x12\x1c.hobnob.v1.PeerStatusRequest\x1a\x1d.hobnob.v1.PeerStatusResponseB+Z)github.com/hobnob/hobnob/gen/proto/hobnobb\x06proto3"
+	"SyncStream\x12\x18.vigo.v1.PeerSyncMessage\x1a\x18.vigo.v1.PeerSyncMessage(\x010\x01\x12D\n" +
+	"\aPromote\x12\x1b.vigo.v1.PeerPromoteRequest\x1a\x1c.vigo.v1.PeerPromoteResponse\x12A\n" +
+	"\x06Status\x12\x1a.vigo.v1.PeerStatusRequest\x1a\x1b.vigo.v1.PeerStatusResponseB%Z#github.com/vigo/vigo/gen/proto/vigob\x06proto3"
 
 var (
-	file_hobnob_proto_rawDescOnce sync.Once
-	file_hobnob_proto_rawDescData []byte
+	file_vigo_proto_rawDescOnce sync.Once
+	file_vigo_proto_rawDescData []byte
 )
 
-func file_hobnob_proto_rawDescGZIP() []byte {
-	file_hobnob_proto_rawDescOnce.Do(func() {
-		file_hobnob_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_hobnob_proto_rawDesc), len(file_hobnob_proto_rawDesc)))
+func file_vigo_proto_rawDescGZIP() []byte {
+	file_vigo_proto_rawDescOnce.Do(func() {
+		file_vigo_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_vigo_proto_rawDesc), len(file_vigo_proto_rawDesc)))
 	})
-	return file_hobnob_proto_rawDescData
+	return file_vigo_proto_rawDescData
 }
 
-var file_hobnob_proto_msgTypes = make([]protoimpl.MessageInfo, 111)
-var file_hobnob_proto_goTypes = []any{
-	(*RegisterRequest)(nil),               // 0: hobnob.v1.RegisterRequest
-	(*RegisterResponse)(nil),              // 1: hobnob.v1.RegisterResponse
-	(*CheckInRequest)(nil),                // 2: hobnob.v1.CheckInRequest
-	(*CheckInResponse)(nil),               // 3: hobnob.v1.CheckInResponse
-	(*ProxiedDevice)(nil),                 // 4: hobnob.v1.ProxiedDevice
-	(*CustomTraitEntry)(nil),              // 5: hobnob.v1.CustomTraitEntry
-	(*DownloadCustomTraitRequest)(nil),    // 6: hobnob.v1.DownloadCustomTraitRequest
-	(*DownloadCustomTraitResponse)(nil),   // 7: hobnob.v1.DownloadCustomTraitResponse
-	(*Module)(nil),                        // 8: hobnob.v1.Module
-	(*Resource)(nil),                      // 9: hobnob.v1.Resource
-	(*PolicyBundle)(nil),                  // 10: hobnob.v1.PolicyBundle
-	(*PolicyModule)(nil),                  // 11: hobnob.v1.PolicyModule
-	(*PolicyResource)(nil),                // 12: hobnob.v1.PolicyResource
-	(*ConditionalVarDef)(nil),             // 13: hobnob.v1.ConditionalVarDef
-	(*ReportResultRequest)(nil),           // 14: hobnob.v1.ReportResultRequest
-	(*ModuleResult)(nil),                  // 15: hobnob.v1.ModuleResult
-	(*ReportResultResponse)(nil),          // 16: hobnob.v1.ReportResultResponse
-	(*ReportTraitsRequest)(nil),           // 17: hobnob.v1.ReportTraitsRequest
-	(*ReportTraitsResponse)(nil),          // 18: hobnob.v1.ReportTraitsResponse
-	(*AgentStreamMessage)(nil),            // 19: hobnob.v1.AgentStreamMessage
-	(*ServerStreamMessage)(nil),           // 20: hobnob.v1.ServerStreamMessage
-	(*StreamRelease)(nil),                 // 21: hobnob.v1.StreamRelease
-	(*StreamPolicyPush)(nil),              // 22: hobnob.v1.StreamPolicyPush
-	(*StreamForcePush)(nil),               // 23: hobnob.v1.StreamForcePush
-	(*DeltaEvent)(nil),                    // 24: hobnob.v1.DeltaEvent
-	(*RunCompleted)(nil),                  // 25: hobnob.v1.RunCompleted
-	(*TraitsDelta)(nil),                   // 26: hobnob.v1.TraitsDelta
-	(*HeartbeatDelta)(nil),                // 27: hobnob.v1.HeartbeatDelta
-	(*DeltaAck)(nil),                      // 28: hobnob.v1.DeltaAck
-	(*StreamCapabilities)(nil),            // 29: hobnob.v1.StreamCapabilities
-	(*PushDispatch)(nil),                  // 30: hobnob.v1.PushDispatch
-	(*PushAck)(nil),                       // 31: hobnob.v1.PushAck
-	(*PushResult)(nil),                    // 32: hobnob.v1.PushResult
-	(*QueryRequest)(nil),                  // 33: hobnob.v1.QueryRequest
-	(*QueryResponse)(nil),                 // 34: hobnob.v1.QueryResponse
-	(*AddApprovedPatternRequest)(nil),     // 35: hobnob.v1.AddApprovedPatternRequest
-	(*AddApprovedPatternResponse)(nil),    // 36: hobnob.v1.AddApprovedPatternResponse
-	(*ListApprovedPatternsRequest)(nil),   // 37: hobnob.v1.ListApprovedPatternsRequest
-	(*ListApprovedPatternsResponse)(nil),  // 38: hobnob.v1.ListApprovedPatternsResponse
-	(*ApprovedPattern)(nil),               // 39: hobnob.v1.ApprovedPattern
-	(*RevokeApprovedPatternRequest)(nil),  // 40: hobnob.v1.RevokeApprovedPatternRequest
-	(*RevokeApprovedPatternResponse)(nil), // 41: hobnob.v1.RevokeApprovedPatternResponse
-	(*ListThrallsRequest)(nil),            // 42: hobnob.v1.ListThrallsRequest
-	(*ListThrallsResponse)(nil),           // 43: hobnob.v1.ListThrallsResponse
-	(*Thrall)(nil),                        // 44: hobnob.v1.Thrall
-	(*GetThrallRequest)(nil),              // 45: hobnob.v1.GetThrallRequest
-	(*GetThrallResponse)(nil),             // 46: hobnob.v1.GetThrallResponse
-	(*RevokeThrallRequest)(nil),           // 47: hobnob.v1.RevokeThrallRequest
-	(*RevokeThrallResponse)(nil),          // 48: hobnob.v1.RevokeThrallResponse
-	(*DeleteThrallRequest)(nil),           // 49: hobnob.v1.DeleteThrallRequest
-	(*DeleteThrallResponse)(nil),          // 50: hobnob.v1.DeleteThrallResponse
-	(*ForcePushRequest)(nil),              // 51: hobnob.v1.ForcePushRequest
-	(*ForcePushResponse)(nil),             // 52: hobnob.v1.ForcePushResponse
-	(*DryRunRequest)(nil),                 // 53: hobnob.v1.DryRunRequest
-	(*DryRunResponse)(nil),                // 54: hobnob.v1.DryRunResponse
-	(*PlannedAction)(nil),                 // 55: hobnob.v1.PlannedAction
-	(*ListRunsRequest)(nil),               // 56: hobnob.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),              // 57: hobnob.v1.ListRunsResponse
-	(*Run)(nil),                           // 58: hobnob.v1.Run
-	(*GetRunRequest)(nil),                 // 59: hobnob.v1.GetRunRequest
-	(*GetRunResponse)(nil),                // 60: hobnob.v1.GetRunResponse
-	(*GenerateTokenRequest)(nil),          // 61: hobnob.v1.GenerateTokenRequest
-	(*GenerateTokenResponse)(nil),         // 62: hobnob.v1.GenerateTokenResponse
-	(*AddWebhookRequest)(nil),             // 63: hobnob.v1.AddWebhookRequest
-	(*AddWebhookResponse)(nil),            // 64: hobnob.v1.AddWebhookResponse
-	(*ListWebhooksRequest)(nil),           // 65: hobnob.v1.ListWebhooksRequest
-	(*ListWebhooksResponse)(nil),          // 66: hobnob.v1.ListWebhooksResponse
-	(*DeleteWebhookRequest)(nil),          // 67: hobnob.v1.DeleteWebhookRequest
-	(*DeleteWebhookResponse)(nil),         // 68: hobnob.v1.DeleteWebhookResponse
-	(*WebhookInfo)(nil),                   // 69: hobnob.v1.WebhookInfo
-	(*GetComplianceSummaryRequest)(nil),   // 70: hobnob.v1.GetComplianceSummaryRequest
-	(*GetComplianceSummaryResponse)(nil),  // 71: hobnob.v1.GetComplianceSummaryResponse
-	(*GetThrallComplianceRequest)(nil),    // 72: hobnob.v1.GetThrallComplianceRequest
-	(*GetThrallComplianceResponse)(nil),   // 73: hobnob.v1.GetThrallComplianceResponse
-	(*ComplianceSnapshot)(nil),            // 74: hobnob.v1.ComplianceSnapshot
-	(*RollbackRequest)(nil),               // 75: hobnob.v1.RollbackRequest
-	(*RollbackResponse)(nil),              // 76: hobnob.v1.RollbackResponse
-	(*ListPackagesRequest)(nil),           // 77: hobnob.v1.ListPackagesRequest
-	(*ListPackagesResponse)(nil),          // 78: hobnob.v1.ListPackagesResponse
-	(*ListPackageDriftRequest)(nil),       // 79: hobnob.v1.ListPackageDriftRequest
-	(*ListPackageDriftResponse)(nil),      // 80: hobnob.v1.ListPackageDriftResponse
-	(*PackageInfo)(nil),                   // 81: hobnob.v1.PackageInfo
-	(*PackageDrift)(nil),                  // 82: hobnob.v1.PackageDrift
-	(*PromoteEnvRequest)(nil),             // 83: hobnob.v1.PromoteEnvRequest
-	(*PromoteEnvResponse)(nil),            // 84: hobnob.v1.PromoteEnvResponse
-	(*EnrollThrallRequest)(nil),           // 85: hobnob.v1.EnrollThrallRequest
-	(*EnrollThrallResponse)(nil),          // 86: hobnob.v1.EnrollThrallResponse
-	(*SetReassignmentRequest)(nil),        // 87: hobnob.v1.SetReassignmentRequest
-	(*SetReassignmentResponse)(nil),       // 88: hobnob.v1.SetReassignmentResponse
-	(*ReassignThrallRequest)(nil),         // 89: hobnob.v1.ReassignThrallRequest
-	(*ReassignThrallResponse)(nil),        // 90: hobnob.v1.ReassignThrallResponse
-	(*DrainSpokeRequest)(nil),             // 91: hobnob.v1.DrainSpokeRequest
-	(*DrainSpokeResponse)(nil),            // 92: hobnob.v1.DrainSpokeResponse
-	(*SyncConfigRequest)(nil),             // 93: hobnob.v1.SyncConfigRequest
-	(*SyncConfigResponse)(nil),            // 94: hobnob.v1.SyncConfigResponse
-	(*SpokeStatusReport)(nil),             // 95: hobnob.v1.SpokeStatusReport
-	(*SpokeStatusAck)(nil),                // 96: hobnob.v1.SpokeStatusAck
-	(*PeerSyncMessage)(nil),               // 97: hobnob.v1.PeerSyncMessage
-	(*PeerFileChange)(nil),                // 98: hobnob.v1.PeerFileChange
-	(*PeerSyncAck)(nil),                   // 99: hobnob.v1.PeerSyncAck
-	(*PeerFullSync)(nil),                  // 100: hobnob.v1.PeerFullSync
-	(*PeerPromoteRequest)(nil),            // 101: hobnob.v1.PeerPromoteRequest
-	(*PeerPromoteResponse)(nil),           // 102: hobnob.v1.PeerPromoteResponse
-	(*PeerStatusRequest)(nil),             // 103: hobnob.v1.PeerStatusRequest
-	(*PeerStatusResponse)(nil),            // 104: hobnob.v1.PeerStatusResponse
-	nil,                                   // 105: hobnob.v1.CheckInRequest.CachedModuleHashesEntry
-	nil,                                   // 106: hobnob.v1.Resource.ParamsEntry
-	nil,                                   // 107: hobnob.v1.PolicyResource.AttributesEntry
-	nil,                                   // 108: hobnob.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 109: hobnob.v1.PushDispatch.EnvEntry
-	nil,                                   // 110: hobnob.v1.PromoteEnvResponse.DiffEntry
+var file_vigo_proto_msgTypes = make([]protoimpl.MessageInfo, 111)
+var file_vigo_proto_goTypes = []any{
+	(*RegisterRequest)(nil),               // 0: vigo.v1.RegisterRequest
+	(*RegisterResponse)(nil),              // 1: vigo.v1.RegisterResponse
+	(*CheckInRequest)(nil),                // 2: vigo.v1.CheckInRequest
+	(*CheckInResponse)(nil),               // 3: vigo.v1.CheckInResponse
+	(*ProxiedDevice)(nil),                 // 4: vigo.v1.ProxiedDevice
+	(*CustomTraitEntry)(nil),              // 5: vigo.v1.CustomTraitEntry
+	(*DownloadCustomTraitRequest)(nil),    // 6: vigo.v1.DownloadCustomTraitRequest
+	(*DownloadCustomTraitResponse)(nil),   // 7: vigo.v1.DownloadCustomTraitResponse
+	(*Module)(nil),                        // 8: vigo.v1.Module
+	(*Resource)(nil),                      // 9: vigo.v1.Resource
+	(*PolicyBundle)(nil),                  // 10: vigo.v1.PolicyBundle
+	(*PolicyModule)(nil),                  // 11: vigo.v1.PolicyModule
+	(*PolicyResource)(nil),                // 12: vigo.v1.PolicyResource
+	(*ConditionalVarDef)(nil),             // 13: vigo.v1.ConditionalVarDef
+	(*ReportResultRequest)(nil),           // 14: vigo.v1.ReportResultRequest
+	(*ModuleResult)(nil),                  // 15: vigo.v1.ModuleResult
+	(*ReportResultResponse)(nil),          // 16: vigo.v1.ReportResultResponse
+	(*ReportTraitsRequest)(nil),           // 17: vigo.v1.ReportTraitsRequest
+	(*ReportTraitsResponse)(nil),          // 18: vigo.v1.ReportTraitsResponse
+	(*AgentStreamMessage)(nil),            // 19: vigo.v1.AgentStreamMessage
+	(*ServerStreamMessage)(nil),           // 20: vigo.v1.ServerStreamMessage
+	(*StreamRelease)(nil),                 // 21: vigo.v1.StreamRelease
+	(*StreamPolicyPush)(nil),              // 22: vigo.v1.StreamPolicyPush
+	(*StreamForcePush)(nil),               // 23: vigo.v1.StreamForcePush
+	(*DeltaEvent)(nil),                    // 24: vigo.v1.DeltaEvent
+	(*RunCompleted)(nil),                  // 25: vigo.v1.RunCompleted
+	(*TraitsDelta)(nil),                   // 26: vigo.v1.TraitsDelta
+	(*HeartbeatDelta)(nil),                // 27: vigo.v1.HeartbeatDelta
+	(*DeltaAck)(nil),                      // 28: vigo.v1.DeltaAck
+	(*StreamCapabilities)(nil),            // 29: vigo.v1.StreamCapabilities
+	(*PushDispatch)(nil),                  // 30: vigo.v1.PushDispatch
+	(*PushAck)(nil),                       // 31: vigo.v1.PushAck
+	(*PushResult)(nil),                    // 32: vigo.v1.PushResult
+	(*QueryRequest)(nil),                  // 33: vigo.v1.QueryRequest
+	(*QueryResponse)(nil),                 // 34: vigo.v1.QueryResponse
+	(*AddApprovedPatternRequest)(nil),     // 35: vigo.v1.AddApprovedPatternRequest
+	(*AddApprovedPatternResponse)(nil),    // 36: vigo.v1.AddApprovedPatternResponse
+	(*ListApprovedPatternsRequest)(nil),   // 37: vigo.v1.ListApprovedPatternsRequest
+	(*ListApprovedPatternsResponse)(nil),  // 38: vigo.v1.ListApprovedPatternsResponse
+	(*ApprovedPattern)(nil),               // 39: vigo.v1.ApprovedPattern
+	(*RevokeApprovedPatternRequest)(nil),  // 40: vigo.v1.RevokeApprovedPatternRequest
+	(*RevokeApprovedPatternResponse)(nil), // 41: vigo.v1.RevokeApprovedPatternResponse
+	(*ListEnvoysRequest)(nil),             // 42: vigo.v1.ListEnvoysRequest
+	(*ListEnvoysResponse)(nil),            // 43: vigo.v1.ListEnvoysResponse
+	(*Envoy)(nil),                         // 44: vigo.v1.Envoy
+	(*GetEnvoyRequest)(nil),               // 45: vigo.v1.GetEnvoyRequest
+	(*GetEnvoyResponse)(nil),              // 46: vigo.v1.GetEnvoyResponse
+	(*RevokeEnvoyRequest)(nil),            // 47: vigo.v1.RevokeEnvoyRequest
+	(*RevokeEnvoyResponse)(nil),           // 48: vigo.v1.RevokeEnvoyResponse
+	(*DeleteEnvoyRequest)(nil),            // 49: vigo.v1.DeleteEnvoyRequest
+	(*DeleteEnvoyResponse)(nil),           // 50: vigo.v1.DeleteEnvoyResponse
+	(*ForcePushRequest)(nil),              // 51: vigo.v1.ForcePushRequest
+	(*ForcePushResponse)(nil),             // 52: vigo.v1.ForcePushResponse
+	(*DryRunRequest)(nil),                 // 53: vigo.v1.DryRunRequest
+	(*DryRunResponse)(nil),                // 54: vigo.v1.DryRunResponse
+	(*PlannedAction)(nil),                 // 55: vigo.v1.PlannedAction
+	(*ListRunsRequest)(nil),               // 56: vigo.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),              // 57: vigo.v1.ListRunsResponse
+	(*Run)(nil),                           // 58: vigo.v1.Run
+	(*GetRunRequest)(nil),                 // 59: vigo.v1.GetRunRequest
+	(*GetRunResponse)(nil),                // 60: vigo.v1.GetRunResponse
+	(*GenerateTokenRequest)(nil),          // 61: vigo.v1.GenerateTokenRequest
+	(*GenerateTokenResponse)(nil),         // 62: vigo.v1.GenerateTokenResponse
+	(*AddWebhookRequest)(nil),             // 63: vigo.v1.AddWebhookRequest
+	(*AddWebhookResponse)(nil),            // 64: vigo.v1.AddWebhookResponse
+	(*ListWebhooksRequest)(nil),           // 65: vigo.v1.ListWebhooksRequest
+	(*ListWebhooksResponse)(nil),          // 66: vigo.v1.ListWebhooksResponse
+	(*DeleteWebhookRequest)(nil),          // 67: vigo.v1.DeleteWebhookRequest
+	(*DeleteWebhookResponse)(nil),         // 68: vigo.v1.DeleteWebhookResponse
+	(*WebhookInfo)(nil),                   // 69: vigo.v1.WebhookInfo
+	(*GetComplianceSummaryRequest)(nil),   // 70: vigo.v1.GetComplianceSummaryRequest
+	(*GetComplianceSummaryResponse)(nil),  // 71: vigo.v1.GetComplianceSummaryResponse
+	(*GetEnvoyComplianceRequest)(nil),     // 72: vigo.v1.GetEnvoyComplianceRequest
+	(*GetEnvoyComplianceResponse)(nil),    // 73: vigo.v1.GetEnvoyComplianceResponse
+	(*ComplianceSnapshot)(nil),            // 74: vigo.v1.ComplianceSnapshot
+	(*RollbackRequest)(nil),               // 75: vigo.v1.RollbackRequest
+	(*RollbackResponse)(nil),              // 76: vigo.v1.RollbackResponse
+	(*ListPackagesRequest)(nil),           // 77: vigo.v1.ListPackagesRequest
+	(*ListPackagesResponse)(nil),          // 78: vigo.v1.ListPackagesResponse
+	(*ListPackageDriftRequest)(nil),       // 79: vigo.v1.ListPackageDriftRequest
+	(*ListPackageDriftResponse)(nil),      // 80: vigo.v1.ListPackageDriftResponse
+	(*PackageInfo)(nil),                   // 81: vigo.v1.PackageInfo
+	(*PackageDrift)(nil),                  // 82: vigo.v1.PackageDrift
+	(*PromoteEnvRequest)(nil),             // 83: vigo.v1.PromoteEnvRequest
+	(*PromoteEnvResponse)(nil),            // 84: vigo.v1.PromoteEnvResponse
+	(*EnrollEnvoyRequest)(nil),            // 85: vigo.v1.EnrollEnvoyRequest
+	(*EnrollEnvoyResponse)(nil),           // 86: vigo.v1.EnrollEnvoyResponse
+	(*SetReassignmentRequest)(nil),        // 87: vigo.v1.SetReassignmentRequest
+	(*SetReassignmentResponse)(nil),       // 88: vigo.v1.SetReassignmentResponse
+	(*ReassignEnvoyRequest)(nil),          // 89: vigo.v1.ReassignEnvoyRequest
+	(*ReassignEnvoyResponse)(nil),         // 90: vigo.v1.ReassignEnvoyResponse
+	(*DrainSpokeRequest)(nil),             // 91: vigo.v1.DrainSpokeRequest
+	(*DrainSpokeResponse)(nil),            // 92: vigo.v1.DrainSpokeResponse
+	(*SyncConfigRequest)(nil),             // 93: vigo.v1.SyncConfigRequest
+	(*SyncConfigResponse)(nil),            // 94: vigo.v1.SyncConfigResponse
+	(*SpokeStatusReport)(nil),             // 95: vigo.v1.SpokeStatusReport
+	(*SpokeStatusAck)(nil),                // 96: vigo.v1.SpokeStatusAck
+	(*PeerSyncMessage)(nil),               // 97: vigo.v1.PeerSyncMessage
+	(*PeerFileChange)(nil),                // 98: vigo.v1.PeerFileChange
+	(*PeerSyncAck)(nil),                   // 99: vigo.v1.PeerSyncAck
+	(*PeerFullSync)(nil),                  // 100: vigo.v1.PeerFullSync
+	(*PeerPromoteRequest)(nil),            // 101: vigo.v1.PeerPromoteRequest
+	(*PeerPromoteResponse)(nil),           // 102: vigo.v1.PeerPromoteResponse
+	(*PeerStatusRequest)(nil),             // 103: vigo.v1.PeerStatusRequest
+	(*PeerStatusResponse)(nil),            // 104: vigo.v1.PeerStatusResponse
+	nil,                                   // 105: vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	nil,                                   // 106: vigo.v1.Resource.ParamsEntry
+	nil,                                   // 107: vigo.v1.PolicyResource.AttributesEntry
+	nil,                                   // 108: vigo.v1.TraitsDelta.ChangedEntry
+	nil,                                   // 109: vigo.v1.PushDispatch.EnvEntry
+	nil,                                   // 110: vigo.v1.PromoteEnvResponse.DiffEntry
 	(*timestamppb.Timestamp)(nil),         // 111: google.protobuf.Timestamp
 }
-var file_hobnob_proto_depIdxs = []int32{
-	111, // 0: hobnob.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
-	105, // 1: hobnob.v1.CheckInRequest.cached_module_hashes:type_name -> hobnob.v1.CheckInRequest.CachedModuleHashesEntry
-	29,  // 2: hobnob.v1.CheckInRequest.capabilities:type_name -> hobnob.v1.StreamCapabilities
-	8,   // 3: hobnob.v1.CheckInResponse.modules:type_name -> hobnob.v1.Module
-	5,   // 4: hobnob.v1.CheckInResponse.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
-	10,  // 5: hobnob.v1.CheckInResponse.policy_bundle:type_name -> hobnob.v1.PolicyBundle
-	4,   // 6: hobnob.v1.CheckInResponse.proxied_devices:type_name -> hobnob.v1.ProxiedDevice
-	10,  // 7: hobnob.v1.ProxiedDevice.policy:type_name -> hobnob.v1.PolicyBundle
-	9,   // 8: hobnob.v1.Module.resources:type_name -> hobnob.v1.Resource
-	106, // 9: hobnob.v1.Resource.params:type_name -> hobnob.v1.Resource.ParamsEntry
-	11,  // 10: hobnob.v1.PolicyBundle.modules:type_name -> hobnob.v1.PolicyModule
-	13,  // 11: hobnob.v1.PolicyBundle.conditional_vars:type_name -> hobnob.v1.ConditionalVarDef
-	5,   // 12: hobnob.v1.PolicyBundle.custom_traits:type_name -> hobnob.v1.CustomTraitEntry
-	12,  // 13: hobnob.v1.PolicyModule.resources:type_name -> hobnob.v1.PolicyResource
-	107, // 14: hobnob.v1.PolicyResource.attributes:type_name -> hobnob.v1.PolicyResource.AttributesEntry
-	15,  // 15: hobnob.v1.ReportResultRequest.results:type_name -> hobnob.v1.ModuleResult
-	111, // 16: hobnob.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
-	111, // 17: hobnob.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
-	2,   // 18: hobnob.v1.AgentStreamMessage.check_in:type_name -> hobnob.v1.CheckInRequest
-	14,  // 19: hobnob.v1.AgentStreamMessage.report_result:type_name -> hobnob.v1.ReportResultRequest
-	17,  // 20: hobnob.v1.AgentStreamMessage.report_traits:type_name -> hobnob.v1.ReportTraitsRequest
-	32,  // 21: hobnob.v1.AgentStreamMessage.push_result:type_name -> hobnob.v1.PushResult
-	31,  // 22: hobnob.v1.AgentStreamMessage.push_ack:type_name -> hobnob.v1.PushAck
-	34,  // 23: hobnob.v1.AgentStreamMessage.query_response:type_name -> hobnob.v1.QueryResponse
-	24,  // 24: hobnob.v1.AgentStreamMessage.delta:type_name -> hobnob.v1.DeltaEvent
-	3,   // 25: hobnob.v1.ServerStreamMessage.check_in_response:type_name -> hobnob.v1.CheckInResponse
-	16,  // 26: hobnob.v1.ServerStreamMessage.report_result_ack:type_name -> hobnob.v1.ReportResultResponse
-	18,  // 27: hobnob.v1.ServerStreamMessage.report_traits_ack:type_name -> hobnob.v1.ReportTraitsResponse
-	22,  // 28: hobnob.v1.ServerStreamMessage.policy_push:type_name -> hobnob.v1.StreamPolicyPush
-	23,  // 29: hobnob.v1.ServerStreamMessage.force_push:type_name -> hobnob.v1.StreamForcePush
-	30,  // 30: hobnob.v1.ServerStreamMessage.push_dispatch:type_name -> hobnob.v1.PushDispatch
-	33,  // 31: hobnob.v1.ServerStreamMessage.query_request:type_name -> hobnob.v1.QueryRequest
-	28,  // 32: hobnob.v1.ServerStreamMessage.delta_ack:type_name -> hobnob.v1.DeltaAck
-	21,  // 33: hobnob.v1.ServerStreamMessage.stream_release:type_name -> hobnob.v1.StreamRelease
-	10,  // 34: hobnob.v1.StreamPolicyPush.policy_bundle:type_name -> hobnob.v1.PolicyBundle
-	25,  // 35: hobnob.v1.DeltaEvent.run:type_name -> hobnob.v1.RunCompleted
-	26,  // 36: hobnob.v1.DeltaEvent.traits:type_name -> hobnob.v1.TraitsDelta
-	27,  // 37: hobnob.v1.DeltaEvent.heartbeat:type_name -> hobnob.v1.HeartbeatDelta
-	15,  // 38: hobnob.v1.RunCompleted.results:type_name -> hobnob.v1.ModuleResult
-	108, // 39: hobnob.v1.TraitsDelta.changed:type_name -> hobnob.v1.TraitsDelta.ChangedEntry
-	109, // 40: hobnob.v1.PushDispatch.env:type_name -> hobnob.v1.PushDispatch.EnvEntry
-	111, // 41: hobnob.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
-	39,  // 42: hobnob.v1.ListApprovedPatternsResponse.patterns:type_name -> hobnob.v1.ApprovedPattern
-	111, // 43: hobnob.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
-	44,  // 44: hobnob.v1.ListThrallsResponse.thralls:type_name -> hobnob.v1.Thrall
-	111, // 45: hobnob.v1.Thrall.enrolled_at:type_name -> google.protobuf.Timestamp
-	111, // 46: hobnob.v1.Thrall.last_seen:type_name -> google.protobuf.Timestamp
-	111, // 47: hobnob.v1.Thrall.revoked_at:type_name -> google.protobuf.Timestamp
-	44,  // 48: hobnob.v1.GetThrallResponse.thrall:type_name -> hobnob.v1.Thrall
-	55,  // 49: hobnob.v1.DryRunResponse.actions:type_name -> hobnob.v1.PlannedAction
-	58,  // 50: hobnob.v1.ListRunsResponse.runs:type_name -> hobnob.v1.Run
-	111, // 51: hobnob.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	111, // 52: hobnob.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
-	58,  // 53: hobnob.v1.GetRunResponse.run:type_name -> hobnob.v1.Run
-	15,  // 54: hobnob.v1.GetRunResponse.results:type_name -> hobnob.v1.ModuleResult
-	69,  // 55: hobnob.v1.AddWebhookResponse.webhook:type_name -> hobnob.v1.WebhookInfo
-	69,  // 56: hobnob.v1.ListWebhooksResponse.webhooks:type_name -> hobnob.v1.WebhookInfo
-	111, // 57: hobnob.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
-	58,  // 58: hobnob.v1.GetThrallComplianceResponse.last_run:type_name -> hobnob.v1.Run
-	74,  // 59: hobnob.v1.GetThrallComplianceResponse.history:type_name -> hobnob.v1.ComplianceSnapshot
-	81,  // 60: hobnob.v1.ListPackagesResponse.packages:type_name -> hobnob.v1.PackageInfo
-	82,  // 61: hobnob.v1.ListPackageDriftResponse.drifts:type_name -> hobnob.v1.PackageDrift
-	111, // 62: hobnob.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
-	110, // 63: hobnob.v1.PromoteEnvResponse.diff:type_name -> hobnob.v1.PromoteEnvResponse.DiffEntry
-	98,  // 64: hobnob.v1.PeerSyncMessage.file_change:type_name -> hobnob.v1.PeerFileChange
-	99,  // 65: hobnob.v1.PeerSyncMessage.ack:type_name -> hobnob.v1.PeerSyncAck
-	100, // 66: hobnob.v1.PeerSyncMessage.full_sync:type_name -> hobnob.v1.PeerFullSync
-	98,  // 67: hobnob.v1.PeerFullSync.files:type_name -> hobnob.v1.PeerFileChange
-	0,   // 68: hobnob.v1.HobnobAgent.Register:input_type -> hobnob.v1.RegisterRequest
-	2,   // 69: hobnob.v1.HobnobAgent.CheckIn:input_type -> hobnob.v1.CheckInRequest
-	14,  // 70: hobnob.v1.HobnobAgent.ReportResult:input_type -> hobnob.v1.ReportResultRequest
-	17,  // 71: hobnob.v1.HobnobAgent.ReportTraits:input_type -> hobnob.v1.ReportTraitsRequest
-	6,   // 72: hobnob.v1.HobnobAgent.DownloadCustomTrait:input_type -> hobnob.v1.DownloadCustomTraitRequest
-	19,  // 73: hobnob.v1.HobnobAgent.AgentStream:input_type -> hobnob.v1.AgentStreamMessage
-	35,  // 74: hobnob.v1.HobnobAdmin.AddApprovedPattern:input_type -> hobnob.v1.AddApprovedPatternRequest
-	37,  // 75: hobnob.v1.HobnobAdmin.ListApprovedPatterns:input_type -> hobnob.v1.ListApprovedPatternsRequest
-	40,  // 76: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:input_type -> hobnob.v1.RevokeApprovedPatternRequest
-	42,  // 77: hobnob.v1.HobnobAdmin.ListThralls:input_type -> hobnob.v1.ListThrallsRequest
-	45,  // 78: hobnob.v1.HobnobAdmin.GetThrall:input_type -> hobnob.v1.GetThrallRequest
-	47,  // 79: hobnob.v1.HobnobAdmin.RevokeThrall:input_type -> hobnob.v1.RevokeThrallRequest
-	49,  // 80: hobnob.v1.HobnobAdmin.DeleteThrall:input_type -> hobnob.v1.DeleteThrallRequest
-	51,  // 81: hobnob.v1.HobnobAdmin.ForcePush:input_type -> hobnob.v1.ForcePushRequest
-	53,  // 82: hobnob.v1.HobnobAdmin.DryRun:input_type -> hobnob.v1.DryRunRequest
-	56,  // 83: hobnob.v1.HobnobAdmin.ListRuns:input_type -> hobnob.v1.ListRunsRequest
-	59,  // 84: hobnob.v1.HobnobAdmin.GetRun:input_type -> hobnob.v1.GetRunRequest
-	61,  // 85: hobnob.v1.HobnobAdmin.GenerateToken:input_type -> hobnob.v1.GenerateTokenRequest
-	63,  // 86: hobnob.v1.HobnobAdmin.AddWebhook:input_type -> hobnob.v1.AddWebhookRequest
-	65,  // 87: hobnob.v1.HobnobAdmin.ListWebhooks:input_type -> hobnob.v1.ListWebhooksRequest
-	67,  // 88: hobnob.v1.HobnobAdmin.DeleteWebhook:input_type -> hobnob.v1.DeleteWebhookRequest
-	70,  // 89: hobnob.v1.HobnobAdmin.GetComplianceSummary:input_type -> hobnob.v1.GetComplianceSummaryRequest
-	72,  // 90: hobnob.v1.HobnobAdmin.GetThrallCompliance:input_type -> hobnob.v1.GetThrallComplianceRequest
-	75,  // 91: hobnob.v1.HobnobAdmin.Rollback:input_type -> hobnob.v1.RollbackRequest
-	77,  // 92: hobnob.v1.HobnobAdmin.ListPackages:input_type -> hobnob.v1.ListPackagesRequest
-	79,  // 93: hobnob.v1.HobnobAdmin.ListPackageDrift:input_type -> hobnob.v1.ListPackageDriftRequest
-	83,  // 94: hobnob.v1.HobnobAdmin.PromoteEnv:input_type -> hobnob.v1.PromoteEnvRequest
-	85,  // 95: hobnob.v1.HobnobAdmin.EnrollThrall:input_type -> hobnob.v1.EnrollThrallRequest
-	87,  // 96: hobnob.v1.HobnobAdmin.SetReassignment:input_type -> hobnob.v1.SetReassignmentRequest
-	93,  // 97: hobnob.v1.HobnobAdmin.SyncConfig:input_type -> hobnob.v1.SyncConfigRequest
-	95,  // 98: hobnob.v1.HobnobAdmin.ReportSpokeStatus:input_type -> hobnob.v1.SpokeStatusReport
-	97,  // 99: hobnob.v1.HobnobPeer.SyncStream:input_type -> hobnob.v1.PeerSyncMessage
-	101, // 100: hobnob.v1.HobnobPeer.Promote:input_type -> hobnob.v1.PeerPromoteRequest
-	103, // 101: hobnob.v1.HobnobPeer.Status:input_type -> hobnob.v1.PeerStatusRequest
-	1,   // 102: hobnob.v1.HobnobAgent.Register:output_type -> hobnob.v1.RegisterResponse
-	3,   // 103: hobnob.v1.HobnobAgent.CheckIn:output_type -> hobnob.v1.CheckInResponse
-	16,  // 104: hobnob.v1.HobnobAgent.ReportResult:output_type -> hobnob.v1.ReportResultResponse
-	18,  // 105: hobnob.v1.HobnobAgent.ReportTraits:output_type -> hobnob.v1.ReportTraitsResponse
-	7,   // 106: hobnob.v1.HobnobAgent.DownloadCustomTrait:output_type -> hobnob.v1.DownloadCustomTraitResponse
-	20,  // 107: hobnob.v1.HobnobAgent.AgentStream:output_type -> hobnob.v1.ServerStreamMessage
-	36,  // 108: hobnob.v1.HobnobAdmin.AddApprovedPattern:output_type -> hobnob.v1.AddApprovedPatternResponse
-	38,  // 109: hobnob.v1.HobnobAdmin.ListApprovedPatterns:output_type -> hobnob.v1.ListApprovedPatternsResponse
-	41,  // 110: hobnob.v1.HobnobAdmin.RevokeApprovedPattern:output_type -> hobnob.v1.RevokeApprovedPatternResponse
-	43,  // 111: hobnob.v1.HobnobAdmin.ListThralls:output_type -> hobnob.v1.ListThrallsResponse
-	46,  // 112: hobnob.v1.HobnobAdmin.GetThrall:output_type -> hobnob.v1.GetThrallResponse
-	48,  // 113: hobnob.v1.HobnobAdmin.RevokeThrall:output_type -> hobnob.v1.RevokeThrallResponse
-	50,  // 114: hobnob.v1.HobnobAdmin.DeleteThrall:output_type -> hobnob.v1.DeleteThrallResponse
-	52,  // 115: hobnob.v1.HobnobAdmin.ForcePush:output_type -> hobnob.v1.ForcePushResponse
-	54,  // 116: hobnob.v1.HobnobAdmin.DryRun:output_type -> hobnob.v1.DryRunResponse
-	57,  // 117: hobnob.v1.HobnobAdmin.ListRuns:output_type -> hobnob.v1.ListRunsResponse
-	60,  // 118: hobnob.v1.HobnobAdmin.GetRun:output_type -> hobnob.v1.GetRunResponse
-	62,  // 119: hobnob.v1.HobnobAdmin.GenerateToken:output_type -> hobnob.v1.GenerateTokenResponse
-	64,  // 120: hobnob.v1.HobnobAdmin.AddWebhook:output_type -> hobnob.v1.AddWebhookResponse
-	66,  // 121: hobnob.v1.HobnobAdmin.ListWebhooks:output_type -> hobnob.v1.ListWebhooksResponse
-	68,  // 122: hobnob.v1.HobnobAdmin.DeleteWebhook:output_type -> hobnob.v1.DeleteWebhookResponse
-	71,  // 123: hobnob.v1.HobnobAdmin.GetComplianceSummary:output_type -> hobnob.v1.GetComplianceSummaryResponse
-	73,  // 124: hobnob.v1.HobnobAdmin.GetThrallCompliance:output_type -> hobnob.v1.GetThrallComplianceResponse
-	76,  // 125: hobnob.v1.HobnobAdmin.Rollback:output_type -> hobnob.v1.RollbackResponse
-	78,  // 126: hobnob.v1.HobnobAdmin.ListPackages:output_type -> hobnob.v1.ListPackagesResponse
-	80,  // 127: hobnob.v1.HobnobAdmin.ListPackageDrift:output_type -> hobnob.v1.ListPackageDriftResponse
-	84,  // 128: hobnob.v1.HobnobAdmin.PromoteEnv:output_type -> hobnob.v1.PromoteEnvResponse
-	86,  // 129: hobnob.v1.HobnobAdmin.EnrollThrall:output_type -> hobnob.v1.EnrollThrallResponse
-	88,  // 130: hobnob.v1.HobnobAdmin.SetReassignment:output_type -> hobnob.v1.SetReassignmentResponse
-	94,  // 131: hobnob.v1.HobnobAdmin.SyncConfig:output_type -> hobnob.v1.SyncConfigResponse
-	96,  // 132: hobnob.v1.HobnobAdmin.ReportSpokeStatus:output_type -> hobnob.v1.SpokeStatusAck
-	97,  // 133: hobnob.v1.HobnobPeer.SyncStream:output_type -> hobnob.v1.PeerSyncMessage
-	102, // 134: hobnob.v1.HobnobPeer.Promote:output_type -> hobnob.v1.PeerPromoteResponse
-	104, // 135: hobnob.v1.HobnobPeer.Status:output_type -> hobnob.v1.PeerStatusResponse
+var file_vigo_proto_depIdxs = []int32{
+	111, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
+	105, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	29,  // 2: vigo.v1.CheckInRequest.capabilities:type_name -> vigo.v1.StreamCapabilities
+	8,   // 3: vigo.v1.CheckInResponse.modules:type_name -> vigo.v1.Module
+	5,   // 4: vigo.v1.CheckInResponse.custom_traits:type_name -> vigo.v1.CustomTraitEntry
+	10,  // 5: vigo.v1.CheckInResponse.policy_bundle:type_name -> vigo.v1.PolicyBundle
+	4,   // 6: vigo.v1.CheckInResponse.proxied_devices:type_name -> vigo.v1.ProxiedDevice
+	10,  // 7: vigo.v1.ProxiedDevice.policy:type_name -> vigo.v1.PolicyBundle
+	9,   // 8: vigo.v1.Module.resources:type_name -> vigo.v1.Resource
+	106, // 9: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
+	11,  // 10: vigo.v1.PolicyBundle.modules:type_name -> vigo.v1.PolicyModule
+	13,  // 11: vigo.v1.PolicyBundle.conditional_vars:type_name -> vigo.v1.ConditionalVarDef
+	5,   // 12: vigo.v1.PolicyBundle.custom_traits:type_name -> vigo.v1.CustomTraitEntry
+	12,  // 13: vigo.v1.PolicyModule.resources:type_name -> vigo.v1.PolicyResource
+	107, // 14: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
+	15,  // 15: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ModuleResult
+	111, // 16: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
+	111, // 17: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	2,   // 18: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
+	14,  // 19: vigo.v1.AgentStreamMessage.report_result:type_name -> vigo.v1.ReportResultRequest
+	17,  // 20: vigo.v1.AgentStreamMessage.report_traits:type_name -> vigo.v1.ReportTraitsRequest
+	32,  // 21: vigo.v1.AgentStreamMessage.push_result:type_name -> vigo.v1.PushResult
+	31,  // 22: vigo.v1.AgentStreamMessage.push_ack:type_name -> vigo.v1.PushAck
+	34,  // 23: vigo.v1.AgentStreamMessage.query_response:type_name -> vigo.v1.QueryResponse
+	24,  // 24: vigo.v1.AgentStreamMessage.delta:type_name -> vigo.v1.DeltaEvent
+	3,   // 25: vigo.v1.ServerStreamMessage.check_in_response:type_name -> vigo.v1.CheckInResponse
+	16,  // 26: vigo.v1.ServerStreamMessage.report_result_ack:type_name -> vigo.v1.ReportResultResponse
+	18,  // 27: vigo.v1.ServerStreamMessage.report_traits_ack:type_name -> vigo.v1.ReportTraitsResponse
+	22,  // 28: vigo.v1.ServerStreamMessage.policy_push:type_name -> vigo.v1.StreamPolicyPush
+	23,  // 29: vigo.v1.ServerStreamMessage.force_push:type_name -> vigo.v1.StreamForcePush
+	30,  // 30: vigo.v1.ServerStreamMessage.push_dispatch:type_name -> vigo.v1.PushDispatch
+	33,  // 31: vigo.v1.ServerStreamMessage.query_request:type_name -> vigo.v1.QueryRequest
+	28,  // 32: vigo.v1.ServerStreamMessage.delta_ack:type_name -> vigo.v1.DeltaAck
+	21,  // 33: vigo.v1.ServerStreamMessage.stream_release:type_name -> vigo.v1.StreamRelease
+	10,  // 34: vigo.v1.StreamPolicyPush.policy_bundle:type_name -> vigo.v1.PolicyBundle
+	25,  // 35: vigo.v1.DeltaEvent.run:type_name -> vigo.v1.RunCompleted
+	26,  // 36: vigo.v1.DeltaEvent.traits:type_name -> vigo.v1.TraitsDelta
+	27,  // 37: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
+	15,  // 38: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ModuleResult
+	108, // 39: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
+	109, // 40: vigo.v1.PushDispatch.env:type_name -> vigo.v1.PushDispatch.EnvEntry
+	111, // 41: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
+	39,  // 42: vigo.v1.ListApprovedPatternsResponse.patterns:type_name -> vigo.v1.ApprovedPattern
+	111, // 43: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
+	44,  // 44: vigo.v1.ListEnvoysResponse.envoys:type_name -> vigo.v1.Envoy
+	111, // 45: vigo.v1.Envoy.enrolled_at:type_name -> google.protobuf.Timestamp
+	111, // 46: vigo.v1.Envoy.last_seen:type_name -> google.protobuf.Timestamp
+	111, // 47: vigo.v1.Envoy.revoked_at:type_name -> google.protobuf.Timestamp
+	44,  // 48: vigo.v1.GetEnvoyResponse.envoy:type_name -> vigo.v1.Envoy
+	55,  // 49: vigo.v1.DryRunResponse.actions:type_name -> vigo.v1.PlannedAction
+	58,  // 50: vigo.v1.ListRunsResponse.runs:type_name -> vigo.v1.Run
+	111, // 51: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	111, // 52: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	58,  // 53: vigo.v1.GetRunResponse.run:type_name -> vigo.v1.Run
+	15,  // 54: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ModuleResult
+	69,  // 55: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
+	69,  // 56: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
+	111, // 57: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
+	58,  // 58: vigo.v1.GetEnvoyComplianceResponse.last_run:type_name -> vigo.v1.Run
+	74,  // 59: vigo.v1.GetEnvoyComplianceResponse.history:type_name -> vigo.v1.ComplianceSnapshot
+	81,  // 60: vigo.v1.ListPackagesResponse.packages:type_name -> vigo.v1.PackageInfo
+	82,  // 61: vigo.v1.ListPackageDriftResponse.drifts:type_name -> vigo.v1.PackageDrift
+	111, // 62: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
+	110, // 63: vigo.v1.PromoteEnvResponse.diff:type_name -> vigo.v1.PromoteEnvResponse.DiffEntry
+	98,  // 64: vigo.v1.PeerSyncMessage.file_change:type_name -> vigo.v1.PeerFileChange
+	99,  // 65: vigo.v1.PeerSyncMessage.ack:type_name -> vigo.v1.PeerSyncAck
+	100, // 66: vigo.v1.PeerSyncMessage.full_sync:type_name -> vigo.v1.PeerFullSync
+	98,  // 67: vigo.v1.PeerFullSync.files:type_name -> vigo.v1.PeerFileChange
+	0,   // 68: vigo.v1.VigoAgent.Register:input_type -> vigo.v1.RegisterRequest
+	2,   // 69: vigo.v1.VigoAgent.CheckIn:input_type -> vigo.v1.CheckInRequest
+	14,  // 70: vigo.v1.VigoAgent.ReportResult:input_type -> vigo.v1.ReportResultRequest
+	17,  // 71: vigo.v1.VigoAgent.ReportTraits:input_type -> vigo.v1.ReportTraitsRequest
+	6,   // 72: vigo.v1.VigoAgent.DownloadCustomTrait:input_type -> vigo.v1.DownloadCustomTraitRequest
+	19,  // 73: vigo.v1.VigoAgent.AgentStream:input_type -> vigo.v1.AgentStreamMessage
+	35,  // 74: vigo.v1.VigoAdmin.AddApprovedPattern:input_type -> vigo.v1.AddApprovedPatternRequest
+	37,  // 75: vigo.v1.VigoAdmin.ListApprovedPatterns:input_type -> vigo.v1.ListApprovedPatternsRequest
+	40,  // 76: vigo.v1.VigoAdmin.RevokeApprovedPattern:input_type -> vigo.v1.RevokeApprovedPatternRequest
+	42,  // 77: vigo.v1.VigoAdmin.ListEnvoys:input_type -> vigo.v1.ListEnvoysRequest
+	45,  // 78: vigo.v1.VigoAdmin.GetEnvoy:input_type -> vigo.v1.GetEnvoyRequest
+	47,  // 79: vigo.v1.VigoAdmin.RevokeEnvoy:input_type -> vigo.v1.RevokeEnvoyRequest
+	49,  // 80: vigo.v1.VigoAdmin.DeleteEnvoy:input_type -> vigo.v1.DeleteEnvoyRequest
+	51,  // 81: vigo.v1.VigoAdmin.ForcePush:input_type -> vigo.v1.ForcePushRequest
+	53,  // 82: vigo.v1.VigoAdmin.DryRun:input_type -> vigo.v1.DryRunRequest
+	56,  // 83: vigo.v1.VigoAdmin.ListRuns:input_type -> vigo.v1.ListRunsRequest
+	59,  // 84: vigo.v1.VigoAdmin.GetRun:input_type -> vigo.v1.GetRunRequest
+	61,  // 85: vigo.v1.VigoAdmin.GenerateToken:input_type -> vigo.v1.GenerateTokenRequest
+	63,  // 86: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
+	65,  // 87: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
+	67,  // 88: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
+	70,  // 89: vigo.v1.VigoAdmin.GetComplianceSummary:input_type -> vigo.v1.GetComplianceSummaryRequest
+	72,  // 90: vigo.v1.VigoAdmin.GetEnvoyCompliance:input_type -> vigo.v1.GetEnvoyComplianceRequest
+	75,  // 91: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
+	77,  // 92: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
+	79,  // 93: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
+	83,  // 94: vigo.v1.VigoAdmin.PromoteEnv:input_type -> vigo.v1.PromoteEnvRequest
+	85,  // 95: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
+	87,  // 96: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
+	93,  // 97: vigo.v1.VigoAdmin.SyncConfig:input_type -> vigo.v1.SyncConfigRequest
+	95,  // 98: vigo.v1.VigoAdmin.ReportSpokeStatus:input_type -> vigo.v1.SpokeStatusReport
+	97,  // 99: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
+	101, // 100: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
+	103, // 101: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
+	1,   // 102: vigo.v1.VigoAgent.Register:output_type -> vigo.v1.RegisterResponse
+	3,   // 103: vigo.v1.VigoAgent.CheckIn:output_type -> vigo.v1.CheckInResponse
+	16,  // 104: vigo.v1.VigoAgent.ReportResult:output_type -> vigo.v1.ReportResultResponse
+	18,  // 105: vigo.v1.VigoAgent.ReportTraits:output_type -> vigo.v1.ReportTraitsResponse
+	7,   // 106: vigo.v1.VigoAgent.DownloadCustomTrait:output_type -> vigo.v1.DownloadCustomTraitResponse
+	20,  // 107: vigo.v1.VigoAgent.AgentStream:output_type -> vigo.v1.ServerStreamMessage
+	36,  // 108: vigo.v1.VigoAdmin.AddApprovedPattern:output_type -> vigo.v1.AddApprovedPatternResponse
+	38,  // 109: vigo.v1.VigoAdmin.ListApprovedPatterns:output_type -> vigo.v1.ListApprovedPatternsResponse
+	41,  // 110: vigo.v1.VigoAdmin.RevokeApprovedPattern:output_type -> vigo.v1.RevokeApprovedPatternResponse
+	43,  // 111: vigo.v1.VigoAdmin.ListEnvoys:output_type -> vigo.v1.ListEnvoysResponse
+	46,  // 112: vigo.v1.VigoAdmin.GetEnvoy:output_type -> vigo.v1.GetEnvoyResponse
+	48,  // 113: vigo.v1.VigoAdmin.RevokeEnvoy:output_type -> vigo.v1.RevokeEnvoyResponse
+	50,  // 114: vigo.v1.VigoAdmin.DeleteEnvoy:output_type -> vigo.v1.DeleteEnvoyResponse
+	52,  // 115: vigo.v1.VigoAdmin.ForcePush:output_type -> vigo.v1.ForcePushResponse
+	54,  // 116: vigo.v1.VigoAdmin.DryRun:output_type -> vigo.v1.DryRunResponse
+	57,  // 117: vigo.v1.VigoAdmin.ListRuns:output_type -> vigo.v1.ListRunsResponse
+	60,  // 118: vigo.v1.VigoAdmin.GetRun:output_type -> vigo.v1.GetRunResponse
+	62,  // 119: vigo.v1.VigoAdmin.GenerateToken:output_type -> vigo.v1.GenerateTokenResponse
+	64,  // 120: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
+	66,  // 121: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
+	68,  // 122: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
+	71,  // 123: vigo.v1.VigoAdmin.GetComplianceSummary:output_type -> vigo.v1.GetComplianceSummaryResponse
+	73,  // 124: vigo.v1.VigoAdmin.GetEnvoyCompliance:output_type -> vigo.v1.GetEnvoyComplianceResponse
+	76,  // 125: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
+	78,  // 126: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
+	80,  // 127: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
+	84,  // 128: vigo.v1.VigoAdmin.PromoteEnv:output_type -> vigo.v1.PromoteEnvResponse
+	86,  // 129: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
+	88,  // 130: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
+	94,  // 131: vigo.v1.VigoAdmin.SyncConfig:output_type -> vigo.v1.SyncConfigResponse
+	96,  // 132: vigo.v1.VigoAdmin.ReportSpokeStatus:output_type -> vigo.v1.SpokeStatusAck
+	97,  // 133: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
+	102, // 134: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
+	104, // 135: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse
 	102, // [102:136] is the sub-list for method output_type
 	68,  // [68:102] is the sub-list for method input_type
 	68,  // [68:68] is the sub-list for extension type_name
@@ -7384,12 +7388,12 @@ var file_hobnob_proto_depIdxs = []int32{
 	0,   // [0:68] is the sub-list for field type_name
 }
 
-func init() { file_hobnob_proto_init() }
-func file_hobnob_proto_init() {
-	if File_hobnob_proto != nil {
+func init() { file_vigo_proto_init() }
+func file_vigo_proto_init() {
+	if File_vigo_proto != nil {
 		return
 	}
-	file_hobnob_proto_msgTypes[19].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[19].OneofWrappers = []any{
 		(*AgentStreamMessage_CheckIn)(nil),
 		(*AgentStreamMessage_ReportResult)(nil),
 		(*AgentStreamMessage_ReportTraits)(nil),
@@ -7398,7 +7402,7 @@ func file_hobnob_proto_init() {
 		(*AgentStreamMessage_QueryResponse)(nil),
 		(*AgentStreamMessage_Delta)(nil),
 	}
-	file_hobnob_proto_msgTypes[20].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[20].OneofWrappers = []any{
 		(*ServerStreamMessage_CheckInResponse)(nil),
 		(*ServerStreamMessage_ReportResultAck)(nil),
 		(*ServerStreamMessage_ReportTraitsAck)(nil),
@@ -7409,12 +7413,12 @@ func file_hobnob_proto_init() {
 		(*ServerStreamMessage_DeltaAck)(nil),
 		(*ServerStreamMessage_StreamRelease)(nil),
 	}
-	file_hobnob_proto_msgTypes[24].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[24].OneofWrappers = []any{
 		(*DeltaEvent_Run)(nil),
 		(*DeltaEvent_Traits)(nil),
 		(*DeltaEvent_Heartbeat)(nil),
 	}
-	file_hobnob_proto_msgTypes[97].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[97].OneofWrappers = []any{
 		(*PeerSyncMessage_FileChange)(nil),
 		(*PeerSyncMessage_Ack)(nil),
 		(*PeerSyncMessage_FullSync)(nil),
@@ -7423,17 +7427,17 @@ func file_hobnob_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hobnob_proto_rawDesc), len(file_hobnob_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vigo_proto_rawDesc), len(file_vigo_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   111,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
-		GoTypes:           file_hobnob_proto_goTypes,
-		DependencyIndexes: file_hobnob_proto_depIdxs,
-		MessageInfos:      file_hobnob_proto_msgTypes,
+		GoTypes:           file_vigo_proto_goTypes,
+		DependencyIndexes: file_vigo_proto_depIdxs,
+		MessageInfos:      file_vigo_proto_msgTypes,
 	}.Build()
-	File_hobnob_proto = out.File
-	file_hobnob_proto_goTypes = nil
-	file_hobnob_proto_depIdxs = nil
+	File_vigo_proto = out.File
+	file_vigo_proto_goTypes = nil
+	file_vigo_proto_depIdxs = nil
 }

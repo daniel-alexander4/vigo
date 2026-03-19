@@ -32,7 +32,7 @@ Returns `manager: "none"` with an empty package map if neither package manager i
 ```yaml
 - name: package-report
   type: file
-  target_path: C:\ProgramData\hobnob\packages.txt
+  target_path: C:\ProgramData\vigo\packages.txt
   content: |
     Package manager: {{ .Traits.packages.manager }}
     Installed: {{ .Traits.packages.count }} packages

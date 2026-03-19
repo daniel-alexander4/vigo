@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package watcher polls isopass for secret version changes and triggers
-// force-push re-convergence for thralls whose configs reference rotated secrets.
+// force-push re-convergence for envoys whose configs reference rotated secrets.
 package watcher
 
 import (
@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
 // VersionProvider retrieves version information for a secret path.
@@ -20,9 +20,9 @@ type VersionProvider interface {
 	GetVersion(ctx context.Context, key string) (int, error)
 }
 
-// ThrallStore resolves which thrall hostnames reference a given secret path.
-type ThrallStore interface {
-	ThrallsReferencingSecret(secretPath string) []string
+// EnvoyStore resolves which envoy hostnames reference a given secret path.
+type EnvoyStore interface {
+	EnvoysReferencingSecret(secretPath string) []string
 }
 
 // ConfigReloader triggers a full config reload (re-resolves secrets from provider).
@@ -34,7 +34,7 @@ type ConfigReloader interface {
 type DB interface {
 	SetForcePush(ctx context.Context, id string) error
 	CreateSecretRotationEvent(ctx context.Context, params RotationRecord) error
-	GetThrallByHostname(ctx context.Context, hostname string) (string, error)
+	GetEnvoyByHostname(ctx context.Context, hostname string) (string, error)
 	AppendRotatedSecret(ctx context.Context, id, secretPath string) error
 }
 
@@ -53,16 +53,16 @@ type RotationRecord struct {
 	SecretPath      string
 	OldVersion      string
 	NewVersion      string
-	AffectedThralls int32
+	AffectedEnvoys int32
 }
 
 // Watcher polls isopass at a configurable interval and detects secret
-// version changes. When a rotation is detected, all thralls referencing
+// version changes. When a rotation is detected, all envoys referencing
 // that secret have their force_push flag set.
 type Watcher struct {
 	provider            VersionProvider
 	db                  DB
-	configStore         ThrallStore
+	configStore         EnvoyStore
 	configReloader      ConfigReloader
 	dispatcher          EventDispatcher
 	notifyFunc          NotifyFunc
@@ -78,7 +78,7 @@ type Watcher struct {
 func NewWatcher(
 	provider VersionProvider,
 	db DB,
-	configStore ThrallStore,
+	configStore EnvoyStore,
 	dispatcher EventDispatcher,
 	pollInterval time.Duration,
 	watchPaths []string,
@@ -192,31 +192,31 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 
 		rotated = true
 
-		// Identify affected thralls.
-		hostnames := w.configStore.ThrallsReferencingSecret(path)
+		// Identify affected envoys.
+		hostnames := w.configStore.EnvoysReferencingSecret(path)
 		var affectedIDs []string
 		for _, hostname := range hostnames {
-			thrallID, err := w.db.GetThrallByHostname(ctx, hostname)
+			envoyID, err := w.db.GetEnvoyByHostname(ctx, hostname)
 			if err != nil {
-				slog.Error("watcher: looking up thrall",
+				slog.Error("watcher: looking up envoy",
 					"hostname", hostname, "error", err)
 				continue
 			}
-			if thrallID == "" {
+			if envoyID == "" {
 				continue
 			}
-			affectedIDs = append(affectedIDs, thrallID)
+			affectedIDs = append(affectedIDs, envoyID)
 		}
 
-		// Set force-push flag and record pending rotation for each affected thrall.
+		// Set force-push flag and record pending rotation for each affected envoy.
 		for _, id := range affectedIDs {
 			if err := w.db.SetForcePush(ctx, id); err != nil {
 				slog.Error("watcher: setting force push",
-					"thrall_id", id, "error", err)
+					"envoy_id", id, "error", err)
 			}
 			if err := w.db.AppendRotatedSecret(ctx, id, path); err != nil {
 				slog.Error("watcher: appending rotated secret",
-					"thrall_id", id, "path", path, "error", err)
+					"envoy_id", id, "path", path, "error", err)
 			}
 		}
 
@@ -225,7 +225,7 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 			SecretPath:      path,
 			OldVersion:      strconv.Itoa(lastVersion),
 			NewVersion:      strconv.Itoa(currentVersion),
-			AffectedThralls: int32(len(affectedIDs)),
+			AffectedEnvoys: int32(len(affectedIDs)),
 		}); err != nil {
 			slog.Error("watcher: recording rotation event",
 				"path", path, "error", err)

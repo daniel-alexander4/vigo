@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hobnob/hobnob/server/backup"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/backup"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
@@ -47,8 +47,8 @@ var backupCreateCmd = &cobra.Command{
   - server.yaml
 
 Examples:
-  hobnobcli backup create /tmp/hobnob-backup.tar.gz
-  hobnobcli backup create /tmp/backup.tar.gz --server-yaml /srv/hobnob/server.yaml`,
+  vigogo backup create /tmp/vigo-backup.tar.gz
+  vigogo backup create /tmp/backup.tar.gz --server-yaml /srv/vigo/server.yaml`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		archivePath := args[0]
@@ -103,7 +103,7 @@ Examples:
 			ServerRoot:     serverRoot,
 			DBDriver:       dbDriver,
 			DBDSN:          dbDSN,
-			HobnobVersion:  version,
+			VigoVersion:  version,
 		})
 		if err != nil {
 			return fmt.Errorf("creating backup: %w", err)
@@ -147,7 +147,7 @@ Examples:
 			}
 			fmt.Printf("\nBackup created successfully.\n")
 			fmt.Printf("  Files: %d\n", len(m.Files))
-			fmt.Printf("  Version: %s\n", m.HobnobVersion)
+			fmt.Printf("  Version: %s\n", m.VigoVersion)
 			fmt.Printf("  Created: %s\n", m.CreatedAt.Format("2006-01-02T15:04:05Z"))
 		} else {
 			fmt.Printf("\nEncrypted backup created successfully.\n")
@@ -171,10 +171,10 @@ Components restored:
   - server.yaml
 
 Examples:
-  hobnobcli backup restore /tmp/hobnob-backup.tar.gz
-  hobnobcli backup restore /tmp/backup.tar.gz --dry-run
-  hobnobcli backup restore /tmp/backup.tar.gz --db-only
-  hobnobcli backup restore /tmp/backup.tar.gz --target /srv/hobnob`,
+  vigogo backup restore /tmp/vigo-backup.tar.gz
+  vigogo backup restore /tmp/backup.tar.gz --dry-run
+  vigogo backup restore /tmp/backup.tar.gz --db-only
+  vigogo backup restore /tmp/backup.tar.gz --target /srv/vigo`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		archivePath := args[0]
@@ -211,7 +211,7 @@ Examples:
 
 		fmt.Printf("Backup archive: %s\n", archivePath)
 		fmt.Printf("  Created: %s\n", m.CreatedAt.Format("2006-01-02T15:04:05Z"))
-		fmt.Printf("  Version: %s\n", m.HobnobVersion)
+		fmt.Printf("  Version: %s\n", m.VigoVersion)
 		fmt.Printf("  Database: %s (%s)\n", m.DBDSN, m.DBDriver)
 		fmt.Printf("  Files: %d\n", len(m.Files))
 
@@ -248,8 +248,8 @@ Examples:
 
 		fmt.Println("\nRestore complete. Next steps:")
 		fmt.Println("  1. Review server.yaml for any host-specific settings")
-		fmt.Println("  2. Run: hobnobcli config publish")
-		fmt.Println("  3. Restart hobd (or Docker container)")
+		fmt.Println("  2. Run: vigogo config publish")
+		fmt.Println("  3. Restart vigosrv (or Docker container)")
 		fmt.Println("  4. Agents will reconnect and re-converge automatically")
 		return nil
 	},
@@ -261,7 +261,7 @@ var backupInspectCmd = &cobra.Command{
 	Long: `Read and display the manifest from a backup archive without extracting.
 
 Examples:
-  hobnobcli backup inspect /tmp/hobnob-backup.tar.gz`,
+  vigogo backup inspect /tmp/vigo-backup.tar.gz`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m, err := backup.ReadManifest(args[0])
@@ -279,7 +279,7 @@ Examples:
 }
 
 func isDBFile(path string) bool {
-	return path == "db/hobnob.db" || path == "db/dump.sql"
+	return path == "db/vigo.db" || path == "db/dump.sql"
 }
 
 // promptBackupPassword reads a password for backup encryption/decryption.
@@ -297,14 +297,14 @@ func promptBackupPassword(prompt string) (string, error) {
 }
 
 func init() {
-	backupCreateCmd.Flags().String("server-yaml", "/srv/hobnob/server.yaml",
+	backupCreateCmd.Flags().String("server-yaml", "/srv/vigo/server.yaml",
 		"Path to server.yaml (used to find DB settings)")
-	backupCreateCmd.Flags().String("server-root", "/srv/hobnob",
+	backupCreateCmd.Flags().String("server-root", "/srv/vigo",
 		"Server root directory containing policy/, secrets/, tls/")
 	backupCreateCmd.Flags().Bool("encrypt", false,
 		"Encrypt the archive with AES-256-GCM (prompts for password)")
 
-	backupRestoreCmd.Flags().String("target", "/srv/hobnob",
+	backupRestoreCmd.Flags().String("target", "/srv/vigo",
 		"Root directory to restore into")
 	backupRestoreCmd.Flags().Bool("db-only", false,
 		"Restore only the database, skip config/secrets/tls")

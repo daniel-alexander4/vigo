@@ -1,19 +1,19 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-use hobnob::auth;
-use hobnob::bootstrap;
-use hobnob::checkin;
-use hobnob::config;
-use hobnob::executors;
-use hobnob::platform;
-use hobnob::policy;
-use hobnob::update;
-use hobnob::proto;
-use hobnob::runner;
-use hobnob::snapshots;
-use hobnob::state;
-use hobnob::traits;
+use vigo::auth;
+use vigo::bootstrap;
+use vigo::checkin;
+use vigo::config;
+use vigo::executors;
+use vigo::platform;
+use vigo::policy;
+use vigo::update;
+use vigo::proto;
+use vigo::runner;
+use vigo::snapshots;
+use vigo::state;
+use vigo::traits;
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
@@ -236,10 +236,10 @@ fn print_usage() {
     let data_dir = platform::paths::default_data_dir();
     let exec_dir = platform::paths::default_executors_dir();
     let snap_dir = platform::paths::default_snapshot_dir();
-    eprintln!("hobnob — Hobnob configuration management agent
+    eprintln!("vigo — Vigo configuration management agent
 
 USAGE:
-    hobnob [FLAGS] [COMMAND]
+    vigo [FLAGS] [COMMAND]
 
 FLAGS:
     --data-dir <PATH>             Agent data directory [default: {}]
@@ -283,7 +283,7 @@ fn setup_logger(level: &str) {
     tracing_subscriber::fmt().with_max_level(level).init();
 }
 
-/// Ensure the agent daemon service is running. Called after `hobnob run`
+/// Ensure the agent daemon service is running. Called after `vigo run`
 /// so the daemon resumes if it was stopped for manual testing.
 fn ensure_daemon_running() {
     use std::process::Command;
@@ -293,43 +293,43 @@ fn ensure_daemon_running() {
         if std::path::Path::new("/run/systemd/system").exists() {
             // systemd
             let running = Command::new("systemctl")
-                .args(["is-active", "--quiet", "hobnob-thrall"])
+                .args(["is-active", "--quiet", "vigo-envoy"])
                 .status()
                 .map(|s| s.success())
                 .unwrap_or(false);
             if !running {
-                info!("starting hobnob-thrall daemon");
-                match Command::new("systemctl").args(["start", "hobnob-thrall"]).status() {
-                    Ok(s) if s.success() => info!("hobnob-thrall daemon started"),
-                    Ok(s) => warn!("failed to start hobnob-thrall (exit {})", s),
-                    Err(e) => warn!("failed to start hobnob-thrall: {}", e),
+                info!("starting vigo-envoy daemon");
+                match Command::new("systemctl").args(["start", "vigo-envoy"]).status() {
+                    Ok(s) if s.success() => info!("vigo-envoy daemon started"),
+                    Ok(s) => warn!("failed to start vigo-envoy (exit {})", s),
+                    Err(e) => warn!("failed to start vigo-envoy: {}", e),
                 }
             }
-        } else if std::path::Path::new("/Library/LaunchDaemons/com.hobnob.thrall.plist").exists() {
+        } else if std::path::Path::new("/Library/LaunchDaemons/com.vigo.envoy.plist").exists() {
             // launchd (macOS)
             let running = Command::new("launchctl")
-                .args(["list", "com.hobnob.thrall"])
+                .args(["list", "com.vigo.envoy"])
                 .status()
                 .map(|s| s.success())
                 .unwrap_or(false);
             if !running {
-                info!("starting hobnob-thrall daemon");
+                info!("starting vigo-envoy daemon");
                 let _ = Command::new("launchctl")
-                    .args(["load", "-w", "/Library/LaunchDaemons/com.hobnob.thrall.plist"])
+                    .args(["load", "-w", "/Library/LaunchDaemons/com.vigo.envoy.plist"])
                     .status();
             }
-        } else if std::path::Path::new("/etc/rc.d/hobnob").exists()
-            || std::path::Path::new("/usr/local/etc/rc.d/hobnob").exists()
+        } else if std::path::Path::new("/etc/rc.d/vigo").exists()
+            || std::path::Path::new("/usr/local/etc/rc.d/vigo").exists()
         {
             // BSD rc.d
             let running = Command::new("service")
-                .args(["hobnob", "status"])
+                .args(["vigo", "status"])
                 .status()
                 .map(|s| s.success())
                 .unwrap_or(false);
             if !running {
-                info!("starting hobnob daemon");
-                let _ = Command::new("service").args(["hobnob", "start"]).status();
+                info!("starting vigo daemon");
+                let _ = Command::new("service").args(["vigo", "start"]).status();
             }
         }
         // No known service manager — skip silently.
@@ -338,30 +338,30 @@ fn ensure_daemon_running() {
     #[cfg(windows)]
     {
         let running = Command::new("sc.exe")
-            .args(["query", "hobnob-thrall"])
+            .args(["query", "vigo-envoy"])
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).contains("RUNNING"))
             .unwrap_or(false);
         if !running {
-            info!("starting hobnob-thrall service");
-            let _ = Command::new("sc.exe").args(["start", "hobnob-thrall"]).status();
+            info!("starting vigo-envoy service");
+            let _ = Command::new("sc.exe").args(["start", "vigo-envoy"]).status();
         }
     }
 }
 
-/// Read thrall UUID from <data-dir>/thrall.uuid.
-fn load_thrall_id(data_dir: &std::path::Path) -> Result<String> {
-    let path = data_dir.join("thrall.uuid");
+/// Read envoy UUID from <data-dir>/envoy.uuid.
+fn load_envoy_id(data_dir: &std::path::Path) -> Result<String> {
+    let path = data_dir.join("envoy.uuid");
     let data = std::fs::read_to_string(&path)
-        .with_context(|| format!("read thrall UUID from {} (have you run 'hobnob register'?)", path.display()))?;
+        .with_context(|| format!("read envoy UUID from {} (have you run 'vigo register'?)", path.display()))?;
     Ok(data.trim().to_string())
 }
 
-/// Write thrall UUID to <data-dir>/thrall.uuid.
-fn save_thrall_id(data_dir: &std::path::Path, id: &str) -> Result<()> {
-    let path = data_dir.join("thrall.uuid");
+/// Write envoy UUID to <data-dir>/envoy.uuid.
+fn save_envoy_id(data_dir: &std::path::Path, id: &str) -> Result<()> {
+    let path = data_dir.join("envoy.uuid");
     std::fs::write(&path, format!("{}\n", id))
-        .with_context(|| format!("write thrall UUID to {}", path.display()))?;
+        .with_context(|| format!("write envoy UUID to {}", path.display()))?;
     // Set permissions to 0600
     #[cfg(unix)]
     {
@@ -433,7 +433,7 @@ async fn run_once(
     dry_run: bool,
 ) -> Result<()> {
     let (_, priv_key) = auth::keypair::load_or_generate(&cli.data_dir)?;
-    let thrall_id = load_thrall_id(&cli.data_dir)?;
+    let envoy_id = load_envoy_id(&cli.data_dir)?;
 
     let (ca, cert, key) = resolve_tls_paths(cli, &cli.data_dir);
 
@@ -453,12 +453,12 @@ async fn run_once(
         ca.as_deref(),
         cert.as_deref(),
         key.as_deref(),
-        &thrall_id,
+        &envoy_id,
         priv_key,
     )
     .await?;
 
-    info!(server = %addr, thrall_id = %thrall_id, version = VERSION, "starting check-in");
+    info!(server = %addr, envoy_id = %envoy_id, version = VERSION, "starting check-in");
 
     // Check-in with server.
     let resp = client.check_in("", None, 0, None).await?;
@@ -661,7 +661,7 @@ fn print_trace(
 /// Run the daemon loop with polling + streaming modes.
 async fn run_daemon(cli: &Cli) -> Result<()> {
     let (_, priv_key) = auth::keypair::load_or_generate(&cli.data_dir)?;
-    let thrall_id = load_thrall_id(&cli.data_dir)?;
+    let envoy_id = load_envoy_id(&cli.data_dir)?;
     let (ca, cert, key) = resolve_tls_paths(cli, &cli.data_dir);
 
     // Use spoke address if hub routed us to a spoke.
@@ -680,7 +680,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         ca.as_deref(),
         cert.as_deref(),
         key.as_deref(),
-        &thrall_id,
+        &envoy_id,
         priv_key,
     )
     .await?;
@@ -697,7 +697,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
 
     info!(
         server = %addr,
-        thrall_id = %thrall_id,
+        envoy_id = %envoy_id,
         version = VERSION,
         "starting daemon loop"
     );
@@ -851,8 +851,8 @@ fn run_status(cli: &Cli) -> Result<()> {
     // Load config.
     let cfg = config::load(&cli.data_dir);
 
-    // Thrall ID.
-    let thrall_id = match load_thrall_id(&cli.data_dir) {
+    // Envoy ID.
+    let envoy_id = match load_envoy_id(&cli.data_dir) {
         Ok(id) => id,
         Err(_) => "(not registered)".to_string(),
     };
@@ -874,7 +874,7 @@ fn run_status(cli: &Cli) -> Result<()> {
     let data_dir = cli.data_dir.display();
     let state_dir = platform::paths::default_state_dir();
 
-    println!("Thrall ID:        {}", thrall_id);
+    println!("Envoy ID:        {}", envoy_id);
     println!("Server:           {}", server);
     if !spoke.is_empty() {
         println!("Spoke:            {}", spoke);
@@ -1071,7 +1071,7 @@ async fn main() -> Result<()> {
                 );
             }
 
-            save_thrall_id(&cli.data_dir, &resp.thrall_id)?;
+            save_envoy_id(&cli.data_dir, &resp.envoy_id)?;
 
             // Persist server address so subsequent runs don't need --server.
             if let Err(e) = config::save(&cli.data_dir, &[("server", &cli.server)]) {
@@ -1098,7 +1098,7 @@ async fn main() -> Result<()> {
                 info!(fallback_servers = %fb, "stored fallback servers for failover");
             }
 
-            info!(thrall_id = %resp.thrall_id, message = %resp.message, "registration successful");
+            info!(envoy_id = %resp.envoy_id, message = %resp.message, "registration successful");
             Ok(())
         }
 
@@ -1193,11 +1193,11 @@ async fn main() -> Result<()> {
             };
             let resp = bootstrap::client::register(bootstrap_server, &req).await?;
 
-            // Save TLS artifacts and thrall UUID.
+            // Save TLS artifacts and envoy UUID.
             auth::keypair::save_tls_key(&cli.data_dir, &tls_key)?;
             auth::keypair::save_tls_cert(&cli.data_dir, &resp.signed_cert_pem)?;
             auth::keypair::save_ca_cert(&cli.data_dir, &resp.ca_cert_pem)?;
-            save_thrall_id(&cli.data_dir, &resp.thrall_id)?;
+            save_envoy_id(&cli.data_dir, &resp.envoy_id)?;
 
             // Persist server address so subsequent runs don't need --server.
             let grpc_addr = format!("{}:{}", bootstrap_server.trim_start_matches("http://").trim_start_matches("https://").split(':').next().unwrap_or(bootstrap_server), grpc_port);
@@ -1214,7 +1214,7 @@ async fn main() -> Result<()> {
             }
 
             info!(
-                thrall_id = %resp.thrall_id,
+                envoy_id = %resp.envoy_id,
                 tls_cert = %auth::keypair::tls_cert_path(&cli.data_dir).display(),
                 ca_cert = %auth::keypair::ca_cert_path(&cli.data_dir).display(),
                 "bootstrap successful"
@@ -1240,7 +1240,7 @@ async fn main() -> Result<()> {
                             ca.as_deref(),
                             cert.as_deref(),
                             key.as_deref(),
-                            &resp.thrall_id,
+                            &resp.envoy_id,
                             priv_key,
                         )
                         .await
@@ -1257,7 +1257,7 @@ async fn main() -> Result<()> {
                     Err(e) => {
                         warn!(error = %e, "service installation failed");
                         eprintln!(
-                            "Service install failed: {}\nStart the agent manually:\n  hobnob --server <grpc-host>:1530 --data-dir {}",
+                            "Service install failed: {}\nStart the agent manually:\n  vigo --server <grpc-host>:1530 --data-dir {}",
                             e,
                             cli.data_dir.display()
                         );

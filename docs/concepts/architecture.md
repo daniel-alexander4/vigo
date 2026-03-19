@@ -1,12 +1,12 @@
 # Architecture
 
-Hobnob has three binaries, two network ports, and a filesystem-only config path.
+Vigo has three binaries, two network ports, and a filesystem-only config path.
 
 ## Three Binaries
 
-![Hobnob Architecture](img/architecture.svg)
+![Vigo Architecture](img/architecture.svg)
 
-### hobd (server)
+### vigosrv (server)
 
 The central server written in Go. It:
 - Accepts agent check-ins via gRPC over mTLS (port 1530)
@@ -15,9 +15,9 @@ The central server written in Go. It:
 - Stores state in SQLite (default) or PostgreSQL
 - Resolves secrets through a pluggable backend (local, isopass)
 
-### hobnob (agent)
+### vigo (agent)
 
-The Rust agent that runs on each managed machine (thrall). It:
+The Rust agent that runs on each managed machine (envoy). It:
 - Checks in with the server on a configurable interval (default 5m)
 - Receives desired state (modules + resources) from the server
 - Applies resources idempotently using 72 built-in resource types
@@ -25,14 +25,14 @@ The Rust agent that runs on each managed machine (thrall). It:
 - Collects 27 traits (hardware, OS, network, packages, etc.)
 - Caches policy bundles in LMDB for offline convergence
 
-### hobnobcli (CLI)
+### vigogo (CLI)
 
 The admin CLI written in Go. It:
 - Talks to the server's REST API
 - Manages enrollment, tokens, approved patterns
 - Dispatches ad-hoc pushes and live queries
 - Runs workflows
-- Views runs, compliance, thralls, packages, inventory
+- Views runs, compliance, envoys, packages, inventory
 
 ## Data Flows
 
@@ -52,13 +52,13 @@ The admin CLI written in Go. It:
 
 | Subsystem | Package | Purpose |
 |-----------|---------|---------|
-| FleetIndex | `server/fleet/` | In-memory thrall index, zero DB on check-in hot path |
+| FleetIndex | `server/fleet/` | In-memory envoy index, zero DB on check-in hot path |
 | ConfigStore | `server/config/` | YAML loader with publish-triggered reload |
 | RunStore | `server/db/` | Run history (DBRunStore or MemRunStore) |
 | BundleSigner | `server/grpc/` | ED25519 signing for compiled promises |
 | Registry | `server/registry/` | Enrollment: pattern match + token validation |
 | Secrets | `server/secrets/` | Pluggable secret backend (local, isopass) |
-| Compliance | `server/compliance/` | Per-thrall status: compliant/drifted/failing/stale/unknown |
+| Compliance | `server/compliance/` | Per-envoy status: compliant/drifted/failing/stale/unknown |
 | Spanner | `server/spanner/` | Hub-spoke scaling with enrollment routing |
 
 ## Related

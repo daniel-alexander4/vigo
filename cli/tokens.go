@@ -27,7 +27,7 @@ var tokensGenerateCmd = &cobra.Command{
 		}
 
 		fmt.Printf("%s %s\n", bold("Token:"), resp.Token)
-		fmt.Printf("\n%s\n  curl -fsSL %s/bootstrap | HOBNOB_TOKEN=%s bash\n", bold("Bootstrap command:"), serverURL, resp.Token)
+		fmt.Printf("\n%s\n  curl -fsSL %s/bootstrap | VIGO_TOKEN=%s bash\n", bold("Bootstrap command:"), serverURL, resp.Token)
 		return nil
 	},
 }

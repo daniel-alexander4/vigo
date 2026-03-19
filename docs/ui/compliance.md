@@ -18,35 +18,35 @@ Five inline counters showing the distribution:
 
 | Counter | Color | Description |
 |---------|-------|-------------|
-| Compliant | Green | Thralls with no changes in the last run |
-| Drifted | Yellow | Thralls that converged but had changes |
-| Failing | Red | Thralls where the last run failed |
-| Stale | Yellow | Thralls that have not checked in |
-| Unknown | Gray | Thralls with no run history |
+| Compliant | Green | Envoys with no changes in the last run |
+| Drifted | Yellow | Envoys that converged but had changes |
+| Failing | Red | Envoys where the last run failed |
+| Stale | Yellow | Envoys that have not checked in |
+| Unknown | Gray | Envoys with no run history |
 
 ### 30-Day Compliance Trend
 
 An SVG sparkline showing daily compliance percentage over the last 30 days. Only displayed when historical data is available in the `compliance_history` table.
 
-### Non-Compliant Thralls Table
+### Non-Compliant Envoys Table
 
-A table listing all thralls that are not compliant:
+A table listing all envoys that are not compliant:
 
 | Column | Description |
 |--------|-------------|
-| Hostname | Thrall hostname |
+| Hostname | Envoy hostname |
 | Status | Compliance status badge |
 | Last Seen | Last check-in time |
 | Last Run | Last run status badge |
 
 ## Key Actions
 
-- Identify non-compliant thralls at a glance
+- Identify non-compliant envoys at a glance
 - Track compliance trends over time via the sparkline
-- Click through to individual thrall detail pages
+- Click through to individual envoy detail pages
 
 ## Data Sources
 
 - Compliance counters: FleetIndex (`ComplianceSummary()`)
 - Sparkline data: `compliance_history` table (daily snapshots)
-- Non-compliant thrall list: FleetIndex, filtered to exclude status "compliant"
+- Non-compliant envoy list: FleetIndex, filtered to exclude status "compliant"

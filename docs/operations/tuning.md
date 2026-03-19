@@ -24,8 +24,8 @@ tuning:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `signature_window` | `5m` | Maximum allowed age difference between the request timestamp and server time for ED25519 signature verification. Wider windows tolerate clock skew; narrower windows improve replay protection. |
-| `last_seen_flush` | `10s` | How often the StateFlusher writes dirty thrall state (last_seen, force_push, rotated secrets) from the FleetIndex to SQLite. Lower values reduce data loss on crash; higher values reduce SQLite write load. |
-| `traits_prune_interval` | `5m` | How often old trait records are pruned from the database. Only the latest trait snapshot per thrall is kept. |
+| `last_seen_flush` | `10s` | How often the StateFlusher writes dirty envoy state (last_seen, force_push, rotated secrets) from the FleetIndex to SQLite. Lower values reduce data loss on crash; higher values reduce SQLite write load. |
+| `traits_prune_interval` | `5m` | How often old trait records are pruned from the database. Only the latest trait snapshot per envoy is kept. |
 | `metrics_interval` | `30s` | How often Prometheus gauge metrics (node counts, compliance percentage, database size) are refreshed. Does not affect counters or histograms, which update in real time. |
 | `traits_scanner_ttl` | `30s` | How long trait scan results are cached before the scanner re-evaluates. |
 
@@ -33,8 +33,8 @@ tuning:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `run_store` | `database` | Where to store convergence run records. Options: `database` (SQLite/Postgres) or `memory` (in-memory ring buffer per thrall, no persistence). Memory mode is useful for development or when you do not need historical run data. |
-| `run_store_capacity` | `20` | When `run_store` is `memory`, the number of runs to keep per thrall in the ring buffer. Older runs are evicted when the buffer is full. |
+| `run_store` | `database` | Where to store convergence run records. Options: `database` (SQLite/Postgres) or `memory` (in-memory ring buffer per envoy, no persistence). Memory mode is useful for development or when you do not need historical run data. |
+| `run_store_capacity` | `20` | When `run_store` is `memory`, the number of runs to keep per envoy in the ring buffer. Older runs are evicted when the buffer is full. |
 
 ## gRPC Transport
 
@@ -51,7 +51,7 @@ tuning:
 
 ## Go Runtime Tuning
 
-These control the Go garbage collector and are only needed for large fleets (10k+ thralls) or memory-constrained environments.
+These control the Go garbage collector and are only needed for large fleets (10k+ envoys) or memory-constrained environments.
 
 ```yaml
 tuning:
@@ -155,7 +155,7 @@ Agents reconnect gracefully — the gRPC client library handles this transparent
 With the FleetIndex handling all hot-path reads in memory, the main SQLite bottleneck is the periodic flush of dirty state. At very large fleet sizes:
 
 - Increase `last_seen_flush` to `30s` or `60s` to batch more writes
-- Consider Postgres for write-heavy workloads (WAL contention at 50k+ thralls)
+- Consider Postgres for write-heavy workloads (WAL contention at 50k+ envoys)
 - Use `run_store: memory` if historical run data isn't needed
 
 ### Go GC at Large Heap Sizes

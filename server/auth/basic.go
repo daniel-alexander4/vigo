@@ -11,7 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -32,8 +32,8 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary
 
 // BasicProvider implements Provider using username/password authentication.
 // User accounts live in the database; password hashes are stored in the
-// local secrets provider at hobnob/web/auth/<username>. An account is not
-// active until a password secret is set via hobnobcli.
+// local secrets provider at vigo/web/auth/<username>. An account is not
+// active until a password secret is set via vigogo.
 type BasicProvider struct {
 	sessions    *SessionManager
 	userStore   *UserStore
@@ -59,14 +59,14 @@ func (p *BasicProvider) Method() string { return "basic" }
 
 // needsSetup returns true when the admin user exists but has no password set.
 // This is the state after first startup — the server seeds an admin account
-// but the operator hasn't run hobnobcli secrets set-web-password yet.
+// but the operator hasn't run vigogo secrets set-web-password yet.
 func (p *BasicProvider) needsSetup(ctx context.Context) bool {
 	count, err := p.userStore.CountUsers(ctx)
 	if err != nil || count == 0 {
 		return true
 	}
 	// Check if the admin user has a password secret.
-	if _, err := p.secrets.Get(ctx, "hobnob/web/auth/admin"); err != nil {
+	if _, err := p.secrets.Get(ctx, "vigo/web/auth/admin"); err != nil {
 		return true
 	}
 	return false
@@ -193,7 +193,7 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Resolve password hash from secrets provider.
-	secretKey := fmt.Sprintf("hobnob/web/auth/%s", username)
+	secretKey := fmt.Sprintf("vigo/web/auth/%s", username)
 	hash, err := p.secrets.Get(r.Context(), secretKey)
 	if err != nil {
 		slog.Debug("no password secret for user", "username", username, "error", err)
@@ -272,7 +272,7 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get TOTP secret from secrets provider.
-	totpSecret, err := p.secrets.Get(r.Context(), fmt.Sprintf("hobnob/web/auth/totp/%s", user.Username))
+	totpSecret, err := p.secrets.Get(r.Context(), fmt.Sprintf("vigo/web/auth/totp/%s", user.Username))
 	if err != nil || totpSecret == "" {
 		slog.Error("totp secret not found", "username", user.Username, "error", err)
 		serveTOTPPage(w, "TOTP configuration error")
@@ -334,13 +334,13 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hobnob - Sign In</title>
+    <title>Vigo - Sign In</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
-            <img src="/static/img/logo.svg" alt="Hobnob" style="height:36px;margin-bottom:0.5rem">
+            <img src="/static/img/logo.svg" alt="Vigo" style="height:36px;margin-bottom:0.5rem">
             <p class="login-subtitle">Sign in to continue</p>`))
 	if errMsg != "" {
 		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + html.EscapeString(errMsg) + `</p>`))
@@ -373,13 +373,13 @@ func serveTOTPPage(w http.ResponseWriter, errMsg string) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hobnob - Two-Factor Authentication</title>
+    <title>Vigo - Two-Factor Authentication</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
-            <img src="/static/img/logo.svg" alt="Hobnob" style="height:36px;margin-bottom:0.5rem">
+            <img src="/static/img/logo.svg" alt="Vigo" style="height:36px;margin-bottom:0.5rem">
             <p class="login-subtitle">Two-factor authentication</p>`))
 	if errMsg != "" {
 		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + html.EscapeString(errMsg) + `</p>`))
@@ -412,19 +412,19 @@ func serveSetupPage(w http.ResponseWriter) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hobnob - Set Admin Password</title>
+    <title>Vigo - Set Admin Password</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card" style="max-width:480px">
-            <img src="/static/img/logo.svg" alt="Hobnob" style="height:36px;margin-bottom:0.5rem">
+            <img src="/static/img/logo.svg" alt="Vigo" style="height:36px;margin-bottom:0.5rem">
             <p class="login-subtitle">Set Admin Password</p>
             <p style="color:#6c757d;text-align:center;margin-bottom:1.5rem;font-size:0.9rem">
                 An <strong>admin</strong> account has been created. Set its password to sign in.
             </p>
             <div style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:1rem;font-family:monospace;font-size:0.85rem;line-height:1.6;margin-bottom:1rem">
-                <div>hobnobcli secrets set-web-password hobnob/web/auth/admin</div>
+                <div>vigogo secrets set-web-password vigo/web/auth/admin</div>
             </div>
             <hr style="border:none;border-top:1px solid #e0e0e0;margin:1.5rem 0">
             <p style="color:#6c757d;text-align:center;font-size:0.85rem">

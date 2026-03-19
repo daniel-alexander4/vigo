@@ -12,7 +12,7 @@ import (
 
 func TestComputeFileDiff_NewFile(t *testing.T) {
 	dir := t.TempDir()
-	newPath := filepath.Join(dir, "new.hnb")
+	newPath := filepath.Join(dir, "new.vgo")
 	os.WriteFile(newPath, []byte("line1\nline2\n"), 0644)
 
 	diff := ComputeFileDiff("", newPath)
@@ -23,7 +23,7 @@ func TestComputeFileDiff_NewFile(t *testing.T) {
 
 func TestComputeFileDiff_DeletedFile(t *testing.T) {
 	dir := t.TempDir()
-	oldPath := filepath.Join(dir, "old.hnb")
+	oldPath := filepath.Join(dir, "old.vgo")
 	os.WriteFile(oldPath, []byte("line1\nline2\n"), 0644)
 
 	diff := ComputeFileDiff(oldPath, "")
@@ -34,8 +34,8 @@ func TestComputeFileDiff_DeletedFile(t *testing.T) {
 
 func TestComputeFileDiff_ModifiedFile(t *testing.T) {
 	dir := t.TempDir()
-	oldPath := filepath.Join(dir, "old.hnb")
-	newPath := filepath.Join(dir, "new.hnb")
+	oldPath := filepath.Join(dir, "old.vgo")
+	newPath := filepath.Join(dir, "new.vgo")
 	os.WriteFile(oldPath, []byte("line1\nline2\n"), 0644)
 	os.WriteFile(newPath, []byte("line1\nline3\n"), 0644)
 
@@ -47,7 +47,7 @@ func TestComputeFileDiff_ModifiedFile(t *testing.T) {
 
 func TestComputeFileDiff_IdenticalFiles(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "same.hnb")
+	path := filepath.Join(dir, "same.vgo")
 	os.WriteFile(path, []byte("identical\n"), 0644)
 
 	diff := ComputeFileDiff(path, path)

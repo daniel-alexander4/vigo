@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
 // Stage represents the current license enforcement stage.
@@ -44,8 +44,8 @@ const (
 	totalDaysToStop = graceDays + enrollBlockDays // 30
 )
 
-// ThrallCounter returns the current number of active (non-revoked) thralls.
-type ThrallCounter func(ctx context.Context) (int, error)
+// EnvoyCounter returns the current number of active (non-revoked) envoys.
+type EnvoyCounter func(ctx context.Context) (int, error)
 
 // ShutdownFunc is called when the enforcer reaches Stage 3.
 type ShutdownFunc func()
@@ -54,8 +54,8 @@ type ShutdownFunc func()
 type Status struct {
 	Stage          Stage     `json:"stage"`
 	License        *Payload  `json:"license,omitempty"`
-	ActiveThralls  int       `json:"active_thralls"`
-	MaxThralls     int       `json:"max_thralls"`
+	ActiveEnvoys  int       `json:"active_envoys"`
+	MaxEnvoys     int       `json:"max_thralls"`
 	ExpiresAt      string    `json:"expires_at,omitempty"`
 	DaysRemaining  int       `json:"days_remaining,omitempty"`
 	GraceStartedAt string    `json:"grace_started_at,omitempty"`
@@ -70,7 +70,7 @@ type Enforcer struct {
 	licenseDir   string
 	graceDir     string
 	caFile       string // TLS CA cert path for fingerprint computation
-	counter      ThrallCounter
+	counter      EnvoyCounter
 	shutdownFn   ShutdownFunc
 	stage        Stage
 	graceStart   *time.Time
@@ -82,7 +82,7 @@ type Enforcer struct {
 // It validates the license immediately and returns an error if no valid
 // license is found or the license is at Stage 3 (service stop).
 // caFile is the path to the TLS CA cert (used for machine fingerprint validation).
-func NewEnforcer(licenseDir, graceDir, caFile string, counter ThrallCounter, shutdownFn ShutdownFunc) (*Enforcer, error) {
+func NewEnforcer(licenseDir, graceDir, caFile string, counter EnvoyCounter, shutdownFn ShutdownFunc) (*Enforcer, error) {
 	e := &Enforcer{
 		licenseDir: licenseDir,
 		graceDir:   graceDir,
@@ -106,7 +106,7 @@ func (e *Enforcer) Reload() error {
 	return e.loadAndCheckLocked()
 }
 
-// RegistrationAllowed returns nil if new thrall registrations are permitted,
+// RegistrationAllowed returns nil if new envoy registrations are permitted,
 // or an error describing why they are blocked.
 func (e *Enforcer) RegistrationAllowed() error {
 	e.mu.RLock()
@@ -134,7 +134,7 @@ func (e *Enforcer) GetStatus() Status {
 	if e.license != nil {
 		p := e.license.Payload
 		s.License = &p
-		s.MaxThralls = p.MaxThralls
+		s.MaxEnvoys = p.MaxEnvoys
 		s.ExpiresAt = p.ExpiresAt
 
 		if exp, err := e.license.ExpiresTime(); err == nil {
@@ -144,7 +144,7 @@ func (e *Enforcer) GetStatus() Status {
 	}
 
 	if count, err := e.counter(context.Background()); err == nil {
-		s.ActiveThralls = count
+		s.ActiveEnvoys = count
 	}
 
 	if e.graceStart != nil {
@@ -198,7 +198,7 @@ func (e *Enforcer) loadAndCheck() error {
 func (e *Enforcer) loadAndCheckLocked() error {
 	lic, path, err := LoadDir(e.licenseDir)
 	if err != nil {
-		return fmt.Errorf("%w\nPlace a .lic file in %s or install with: hobnobcli license install --file=<path>", err, e.licenseDir)
+		return fmt.Errorf("%w\nPlace a .lic file in %s or install with: vigogo license install --file=<path>", err, e.licenseDir)
 	}
 
 	slog.Info("license loaded", "path", path)
@@ -240,7 +240,7 @@ func (e *Enforcer) evaluateLocked() error {
 
 	overLimit := false
 	if count, err := e.counter(context.Background()); err == nil {
-		overLimit = count > e.license.Payload.MaxThralls
+		overLimit = count > e.license.Payload.MaxEnvoys
 	}
 
 	if !expired && !overLimit {
@@ -255,11 +255,11 @@ func (e *Enforcer) evaluateLocked() error {
 
 	// Determine violation reason.
 	if expired && overLimit {
-		e.violation = "license expired and thrall count exceeds limit"
+		e.violation = "license expired and envoy count exceeds limit"
 	} else if expired {
 		e.violation = "license expired"
 	} else {
-		e.violation = fmt.Sprintf("active thralls exceed license limit (%d)", e.license.Payload.MaxThralls)
+		e.violation = fmt.Sprintf("active envoys exceed license limit (%d)", e.license.Payload.MaxEnvoys)
 	}
 
 	// Load or create grace start timestamp.
@@ -295,7 +295,7 @@ func (e *Enforcer) evaluateLocked() error {
 func (e *Enforcer) updateMetrics() {
 	metrics.LicenseStage.Set(float64(e.stage))
 	if e.license != nil {
-		metrics.LicenseThrallsMax.Set(float64(e.license.Payload.MaxThralls))
+		metrics.LicenseEnvoysMax.Set(float64(e.license.Payload.MaxEnvoys))
 		if exp, err := e.license.ExpiresTime(); err == nil {
 			days := int(time.Until(exp).Hours() / 24)
 			metrics.LicenseDaysRemaining.Set(float64(days))
@@ -303,7 +303,7 @@ func (e *Enforcer) updateMetrics() {
 		}
 	}
 	if count, err := e.counter(context.Background()); err == nil {
-		metrics.LicenseThrallsUsed.Set(float64(count))
+		metrics.LicenseEnvoysUsed.Set(float64(count))
 	}
 }
 

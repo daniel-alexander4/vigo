@@ -22,23 +22,23 @@ resources:
     state: present
 `,
 	}
-	thralls := `
-thralls:
+	envoys := `
+envoys:
   - match: "*.integ.test"
     modules: [testmod]
 `
-	env := startServer(t, modules, thralls)
+	env := startServer(t, modules, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
-	thrallID := enrollAgent(t, env, dataDir, pubPEM, "web01.integ.test", "cross-binary-token")
+	envoyID := enrollAgent(t, env, dataDir, pubPEM, "web01.integ.test", "cross-binary-token")
 
 	// Run agent in dry-run mode (don't actually install packages on the test host).
 	output, err := runAgent(t, env.ServerAddr, dataDir, "--dry-run")
 	if err != nil {
 		t.Fatalf("agent failed: %v\noutput:\n%s", err, output)
 	}
-	_ = thrallID
+	_ = envoyID
 
 	// Verify the agent received and processed the testmod module.
 	assertOutputContains(t, output, "testmod")
@@ -57,12 +57,12 @@ resources:
     state: present
 `,
 	}
-	thralls := `
-thralls:
+	envoys := `
+envoys:
   - match: "*.integ.test"
     modules: [testmod]
 `
-	env := startServer(t, modules, thralls)
+	env := startServer(t, modules, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
@@ -88,7 +88,7 @@ thralls:
 // (no modules assigned) gracefully — it should connect, check in, and
 // exit without error.
 func TestCrossBinary_EmptyConfig(t *testing.T) {
-	// No modules, no thrall mapping.
+	// No modules, no envoy mapping.
 	env := startServer(t, nil, "")
 	defer env.Cleanup()
 
@@ -111,10 +111,10 @@ func TestCrossBinary_RevokedAgent(t *testing.T) {
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
-	thrallID := enrollAgent(t, env, dataDir, pubPEM, "revoked01.integ.test", "revoke-token")
+	envoyID := enrollAgent(t, env, dataDir, pubPEM, "revoked01.integ.test", "revoke-token")
 
 	// Revoke the agent.
-	if err := env.Registry.RevokeThrall(context.Background(), thrallID); err != nil {
+	if err := env.Registry.RevokeEnvoy(context.Background(), envoyID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -148,12 +148,12 @@ resources:
     state: present
 `,
 	}
-	thralls := `
-thralls:
+	envoys := `
+envoys:
   - match: "*.integ.test"
     modules: [base, web]
 `
-	env := startServer(t, modules, thralls)
+	env := startServer(t, modules, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
@@ -169,7 +169,7 @@ thralls:
 	assertOutputContains(t, output, "web")
 }
 
-// TestCrossBinary_ForcePush verifies that setting force_push on a thrall
+// TestCrossBinary_ForcePush verifies that setting force_push on a envoy
 // causes the server to re-deliver the full policy even on a no-change cycle.
 func TestCrossBinary_ForcePush(t *testing.T) {
 	modules := map[string]string{
@@ -182,16 +182,16 @@ resources:
     state: present
 `,
 	}
-	thralls := `
-thralls:
+	envoys := `
+envoys:
   - match: "*.integ.test"
     modules: [testmod]
 `
-	env := startServer(t, modules, thralls)
+	env := startServer(t, modules, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
-	thrallID := enrollAgent(t, env, dataDir, pubPEM, "force01.integ.test", "force-token")
+	envoyID := enrollAgent(t, env, dataDir, pubPEM, "force01.integ.test", "force-token")
 
 	// First run — caches policy.
 	output1, err := runAgent(t, env.ServerAddr, dataDir, "--dry-run")
@@ -200,7 +200,7 @@ thralls:
 	}
 
 	// Set force_push.
-	if err := env.Queries.SetForcePush(context.Background(), thrallID); err != nil {
+	if err := env.Queries.SetForcePush(context.Background(), envoyID); err != nil {
 		t.Fatal(err)
 	}
 

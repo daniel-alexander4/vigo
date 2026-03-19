@@ -166,7 +166,7 @@ mod tests {
         // state=absent on a file that doesn't exist under /etc/tmpfiles.d/.
         let result = exec.execute(
             &make_params(&[
-                ("name", "hobnob-test-nonexistent-tmpfile-99999"),
+                ("name", "vigo-test-nonexistent-tmpfile-99999"),
                 ("state", "absent"),
             ]),
             false,
@@ -185,12 +185,12 @@ mod tests {
         let exec = TmpfileExecutor {
             runner: Box::new(mock),
         };
-        // The conf file /etc/tmpfiles.d/hobnob-test-nonexistent-99999.conf doesn't exist,
+        // The conf file /etc/tmpfiles.d/vigo-test-nonexistent-99999.conf doesn't exist,
         // so with state=present this would be Created. dry_run=true means no write, no
         // systemd-tmpfiles call.
         let result = exec.execute(
             &make_params(&[
-                ("name", "hobnob-test-nonexistent-99999"),
+                ("name", "vigo-test-nonexistent-99999"),
                 ("path", "/run/myapp"),
             ]),
             true,

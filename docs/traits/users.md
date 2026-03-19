@@ -32,7 +32,7 @@ Logged-in users are collected by parsing the output of the `who` command. Accoun
 ```yaml
 - name: user-report
   type: file
-  target_path: /var/lib/hobnob/users.txt
+  target_path: /var/lib/vigo/users.txt
   content: |
     Human users: {{ range .Traits.users.human }}{{ . }} {{ end }}
     Logged in: {{ range .Traits.users.logged_in }}{{ . }} {{ end }}

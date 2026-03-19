@@ -14,13 +14,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hobnob/hobnob/server/license"
+	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/spf13/cobra"
 )
 
 var cliLicenseCmd = &cobra.Command{
 	Use:   "license",
-	Short: "View, install, and inspect the server license that governs thrall limits",
+	Short: "View, install, and inspect the server license that governs envoy limits",
 }
 
 var licenseInstallFile string
@@ -33,7 +33,7 @@ var cliLicenseInstallCmd = &cobra.Command{
 
 var cliLicenseStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show current license tier, thrall usage, enforcement stage, and expiry",
+	Short: "Show current license tier, envoy usage, enforcement stage, and expiry",
 	RunE:  runLicenseStatus,
 }
 
@@ -48,7 +48,7 @@ func init() {
 	cliLicenseInstallCmd.Flags().StringVar(&licenseInstallFile, "file", "", "Path to the .lic file (required)")
 	cliLicenseInstallCmd.MarkFlagRequired("file")
 
-	cliLicenseFingerprintCmd.Flags().String("ca-file", "/srv/hobnob/tls/ca", "Path to TLS CA certificate")
+	cliLicenseFingerprintCmd.Flags().String("ca-file", "/srv/vigo/tls/ca", "Path to TLS CA certificate")
 
 	cliLicenseCmd.AddCommand(cliLicenseInstallCmd)
 	cliLicenseCmd.AddCommand(cliLicenseStatusCmd)
@@ -111,12 +111,12 @@ func runLicenseInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  License ID:  %s\n", lic.Payload.LicenseID)
 	fmt.Printf("  Customer:    %s\n", lic.Payload.CustomerName)
 	fmt.Printf("  Tier:        %s\n", lic.Payload.TierDisplayName())
-	fmt.Printf("  Max thralls: %d\n", lic.Payload.MaxThralls)
+	fmt.Printf("  Max envoys: %d\n", lic.Payload.MaxEnvoys)
 	fmt.Printf("  Expires:     %s\n", lic.Payload.ExpiresAt)
 
-	// Send SIGHUP to the running hobd process for live reload.
+	// Send SIGHUP to the running vigosrv process for live reload.
 	if err := signalHobd(); err != nil {
-		fmt.Printf("\nNote: could not signal hobd for reload: %v\n", err)
+		fmt.Printf("\nNote: could not signal vigosrv for reload: %v\n", err)
 		fmt.Println("Restart the server to apply the new license.")
 	} else {
 		fmt.Println("\nServer notified — license reloaded.")
@@ -135,13 +135,13 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 			CustomerID   string `json:"customer_id"`
 			LicenseID    string `json:"license_id"`
 			Tier         string `json:"tier"`
-			MaxThralls   int    `json:"max_thralls"`
+			MaxEnvoys   int    `json:"max_envoys"`
 			IssuedAt     string `json:"issued_at"`
 			ExpiresAt    string `json:"expires_at"`
 			Version      int    `json:"version"`
 		} `json:"license"`
-		ActiveThralls  int    `json:"active_thralls"`
-		MaxThralls     int    `json:"max_thralls"`
+		ActiveEnvoys  int    `json:"active_envoys"`
+		MaxEnvoys     int    `json:"max_envoys"`
 		ExpiresAt      string `json:"expires_at"`
 		DaysRemaining  int    `json:"days_remaining"`
 		GraceStartedAt string `json:"grace_started_at"`
@@ -183,7 +183,7 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\nThralls: %d / %d\n", status.ActiveThralls, status.MaxThralls)
+	fmt.Printf("\nEnvoys: %d / %d\n", status.ActiveEnvoys, status.MaxEnvoys)
 
 	if status.Violation != "" {
 		fmt.Printf("\nViolation: %s\n", status.Violation)
@@ -220,7 +220,7 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	fmt.Printf("License ID:    %s\n", p.LicenseID)
 	fmt.Printf("Customer:      %s (%s)\n", p.CustomerName, p.CustomerID)
 	fmt.Printf("Tier:          %s\n", p.TierDisplayName())
-	fmt.Printf("Max thralls:   %d\n", p.MaxThralls)
+	fmt.Printf("Max envoys:   %d\n", p.MaxEnvoys)
 	fmt.Printf("Issued:        %s\n", p.IssuedAt)
 	fmt.Printf("Expires:       %s\n", p.ExpiresAt)
 	fmt.Printf("Version:       %d\n", p.Version)
@@ -242,17 +242,17 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// signalHobd finds the hobd process and sends SIGHUP.
+// signalHobd finds the vigosrv process and sends SIGHUP.
 func signalHobd() error {
-	out, err := exec.Command("pgrep", "-x", "hobd").Output()
+	out, err := exec.Command("pgrep", "-x", "vigosrv").Output()
 	if err != nil {
-		return fmt.Errorf("hobd process not found")
+		return fmt.Errorf("vigosrv process not found")
 	}
 
 	pidStr := strings.TrimSpace(string(out))
 	lines := strings.Split(pidStr, "\n")
 	if len(lines) == 0 || lines[0] == "" {
-		return fmt.Errorf("hobd process not found")
+		return fmt.Errorf("vigosrv process not found")
 	}
 
 	pid, err := strconv.Atoi(lines[0])

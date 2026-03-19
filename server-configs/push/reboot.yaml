@@ -2,7 +2,7 @@ name: reboot
 description: Reboot the system with a warning message. Use with caution.
 
 vars:
-  message: "System reboot initiated by Hobnob"
+  message: "System reboot initiated by Vigo"
   delay_secs: "5"
 
 resources:

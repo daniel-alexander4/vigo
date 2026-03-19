@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package ai provides an LLM-powered assistant for natural language queries
-// about Hobnob fleet state, configuration, and diagnostics. It wraps multiple
+// about Vigo fleet state, configuration, and diagnostics. It wraps multiple
 // LLM backends (Ollama, Claude, OpenAI, generic OpenAI-compat) behind a
 // common Provider interface and uses tool-calling to access live server data.
 package ai

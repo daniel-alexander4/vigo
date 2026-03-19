@@ -13,18 +13,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const (
 	// apiTokenPrefix is prepended to all generated API tokens.
-	apiTokenPrefix = "hbt_"
+	apiTokenPrefix = "vgot_"
 	// apiTokenBytes is the number of random bytes in a token (32 bytes = 64 hex chars).
 	apiTokenBytes = 32
 )
 
-// GenerateAPIToken creates a new random API token with the hbt_ prefix.
+// GenerateAPIToken creates a new random API token with the vgot_ prefix.
 // Returns the plaintext token (shown once to the user) and the bcrypt hash
 // (stored in the database).
 func GenerateAPIToken() (plaintext, hash string, err error) {

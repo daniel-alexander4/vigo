@@ -301,7 +301,7 @@ resources:
   - name: my-file
     type: file
     target_path: /etc/foo
-    content: "secret:hobnob/db/dsn"
+    content: "secret:vigo/db/dsn"
     owner: root
     group: root
     mode: "0644"

@@ -19,21 +19,21 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
 // EventPayload is the JSON body sent to webhook endpoints.
 type EventPayload struct {
 	Event     string      `json:"event"`
 	Timestamp time.Time   `json:"timestamp"`
-	Thrall      *ThrallInfo   `json:"thrall,omitempty"`
+	Envoy      *EnvoyInfo   `json:"envoy,omitempty"`
 	Run       *RunInfo    `json:"run,omitempty"`
 	Details   any         `json:"details,omitempty"`
 }
 
-// ThrallInfo contains thrall metadata included in webhook payloads.
-type ThrallInfo struct {
+// EnvoyInfo contains envoy metadata included in webhook payloads.
+type EnvoyInfo struct {
 	ID       string `json:"id"`
 	Hostname string `json:"hostname"`
 	IP       string `json:"ip,omitempty"`
@@ -120,7 +120,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event string, payload EventPa
 }
 
 // DispatchRotation fires a secret.rotated webhook event with the secret path
-// and count of affected thralls.
+// and count of affected envoys.
 func (d *Dispatcher) DispatchRotation(ctx context.Context, event string, secretPath string, affected int) {
 	d.Dispatch(ctx, event, EventPayload{
 		Details: map[string]any{
@@ -166,8 +166,8 @@ func (d *Dispatcher) deliver(ctx context.Context, wh db.Webhook, event string, b
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Hobnob-Signature", signature)
-		req.Header.Set("X-Hobnob-Event", event)
+		req.Header.Set("X-Vigo-Signature", signature)
+		req.Header.Set("X-Vigo-Event", event)
 
 		resp, err := d.httpClient.Do(req)
 		if err != nil {

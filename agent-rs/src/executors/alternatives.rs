@@ -287,14 +287,14 @@ mod tests {
     fn absent_already_gone() {
         // --query fails and no symlink exists -> nothing to remove.
         // Use a name with no real /etc/alternatives/ symlink on this system.
-        let query_fail = fail_output("no alternatives for hobnob_fake_test_alt");
+        let query_fail = fail_output("no alternatives for vigo_fake_test_alt");
         let mock = MockRunner::new(vec![query_fail]);
         let exec = AlternativesExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
             &make_params(&[
-                ("name", "hobnob_fake_test_alt"),
+                ("name", "vigo_fake_test_alt"),
                 ("path", "/usr/bin/nonexistent"),
                 ("state", "absent"),
             ]),

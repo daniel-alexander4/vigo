@@ -82,13 +82,13 @@ func (s *DBRunStore) ListRunResults(ctx context.Context, runID string) ([]RunRes
 	return s.q.ListRunResults(ctx, runID)
 }
 
-func (s *DBRunStore) ListRunsByThrall(ctx context.Context, arg ListRunsByThrallParams) ([]Run, error) {
-	return s.q.ListRunsByThrall(ctx, arg)
+func (s *DBRunStore) ListRunsByEnvoy(ctx context.Context, arg ListRunsByEnvoyParams) ([]Run, error) {
+	return s.q.ListRunsByEnvoy(ctx, arg)
 }
 
-func (s *DBRunStore) LatestRunPerThrall(ctx context.Context, thrallIDs []string) (map[string]*Run, error) {
+func (s *DBRunStore) LatestRunPerEnvoy(ctx context.Context, envoyIDs []string) (map[string]*Run, error) {
 	// Use the optimized correlated subquery.
-	rows, err := s.q.ListThrallsWithLatestRun(ctx)
+	rows, err := s.q.ListEnvoysWithLatestRun(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (s *DBRunStore) LatestRunPerThrall(ctx context.Context, thrallIDs []string)
 	for _, r := range rows {
 		if r.LatestRunStatus.Valid {
 			run := Run{
-				ThrallID:       r.ID,
+				EnvoyID:       r.ID,
 				Status:       r.LatestRunStatus.String,
 				ChangedCount: r.LatestRunChangedCount.Int64,
 			}

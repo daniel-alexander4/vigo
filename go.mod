@@ -1,4 +1,4 @@
-module github.com/hobnob/hobnob
+module github.com/daniel-alexander4/vigo
 
 go 1.25.0
 

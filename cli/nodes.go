@@ -13,27 +13,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var thrallsCmd = &cobra.Command{
-	Use:   "thralls",
-	Short: "Inspect and manage enrolled managed nodes (thralls)",
+var envoysCmd = &cobra.Command{
+	Use:   "envoys",
+	Short: "Inspect and manage enrolled managed nodes (envoys)",
 }
 
-var thrallsListCmd = &cobra.Command{
+var envoysListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all managed nodes with enrollment status and last check-in time",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {
-			Thralls []struct {
+			Envoys []struct {
 				ID         string `json:"id"`
 				Hostname   string `json:"hostname"`
 				IPAddress  string `json:"ipAddress"`
 				EnrolledAt string `json:"enrolledAt"`
 				LastSeen   string `json:"lastSeen"`
 				Revoked    bool   `json:"revoked"`
-			} `json:"thralls"`
+			} `json:"envoys"`
 		}
-		endpoint := "/api/v1/thralls"
+		endpoint := "/api/v1/envoys"
 		if all, _ := cmd.Flags().GetBool("all"); all {
 			endpoint += "?includeRevoked=true"
 		}
@@ -41,14 +41,14 @@ var thrallsListCmd = &cobra.Command{
 			return err
 		}
 
-		if len(resp.Thralls) == 0 {
-			fmt.Println("No thralls found.")
+		if len(resp.Envoys) == 0 {
+			fmt.Println("No envoys found.")
 			return nil
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP"), header("ENROLLED"), header("LAST SEEN"), header("STATUS"))
-		for _, c := range resp.Thralls {
+		for _, c := range resp.Envoys {
 			status := "active"
 			if c.Revoked {
 				status = "revoked"
@@ -63,20 +63,20 @@ var thrallsListCmd = &cobra.Command{
 	},
 }
 
-var thrallsShowCmd = &cobra.Command{
+var envoysShowCmd = &cobra.Command{
 	Use:   "show <id-or-hostname>",
-	Short: "Show enrollment details, compliance status, and recent runs for a thrall",
-	Example: `  hobnobcli thralls show web01.example.com
-  hobnobcli thralls show 2e66cb50-4e75-4859-bf24-c16588dd4f3e`,
+	Short: "Show enrollment details, compliance status, and recent runs for a envoy",
+	Example: `  vigogo envoys show web01.example.com
+  vigogo envoys show 2e66cb50-4e75-4859-bf24-c16588dd4f3e`,
 	Args: requireArgs(1, "a hostname or UUID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		thrallID, err := resolveThrall(client, args[0])
+		envoyID, err := resolveEnvoy(client, args[0])
 		if err != nil {
 			return err
 		}
 		var resp struct {
-			Thrall struct {
+			Envoy struct {
 				ID                     string   `json:"id"`
 				Hostname               string   `json:"hostname"`
 				IPAddress              string   `json:"ipAddress"`
@@ -86,13 +86,13 @@ var thrallsShowCmd = &cobra.Command{
 				RevokedAt              string   `json:"revokedAt"`
 				PendingRotatedSecrets  []string `json:"pendingRotatedSecrets"`
 				AgentVersion           string   `json:"agentVersion"`
-			} `json:"thrall"`
+			} `json:"envoy"`
 		}
-		if err := client.get("/api/v1/thralls/"+thrallID, &resp); err != nil {
+		if err := client.get("/api/v1/envoys/"+envoyID, &resp); err != nil {
 			return err
 		}
 
-		c := resp.Thrall
+		c := resp.Envoy
 		fmt.Printf("ID:         %s\n", c.ID)
 		fmt.Printf("Hostname:   %s\n", c.Hostname)
 		fmt.Printf("IP:         %s\n", c.IPAddress)
@@ -111,7 +111,7 @@ var thrallsShowCmd = &cobra.Command{
 		var compResp struct {
 			Status string `json:"status"`
 		}
-		if err := client.get("/api/v1/thralls/"+thrallID+"/compliance", &compResp); err == nil {
+		if err := client.get("/api/v1/envoys/"+envoyID+"/compliance", &compResp); err == nil {
 			fmt.Printf("Compliance: %s\n", compResp.Status)
 		}
 
@@ -123,54 +123,54 @@ var thrallsShowCmd = &cobra.Command{
 	},
 }
 
-var thrallsRevokeCmd = &cobra.Command{
+var envoysRevokeCmd = &cobra.Command{
 	Use:     "revoke <id>",
-	Short:   "Block a thrall from checking in and receiving policy updates",
-	Example: "  hobnobcli thralls revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
-	Args:    requireArgs(1, "a thrall ID"),
+	Short:   "Block a envoy from checking in and receiving policy updates",
+	Example: "  vigogo envoys revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Args:    requireArgs(1, "a envoy ID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !confirmAction("Revoke this thrall? It will be blocked from checking in.") {
+		if !confirmAction("Revoke this envoy? It will be blocked from checking in.") {
 			fmt.Println("Cancelled.")
 			return nil
 		}
 
 		client := newAPIClient()
-		if err := client.post("/api/v1/thralls/"+args[0]+"/revoke", nil, nil); err != nil {
+		if err := client.post("/api/v1/envoys/"+args[0]+"/revoke", nil, nil); err != nil {
 			return err
 		}
-		fmt.Printf("Revoked thrall %s\n", args[0])
+		fmt.Printf("Revoked envoy %s\n", args[0])
 		return nil
 	},
 }
 
-var thrallsDeleteCmd = &cobra.Command{
+var envoysDeleteCmd = &cobra.Command{
 	Use:     "delete <id>",
-	Short:   "Permanently remove a thrall, its run history, and traits from the server",
-	Example: "  hobnobcli thralls delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
-	Args:    requireArgs(1, "a thrall ID"),
+	Short:   "Permanently remove a envoy, its run history, and traits from the server",
+	Example: "  vigogo envoys delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Args:    requireArgs(1, "a envoy ID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !confirmAction("Delete this thrall and all its history? This cannot be undone.") {
+		if !confirmAction("Delete this envoy and all its history? This cannot be undone.") {
 			fmt.Println("Cancelled.")
 			return nil
 		}
 
 		client := newAPIClient()
-		if err := client.delete("/api/v1/thralls/"+args[0], nil); err != nil {
+		if err := client.delete("/api/v1/envoys/"+args[0], nil); err != nil {
 			return err
 		}
-		fmt.Printf("Deleted thrall %s\n", args[0])
+		fmt.Printf("Deleted envoy %s\n", args[0])
 		return nil
 	},
 }
 
-var thrallsTraitsCmd = &cobra.Command{
+var envoysTraitsCmd = &cobra.Command{
 	Use:   "traits <hostname> [dot.path]",
-	Short: "View auto-discovered system facts (OS, hardware, network, packages) for a thrall",
-	Long: `View the traits (auto-discovered system facts) for a thrall. Returns the full
+	Short: "View auto-discovered system facts (OS, hardware, network, packages) for a envoy",
+	Long: `View the traits (auto-discovered system facts) for a envoy. Returns the full
 trait tree as JSON, or a specific value when a dot-path is provided.`,
-	Example: `  hobnobcli thralls traits web01.example.com
-  hobnobcli thralls traits web01.example.com os.distro
-  hobnobcli thralls traits web01.example.com hardware.memory_mb`,
+	Example: `  vigogo envoys traits web01.example.com
+  vigogo envoys traits web01.example.com os.distro
+  vigogo envoys traits web01.example.com hardware.memory_mb`,
 	Args: requireArgs(1, "a hostname"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hostname := args[0]
@@ -181,7 +181,7 @@ trait tree as JSON, or a specific value when a dot-path is provided.`,
 			CollectedAt string         `json:"collected_at"`
 			Traits       map[string]any `json:"traits"`
 		}
-		if err := client.get("/api/v1/thralls/"+hostname+"/traits", &resp); err != nil {
+		if err := client.get("/api/v1/envoys/"+hostname+"/traits", &resp); err != nil {
 			return err
 		}
 
@@ -238,14 +238,14 @@ func formatTraitValue(v any) string {
 	}
 }
 
-var thrallsTagCmd = &cobra.Command{
+var envoysTagCmd = &cobra.Command{
 	Use:     "tag <id-or-hostname> <tag1,tag2,...>",
-	Short:   "Apply classification tags to a thrall for use in task targeting",
-	Example: "  hobnobcli thralls tag web01.example.com web,production,us-west",
-	Args:    requireArgs(2, "a thrall ID/hostname and comma-separated tags"),
+	Short:   "Apply classification tags to a envoy for use in task targeting",
+	Example: "  vigogo envoys tag web01.example.com web,production,us-west",
+	Args:    requireArgs(2, "a envoy ID/hostname and comma-separated tags"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		thrallID, err := resolveThrall(client, args[0])
+		envoyID, err := resolveEnvoy(client, args[0])
 		if err != nil {
 			return err
 		}
@@ -254,7 +254,7 @@ var thrallsTagCmd = &cobra.Command{
 			tags[i] = strings.TrimSpace(tags[i])
 		}
 		req := map[string]any{"tags": tags}
-		if err := client.put("/api/v1/thralls/"+thrallID+"/tags", req, nil); err != nil {
+		if err := client.put("/api/v1/envoys/"+envoyID+"/tags", req, nil); err != nil {
 			return err
 		}
 		fmt.Printf("Tags set: %s\n", strings.Join(tags, ", "))
@@ -262,13 +262,13 @@ var thrallsTagCmd = &cobra.Command{
 	},
 }
 
-var thrallsUntagCmd = &cobra.Command{
+var envoysUntagCmd = &cobra.Command{
 	Use:   "untag <id-or-hostname> <tag1,tag2,...>",
-	Short: "Remove classification tags from a thrall",
+	Short: "Remove classification tags from a envoy",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		thrallID, err := resolveThrall(client, args[0])
+		envoyID, err := resolveEnvoy(client, args[0])
 		if err != nil {
 			return err
 		}
@@ -277,7 +277,7 @@ var thrallsUntagCmd = &cobra.Command{
 		var resp struct {
 			Tags []string `json:"tags"`
 		}
-		if err := client.get("/api/v1/thralls/"+thrallID+"/tags", &resp); err != nil {
+		if err := client.get("/api/v1/envoys/"+envoyID+"/tags", &resp); err != nil {
 			return err
 		}
 
@@ -294,7 +294,7 @@ var thrallsUntagCmd = &cobra.Command{
 		}
 
 		req := map[string]any{"tags": remaining}
-		if err := client.put("/api/v1/thralls/"+thrallID+"/tags", req, nil); err != nil {
+		if err := client.put("/api/v1/envoys/"+envoyID+"/tags", req, nil); err != nil {
 			return err
 		}
 		fmt.Printf("Tags updated: %s\n", strings.Join(remaining, ", "))
@@ -302,16 +302,16 @@ var thrallsUntagCmd = &cobra.Command{
 	},
 }
 
-var thrallsMaintenanceCmd = &cobra.Command{
+var envoysMaintenanceCmd = &cobra.Command{
 	Use:   "maintenance <id>",
-	Short: "Suppress convergence on a thrall until a specified time",
+	Short: "Suppress convergence on a envoy until a specified time",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		clear, _ := cmd.Flags().GetBool("clear")
 
 		if clear {
-			if err := client.delete("/api/v1/thralls/"+args[0]+"/maintenance", nil); err != nil {
+			if err := client.delete("/api/v1/envoys/"+args[0]+"/maintenance", nil); err != nil {
 				return err
 			}
 			fmt.Println("Maintenance mode cleared.")
@@ -324,7 +324,7 @@ var thrallsMaintenanceCmd = &cobra.Command{
 		}
 
 		req := map[string]string{"until": until}
-		if err := client.put("/api/v1/thralls/"+args[0]+"/maintenance", req, nil); err != nil {
+		if err := client.put("/api/v1/envoys/"+args[0]+"/maintenance", req, nil); err != nil {
 			return err
 		}
 		fmt.Printf("Maintenance mode set until %s\n", until)
@@ -332,10 +332,10 @@ var thrallsMaintenanceCmd = &cobra.Command{
 	},
 }
 
-var thrallsPurgeCmd = &cobra.Command{
+var envoysPurgeCmd = &cobra.Command{
 	Use:   "purge",
-	Short: "Delete stale duplicate thralls, keeping only the most recently seen entry per hostname",
-	Long: `Finds hostnames with multiple enrolled thralls (e.g., machines rebuilt with
+	Short: "Delete stale duplicate envoys, keeping only the most recently seen entry per hostname",
+	Long: `Finds hostnames with multiple enrolled envoys (e.g., machines rebuilt with
 the same name) and deletes all but the most recently seen entry for each.
 
 Use --dry-run to preview what would be deleted without making changes.`,
@@ -344,16 +344,16 @@ Use --dry-run to preview what would be deleted without making changes.`,
 
 		client := newAPIClient()
 		var resp struct {
-			Thralls []struct {
+			Envoys []struct {
 				ID         string `json:"id"`
 				Hostname   string `json:"hostname"`
 				IPAddress  string `json:"ipAddress"`
 				EnrolledAt string `json:"enrolledAt"`
 				LastSeen   string `json:"lastSeen"`
 				Revoked    bool   `json:"revoked"`
-			} `json:"thralls"`
+			} `json:"envoys"`
 		}
-		if err := client.get("/api/v1/thralls?includeRevoked=true", &resp); err != nil {
+		if err := client.get("/api/v1/envoys?includeRevoked=true", &resp); err != nil {
 			return err
 		}
 
@@ -363,7 +363,7 @@ Use --dry-run to preview what would be deleted without making changes.`,
 			Revoked                                       bool
 		}
 		byHostname := make(map[string][]entry)
-		for _, t := range resp.Thralls {
+		for _, t := range resp.Envoys {
 			byHostname[t.Hostname] = append(byHostname[t.Hostname], entry{
 				t.ID, t.Hostname, t.IPAddress, t.EnrolledAt, t.LastSeen, t.Revoked,
 			})
@@ -396,7 +396,7 @@ Use --dry-run to preview what would be deleted without making changes.`,
 		}
 
 		if len(toDelete) == 0 {
-			fmt.Println("No duplicate thralls found.")
+			fmt.Println("No duplicate envoys found.")
 			return nil
 		}
 
@@ -411,21 +411,21 @@ Use --dry-run to preview what would be deleted without making changes.`,
 				dim(d.ID), d.Hostname, d.IPAddress, dim(formatTimestamp(d.LastSeen)), colorStatus(status))
 		}
 		w.Flush()
-		fmt.Printf("\n%d duplicate thrall(s) will be deleted.\n", len(toDelete))
+		fmt.Printf("\n%d duplicate envoy(s) will be deleted.\n", len(toDelete))
 
 		if dryRun {
 			fmt.Println("Dry run — no changes made.")
 			return nil
 		}
 
-		if !confirmAction("Purge these thralls?") {
+		if !confirmAction("Purge these envoys?") {
 			fmt.Println("Cancelled.")
 			return nil
 		}
 
 		var failures int
 		for _, d := range toDelete {
-			if err := client.delete("/api/v1/thralls/"+d.ID, nil); err != nil {
+			if err := client.delete("/api/v1/envoys/"+d.ID, nil); err != nil {
 				fmt.Fprintf(os.Stderr, "  failed to delete %s (%s): %v\n", d.ID, d.Hostname, err)
 				failures++
 			} else {
@@ -435,15 +435,15 @@ Use --dry-run to preview what would be deleted without making changes.`,
 		if failures > 0 {
 			return fmt.Errorf("%d deletion(s) failed", failures)
 		}
-		fmt.Printf("Purged %d stale thrall(s).\n", len(toDelete))
+		fmt.Printf("Purged %d stale envoy(s).\n", len(toDelete))
 		return nil
 	},
 }
 
-// resolveThrall resolves an ID-or-hostname string to a thrall UUID.
+// resolveEnvoy resolves an ID-or-hostname string to a envoy UUID.
 // If the argument looks like a UUID (contains a hyphen and is 36+ chars),
-// it is returned as-is. Otherwise, it searches the thrall list by hostname.
-func resolveThrall(client *apiClient, idOrHostname string) (string, error) {
+// it is returned as-is. Otherwise, it searches the envoy list by hostname.
+func resolveEnvoy(client *apiClient, idOrHostname string) (string, error) {
 	// Simple heuristic: UUIDs are 36 chars with hyphens.
 	if len(idOrHostname) >= 36 && strings.Contains(idOrHostname, "-") {
 		return idOrHostname, nil
@@ -451,40 +451,40 @@ func resolveThrall(client *apiClient, idOrHostname string) (string, error) {
 	// Also accept short UUIDs (8-char prefix from truncUUID).
 	// But hostnames can also be short, so try hostname lookup first.
 	var resp struct {
-		Thralls []struct {
+		Envoys []struct {
 			ID       string `json:"id"`
 			Hostname string `json:"hostname"`
-		} `json:"thralls"`
+		} `json:"envoys"`
 	}
-	if err := client.get("/api/v1/thralls", &resp); err != nil {
-		return "", fmt.Errorf("listing thralls for hostname lookup: %w", err)
+	if err := client.get("/api/v1/envoys", &resp); err != nil {
+		return "", fmt.Errorf("listing envoys for hostname lookup: %w", err)
 	}
-	for _, t := range resp.Thralls {
+	for _, t := range resp.Envoys {
 		if t.Hostname == idOrHostname {
 			return t.ID, nil
 		}
 	}
 	// Maybe it's a short UUID prefix.
-	for _, t := range resp.Thralls {
+	for _, t := range resp.Envoys {
 		if strings.HasPrefix(t.ID, idOrHostname) {
 			return t.ID, nil
 		}
 	}
-	return "", fmt.Errorf("no thrall found matching %q", idOrHostname)
+	return "", fmt.Errorf("no envoy found matching %q", idOrHostname)
 }
 
-var thrallsRebootstrapCmd = &cobra.Command{
+var envoysRebootstrapCmd = &cobra.Command{
 	Use:   "rebootstrap [hostname...]",
-	Short: "Signal thralls to download the latest agent binary and restart",
-	Long: `Signal one or more thralls to update their agent binary on the next check-in.
+	Short: "Signal envoys to download the latest agent binary and restart",
+	Long: `Signal one or more envoys to update their agent binary on the next check-in.
 The server sets a force_update flag that tells the agent to download the latest
 binary, verify its checksum, replace itself, and restart — no SSH required.
 
-With --all, signals every active thrall. Otherwise, pass hostnames.
+With --all, signals every active envoy. Otherwise, pass hostnames.
 
 Examples:
-  hobnobcli thralls rebootstrap plex raspberry
-  hobnobcli thralls rebootstrap --all`,
+  vigogo envoys rebootstrap plex raspberry
+  vigogo envoys rebootstrap --all`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
 
@@ -498,23 +498,23 @@ Examples:
 			var resp struct {
 				Count int `json:"count"`
 			}
-			if err := client.post("/api/v1/thralls/update", nil, &resp); err != nil {
+			if err := client.post("/api/v1/envoys/update", nil, &resp); err != nil {
 				return err
 			}
-			fmt.Printf("Queued update for %d thrall(s). They will update on next check-in.\n", resp.Count)
+			fmt.Printf("Queued update for %d envoy(s). They will update on next check-in.\n", resp.Count)
 			return nil
 		}
 
 		// Resolve hostnames to IDs and signal each one.
 		var failures int
 		for _, name := range args {
-			id, err := resolveThrall(client, name)
+			id, err := resolveEnvoy(client, name)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  %s: %v\n", name, err)
 				failures++
 				continue
 			}
-			if err := client.post("/api/v1/thralls/"+id+"/update", nil, nil); err != nil {
+			if err := client.post("/api/v1/envoys/"+id+"/update", nil, nil); err != nil {
 				fmt.Fprintf(os.Stderr, "  %s: %v\n", name, err)
 				failures++
 			} else {
@@ -524,18 +524,18 @@ Examples:
 		if failures > 0 {
 			return fmt.Errorf("%d target(s) failed", failures)
 		}
-		fmt.Println("Thralls will update on next check-in.")
+		fmt.Println("Envoys will update on next check-in.")
 		return nil
 	},
 }
 
 func init() {
-	thrallsListCmd.Flags().Bool("all", false, "include revoked thralls")
-	thrallsRebootstrapCmd.Flags().Bool("all", false, "update all active thralls")
-	thrallsMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
-	thrallsMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
-	thrallsPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
-	thrallsCmd.AddCommand(thrallsListCmd, thrallsShowCmd, thrallsRevokeCmd, thrallsDeleteCmd,
-		thrallsTraitsCmd, thrallsTagCmd, thrallsUntagCmd, thrallsMaintenanceCmd,
-		thrallsPurgeCmd, thrallsRebootstrapCmd, thrallsPushCmd, rollbackCmd, previewCmd, packagesCmd)
+	envoysListCmd.Flags().Bool("all", false, "include revoked envoys")
+	envoysRebootstrapCmd.Flags().Bool("all", false, "update all active envoys")
+	envoysMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
+	envoysMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
+	envoysPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
+	envoysCmd.AddCommand(envoysListCmd, envoysShowCmd, envoysRevokeCmd, envoysDeleteCmd,
+		envoysTraitsCmd, envoysTagCmd, envoysUntagCmd, envoysMaintenanceCmd,
+		envoysPurgeCmd, envoysRebootstrapCmd, envoysPushCmd, rollbackCmd, previewCmd, packagesCmd)
 }

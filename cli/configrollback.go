@@ -36,7 +36,7 @@ var configRollbackCmd = &cobra.Command{
 		}
 
 		version := args[0]
-		if !confirmAction("Roll back config to this version? This affects all thralls.") {
+		if !confirmAction("Roll back config to this version? This affects all envoys.") {
 			fmt.Println("Cancelled.")
 			return nil
 		}

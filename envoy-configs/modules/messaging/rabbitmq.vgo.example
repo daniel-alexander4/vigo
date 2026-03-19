@@ -39,7 +39,7 @@ resources:
     type: file
     target_path: /etc/rabbitmq/rabbitmq.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       listeners.tcp.default = {{ .Vars.rabbitmq_port }}
       management.tcp.port = {{ .Vars.rabbitmq_mgmt_port }}
       vm_memory_high_watermark.relative = {{ .Vars.memory_watermark }}

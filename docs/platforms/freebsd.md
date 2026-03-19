@@ -1,6 +1,6 @@
 # FreeBSD Support
 
-Hobnob supports FreeBSD with native integration for rc.d services, the `pw` user/group utility, kernel module management, and `pkg` package management. The agent includes FreeBSD-specific executors alongside shared BSD executors for hostname, timezone, sysctl, and pf firewall management.
+Vigo supports FreeBSD with native integration for rc.d services, the `pw` user/group utility, kernel module management, and `pkg` package management. The agent includes FreeBSD-specific executors alongside shared BSD executors for hostname, timezone, sysctl, and pf firewall management.
 
 ## Supported Versions
 
@@ -12,20 +12,20 @@ Hobnob supports FreeBSD with native integration for rc.d services, the `pw` user
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-The bootstrap script detects FreeBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/hobnob`, and installs an rc.d service script.
+The bootstrap script detects FreeBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/vigo`, and installs an rc.d service script.
 
 ## rc.d Service
 
-The agent runs as an rc.d service at `/usr/local/etc/rc.d/hobnob_thrall`.
+The agent runs as an rc.d service at `/usr/local/etc/rc.d/vigo_envoy`.
 
 ```sh
 # Enable at boot
-sysrc hobnob_thrall_enable=YES
+sysrc vigo_envoy_enable=YES
 
 # Service management
-service hobnob_thrall start
-service hobnob_thrall stop
-service hobnob_thrall status
+service vigo_envoy start
+service vigo_envoy stop
+service vigo_envoy status
 ```
 
 ## Package Management
@@ -107,7 +107,7 @@ FreeBSD has access to all cross-platform executors, FreeBSD-specific executors, 
 ## Example: FreeBSD Jail Host
 
 ```yaml
-# modules/freebsd-jailhost.hnb
+# modules/freebsd-jailhost.vgo
 name: freebsd-jailhost
 
 vars:
@@ -159,7 +159,7 @@ resources:
 
 ## FreeBSD-Specific Notes
 
-- **pkg vs ports**: Hobnob manages binary packages via `pkg`. For ports-based installations, use `exec` resources with appropriate guards.
+- **pkg vs ports**: Vigo manages binary packages via `pkg`. For ports-based installations, use `exec` resources with appropriate guards.
 - **Jails**: Jail creation and management is not handled by a dedicated executor. Use `exec` resources to invoke `jail`/`ezjail-admin` commands with idempotent guards (`creates:` or `unless:`).
 - **ZFS**: No dedicated ZFS executor. Use `exec` resources for `zpool` and `zfs` commands. Ensure idempotency with `unless: "zfs list poolname"` or similar guards.
 - **PF firewall**: The `firewall_pf` executor manages PF rules. For complex rulesets, use a `file` resource for `/etc/pf.conf` with a `notify` to reload via `exec`.

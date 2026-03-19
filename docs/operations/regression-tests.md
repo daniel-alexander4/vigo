@@ -1,6 +1,6 @@
 # Automated Regression Tests
 
-Hobnob includes an automated regression test suite in `test/audit/` that catches documentation drift, missing docs, undocumented endpoints, ignored errors, secrets in logs, and count inconsistencies. These tests run as part of `go test ./...` and fail when problems are introduced.
+Vigo includes an automated regression test suite in `test/audit/` that catches documentation drift, missing docs, undocumented endpoints, ignored errors, secrets in logs, and count inconsistencies. These tests run as part of `go test ./...` and fail when problems are introduced.
 
 ## Running
 

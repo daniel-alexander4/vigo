@@ -1,6 +1,6 @@
-# hobnobcli approved
+# vigogo approved
 
-Manage approved enrollment patterns that control which hostnames can enroll as thralls.
+Manage approved enrollment patterns that control which hostnames can enroll as envoys.
 
 ## Subcommands
 
@@ -13,7 +13,7 @@ Manage approved enrollment patterns that control which hostnames can enroll as t
 ## Usage
 
 ```bash
-hobnobcli approved [subcommand] [flags]
+vigogo approved [subcommand] [flags]
 ```
 
 ## add
@@ -21,7 +21,7 @@ hobnobcli approved [subcommand] [flags]
 Add an approved hostname pattern with a one-time enrollment token.
 
 ```bash
-hobnobcli approved add <pattern> --token <token>
+vigogo approved add <pattern> --token <token>
 ```
 
 ### Flags
@@ -35,7 +35,7 @@ hobnobcli approved add <pattern> --token <token>
 #### Add a wildcard pattern for web servers
 
 ```bash
-hobnobcli approved add "*.web.example.com" --token "my-secret-token"
+vigogo approved add "*.web.example.com" --token "my-secret-token"
 ```
 
 ```
@@ -47,7 +47,7 @@ Created approved pattern *.web.example.com (ID: a1b2c3d4)
 List all approved patterns with their usage status.
 
 ```bash
-hobnobcli approved list
+vigogo approved list
 ```
 
 ### Example output
@@ -63,13 +63,13 @@ e5f6g7h8    db-*.internal.net     2026-03-08 09:15  yes (db-01.internal.net)
 Revoke an approved pattern by its ID.
 
 ```bash
-hobnobcli approved revoke <id>
+vigogo approved revoke <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli approved revoke a1b2c3d4
+vigogo approved revoke a1b2c3d4
 ```
 
 ```
@@ -79,4 +79,4 @@ Revoked approved pattern a1b2c3d4
 ## Related
 
 - [tokens](tokens.md) -- generate enrollment tokens
-- [thralls](thralls.md) -- manage enrolled thralls
+- [envoys](envoys.md) -- manage enrolled envoys

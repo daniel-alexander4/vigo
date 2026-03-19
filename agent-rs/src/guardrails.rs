@@ -3,7 +3,7 @@
 
 //! Self-protection guardrails — hardcoded, non-configurable by the server.
 //!
-//! Prevents configs or ad-hoc tasks from destroying the hobnob agent, server,
+//! Prevents configs or ad-hoc tasks from destroying the vigo agent, server,
 //! or their dependencies on managed nodes. The agent enforces these regardless
 //! of what the server sends.
 
@@ -15,91 +15,91 @@ use std::collections::HashMap;
 #[cfg(unix)]
 const PROTECTED_PATHS: &[&str] = &[
     // Agent (Linux)
-    "/usr/local/sbin/hobnob",
-    "/etc/hobnob-thrall/",
-    "/etc/hobnob/",
-    "/var/lib/hobnob/",
-    "/etc/systemd/system/hobnob-thrall.service",
+    "/usr/local/sbin/vigo",
+    "/etc/vigo-envoy/",
+    "/etc/vigo/",
+    "/var/lib/vigo/",
+    "/etc/systemd/system/vigo-envoy.service",
     // Agent (macOS)
-    "/usr/local/etc/hobnob-thrall/",
-    "/Library/Hobnob/",
-    "/Library/LaunchDaemons/com.hobnob.thrall.plist",
+    "/usr/local/etc/vigo-envoy/",
+    "/Library/Vigo/",
+    "/Library/LaunchDaemons/com.vigo.envoy.plist",
     // Agent (FreeBSD)
-    "/usr/local/etc/rc.d/hobnob_thrall",
+    "/usr/local/etc/rc.d/vigo_envoy",
     // Agent (illumos)
-    "/var/svc/manifest/system/hobnob-thrall.xml",
+    "/var/svc/manifest/system/vigo-envoy.xml",
     // Server
-    "/usr/local/sbin/hobd",
-    "/usr/local/bin/hobnobcli",
-    "/usr/local/sbin/hobnob-license-manager",
-    "/srv/hobnob/",
-    "/etc/systemd/system/hobd.service",
+    "/usr/local/sbin/vigosrv",
+    "/usr/local/bin/vigogo",
+    "/usr/local/sbin/vigo-license-manager",
+    "/srv/vigo/",
+    "/etc/systemd/system/vigosrv.service",
 ];
 
 #[cfg(windows)]
 const PROTECTED_PATHS: &[&str] = &[
     // Agent (Windows standard paths)
-    r"C:\Program Files\Hobnob\",
-    r"C:\ProgramData\Hobnob\",
+    r"C:\Program Files\Vigo\",
+    r"C:\ProgramData\Vigo\",
 ];
 
 /// Services that must never be stopped, disabled, or masked.
-const PROTECTED_SERVICES: &[&str] = &["hobnob-thrall", "hobd"];
+const PROTECTED_SERVICES: &[&str] = &["vigo-envoy", "vigosrv"];
 
 /// Packages that must never be removed.
-const PROTECTED_PACKAGES: &[&str] = &["hobnob", "hobd", "hobnobcli"];
+const PROTECTED_PACKAGES: &[&str] = &["vigo", "vigosrv", "vigogo"];
 
-/// Dangerous command fragments that target hobnob processes or files.
+/// Dangerous command fragments that target vigo processes or files.
 /// Used for heuristic scanning of exec commands and ad-hoc tasks.
 #[cfg(unix)]
 const DANGEROUS_PATTERNS: &[&str] = &[
     // systemd (Linux)
-    "systemctl stop hobnob",
-    "systemctl disable hobnob",
-    "systemctl mask hobnob",
-    "systemctl stop hobd",
-    "systemctl disable hobd",
-    "systemctl mask hobd",
+    "systemctl stop vigo",
+    "systemctl disable vigo",
+    "systemctl mask vigo",
+    "systemctl stop vigosrv",
+    "systemctl disable vigosrv",
+    "systemctl mask vigosrv",
     // rc.d / service (BSD)
-    "service hobnob-thrall stop",
-    "service hobnob_thrall stop",
-    "service hobd stop",
+    "service vigo-envoy stop",
+    "service vigo_envoy stop",
+    "service vigosrv stop",
     // rcctl (OpenBSD)
-    "rcctl stop hobnob",
-    "rcctl disable hobnob",
+    "rcctl stop vigo",
+    "rcctl disable vigo",
     // launchctl (macOS)
-    "launchctl unload com.hobnob",
-    "launchctl remove com.hobnob",
-    "launchctl bootout com.hobnob",
+    "launchctl unload com.vigo",
+    "launchctl remove com.vigo",
+    "launchctl bootout com.vigo",
     // SMF (illumos)
-    "svcadm disable hobnob",
-    "svccfg delete hobnob",
+    "svcadm disable vigo",
+    "svccfg delete vigo",
     // process kill
-    "pkill hobnob",
-    "pkill hobd",
-    "killall hobnob",
-    "killall hobd",
-    "kill -9 hobnob",
-    "kill -9 hobd",
+    "pkill vigo",
+    "pkill vigosrv",
+    "killall vigo",
+    "killall vigosrv",
+    "kill -9 vigo",
+    "kill -9 vigosrv",
     // file removal
-    "rm /usr/local/sbin/hobnob",
-    "rm /usr/local/sbin/hobd",
-    "rm /usr/local/bin/hobnobcli",
-    "rm /usr/local/sbin/hobnob-license-manager",
-    "rm -rf /etc/hobnob",
-    "rm -rf /var/lib/hobnob",
-    "rm -rf /srv/hobnob",
-    "rm -rf /etc/hobnob-thrall",
-    "rm -rf /library/hobnob",
+    "rm /usr/local/sbin/vigo",
+    "rm /usr/local/sbin/vigosrv",
+    "rm /usr/local/bin/vigogo",
+    "rm /usr/local/sbin/vigo-license-manager",
+    "rm -rf /etc/vigo",
+    "rm -rf /var/lib/vigo",
+    "rm -rf /srv/vigo",
+    "rm -rf /etc/vigo-envoy",
+    "rm -rf /library/vigo",
 ];
 
 #[cfg(windows)]
 const DANGEROUS_PATTERNS: &[&str] = &[
-    "sc stop hobnob",
-    "sc delete hobnob",
-    "taskkill /im hobnob",
-    "del /f hobnob.exe",
-    "rmdir /s hobnob",
+    "sc stop vigo",
+    "sc delete vigo",
+    "taskkill /im vigo",
+    "del /f vigo.exe",
+    "rmdir /s vigo",
 ];
 
 /// Result of a guardrail check.
@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn file_targeting_agent_binary_blocked() {
-        let p = params(&[("targetpath", "/usr/local/sbin/hobnob")]);
+        let p = params(&[("targetpath", "/usr/local/sbin/vigo")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
         assert!(v.unwrap().reason.contains("protected path"));
@@ -346,29 +346,29 @@ mod tests {
 
     #[test]
     fn file_targeting_server_binary_blocked() {
-        let p = params(&[("targetpath", "/usr/local/sbin/hobd")]);
+        let p = params(&[("targetpath", "/usr/local/sbin/vigosrv")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn file_targeting_server_config_dir_blocked() {
-        let p = params(&[("targetpath", "/srv/hobnob/server.yaml")]);
+        let p = params(&[("targetpath", "/srv/vigo/server.yaml")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
-        assert!(v.unwrap().reason.contains("/srv/hobnob/"));
+        assert!(v.unwrap().reason.contains("/srv/vigo/"));
     }
 
     #[test]
     fn file_targeting_agent_config_dir_blocked() {
-        let p = params(&[("targetpath", "/etc/hobnob-thrall/config.yaml")]);
+        let p = params(&[("targetpath", "/etc/vigo-envoy/config.yaml")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn file_targeting_lmdb_state_blocked() {
-        let p = params(&[("targetpath", "/var/lib/hobnob/state/data.mdb")]);
+        let p = params(&[("targetpath", "/var/lib/vigo/state/data.mdb")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
     }
@@ -388,14 +388,14 @@ mod tests {
 
     #[test]
     fn file_line_targeting_agent_config_blocked() {
-        let p = params(&[("path", "/etc/hobnob-thrall/config.yaml")]);
+        let p = params(&[("path", "/etc/vigo-envoy/config.yaml")]);
         let v = check_resource("bad-line", "file_line", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn ini_targeting_server_config_blocked() {
-        let p = params(&[("path", "/srv/hobnob/settings.ini")]);
+        let p = params(&[("path", "/srv/vigo/settings.ini")]);
         let v = check_resource("bad-ini", "ini", &p);
         assert!(v.is_some());
     }
@@ -404,29 +404,29 @@ mod tests {
 
     #[test]
     fn service_stop_agent_blocked() {
-        let p = params(&[("service", "hobnob-thrall"), ("state", "stopped")]);
+        let p = params(&[("service", "vigo-envoy"), ("state", "stopped")]);
         let v = check_resource("stop-agent", "service", &p);
         assert!(v.is_some());
-        assert!(v.unwrap().reason.contains("hobnob-thrall"));
+        assert!(v.unwrap().reason.contains("vigo-envoy"));
     }
 
     #[test]
     fn service_disable_server_blocked() {
-        let p = params(&[("service", "hobd"), ("state", "disabled")]);
+        let p = params(&[("service", "vigosrv"), ("state", "disabled")]);
         let v = check_resource("disable-server", "service", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn service_restart_agent_allowed() {
-        let p = params(&[("service", "hobnob-thrall"), ("state", "restarted")]);
+        let p = params(&[("service", "vigo-envoy"), ("state", "restarted")]);
         let v = check_resource("restart-agent", "service", &p);
         assert!(v.is_none());
     }
 
     #[test]
     fn service_start_agent_allowed() {
-        let p = params(&[("service", "hobnob-thrall"), ("state", "running")]);
+        let p = params(&[("service", "vigo-envoy"), ("state", "running")]);
         let v = check_resource("start-agent", "service", &p);
         assert!(v.is_none());
     }
@@ -441,22 +441,22 @@ mod tests {
     // ── Package resource tests ──────────────────────────────────────
 
     #[test]
-    fn package_remove_hobnob_blocked() {
-        let p = params(&[("package", "hobnob"), ("state", "absent")]);
+    fn package_remove_vigo_blocked() {
+        let p = params(&[("package", "vigo"), ("state", "absent")]);
         let v = check_resource("rm-pkg", "package", &p);
         assert!(v.is_some());
     }
 
     #[test]
-    fn package_remove_hobd_blocked() {
-        let p = params(&[("package", "hobd"), ("state", "absent")]);
+    fn package_remove_vigosrv_blocked() {
+        let p = params(&[("package", "vigosrv"), ("state", "absent")]);
         let v = check_resource("rm-pkg", "package", &p);
         assert!(v.is_some());
     }
 
     #[test]
-    fn package_install_hobnob_allowed() {
-        let p = params(&[("package", "hobnob"), ("state", "present")]);
+    fn package_install_vigo_allowed() {
+        let p = params(&[("package", "vigo"), ("state", "present")]);
         let v = check_resource("install-pkg", "package", &p);
         assert!(v.is_none());
     }
@@ -472,35 +472,35 @@ mod tests {
 
     #[test]
     fn exec_systemctl_stop_agent_blocked() {
-        let p = params(&[("command", "systemctl stop hobnob-thrall")]);
+        let p = params(&[("command", "systemctl stop vigo-envoy")]);
         let v = check_resource("bad-exec", "exec", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn exec_systemctl_stop_server_blocked() {
-        let p = params(&[("command", "systemctl stop hobd")]);
+        let p = params(&[("command", "systemctl stop vigosrv")]);
         let v = check_resource("bad-exec", "exec", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn exec_rm_agent_binary_blocked() {
-        let p = params(&[("command", "rm /usr/local/sbin/hobnob")]);
+        let p = params(&[("command", "rm /usr/local/sbin/vigo")]);
         let v = check_resource("bad-exec", "exec", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn exec_rm_rf_server_config_blocked() {
-        let p = params(&[("command", "rm -rf /srv/hobnob")]);
+        let p = params(&[("command", "rm -rf /srv/vigo")]);
         let v = check_resource("bad-exec", "exec", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn exec_pkill_blocked() {
-        let p = params(&[("command", "pkill hobnob")]);
+        let p = params(&[("command", "pkill vigo")]);
         let v = check_resource("bad-exec", "exec", &p);
         assert!(v.is_some());
     }
@@ -516,19 +516,19 @@ mod tests {
 
     #[test]
     fn push_stop_agent_blocked() {
-        let r = check_push_command("systemctl stop hobnob-thrall && echo done");
+        let r = check_push_command("systemctl stop vigo-envoy && echo done");
         assert!(r.is_some());
     }
 
     #[test]
     fn push_stop_server_blocked() {
-        let r = check_push_command("systemctl stop hobd");
+        let r = check_push_command("systemctl stop vigosrv");
         assert!(r.is_some());
     }
 
     #[test]
     fn push_rm_server_config_blocked() {
-        let r = check_push_command("rm -rf /srv/hobnob/db");
+        let r = check_push_command("rm -rf /srv/vigo/db");
         assert!(r.is_some());
     }
 
@@ -540,7 +540,7 @@ mod tests {
 
     #[test]
     fn push_case_insensitive() {
-        let r = check_push_command("Systemctl Stop Hobnob-Thrall");
+        let r = check_push_command("Systemctl Stop Vigo-Envoy");
         assert!(r.is_some());
     }
 
@@ -548,37 +548,37 @@ mod tests {
 
     #[test]
     fn path_exact_match() {
-        assert!(is_protected_path("/usr/local/sbin/hobnob").is_some());
+        assert!(is_protected_path("/usr/local/sbin/vigo").is_some());
     }
 
     #[test]
     fn path_child_match() {
-        assert!(is_protected_path("/srv/hobnob/certs/ca.pem").is_some());
+        assert!(is_protected_path("/srv/vigo/certs/ca.pem").is_some());
     }
 
     #[test]
     fn path_prefix_not_child_allowed() {
-        // /srv/hobnobXYZ should NOT match /srv/hobnob/
-        assert!(is_protected_path("/srv/hobnobXYZ/foo").is_none());
+        // /srv/vigoXYZ should NOT match /srv/vigo/
+        assert!(is_protected_path("/srv/vigoXYZ/foo").is_none());
     }
 
     #[test]
     fn path_similar_name_allowed() {
-        // /usr/local/sbin/hobnob-helper should NOT match /usr/local/sbin/hobnob
-        assert!(is_protected_path("/usr/local/sbin/hobnob-helper").is_none());
+        // /usr/local/sbin/vigo-helper should NOT match /usr/local/sbin/vigo
+        assert!(is_protected_path("/usr/local/sbin/vigo-helper").is_none());
     }
 
     #[test]
     fn path_var_lib_child_blocked() {
-        assert!(is_protected_path("/var/lib/hobnob/snapshots/foo.tar").is_some());
+        assert!(is_protected_path("/var/lib/vigo/snapshots/foo.tar").is_some());
     }
 
     #[test]
     fn symlink_to_protected_path_blocked() {
         use std::os::unix::fs::symlink;
-        let dir = std::env::temp_dir().join("hobnob_guardrail_test_symlink");
+        let dir = std::env::temp_dir().join("vigo_guardrail_test_symlink");
         let _ = std::fs::remove_file(&dir);
-        symlink("/srv/hobnob", &dir).unwrap();
+        symlink("/srv/vigo", &dir).unwrap();
         let target = format!("{}/server.yaml", dir.display());
         let result = is_protected_path(&target);
         let _ = std::fs::remove_file(&dir);
@@ -588,9 +588,9 @@ mod tests {
     #[test]
     fn nonexistent_file_under_symlinked_dir_blocked() {
         use std::os::unix::fs::symlink;
-        let dir = std::env::temp_dir().join("hobnob_guardrail_test_symlink2");
+        let dir = std::env::temp_dir().join("vigo_guardrail_test_symlink2");
         let _ = std::fs::remove_file(&dir);
-        symlink("/srv/hobnob", &dir).unwrap();
+        symlink("/srv/vigo", &dir).unwrap();
         // File doesn't exist, but parent dir resolves through symlink.
         let target = format!("{}/nonexistent.yaml", dir.display());
         let result = is_protected_path(&target);

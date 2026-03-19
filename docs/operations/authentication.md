@@ -44,34 +44,34 @@ Basic authentication stores user accounts in the database and password hashes (b
 The server automatically creates an `admin` account on first startup. The web UI redirects to a setup page with the one command needed to activate it:
 
 ```bash
-hobnobcli secrets set-web-password hobnob/web/auth/admin
+vigogo secrets set-web-password vigo/web/auth/admin
 ```
 
-Until a password is set, all web UI requests redirect to the setup page. Password hashes are stored at `hobnob/web/auth/<username>` in the secrets provider.
+Until a password is set, all web UI requests redirect to the setup page. Password hashes are stored at `vigo/web/auth/<username>` in the secrets provider.
 
 ### Adding Users
 
 ```bash
 # Create a viewer account
-hobnobcli webusers create --username alice --role viewer --email alice@example.com
+vigogo webusers create --username alice --role viewer --email alice@example.com
 
 # Set their password
-hobnobcli secrets set-web-password hobnob/web/auth/alice
+vigogo secrets set-web-password vigo/web/auth/alice
 ```
 
 ### Resetting Passwords
 
 ```bash
-hobnobcli secrets set-web-password hobnob/web/auth/admin
+vigogo secrets set-web-password vigo/web/auth/admin
 ```
 
 ### CLI Access (Localhost Trust)
 
 When the CLI runs on the same host as the server (or Docker host), API requests are automatically trusted with admin privileges — no token needed. This works like PostgreSQL's `peer` authentication: shell access to the server host implies full access.
 
-Localhost (`127.0.0.1`, `::1`) and Docker bridge networks (`172.16.0.0/12`) are trusted. Remote CLI access requires an API token via `hobnobcli auth set-token`.
+Localhost (`127.0.0.1`, `::1`) and Docker bridge networks (`172.16.0.0/12`) are trusted. Remote CLI access requires an API token via `vigogo auth set-token`.
 
-**Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Hobnob is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8443` from an untrusted network — the proxy's requests would be trusted as local.
+**Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Vigo is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8443` from an untrusted network — the proxy's requests would be trusted as local.
 
 ## OIDC (OpenID Connect)
 
@@ -85,8 +85,8 @@ auth:
   oidc:
     issuer: "https://accounts.google.com"
     client_id: "your-client-id"
-    client_secret: "secret:hobnob/auth/oidc_client_secret"
-    redirect_url: "https://hobnob.example.com:8443/auth/callback"
+    client_secret: "secret:vigo/auth/oidc_client_secret"
+    redirect_url: "https://vigo.example.com:8443/auth/callback"
     scopes: [openid, profile, email]
 ```
 
@@ -95,10 +95,10 @@ auth:
 **Keycloak:**
 ```yaml
 oidc:
-  issuer: "https://keycloak.example.com/realms/hobnob"
-  client_id: "hobnob"
-  client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8443/auth/callback"
+  issuer: "https://keycloak.example.com/realms/vigo"
+  client_id: "vigo"
+  client_secret: "secret:vigo/auth/oidc_client_secret"
+  redirect_url: "https://vigo.example.com:8443/auth/callback"
 ```
 
 **Okta:**
@@ -106,8 +106,8 @@ oidc:
 oidc:
   issuer: "https://your-org.okta.com"
   client_id: "0oaXXXXXXXXXXXXX"
-  client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8443/auth/callback"
+  client_secret: "secret:vigo/auth/oidc_client_secret"
+  redirect_url: "https://vigo.example.com:8443/auth/callback"
 ```
 
 **Google:**
@@ -115,8 +115,8 @@ oidc:
 oidc:
   issuer: "https://accounts.google.com"
   client_id: "xxxx.apps.googleusercontent.com"
-  client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8443/auth/callback"
+  client_secret: "secret:vigo/auth/oidc_client_secret"
+  redirect_url: "https://vigo.example.com:8443/auth/callback"
 ```
 
 **Azure AD:**
@@ -124,8 +124,8 @@ oidc:
 oidc:
   issuer: "https://login.microsoftonline.com/{tenant-id}/v2.0"
   client_id: "your-app-id"
-  client_secret: "secret:hobnob/auth/oidc_client_secret"
-  redirect_url: "https://hobnob.example.com:8443/auth/callback"
+  client_secret: "secret:vigo/auth/oidc_client_secret"
+  redirect_url: "https://vigo.example.com:8443/auth/callback"
 ```
 
 ### First-User Bootstrap
@@ -134,19 +134,19 @@ The first user to log in via OIDC is automatically promoted to **admin**. All su
 
 ## Isowebauth (SSH Key-Based)
 
-Isowebauth uses the [isowebauth](https://github.com/hobnob/isowebauth) desktop app to sign challenges with the user's SSH private key. The server verifies signatures using `ssh-keygen -Y verify`.
+Isowebauth uses the [isowebauth](https://github.com/vigo/isowebauth) desktop app to sign challenges with the user's SSH private key. The server verifies signatures using `ssh-keygen -Y verify`.
 
 ### Setup
 
 1. Install the isowebauth desktop app on each admin workstation.
-2. Configure isowebauth to allow your Hobnob server's origin and the `hobnob` namespace.
+2. Configure isowebauth to allow your Vigo server's origin and the `vigo` namespace.
 3. Set `auth.method: isowebauth` in `server.yaml`:
 
 ```yaml
 auth:
   method: isowebauth
   isowebauth:
-    namespace: "hobnob"   # default
+    namespace: "vigo"   # default
 ```
 
 ### User Management
@@ -155,10 +155,10 @@ Unlike OIDC, isowebauth requires users to be pre-created with their SSH public k
 
 ```bash
 # First, set the admin password to get CLI access:
-hobnobcli secrets set-web-password hobnob/web/auth/admin
+vigogo secrets set-web-password vigo/web/auth/admin
 
 # Create users with SSH keys:
-hobnobcli webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
+vigogo webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
 ```
 
 ### Sign-In Flow
@@ -193,7 +193,7 @@ Two roles are supported:
 
 | Action | Admin | Viewer |
 |--------|-------|--------|
-| View dashboards, thralls, runs, compliance | Yes | Yes |
+| View dashboards, envoys, runs, compliance | Yes | Yes |
 | View tasks, workflows, query results | Yes | Yes |
 | View docs, spanner status | Yes | Yes |
 | Dispatch tasks | Yes | No |
@@ -212,8 +212,8 @@ Beyond the admin/viewer roles, each user has a set of permissions stored as a JS
 
 | Permission | Description | Admin | Viewer |
 |------------|-------------|-------|--------|
-| `fleet.read` | View thralls, runs, compliance | Yes | Yes |
-| `fleet.write` | Modify thrall tags, maintenance | Yes | No |
+| `fleet.read` | View envoys, runs, compliance | Yes | Yes |
+| `fleet.write` | Modify envoy tags, maintenance | Yes | No |
 | `config.publish` | Publish configuration | Yes | No |
 | `config.rollback` | Rollback configuration | Yes | No |
 | `push.execute` | Dispatch ad-hoc pushes | Yes | No |
@@ -237,13 +237,13 @@ TOTP (Time-based One-Time Password) adds a second factor to basic authentication
 1. Log in to the web UI with your password
 2. Call the TOTP setup API:
    ```bash
-   curl -X POST https://hobnob:8443/api/v1/users/totp/setup \
+   curl -X POST https://vigo:8443/api/v1/users/totp/setup \
      -H "Authorization: Bearer $TOKEN"
    ```
 3. Scan the returned `url` as a QR code in your authenticator app (Google Authenticator, Authy, 1Password, etc.)
 4. Confirm with a valid code:
    ```bash
-   curl -X POST https://hobnob:8443/api/v1/users/totp/confirm \
+   curl -X POST https://vigo:8443/api/v1/users/totp/confirm \
      -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"code": "123456"}'
@@ -257,7 +257,7 @@ Eight recovery codes are generated when TOTP is enabled. Each code can only be u
 ### Disabling TOTP
 
 ```bash
-curl -X POST https://hobnob:8443/api/v1/users/totp/disable \
+curl -X POST https://vigo:8443/api/v1/users/totp/disable \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -271,7 +271,7 @@ curl -X POST https://hobnob:8443/api/v1/users/totp/disable \
 
 ## API Tokens
 
-API tokens allow the CLI and scripts to authenticate without a browser session. Tokens use the `hbt_` prefix and are bcrypt-hashed at rest.
+API tokens allow the CLI and scripts to authenticate without a browser session. Tokens use the `vgot_` prefix and are bcrypt-hashed at rest.
 
 ### Creating a Token
 
@@ -279,17 +279,17 @@ Via the CLI (requires an active session or existing token):
 
 ```bash
 # Create a token (the plaintext is shown once):
-hobnobcli auth set-token $(curl -s -X POST \
+vigogo auth set-token $(curl -s -X POST \
   -H "Authorization: Bearer $EXISTING_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "ci-deploy", "expires_in": "720h"}' \
-  https://hobnob.example.com:8443/api/v1/auth/tokens | jq -r .token)
+  https://vigo.example.com:8443/api/v1/auth/tokens | jq -r .token)
 ```
 
 Or via the REST API directly:
 
 ```bash
-curl -X POST https://hobnob.example.com:8443/api/v1/auth/tokens \
+curl -X POST https://vigo.example.com:8443/api/v1/auth/tokens \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "my-token", "expires_in": "720h"}'
@@ -300,12 +300,12 @@ curl -X POST https://hobnob.example.com:8443/api/v1/auth/tokens \
 Store a token for CLI use:
 
 ```bash
-hobnobcli auth set-token hbt_abc123...
-hobnobcli auth status    # verify
-hobnobcli auth clear     # remove
+vigogo auth set-token vgot_abc123...
+vigogo auth status    # verify
+vigogo auth clear     # remove
 ```
 
-The token is stored at `~/.config/hobnob/token` (mode 0600).
+The token is stored at `~/.config/vigo/token` (mode 0600).
 
 ### Token Endpoints
 
@@ -329,10 +329,10 @@ The token is stored at `~/.config/hobnob/token` (mode 0600).
 ### CLI
 
 ```bash
-hobnobcli webusers list
-hobnobcli webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
-hobnobcli secrets set-web-password hobnob/web/auth/alice
-hobnobcli webusers delete --username alice
+vigogo webusers list
+vigogo webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
+vigogo secrets set-web-password vigo/web/auth/alice
+vigogo webusers delete --username alice
 ```
 
 ## Audit Logging
@@ -355,8 +355,8 @@ Login and failed login events include the client IP address in the payload field
 View audit events:
 
 ```bash
-hobnobcli audit list
-hobnobcli audit list --type auth.login_failed
+vigogo audit list
+vigogo audit list --type auth.login_failed
 ```
 
 ## Troubleshooting
@@ -365,10 +365,10 @@ hobnobcli audit list --type auth.login_failed
 The session may have expired between redirect and callback. Check that `redirect_url` exactly matches what's registered with your OIDC provider.
 
 **Isowebauth "Cannot connect to isowebauth app":**
-Ensure the isowebauth desktop app is running and listening on `127.0.0.1:7890`. Check that your Hobnob server's origin is in isowebauth's allowed origins.
+Ensure the isowebauth desktop app is running and listening on `127.0.0.1:7890`. Check that your Vigo server's origin is in isowebauth's allowed origins.
 
 **"ssh-keygen: command not found":**
 The server requires `ssh-keygen` in the PATH for isowebauth signature verification. Install OpenSSH on the server.
 
 **API returns 401 with valid token:**
-Check that the token hasn't expired. List your tokens with `hobnobcli auth status` or the tokens API.
+Check that the token hasn't expired. List your tokens with `vigogo auth status` or the tokens API.

@@ -12,7 +12,7 @@ func TestSelfProtect_FileTargetingAgentBinary(t *testing.T) {
 			Name: "overwrite-agent",
 			Type: "file",
 			Attributes: map[string]any{
-				"target_path": "/usr/local/sbin/hobnob",
+				"target_path": "/usr/local/sbin/vigo",
 				"content":    "malicious",
 			},
 		}},
@@ -30,7 +30,7 @@ func TestSelfProtect_FileTargetingServerBinary(t *testing.T) {
 			Name: "overwrite-server",
 			Type: "file",
 			Attributes: map[string]any{
-				"target_path": "/usr/local/sbin/hobd",
+				"target_path": "/usr/local/sbin/vigosrv",
 				"content":    "malicious",
 			},
 		}},
@@ -48,7 +48,7 @@ func TestSelfProtect_FileTargetingServerConfigDir(t *testing.T) {
 			Name: "overwrite-config",
 			Type: "file",
 			Attributes: map[string]any{
-				"target_path": "/srv/hobnob/server.yaml",
+				"target_path": "/srv/vigo/server.yaml",
 				"content":    "malicious",
 			},
 		}},
@@ -66,7 +66,7 @@ func TestSelfProtect_FileTargetingAgentState(t *testing.T) {
 			Name: "overwrite-lmdb",
 			Type: "file",
 			Attributes: map[string]any{
-				"target_path": "/var/lib/hobnob/state/data.mdb",
+				"target_path": "/var/lib/vigo/state/data.mdb",
 				"content":    "garbage",
 			},
 		}},
@@ -102,7 +102,7 @@ func TestSelfProtect_ServiceStopAgent(t *testing.T) {
 			Name: "kill-agent",
 			Type: "service",
 			Attributes: map[string]any{
-				"service": "hobnob-thrall",
+				"service": "vigo-envoy",
 				"state":   "stopped",
 			},
 		}},
@@ -120,7 +120,7 @@ func TestSelfProtect_ServiceDisableServer(t *testing.T) {
 			Name: "disable-server",
 			Type: "service",
 			Attributes: map[string]any{
-				"service": "hobd",
+				"service": "vigosrv",
 				"state":   "disabled",
 			},
 		}},
@@ -138,7 +138,7 @@ func TestSelfProtect_ServiceRestartAgentAllowed(t *testing.T) {
 			Name: "restart-agent",
 			Type: "service",
 			Attributes: map[string]any{
-				"service": "hobnob-thrall",
+				"service": "vigo-envoy",
 				"state":   "restarted",
 			},
 		}},
@@ -167,21 +167,21 @@ func TestSelfProtect_ServiceStopUnrelatedAllowed(t *testing.T) {
 	}
 }
 
-func TestSelfProtect_PackageRemoveHobnob(t *testing.T) {
+func TestSelfProtect_PackageRemoveVigo(t *testing.T) {
 	mod := Module{
 		Name: "bad-mod",
 		Resources: []Resource{{
-			Name: "rm-hobnob",
+			Name: "rm-vigo",
 			Type: "package",
 			Attributes: map[string]any{
-				"package": "hobnob",
+				"package": "vigo",
 				"state":   "absent",
 			},
 		}},
 	}
 	findings := ValidateSelfProtection(mod)
 	if !HasErrors(findings) {
-		t.Fatal("expected error for removing hobnob package")
+		t.Fatal("expected error for removing vigo package")
 	}
 }
 
@@ -189,17 +189,17 @@ func TestSelfProtect_PackageInstallAllowed(t *testing.T) {
 	mod := Module{
 		Name: "good-mod",
 		Resources: []Resource{{
-			Name: "install-hobnob",
+			Name: "install-vigo",
 			Type: "package",
 			Attributes: map[string]any{
-				"package": "hobnob",
+				"package": "vigo",
 				"state":   "present",
 			},
 		}},
 	}
 	findings := ValidateSelfProtection(mod)
 	if HasErrors(findings) {
-		t.Fatalf("installing hobnob should be allowed: %s", FormatFindings(findings))
+		t.Fatalf("installing vigo should be allowed: %s", FormatFindings(findings))
 	}
 }
 
@@ -210,7 +210,7 @@ func TestSelfProtect_ExecStopAgent(t *testing.T) {
 			Name: "exec-kill",
 			Type: "exec",
 			Attributes: map[string]any{
-				"command": "systemctl stop hobnob-thrall",
+				"command": "systemctl stop vigo-envoy",
 				"creates": "/tmp/marker",
 			},
 		}},
@@ -228,7 +228,7 @@ func TestSelfProtect_ExecStopServer(t *testing.T) {
 			Name: "exec-kill-server",
 			Type: "exec",
 			Attributes: map[string]any{
-				"command": "systemctl stop hobd",
+				"command": "systemctl stop vigosrv",
 				"creates": "/tmp/marker",
 			},
 		}},
@@ -264,7 +264,7 @@ func TestSelfProtect_FileLineTargetingAgentConfig(t *testing.T) {
 			Name: "edit-agent-config",
 			Type: "file_line",
 			Attributes: map[string]any{
-				"path": "/etc/hobnob-thrall/config.yaml",
+				"path": "/etc/vigo-envoy/config.yaml",
 				"line": "server: evil.example.com",
 			},
 		}},
@@ -276,37 +276,37 @@ func TestSelfProtect_FileLineTargetingAgentConfig(t *testing.T) {
 }
 
 func TestSelfProtect_PathPrefixNotChild(t *testing.T) {
-	// /srv/hobnobXYZ should NOT match /srv/hobnob/
-	result := matchProtectedPath("/srv/hobnobXYZ/foo")
+	// /srv/vigoXYZ should NOT match /srv/vigo/
+	result := matchProtectedPath("/srv/vigoXYZ/foo")
 	if result != "" {
 		t.Fatalf("should not match similar prefix, got: %s", result)
 	}
 }
 
 func TestSelfProtect_PathSimilarBinaryAllowed(t *testing.T) {
-	// /usr/local/sbin/hobnob-helper should NOT match /usr/local/sbin/hobnob
-	result := matchProtectedPath("/usr/local/sbin/hobnob-helper")
+	// /usr/local/sbin/vigo-helper should NOT match /usr/local/sbin/vigo
+	result := matchProtectedPath("/usr/local/sbin/vigo-helper")
 	if result != "" {
 		t.Fatalf("should not match similar binary name, got: %s", result)
 	}
 }
 
 func TestValidatePushCommand_StopAgent(t *testing.T) {
-	err := ValidatePushCommand("systemctl stop hobnob-thrall && echo done")
+	err := ValidatePushCommand("systemctl stop vigo-envoy && echo done")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestValidatePushCommand_StopServer(t *testing.T) {
-	err := ValidatePushCommand("systemctl stop hobd")
+	err := ValidatePushCommand("systemctl stop vigosrv")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestValidatePushCommand_RmServerConfig(t *testing.T) {
-	err := ValidatePushCommand("rm -rf /srv/hobnob/db")
+	err := ValidatePushCommand("rm -rf /srv/vigo/db")
 	if err == nil {
 		t.Fatal("expected error")
 	}

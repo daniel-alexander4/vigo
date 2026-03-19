@@ -27,7 +27,7 @@ Runs `wmic os get LastBootUpTime /value` and parses the WMI datetime format (`yy
 ```yaml
 - name: uptime-report
   type: file
-  target_path: C:\ProgramData\hobnob\uptime.txt
+  target_path: C:\ProgramData\vigo\uptime.txt
   content: |
     Uptime: {{ .Traits.uptime.seconds }} seconds
 ```

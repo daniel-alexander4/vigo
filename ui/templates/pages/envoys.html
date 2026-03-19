@@ -1,28 +1,28 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Thralls</h1>
-    <p>{{.ThrallCount}} enrolled thralls</p>
+    <h1>Envoys</h1>
+    <p>{{.EnvoyCount}} enrolled envoys</p>
 </div>
 
 <div class="filter-bar mb-2">
-    <a href="/thralls" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/thralls?status=compliant" class="btn btn--sm{{if eq .StatusFilter "compliant"}} btn--primary{{end}}">Compliant</a>
-    <a href="/thralls?status=drifted" class="btn btn--sm{{if eq .StatusFilter "drifted"}} btn--primary{{end}}">Drifted</a>
-    <a href="/thralls?status=failing" class="btn btn--sm{{if eq .StatusFilter "failing"}} btn--primary{{end}}">Failing</a>
-    <a href="/thralls?status=stale" class="btn btn--sm{{if eq .StatusFilter "stale"}} btn--primary{{end}}">Stale</a>
-    <a href="/thralls?status=unknown" class="btn btn--sm{{if eq .StatusFilter "unknown"}} btn--primary{{end}}">Unknown</a>
+    <a href="/envoys" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
+    <a href="/envoys?status=compliant" class="btn btn--sm{{if eq .StatusFilter "compliant"}} btn--primary{{end}}">Compliant</a>
+    <a href="/envoys?status=drifted" class="btn btn--sm{{if eq .StatusFilter "drifted"}} btn--primary{{end}}">Drifted</a>
+    <a href="/envoys?status=failing" class="btn btn--sm{{if eq .StatusFilter "failing"}} btn--primary{{end}}">Failing</a>
+    <a href="/envoys?status=stale" class="btn btn--sm{{if eq .StatusFilter "stale"}} btn--primary{{end}}">Stale</a>
+    <a href="/envoys?status=unknown" class="btn btn--sm{{if eq .StatusFilter "unknown"}} btn--primary{{end}}">Unknown</a>
 </div>
 
 <div class="table-container"
-     id="thralls-table-container"
-     hx-get="/ui/fragments/thralls-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
+     id="envoys-table-container"
+     hx-get="/ui/fragments/envoys-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
      hx-trigger="every 30s"
      hx-swap="innerHTML">
-    {{template "thralls-table" .}}
+    {{template "envoys-table" .}}
 </div>
 {{end}}
 
-{{define "thralls-table"}}
+{{define "envoys-table"}}
 <table class="table">
     <thead>
         <tr>
@@ -33,26 +33,26 @@
             <th>Status</th>
         </tr>
     </thead>
-    <tbody id="thralls-table-body">
-        {{range .Thralls}}
+    <tbody id="envoys-table-body">
+        {{range .Envoys}}
         <tr>
-            <td><a href="/thralls/{{.ID}}">{{.Hostname}}</a></td>
+            <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="text-muted">{{formatTime .LastSeen}}</td>
             <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}{{formatTime .LastRunAt}}{{end}}</td>
             <td>{{template "status-badge" dict "Status" .Status}}</td>
         </tr>
         {{end}}
-        {{if not .Thralls}}
+        {{if not .Envoys}}
         <tr>
-            <td colspan="5" class="text-muted" style="text-align:center; padding:40px;">No thralls found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}.</td>
+            <td colspan="5" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}.</td>
         </tr>
         {{end}}
     </tbody>
 </table>
 {{if .HasMore}}
 <div style="text-align:center; padding:16px;">
-    <a href="/thralls?{{if .StatusFilter}}status={{.StatusFilter}}&{{end}}after={{.NextCursor}}" class="btn btn--sm">Load More</a>
+    <a href="/envoys?{{if .StatusFilter}}status={{.StatusFilter}}&{{end}}after={{.NextCursor}}" class="btn btn--sm">Load More</a>
 </div>
 {{end}}
 {{end}}

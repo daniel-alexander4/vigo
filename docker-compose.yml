@@ -2,8 +2,8 @@
 # For production, see docker-compose.prod.yml.
 
 services:
-  hobnob:
-    container_name: hobnob
+  vigo:
+    container_name: vigo
     build:
       context: .
       dockerfile: Dockerfile.server
@@ -11,7 +11,7 @@ services:
       - "1530:1530"
       - "8443:8443"
     volumes:
-      - /srv/hobnob:/srv/hobnob
+      - /srv/vigo:/srv/vigo
       - /usr/local/bin:/host-bin
     depends_on:
       postgres:
@@ -20,25 +20,25 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: hobnob-postgres
+    container_name: vigo-postgres
     profiles: ["postgres"]
     environment:
-      POSTGRES_DB: hobnob
-      POSTGRES_USER: hobnob
-      POSTGRES_PASSWORD: hobnob
+      POSTGRES_DB: vigo
+      POSTGRES_USER: vigo
+      POSTGRES_PASSWORD: vigo
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hobnob"]
+      test: ["CMD-SHELL", "pg_isready -U vigo"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   ollama:
     image: ollama/ollama:latest
-    container_name: hobnob-ollama
+    container_name: vigo-ollama
     restart: unless-stopped
     profiles: ["ollama"]
     ports:

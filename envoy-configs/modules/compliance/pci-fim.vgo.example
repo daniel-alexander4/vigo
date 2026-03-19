@@ -5,7 +5,7 @@
 # for file integrity monitoring on critical system files and cardholder
 # data directories. AIDE runs daily via cron and logs changes.
 #
-# Hobnob's own drift detection provides a second layer of FIM — any
+# Vigo's own drift detection provides a second layer of FIM — any
 # managed file that changes between check-ins triggers a compliance alert.
 
 name: pci-fim
@@ -33,7 +33,7 @@ resources:
     target_path: /etc/aide/aide.conf
     content: |
       # AIDE configuration for PCI DSS v4.0 Req 11.5.1
-      # Managed by Hobnob
+      # Managed by Vigo
 
       database_in=file:{{ .Vars.aide_db_path }}
       database_out=file:{{ .Vars.aide_db_path }}.new

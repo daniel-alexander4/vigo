@@ -1,4 +1,4 @@
-# hobnobcli webhooks
+# vigogo webhooks
 
 Manage webhook endpoints for event notifications with HMAC-SHA256 signing.
 
@@ -13,7 +13,7 @@ Manage webhook endpoints for event notifications with HMAC-SHA256 signing.
 ## Usage
 
 ```bash
-hobnobcli webhooks [subcommand] [flags]
+vigogo webhooks [subcommand] [flags]
 ```
 
 ## add
@@ -21,7 +21,7 @@ hobnobcli webhooks [subcommand] [flags]
 Register a new webhook endpoint for receiving event notifications.
 
 ```bash
-hobnobcli webhooks add <url> [flags]
+vigogo webhooks add <url> [flags]
 ```
 
 ### Flags
@@ -34,13 +34,13 @@ hobnobcli webhooks add <url> [flags]
 ### Example
 
 ```bash
-hobnobcli webhooks add https://hooks.example.com/hobnob \
+vigogo webhooks add https://hooks.example.com/vigo \
   --secret "webhook-signing-secret" \
-  --events "run.failure,drift.detected,thrall.enrolled"
+  --events "run.failure,drift.detected,envoy.enrolled"
 ```
 
 ```
-Created webhook wh1a2b3c -> https://hooks.example.com/hobnob
+Created webhook wh1a2b3c -> https://hooks.example.com/vigo
 ```
 
 ## list
@@ -48,15 +48,15 @@ Created webhook wh1a2b3c -> https://hooks.example.com/hobnob
 List all registered webhooks.
 
 ```bash
-hobnobcli webhooks list
+vigogo webhooks list
 ```
 
 ### Example output
 
 ```
 ID          URL                                EVENTS                              ACTIVE
-wh1a2b3c    https://hooks.example.com/hobnob   run.failure,drift.detected          true
-wh4d5e6f    https://slack.example.com/webhook   thrall.enrolled,thrall.revoked      true
+wh1a2b3c    https://hooks.example.com/vigo   run.failure,drift.detected          true
+wh4d5e6f    https://slack.example.com/webhook   envoy.enrolled,envoy.revoked      true
 ```
 
 ## delete
@@ -64,13 +64,13 @@ wh4d5e6f    https://slack.example.com/webhook   thrall.enrolled,thrall.revoked  
 Remove a webhook by its ID.
 
 ```bash
-hobnobcli webhooks delete <id>
+vigogo webhooks delete <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli webhooks delete wh1a2b3c
+vigogo webhooks delete wh1a2b3c
 ```
 
 ```
@@ -80,4 +80,4 @@ Deleted webhook wh1a2b3c
 ## Related
 
 - [runs](runs.md) -- view run history
-- [thralls](thralls.md) -- manage enrolled thralls
+- [envoys](envoys.md) -- manage enrolled envoys

@@ -6,7 +6,7 @@ Manages per-service failure recovery actions on Windows idempotently via `sc.exe
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `service` | Yes | -- | Windows service name (e.g., `W3SVC`, `hobnob-thrall`). |
+| `service` | Yes | -- | Windows service name (e.g., `W3SVC`, `vigo-envoy`). |
 | `first_failure` | No | `restart` | Action on first failure: `restart`, `run`, `reboot`, or `none`. |
 | `second_failure` | No | Same as `first_failure` | Action on second failure. |
 | `subsequent_failure` | No | Same as `first_failure` | Action on third and all subsequent failures. |

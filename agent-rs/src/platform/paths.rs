@@ -1,36 +1,36 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! Platform-specific default paths for the Hobnob agent.
+//! Platform-specific default paths for the Vigo agent.
 
 use std::path::PathBuf;
 
 /// Default agent data directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_data_dir() -> PathBuf {
-    PathBuf::from("/etc/hobnob-thrall")
+    PathBuf::from("/etc/vigo-envoy")
 }
 
 #[cfg(target_os = "macos")]
 pub fn default_data_dir() -> PathBuf {
-    PathBuf::from("/usr/local/etc/hobnob-thrall")
+    PathBuf::from("/usr/local/etc/vigo-envoy")
 }
 
 #[cfg(windows)]
 pub fn default_data_dir() -> PathBuf {
     let base = std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".to_string());
-    PathBuf::from(base).join("Hobnob")
+    PathBuf::from(base).join("Vigo")
 }
 
 /// Default persistent state directory (LMDB).
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_state_dir() -> PathBuf {
-    PathBuf::from("/var/lib/hobnob/state")
+    PathBuf::from("/var/lib/vigo/state")
 }
 
 #[cfg(target_os = "macos")]
 pub fn default_state_dir() -> PathBuf {
-    PathBuf::from("/Library/Hobnob/state")
+    PathBuf::from("/Library/Vigo/state")
 }
 
 #[cfg(windows)]
@@ -41,12 +41,12 @@ pub fn default_state_dir() -> PathBuf {
 /// Default file snapshot directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_snapshot_dir() -> PathBuf {
-    PathBuf::from("/var/lib/hobnob/snapshots")
+    PathBuf::from("/var/lib/vigo/snapshots")
 }
 
 #[cfg(target_os = "macos")]
 pub fn default_snapshot_dir() -> PathBuf {
-    PathBuf::from("/Library/Hobnob/snapshots")
+    PathBuf::from("/Library/Vigo/snapshots")
 }
 
 #[cfg(windows)]
@@ -57,12 +57,12 @@ pub fn default_snapshot_dir() -> PathBuf {
 /// Default flags directory (for `flag_set()` builtin).
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_flags_dir() -> PathBuf {
-    PathBuf::from("/var/lib/hobnob/flags")
+    PathBuf::from("/var/lib/vigo/flags")
 }
 
 #[cfg(target_os = "macos")]
 pub fn default_flags_dir() -> PathBuf {
-    PathBuf::from("/Library/Hobnob/flags")
+    PathBuf::from("/Library/Vigo/flags")
 }
 
 #[cfg(windows)]
@@ -73,12 +73,12 @@ pub fn default_flags_dir() -> PathBuf {
 /// Default custom executors directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {
-    PathBuf::from("/etc/hobnob-thrall/executors")
+    PathBuf::from("/etc/vigo-envoy/executors")
 }
 
 #[cfg(target_os = "macos")]
 pub fn default_executors_dir() -> PathBuf {
-    PathBuf::from("/usr/local/etc/hobnob-thrall/executors")
+    PathBuf::from("/usr/local/etc/vigo-envoy/executors")
 }
 
 #[cfg(windows)]
@@ -89,13 +89,13 @@ pub fn default_executors_dir() -> PathBuf {
 /// Default binary install path.
 #[cfg(unix)]
 pub fn default_binary_path() -> PathBuf {
-    PathBuf::from("/usr/local/sbin/hobnob")
+    PathBuf::from("/usr/local/sbin/vigo")
 }
 
 #[cfg(windows)]
 pub fn default_binary_path() -> PathBuf {
     let base = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
-    PathBuf::from(base).join("Hobnob").join("hobnob.exe")
+    PathBuf::from(base).join("Vigo").join("vigo.exe")
 }
 
 /// System hosts file path.
@@ -139,7 +139,7 @@ pub fn shell_command() -> (&'static str, &'static str) {
 }
 
 /// Service name for the agent.
-pub const SERVICE_NAME: &str = "hobnob-thrall";
+pub const SERVICE_NAME: &str = "vigo-envoy";
 
 #[cfg(test)]
 mod tests {

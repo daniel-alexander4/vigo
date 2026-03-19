@@ -8,24 +8,24 @@ import (
 	"log/slog"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/metrics"
-	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/webhook"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/metrics"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/webhook"
 )
 
 // handleDelta processes a DeltaEvent from the agent stream and returns an ack.
-func (s *AgentService) handleDelta(thrallID, hostname string, delta *pb.DeltaEvent) *pb.DeltaAck {
+func (s *AgentService) handleDelta(envoyID, hostname string, delta *pb.DeltaEvent) *pb.DeltaAck {
 	switch ev := delta.Event.(type) {
 	case *pb.DeltaEvent_Run:
-		s.handleRunDelta(thrallID, hostname, ev.Run)
+		s.handleRunDelta(envoyID, hostname, ev.Run)
 	case *pb.DeltaEvent_Heartbeat:
 		// Heartbeats only occur within streams — update in-memory only to avoid
 		// redundant last_seen DB writes. The stream disconnect handler persists
 		// the final timestamp.
 		if s.fleetIndex != nil {
-			s.fleetIndex.MarkSeenInMemory(thrallID, time.Now())
+			s.fleetIndex.MarkSeenInMemory(envoyID, time.Now())
 		}
 	}
 	return &pb.DeltaAck{AckedSequence: delta.Sequence}
@@ -33,7 +33,7 @@ func (s *AgentService) handleDelta(thrallID, hostname string, delta *pb.DeltaEve
 
 // handleRunDelta processes a RunCompleted delta: updates FleetIndex, records
 // metrics, dispatches webhooks/SMTP, and submits to the async RunBatcher.
-func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunCompleted) {
+func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompleted) {
 	runStatus := run.Status
 	changedCount := int64(run.ChangedCount)
 	failedCount := int64(run.FailedCount)
@@ -42,10 +42,10 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 	// Update FleetIndex with run status + append to recent runs.
 	now := time.Now()
 	if s.fleetIndex != nil {
-		s.fleetIndex.UpdateRunStatus(thrallID, runStatus, changedCount, now)
+		s.fleetIndex.UpdateRunStatus(envoyID, runStatus, changedCount, now)
 		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
 			RunID:        run.RunId,
-			ThrallID:     thrallID,
+			EnvoyID:     envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
 			ChangedCount: changedCount,
@@ -80,7 +80,7 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 
 		s.runBatcher.Submit(fleet.RunBatchEntry{
 			RunID:        run.RunId,
-			ThrallID:     thrallID,
+			EnvoyID:     envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
 			ModuleCount:  int64(run.TotalCount),
@@ -93,7 +93,7 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 
 	slog.Info("run completed (delta)",
 		"run_id", run.RunId,
-		"thrall_id", thrallID,
+		"envoy_id", envoyID,
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
@@ -104,8 +104,8 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 	if s.dispatcher != nil {
 		event := webhook.FormatRunEvent(runStatus)
 		s.dispatcher.Dispatch(context.Background(), event, webhook.EventPayload{
-			Thrall: &webhook.ThrallInfo{
-				ID:       thrallID,
+			Envoy: &webhook.EnvoyInfo{
+				ID:       envoyID,
 				Hostname: hostname,
 			},
 			Run: &webhook.RunInfo{
@@ -118,8 +118,8 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 
 		if changedCount > 0 {
 			s.dispatcher.Dispatch(context.Background(), "drift.detected", webhook.EventPayload{
-				Thrall: &webhook.ThrallInfo{
-					ID:       thrallID,
+				Envoy: &webhook.EnvoyInfo{
+					ID:       envoyID,
 					Hostname: hostname,
 				},
 				Run: &webhook.RunInfo{
@@ -132,16 +132,16 @@ func (s *AgentService) handleRunDelta(thrallID, hostname string, run *pb.RunComp
 	}
 
 	// Send SMTP notification.
-	smtpThrall := &hobnobsmtp.ThrallInfo{ID: thrallID, Hostname: hostname}
-	smtpRun := &hobnobsmtp.RunInfo{ID: run.RunId, Status: runStatus, Changed: int32(changedCount), Failed: int32(failedCount)}
-	s.smtpNotifier.Notify(hobnobsmtp.Event{
+	smtpEnvoy := &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: hostname}
+	smtpRun := &vigosmtp.RunInfo{ID: run.RunId, Status: runStatus, Changed: int32(changedCount), Failed: int32(failedCount)}
+	s.smtpNotifier.Notify(vigosmtp.Event{
 		Name: webhook.FormatRunEvent(runStatus), Timestamp: now.UTC(),
-		Thrall: smtpThrall, Run: smtpRun,
+		Envoy: smtpEnvoy, Run: smtpRun,
 	})
 	if changedCount > 0 {
-		s.smtpNotifier.Notify(hobnobsmtp.Event{
+		s.smtpNotifier.Notify(vigosmtp.Event{
 			Name: "drift.detected", Timestamp: now.UTC(),
-			Thrall: smtpThrall, Run: smtpRun,
+			Envoy: smtpEnvoy, Run: smtpRun,
 		})
 	}
 }

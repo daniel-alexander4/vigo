@@ -9,7 +9,7 @@ Manages kernel parameters via `sysctl`, with optional persistence to `/etc/sysct
 | `key` | Yes | -- | Sysctl key name (e.g., `net.ipv4.ip_forward`). |
 | `value` | Yes (for present) | -- | Desired value for the key. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
-| `persist` | No | `true` | If `true`, write the setting to `/etc/sysctl.d/99-hobnob-<key>.conf` for persistence across reboots. |
+| `persist` | No | `true` | If `true`, write the setting to `/etc/sysctl.d/99-vigo-<key>.conf` for persistence across reboots. |
 
 ## States
 
@@ -71,5 +71,5 @@ Linux only.
 ## Notes
 
 - Runtime values are set with `sysctl -w <key>=<value>`.
-- Persistence files are written to `/etc/sysctl.d/99-hobnob-<key>.conf`.
+- Persistence files are written to `/etc/sysctl.d/99-vigo-<key>.conf`.
 - When `state: absent`, only the persistence file is removed. The runtime value is not reverted.

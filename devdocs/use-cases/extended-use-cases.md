@@ -1,6 +1,6 @@
 # Extended Use Cases
 
-Beyond the [core use cases](use-cases.md), Hobnob's architecture — lightweight agent, near-real-time trait collection, idempotent state enforcement, offline convergence, authenticated channels — maps onto domains that don't look like traditional IT infrastructure at first glance.
+Beyond the [core use cases](use-cases.md), Vigo's architecture — lightweight agent, near-real-time trait collection, idempotent state enforcement, offline convergence, authenticated channels — maps onto domains that don't look like traditional IT infrastructure at first glance.
 
 The pattern is the same everywhere: **more than a handful of networked things that need to be in a known state, and someone who cares whether they are.**
 
@@ -14,7 +14,7 @@ Traits report firmware versions, lamp temperatures, lamp hours remaining, signal
 
 ## Election Infrastructure
 
-Every voting machine, tabulation server, and election management workstation in a county is a thrall. Desired state: correct ballot definitions loaded, USB ports disabled, firewall locked to whitelist, audit logging enabled, correct time source configured.
+Every voting machine, tabulation server, and election management workstation in a county is a envoy. Desired state: correct ballot definitions loaded, USB ports disabled, firewall locked to whitelist, audit logging enabled, correct time source configured.
 
 Traits report serial numbers, firmware versions, tamper-evident seal status, and network connectivity. At 30-second intervals, a poll worker unplugging a machine from the network triggers a stale alert within 90 seconds. The compliance dashboard shows election officials exactly which machines are configured correctly, in real time, during voting hours. The compliance export (OSCAL) feeds directly into EAC audit requirements.
 
@@ -46,7 +46,7 @@ At 30-second intervals, compliance is continuous — not a quarterly audit but a
 
 ## Smart Building Management
 
-Every HVAC controller, lighting panel, access badge reader, elevator controller, and fire alarm panel in a commercial building is a thrall. Desired state: HVAC setpoints by zone and time of day, lighting schedules, access control lists per door, elevator firmware versions.
+Every HVAC controller, lighting panel, access badge reader, elevator controller, and fire alarm panel in a commercial building is a envoy. Desired state: HVAC setpoints by zone and time of day, lighting schedules, access control lists per door, elevator firmware versions.
 
 Traits report room temperature, humidity, occupancy sensor readings, door open/closed status, and energy consumption per zone. At 30-second intervals, the building manager sees a near-real-time environmental heatmap. `when: "occupancy == 0 && time_after('18:00')"` enforces energy savings mode. Hub-spoke maps to floors or buildings in a campus.
 
@@ -64,7 +64,7 @@ Traits report GPS coordinates, battery voltage, wind speed at altitude, photos t
 
 A floating city with 3,000 crew devices, 1,000 passenger-facing kiosks, POS terminals in 20 restaurants, entertainment systems in 2,000 cabins, navigation and safety systems on the bridge.
 
-Hub-spoke maps to decks or departments. Offline convergence is critical — satellite internet is slow, expensive, and intermittent. The ship's local Hobnob server enforces state regardless of shore connectivity. At 30-second intervals, the IT officer sees the entire vessel's device fleet in real time. Port days trigger a config publish — different regulatory requirements apply in different countries' territorial waters.
+Hub-spoke maps to decks or departments. Offline convergence is critical — satellite internet is slow, expensive, and intermittent. The ship's local Vigo server enforces state regardless of shore connectivity. At 30-second intervals, the IT officer sees the entire vessel's device fleet in real time. Port days trigger a config publish — different regulatory requirements apply in different countries' territorial waters.
 
 **Recommended interval:** 30 seconds. The fleet is large but self-contained. Regulatory config changes on port arrival need fast propagation. Offline convergence is the killer feature for maritime operations.
 

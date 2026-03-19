@@ -23,13 +23,13 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/license"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/license"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 )
 
-// openDoctorTestDB creates an in-memory SQLite database with the thralls table.
+// openDoctorTestDB creates an in-memory SQLite database with the envoys table.
 func openDoctorTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 	t.Helper()
 	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
@@ -39,7 +39,7 @@ func openDoctorTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 	t.Cleanup(func() { sqlDB.Close() })
 
 	_, err = sqlDB.Exec(`
-		CREATE TABLE thralls (
+		CREATE TABLE envoys (
 			id                       TEXT PRIMARY KEY,
 			hostname                 TEXT NOT NULL,
 			ip_address               TEXT NOT NULL,
@@ -101,7 +101,7 @@ func newTestLicenseEnforcer(t *testing.T) *license.Enforcer {
 
 	// LoadDir falls back to the built-in free license when no .lic files exist.
 	enforcer, err := license.NewEnforcer(licenseDir, graceDir, "", func(_ context.Context) (int, error) {
-		return 0, nil // 0 active thralls
+		return 0, nil // 0 active envoys
 	}, nil)
 	if err != nil {
 		t.Fatalf("new enforcer: %v", err)
@@ -113,13 +113,13 @@ func newTestLicenseEnforcer(t *testing.T) *license.Enforcer {
 func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 	t.Helper()
 	dir := t.TempDir()
-	for _, sub := range []string{"thralls", "modules", "roles"} {
+	for _, sub := range []string{"envoys", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
 	}
-	// Write an empty nodes.hnb
-	os.WriteFile(filepath.Join(dir, "thralls", "nodes.hnb"), []byte("thralls: []\n"), 0644)
+	// Write an empty nodes.vgo
+	os.WriteFile(filepath.Join(dir, "envoys", "nodes.vgo"), []byte("envoys: []\n"), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {
@@ -234,16 +234,16 @@ func TestDoctor_BadTLSCert(t *testing.T) {
 	}
 }
 
-func TestDoctor_StaleThralls(t *testing.T) {
+func TestDoctor_StaleEnvoys(t *testing.T) {
 	sqlDB, queries := openDoctorTestDB(t)
 	certFile, keyFile := generateTestCerts(t)
 	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 
-	// Insert a thrall that was last seen 30 minutes ago (stale with 5min interval).
+	// Insert a envoy that was last seen 30 minutes ago (stale with 5min interval).
 	staleTime := time.Now().Add(-30 * time.Minute).UTC().Format("2006-01-02 15:04:05")
 	_, err := sqlDB.Exec(
-		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem, last_seen) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem, last_seen) VALUES (?, ?, ?, ?, ?)`,
 		"t-stale", "stale.host", "10.0.0.1", "pubkey", staleTime,
 	)
 	if err != nil {
@@ -270,8 +270,8 @@ func TestDoctor_StaleThralls(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&resp)
 
 	for _, c := range resp.Checks {
-		if c.Name == "stale_thralls" && c.Status != StatusWarn {
-			t.Errorf("expected stale_thralls check to warn, got %s: %s", c.Status, c.Message)
+		if c.Name == "stale_envoys" && c.Status != StatusWarn {
+			t.Errorf("expected stale_envoys check to warn, got %s: %s", c.Status, c.Message)
 		}
 	}
 }

@@ -4,52 +4,52 @@ title: Decommissioning Procedures
 
 # Decommissioning Procedures
 
-HIPAA 164.310(d)(2)(i) requires procedures for secure disposal of hardware and electronic media containing ePHI. This page covers decommissioning managed nodes (thralls) and the Hobnob server itself.
+HIPAA 164.310(d)(2)(i) requires procedures for secure disposal of hardware and electronic media containing ePHI. This page covers decommissioning managed nodes (envoys) and the Vigo server itself.
 
-## Decommissioning a Managed Node (Thrall)
+## Decommissioning a Managed Node (Envoy)
 
 When a managed node is retired, deprovisioned, or repurposed:
 
 ### 1. Remove from fleet management
 
 ```bash
-# Revoke the thrall's enrollment — it can no longer check in or re-enroll
-hobnobcli thralls revoke <hostname-or-uuid>
+# Revoke the envoy's enrollment — it can no longer check in or re-enroll
+vigogo envoys revoke <hostname-or-uuid>
 ```
 
-Revocation is immediate. The thrall receives an error on its next check-in and cannot re-enroll with the same UUID. The revocation is recorded in the tamper-evident audit trail.
+Revocation is immediate. The envoy receives an error on its next check-in and cannot re-enroll with the same UUID. The revocation is recorded in the tamper-evident audit trail.
 
 ### 2. Purge agent data on the node
 
-SSH to the node and remove all Hobnob agent data:
+SSH to the node and remove all Vigo agent data:
 
 ```bash
 # Stop the agent service
-sudo systemctl stop hobnob-thrall    # Linux (systemd)
-sudo launchctl unload /Library/LaunchDaemons/com.hobnob.agent.plist  # macOS
-sudo svcadm disable hobnob-thrall    # illumos
+sudo systemctl stop vigo-envoy    # Linux (systemd)
+sudo launchctl unload /Library/LaunchDaemons/com.vigo.agent.plist  # macOS
+sudo svcadm disable vigo-envoy    # illumos
 
 # Remove agent binary and state
-sudo rm -rf /usr/local/bin/hobnob
-sudo rm -rf /var/lib/hobnob/          # LMDB state store, cached policy, pending results
-sudo rm -rf /etc/hobnob/              # Client certificates, agent config
+sudo rm -rf /usr/local/bin/vigo
+sudo rm -rf /var/lib/vigo/          # LMDB state store, cached policy, pending results
+sudo rm -rf /etc/vigo/              # Client certificates, agent config
 
 # Remove the service definition
-sudo rm -f /etc/systemd/system/hobnob-thrall.service  # systemd
-sudo rm -f /Library/LaunchDaemons/com.hobnob.agent.plist  # macOS
-sudo rm -f /var/svc/manifest/site/hobnob-thrall.xml  # illumos
+sudo rm -f /etc/systemd/system/vigo-envoy.service  # systemd
+sudo rm -f /Library/LaunchDaemons/com.vigo.agent.plist  # macOS
+sudo rm -f /var/svc/manifest/site/vigo-envoy.xml  # illumos
 ```
 
 On Windows:
 
 ```powershell
 # Stop and remove the Windows service
-Stop-Service hobnob-thrall
-sc.exe delete hobnob-thrall
+Stop-Service vigo-envoy
+sc.exe delete vigo-envoy
 
 # Remove agent files
-Remove-Item -Recurse -Force "C:\ProgramData\hobnob"
-Remove-Item -Force "C:\Program Files\hobnob\hobnob.exe"
+Remove-Item -Recurse -Force "C:\ProgramData\vigo"
+Remove-Item -Force "C:\Program Files\vigo\vigo.exe"
 ```
 
 ### 3. Remove sensitive data from the node
@@ -62,11 +62,11 @@ If the node processed or stored ePHI:
 
 ### 4. Remove from server records
 
-The thrall's enrollment record, traits, and run history remain in the server database for audit purposes. To fully purge:
+The envoy's enrollment record, traits, and run history remain in the server database for audit purposes. To fully purge:
 
 ```bash
-# Delete the thrall and all associated data (traits, run results, compliance history)
-hobnobcli thralls delete <hostname-or-uuid>
+# Delete the envoy and all associated data (traits, run results, compliance history)
+vigogo envoys delete <hostname-or-uuid>
 ```
 
 **Note:** Retain records if your compliance policy requires historical audit trails for decommissioned systems.
@@ -77,15 +77,15 @@ Remove the node's entry from the node mapping configuration:
 
 ```bash
 # Edit the config to remove the node's match entry
-hobnobcli vi nodes.hnb
+vigogo vi nodes.vgo
 
 # Publish the updated config
-hobnobcli config publish
+vigogo config publish
 ```
 
-## Decommissioning the Hobnob Server
+## Decommissioning the Vigo Server
 
-When the entire Hobnob deployment is being retired:
+When the entire Vigo deployment is being retired:
 
 ### 1. Export audit trail
 
@@ -93,23 +93,23 @@ Before shutdown, export the complete audit trail for compliance records:
 
 ```bash
 # Export full audit history
-hobnobcli audit list --limit 10000 > /path/to/audit-export.json
+vigogo audit list --limit 10000 > /path/to/audit-export.json
 
 # Verify chain integrity one final time
-hobnobcli audit verify
+vigogo audit verify
 
 # Create a final backup
-hobnobcli backup create
+vigogo backup create
 ```
 
-### 2. Revoke all thralls
+### 2. Revoke all envoys
 
 ```bash
-# List all active thralls
-hobnobcli thralls list
+# List all active envoys
+vigogo envoys list
 
 # Revoke each one (they will stop checking in)
-hobnobcli thralls revoke --all
+vigogo envoys revoke --all
 ```
 
 ### 3. Purge agents on all nodes
@@ -118,7 +118,7 @@ Run the agent cleanup steps (above) on every managed node. For large fleets, use
 
 ```bash
 # Push a cleanup script to all nodes before revoking
-hobnobcli push exec --target "*" --command "systemctl stop hobnob-thrall && rm -rf /var/lib/hobnob /etc/hobnob /usr/local/bin/hobnob"
+vigogo push exec --target "*" --command "systemctl stop vigo-envoy && rm -rf /var/lib/vigo /etc/vigo /usr/local/bin/vigo"
 ```
 
 ### 4. Destroy server data
@@ -129,11 +129,11 @@ hobnobcli push exec --target "*" --command "systemctl stop hobnob-thrall && rm -
 docker compose down
 
 # Remove all server data
-sudo rm -rf /srv/hobnob/          # Config, database, secrets, TLS certs
-sudo rm -rf /var/log/hobnob/      # Logs (if configured)
+sudo rm -rf /srv/vigo/          # Config, database, secrets, TLS certs
+sudo rm -rf /var/log/vigo/      # Logs (if configured)
 
 # Remove Docker volumes (if applicable)
-docker volume rm hobnob_data
+docker volume rm vigo_data
 ```
 
 ### 5. Secure media disposal
@@ -147,11 +147,11 @@ For the server host:
 
 | Data | Location | Action |
 |------|----------|--------|
-| Agent LMDB state | `/var/lib/hobnob/state/` on each node | Delete during node decommission |
-| Agent TLS certs | `/etc/hobnob/` on each node | Delete during node decommission |
-| Server database | `/srv/hobnob/hobnob.db` | Export audit trail, then delete |
-| Server secrets | `/srv/hobnob/secrets/` | Delete during server decommission |
-| Server TLS certs | `/srv/hobnob/tls/` | Delete during server decommission |
+| Agent LMDB state | `/var/lib/vigo/state/` on each node | Delete during node decommission |
+| Agent TLS certs | `/etc/vigo/` on each node | Delete during node decommission |
+| Server database | `/srv/vigo/vigo.db` | Export audit trail, then delete |
+| Server secrets | `/srv/vigo/secrets/` | Delete during server decommission |
+| Server TLS certs | `/srv/vigo/tls/` | Delete during server decommission |
 | Backup archives | Configured backup location | Retain per retention policy, then securely delete |
 | Litestream replicas | Configured S3/NFS target | Delete per retention policy |
 

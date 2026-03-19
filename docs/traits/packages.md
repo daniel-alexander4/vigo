@@ -31,7 +31,7 @@ Returns an empty object if no supported package manager is found.
 ```yaml
 - name: package-report
   type: file
-  target_path: /var/lib/hobnob/package-report.txt
+  target_path: /var/lib/vigo/package-report.txt
   content: |
     Installed packages on {{ .Traits.network.hostname }}:
     {{ range $name, $ver := .Traits.packages.installed }}{{ $name }}={{ $ver }}

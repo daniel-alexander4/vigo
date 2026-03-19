@@ -6,7 +6,7 @@ package grpc
 import (
 	"testing"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 )
 
 func TestQueryRouterRegisterAndRoute(t *testing.T) {
@@ -15,12 +15,12 @@ func TestQueryRouterRegisterAndRoute(t *testing.T) {
 	resultCh := make(chan queryResult, 2)
 	pq := &pendingQuery{
 		resultCh:  resultCh,
-		hostnames: map[string]string{"thrall-a": "web01.prod", "thrall-b": "web02.prod"},
+		hostnames: map[string]string{"envoy-a": "web01.prod", "envoy-b": "web02.prod"},
 	}
 	router.register("query-1", pq)
 
 	// Route a response.
-	router.handleQueryResponse("thrall-a", &pb.QueryResponse{
+	router.handleQueryResponse("envoy-a", &pb.QueryResponse{
 		QueryId:   "query-1",
 		TraitPath: "os.distro",
 		Value:     "ubuntu",
@@ -29,8 +29,8 @@ func TestQueryRouterRegisterAndRoute(t *testing.T) {
 
 	select {
 	case r := <-resultCh:
-		if r.thrallID != "thrall-a" {
-			t.Errorf("expected thrall-a, got %s", r.thrallID)
+		if r.envoyID != "envoy-a" {
+			t.Errorf("expected envoy-a, got %s", r.envoyID)
 		}
 		if r.hostname != "web01.prod" {
 			t.Errorf("expected web01.prod, got %s", r.hostname)
@@ -50,7 +50,7 @@ func TestQueryRouterUnknownQuery(t *testing.T) {
 	router := newQueryRouter()
 
 	// Should not panic for unknown query.
-	router.handleQueryResponse("thrall-a", &pb.QueryResponse{
+	router.handleQueryResponse("envoy-a", &pb.QueryResponse{
 		QueryId: "nonexistent",
 	})
 }
@@ -61,13 +61,13 @@ func TestQueryRouterRemove(t *testing.T) {
 	resultCh := make(chan queryResult, 1)
 	pq := &pendingQuery{
 		resultCh:  resultCh,
-		hostnames: map[string]string{"thrall-a": "host"},
+		hostnames: map[string]string{"envoy-a": "host"},
 	}
 	router.register("query-1", pq)
 	router.remove("query-1")
 
 	// After removal, response should be dropped silently.
-	router.handleQueryResponse("thrall-a", &pb.QueryResponse{
+	router.handleQueryResponse("envoy-a", &pb.QueryResponse{
 		QueryId: "query-1",
 		Value:   "test",
 		Found:   true,
@@ -86,11 +86,11 @@ func TestQueryRouterNotFoundResponse(t *testing.T) {
 	resultCh := make(chan queryResult, 1)
 	pq := &pendingQuery{
 		resultCh:  resultCh,
-		hostnames: map[string]string{"thrall-a": "web01"},
+		hostnames: map[string]string{"envoy-a": "web01"},
 	}
 	router.register("query-1", pq)
 
-	router.handleQueryResponse("thrall-a", &pb.QueryResponse{
+	router.handleQueryResponse("envoy-a", &pb.QueryResponse{
 		QueryId:   "query-1",
 		TraitPath: "nonexistent.path",
 		Found:     false,

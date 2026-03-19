@@ -30,7 +30,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"/api/v1/agent/latest", true},
 		{"/api/v1/bootstrap/register", true},
 		{"/", false},
-		{"/thralls", false},
+		{"/envoys", false},
 		{"/api/v1/users", false},
 		{"/api/v1/tasks", false},
 		{"/admin/users", false},

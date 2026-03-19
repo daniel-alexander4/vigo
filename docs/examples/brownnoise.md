@@ -4,7 +4,7 @@ This example builds and runs a brown noise Docker container on a managed node, w
 
 ## Module Definition
 
-`policy/stage/modules/brownnoise.hnb`:
+`policy/stage/modules/brownnoise.vgo`:
 
 ```yaml
 name: brownnoise
@@ -73,10 +73,10 @@ resources:
 
 ## Node Assignment
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "workstation.home.example.com"
     roles: []
     modules:

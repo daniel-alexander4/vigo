@@ -1,6 +1,6 @@
 # Check-in Lifecycle
 
-The agent check-in is the core data flow in Hobnob. Every 5 minutes (configurable), the agent contacts the server, receives its desired state, applies changes, and reports results.
+The agent check-in is the core data flow in Vigo. Every 5 minutes (configurable), the agent contacts the server, receives its desired state, applies changes, and reports results.
 
 ## Pull Loop
 
@@ -22,14 +22,14 @@ Every request from the agent is signed with its ED25519 private key. The server 
 
 ### 4. FleetIndex Update
 
-The server updates the in-memory FleetIndex with the thrall's last-seen timestamp. This is O(1) and touches no database — the dirty set is flushed to SQLite asynchronously every 10s.
+The server updates the in-memory FleetIndex with the envoy's last-seen timestamp. This is O(1) and touches no database — the dirty set is flushed to SQLite asynchronously every 10s.
 
 ### 5. Config Resolution
 
-The server resolves the thrall's desired state:
+The server resolves the envoy's desired state:
 
 ```
-Hostname match (nodes.hnb, first match wins)
+Hostname match (nodes.vgo, first match wins)
     ↓
 Expand roles → module list
     ↓
@@ -83,7 +83,7 @@ Results are stored in the database and used to compute compliance status.
 | `checkin.jitter_percent` | `20` | Random jitter to avoid thundering herd |
 | `checkin.bundle_max_age` | `24h` | Compiled promise validity period |
 
-With default settings, an agent checks in every 5m ± 20% jitter (4m–6m). A thrall is considered **stale** if it hasn't checked in within 2× the interval (10m).
+With default settings, an agent checks in every 5m ± 20% jitter (4m–6m). A envoy is considered **stale** if it hasn't checked in within 2× the interval (10m).
 
 ## Adaptive Stream Promotion
 

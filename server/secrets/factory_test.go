@@ -20,12 +20,12 @@ func TestNewFromConfigDefaultsToLocal(t *testing.T) {
 	defer p.Close()
 
 	// Default backend is local — should resolve builtin defaults.
-	val, err := p.Get(t.Context(), "hobnob/db/dsn")
+	val, err := p.Get(t.Context(), "vigo/db/dsn")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if val != "/srv/hobnob/db/hobnob.db" {
-		t.Errorf("got %q, want %q", val, "/srv/hobnob/db/hobnob.db")
+	if val != "/srv/vigo/db/vigo.db" {
+		t.Errorf("got %q, want %q", val, "/srv/vigo/db/vigo.db")
 	}
 }
 
@@ -45,12 +45,12 @@ func TestNewFromConfigLocal(t *testing.T) {
 	defer p.Close()
 
 	// Should resolve built-in default.
-	val, err := p.Get(t.Context(), "hobnob/db/dsn")
+	val, err := p.Get(t.Context(), "vigo/db/dsn")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if val != "/srv/hobnob/db/hobnob.db" {
-		t.Errorf("got %q, want %q", val, "/srv/hobnob/db/hobnob.db")
+	if val != "/srv/vigo/db/vigo.db" {
+		t.Errorf("got %q, want %q", val, "/srv/vigo/db/vigo.db")
 	}
 }
 
@@ -78,7 +78,7 @@ func TestNewFromConfigLocalDefaultSecretsDir(t *testing.T) {
 	keyFile := filepath.Join(dir, "master.key")
 	os.WriteFile(keyFile, []byte("0000000000000000000000000000000000000000000000000000000000000000\n"), 0o600)
 
-	// Default secrets_dir is /srv/hobnob/secrets. Use explicit dir in test.
+	// Default secrets_dir is /srv/vigo/secrets. Use explicit dir in test.
 	p, err := NewFromConfig(Config{
 		Backend:    "local",
 		KeyFile:    keyFile,

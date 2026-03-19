@@ -1,4 +1,4 @@
-module github.com/hobnob/hobnob-site
+module github.com/daniel-alexander4/vigo-site
 
 go 1.25
 

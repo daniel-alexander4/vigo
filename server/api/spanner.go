@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/spanner"
 )
 
 // SpannerStatus is the response for GET /api/v1/spanner/status.
@@ -36,7 +36,7 @@ func (h *SpannerHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Spoke drill-down (Phase 2)
 	if h.hub != nil {
 		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}", h.handleSpokeDetail)
-		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/thralls", h.handleSpokeThralls)
+		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/envoys", h.handleSpokeEnvoys)
 		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/runs", h.handleSpokeRuns)
 		mux.HandleFunc("POST /api/v1/spanner/spokes/{id}/push", h.handleSpokePush)
 		// Reassignment + drain (Phase 3)
@@ -77,15 +77,15 @@ func (h *SpannerHandler) handleSpokeDetail(w http.ResponseWriter, r *http.Reques
 	writeJSONError(w, http.StatusNotFound, "spoke not found")
 }
 
-func (h *SpannerHandler) handleSpokeThralls(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerHandler) handleSpokeEnvoys(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	thralls, err := h.hub.SpokeListThralls(r.Context(), id)
+	envoys, err := h.hub.SpokeListEnvoys(r.Context(), id)
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"thralls": thralls})
+	json.NewEncoder(w).Encode(map[string]any{"envoys": envoys})
 }
 
 func (h *SpannerHandler) handleSpokeRuns(w http.ResponseWriter, r *http.Request) {
@@ -103,21 +103,21 @@ func (h *SpannerHandler) handleSpokeRuns(w http.ResponseWriter, r *http.Request)
 func (h *SpannerHandler) handleSpokePush(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		ThrallID string `json:"thrall_id"`
+		EnvoyID string `json:"envoy_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	count, err := h.hub.SpokeForcePush(r.Context(), id, req.ThrallID)
+	count, err := h.hub.SpokeForcePush(r.Context(), id, req.EnvoyID)
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"thralls_notified": count})
+	json.NewEncoder(w).Encode(map[string]any{"envoys_notified": count})
 }
 
 func (h *SpannerHandler) handleReassign(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ThrallID    string `json:"thrall_id"`
+		EnvoyID    string `json:"envoy_id"`
 		FromSpokeID string `json:"from_spoke_id"`
 		ToSpokeID   string `json:"to_spoke_id"`
 	}
@@ -125,12 +125,12 @@ func (h *SpannerHandler) handleReassign(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.ThrallID == "" || req.FromSpokeID == "" || req.ToSpokeID == "" {
-		writeJSONError(w, http.StatusBadRequest, "thrall_id, from_spoke_id, and to_spoke_id are required")
+	if req.EnvoyID == "" || req.FromSpokeID == "" || req.ToSpokeID == "" {
+		writeJSONError(w, http.StatusBadRequest, "envoy_id, from_spoke_id, and to_spoke_id are required")
 		return
 	}
 
-	result, err := h.hub.ReassignThrall(r.Context(), req.ThrallID, req.FromSpokeID, req.ToSpokeID)
+	result, err := h.hub.ReassignEnvoy(r.Context(), req.EnvoyID, req.FromSpokeID, req.ToSpokeID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return

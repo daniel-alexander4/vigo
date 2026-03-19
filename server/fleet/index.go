@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package fleet provides an in-memory FleetIndex that holds the current state
-// of every thrall. All real-time queries (pubkey lookups, check-in state reads,
+// of every envoy. All real-time queries (pubkey lookups, check-in state reads,
 // targeting, compliance counters) are served from this index. SQLite remains
 // the durable store, fed asynchronously via the StateFlusher.
 package fleet
@@ -16,9 +16,9 @@ import (
 	"time"
 )
 
-// ThrallState holds the in-memory state of a single thrall. All fields are
+// EnvoyState holds the in-memory state of a single envoy. All fields are
 // owned by the FleetIndex and protected by its mutex.
-type ThrallState struct {
+type EnvoyState struct {
 	ID                    string
 	Hostname              string
 	IP                    string
@@ -36,8 +36,8 @@ type ThrallState struct {
 	ForceUpdate           bool   // ephemeral: agent should download latest binary and restart
 	AgentVersion          string // agent binary version reported on check-in
 	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
-	Gateway               string // hostname of gateway thrall (empty for normal thralls)
-	DeviceType            string // network device type (empty for normal thralls)
+	Gateway               string // hostname of gateway envoy (empty for normal envoys)
+	DeviceType            string // network device type (empty for normal envoys)
 	Tags                  []string   // user-assigned tags for targeting
 	MaintenanceUntil      time.Time  // zero = not in maintenance
 }
@@ -55,7 +55,7 @@ type ComplianceCounters struct {
 // RunSummary is a brief record of a completed run for the recent-runs ring buffer.
 type RunSummary struct {
 	RunID        string
-	ThrallID     string
+	EnvoyID     string
 	Hostname     string
 	Status       string
 	ChangedCount int64
@@ -69,13 +69,13 @@ type ComplianceSnapshot struct {
 	Counters  ComplianceCounters
 }
 
-// FleetIndex is a concurrency-safe in-memory index of all thralls. It provides
+// FleetIndex is a concurrency-safe in-memory index of all envoys. It provides
 // O(1) lookups by ID, hostname, and pubkey, O(k) queries by status and trait,
-// and pre-computed compliance counters. Write methods mark thralls dirty for
+// and pre-computed compliance counters. Write methods mark envoys dirty for
 // async flush to SQLite.
 type FleetIndex struct {
 	mu         sync.RWMutex
-	thralls    map[string]*ThrallState       // ID → state
+	envoys    map[string]*EnvoyState       // ID → state
 	byHostname map[string]string             // hostname → ID
 	pubkeys    map[string]ed25519.PublicKey   // ID → parsed key
 	byStatus   map[string]map[string]bool    // status → set of IDs
@@ -90,7 +90,7 @@ type FleetIndex struct {
 // NewFleetIndex creates an empty FleetIndex.
 func NewFleetIndex() *FleetIndex {
 	return &FleetIndex{
-		thralls:    make(map[string]*ThrallState),
+		envoys:    make(map[string]*EnvoyState),
 		byHostname: make(map[string]string),
 		pubkeys:    make(map[string]ed25519.PublicKey),
 		byStatus:   make(map[string]map[string]bool),
@@ -104,12 +104,12 @@ func NewFleetIndex() *FleetIndex {
 
 // --- Read methods (acquire RLock) ---
 
-// GetThrall returns a copy of the ThrallState for the given ID.
+// GetEnvoy returns a copy of the EnvoyState for the given ID.
 // Returns nil if not found.
-func (f *FleetIndex) GetThrall(id string) *ThrallState {
+func (f *FleetIndex) GetEnvoy(id string) *EnvoyState {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	ts := f.thralls[id]
+	ts := f.envoys[id]
 	if ts == nil {
 		return nil
 	}
@@ -127,14 +127,14 @@ func (f *FleetIndex) GetThrall(id string) *ThrallState {
 	return &cp
 }
 
-// GetThrallLite returns a shallow copy of the ThrallState without deep-copying
+// GetEnvoyLite returns a shallow copy of the EnvoyState without deep-copying
 // Traits or PendingRotatedSecrets. It also returns existence and revoked status,
-// collapsing IsRevoked + GetThrall into one lock acquisition. The caller must
+// collapsing IsRevoked + GetEnvoy into one lock acquisition. The caller must
 // not mutate the Traits or PendingRotatedSecrets slices on the returned value.
-func (f *FleetIndex) GetThrallLite(id string) (ts *ThrallState, exists, revoked bool) {
+func (f *FleetIndex) GetEnvoyLite(id string) (ts *EnvoyState, exists, revoked bool) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	src := f.thralls[id]
+	src := f.envoys[id]
 	if src == nil {
 		return nil, false, false
 	}
@@ -142,7 +142,7 @@ func (f *FleetIndex) GetThrallLite(id string) (ts *ThrallState, exists, revoked 
 	return &cp, true, src.Revoked
 }
 
-// GetPubKey returns the parsed ED25519 public key for the given thrall ID.
+// GetPubKey returns the parsed ED25519 public key for the given envoy ID.
 // Returns nil if not found.
 func (f *FleetIndex) GetPubKey(id string) ed25519.PublicKey {
 	f.mu.RLock()
@@ -150,7 +150,7 @@ func (f *FleetIndex) GetPubKey(id string) ed25519.PublicKey {
 	return f.pubkeys[id]
 }
 
-// GetByHostname returns the thrall ID for the given hostname.
+// GetByHostname returns the envoy ID for the given hostname.
 // Returns "" if not found.
 func (f *FleetIndex) GetByHostname(hostname string) string {
 	f.mu.RLock()
@@ -158,28 +158,28 @@ func (f *FleetIndex) GetByHostname(hostname string) string {
 	return f.byHostname[hostname]
 }
 
-// ListByGlob returns all non-revoked thralls whose hostname matches the glob pattern.
+// ListByGlob returns all non-revoked envoys whose hostname matches the glob pattern.
 func (f *FleetIndex) ListByGlob(pattern string) []TargetInfo {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	// Pre-allocate for ~10% match rate to avoid repeated slice growth.
-	estimate := len(f.thralls) / 10
+	estimate := len(f.envoys) / 10
 	if estimate < 8 {
 		estimate = 8
 	}
 	results := make([]TargetInfo, 0, estimate)
-	for _, ts := range f.thralls {
+	for _, ts := range f.envoys {
 		if ts.Revoked {
 			continue
 		}
 		if matched, _ := filepath.Match(pattern, ts.Hostname); matched {
-			results = append(results, TargetInfo{ThrallID: ts.ID, Hostname: ts.Hostname})
+			results = append(results, TargetInfo{EnvoyID: ts.ID, Hostname: ts.Hostname})
 		}
 	}
 	return results
 }
 
-// ListByTrait returns all non-revoked thralls whose flattened traits contain key=value.
+// ListByTrait returns all non-revoked envoys whose flattened traits contain key=value.
 func (f *FleetIndex) ListByTrait(key, value string) []TargetInfo {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -193,9 +193,9 @@ func (f *FleetIndex) ListByTrait(key, value string) []TargetInfo {
 	}
 	var results []TargetInfo
 	for id := range ids {
-		ts := f.thralls[id]
+		ts := f.envoys[id]
 		if ts != nil && !ts.Revoked {
-			results = append(results, TargetInfo{ThrallID: ts.ID, Hostname: ts.Hostname})
+			results = append(results, TargetInfo{EnvoyID: ts.ID, Hostname: ts.Hostname})
 		}
 	}
 	return results
@@ -203,7 +203,7 @@ func (f *FleetIndex) ListByTrait(key, value string) []TargetInfo {
 
 // TargetInfo is the minimal info returned by targeting queries.
 type TargetInfo struct {
-	ThrallID string
+	EnvoyID string
 	Hostname string
 }
 
@@ -242,27 +242,27 @@ func (f *FleetIndex) ComplianceSparkline() []ComplianceSnapshot {
 	return f.complianceHistory.All()
 }
 
-// AllThralls returns a copy of all ThrallState values.
-func (f *FleetIndex) AllThralls() []ThrallState {
+// AllEnvoys returns a copy of all EnvoyState values.
+func (f *FleetIndex) AllEnvoys() []EnvoyState {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	result := make([]ThrallState, 0, len(f.thralls))
-	for _, ts := range f.thralls {
+	result := make([]EnvoyState, 0, len(f.envoys))
+	for _, ts := range f.envoys {
 		result = append(result, *ts)
 	}
 	return result
 }
 
-// PaginatedThralls returns up to `limit` non-revoked thralls, sorted by hostname,
+// PaginatedEnvoys returns up to `limit` non-revoked envoys, sorted by hostname,
 // starting after `afterHostname` (exclusive). Pass "" to start from the beginning.
-// Returns the thralls and whether there are more results.
-func (f *FleetIndex) PaginatedThralls(afterHostname string, limit int, statusFilter string) ([]ThrallState, bool) {
+// Returns the envoys and whether there are more results.
+func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilter string) ([]EnvoyState, bool) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	// Collect matching thralls.
-	var candidates []ThrallState
-	for _, ts := range f.thralls {
+	// Collect matching envoys.
+	var candidates []EnvoyState
+	for _, ts := range f.envoys {
 		if ts.Revoked {
 			continue
 		}
@@ -294,7 +294,7 @@ func (f *FleetIndex) RecentRuns(n int) []RunSummary {
 	return f.recentRuns.Last(n)
 }
 
-// ListByTag returns all non-revoked thralls with the given tag.
+// ListByTag returns all non-revoked envoys with the given tag.
 func (f *FleetIndex) ListByTag(tag string) []TargetInfo {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -304,26 +304,26 @@ func (f *FleetIndex) ListByTag(tag string) []TargetInfo {
 	}
 	var results []TargetInfo
 	for id := range ids {
-		ts := f.thralls[id]
+		ts := f.envoys[id]
 		if ts != nil && !ts.Revoked {
-			results = append(results, TargetInfo{ThrallID: ts.ID, Hostname: ts.Hostname})
+			results = append(results, TargetInfo{EnvoyID: ts.ID, Hostname: ts.Hostname})
 		}
 	}
 	return results
 }
 
-// IsInMaintenance returns true if the thrall is currently in a maintenance window.
+// IsInMaintenance returns true if the envoy is currently in a maintenance window.
 func (f *FleetIndex) IsInMaintenance(id string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	ts := f.thralls[id]
+	ts := f.envoys[id]
 	if ts == nil {
 		return false
 	}
 	return !ts.MaintenanceUntil.IsZero() && time.Now().Before(ts.MaintenanceUntil)
 }
 
-// CompliancePercent returns the percentage of non-revoked thralls that are compliant.
+// CompliancePercent returns the percentage of non-revoked envoys that are compliant.
 func (f *FleetIndex) CompliancePercent() float64 {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -335,14 +335,14 @@ func (f *FleetIndex) CompliancePercent() float64 {
 
 // --- Write methods (acquire Lock) ---
 
-// AddThrall inserts a new thrall into the index. If a thrall with the same ID
+// AddEnvoy inserts a new envoy into the index. If a envoy with the same ID
 // already exists, it is overwritten.
-func (f *FleetIndex) AddThrall(ts ThrallState, pubKey ed25519.PublicKey) {
+func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	// Remove old hostname mapping if it changed.
-	if old, ok := f.thralls[ts.ID]; ok {
+	if old, ok := f.envoys[ts.ID]; ok {
 		if old.Hostname != ts.Hostname {
 			delete(f.byHostname, old.Hostname)
 		}
@@ -356,7 +356,7 @@ func (f *FleetIndex) AddThrall(ts ThrallState, pubKey ed25519.PublicKey) {
 	}
 
 	state := ts // copy
-	f.thralls[ts.ID] = &state
+	f.envoys[ts.ID] = &state
 	f.byHostname[ts.Hostname] = ts.ID
 	if pubKey != nil {
 		f.pubkeys[ts.ID] = pubKey
@@ -371,12 +371,12 @@ func (f *FleetIndex) AddThrall(ts ThrallState, pubKey ed25519.PublicKey) {
 	}
 }
 
-// RemoveThrall removes a thrall from the index entirely.
-func (f *FleetIndex) RemoveThrall(id string) {
+// RemoveEnvoy removes a envoy from the index entirely.
+func (f *FleetIndex) RemoveEnvoy(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -390,16 +390,16 @@ func (f *FleetIndex) RemoveThrall(id string) {
 		f.compliance.Total--
 		f.decrementCounter(ts.ComplianceStatus)
 	}
-	delete(f.thralls, id)
+	delete(f.envoys, id)
 	delete(f.dirty, id)
 }
 
-// SetRevoked marks a thrall as revoked.
+// SetRevoked marks a envoy as revoked.
 func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -420,13 +420,13 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 	}
 }
 
-// MarkSeen updates the LastSeen timestamp for a thrall and marks it dirty
+// MarkSeen updates the LastSeen timestamp for a envoy and marks it dirty
 // for async flush to SQLite.
 func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -435,13 +435,13 @@ func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 }
 
 // MarkSeenInMemory updates the LastSeen timestamp in-memory without marking
-// the thrall dirty. Used for streaming thralls where the open gRPC stream
+// the envoy dirty. Used for streaming envoys where the open gRPC stream
 // already proves liveness — avoids redundant last_seen DB writes.
 func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -453,7 +453,7 @@ func (f *FleetIndex) SetAgentVersion(id, version string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -465,7 +465,7 @@ func (f *FleetIndex) SetForcePush(id string, val bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -473,25 +473,25 @@ func (f *FleetIndex) SetForcePush(id string, val bool) {
 	f.dirty[id] = true
 }
 
-// SetForceUpdate sets the ForceUpdate flag on a single thrall.
+// SetForceUpdate sets the ForceUpdate flag on a single envoy.
 func (f *FleetIndex) SetForceUpdate(id string, val bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
 	ts.ForceUpdate = val
 }
 
-// SetForceUpdateAll sets ForceUpdate on all non-revoked thralls. Returns count.
+// SetForceUpdateAll sets ForceUpdate on all non-revoked envoys. Returns count.
 func (f *FleetIndex) SetForceUpdateAll() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	count := 0
-	for _, ts := range f.thralls {
+	for _, ts := range f.envoys {
 		if ts.Revoked {
 			continue
 		}
@@ -501,13 +501,13 @@ func (f *FleetIndex) SetForceUpdateAll() int {
 	return count
 }
 
-// SetForcePushAll sets ForcePush on all non-revoked thralls. Returns count.
+// SetForcePushAll sets ForcePush on all non-revoked envoys. Returns count.
 func (f *FleetIndex) SetForcePushAll() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	count := 0
-	for id, ts := range f.thralls {
+	for id, ts := range f.envoys {
 		if ts.Revoked {
 			continue
 		}
@@ -523,7 +523,7 @@ func (f *FleetIndex) SetStreamRequested(id string, val bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -541,7 +541,7 @@ func (f *FleetIndex) ClearPendingRotatedSecrets(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -549,13 +549,13 @@ func (f *FleetIndex) ClearPendingRotatedSecrets(id string) {
 	f.dirty[id] = true
 }
 
-// AppendPendingRotatedSecret adds a secret path to a thrall's pending rotation
+// AppendPendingRotatedSecret adds a secret path to a envoy's pending rotation
 // list and sets force_push. Used by the secrets API to trigger rotation delivery.
 func (f *FleetIndex) AppendPendingRotatedSecret(id, secretPath string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -570,12 +570,12 @@ func (f *FleetIndex) AppendPendingRotatedSecret(id, secretPath string) {
 	f.dirty[id] = true
 }
 
-// SetTags replaces the tags for a thrall and updates the inverted tag index.
+// SetTags replaces the tags for a envoy and updates the inverted tag index.
 func (f *FleetIndex) SetTags(id string, tags []string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -587,12 +587,12 @@ func (f *FleetIndex) SetTags(id string, tags []string) {
 	f.dirty[id] = true
 }
 
-// SetMaintenanceUntil sets the maintenance window for a thrall.
+// SetMaintenanceUntil sets the maintenance window for a envoy.
 func (f *FleetIndex) SetMaintenanceUntil(id string, until time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -600,7 +600,7 @@ func (f *FleetIndex) SetMaintenanceUntil(id string, until time.Time) {
 	f.dirty[id] = true
 }
 
-// ClearMaintenance clears the maintenance window for a thrall.
+// ClearMaintenance clears the maintenance window for a envoy.
 func (f *FleetIndex) ClearMaintenance(id string) {
 	f.SetMaintenanceUntil(id, time.Time{})
 }
@@ -610,7 +610,7 @@ func (f *FleetIndex) UpdateRunStatus(id, runStatus string, changedCount int64, r
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	ts, ok := f.thralls[id]
+	ts, ok := f.envoys[id]
 	if !ok {
 		return
 	}
@@ -639,15 +639,15 @@ func (f *FleetIndex) AppendRecentRun(run RunSummary) {
 	f.recentRuns.Push(run)
 }
 
-// MarkDirty marks a thrall for async flush.
+// MarkDirty marks a envoy for async flush.
 func (f *FleetIndex) MarkDirty(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.dirty[id] = true
 }
 
-// DrainDirty returns and clears the set of dirty thrall IDs.
-func (f *FleetIndex) DrainDirty() map[string]*ThrallState {
+// DrainDirty returns and clears the set of dirty envoy IDs.
+func (f *FleetIndex) DrainDirty() map[string]*EnvoyState {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -655,9 +655,9 @@ func (f *FleetIndex) DrainDirty() map[string]*ThrallState {
 		return nil
 	}
 
-	result := make(map[string]*ThrallState, len(f.dirty))
+	result := make(map[string]*EnvoyState, len(f.dirty))
 	for id := range f.dirty {
-		if ts, ok := f.thralls[id]; ok {
+		if ts, ok := f.envoys[id]; ok {
 			cp := *ts
 			result[id] = &cp
 		}

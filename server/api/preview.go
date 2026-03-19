@@ -6,8 +6,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 // PreviewHandler provides multi-node impact analysis for config changes.
@@ -26,7 +26,7 @@ func (h *PreviewHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/preview", h.Preview)
 }
 
-// Preview returns the list of thralls that would be affected by changes to a module.
+// Preview returns the list of envoys that would be affected by changes to a module.
 func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	moduleName := r.URL.Query().Get("module")
 	if moduleName == "" {
@@ -39,29 +39,29 @@ func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type affectedThrall struct {
+	type affectedEnvoy struct {
 		Hostname string `json:"hostname"`
-		ThrallID string `json:"thrall_id"`
+		EnvoyID string `json:"envoy_id"`
 	}
 
-	// Find all thralls that include this module.
-	allThralls := h.fleetIndex.AllThralls()
-	var affected []affectedThrall
+	// Find all envoys that include this module.
+	allEnvoys := h.fleetIndex.AllEnvoys()
+	var affected []affectedEnvoy
 
-	for _, ts := range allThralls {
+	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
-		// Resolve config for this thrall and check if it includes the module.
+		// Resolve config for this envoy and check if it includes the module.
 		_, cfg := h.configStore.Match(ts.Hostname)
 		if cfg == nil {
 			continue
 		}
 		for _, mod := range cfg.Modules {
 			if mod.Name == moduleName {
-				affected = append(affected, affectedThrall{
+				affected = append(affected, affectedEnvoy{
 					Hostname: ts.Hostname,
-					ThrallID: ts.ID,
+					EnvoyID: ts.ID,
 				})
 				break
 			}

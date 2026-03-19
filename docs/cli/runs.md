@@ -1,6 +1,6 @@
-# hobnobcli runs
+# vigogo runs
 
-View run history for convergence runs executed by thralls.
+View run history for convergence runs executed by envoys.
 
 ## Subcommands
 
@@ -12,7 +12,7 @@ View run history for convergence runs executed by thralls.
 ## Usage
 
 ```bash
-hobnobcli runs [subcommand] [flags]
+vigogo runs [subcommand] [flags]
 ```
 
 ## list
@@ -20,14 +20,14 @@ hobnobcli runs [subcommand] [flags]
 List recent convergence runs with optional filtering.
 
 ```bash
-hobnobcli runs list [flags]
+vigogo runs list [flags]
 ```
 
 ### Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--thrall` | | | Filter by thrall ID |
+| `--envoy` | | | Filter by envoy ID |
 | `--limit` | | `20` | Maximum number of runs to display |
 
 ### Examples
@@ -35,20 +35,20 @@ hobnobcli runs list [flags]
 #### List all recent runs
 
 ```bash
-hobnobcli runs list
+vigogo runs list
 ```
 
 ```
-ID          THRALL      STARTED            STATUS     CHANGED  FAILED
+ID          ENVOY      STARTED            STATUS     CHANGED  FAILED
 r1a2b3c4    a1b2c3d4    2026-03-13 12:30   success    3        0
 r5e6f7g8    e5f6g7h8    2026-03-13 12:28   success    0        0
 r9h0i1j2    a1b2c3d4    2026-03-13 11:30   failed     2        1
 ```
 
-#### List runs for a specific thrall
+#### List runs for a specific envoy
 
 ```bash
-hobnobcli runs list --thrall a1b2c3d4 --limit 5
+vigogo runs list --envoy a1b2c3d4 --limit 5
 ```
 
 ## show
@@ -56,18 +56,18 @@ hobnobcli runs list --thrall a1b2c3d4 --limit 5
 Show detailed results for a specific run, including per-resource outcomes.
 
 ```bash
-hobnobcli runs show <id>
+vigogo runs show <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli runs show r1a2b3c4
+vigogo runs show r1a2b3c4
 ```
 
 ```
 Run:      r1a2b3c4
-Thrall:     a1b2c3d4
+Envoy:     a1b2c3d4
 Started:  2026-03-13 12:30
 Finished: 2026-03-13 12:31
 Status:   success
@@ -81,5 +81,5 @@ nginx       service    nginx              restart   true     -
 
 ## Related
 
-- [thralls](thralls.md) -- manage enrolled thralls
+- [envoys](envoys.md) -- manage enrolled envoys
 - [push](push.md) -- dispatch ad-hoc pushes

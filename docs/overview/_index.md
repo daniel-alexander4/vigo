@@ -1,10 +1,10 @@
 # Overview
 
-Hobnob is a distributed state enforcement engine for managing fleets of servers and network devices. These pages explain what it is, how it compares, and why it exists.
+Vigo is a distributed state enforcement engine for managing fleets of servers and network devices. These pages explain what it is, how it compares, and why it exists.
 
 | Page | Description |
 |------|-------------|
-| [Overview](overview.md) | What Hobnob is and how it works |
+| [Overview](overview.md) | What Vigo is and how it works |
 | [Fact Sheet](fact-sheet.md) | Quick reference of capabilities |
-| [Differentiators](differentiators.md) | What makes Hobnob different |
+| [Differentiators](differentiators.md) | What makes Vigo different |
 | [Technical Comparison](technical-comparison.md) | Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine |

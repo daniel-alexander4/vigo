@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/hobnob/hobnob/server/conditionals"
+	"github.com/daniel-alexander4/vigo/server/conditionals"
 )
 
 // templateContext is the context passed to Go templates when rendering

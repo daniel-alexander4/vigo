@@ -9,35 +9,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-// ThrallsHandler provides REST endpoints for thrall management operations
+// EnvoysHandler provides REST endpoints for envoy management operations
 // that are not covered by grpc-gateway.
-type ThrallsHandler struct {
+type EnvoysHandler struct {
 	queries    *db.Queries
 	fleetIndex *fleet.FleetIndex
 }
 
-// NewThrallsHandler creates a ThrallsHandler.
-func NewThrallsHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex) *ThrallsHandler {
-	return &ThrallsHandler{queries: queries, fleetIndex: fleetIndex}
+// NewEnvoysHandler creates a EnvoysHandler.
+func NewEnvoysHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex) *EnvoysHandler {
+	return &EnvoysHandler{queries: queries, fleetIndex: fleetIndex}
 }
 
-// RegisterRoutes registers thrall management endpoints.
-func (h *ThrallsHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("PUT /api/v1/thralls/{id}/tags", h.SetTags)
-	mux.HandleFunc("GET /api/v1/thralls/{id}/tags", h.GetTags)
-	mux.HandleFunc("PUT /api/v1/thralls/{id}/maintenance", h.SetMaintenance)
-	mux.HandleFunc("DELETE /api/v1/thralls/{id}/maintenance", h.ClearMaintenance)
-	mux.HandleFunc("GET /api/v1/thralls/{id}/compliance", h.GetCompliance)
-	mux.HandleFunc("POST /api/v1/thralls/{id}/update", h.ForceUpdate)
-	mux.HandleFunc("POST /api/v1/thralls/update", h.ForceUpdateAll)
+// RegisterRoutes registers envoy management endpoints.
+func (h *EnvoysHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("PUT /api/v1/envoys/{id}/tags", h.SetTags)
+	mux.HandleFunc("GET /api/v1/envoys/{id}/tags", h.GetTags)
+	mux.HandleFunc("PUT /api/v1/envoys/{id}/maintenance", h.SetMaintenance)
+	mux.HandleFunc("DELETE /api/v1/envoys/{id}/maintenance", h.ClearMaintenance)
+	mux.HandleFunc("GET /api/v1/envoys/{id}/compliance", h.GetCompliance)
+	mux.HandleFunc("POST /api/v1/envoys/{id}/update", h.ForceUpdate)
+	mux.HandleFunc("POST /api/v1/envoys/update", h.ForceUpdateAll)
 }
 
-// SetTags sets the tags for a thrall.
-func (h *ThrallsHandler) SetTags(w http.ResponseWriter, r *http.Request) {
+// SetTags sets the tags for a envoy.
+func (h *EnvoysHandler) SetTags(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var req struct {
@@ -49,11 +49,11 @@ func (h *ThrallsHandler) SetTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update DB.
-	if err := h.queries.UpdateThrallTags(r.Context(), db.UpdateThrallTagsParams{
+	if err := h.queries.UpdateEnvoyTags(r.Context(), db.UpdateEnvoyTagsParams{
 		Tags: strings.Join(req.Tags, ","),
 		ID:   id,
 	}); err != nil {
-		writeJSONError(w, http.StatusNotFound, "thrall not found")
+		writeJSONError(w, http.StatusNotFound, "envoy not found")
 		return
 	}
 
@@ -65,14 +65,14 @@ func (h *ThrallsHandler) SetTags(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tags": req.Tags})
 }
 
-// GetTags returns the tags for a thrall.
-func (h *ThrallsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
+// GetTags returns the tags for a envoy.
+func (h *EnvoysHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if h.fleetIndex != nil {
-		ts := h.fleetIndex.GetThrall(id)
+		ts := h.fleetIndex.GetEnvoy(id)
 		if ts == nil {
-			writeJSONError(w, http.StatusNotFound, "thrall not found")
+			writeJSONError(w, http.StatusNotFound, "envoy not found")
 			return
 		}
 		tags := ts.Tags
@@ -83,14 +83,14 @@ func (h *ThrallsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	thrall, err := h.queries.GetThrallByID(r.Context(), id)
+	envoy, err := h.queries.GetEnvoyByID(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "thrall not found")
+		writeJSONError(w, http.StatusNotFound, "envoy not found")
 		return
 	}
 	var tags []string
-	if thrall.Tags != "" {
-		for _, t := range strings.Split(thrall.Tags, ",") {
+	if envoy.Tags != "" {
+		for _, t := range strings.Split(envoy.Tags, ",") {
 			t = strings.TrimSpace(t)
 			if t != "" {
 				tags = append(tags, t)
@@ -103,8 +103,8 @@ func (h *ThrallsHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
 }
 
-// SetMaintenance sets a maintenance window for a thrall.
-func (h *ThrallsHandler) SetMaintenance(w http.ResponseWriter, r *http.Request) {
+// SetMaintenance sets a maintenance window for a envoy.
+func (h *EnvoysHandler) SetMaintenance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var req struct {
@@ -130,8 +130,8 @@ func (h *ThrallsHandler) SetMaintenance(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// ClearMaintenance removes the maintenance window for a thrall.
-func (h *ThrallsHandler) ClearMaintenance(w http.ResponseWriter, r *http.Request) {
+// ClearMaintenance removes the maintenance window for a envoy.
+func (h *EnvoysHandler) ClearMaintenance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if h.fleetIndex != nil {
@@ -141,14 +141,14 @@ func (h *ThrallsHandler) ClearMaintenance(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"maintenance_until": nil})
 }
 
-// GetCompliance returns the compliance status for a thrall.
-func (h *ThrallsHandler) GetCompliance(w http.ResponseWriter, r *http.Request) {
+// GetCompliance returns the compliance status for a envoy.
+func (h *EnvoysHandler) GetCompliance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if h.fleetIndex != nil {
-		ts := h.fleetIndex.GetThrall(id)
+		ts := h.fleetIndex.GetEnvoy(id)
 		if ts == nil {
-			writeJSONError(w, http.StatusNotFound, "thrall not found")
+			writeJSONError(w, http.StatusNotFound, "envoy not found")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": ts.ComplianceStatus})
@@ -158,17 +158,17 @@ func (h *ThrallsHandler) GetCompliance(w http.ResponseWriter, r *http.Request) {
 	writeJSONError(w, http.StatusNotImplemented, "compliance requires FleetIndex")
 }
 
-// ForceUpdate sets the force_update flag on a single thrall so it downloads
+// ForceUpdate sets the force_update flag on a single envoy so it downloads
 // the latest binary on its next check-in.
-func (h *ThrallsHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
+func (h *EnvoysHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
 		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
 		return
 	}
 
 	id := r.PathValue("id")
-	if _, ok, _ := h.fleetIndex.GetThrallLite(id); !ok {
-		writeJSONError(w, http.StatusNotFound, "thrall not found")
+	if _, ok, _ := h.fleetIndex.GetEnvoyLite(id); !ok {
+		writeJSONError(w, http.StatusNotFound, "envoy not found")
 		return
 	}
 
@@ -176,8 +176,8 @@ func (h *ThrallsHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "queued"})
 }
 
-// ForceUpdateAll sets the force_update flag on all active thralls.
-func (h *ThrallsHandler) ForceUpdateAll(w http.ResponseWriter, r *http.Request) {
+// ForceUpdateAll sets the force_update flag on all active envoys.
+func (h *EnvoysHandler) ForceUpdateAll(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
 		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
 		return

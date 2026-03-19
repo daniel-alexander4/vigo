@@ -123,14 +123,14 @@ func (q *Queries) CreatePushRun(ctx context.Context, arg CreatePushRunParams) (P
 }
 
 const createPushRunTarget = `-- name: CreatePushRunTarget :one
-INSERT INTO push_run_targets (push_run_id, thrall_id, hostname, status)
+INSERT INTO push_run_targets (push_run_id, envoy_id, hostname, status)
 VALUES (?, ?, ?, ?)
-RETURNING id, push_run_id, thrall_id, hostname, status, exit_code, stdout, stderr, duration_ms, error_msg, dispatched_at, finished_at
+RETURNING id, push_run_id, envoy_id, hostname, status, exit_code, stdout, stderr, duration_ms, error_msg, dispatched_at, finished_at
 `
 
 type CreatePushRunTargetParams struct {
 	PushRunID string `json:"push_run_id"`
-	ThrallID  string `json:"thrall_id"`
+	EnvoyID   string `json:"envoy_id"`
 	Hostname  string `json:"hostname"`
 	Status    string `json:"status"`
 }
@@ -138,7 +138,7 @@ type CreatePushRunTargetParams struct {
 func (q *Queries) CreatePushRunTarget(ctx context.Context, arg CreatePushRunTargetParams) (PushRunTarget, error) {
 	row := q.db.QueryRowContext(ctx, createPushRunTarget,
 		arg.PushRunID,
-		arg.ThrallID,
+		arg.EnvoyID,
 		arg.Hostname,
 		arg.Status,
 	)
@@ -146,7 +146,7 @@ func (q *Queries) CreatePushRunTarget(ctx context.Context, arg CreatePushRunTarg
 	err := row.Scan(
 		&i.ID,
 		&i.PushRunID,
-		&i.ThrallID,
+		&i.EnvoyID,
 		&i.Hostname,
 		&i.Status,
 		&i.ExitCode,
@@ -185,7 +185,7 @@ func (q *Queries) GetPushRun(ctx context.Context, id string) (PushRun, error) {
 }
 
 const listPushRunTargets = `-- name: ListPushRunTargets :many
-SELECT id, push_run_id, thrall_id, hostname, status, exit_code, stdout, stderr, duration_ms, error_msg, dispatched_at, finished_at FROM push_run_targets
+SELECT id, push_run_id, envoy_id, hostname, status, exit_code, stdout, stderr, duration_ms, error_msg, dispatched_at, finished_at FROM push_run_targets
 WHERE push_run_id = ?
 ORDER BY hostname ASC
 `
@@ -202,7 +202,7 @@ func (q *Queries) ListPushRunTargets(ctx context.Context, pushRunID string) ([]P
 		if err := rows.Scan(
 			&i.ID,
 			&i.PushRunID,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.Hostname,
 			&i.Status,
 			&i.ExitCode,

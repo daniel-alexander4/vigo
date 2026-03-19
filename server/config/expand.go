@@ -86,8 +86,8 @@ func ExpandCase(resources []ResourceConfig, traits map[string]any, vars map[stri
 }
 
 // HasCaseResources returns true if any module in the config has resources
-// with Case expressions, meaning per-thrall expansion is needed at check-in.
-func HasCaseResources(cfg *ThrallConfig) bool {
+// with Case expressions, meaning per-envoy expansion is needed at check-in.
+func HasCaseResources(cfg *EnvoyConfig) bool {
 	for _, mod := range cfg.Modules {
 		for _, res := range mod.Resources {
 			if res.Case != "" {

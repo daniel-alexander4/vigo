@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/spanner"
 )
 
 func TestSpannerStatusStandalone(t *testing.T) {
@@ -122,7 +122,7 @@ func TestSpokeDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 		path   string
 	}{
 		{"GET", "/api/v1/spanner/spokes/spoke-1"},
-		{"GET", "/api/v1/spanner/spokes/spoke-1/thralls"},
+		{"GET", "/api/v1/spanner/spokes/spoke-1/envoys"},
 		{"GET", "/api/v1/spanner/spokes/spoke-1/runs"},
 		{"POST", "/api/v1/spanner/spokes/spoke-1/push"},
 		{"POST", "/api/v1/spanner/reassign"},

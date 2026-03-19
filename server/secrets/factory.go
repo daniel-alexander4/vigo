@@ -15,7 +15,7 @@ import (
 type Config struct {
 	Backend       string `yaml:"backend"`         // "local" (default) or "isopass"
 	KeyFile       string `yaml:"key_file"`        // local: path to master encryption key (empty = auto-generate)
-	SecretsDir    string `yaml:"secrets_dir"`     // local: directory for secret files (default: /srv/hobnob/secrets)
+	SecretsDir    string `yaml:"secrets_dir"`     // local: directory for secret files (default: /srv/vigo/secrets)
 	URL           string `yaml:"url"`             // isopass: API base URL
 	TokenFile     string `yaml:"token_file"`      // isopass: path to file containing bearer token (0600)
 	TLSSkipVerify bool   `yaml:"tls_skip_verify"` // isopass: skip TLS certificate verification
@@ -33,7 +33,7 @@ func NewFromConfig(cfg Config) (Provider, error) {
 	case "local":
 		secretsDir := cfg.SecretsDir
 		if secretsDir == "" {
-			secretsDir = "/srv/hobnob/secrets"
+			secretsDir = "/srv/vigo/secrets"
 		}
 		return NewLocalProvider(cfg.KeyFile, secretsDir)
 	case "isopass":

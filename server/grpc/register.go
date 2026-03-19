@@ -9,19 +9,19 @@ import (
 	"log/slog"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/registry"
-	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/webhook"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/registry"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// Register handles the HobnobAgent.Register RPC. It delegates to the enrollment
+// Register handles the VigoAgent.Register RPC. It delegates to the enrollment
 // registry to validate the one-time token, match approved patterns, and create
-// the client record. In hub mode, after token validation, the thrall is enrolled
+// the client record. In hub mode, after token validation, the envoy is enrolled
 // on the target spoke and the spoke address is returned to the agent.
 func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	slog.Info("register request",
@@ -40,14 +40,14 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}
 	}
 
-	// If force-replacing, revoke the old thrall in FleetIndex first.
+	// If force-replacing, revoke the old envoy in FleetIndex first.
 	if req.GetForce() && s.fleetIndex != nil {
 		if oldID := s.fleetIndex.GetByHostname(req.GetHostname()); oldID != "" {
 			s.fleetIndex.SetRevoked(oldID, true)
 		}
 	}
 
-	thrallID, err := s.registry.Register(ctx,
+	envoyID, err := s.registry.Register(ctx,
 		req.GetHostname(),
 		req.GetIpAddress(),
 		req.GetPubkeyPem(),
@@ -68,11 +68,11 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 			}, nil
 		case errors.Is(err, registry.ErrHostnameRevoked):
 			return nil, status.Error(codes.PermissionDenied,
-				"hostname belongs to a revoked thrall and cannot re-enroll")
+				"hostname belongs to a revoked envoy and cannot re-enroll")
 		case errors.Is(err, registry.ErrHostnameInUse):
 			return &pb.RegisterResponse{
 				Success: false,
-				Message: "an active thrall with this hostname already exists; use --force to replace",
+				Message: "an active envoy with this hostname already exists; use --force to replace",
 			}, nil
 		default:
 			return nil, status.Errorf(codes.Internal, "registration failed: %v", err)
@@ -85,21 +85,21 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	if s.hub != nil {
 		addr, matched := s.hub.RouteHostname(req.GetHostname())
 		if matched {
-			spokeThrallID, enrollErr := s.hub.EnrollOnSpoke(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
+			spokeEnvoyID, enrollErr := s.hub.EnrollOnSpoke(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
 			if enrollErr != nil {
-				slog.Error("spoke enrollment failed, thrall registered on hub only",
+				slog.Error("spoke enrollment failed, envoy registered on hub only",
 					"hostname", req.GetHostname(),
 					"spoke_addr", addr,
 					"error", enrollErr,
 				)
 			} else {
-				// Spoke created the thrall — use the spoke's thrall ID and address.
-				thrallID = spokeThrallID
+				// Spoke created the envoy — use the spoke's envoy ID and address.
+				envoyID = spokeEnvoyID
 				spokeAddr = addr
-				slog.Info("thrall enrolled on spoke",
+				slog.Info("envoy enrolled on spoke",
 					"hostname", req.GetHostname(),
 					"spoke_addr", addr,
-					"thrall_id", thrallID,
+					"envoy_id", envoyID,
 				)
 			}
 		}
@@ -109,8 +109,8 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	if s.fleetIndex != nil && spokeAddr == "" {
 		// Only index locally when not routed to a spoke.
 		pubKey, _ := db.ParsePubKey(req.GetPubkeyPem())
-		s.fleetIndex.AddThrall(fleet.ThrallState{
-			ID:               thrallID,
+		s.fleetIndex.AddEnvoy(fleet.EnvoyState{
+			ID:               envoyID,
 			Hostname:         req.GetHostname(),
 			IP:               req.GetIpAddress(),
 			PubkeyPEM:        req.GetPubkeyPem(),
@@ -119,34 +119,34 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}, pubKey)
 	}
 
-	slog.Info("thrall registered",
+	slog.Info("envoy registered",
 		"hostname", req.GetHostname(),
-		"node_id", thrallID,
+		"node_id", envoyID,
 	)
 
 	// Record tamper-evident audit event.
-	recordAudit(ctx, s.auditWriter, "thrall.enroll", "system",
-		req.GetHostname()+" enrolled as "+thrallID, "")
+	recordAudit(ctx, s.auditWriter, "envoy.enroll", "system",
+		req.GetHostname()+" enrolled as "+envoyID, "")
 
-	// Dispatch thrall.enrolled webhook event.
+	// Dispatch envoy.enrolled webhook event.
 	if s.dispatcher != nil {
-		s.dispatcher.Dispatch(ctx, "thrall.enrolled", webhook.EventPayload{
-			Thrall: &webhook.ThrallInfo{
-				ID:       thrallID,
+		s.dispatcher.Dispatch(ctx, "envoy.enrolled", webhook.EventPayload{
+			Envoy: &webhook.EnvoyInfo{
+				ID:       envoyID,
 				Hostname: req.GetHostname(),
 				IP:       req.GetIpAddress(),
 			},
 		})
 	}
 
-	s.smtpNotifier.Notify(hobnobsmtp.Event{
-		Name: "thrall.enrolled", Timestamp: time.Now().UTC(),
-		Thrall: &hobnobsmtp.ThrallInfo{ID: thrallID, Hostname: req.GetHostname(), IP: req.GetIpAddress()},
+	s.smtpNotifier.Notify(vigosmtp.Event{
+		Name: "envoy.enrolled", Timestamp: time.Now().UTC(),
+		Envoy: &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: req.GetHostname(), IP: req.GetIpAddress()},
 	})
 
 	resp := &pb.RegisterResponse{
 		Success:         true,
-		ThrallId:        thrallID,
+		EnvoyId:        envoyID,
 		Message:         "registered successfully",
 		SpokeAddr:       spokeAddr,
 		FallbackServers: s.fallbackServers,

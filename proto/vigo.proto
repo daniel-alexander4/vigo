@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package hobnob.v1;
+package vigo.v1;
 
-option go_package = "github.com/hobnob/hobnob/gen/proto/hobnob";
+option go_package = "github.com/vigo/vigo/gen/proto/vigo";
 
 import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
@@ -11,7 +11,7 @@ import "google/api/annotations.proto";
 // Agent-facing service (gRPC-only, port 1530)
 // =============================================================================
 
-service HobnobAgent {
+service VigoAgent {
   // Register enrolls a new agent with the server using hostname, IP, pubkey, and one-time token.
   rpc Register(RegisterRequest) returns (RegisterResponse);
 
@@ -38,7 +38,7 @@ service HobnobAgent {
 // Admin-facing service (gRPC + grpc-gateway REST, port 8443)
 // =============================================================================
 
-service HobnobAdmin {
+service VigoAdmin {
   // AddApprovedPattern adds a hostname/IP wildcard pattern with a one-time token.
   rpc AddApprovedPattern(AddApprovedPatternRequest) returns (AddApprovedPatternResponse) {
     option (google.api.http) = {
@@ -61,36 +61,36 @@ service HobnobAdmin {
     };
   }
 
-  // ListThralls lists all enrolled thralls.
-  rpc ListThralls(ListThrallsRequest) returns (ListThrallsResponse) {
+  // ListEnvoys lists all enrolled envoys.
+  rpc ListEnvoys(ListEnvoysRequest) returns (ListEnvoysResponse) {
     option (google.api.http) = {
-      get: "/api/v1/thralls"
+      get: "/api/v1/envoys"
     };
   }
 
-  // GetThrall returns details for a single thrall.
-  rpc GetThrall(GetThrallRequest) returns (GetThrallResponse) {
+  // GetEnvoy returns details for a single envoy.
+  rpc GetEnvoy(GetEnvoyRequest) returns (GetEnvoyResponse) {
     option (google.api.http) = {
-      get: "/api/v1/thralls/{id}"
+      get: "/api/v1/envoys/{id}"
     };
   }
 
-  // RevokeThrall revokes an enrolled thrall, blocking future check-ins.
-  rpc RevokeThrall(RevokeThrallRequest) returns (RevokeThrallResponse) {
+  // RevokeEnvoy revokes an enrolled envoy, blocking future check-ins.
+  rpc RevokeEnvoy(RevokeEnvoyRequest) returns (RevokeEnvoyResponse) {
     option (google.api.http) = {
-      post: "/api/v1/thralls/{id}/revoke"
+      post: "/api/v1/envoys/{id}/revoke"
       body: "*"
     };
   }
 
-  // DeleteThrall permanently removes a thrall and all its history from the database.
-  rpc DeleteThrall(DeleteThrallRequest) returns (DeleteThrallResponse) {
+  // DeleteEnvoy permanently removes a envoy and all its history from the database.
+  rpc DeleteEnvoy(DeleteEnvoyRequest) returns (DeleteEnvoyResponse) {
     option (google.api.http) = {
-      delete: "/api/v1/thralls/{id}"
+      delete: "/api/v1/envoys/{id}"
     };
   }
 
-  // ForcePush triggers an immediate check-in for a thrall or all thralls.
+  // ForcePush triggers an immediate check-in for a envoy or all envoys.
   rpc ForcePush(ForcePushRequest) returns (ForcePushResponse) {
     option (google.api.http) = {
       post: "/api/v1/push"
@@ -101,12 +101,12 @@ service HobnobAdmin {
   // DryRun computes a plan without applying changes.
   rpc DryRun(DryRunRequest) returns (DryRunResponse) {
     option (google.api.http) = {
-      post: "/api/v1/thralls/{thrall_id}/dry-run"
+      post: "/api/v1/envoys/{envoy_id}/dry-run"
       body: "*"
     };
   }
 
-  // ListRuns lists recent runs, optionally filtered by thrall.
+  // ListRuns lists recent runs, optionally filtered by envoy.
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse) {
     option (google.api.http) = {
       get: "/api/v1/runs"
@@ -150,29 +150,29 @@ service HobnobAdmin {
     };
   }
 
-  // GetComplianceSummary returns aggregate compliance status across all thralls.
+  // GetComplianceSummary returns aggregate compliance status across all envoys.
   rpc GetComplianceSummary(GetComplianceSummaryRequest) returns (GetComplianceSummaryResponse) {
     option (google.api.http) = {
       get: "/api/v1/compliance"
     };
   }
 
-  // GetThrallCompliance returns compliance details for a single thrall.
-  rpc GetThrallCompliance(GetThrallComplianceRequest) returns (GetThrallComplianceResponse) {
+  // GetEnvoyCompliance returns compliance details for a single envoy.
+  rpc GetEnvoyCompliance(GetEnvoyComplianceRequest) returns (GetEnvoyComplianceResponse) {
     option (google.api.http) = {
-      get: "/api/v1/thralls/{id}/compliance"
+      get: "/api/v1/envoys/{id}/compliance"
     };
   }
 
-  // Rollback reverts a thrall to a previous run's state.
+  // Rollback reverts a envoy to a previous run's state.
   rpc Rollback(RollbackRequest) returns (RollbackResponse) {
     option (google.api.http) = {
-      post: "/api/v1/thralls/{thrall_id}/rollback"
+      post: "/api/v1/envoys/{envoy_id}/rollback"
       body: "*"
     };
   }
 
-  // ListPackages lists package audit records, optionally filtered by thrall.
+  // ListPackages lists package audit records, optionally filtered by envoy.
   rpc ListPackages(ListPackagesRequest) returns (ListPackagesResponse) {
     option (google.api.http) = {
       get: "/api/v1/packages"
@@ -194,13 +194,13 @@ service HobnobAdmin {
     };
   }
 
-  // EnrollThrall creates a thrall record directly (hub→spoke internal RPC).
+  // EnrollEnvoy creates a envoy record directly (hub→spoke internal RPC).
   // Used during enrollment routing: the hub validates the token, then calls
-  // this on the target spoke to create the thrall without token re-validation.
-  rpc EnrollThrall(EnrollThrallRequest) returns (EnrollThrallResponse);
+  // this on the target spoke to create the envoy without token re-validation.
+  rpc EnrollEnvoy(EnrollEnvoyRequest) returns (EnrollEnvoyResponse);
 
-  // SetReassignment marks a thrall for reassignment to a different spoke.
-  // Called hub→spoke to set reassign_addr/reassign_id on the thrall.
+  // SetReassignment marks a envoy for reassignment to a different spoke.
+  // Called hub→spoke to set reassign_addr/reassign_id on the envoy.
   rpc SetReassignment(SetReassignmentRequest) returns (SetReassignmentResponse);
 
   // SyncConfig pushes the hub's live config to a spoke as a tar.gz archive.
@@ -221,12 +221,12 @@ message RegisterRequest {
   string ip_address = 2;
   string pubkey_pem = 3;
   string token = 4;
-  bool force = 5; // revoke existing active thrall with same hostname and re-enroll
+  bool force = 5; // revoke existing active envoy with same hostname and re-enroll
 }
 
 message RegisterResponse {
   bool success = 1;
-  string thrall_id = 2;       // UUID assigned by the server
+  string envoy_id = 2;       // UUID assigned by the server
   string message = 3;
   string spoke_addr = 4;    // if set, agent should connect to this spoke for check-ins
   string server_pubkey_pem = 5; // server's ED25519 public key for bundle signature verification
@@ -234,7 +234,7 @@ message RegisterResponse {
 }
 
 message CheckInRequest {
-  string thrall_id = 1;
+  string envoy_id = 1;
   string state_fingerprint = 2;
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
@@ -264,12 +264,12 @@ message CheckInResponse {
   bool force_update = 15;                      // agent should download latest binary and restart
 }
 
-// ProxiedDevice describes a network device managed through a gateway thrall.
+// ProxiedDevice describes a network device managed through a gateway envoy.
 // The gateway agent receives these alongside its own policy and converges
 // each device over SSH during its convergence cycle.
 message ProxiedDevice {
-  string thrall_id   = 1;   // server-assigned UUID for this virtual thrall
-  string hostname    = 2;   // device hostname (from nodes.hnb match pattern)
+  string envoy_id   = 1;   // server-assigned UUID for this virtual envoy
+  string hostname    = 2;   // device hostname (from nodes.vgo match pattern)
   string device_type = 3;   // cisco_ios, cisco_nxos, juniper_junos
   string credential  = 4;   // resolved secret value (SSH key or password)
   string username    = 5;   // SSH username
@@ -322,7 +322,7 @@ message PolicyBundle {
   repeated CustomTraitEntry custom_traits = 6;
 
   // Trace fields for dry-run resolution visibility.
-  string matched_pattern = 7;          // thrall entry match pattern from thralls.hnb
+  string matched_pattern = 7;          // envoy entry match pattern from envoys.vgo
   string environment = 8;             // resolved environment
   repeated string roles = 9;          // role names that were expanded
 
@@ -365,7 +365,7 @@ message ConditionalVarDef {
 
 message ReportResultRequest {
   string run_id = 1;
-  string thrall_id = 2;
+  string envoy_id = 2;
   repeated ModuleResult results = 3;
   bytes signature = 4;
   google.protobuf.Timestamp timestamp = 5;
@@ -389,7 +389,7 @@ message ReportResultResponse {
 }
 
 message ReportTraitsRequest {
-  string thrall_id = 1;
+  string envoy_id = 1;
   bytes traits_json = 2;       // JSON-encoded traits map
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
@@ -498,7 +498,7 @@ message StreamCapabilities {
 // Orchestration messages (push dispatch, query, results)
 // =============================================================================
 
-// PushDispatch is sent server→agent to execute a command on the thrall.
+// PushDispatch is sent server→agent to execute a command on the envoy.
 message PushDispatch {
   string push_id = 1;           // unique ID for this push execution
   string command = 2;           // shell command to execute
@@ -564,7 +564,7 @@ message ApprovedPattern {
   string pattern = 2;
   google.protobuf.Timestamp created_at = 3;
   bool used = 4;
-  string used_by = 5;          // thrall UUID if used
+  string used_by = 5;          // envoy UUID if used
 }
 
 message RevokeApprovedPatternRequest {
@@ -573,15 +573,15 @@ message RevokeApprovedPatternRequest {
 
 message RevokeApprovedPatternResponse {}
 
-message ListThrallsRequest {
-  bool include_revoked = 1; // if true, include revoked thralls in the response
+message ListEnvoysRequest {
+  bool include_revoked = 1; // if true, include revoked envoys in the response
 }
 
-message ListThrallsResponse {
-  repeated Thrall thralls = 1;
+message ListEnvoysResponse {
+  repeated Envoy envoys = 1;
 }
 
-message Thrall {
+message Envoy {
   string id = 1;
   string hostname = 2;
   string ip_address = 3;
@@ -593,36 +593,36 @@ message Thrall {
   string agent_version = 9;
 }
 
-message GetThrallRequest {
+message GetEnvoyRequest {
   string id = 1;
 }
 
-message GetThrallResponse {
-  Thrall thrall = 1;
+message GetEnvoyResponse {
+  Envoy envoy = 1;
 }
 
-message RevokeThrallRequest {
+message RevokeEnvoyRequest {
   string id = 1;
 }
 
-message RevokeThrallResponse {}
+message RevokeEnvoyResponse {}
 
-message DeleteThrallRequest {
+message DeleteEnvoyRequest {
   string id = 1;
 }
 
-message DeleteThrallResponse {}
+message DeleteEnvoyResponse {}
 
 message ForcePushRequest {
-  string thrall_id = 1;         // empty = all thralls
+  string envoy_id = 1;         // empty = all envoys
 }
 
 message ForcePushResponse {
-  int32 thralls_notified = 1;
+  int32 envoys_notified = 1;
 }
 
 message DryRunRequest {
-  string thrall_id = 1;
+  string envoy_id = 1;
 }
 
 message DryRunResponse {
@@ -637,7 +637,7 @@ message PlannedAction {
 }
 
 message ListRunsRequest {
-  string thrall_id = 1;         // optional filter
+  string envoy_id = 1;         // optional filter
   int32 limit = 2;            // default 20
 }
 
@@ -647,7 +647,7 @@ message ListRunsResponse {
 
 message Run {
   string id = 1;
-  string thrall_id = 2;
+  string envoy_id = 2;
   google.protobuf.Timestamp started_at = 3;
   google.protobuf.Timestamp finished_at = 4;
   string status = 5;          // running, success, failure, partial
@@ -722,11 +722,11 @@ message GetComplianceSummaryResponse {
   float compliance_pct = 7;
 }
 
-message GetThrallComplianceRequest {
+message GetEnvoyComplianceRequest {
   string id = 1;
 }
 
-message GetThrallComplianceResponse {
+message GetEnvoyComplianceResponse {
   string status = 1;
   Run last_run = 2;
   repeated ComplianceSnapshot history = 3;
@@ -747,7 +747,7 @@ message ComplianceSnapshot {
 // =============================================================================
 
 message RollbackRequest {
-  string thrall_id = 1;
+  string envoy_id = 1;
   string run_id = 2;            // optional: rollback to specific run
   string file_path = 3;         // optional: rollback a single file
 }
@@ -762,7 +762,7 @@ message RollbackResponse {
 // =============================================================================
 
 message ListPackagesRequest {
-  string thrall_id = 1;           // optional filter
+  string envoy_id = 1;           // optional filter
 }
 
 message ListPackagesResponse {
@@ -776,7 +776,7 @@ message ListPackageDriftResponse {
 }
 
 message PackageInfo {
-  string thrall_id = 1;
+  string envoy_id = 1;
   string hostname = 2;
   string package_name = 3;
   string installed_version = 4;
@@ -784,7 +784,7 @@ message PackageInfo {
 }
 
 message PackageDrift {
-  string thrall_id = 1;
+  string envoy_id = 1;
   string hostname = 2;
   string package_name = 3;
   string installed_version = 4;
@@ -811,15 +811,15 @@ message PromoteEnvResponse {
 // Enrollment routing messages (hub→spoke internal)
 // =============================================================================
 
-message EnrollThrallRequest {
+message EnrollEnvoyRequest {
   string hostname = 1;
   string ip_address = 2;
   string pubkey_pem = 3;
-  bool force = 4; // revoke existing active thrall with same hostname and re-enroll
+  bool force = 4; // revoke existing active envoy with same hostname and re-enroll
 }
 
-message EnrollThrallResponse {
-  string thrall_id = 1;
+message EnrollEnvoyResponse {
+  string envoy_id = 1;
 }
 
 // =============================================================================
@@ -827,21 +827,21 @@ message EnrollThrallResponse {
 // =============================================================================
 
 message SetReassignmentRequest {
-  string thrall_id = 1;
+  string envoy_id = 1;
   string target_addr = 2;
-  string new_thrall_id = 3;
+  string new_envoy_id = 3;
 }
 
 message SetReassignmentResponse {}
 
-message ReassignThrallRequest {
-  string thrall_id = 1;
+message ReassignEnvoyRequest {
+  string envoy_id = 1;
   string from_spoke_id = 2;
   string to_spoke_id = 3;
 }
 
-message ReassignThrallResponse {
-  string new_thrall_id = 1;
+message ReassignEnvoyResponse {
+  string new_envoy_id = 1;
   string target_addr = 2;
 }
 
@@ -872,7 +872,7 @@ message SyncConfigResponse {}
 
 message SpokeStatusReport {
   string spoke_id = 1;
-  int32 thrall_count = 2;
+  int32 envoy_count = 2;
   int32 compliant = 3;
   int32 recurring_drift = 4;
   int32 errors = 5;
@@ -887,7 +887,7 @@ message SpokeStatusAck {}
 // Peer replication service (primary↔peer, port 1530)
 // =============================================================================
 
-service HobnobPeer {
+service VigoPeer {
   // SyncStream is a bidirectional stream between primary and peer.
   // Primary pushes file changes; peer acknowledges receipt.
   rpc SyncStream(stream PeerSyncMessage) returns (stream PeerSyncMessage);
@@ -908,7 +908,7 @@ message PeerSyncMessage {
 }
 
 message PeerFileChange {
-  string path = 1;           // relative to /srv/hobnob (e.g., "hnb/proposed/modules/nginx.hnb")
+  string path = 1;           // relative to /srv/vigo (e.g., "hnb/proposed/modules/nginx.vgo")
   bytes content = 2;         // file contents (empty = deletion)
   int64 mtime_unix = 3;      // modification time (unix seconds)
   uint32 mode = 4;           // file permissions

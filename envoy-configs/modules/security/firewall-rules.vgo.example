@@ -23,7 +23,7 @@ resources:
     port: "22"
     proto: tcp
     action: allow
-    comment: "hobnob: allow SSH"
+    comment: "vigo: allow SSH"
     depends_on: [enable-ufw]
 
   - name: allow-http
@@ -31,7 +31,7 @@ resources:
     port: "80"
     proto: tcp
     action: allow
-    comment: "hobnob: allow HTTP"
+    comment: "vigo: allow HTTP"
     depends_on: [enable-ufw]
 
   - name: allow-https
@@ -39,7 +39,7 @@ resources:
     port: "443"
     proto: tcp
     action: allow
-    comment: "hobnob: allow HTTPS"
+    comment: "vigo: allow HTTPS"
     depends_on: [enable-ufw]
 
   # ICMP uses a ufw application-level rule rather than a port

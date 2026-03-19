@@ -7,7 +7,7 @@ The server is configured via `server.yaml`. This page documents every section an
 The server looks for `server.yaml` in the current working directory. Override with:
 
 ```bash
-HOBNOB_CONFIG_FILE=/path/to/server.yaml hobd
+VIGO_CONFIG_FILE=/path/to/server.yaml vigosrv
 ```
 
 ## Sections
@@ -19,15 +19,15 @@ Determines how `secret:` references in config values are resolved.
 ```yaml
 secrets:
   backend: local                          # local (default) | isopass
-  key_file: "/srv/hobnob/master.key"   # 32-byte hex master key (local only)
-  secrets_dir: "/srv/hobnob/secrets"    # encrypted files directory (local only)
+  key_file: "/srv/vigo/master.key"   # 32-byte hex master key (local only)
+  secrets_dir: "/srv/vigo/secrets"    # encrypted files directory (local only)
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `backend` | `local` | Secrets backend: `local` (AES-256-GCM encrypted files) or `isopass` (external API) |
 | `key_file` | auto-generated | Path to 32-byte hex master key file (local backend, mode 0600) |
-| `secrets_dir` | `/srv/hobnob/secrets` | Directory for encrypted secret files (local backend) |
+| `secrets_dir` | `/srv/vigo/secrets` | Directory for encrypted secret files (local backend) |
 | `url` | — | Isopass API base URL (isopass backend only) |
 | `token_file` | — | File containing bearer token (isopass backend, required, mode 0600) |
 | `tls_skip_verify` | `false` | Skip TLS verification for isopass (not recommended) |
@@ -49,7 +49,7 @@ server:
     ca_key_file: "tls/ca_key"
   tls_sans:
     - "192.168.1.2"
-    - "hobnob.example.com"
+    - "vigo.example.com"
 ```
 
 | Option | Default | Description |
@@ -68,7 +68,7 @@ TLS certificates are auto-generated on first start when using the `local` secret
 
 ```yaml
 database:
-  dsn: "secret:hobnob/db/dsn"
+  dsn: "secret:vigo/db/dsn"
   driver: sqlite
   retention: "90d"
 ```
@@ -125,11 +125,11 @@ auth:
 | `oidc.issuer` | — | OIDC provider URL (required for `oidc`) |
 | `oidc.client_id` | — | OIDC client ID (required for `oidc`) |
 | `oidc.client_secret` | — | OIDC client secret (supports `secret:` prefix) |
-| `oidc.redirect_url` | — | OAuth callback URL (e.g., `http://hobnob:8443/auth/callback`) |
+| `oidc.redirect_url` | — | OAuth callback URL (e.g., `http://vigo:8443/auth/callback`) |
 | `oidc.scopes` | `[openid, profile, email]` | OIDC scopes to request |
-| `isowebauth.namespace` | `hobnob` | Namespace for SSH signature verification |
+| `isowebauth.namespace` | `vigo` | Namespace for SSH signature verification |
 
-Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `hobnob/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `hobnobcli secrets set-web-password hobnob/web/auth/admin`.
+Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `vigo/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `vigogo secrets set-web-password vigo/web/auth/admin`.
 
 See [Authentication](../operations/authentication.md) for setup details.
 
@@ -200,7 +200,7 @@ tuning:
 | `metrics_interval` | `30s` | Prometheus metrics collection interval |
 | `traits_scanner_ttl` | `30s` | Custom trait collector cache TTL |
 | `run_store` | `database` | Run history backend: `database` or `memory` |
-| `run_store_capacity` | `20` | Per-thrall run depth in memory mode |
+| `run_store_capacity` | `20` | Per-envoy run depth in memory mode |
 | `max_concurrent_streams` | `5000` | gRPC bidirectional stream limit |
 
 See [Tuning](../operations/tuning.md) for detailed guidance.
@@ -211,7 +211,7 @@ See [Tuning](../operations/tuning.md) for detailed guidance.
 smtp:
   host: "smtp.example.com"
   port: 587
-  from: "hobnob@example.com"
+  from: "vigo@example.com"
   recipients: ["admin@example.com"]
 ```
 
@@ -227,7 +227,7 @@ smtp:
 | `events` | all enabled | Per-event overrides (see below) |
 | `digest.interval` | — | Batch window for digest summaries (e.g., `1h`) |
 
-Available events: `thrall.enrolled`, `run.success`, `run.failure`, `drift.detected`, `secret.rotated`, `config.reload.failure`, `thrall.stale`, `compliance.threshold`.
+Available events: `envoy.enrolled`, `run.success`, `run.failure`, `drift.detected`, `secret.rotated`, `config.reload.failure`, `envoy.stale`, `compliance.threshold`.
 
 See [Email Notifications](../operations/smtp.md) for details.
 
@@ -259,9 +259,9 @@ See [AI Assistant](../ai/_index.md) for details.
 
 ```yaml
 backup:
-  url: "s3://my-bucket/hobnob"
-  access_key_id: "secret:hobnob/backup/aws_access_key"
-  secret_access_key: "secret:hobnob/backup/aws_secret_key"
+  url: "s3://my-bucket/vigo"
+  access_key_id: "secret:vigo/backup/aws_access_key"
+  secret_access_key: "secret:vigo/backup/aws_secret_key"
 ```
 
 | Option | Default | Description |
@@ -282,14 +282,14 @@ Only applies when `database.driver` is `sqlite`. See [Backup](../operations/back
 ```yaml
 rate_limit:
   enabled: true
-  checkin_per_thrall: 6
+  checkin_per_envoy: 6
   checkin_global: 500
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `false` | Enable rate limiting on check-in RPCs |
-| `checkin_per_thrall` | `6` | Max check-ins per thrall per minute |
+| `checkin_per_envoy` | `6` | Max check-ins per envoy per minute |
 | `checkin_global` | `500` | Max total check-ins per second |
 
 See [Rate Limiting](../operations/rate-limiting.md) for details.
@@ -309,7 +309,7 @@ See [Maintenance Windows](../operations/maintenance-windows.md) for details.
 
 ### publish
 
-Controls change approval workflow for `hobnobcli config publish`.
+Controls change approval workflow for `vigogo config publish`.
 
 ```yaml
 publish:
@@ -326,7 +326,7 @@ publish:
 | `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet compliance drops below this percentage after reload (1-100) |
 | `rollback_window` | `"5m"` | Duration to monitor compliance after reload |
 
-When `approval_required` is enabled, `hobnobcli config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `hobnobcli config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
+When `approval_required` is enabled, `vigogo config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigogo config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
 
 If `compliance_threshold` is set, the server monitors fleet compliance for `rollback_window` after a config reload. If compliance drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 
@@ -351,7 +351,7 @@ Only one environment variable is supported. All other configuration belongs in `
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOBNOB_CONFIG_FILE` | `server.yaml` | Path to server config file (bootstraps everything else) |
+| `VIGO_CONFIG_FILE` | `server.yaml` | Path to server config file (bootstraps everything else) |
 
 The server version is injected at build time via `-ldflags="-X main.version=1.2.3"` and defaults to `dev`.
 
@@ -367,5 +367,5 @@ paths:
   push: "push"
   workflows: "workflows"
   agent_dist: "dist/agent"
-  license_dir: "/srv/hobnob/license"
+  license_dir: "/srv/vigo/license"
 ```

@@ -24,18 +24,18 @@ func TestAddGetRemoveLifecycle(t *testing.T) {
 	fi := NewFleetIndex()
 	pubKey := genKey(t)
 
-	ts := ThrallState{
+	ts := EnvoyState{
 		ID:               "t1",
 		Hostname:         "web01.example.com",
 		IP:               "10.0.0.1",
 		ComplianceStatus: "compliant",
 	}
-	fi.AddThrall(ts, pubKey)
+	fi.AddEnvoy(ts, pubKey)
 
 	// Get by ID.
-	got := fi.GetThrall("t1")
+	got := fi.GetEnvoy("t1")
 	if got == nil {
-		t.Fatal("expected thrall, got nil")
+		t.Fatal("expected envoy, got nil")
 	}
 	if got.Hostname != "web01.example.com" {
 		t.Errorf("hostname = %q, want %q", got.Hostname, "web01.example.com")
@@ -48,8 +48,8 @@ func TestAddGetRemoveLifecycle(t *testing.T) {
 	}
 
 	// Remove.
-	fi.RemoveThrall("t1")
-	if fi.GetThrall("t1") != nil {
+	fi.RemoveEnvoy("t1")
+	if fi.GetEnvoy("t1") != nil {
 		t.Error("expected nil after remove")
 	}
 }
@@ -58,7 +58,7 @@ func TestPubKeyLookup(t *testing.T) {
 	fi := NewFleetIndex()
 	pubKey := genKey(t)
 
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, pubKey)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, pubKey)
 
 	got := fi.GetPubKey("t1")
 	if got == nil {
@@ -77,30 +77,30 @@ func TestPubKeyLookup(t *testing.T) {
 func TestFlagOperations(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
 
 	// ForcePush.
 	fi.SetForcePush("t1", true)
-	got := fi.GetThrall("t1")
+	got := fi.GetEnvoy("t1")
 	if !got.ForcePush {
 		t.Error("expected ForcePush=true")
 	}
 
 	fi.SetForcePush("t1", false)
-	got = fi.GetThrall("t1")
+	got = fi.GetEnvoy("t1")
 	if got.ForcePush {
 		t.Error("expected ForcePush=false")
 	}
 
 	// AppendPendingRotatedSecret.
 	fi.AppendPendingRotatedSecret("t1", "secret:path/a")
-	got = fi.GetThrall("t1")
+	got = fi.GetEnvoy("t1")
 	if len(got.PendingRotatedSecrets) != 1 || got.PendingRotatedSecrets[0] != "secret:path/a" {
 		t.Errorf("PendingRotatedSecrets = %v", got.PendingRotatedSecrets)
 	}
 
 	fi.ClearPendingRotatedSecrets("t1")
-	got = fi.GetThrall("t1")
+	got = fi.GetEnvoy("t1")
 	if len(got.PendingRotatedSecrets) != 0 {
 		t.Error("expected empty PendingRotatedSecrets after clear")
 	}
@@ -108,7 +108,7 @@ func TestFlagOperations(t *testing.T) {
 
 func TestDirtyTracking(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
 
 	fi.MarkSeen("t1", time.Now())
 
@@ -129,10 +129,10 @@ func TestDirtyTracking(t *testing.T) {
 func TestComplianceCounterConsistency(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
-	fi.AddThrall(ThrallState{ID: "t2", Hostname: "h2", ComplianceStatus: "recurring drift"}, nil)
-	fi.AddThrall(ThrallState{ID: "t3", Hostname: "h3", ComplianceStatus: "errors"}, nil)
-	fi.AddThrall(ThrallState{ID: "t4", Hostname: "h4", Revoked: true, ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ComplianceStatus: "recurring drift"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ComplianceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", Revoked: true, ComplianceStatus: "no data"}, nil)
 
 	c := fi.ComplianceSummary()
 	if c.Total != 3 {
@@ -158,8 +158,8 @@ func TestComplianceCounterConsistency(t *testing.T) {
 		t.Errorf("after update: RecurringDrift = %d, want 0", c.RecurringDrift)
 	}
 
-	// Remove a thrall.
-	fi.RemoveThrall("t1")
+	// Remove a envoy.
+	fi.RemoveEnvoy("t1")
 	c = fi.ComplianceSummary()
 	if c.Total != 2 {
 		t.Errorf("after remove: Total = %d, want 2", c.Total)
@@ -172,10 +172,10 @@ func TestComplianceCounterConsistency(t *testing.T) {
 func TestListByGlob(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "web01.prod", ComplianceStatus: "no data"}, nil)
-	fi.AddThrall(ThrallState{ID: "t2", Hostname: "web02.prod", ComplianceStatus: "no data"}, nil)
-	fi.AddThrall(ThrallState{ID: "t3", Hostname: "db01.prod", ComplianceStatus: "no data"}, nil)
-	fi.AddThrall(ThrallState{ID: "t4", Hostname: "web03.staging", Revoked: true, ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "web01.prod", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "web02.prod", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "db01.prod", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "web03.staging", Revoked: true, ComplianceStatus: "no data"}, nil)
 
 	results := fi.ListByGlob("web*.prod")
 	if len(results) != 2 {
@@ -192,17 +192,17 @@ func TestListByGlob(t *testing.T) {
 func TestListByTrait(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID: "t1", Hostname: "h1", ComplianceStatus: "no data",
 		Traits: map[string]string{"os.distro": "ubuntu", "os.version": "22.04"},
 	}, nil)
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID: "t2", Hostname: "h2", ComplianceStatus: "no data",
 		Traits: map[string]string{"os.distro": "debian", "os.version": "12"},
 	}, nil)
 
 	results := fi.ListByTrait("os.distro", "ubuntu")
-	if len(results) != 1 || results[0].ThrallID != "t1" {
+	if len(results) != 1 || results[0].EnvoyID != "t1" {
 		t.Errorf("ListByTrait = %v, want [t1]", results)
 	}
 }
@@ -214,14 +214,14 @@ func TestConcurrentReadWrite(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	// Writers: add thralls.
+	// Writers: add envoys.
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
 				id := string(rune('A'+n)) + string(rune('0'+j%10))
-				fi.AddThrall(ThrallState{
+				fi.AddEnvoy(EnvoyState{
 					ID:               id,
 					Hostname:         id + ".example.com",
 					ComplianceStatus: "no data",
@@ -237,7 +237,7 @@ func TestConcurrentReadWrite(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
 				fi.ComplianceSummary()
-				fi.AllThralls()
+				fi.AllEnvoys()
 			}
 		}()
 	}
@@ -280,9 +280,9 @@ func TestRingBuffer(t *testing.T) {
 func TestSetForcePushAll(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
-	fi.AddThrall(ThrallState{ID: "t2", Hostname: "h2", ComplianceStatus: "no data"}, nil)
-	fi.AddThrall(ThrallState{ID: "t3", Hostname: "h3", Revoked: true, ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", Revoked: true, ComplianceStatus: "no data"}, nil)
 
 	count := fi.SetForcePushAll()
 	if count != 2 {
@@ -290,13 +290,13 @@ func TestSetForcePushAll(t *testing.T) {
 	}
 
 	// Verify individual flags.
-	if !fi.GetThrall("t1").ForcePush {
+	if !fi.GetEnvoy("t1").ForcePush {
 		t.Error("t1 should have ForcePush")
 	}
-	if !fi.GetThrall("t2").ForcePush {
+	if !fi.GetEnvoy("t2").ForcePush {
 		t.Error("t2 should have ForcePush")
 	}
-	if fi.GetThrall("t3").ForcePush {
+	if fi.GetEnvoy("t3").ForcePush {
 		t.Error("t3 (revoked) should NOT have ForcePush")
 	}
 }
@@ -304,7 +304,7 @@ func TestSetForcePushAll(t *testing.T) {
 func TestSetRevoked(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
 	c := fi.ComplianceSummary()
 	if c.Total != 1 || c.Compliant != 1 {
 		t.Fatalf("initial: Total=%d Compliant=%d", c.Total, c.Compliant)
@@ -328,12 +328,12 @@ func TestSetRevoked(t *testing.T) {
 
 func TestMarkSeenInMemory(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
 
 	fi.MarkSeenInMemory("t1", time.Now())
 
 	// LastSeen should be updated.
-	got := fi.GetThrall("t1")
+	got := fi.GetEnvoy("t1")
 	if time.Since(got.LastSeen) > time.Second {
 		t.Errorf("expected LastSeen to be recent, got %v", got.LastSeen)
 	}
@@ -346,7 +346,7 @@ func TestMarkSeenInMemory(t *testing.T) {
 
 func TestMarkSeenInMemory_ThenMarkSeen(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
 
 	// Simulate many in-memory updates (streaming heartbeats).
 	for i := 0; i < 100; i++ {
@@ -368,17 +368,17 @@ func TestTagOperations(t *testing.T) {
 	fi := NewFleetIndex()
 	pubKey := genKey(t)
 
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID:       "t1",
 		Hostname: "web01",
 		Tags:     []string{"webserver", "production"},
 	}, pubKey)
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID:       "t2",
 		Hostname: "web02",
 		Tags:     []string{"webserver", "staging"},
 	}, nil)
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID:       "t3",
 		Hostname: "db01",
 		Tags:     []string{"database", "production"},
@@ -421,7 +421,7 @@ func TestTagOperations(t *testing.T) {
 func TestMaintenanceWindow(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID:       "t1",
 		Hostname: "web01",
 	}, nil)
@@ -459,10 +459,10 @@ func TestCompliancePercent(t *testing.T) {
 		t.Errorf("CompliancePercent on empty fleet = %f, want 100.0", pct)
 	}
 
-	fi.AddThrall(ThrallState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
-	fi.AddThrall(ThrallState{ID: "t2", Hostname: "h2", ComplianceStatus: "compliant"}, nil)
-	fi.AddThrall(ThrallState{ID: "t3", Hostname: "h3", ComplianceStatus: "recurring drift"}, nil)
-	fi.AddThrall(ThrallState{ID: "t4", Hostname: "h4", ComplianceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ComplianceStatus: "compliant"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ComplianceStatus: "recurring drift"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", ComplianceStatus: "errors"}, nil)
 
 	pct := fi.CompliancePercent()
 	// 2 compliant out of 4 = 50%

@@ -12,18 +12,18 @@ import (
 
 	"strings"
 
-	"github.com/hobnob/hobnob/server/compliance"
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // Rehydrate loads the FleetIndex from SQLite on startup. It populates all maps,
-// parses pubkeys, loads traits, and computes compliance status for each thrall.
-// Any thralls with unparseable pubkeys are still loaded but won't have cached keys.
+// parses pubkeys, loads traits, and computes compliance status for each envoy.
+// Any envoys with unparseable pubkeys are still loaded but won't have cached keys.
 func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStore db.RunStore, baseInterval time.Duration) error {
 	start := time.Now()
 
-	// Load all thralls with their latest run status in a single query.
-	thrallsWithRuns, err := queries.ListThrallsWithLatestRun(ctx)
+	// Load all envoys with their latest run status in a single query.
+	envoysWithRuns, err := queries.ListEnvoysWithLatestRun(ctx)
 	if err != nil {
 		return err
 	}
@@ -36,20 +36,20 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		allTraits = nil
 	}
 
-	// Build trait lookup: thrallID → traits JSON
-	traitsByThrall := make(map[string]string, len(allTraits))
+	// Build trait lookup: envoyID → traits JSON
+	traitsByEnvoy := make(map[string]string, len(allTraits))
 	for _, t := range allTraits {
-		traitsByThrall[t.ID] = t.Traits
+		traitsByEnvoy[t.ID] = t.Traits
 	}
 
-	for _, twr := range thrallsWithRuns {
-		t := twr.Thrall
+	for _, twr := range envoysWithRuns {
+		t := twr.Envoy
 
 		// Parse pubkey.
 		pubKey, pkErr := db.ParsePubKey(t.PubkeyPem)
 		if pkErr != nil {
-			slog.Warn("rehydrate: failed to parse pubkey, thrall will need DB fallback",
-				"thrall_id", t.ID,
+			slog.Warn("rehydrate: failed to parse pubkey, envoy will need DB fallback",
+				"envoy_id", t.ID,
 				"hostname", t.Hostname,
 				"error", pkErr,
 			)
@@ -74,13 +74,13 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		var pendingSecrets []string
 		if t.PendingRotatedSecrets != "" && t.PendingRotatedSecrets != "[]" {
 			if err := json.Unmarshal([]byte(t.PendingRotatedSecrets), &pendingSecrets); err != nil {
-				slog.Warn("malformed pending_rotated_secrets JSON", "thrall_id", t.ID, "error", err)
+				slog.Warn("malformed pending_rotated_secrets JSON", "envoy_id", t.ID, "error", err)
 			}
 		}
 
 		// Parse traits into flattened map.
 		var traits map[string]string
-		if traitsJSON, ok := traitsByThrall[t.ID]; ok {
+		if traitsJSON, ok := traitsByEnvoy[t.ID]; ok {
 			var parsed map[string]any
 			if err := json.Unmarshal([]byte(traitsJSON), &parsed); err == nil {
 				traits = make(map[string]string)
@@ -110,7 +110,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			maintenanceUntil = t.MaintenanceUntil.Time
 		}
 
-		ts := ThrallState{
+		ts := EnvoyState{
 			ID:                    t.ID,
 			Hostname:              t.Hostname,
 			IP:                    t.IpAddress,
@@ -129,12 +129,12 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			MaintenanceUntil:      maintenanceUntil,
 		}
 
-		fi.AddThrall(ts, pubKey)
+		fi.AddEnvoy(ts, pubKey)
 	}
 
 	elapsed := time.Since(start)
 	slog.Info("fleet index rehydrated",
-		"thralls", len(thrallsWithRuns),
+		"envoys", len(envoysWithRuns),
 		"traits", len(allTraits),
 		"elapsed", elapsed,
 	)

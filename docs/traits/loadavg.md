@@ -28,7 +28,7 @@ Parses the first three whitespace-separated fields of `/proc/loadavg`.
 ```yaml
 - name: load-report
   type: file
-  target_path: /var/lib/hobnob/load.txt
+  target_path: /var/lib/vigo/load.txt
   content: |
     Load: {{ .Traits.loadavg.load1 }} / {{ .Traits.loadavg.load5 }} / {{ .Traits.loadavg.load15 }}
 ```

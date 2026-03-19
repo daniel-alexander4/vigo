@@ -11,11 +11,11 @@ resources:
     package: rsyslog
     state: present
 
-  - name: rsyslog-hobnob-conf
+  - name: rsyslog-vigo-conf
     type: file
-    target_path: /etc/rsyslog.d/50-hobnob.conf
+    target_path: /etc/rsyslog.d/50-vigo.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
 
       # Use configured log format
       $ActionFileDefaultTemplate {{ .Vars.log_format }}
@@ -40,4 +40,4 @@ resources:
     service: rsyslog
     enabled: true
     state: running
-    depends_on: [rsyslog-hobnob-conf]
+    depends_on: [rsyslog-vigo-conf]

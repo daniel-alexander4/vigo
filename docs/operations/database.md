@@ -1,6 +1,6 @@
 # Database
 
-Hobnob supports two database backends: SQLite (default) and PostgreSQL.
+Vigo supports two database backends: SQLite (default) and PostgreSQL.
 
 ## SQLite (Default)
 
@@ -9,7 +9,7 @@ SQLite is the default and recommended backend for most deployments. It runs in W
 ```yaml
 database:
   driver: sqlite
-  dsn: /var/lib/hobnob-server/hobnob.db
+  dsn: /var/lib/vigo-server/vigo.db
 ```
 
 ### WAL Mode
@@ -27,10 +27,10 @@ For large-scale deployments or when you need a managed database:
 ```yaml
 database:
   driver: postgres
-  dsn: "secret:hobnob/db/dsn"
+  dsn: "secret:vigo/db/dsn"
 ```
 
-The DSN should be a standard PostgreSQL connection string: `postgres://user:password@host:5432/hobnob?sslmode=require`.
+The DSN should be a standard PostgreSQL connection string: `postgres://user:password@host:5432/vigo?sslmode=require`.
 
 ## Schema Overview
 
@@ -40,11 +40,11 @@ The database schema is defined in `migrations/000001_initial_schema.up.sql`. Key
 
 | Table | Description |
 |-------|-------------|
-| `thralls` | Enrolled managed nodes: hostname, IP, pubkey, enrollment time, last seen, revocation status |
+| `envoys` | Enrolled managed nodes: hostname, IP, pubkey, enrollment time, last seen, revocation status |
 | `approved_patterns` | Enrollment patterns with bcrypt-hashed one-time tokens |
 | `runs` | Convergence run records: status (running/success/failure/partial), module/changed/failed counts |
 | `run_results` | Per-resource results within a run: action taken, changed flag, error, duration |
-| `thrall_traits` | Collected traits (facts) as JSON blobs with timestamps |
+| `envoy_traits` | Collected traits (facts) as JSON blobs with timestamps |
 
 ### Audit Tables
 
@@ -53,7 +53,7 @@ The database schema is defined in `migrations/000001_initial_schema.up.sql`. Key
 | `plans` | Dry-run plan records |
 | `plan_results` | Per-resource planned actions |
 | `file_snapshots` | File content snapshots for rollback |
-| `package_audit` | Package version tracking per thrall |
+| `package_audit` | Package version tracking per envoy |
 | `compliance_history` | Daily fleet compliance snapshots |
 | `secret_rotation_events` | Secret rotation audit trail |
 | `env_promotions` | Environment variable promotion history |
@@ -90,7 +90,7 @@ Pruning removes:
 - Old workflow runs and their step results
 - Old compliance history snapshots
 
-Thrall records, approved patterns, and webhooks are never pruned automatically.
+Envoy records, approved patterns, and webhooks are never pruned automatically.
 
 ## Connection Tuning
 
@@ -102,12 +102,12 @@ For PostgreSQL, the Go `database/sql` package manages connection pooling. The DS
 
 The schema includes indexes for common query patterns:
 
-- `idx_thralls_hostname` -- hostname lookups during check-in
-- `idx_runs_thrall_id` -- listing runs for a specific thrall
+- `idx_envoys_hostname` -- hostname lookups during check-in
+- `idx_runs_envoy_id` -- listing runs for a specific envoy
 - `idx_run_results_run_id` -- fetching results for a specific run
-- `idx_thrall_traits_thrall_id_collected` -- latest traits lookup
+- `idx_envoy_traits_envoy_id_collected` -- latest traits lookup
 - `idx_push_runs_status`, `idx_push_runs_created_at` -- push listing/filtering
-- `idx_push_run_targets_push_run_id`, `idx_push_run_targets_thrall_id` -- target result lookups
+- `idx_push_run_targets_push_run_id`, `idx_push_run_targets_envoy_id` -- target result lookups
 - `idx_workflow_runs_status` -- workflow listing
 - `idx_workflow_step_results_workflow` -- step result lookups
 

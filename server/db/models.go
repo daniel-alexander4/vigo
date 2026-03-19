@@ -80,9 +80,31 @@ type EnvPromotion struct {
 	PromotedAt time.Time `json:"promoted_at"`
 }
 
+type Envoy struct {
+	ID                    string       `json:"id"`
+	Hostname              string       `json:"hostname"`
+	IpAddress             string       `json:"ip_address"`
+	PubkeyPem             string       `json:"pubkey_pem"`
+	EnrolledAt            time.Time    `json:"enrolled_at"`
+	LastSeen              sql.NullTime `json:"last_seen"`
+	Revoked               int64        `json:"revoked"`
+	RevokedAt             sql.NullTime `json:"revoked_at"`
+	ForcePush             int64        `json:"force_push"`
+	PendingRotatedSecrets string       `json:"pending_rotated_secrets"`
+	Tags                  string       `json:"tags"`
+	MaintenanceUntil      sql.NullTime `json:"maintenance_until"`
+}
+
+type EnvoyTrait struct {
+	ID          string    `json:"id"`
+	EnvoyID     string    `json:"envoy_id"`
+	Traits      string    `json:"traits"`
+	CollectedAt time.Time `json:"collected_at"`
+}
+
 type FileSnapshot struct {
 	ID          string         `json:"id"`
-	ThrallID    string         `json:"thrall_id"`
+	EnvoyID     string         `json:"envoy_id"`
 	FilePath    string         `json:"file_path"`
 	ContentHash string         `json:"content_hash"`
 	Content     []byte         `json:"content"`
@@ -92,7 +114,7 @@ type FileSnapshot struct {
 
 type PackageAudit struct {
 	ID               string         `json:"id"`
-	ThrallID         string         `json:"thrall_id"`
+	EnvoyID          string         `json:"envoy_id"`
 	PackageName      string         `json:"package_name"`
 	InstalledVersion sql.NullString `json:"installed_version"`
 	DesiredVersion   sql.NullString `json:"desired_version"`
@@ -101,7 +123,7 @@ type PackageAudit struct {
 
 type Plan struct {
 	ID        string    `json:"id"`
-	ThrallID  string    `json:"thrall_id"`
+	EnvoyID   string    `json:"envoy_id"`
 	CreatedAt time.Time `json:"created_at"`
 	Modules   string    `json:"modules"`
 }
@@ -133,7 +155,7 @@ type PushRun struct {
 type PushRunTarget struct {
 	ID           string         `json:"id"`
 	PushRunID    string         `json:"push_run_id"`
-	ThrallID     string         `json:"thrall_id"`
+	EnvoyID      string         `json:"envoy_id"`
 	Hostname     string         `json:"hostname"`
 	Status       string         `json:"status"`
 	ExitCode     sql.NullInt64  `json:"exit_code"`
@@ -147,7 +169,7 @@ type PushRunTarget struct {
 
 type Run struct {
 	ID           string       `json:"id"`
-	ThrallID     string       `json:"thrall_id"`
+	EnvoyID      string       `json:"envoy_id"`
 	StartedAt    time.Time    `json:"started_at"`
 	FinishedAt   sql.NullTime `json:"finished_at"`
 	Status       string       `json:"status"`
@@ -171,12 +193,12 @@ type RunResult struct {
 }
 
 type SecretRotationEvent struct {
-	ID              string         `json:"id"`
-	SecretPath      string         `json:"secret_path"`
-	OldVersion      sql.NullString `json:"old_version"`
-	NewVersion      sql.NullString `json:"new_version"`
-	RotatedAt       time.Time      `json:"rotated_at"`
-	AffectedThralls int64          `json:"affected_thralls"`
+	ID             string         `json:"id"`
+	SecretPath     string         `json:"secret_path"`
+	OldVersion     sql.NullString `json:"old_version"`
+	NewVersion     sql.NullString `json:"new_version"`
+	RotatedAt      time.Time      `json:"rotated_at"`
+	AffectedEnvoys int64          `json:"affected_envoys"`
 }
 
 type Session struct {
@@ -203,7 +225,7 @@ type TaskRun struct {
 type TaskRunTarget struct {
 	ID           string         `json:"id"`
 	TaskRunID    string         `json:"task_run_id"`
-	ThrallID     string         `json:"thrall_id"`
+	EnvoyID      string         `json:"envoy_id"`
 	Hostname     string         `json:"hostname"`
 	Status       string         `json:"status"`
 	ExitCode     sql.NullInt64  `json:"exit_code"`
@@ -213,28 +235,6 @@ type TaskRunTarget struct {
 	ErrorMsg     sql.NullString `json:"error_msg"`
 	DispatchedAt sql.NullTime   `json:"dispatched_at"`
 	FinishedAt   sql.NullTime   `json:"finished_at"`
-}
-
-type Thrall struct {
-	ID                    string       `json:"id"`
-	Hostname              string       `json:"hostname"`
-	IpAddress             string       `json:"ip_address"`
-	PubkeyPem             string       `json:"pubkey_pem"`
-	EnrolledAt            time.Time    `json:"enrolled_at"`
-	LastSeen              sql.NullTime `json:"last_seen"`
-	Revoked               int64        `json:"revoked"`
-	RevokedAt             sql.NullTime `json:"revoked_at"`
-	ForcePush             int64        `json:"force_push"`
-	PendingRotatedSecrets string       `json:"pending_rotated_secrets"`
-	Tags                  string       `json:"tags"`
-	MaintenanceUntil      sql.NullTime `json:"maintenance_until"`
-}
-
-type ThrallTrait struct {
-	ID          string    `json:"id"`
-	ThrallID    string    `json:"thrall_id"`
-	Traits      string    `json:"traits"`
-	CollectedAt time.Time `json:"collected_at"`
 }
 
 type User struct {

@@ -1,15 +1,15 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! Launchd service installation for the Hobnob agent on macOS.
+//! Launchd service installation for the Vigo agent on macOS.
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
-const SERVICE_LABEL: &str = "com.hobnob.thrall";
-const PLIST_PATH: &str = "/Library/LaunchDaemons/com.hobnob.thrall.plist";
+const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
+const SERVICE_LABEL: &str = "com.vigo.envoy";
+const PLIST_PATH: &str = "/Library/LaunchDaemons/com.vigo.envoy.plist";
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
@@ -37,9 +37,9 @@ fn plist_content(data_dir: &str) -> String {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/hobnob-thrall.log</string>
+    <string>/var/log/vigo-envoy.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/hobnob-thrall.log</string>
+    <string>/var/log/vigo-envoy.log</string>
 </dict>
 </plist>
 "#,
@@ -70,7 +70,7 @@ pub async fn install_service(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(INSTALL_PATH, std::fs::Permissions::from_mode(0o755))?;
         }
-        info!(path = INSTALL_PATH, "installed hobnob binary");
+        info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
     // Write plist.
@@ -88,9 +88,9 @@ pub async fn install_service(
         bail!("launchctl load exited with {}", status);
     }
 
-    println!("Hobnob agent service installed and started.");
+    println!("Vigo agent service installed and started.");
     println!("  launchctl list {}    # check status", SERVICE_LABEL);
-    println!("  tail -f /var/log/hobnob-thrall.log    # follow logs");
+    println!("  tail -f /var/log/vigo-envoy.log    # follow logs");
 
     Ok(grpc_addr)
 }
@@ -101,9 +101,9 @@ mod tests {
 
     #[test]
     fn test_plist_content() {
-        let plist = plist_content("/usr/local/etc/hobnob-thrall");
-        assert!(plist.contains("com.hobnob.thrall"));
-        assert!(plist.contains("/usr/local/sbin/hobnob"));
+        let plist = plist_content("/usr/local/etc/vigo-envoy");
+        assert!(plist.contains("com.vigo.envoy"));
+        assert!(plist.contains("/usr/local/sbin/vigo"));
         assert!(!plist.contains("--server"), "service should read config from file");
         assert!(plist.contains("KeepAlive"));
     }

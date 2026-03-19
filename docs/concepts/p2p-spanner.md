@@ -24,7 +24,7 @@ All servers are peers. There is no dedicated hub. Any peer can serve the web UI,
 ## Peer Responsibilities
 
 Every peer handles:
-- Agent check-ins for its owned thralls (unchanged from spoke behavior)
+- Agent check-ins for its owned envoys (unchanged from spoke behavior)
 - Run storage, trait storage, result reporting
 - Web UI serving, with fan-out to peers for aggregated views
 - Bootstrap and enrollment (accepting and routing)
@@ -41,7 +41,7 @@ All peers pull from the same git repository on a timer or webhook.
 ```yaml
 config:
   source: git
-  repo: "git@github.com:org/hobnob-config.git"
+  repo: "git@github.com:org/vigo-config.git"
   branch: main
   poll_interval: "60s"
 ```
@@ -50,7 +50,7 @@ Advantages:
 - No consensus needed — git is the source of truth
 - Audit trail built in (git log)
 - Operators use familiar git workflows (branch, review, merge)
-- `hobnobcli config publish` becomes `git push` with a webhook to notify peers
+- `vigogo config publish` becomes `git push` with a webhook to notify peers
 
 Disadvantages:
 - Requires a git server (GitHub, GitLab, Gitea, bare repo on shared storage)
@@ -63,7 +63,7 @@ All peers mount the same NFS/CIFS share or S3 bucket for the `.live/` directory.
 ```yaml
 config:
   source: s3
-  bucket: "hobnob-config"
+  bucket: "vigo-config"
   region: "us-west-2"
   poll_interval: "30s"
 ```
@@ -115,7 +115,7 @@ spanner:
   role: peer
   peer_id: "dc1"
   discovery: dns
-  dns_name: "_hobnob._tcp.example.com"
+  dns_name: "_vigo._tcp.example.com"
 ```
 
 Peers query DNS SRV records to discover each other. Adding a peer requires only a DNS update.
@@ -142,7 +142,7 @@ Most operations work without a leader. The few that need coordination:
 |-----------|-----|-----------|
 | Enrollment token validation | One-time tokens must be consumed exactly once | Rare (enrollment events) |
 | Webhook deduplication | Prevent duplicate webhook delivery for the same event | Per run completion |
-| Enrollment routing | Decide which peer owns a new thrall | Rare |
+| Enrollment routing | Decide which peer owns a new envoy | Rare |
 
 Leader election can use:
 - **Raft** (if using Option C for config) — leader already exists
@@ -151,9 +151,9 @@ Leader election can use:
 
 For enrollment tokens specifically, consistent hashing on the token value would route validation to a specific peer without needing a global leader.
 
-## Thrall Ownership
+## Envoy Ownership
 
-Each thrall is owned by one peer. Ownership is determined by hostname pattern matching (same as current spoke patterns). The difference: every peer knows the full pattern table and can route requests.
+Each envoy is owned by one peer. Ownership is determined by hostname pattern matching (same as current spoke patterns). The difference: every peer knows the full pattern table and can route requests.
 
 ```
 Agent bootstraps → contacts any peer → peer checks patterns →
@@ -165,7 +165,7 @@ This is the same as current hub routing, except any peer can do it.
 
 ### Ownership transfer
 
-Thrall reassignment works the same as today — one peer marks the thrall for reassignment, agent reconnects to the new peer. The difference: any peer can initiate a reassignment, not just the hub.
+Envoy reassignment works the same as today — one peer marks the envoy for reassignment, agent reconnects to the new peer. The difference: any peer can initiate a reassignment, not just the hub.
 
 ## Admin Query Fan-out
 
@@ -177,10 +177,10 @@ The web UI includes a peer selector or automatically queries all peers. The peer
 
 | Failure | Impact | Recovery |
 |---------|--------|----------|
-| One peer down | Its thralls use cached policy (offline convergence). Other peers detect the failure. | Auto-reassign thralls after timeout, or wait for recovery. |
-| Minority of peers down | Quorum maintained (if using Raft). Full operations continue. | Thralls auto-reassigned or wait. |
+| One peer down | Its envoys use cached policy (offline convergence). Other peers detect the failure. | Auto-reassign envoys after timeout, or wait for recovery. |
+| Minority of peers down | Quorum maintained (if using Raft). Full operations continue. | Envoys auto-reassigned or wait. |
 | Majority of peers down | Loss of quorum (Raft only). Read-only mode. Agents continue with cached policy. | Restore peers, quorum recovers. |
-| Network partition | Each partition operates independently. Thralls converge locally. | Heal partition, peers reconcile. |
+| Network partition | Each partition operates independently. Envoys converge locally. | Heal partition, peers reconcile. |
 
 The critical insight: agents always have cached policy and offline convergence. The control plane can be entirely down and agents continue enforcing desired state. P2P spanner improves control plane availability, not data plane availability (which is already resilient).
 

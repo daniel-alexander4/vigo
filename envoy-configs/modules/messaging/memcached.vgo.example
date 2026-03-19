@@ -16,7 +16,7 @@ resources:
     type: file
     target_path: /etc/memcached.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       -l {{ .Vars.memcached_listen }}
       -p {{ .Vars.memcached_port }}
       -m {{ .Vars.memcached_memory }}

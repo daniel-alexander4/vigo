@@ -13,8 +13,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/db"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // openTokensTestDB creates an in-memory SQLite database with users and api_tokens tables.
@@ -80,7 +80,7 @@ func tokenRequestWithUser(method, path string, body []byte, userID, username, ro
 	} else {
 		req = httptest.NewRequest(method, path, nil)
 	}
-	ctx := hobnobauth.ContextWithUser(req.Context(), &hobnobauth.User{
+	ctx := vigoauth.ContextWithUser(req.Context(), &vigoauth.User{
 		ID:       userID,
 		Username: username,
 		Role:     role,
@@ -94,7 +94,7 @@ func TestTokens_CreateToken(t *testing.T) {
 	sqlDB, queries := openTokensTestDB(t)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := hobnobauth.NewTokenStore(queries)
+	tokenStore := vigoauth.NewTokenStore(queries)
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -125,7 +125,7 @@ func TestTokens_CreateTokenInvalidExpiry(t *testing.T) {
 	sqlDB, queries := openTokensTestDB(t)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := hobnobauth.NewTokenStore(queries)
+	tokenStore := vigoauth.NewTokenStore(queries)
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -144,7 +144,7 @@ func TestTokens_ListTokens(t *testing.T) {
 	sqlDB, queries := openTokensTestDB(t)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := hobnobauth.NewTokenStore(queries)
+	tokenStore := vigoauth.NewTokenStore(queries)
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -180,7 +180,7 @@ func TestTokens_DeleteToken(t *testing.T) {
 	sqlDB, queries := openTokensTestDB(t)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := hobnobauth.NewTokenStore(queries)
+	tokenStore := vigoauth.NewTokenStore(queries)
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -221,7 +221,7 @@ func TestTokens_DeleteToken(t *testing.T) {
 func TestTokens_UnauthorizedWithoutUser(t *testing.T) {
 	_, queries := openTokensTestDB(t)
 
-	tokenStore := hobnobauth.NewTokenStore(queries)
+	tokenStore := vigoauth.NewTokenStore(queries)
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)

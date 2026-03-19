@@ -4,7 +4,7 @@
 //! Go-template-compatible renderer.
 //! Port of server/config/template.go (78 lines).
 //!
-//! Supports only the subset of Go `text/template` actually used by Hobnob:
+//! Supports only the subset of Go `text/template` actually used by Vigo:
 //! - `{{ .Vars.key }}` — dot-path access into vars map
 //! - `{{ .Traits.os.distro }}` — dot-path access into traits map
 //! - Whitespace trimming: `{{- .Vars.key -}}` (leading/trailing dash)
@@ -118,7 +118,7 @@ fn resolve_expr(expr: &str, ctx: &TemplateContext) -> Result<String> {
         Some(v) => Ok(value_to_template_string(v)),
         None => {
             // Go template returns "<no value>" for missing paths by default,
-            // but with Option "missingkey=zero" it returns "". Hobnob uses the
+            // but with Option "missingkey=zero" it returns "". Vigo uses the
             // default (which actually returns the zero value for the type).
             // For map lookups that fail, Go returns "".
             Ok(String::new())

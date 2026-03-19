@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -22,17 +22,17 @@ import (
 // fakeAdminService: real gRPC server for integration-style fan-out tests
 // ---------------------------------------------------------------------------
 
-// fakeAdminService implements HobnobAdminServer for testing hub fan-out.
+// fakeAdminService implements VigoAdminServer for testing hub fan-out.
 type fakeAdminService struct {
-	pb.UnimplementedHobnobAdminServer
-	thralls    []*pb.Thrall
+	pb.UnimplementedVigoAdminServer
+	envoys    []*pb.Envoy
 	runs       []*pb.Run
 	compliance *pb.GetComplianceSummaryResponse
 	forcePush  int32
 }
 
-func (f *fakeAdminService) ListThralls(_ context.Context, _ *pb.ListThrallsRequest) (*pb.ListThrallsResponse, error) {
-	return &pb.ListThrallsResponse{Thralls: f.thralls}, nil
+func (f *fakeAdminService) ListEnvoys(_ context.Context, _ *pb.ListEnvoysRequest) (*pb.ListEnvoysResponse, error) {
+	return &pb.ListEnvoysResponse{Envoys: f.envoys}, nil
 }
 
 func (f *fakeAdminService) ListRuns(_ context.Context, _ *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
@@ -44,7 +44,7 @@ func (f *fakeAdminService) GetComplianceSummary(_ context.Context, _ *pb.GetComp
 }
 
 func (f *fakeAdminService) ForcePush(_ context.Context, _ *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
-	return &pb.ForcePushResponse{ThrallsNotified: f.forcePush}, nil
+	return &pb.ForcePushResponse{EnvoysNotified: f.forcePush}, nil
 }
 
 // startFakeSpoke starts a gRPC server with a fake admin service and returns
@@ -56,7 +56,7 @@ func startFakeSpoke(t *testing.T, svc *fakeAdminService) string {
 		t.Fatal(err)
 	}
 	srv := grpc.NewServer()
-	pb.RegisterHobnobAdminServer(srv, svc)
+	pb.RegisterVigoAdminServer(srv, svc)
 	go srv.Serve(lis)
 	t.Cleanup(func() { srv.GracefulStop() })
 	return lis.Addr().String()
@@ -82,7 +82,7 @@ func newGRPCTestHub(t *testing.T, addrs []string) *Hub {
 			id:    fmt.Sprintf("spoke%c", 'A'+i),
 			addr:  addr,
 			conn:  conn,
-			admin: pb.NewHobnobAdminClient(conn),
+			admin: pb.NewVigoAdminClient(conn),
 		})
 	}
 	return h
@@ -92,25 +92,25 @@ func newGRPCTestHub(t *testing.T, addrs []string) *Hub {
 // mockAdminClient: in-process mock for unit tests (no real gRPC server)
 // ---------------------------------------------------------------------------
 
-// mockAdminClient implements pb.HobnobAdminClient with canned responses.
+// mockAdminClient implements pb.VigoAdminClient with canned responses.
 type mockAdminClient struct {
 	complianceResp  *pb.GetComplianceSummaryResponse
 	complianceErr   error
-	listThrallsResp *pb.ListThrallsResponse
-	listThrallsErr  error
+	listEnvoysResp *pb.ListEnvoysResponse
+	listEnvoysErr  error
 	listRunsResp    *pb.ListRunsResponse
 	listRunsErr     error
 	forcePushResp   *pb.ForcePushResponse
 	forcePushErr    error
-	getThrallResp   *pb.GetThrallResponse
-	getThrallErr    error
-	enrollResp      *pb.EnrollThrallResponse
+	getEnvoyResp   *pb.GetEnvoyResponse
+	getEnvoyErr    error
+	enrollResp      *pb.EnrollEnvoyResponse
 	enrollErr       error
 	setReassignResp *pb.SetReassignmentResponse
 	setReassignErr  error
 
 	// Track calls for assertions.
-	enrollCalls      []pb.EnrollThrallRequest
+	enrollCalls      []pb.EnrollEnvoyRequest
 	setReassignCalls []pb.SetReassignmentRequest
 }
 
@@ -118,8 +118,8 @@ func (m *mockAdminClient) GetComplianceSummary(_ context.Context, _ *pb.GetCompl
 	return m.complianceResp, m.complianceErr
 }
 
-func (m *mockAdminClient) ListThralls(_ context.Context, _ *pb.ListThrallsRequest, _ ...grpc.CallOption) (*pb.ListThrallsResponse, error) {
-	return m.listThrallsResp, m.listThrallsErr
+func (m *mockAdminClient) ListEnvoys(_ context.Context, _ *pb.ListEnvoysRequest, _ ...grpc.CallOption) (*pb.ListEnvoysResponse, error) {
+	return m.listEnvoysResp, m.listEnvoysErr
 }
 
 func (m *mockAdminClient) ListRuns(_ context.Context, _ *pb.ListRunsRequest, _ ...grpc.CallOption) (*pb.ListRunsResponse, error) {
@@ -130,11 +130,11 @@ func (m *mockAdminClient) ForcePush(_ context.Context, _ *pb.ForcePushRequest, _
 	return m.forcePushResp, m.forcePushErr
 }
 
-func (m *mockAdminClient) GetThrall(_ context.Context, _ *pb.GetThrallRequest, _ ...grpc.CallOption) (*pb.GetThrallResponse, error) {
-	return m.getThrallResp, m.getThrallErr
+func (m *mockAdminClient) GetEnvoy(_ context.Context, _ *pb.GetEnvoyRequest, _ ...grpc.CallOption) (*pb.GetEnvoyResponse, error) {
+	return m.getEnvoyResp, m.getEnvoyErr
 }
 
-func (m *mockAdminClient) EnrollThrall(_ context.Context, req *pb.EnrollThrallRequest, _ ...grpc.CallOption) (*pb.EnrollThrallResponse, error) {
+func (m *mockAdminClient) EnrollEnvoy(_ context.Context, req *pb.EnrollEnvoyRequest, _ ...grpc.CallOption) (*pb.EnrollEnvoyResponse, error) {
 	m.enrollCalls = append(m.enrollCalls, *req)
 	return m.enrollResp, m.enrollErr
 }
@@ -155,10 +155,10 @@ func (m *mockAdminClient) ListApprovedPatterns(context.Context, *pb.ListApproved
 func (m *mockAdminClient) RevokeApprovedPattern(context.Context, *pb.RevokeApprovedPatternRequest, ...grpc.CallOption) (*pb.RevokeApprovedPatternResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
-func (m *mockAdminClient) RevokeThrall(context.Context, *pb.RevokeThrallRequest, ...grpc.CallOption) (*pb.RevokeThrallResponse, error) {
+func (m *mockAdminClient) RevokeEnvoy(context.Context, *pb.RevokeEnvoyRequest, ...grpc.CallOption) (*pb.RevokeEnvoyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
-func (m *mockAdminClient) DeleteThrall(context.Context, *pb.DeleteThrallRequest, ...grpc.CallOption) (*pb.DeleteThrallResponse, error) {
+func (m *mockAdminClient) DeleteEnvoy(context.Context, *pb.DeleteEnvoyRequest, ...grpc.CallOption) (*pb.DeleteEnvoyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
 func (m *mockAdminClient) DryRun(context.Context, *pb.DryRunRequest, ...grpc.CallOption) (*pb.DryRunResponse, error) {
@@ -179,7 +179,7 @@ func (m *mockAdminClient) ListWebhooks(context.Context, *pb.ListWebhooksRequest,
 func (m *mockAdminClient) DeleteWebhook(context.Context, *pb.DeleteWebhookRequest, ...grpc.CallOption) (*pb.DeleteWebhookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
-func (m *mockAdminClient) GetThrallCompliance(context.Context, *pb.GetThrallComplianceRequest, ...grpc.CallOption) (*pb.GetThrallComplianceResponse, error) {
+func (m *mockAdminClient) GetEnvoyCompliance(context.Context, *pb.GetEnvoyComplianceRequest, ...grpc.CallOption) (*pb.GetEnvoyComplianceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
 func (m *mockAdminClient) Rollback(context.Context, *pb.RollbackRequest, ...grpc.CallOption) (*pb.RollbackResponse, error) {
@@ -210,17 +210,17 @@ func newTestHub(spokes ...spokeConn) *Hub {
 // Fan-out integration tests (existing, using real gRPC)
 // ---------------------------------------------------------------------------
 
-func TestHub_AggregateListThralls(t *testing.T) {
+func TestHub_AggregateListEnvoys(t *testing.T) {
 	now := timestamppb.Now()
 
 	spokeA := &fakeAdminService{
-		thralls: []*pb.Thrall{
+		envoys: []*pb.Envoy{
 			{Id: "n1", Hostname: "web1.dc1", EnrolledAt: now},
 			{Id: "n2", Hostname: "web2.dc1", EnrolledAt: now},
 		},
 	}
 	spokeB := &fakeAdminService{
-		thralls: []*pb.Thrall{
+		envoys: []*pb.Envoy{
 			{Id: "n3", Hostname: "web1.dc2", EnrolledAt: now},
 		},
 	}
@@ -229,21 +229,21 @@ func TestHub_AggregateListThralls(t *testing.T) {
 	addrB := startFakeSpoke(t, spokeB)
 	hub := newGRPCTestHub(t, []string{addrA, addrB})
 
-	thralls, err := hub.AggregateListThralls(context.Background())
+	envoys, err := hub.AggregateListEnvoys(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(thralls) != 3 {
-		t.Fatalf("got %d thralls, want 3", len(thralls))
+	if len(envoys) != 3 {
+		t.Fatalf("got %d envoys, want 3", len(envoys))
 	}
 
 	ids := map[string]bool{}
-	for _, n := range thralls {
+	for _, n := range envoys {
 		ids[n.Id] = true
 	}
 	for _, want := range []string{"n1", "n2", "n3"} {
 		if !ids[want] {
-			t.Errorf("missing thrall %s", want)
+			t.Errorf("missing envoy %s", want)
 		}
 	}
 }
@@ -294,13 +294,13 @@ func TestHub_AggregateListRuns(t *testing.T) {
 	now := timestamppb.Now()
 	spokeA := &fakeAdminService{
 		runs: []*pb.Run{
-			{Id: "r1", ThrallId: "n1", StartedAt: now, Status: "success"},
+			{Id: "r1", EnvoyId: "n1", StartedAt: now, Status: "success"},
 		},
 	}
 	spokeB := &fakeAdminService{
 		runs: []*pb.Run{
-			{Id: "r2", ThrallId: "n3", StartedAt: now, Status: "failure"},
-			{Id: "r3", ThrallId: "n3", StartedAt: now, Status: "success"},
+			{Id: "r2", EnvoyId: "n3", StartedAt: now, Status: "failure"},
+			{Id: "r3", EnvoyId: "n3", StartedAt: now, Status: "success"},
 		},
 	}
 
@@ -380,8 +380,8 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	if !s.Healthy {
 		t.Error("expected spoke to be healthy")
 	}
-	if s.ThrallCount != 20 {
-		t.Errorf("ThrallCount = %d, want 20", s.ThrallCount)
+	if s.EnvoyCount != 20 {
+		t.Errorf("EnvoyCount = %d, want 20", s.EnvoyCount)
 	}
 	if s.Compliant != 15 {
 		t.Errorf("Compliant = %d, want 15", s.Compliant)
@@ -457,8 +457,8 @@ func TestSpokeStatusError(t *testing.T) {
 	if s.Error == "" {
 		t.Error("expected Error to be populated")
 	}
-	if s.ThrallCount != 0 {
-		t.Errorf("ThrallCount = %d, want 0 on error", s.ThrallCount)
+	if s.EnvoyCount != 0 {
+		t.Errorf("EnvoyCount = %d, want 0 on error", s.EnvoyCount)
 	}
 }
 
@@ -481,8 +481,8 @@ func TestMultipleSpokeStatuses(t *testing.T) {
 	if statuses[0].ID != "spoke-a" || statuses[1].ID != "spoke-b" {
 		t.Errorf("status IDs = [%s, %s], want [spoke-a, spoke-b]", statuses[0].ID, statuses[1].ID)
 	}
-	if statuses[0].ThrallCount != 10 {
-		t.Errorf("spoke-a ThrallCount = %d, want 10", statuses[0].ThrallCount)
+	if statuses[0].EnvoyCount != 10 {
+		t.Errorf("spoke-a EnvoyCount = %d, want 10", statuses[0].EnvoyCount)
 	}
 	if statuses[1].RecurringDrift != 2 {
 		t.Errorf("spoke-b RecurringDrift = %d, want 2", statuses[1].RecurringDrift)
@@ -524,10 +524,10 @@ func TestSpokeByID(t *testing.T) {
 // Single-spoke drill-down tests
 // ---------------------------------------------------------------------------
 
-func TestSpokeListThralls(t *testing.T) {
+func TestSpokeListEnvoys(t *testing.T) {
 	mock := &mockAdminClient{
-		listThrallsResp: &pb.ListThrallsResponse{
-			Thralls: []*pb.Thrall{
+		listEnvoysResp: &pb.ListEnvoysResponse{
+			Envoys: []*pb.Envoy{
 				{Id: "t1", Hostname: "web1.east.example.com", IpAddress: "10.0.1.1"},
 				{Id: "t2", Hostname: "web2.east.example.com", IpAddress: "10.0.1.2"},
 			},
@@ -536,18 +536,18 @@ func TestSpokeListThralls(t *testing.T) {
 
 	hub := newTestHub(spokeConn{id: "spoke-east", addr: "east:1530", admin: mock})
 
-	thralls, err := hub.SpokeListThralls(context.Background(), "spoke-east")
+	envoys, err := hub.SpokeListEnvoys(context.Background(), "spoke-east")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(thralls) != 2 {
-		t.Fatalf("got %d thralls, want 2", len(thralls))
+	if len(envoys) != 2 {
+		t.Fatalf("got %d envoys, want 2", len(envoys))
 	}
-	if thralls[0].Id != "t1" {
-		t.Errorf("thralls[0].Id = %q, want t1", thralls[0].Id)
+	if envoys[0].Id != "t1" {
+		t.Errorf("envoys[0].Id = %q, want t1", envoys[0].Id)
 	}
-	if thralls[1].Hostname != "web2.east.example.com" {
-		t.Errorf("thralls[1].Hostname = %q, want web2.east.example.com", thralls[1].Hostname)
+	if envoys[1].Hostname != "web2.east.example.com" {
+		t.Errorf("envoys[1].Hostname = %q, want web2.east.example.com", envoys[1].Hostname)
 	}
 }
 
@@ -555,8 +555,8 @@ func TestSpokeListRuns(t *testing.T) {
 	mock := &mockAdminClient{
 		listRunsResp: &pb.ListRunsResponse{
 			Runs: []*pb.Run{
-				{Id: "run-1", ThrallId: "t1", Status: "success"},
-				{Id: "run-2", ThrallId: "t2", Status: "failure"},
+				{Id: "run-1", EnvoyId: "t1", Status: "success"},
+				{Id: "run-2", EnvoyId: "t2", Status: "failure"},
 			},
 		},
 	}
@@ -598,7 +598,7 @@ func TestSpokeComplianceSummary(t *testing.T) {
 
 func TestSpokeForcePush(t *testing.T) {
 	mock := &mockAdminClient{
-		forcePushResp: &pb.ForcePushResponse{ThrallsNotified: 5},
+		forcePushResp: &pb.ForcePushResponse{EnvoysNotified: 5},
 	}
 
 	hub := newTestHub(spokeConn{id: "spoke-east", addr: "east:1530", admin: mock})
@@ -608,7 +608,7 @@ func TestSpokeForcePush(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if count != 5 {
-		t.Errorf("ThrallsNotified = %d, want 5", count)
+		t.Errorf("EnvoysNotified = %d, want 5", count)
 	}
 }
 
@@ -618,8 +618,8 @@ func TestSpokeNotFound(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	t.Run("SpokeListThralls", func(t *testing.T) {
-		_, err := hub.SpokeListThralls(ctx, "spoke-missing")
+	t.Run("SpokeListEnvoys", func(t *testing.T) {
+		_, err := hub.SpokeListEnvoys(ctx, "spoke-missing")
 		if err == nil {
 			t.Fatal("expected error for missing spoke")
 		}
@@ -648,14 +648,14 @@ func TestSpokeNotFound(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ReassignThrall tests
+// ReassignEnvoy tests
 // ---------------------------------------------------------------------------
 
-func TestReassignThrall(t *testing.T) {
+func TestReassignEnvoy(t *testing.T) {
 	srcMock := &mockAdminClient{
-		getThrallResp: &pb.GetThrallResponse{
-			Thrall: &pb.Thrall{
-				Id:        "thrall-1",
+		getEnvoyResp: &pb.GetEnvoyResponse{
+			Envoy: &pb.Envoy{
+				Id:        "envoy-1",
 				Hostname:  "web1.east.example.com",
 				IpAddress: "10.0.1.1",
 			},
@@ -664,7 +664,7 @@ func TestReassignThrall(t *testing.T) {
 	}
 
 	dstMock := &mockAdminClient{
-		enrollResp: &pb.EnrollThrallResponse{ThrallId: "thrall-1-new"},
+		enrollResp: &pb.EnrollEnvoyResponse{EnvoyId: "envoy-1-new"},
 	}
 
 	hub := newTestHub(
@@ -672,18 +672,18 @@ func TestReassignThrall(t *testing.T) {
 		spokeConn{id: "spoke-west", addr: "west:1530", admin: dstMock},
 	)
 
-	result, err := hub.ReassignThrall(context.Background(), "thrall-1", "spoke-east", "spoke-west")
+	result, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "spoke-east", "spoke-west")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.NewThrallID != "thrall-1-new" {
-		t.Errorf("NewThrallID = %q, want thrall-1-new", result.NewThrallID)
+	if result.NewEnvoyID != "envoy-1-new" {
+		t.Errorf("NewEnvoyID = %q, want envoy-1-new", result.NewEnvoyID)
 	}
 	if result.TargetAddr != "west:1530" {
 		t.Errorf("TargetAddr = %q, want west:1530", result.TargetAddr)
 	}
 
-	// Verify EnrollThrall was called on the target spoke.
+	// Verify EnrollEnvoy was called on the target spoke.
 	if len(dstMock.enrollCalls) != 1 {
 		t.Fatalf("expected 1 enroll call, got %d", len(dstMock.enrollCalls))
 	}
@@ -700,38 +700,38 @@ func TestReassignThrall(t *testing.T) {
 		t.Fatalf("expected 1 set-reassign call, got %d", len(srcMock.setReassignCalls))
 	}
 	rc := srcMock.setReassignCalls[0]
-	if rc.ThrallId != "thrall-1" {
-		t.Errorf("reassign ThrallId = %q, want thrall-1", rc.ThrallId)
+	if rc.EnvoyId != "envoy-1" {
+		t.Errorf("reassign EnvoyId = %q, want envoy-1", rc.EnvoyId)
 	}
 	if rc.TargetAddr != "west:1530" {
 		t.Errorf("reassign TargetAddr = %q, want west:1530", rc.TargetAddr)
 	}
-	if rc.NewThrallId != "thrall-1-new" {
-		t.Errorf("reassign NewThrallId = %q, want thrall-1-new", rc.NewThrallId)
+	if rc.NewEnvoyId != "envoy-1-new" {
+		t.Errorf("reassign NewEnvoyId = %q, want envoy-1-new", rc.NewEnvoyId)
 	}
 }
 
-func TestReassignThrallSourceNotFound(t *testing.T) {
+func TestReassignEnvoySourceNotFound(t *testing.T) {
 	hub := newTestHub(
 		spokeConn{id: "spoke-east", addr: "east:1530", admin: &mockAdminClient{}},
 	)
 
-	_, err := hub.ReassignThrall(context.Background(), "thrall-1", "spoke-missing", "spoke-east")
+	_, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "spoke-missing", "spoke-east")
 	if err == nil {
 		t.Fatal("expected error for missing source spoke")
 	}
 }
 
-func TestReassignThrallTargetNotFound(t *testing.T) {
+func TestReassignEnvoyTargetNotFound(t *testing.T) {
 	hub := newTestHub(
 		spokeConn{id: "spoke-east", addr: "east:1530", admin: &mockAdminClient{
-			getThrallResp: &pb.GetThrallResponse{
-				Thrall: &pb.Thrall{Id: "thrall-1", Hostname: "web1.east.example.com"},
+			getEnvoyResp: &pb.GetEnvoyResponse{
+				Envoy: &pb.Envoy{Id: "envoy-1", Hostname: "web1.east.example.com"},
 			},
 		}},
 	)
 
-	_, err := hub.ReassignThrall(context.Background(), "thrall-1", "spoke-east", "spoke-missing")
+	_, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "spoke-east", "spoke-missing")
 	if err == nil {
 		t.Fatal("expected error for missing target spoke")
 	}
@@ -743,21 +743,21 @@ func TestReassignThrallTargetNotFound(t *testing.T) {
 
 func TestDrainSpoke(t *testing.T) {
 	srcMock := &mockAdminClient{
-		listThrallsResp: &pb.ListThrallsResponse{
-			Thralls: []*pb.Thrall{
+		listEnvoysResp: &pb.ListEnvoysResponse{
+			Envoys: []*pb.Envoy{
 				{Id: "t1", Hostname: "web1.east.example.com", IpAddress: "10.0.1.1"},
 				{Id: "t2", Hostname: "web2.east.example.com", IpAddress: "10.0.1.2"},
 			},
 		},
-		// GetThrall is called during ReassignThrall for each thrall.
-		getThrallResp: &pb.GetThrallResponse{
-			Thrall: &pb.Thrall{Id: "t1", Hostname: "web1.east.example.com", IpAddress: "10.0.1.1"},
+		// GetEnvoy is called during ReassignEnvoy for each envoy.
+		getEnvoyResp: &pb.GetEnvoyResponse{
+			Envoy: &pb.Envoy{Id: "t1", Hostname: "web1.east.example.com", IpAddress: "10.0.1.1"},
 		},
 		setReassignResp: &pb.SetReassignmentResponse{},
 	}
 
 	dstMock := &mockAdminClient{
-		enrollResp: &pb.EnrollThrallResponse{ThrallId: "new-id"},
+		enrollResp: &pb.EnrollEnvoyResponse{EnvoyId: "new-id"},
 	}
 
 	hub := newTestHub(
@@ -785,19 +785,19 @@ func TestDrainSpoke(t *testing.T) {
 
 func TestDrainSpokeAutoRoute(t *testing.T) {
 	srcMock := &mockAdminClient{
-		listThrallsResp: &pb.ListThrallsResponse{
-			Thralls: []*pb.Thrall{
+		listEnvoysResp: &pb.ListEnvoysResponse{
+			Envoys: []*pb.Envoy{
 				{Id: "t1", Hostname: "web1.west.example.com", IpAddress: "10.0.2.1"},
 			},
 		},
-		getThrallResp: &pb.GetThrallResponse{
-			Thrall: &pb.Thrall{Id: "t1", Hostname: "web1.west.example.com", IpAddress: "10.0.2.1"},
+		getEnvoyResp: &pb.GetEnvoyResponse{
+			Envoy: &pb.Envoy{Id: "t1", Hostname: "web1.west.example.com", IpAddress: "10.0.2.1"},
 		},
 		setReassignResp: &pb.SetReassignmentResponse{},
 	}
 
 	dstMock := &mockAdminClient{
-		enrollResp: &pb.EnrollThrallResponse{ThrallId: "new-t1"},
+		enrollResp: &pb.EnrollEnvoyResponse{EnvoyId: "new-t1"},
 	}
 
 	hub := newTestHub(
@@ -819,23 +819,23 @@ func TestDrainSpokeAutoRoute(t *testing.T) {
 }
 
 func TestDrainSpokePartialFailure(t *testing.T) {
-	// Three thralls: two match a target pattern, one does not.
+	// Three envoys: two match a target pattern, one does not.
 	srcMock := &mockAdminClient{
-		listThrallsResp: &pb.ListThrallsResponse{
-			Thralls: []*pb.Thrall{
+		listEnvoysResp: &pb.ListEnvoysResponse{
+			Envoys: []*pb.Envoy{
 				{Id: "t1", Hostname: "web1.west.example.com", IpAddress: "10.0.2.1"},
 				{Id: "t2", Hostname: "orphan.nowhere.example.com", IpAddress: "10.0.3.1"},
 				{Id: "t3", Hostname: "web2.west.example.com", IpAddress: "10.0.2.2"},
 			},
 		},
-		getThrallResp: &pb.GetThrallResponse{
-			Thrall: &pb.Thrall{Id: "t1", Hostname: "web1.west.example.com", IpAddress: "10.0.2.1"},
+		getEnvoyResp: &pb.GetEnvoyResponse{
+			Envoy: &pb.Envoy{Id: "t1", Hostname: "web1.west.example.com", IpAddress: "10.0.2.1"},
 		},
 		setReassignResp: &pb.SetReassignmentResponse{},
 	}
 
 	dstMock := &mockAdminClient{
-		enrollResp: &pb.EnrollThrallResponse{ThrallId: "new-id"},
+		enrollResp: &pb.EnrollEnvoyResponse{EnvoyId: "new-id"},
 	}
 
 	hub := newTestHub(
@@ -865,8 +865,8 @@ func TestDrainSpokePartialFailure(t *testing.T) {
 
 func TestDrainSpokeSkipsRevoked(t *testing.T) {
 	srcMock := &mockAdminClient{
-		listThrallsResp: &pb.ListThrallsResponse{
-			Thralls: []*pb.Thrall{
+		listEnvoysResp: &pb.ListEnvoysResponse{
+			Envoys: []*pb.Envoy{
 				{Id: "t1", Hostname: "web1.west.example.com", IpAddress: "10.0.2.1", Revoked: true},
 			},
 		},
@@ -901,15 +901,15 @@ func TestDrainSpokeNotFound(t *testing.T) {
 }
 
 func TestDrainSpokeReassignError(t *testing.T) {
-	// Enrollment on target fails, so the thrall fails.
+	// Enrollment on target fails, so the envoy fails.
 	srcMock := &mockAdminClient{
-		listThrallsResp: &pb.ListThrallsResponse{
-			Thralls: []*pb.Thrall{
+		listEnvoysResp: &pb.ListEnvoysResponse{
+			Envoys: []*pb.Envoy{
 				{Id: "t1", Hostname: "web1.east.example.com", IpAddress: "10.0.1.1"},
 			},
 		},
-		getThrallResp: &pb.GetThrallResponse{
-			Thrall: &pb.Thrall{Id: "t1", Hostname: "web1.east.example.com", IpAddress: "10.0.1.1"},
+		getEnvoyResp: &pb.GetEnvoyResponse{
+			Envoy: &pb.Envoy{Id: "t1", Hostname: "web1.east.example.com", IpAddress: "10.0.1.1"},
 		},
 	}
 

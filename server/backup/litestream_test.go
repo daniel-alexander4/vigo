@@ -9,7 +9,7 @@ import (
 )
 
 func TestParseReplicaURL_S3(t *testing.T) {
-	rt, bucket, path, err := parseReplicaURL("s3://my-bucket/hobnob/backups")
+	rt, bucket, path, err := parseReplicaURL("s3://my-bucket/vigo/backups")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,8 +19,8 @@ func TestParseReplicaURL_S3(t *testing.T) {
 	if bucket != "my-bucket" {
 		t.Errorf("bucket = %q, want my-bucket", bucket)
 	}
-	if path != "hobnob/backups" {
-		t.Errorf("path = %q, want hobnob/backups", path)
+	if path != "vigo/backups" {
+		t.Errorf("path = %q, want vigo/backups", path)
 	}
 }
 
@@ -41,7 +41,7 @@ func TestParseReplicaURL_GCS(t *testing.T) {
 }
 
 func TestParseReplicaURL_SFTP(t *testing.T) {
-	rt, bucket, path, err := parseReplicaURL("sftp://backup.example.com/srv/hobnob")
+	rt, bucket, path, err := parseReplicaURL("sftp://backup.example.com/srv/vigo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,21 +51,21 @@ func TestParseReplicaURL_SFTP(t *testing.T) {
 	if bucket != "backup.example.com" {
 		t.Errorf("host = %q, want backup.example.com", bucket)
 	}
-	if path != "srv/hobnob" {
-		t.Errorf("path = %q, want srv/hobnob", path)
+	if path != "srv/vigo" {
+		t.Errorf("path = %q, want srv/vigo", path)
 	}
 }
 
 func TestParseReplicaURL_File(t *testing.T) {
-	rt, bucket, path, err := parseReplicaURL("file:///mnt/backup/hobnob")
+	rt, bucket, path, err := parseReplicaURL("file:///mnt/backup/vigo")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rt != "file" {
 		t.Errorf("type = %q, want file", rt)
 	}
-	if bucket != "/mnt/backup/hobnob" {
-		t.Errorf("path = %q, want /mnt/backup/hobnob", bucket)
+	if bucket != "/mnt/backup/vigo" {
+		t.Errorf("path = %q, want /mnt/backup/vigo", bucket)
 	}
 	if path != "" {
 		t.Errorf("extra path = %q, want empty", path)
@@ -94,8 +94,8 @@ func TestParseReplicaURL_NoScheme(t *testing.T) {
 
 func TestGenerateConfig_S3(t *testing.T) {
 	cfg := Config{
-		URL:             "s3://my-bucket/hobnob",
-		DBPath:          "/srv/hobnob/db/hobnob.db",
+		URL:             "s3://my-bucket/vigo",
+		DBPath:          "/srv/vigo/db/vigo.db",
 		AccessKeyID:     "AKID",
 		SecretAccessKey: "SECRET",
 		Region:          "us-west-2",
@@ -107,10 +107,10 @@ func TestGenerateConfig_S3(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"path: /srv/hobnob/db/hobnob.db",
+		"path: /srv/vigo/db/vigo.db",
 		"type: s3",
 		"bucket: my-bucket",
-		"path: hobnob",
+		"path: vigo",
 		"region: us-west-2",
 		"retention: 168h",
 		"sync-interval: 5s",
@@ -123,8 +123,8 @@ func TestGenerateConfig_S3(t *testing.T) {
 
 func TestGenerateConfig_S3_MinIO(t *testing.T) {
 	cfg := Config{
-		URL:            "s3://backup/hobnob",
-		DBPath:         "/data/hobnob.db",
+		URL:            "s3://backup/vigo",
+		DBPath:         "/data/vigo.db",
 		Endpoint:       "http://minio:9000",
 		ForcePathStyle: true,
 	}
@@ -144,8 +144,8 @@ func TestGenerateConfig_S3_MinIO(t *testing.T) {
 
 func TestGenerateConfig_File(t *testing.T) {
 	cfg := Config{
-		URL:    "file:///mnt/backup/hobnob",
-		DBPath: "/data/hobnob.db",
+		URL:    "file:///mnt/backup/vigo",
+		DBPath: "/data/vigo.db",
 	}
 	content, err := GenerateConfig(cfg)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestGenerateConfig_File(t *testing.T) {
 	}
 	for _, want := range []string{
 		"type: file",
-		"path: /mnt/backup/hobnob",
+		"path: /mnt/backup/vigo",
 		"retention: 720h",
 		"sync-interval: 1s",
 	} {

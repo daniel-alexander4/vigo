@@ -4,11 +4,11 @@ title: HITRUST CSF Compliance
 
 # HITRUST CSF Compliance
 
-HITRUST CSF (Common Security Framework) harmonizes HIPAA, NIST 800-53, ISO 27001, PCI DSS, and other frameworks into a single certifiable standard. Hobnob maps its technical controls to HITRUST CSF control references across 8 of the 19 control domains.
+HITRUST CSF (Common Security Framework) harmonizes HIPAA, NIST 800-53, ISO 27001, PCI DSS, and other frameworks into a single certifiable standard. Vigo maps its technical controls to HITRUST CSF control references across 8 of the 19 control domains.
 
 ## Coverage Summary
 
-Hobnob satisfies or provides evidence for **31 HITRUST CSF control references** across the technically enforceable domains. The remaining domains (HR Security, Physical Security, Privacy Practices, etc.) require organizational policies that no configuration management tool can automate.
+Vigo satisfies or provides evidence for **31 HITRUST CSF control references** across the technically enforceable domains. The remaining domains (HR Security, Physical Security, Privacy Practices, etc.) require organizational policies that no configuration management tool can automate.
 
 | Domain | Name | Controls Mapped | Status |
 |--------|------|----------------|--------|
@@ -25,7 +25,7 @@ Hobnob satisfies or provides evidence for **31 HITRUST CSF control references** 
 
 ### Domain 01 — Access Control
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 01.b | User Registration | Per-user accounts with unique UUIDs, RBAC roles, 13 fine-grained permissions |
 | 01.c | Privilege Management | Fine-grained RBAC: fleet.read, config.publish, users.manage, etc. Role-based defaults |
@@ -37,7 +37,7 @@ Hobnob satisfies or provides evidence for **31 HITRUST CSF control references** 
 
 ### Domain 06 — Compliance
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 06.c | Protection of Organizational Records | AES-256-GCM encrypted backups, SHA-256 integrity verification, file snapshots |
 | 06.g | Compliance with Security Policies | Continuous drift detection with 5-level compliance status, fleet dashboards |
@@ -46,13 +46,13 @@ Hobnob satisfies or provides evidence for **31 HITRUST CSF control references** 
 
 ### Domain 07 — Asset Management
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 07.a | Inventory of Assets | 25 trait collectors auto-discover hardware, OS, network, packages; FleetIndex real-time inventory |
 
 ### Domain 09 — Communications and Operations Management
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 09.a | Documented Operating Procedures | Config-as-code: YAML modules define desired state, version-controlled |
 | 09.b | Change Management | Stage → publish workflow, git history, modlint validation, audit trail |
@@ -67,7 +67,7 @@ Hobnob satisfies or provides evidence for **31 HITRUST CSF control references** 
 
 ### Domain 10 — Systems Acquisition, Development, Maintenance
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 10.f | Cryptographic Controls | AES-256-GCM secrets, mTLS (TLS 1.3), ED25519 signatures, Argon2id KDF |
 | 10.g | Key Management | Auto-generated master key, secret rotation via watcher, certificate renewal |
@@ -78,20 +78,20 @@ Hobnob satisfies or provides evidence for **31 HITRUST CSF control references** 
 
 ### Domain 11 — Incident Management
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 11.a | Reporting Security Events | Webhook + SMTP notifications for compliance drift, threshold breaches |
 | 11.e | Collection of Evidence | Run history, file snapshots, compliance history, tamper-evident audit chain |
 
 ### Domain 12 — Business Continuity
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 12.c | Developing BCPs | Config-as-code enables rapid rebuild; backup + restore; disaster recovery documented |
 
 ### Domain 16 — Endpoint Protection
 
-| Ref | Control | Hobnob Implementation |
+| Ref | Control | Vigo Implementation |
 |-----|---------|----------------------|
 | 16.a | Endpoint Protection | Package/service executors enforce AV/EDR/firewall on all managed endpoints |
 
@@ -101,25 +101,25 @@ Hobnob satisfies or provides evidence for **31 HITRUST CSF control references** 
 
 ```bash
 # JSON report
-hobnobcli report hitrust
+vigogo report hitrust
 
-# HTML report (printable, Hobnob-branded)
-hobnobcli report hitrust --format html --output hitrust-report.html
+# HTML report (printable, Vigo-branded)
+vigogo report hitrust --format html --output hitrust-report.html
 ```
 
 ### REST API
 
 ```bash
 # JSON
-curl -s https://hobnob:8443/api/v1/report/hitrust | jq .
+curl -s https://vigo:8443/api/v1/report/hitrust | jq .
 
 # HTML
-curl -s https://hobnob:8443/api/v1/report/hitrust.html > hitrust-report.html
+curl -s https://vigo:8443/api/v1/report/hitrust.html > hitrust-report.html
 ```
 
 ## Cross-Reference to Other Frameworks
 
-HITRUST CSF harmonizes multiple standards. The controls Hobnob satisfies map across:
+HITRUST CSF harmonizes multiple standards. The controls Vigo satisfies map across:
 
 | HITRUST Ref | HIPAA | NIST 800-53 | ISO 27001 | PCI DSS |
 |-------------|-------|-------------|-----------|---------|
@@ -154,7 +154,7 @@ These HITRUST CSF domains require organizational policies and human processes:
 
 ## HITRUST Assessment Preparation
 
-For a formal HITRUST assessment (r2, i1, or e1), Hobnob provides:
+For a formal HITRUST assessment (r2, i1, or e1), Vigo provides:
 
 1. **Automated evidence** — compliance reports, audit logs, drift detection results
 2. **Technical control documentation** — this mapping document + architecture docs

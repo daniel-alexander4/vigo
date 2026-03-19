@@ -6,15 +6,15 @@ Configuration management at scale creates repetition. You have 50 web servers th
 
 Other CM systems solve this with full programming languages (Puppet's DSL, Chef's Ruby, Ansible's Jinja2 + Python). These are powerful but sacrifice readability — an operator unfamiliar with the tool can't glance at a config and understand it.
 
-Hobnob solves this differently: **layered composition in plain YAML**, with each layer handling a specific type of reuse. No DSL, no programming language, no templating for control flow. Every config file is readable by anyone who knows YAML.
+Vigo solves this differently: **layered composition in plain YAML**, with each layer handling a specific type of reuse. No DSL, no programming language, no templating for control flow. Every config file is readable by anyone who knows YAML.
 
 ## The Composition Stack
 
-Hobnob provides six layers of composition, from broadest to most specific:
+Vigo provides six layers of composition, from broadest to most specific:
 
 ```
-directory inheritance → shared base config via common.hnb at directory levels
-  thrall glob match   → assigns roles/modules to groups of machines
+directory inheritance → shared base config via common.vgo at directory levels
+  envoy glob match   → assigns roles/modules to groups of machines
     roles             → bundles modules into reusable profiles
       modules         → packages related resources together
         resource tools → foreach, case, conditional_block, when, defaults
@@ -25,17 +25,17 @@ Each layer eliminates a specific type of repetition.
 
 ## Layer 0: Directory Inheritance — Shared Base Config
 
-**Problem:** Every machine needs sshd, monitoring, and NTP. Every production machine also needs log shipping and audit logging. You don't want to repeat these on every thrall entry.
+**Problem:** Every machine needs sshd, monitoring, and NTP. Every production machine also needs log shipping and audit logging. You don't want to repeat these on every envoy entry.
 
-**Solution:** Place `common.hnb` files at directory levels. Everything in subdirectories inherits automatically.
+**Solution:** Place `common.vgo` files at directory levels. Everything in subdirectories inherits automatically.
 
 ```
 policy/stage/
-├── common.hnb            # modules: [sshd, ntp, monitoring]
+├── common.vgo            # modules: [sshd, ntp, monitoring]
 ├── production/
-│   ├── common.hnb        # modules: [log-shipping, auditd]
-│   └── web/web.hnb       # match: "web*.prod.example.com", modules: [nginx]
-└── staging/staging.hnb   # match: "*.staging.example.com", modules: [debug-tools]
+│   ├── common.vgo        # modules: [log-shipping, auditd]
+│   └── web/web.vgo       # match: "web*.prod.example.com", modules: [nginx]
+└── staging/staging.vgo   # match: "*.staging.example.com", modules: [debug-tools]
 ```
 
 A production web server gets: `sshd, ntp, monitoring, log-shipping, auditd, nginx`. A staging box gets: `sshd, ntp, monitoring, debug-tools`. Zero duplication.
@@ -48,11 +48,11 @@ See [Config Format: Directory Inheritance](config-format.md#directory-inheritanc
 
 **Problem:** 50 web servers need the same configuration.
 
-**Solution:** One thrall entry with a glob pattern covers all of them.
+**Solution:** One envoy entry with a glob pattern covers all of them.
 
 ```yaml
-# thralls/web-servers.hnb
-thralls:
+# envoys/web-servers.vgo
+envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
@@ -65,7 +65,7 @@ This single entry covers `web01.prod.example.com` through `web99.prod.example.co
 **Split by environment with the same role:**
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
@@ -93,27 +93,27 @@ Three entries cover an entire multi-environment web fleet with different tuning 
 **Per-host overrides with `vars_from`:**
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
     vars:
       workers: 16
     vars_from:
-      - "vars/web-common.hnb"
-      - "vars/{{ .Hostname }}.hnb"  # host-specific overrides, skipped if missing
+      - "vars/web-common.vgo"
+      - "vars/{{ .Hostname }}.vgo"  # host-specific overrides, skipped if missing
 ```
 
 This gives every web server the same base config, with an optional per-host override file for snowflakes.
 
 ## Layer 2: Roles — Bundle Modules into Profiles
 
-**Problem:** A "webserver" needs nginx, logrotate, monitoring, and security hardening. Listing all four modules in every thrall entry is repetitive.
+**Problem:** A "webserver" needs nginx, logrotate, monitoring, and security hardening. Listing all four modules in every envoy entry is repetitive.
 
 **Solution:** Define a role once, assign it everywhere.
 
 ```yaml
-# roles/webserver.hnb
+# roles/webserver.vgo
 name: webserver
 modules:
   - nginx
@@ -123,12 +123,12 @@ modules:
     when: "!is_container"
 ```
 
-Now thrall entries just say `roles: [webserver]`.
+Now envoy entries just say `roles: [webserver]`.
 
 **Role includes for shared foundations:**
 
 ```yaml
-# roles/base.hnb
+# roles/base.vgo
 name: base
 modules:
   - ntp
@@ -136,14 +136,14 @@ modules:
   - sudo-config
   - log-forwarding
 
-# roles/webserver.hnb
+# roles/webserver.vgo
 name: webserver
 includes: [base]          # pulls in ntp, sshd, sudo, logging
 modules:
   - nginx
   - logrotate
 
-# roles/database.hnb
+# roles/database.vgo
 name: database
 includes: [base]          # same foundation
 modules:
@@ -175,7 +175,7 @@ modules:
 **Solution:** A module bundles these into a single reusable unit with configurable variables.
 
 ```yaml
-# modules/nginx.hnb
+# modules/nginx.vgo
 name: nginx
 
 vars:
@@ -203,10 +203,10 @@ resources:
     depends_on: [nginx-package]
 ```
 
-Thrall entries override the module's default vars:
+Envoy entries override the module's default vars:
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.prod.example.com"
     roles: [webserver]
     vars:
@@ -244,7 +244,7 @@ resources:
 **Module ordering with `depends_on` and `before`:**
 
 ```yaml
-# modules/app.hnb
+# modules/app.vgo
 name: app
 depends_on: [nginx, postgres]   # app module runs after nginx and postgres modules
 
@@ -305,11 +305,11 @@ resources:
     case: "{{ .Traits.os.family }}"
     match:
       debian:
-        target_path: /etc/apt/apt.conf.d/99-hobnob
+        target_path: /etc/apt/apt.conf.d/99-vigo
         content: |
           APT::Install-Recommends "false";
       redhat:
-        target_path: /etc/yum.conf.d/hobnob.conf
+        target_path: /etc/yum.conf.d/vigo.conf
         content: |
           installonly_limit=3
 ```
@@ -391,7 +391,7 @@ resources:
 **Problem:** Production, staging, and dev need different values for the same variables.
 
 ```yaml
-thralls:
+envoys:
   - match: "app*.example.com"
     roles: [app-server]
     vars:
@@ -434,18 +434,18 @@ resources:
             - targets: ['localhost:{{ .Vars.exporter_port }}']
 ```
 
-Templates resolve at check-in time using the thrall's actual traits and resolved vars. They're only allowed in `content:` attributes and `source:` template files — not in `command:`, `target_path:`, or other parameters.
+Templates resolve at check-in time using the envoy's actual traits and resolved vars. They're only allowed in `content:` attributes and `source:` template files — not in `command:`, `target_path:`, or other parameters.
 
 ## Putting It All Together
 
 A complete example managing a web fleet across two environments:
 
 ```yaml
-# roles/base.hnb
+# roles/base.vgo
 name: base
 modules: [ntp, sshd-config, node-exporter]
 
-# roles/webserver.hnb
+# roles/webserver.vgo
 name: webserver
 includes: [base]
 modules:
@@ -454,7 +454,7 @@ modules:
   - name: crowdsec
     when: "os_family('debian')"
 
-# modules/nginx.hnb
+# modules/nginx.vgo
 name: nginx
 vars:
   nginx_port: 80
@@ -482,8 +482,8 @@ resources:
     state: running
     enabled: true
 
-# thralls/web-fleet.hnb
-thralls:
+# envoys/web-fleet.vgo
+envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
@@ -492,7 +492,7 @@ thralls:
       vhosts:
         - {name: app, domain: app.example.com}
         - {name: api, domain: api.example.com}
-    vars_from: ["vars/{{ .Hostname }}.hnb"]
+    vars_from: ["vars/{{ .Hostname }}.vgo"]
 
   - match: "web*.staging.example.com"
     environment: staging
@@ -508,15 +508,15 @@ thralls:
 - `base` role shared across webserver, database, and any future role
 - `webserver` role composes base + nginx + logrotate + conditional security
 - `nginx` module is fully parameterized — vhosts driven by a var list
-- One thrall entry covers all production web servers
+- One envoy entry covers all production web servers
 - Per-host overrides available via `vars_from` for snowflakes
 - Templates inject actual hostnames, ports, and domains at check-in time
 
-**No duplication.** Adding a new vhost: add one entry to the `vhosts` list. Adding a new environment: add one thrall entry with the environment name. Adding monitoring to all servers: add the module to `base` role. Each change happens in exactly one place.
+**No duplication.** Adding a new vhost: add one entry to the `vhosts` list. Adding a new environment: add one envoy entry with the environment name. Adding monitoring to all servers: add the module to `base` role. Each change happens in exactly one place.
 
 ## Related
 
-- [Config Format](config-format.md) — Module, role, and thrall structure
+- [Config Format](config-format.md) — Module, role, and envoy structure
 - [Resource Language](resource-language.md) — foreach, case, conditional_block, defaults, stream_edit
 - [When Expressions](when-expressions.md) — Conditional logic syntax
 - [Templates](templates.md) — Go template expressions in content

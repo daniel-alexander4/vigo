@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/secrets"
-	"github.com/hobnob/hobnob/server/validate"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/validate"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -133,8 +133,8 @@ func runDoctorPreStart() error {
 		checks = append(checks, preStartCheck{"tls_certs", "skip", "config unavailable"})
 	}
 
-	// 5. config_dir — thrall-configs/ exists with modules/, roles/, thralls/
-	configDir := "thrall-configs"
+	// 5. config_dir — envoy-configs/ exists with modules/, roles/, envoys/
+	configDir := "envoy-configs"
 	if dc := checkConfigDir(configDir); dc.status == "fail" {
 		hasFailure = true
 		checks = append(checks, dc)
@@ -142,7 +142,7 @@ func runDoctorPreStart() error {
 		checks = append(checks, dc)
 	}
 
-	// 6. config_validation — load all .hnb module files and validate
+	// 6. config_validation — load all .vgo module files and validate
 	checks = append(checks, checkConfigValidation(configDir))
 
 	// 7. spanner
@@ -250,7 +250,7 @@ func checkTLSCerts(certFile, keyFile string) preStartCheck {
 }
 
 func checkConfigDir(dir string) preStartCheck {
-	subdirs := []string{"modules", "roles", "thralls"}
+	subdirs := []string{"modules", "roles", "envoys"}
 	var missing []string
 	for _, sub := range subdirs {
 		path := filepath.Join(dir, sub)
@@ -286,7 +286,7 @@ func checkConfigValidation(dir string) preStartCheck {
 			return nil
 		}
 		ext := filepath.Ext(path)
-		if ext != ".hnb" && ext != ".yaml" && ext != ".yml" {
+		if ext != ".vgo" && ext != ".yaml" && ext != ".yml" {
 			return nil
 		}
 

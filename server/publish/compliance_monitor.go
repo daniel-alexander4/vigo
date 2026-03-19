@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 // ComplianceMonitor watches fleet compliance after a config reload.
@@ -80,7 +80,7 @@ func (m *ComplianceMonitor) run(ctx context.Context, threshold int, window time.
 
 			summary := m.fleetIndex.ComplianceSummary()
 			if summary.Total == 0 {
-				slog.Debug("compliance monitor: no thralls enrolled, skipping check")
+				slog.Debug("compliance monitor: no envoys enrolled, skipping check")
 				continue
 			}
 

@@ -1,10 +1,10 @@
 # First Module
 
-This walkthrough builds a complete nginx module with package installation, config file management, and service control — demonstrating the core patterns you'll use in every Hobnob module.
+This walkthrough builds a complete nginx module with package installation, config file management, and service control — demonstrating the core patterns you'll use in every Vigo module.
 
 ## Module Structure
 
-A module is a YAML file with a `.hnb` extension in `policy/stage/modules/`. It contains:
+A module is a YAML file with a `.vgo` extension in `policy/stage/modules/`. It contains:
 
 ```yaml
 name: module-name
@@ -18,7 +18,7 @@ resources:
 
 ## Step 1: Create the Module
 
-Create `policy/stage/modules/nginx.hnb`:
+Create `policy/stage/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -69,17 +69,17 @@ This module demonstrates three key patterns:
 
 ![Resource Dependency Graph](img/resource-dag.svg)
 
-## Step 3: Assign to a Thrall
+## Step 3: Assign to a Envoy
 
-Create a directory for your web servers and add a thrall entry:
+Create a directory for your web servers and add a envoy entry:
 
 ```bash
 mkdir -p policy/stage/web
 ```
 
 ```yaml
-# policy/stage/web/web.hnb
-thralls:
+# policy/stage/web/web.vgo
+envoys:
   - match: "web*.example.com"
     modules: [nginx]
     vars:
@@ -89,11 +89,11 @@ thralls:
 
 Node-level `vars` override the module's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have modules that should apply to *all* your thralls (like SSH and monitoring), put them in `policy/stage/common.hnb` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
+**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `policy/stage/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
-For multiple modules, group them into a role. Create `policy/stage/roles.hnb`:
+For multiple modules, group them into a role. Create `policy/stage/roles.vgo`:
 
 ```yaml
 roles:
@@ -107,7 +107,7 @@ roles:
 Then assign the role:
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.example.com"
     roles: [webserver]
     vars:
@@ -119,7 +119,7 @@ thralls:
 Use `environment_overrides` to vary config by environment:
 
 ```yaml
-thralls:
+envoys:
   - match: "web*.example.com"
     environment: production
     roles: [webserver]
@@ -132,7 +132,7 @@ thralls:
         nginx_port: 443
 ```
 
-When the thrall's environment is `production`, `nginx_port` resolves to `443`.
+When the envoy's environment is `production`, `nginx_port` resolves to `443`.
 
 ## Step 6: Conditional Resources
 
@@ -151,14 +151,14 @@ resources:
     when: "os_family('redhat')"
 ```
 
-The agent evaluates `when:` expressions using the thrall's traits. Only the matching resource runs.
+The agent evaluates `when:` expressions using the envoy's traits. Only the matching resource runs.
 
 ## Step 7: Publish and Push
 
 Publish the config to make it active:
 
 ```bash
-hobnobcli config publish
+vigogo config publish
 ```
 
 The publish command runs your module through the **module linter**, which:
@@ -184,19 +184,19 @@ These `#~` comments are regenerated on every publish — don't edit them. Use pl
 Then force an immediate check-in:
 
 ```bash
-hobnobcli push --target "web1.example.com"
+vigogo push --target "web1.example.com"
 ```
 
 Check the run result:
 
 ```bash
-hobnobcli runs list --limit 1
+vigogo runs list --limit 1
 ```
 
-View the thrall's applied config:
+View the envoy's applied config:
 
 ```bash
-hobnobcli thralls show web1.example.com
+vigogo envoys show web1.example.com
 ```
 
 ## What's Next

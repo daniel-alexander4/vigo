@@ -68,11 +68,11 @@ func mockIsopassServer(t *testing.T) *httptest.Server {
 		json.NewDecoder(r.Body).Decode(&body)
 
 		secrets := map[string][]map[string]any{
-			"hobnob/db/dsn": {
-				{"id": "secret-1", "name": "hobnob/db/dsn", "value": "/srv/hobnob/db/hobnob.db", "version": 2},
+			"vigo/db/dsn": {
+				{"id": "secret-1", "name": "vigo/db/dsn", "value": "/srv/vigo/db/vigo.db", "version": 2},
 			},
-			"hobnob/tls/cert": {
-				{"id": "secret-2", "name": "hobnob/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB...", "version": 1},
+			"vigo/tls/cert": {
+				{"id": "secret-2", "name": "vigo/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB...", "version": 1},
 			},
 		}
 
@@ -95,9 +95,9 @@ func TestIsopassGet(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	val, err := p.Get(context.Background(), "vigo/db/dsn")
 	require.NoError(t, err)
-	assert.Equal(t, "/srv/hobnob/db/hobnob.db", val)
+	assert.Equal(t, "/srv/vigo/db/vigo.db", val)
 }
 
 func TestIsopassGetNotFound(t *testing.T) {
@@ -121,7 +121,7 @@ func TestIsopassGetBytes(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	val, err := p.GetBytes(context.Background(), "hobnob/tls/cert")
+	val, err := p.GetBytes(context.Background(), "vigo/tls/cert")
 	require.NoError(t, err)
 	assert.Equal(t, []byte("-----BEGIN CERTIFICATE-----\nMIIB..."), val)
 }
@@ -134,7 +134,7 @@ func TestIsopassGetVersion(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	ver, err := p.GetVersion(context.Background(), "hobnob/db/dsn")
+	ver, err := p.GetVersion(context.Background(), "vigo/db/dsn")
 	require.NoError(t, err)
 	assert.Equal(t, 2, ver)
 }
@@ -148,11 +148,11 @@ func TestIsopassTokenExchange(t *testing.T) {
 	defer p.Close()
 
 	// First call should trigger token exchange.
-	_, err = p.Get(context.Background(), "hobnob/db/dsn")
+	_, err = p.Get(context.Background(), "vigo/db/dsn")
 	require.NoError(t, err)
 
 	// Second call should reuse token (no re-exchange).
-	_, err = p.Get(context.Background(), "hobnob/db/dsn")
+	_, err = p.Get(context.Background(), "vigo/db/dsn")
 	require.NoError(t, err)
 }
 
@@ -171,9 +171,9 @@ func TestIsopassTokenRenewalOnExpiry(t *testing.T) {
 	p.mu.Unlock()
 
 	// Call should trigger a new token exchange.
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	val, err := p.Get(context.Background(), "vigo/db/dsn")
 	require.NoError(t, err)
-	assert.Equal(t, "/srv/hobnob/db/hobnob.db", val)
+	assert.Equal(t, "/srv/vigo/db/vigo.db", val)
 }
 
 func TestIsopassAuthFailure(t *testing.T) {
@@ -184,7 +184,7 @@ func TestIsopassAuthFailure(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	_, err = p.Get(context.Background(), "hobnob/db/dsn")
+	_, err = p.Get(context.Background(), "vigo/db/dsn")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication failed")
 }
@@ -194,6 +194,6 @@ func TestIsopassUnreachable(t *testing.T) {
 	require.NoError(t, err)
 	defer p.Close()
 
-	_, err = p.Get(context.Background(), "hobnob/db/dsn")
+	_, err = p.Get(context.Background(), "vigo/db/dsn")
 	require.Error(t, err)
 }

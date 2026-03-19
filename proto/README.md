@@ -1,12 +1,12 @@
-# Hobnob Protocol Buffers
+# Vigo Protocol Buffers
 
-Protocol Buffer definitions for Hobnob's gRPC services. Defines the agent-facing and admin-facing service contracts, all message types, and REST gateway annotations.
+Protocol Buffer definitions for Vigo's gRPC services. Defines the agent-facing and admin-facing service contracts, all message types, and REST gateway annotations.
 
-- **File:** `proto/hobnob.proto`
-- **Package:** `hobnob.v1`
-- **Go import:** `github.com/hobnob/hobnob/gen/proto/hobnob`
-- **Two services:** HobnobAgent (gRPC-only), HobnobAdmin (gRPC + REST)
-- **Generated code:** `gen/proto/hobnob/`
+- **File:** `proto/vigo.proto`
+- **Package:** `vigo.v1`
+- **Go import:** `github.com/vigo/vigo/gen/proto/vigo`
+- **Two services:** VigoAgent (gRPC-only), VigoAdmin (gRPC + REST)
+- **Generated code:** `gen/proto/vigo/`
 
 ## Regenerating
 
@@ -16,13 +16,13 @@ make proto
 
 This runs `buf generate` which produces:
 
-- `gen/proto/hobnob/hobnob.pb.go` -- message types
-- `gen/proto/hobnob/hobnob_grpc.pb.go` -- gRPC client/server stubs
-- `gen/proto/hobnob/hobnob.pb.gw.go` -- grpc-gateway REST proxy
+- `gen/proto/vigo/vigo.pb.go` -- message types
+- `gen/proto/vigo/vigo_grpc.pb.go` -- gRPC client/server stubs
+- `gen/proto/vigo/vigo.pb.gw.go` -- grpc-gateway REST proxy
 
 ## Services
 
-### HobnobAgent (gRPC-only, port 1530)
+### VigoAgent (gRPC-only, port 1530)
 
 Agent-facing service. All RPCs (except Register) require ED25519 signature verification.
 
@@ -34,7 +34,7 @@ Agent-facing service. All RPCs (except Register) require ED25519 signature verif
 | ReportTraits | ReportTraitsRequest | ReportTraitsResponse | Submit collected traits |
 | DownloadCustomTrait | DownloadCustomTraitRequest | DownloadCustomTraitResponse | Fetch custom trait executable |
 
-### HobnobAdmin (gRPC + REST, port 8443)
+### VigoAdmin (gRPC + REST, port 8443)
 
 Admin-facing service with grpc-gateway REST annotations.
 
@@ -43,12 +43,12 @@ Admin-facing service with grpc-gateway REST annotations.
 | AddApprovedPattern | POST | /api/v1/approved | Add enrollment pattern |
 | ListApprovedPatterns | GET | /api/v1/approved | List patterns |
 | RevokeApprovedPattern | DELETE | /api/v1/approved/{id} | Remove pattern |
-| ListThralls | GET | /api/v1/thralls | List thralls |
-| GetThrall | GET | /api/v1/thralls/{id} | Get thrall details |
-| RevokeThrall | POST | /api/v1/thralls/{id}/revoke | Revoke thrall |
-| DeleteThrall | DELETE | /api/v1/thralls/{id} | Delete thrall |
+| ListEnvoys | GET | /api/v1/envoys | List envoys |
+| GetEnvoy | GET | /api/v1/envoys/{id} | Get envoy details |
+| RevokeEnvoy | POST | /api/v1/envoys/{id}/revoke | Revoke envoy |
+| DeleteEnvoy | DELETE | /api/v1/envoys/{id} | Delete envoy |
 | ForcePush | POST | /api/v1/push | Trigger check-in |
-| DryRun | POST | /api/v1/thralls/{thrall_id}/dry-run | Preview changes |
+| DryRun | POST | /api/v1/envoys/{envoy_id}/dry-run | Preview changes |
 | ListRuns | GET | /api/v1/runs | List runs |
 | GetRun | GET | /api/v1/runs/{id} | Get run details |
 | GenerateToken | POST | /api/v1/tokens | Generate enrollment token |
@@ -56,8 +56,8 @@ Admin-facing service with grpc-gateway REST annotations.
 | ListWebhooks | GET | /api/v1/webhooks | List webhooks |
 | DeleteWebhook | DELETE | /api/v1/webhooks/{id} | Remove webhook |
 | GetComplianceSummary | GET | /api/v1/compliance | Fleet compliance |
-| GetThrallCompliance | GET | /api/v1/thralls/{id}/compliance | Thrall compliance |
-| Rollback | POST | /api/v1/thralls/{thrall_id}/rollback | Rollback changes |
+| GetEnvoyCompliance | GET | /api/v1/envoys/{id}/compliance | Envoy compliance |
+| Rollback | POST | /api/v1/envoys/{envoy_id}/rollback | Rollback changes |
 | ListPackages | GET | /api/v1/packages | List packages |
 | ListPackageDrift | GET | /api/v1/packages/drift | Package drift |
 | PromoteEnv | POST | /api/v1/env/promote | Promote env vars |

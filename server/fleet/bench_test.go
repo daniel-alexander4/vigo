@@ -20,7 +20,7 @@ func populateIndex(n int) *FleetIndex {
 	fi := NewFleetIndex()
 	distros := []string{"ubuntu", "debian", "centos", "rhel", "suse"}
 	for i := 0; i < n; i++ {
-		fi.AddThrall(ThrallState{
+		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("web%04d.prod.example.com", i),
 			IP:               fmt.Sprintf("10.0.%d.%d", i/256, i%256),
@@ -35,19 +35,19 @@ func populateIndex(n int) *FleetIndex {
 	return fi
 }
 
-func BenchmarkFleetIndexGetThrall(b *testing.B) {
+func BenchmarkFleetIndexGetEnvoy(b *testing.B) {
 	fi := populateIndex(10000)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		fi.GetThrall(fmt.Sprintf("t-%d", i%10000))
+		fi.GetEnvoy(fmt.Sprintf("t-%d", i%10000))
 	}
 }
 
-func BenchmarkFleetIndexGetThrallLite(b *testing.B) {
+func BenchmarkFleetIndexGetEnvoyLite(b *testing.B) {
 	fi := populateIndex(10000)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		fi.GetThrallLite(fmt.Sprintf("t-%d", i%10000))
+		fi.GetEnvoyLite(fmt.Sprintf("t-%d", i%10000))
 	}
 }
 

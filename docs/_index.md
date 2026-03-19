@@ -1,12 +1,12 @@
-# Hobnob Documentation
+# Vigo Documentation
 
-Hobnob is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (thralls) pull desired state from a central server, apply idempotent changes, and report results back. 72 built-in resource types across 8 platforms. No DSL — plain YAML.
+Vigo is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (envoys) pull desired state from a central server, apply idempotent changes, and report results back. 72 built-in resource types across 8 platforms. No DSL — plain YAML.
 
 ## Overview
 
-- [What is Hobnob](overview/overview.md) — Architecture, design principles, how it works
+- [What is Vigo](overview/overview.md) — Architecture, design principles, how it works
 - [Fact Sheet](overview/fact-sheet.md) — Quick reference of capabilities
-- [Differentiators](overview/differentiators.md) — What makes Hobnob different
+- [Differentiators](overview/differentiators.md) — What makes Vigo different
 - [Technical Comparison](overview/technical-comparison.md) — Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine
 
 ## Getting Started
@@ -14,8 +14,8 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [Installation](getting-started/installation.md) — Docker setup, first boot
 - [Server Configuration](getting-started/server-config.md) — Full server.yaml reference
 - [Bootstrap](getting-started/bootstrap.md) — Agent enrollment on all platforms
-- [Quickstart](getting-started/quickstart.md) — 10-minute first-thrall walkthrough
-- [First Module](getting-started/first-module.md) — Write your first .hnb module
+- [Quickstart](getting-started/quickstart.md) — 10-minute first-envoy walkthrough
+- [First Module](getting-started/first-module.md) — Write your first .vgo module
 
 ## Supported Platforms
 
@@ -31,7 +31,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 ## Concepts
 
 - [Architecture](concepts/architecture.md) — Three binaries, ports, data flows
-- [Config Format](concepts/config-format.md) — Modules, roles, thralls, vars
+- [Config Format](concepts/config-format.md) — Modules, roles, envoys, vars
 - [Composition Patterns](concepts/composition-patterns.md) — Five layers of config reuse
 - [Resource Language](concepts/resource-language.md) — foreach, case/match, conditional_block, defaults
 - [Resource DAG](concepts/resource-dag.md) — depends_on, notify, subscribes
@@ -75,7 +75,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [Database](operations/database.md) — SQLite, PostgreSQL, schema, retention
 - [FleetIndex](operations/fleet-index.md) — In-memory index internals
 - [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting
-- [Maintenance Windows](operations/maintenance-windows.md) — Per-thrall and global change freeze
+- [Maintenance Windows](operations/maintenance-windows.md) — Per-envoy and global change freeze
 - [Drift Alerting](operations/drift-alerting.md) — Fleet compliance threshold monitoring
 - [Audit Log](operations/audit.md) — Unified audit trail
 - [Tamper-Evident Audit](operations/tamper-evident-audit.md) — SHA-256 hash chain for tamper detection
@@ -108,14 +108,14 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 
 - [Executors](executors/_index.md) — 72 resource types across all platforms
 - [Trait Collectors](traits/_index.md) — System fact collectors
-- [Agent CLI](cli/agent.md) — hobnob agent commands (daemon, status, traits, run)
-- [CLI Reference](cli/_index.md) — hobnobcli admin commands
+- [Agent CLI](cli/agent.md) — vigo agent commands (daemon, status, traits, run)
+- [CLI Reference](cli/_index.md) — vigogo admin commands
 - [API Reference](api/_index.md) — gRPC and REST APIs
 
 ## Web UI
 
 - [Dashboard](ui/dashboard.md) — Fleet overview
-- [Thralls](ui/thralls.md) — Managed node list and detail
+- [Envoys](ui/envoys.md) — Managed node list and detail
 - [Compliance](ui/compliance.md) — Compliance gauge and breakdown
 - [Runs](ui/runs.md) — Convergence run history
 - [Pushes](ui/push.md) — Ad-hoc push execution

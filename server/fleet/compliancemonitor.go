@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/webhook"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/webhook"
 )
 
 // ComplianceMonitor periodically checks fleet compliance percentage against a
@@ -20,14 +20,14 @@ type ComplianceMonitor struct {
 	fleetIndex  *FleetIndex
 	threshold   float64
 	dispatcher  *webhook.Dispatcher
-	notifier    *hobnobsmtp.Notifier
+	notifier    *vigosmtp.Notifier
 	alertActive bool
 	mu          sync.Mutex
 }
 
 // NewComplianceMonitor creates a compliance monitor that fires alerts when fleet
 // compliance drops below the given threshold percentage (e.g., 95.0 = 95%).
-func NewComplianceMonitor(fi *FleetIndex, threshold float64, dispatcher *webhook.Dispatcher, notifier *hobnobsmtp.Notifier) *ComplianceMonitor {
+func NewComplianceMonitor(fi *FleetIndex, threshold float64, dispatcher *webhook.Dispatcher, notifier *vigosmtp.Notifier) *ComplianceMonitor {
 	return &ComplianceMonitor{
 		fleetIndex: fi,
 		threshold:  threshold,
@@ -101,7 +101,7 @@ func (m *ComplianceMonitor) fireAlert(pct float64) {
 	}
 
 	if m.notifier != nil {
-		m.notifier.Notify(hobnobsmtp.Event{
+		m.notifier.Notify(vigosmtp.Event{
 			Name:      "compliance.threshold",
 			Timestamp: time.Now(),
 			Details:   details,

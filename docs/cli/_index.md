@@ -1,34 +1,34 @@
 # CLI Reference
 
-Hobnob has two CLI binaries:
+Vigo has two CLI binaries:
 
-- **`hobnob`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands.
-- **`hobnobcli`** -- the admin CLI that talks to the server's REST API (documented below).
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands.
+- **`vigogo`** -- the admin CLI that talks to the server's REST API (documented below).
 
-When invoked as `hnbvi`, `hobnobcli` behaves as `hobnobcli vi <args>`.
+When invoked as `hnbvi`, `vigogo` behaves as `vigogo vi <args>`.
 
 ---
 
-## hobnobcli
+## vigogo
 
-`hobnobcli` communicates with the server's REST API to manage enrollment, thralls, operations, orchestration, secrets, and spanner.
+`vigogo` communicates with the server's REST API to manage enrollment, envoys, operations, orchestration, secrets, and spanner.
 
 ## Global Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--server` | `https://localhost:8443` | Base URL for the Hobnob REST API |
+| `--server` | `https://localhost:8443` | Base URL for the Vigo REST API |
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | [approved](approved.md) | Manage approved enrollment patterns |
-| [thralls](thralls.md) | Manage enrolled thralls (alias: `nodes`) |
+| [envoys](envoys.md) | Manage enrolled envoys (alias: `nodes`) |
 | [tokens](tokens.md) | Manage enrollment tokens |
 | [runs](runs.md) | View run history |
-| [push](push.md) | Dispatch and monitor ad-hoc commands on thralls |
-| [query](query.md) | Query trait values from targeted thralls |
+| [push](push.md) | Dispatch and monitor ad-hoc commands on envoys |
+| [query](query.md) | Query trait values from targeted envoys |
 | [workflow](workflow.md) | Run and monitor multi-step workflows |
 | [packages](packages.md) | Query package audit information |
 | [env](env.md) | Manage environment tier operations |
@@ -37,11 +37,11 @@ When invoked as `hnbvi`, `hobnobcli` behaves as `hobnobcli vi <args>`.
 | [remediation](remediation.md) | Automated drift remediation |
 | [webhooks](webhooks.md) | Manage webhook endpoints |
 | [preview](preview.md) | Dry-run to preview planned changes |
-| [rollback](rollback.md) | Rollback a thrall to a previous state |
-| [validate](validate.md) | Check .hnb files for YAML correctness and idempotency |
+| [rollback](rollback.md) | Rollback a envoy to a previous state |
+| [validate](validate.md) | Check .vgo files for YAML correctness and idempotency |
 | [test](test.md) | Run config tests against expected outcomes |
-| [inventory](inventory.md) | Query thralls by traits |
-| [doctor](doctor.md) | Run health checks against the Hobnob server |
+| [inventory](inventory.md) | Query envoys by traits |
+| [doctor](doctor.md) | Run health checks against the Vigo server |
 | [spanner](spanner.md) | Manage and inspect spanner status |
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
 | [config](config.md) | Config inspection, publish history, rollback, and freeze |
@@ -52,4 +52,4 @@ When invoked as `hnbvi`, `hobnobcli` behaves as `hobnobcli vi <args>`.
 | [backup](backup.md) | Create and restore full server backups |
 | [server](server.md) | Peer replication: promote a server to primary, check status |
 | [db](db.md) | Inspect and maintain the SQLite database |
-| [vi](vi.md) | Edit a .hnb file with syntax highlighting and validation |
+| [vi](vi.md) | Edit a .vgo file with syntax highlighting and validation |

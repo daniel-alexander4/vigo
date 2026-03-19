@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/metrics"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
 // streamManager tracks connected agent streams for push notifications.
@@ -19,15 +19,15 @@ import (
 // When a force-push is requested, it signals the target agent's stream.
 type streamManager struct {
 	mu               sync.RWMutex
-	streams          map[string]*agentStream      // thrall_id → stream
+	streams          map[string]*agentStream      // envoy_id → stream
 	sendBufferSize   int                          // per-agent send channel capacity
-	pending          map[string][]*pendingPromotion // thrall_id → queued messages
+	pending          map[string][]*pendingPromotion // envoy_id → queued messages
 	fleetIndex       *fleet.FleetIndex
 	promotionTimeout time.Duration // default: 12 minutes
 }
 
 type agentStream struct {
-	thrallID  string
+	envoyID  string
 	hostname  string
 	send      chan *pb.ServerStreamMessage
 	done      chan struct{}
@@ -59,23 +59,23 @@ func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, promotionTimeou
 }
 
 // register adds an agent stream. Returns the stream and a cleanup function.
-func (sm *streamManager) register(thrallID, hostname string) (*agentStream, func()) {
+func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func()) {
 	as := &agentStream{
-		thrallID: thrallID,
+		envoyID: envoyID,
 		hostname: hostname,
 		send:     make(chan *pb.ServerStreamMessage, sm.sendBufferSize),
 		done:     make(chan struct{}),
 	}
 
 	sm.mu.Lock()
-	// If there's an existing stream for this thrall, close it.
-	if old, ok := sm.streams[thrallID]; ok {
+	// If there's an existing stream for this envoy, close it.
+	if old, ok := sm.streams[envoyID]; ok {
 		close(old.done)
 	}
-	sm.streams[thrallID] = as
+	sm.streams[envoyID] = as
 
 	// Deliver any pending promotion messages.
-	if pending, ok := sm.pending[thrallID]; ok && len(pending) > 0 {
+	if pending, ok := sm.pending[envoyID]; ok && len(pending) > 0 {
 		as.promoted = true
 		as.workCount = int32(len(pending))
 		for _, p := range pending {
@@ -83,44 +83,44 @@ func (sm *streamManager) register(thrallID, hostname string) (*agentStream, func
 			select {
 			case as.send <- p.msg:
 			default:
-				slog.Warn("promotion dispatch dropped (buffer full)", "thrall_id", thrallID)
+				slog.Warn("promotion dispatch dropped (buffer full)", "envoy_id", envoyID)
 				atomic.AddInt32(&as.workCount, -1)
 			}
 		}
-		delete(sm.pending, thrallID)
+		delete(sm.pending, envoyID)
 		if sm.fleetIndex != nil {
-			sm.fleetIndex.ClearStreamRequested(thrallID)
+			sm.fleetIndex.ClearStreamRequested(envoyID)
 		}
 		slog.Info("delivered pending promotion messages",
-			"thrall_id", thrallID, "count", len(pending))
+			"envoy_id", envoyID, "count", len(pending))
 	}
 	sm.mu.Unlock()
 
 	metrics.StreamsActive.Set(float64(len(sm.streams)))
-	slog.Info("agent stream connected", "thrall_id", thrallID, "hostname", hostname,
+	slog.Info("agent stream connected", "envoy_id", envoyID, "hostname", hostname,
 		"promoted", as.promoted)
 
 	return as, func() {
 		sm.mu.Lock()
 		// Only remove if it's still our stream (could have been replaced).
-		if sm.streams[thrallID] == as {
-			delete(sm.streams, thrallID)
+		if sm.streams[envoyID] == as {
+			delete(sm.streams, envoyID)
 		}
 		metrics.StreamsActive.Set(float64(len(sm.streams)))
 		sm.mu.Unlock()
-		slog.Info("agent stream disconnected", "thrall_id", thrallID, "hostname", hostname)
+		slog.Info("agent stream disconnected", "envoy_id", envoyID, "hostname", hostname)
 	}
 }
 
 // queueForPromotion stores a message for delivery when the agent opens a stream.
 // Sets StreamRequested in FleetIndex so the next unary check-in includes the flag.
 // If the stream is not opened within the promotion timeout, onTimeout is called.
-func (sm *streamManager) queueForPromotion(thrallID string, msg *pb.ServerStreamMessage, onTimeout func()) {
+func (sm *streamManager) queueForPromotion(envoyID string, msg *pb.ServerStreamMessage, onTimeout func()) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
 	// If already connected, deliver immediately.
-	if as, ok := sm.streams[thrallID]; ok {
+	if as, ok := sm.streams[envoyID]; ok {
 		select {
 		case as.send <- msg:
 			atomic.AddInt32(&as.workCount, 1)
@@ -128,7 +128,7 @@ func (sm *streamManager) queueForPromotion(thrallID string, msg *pb.ServerStream
 				as.promoted = true
 			}
 		default:
-			slog.Warn("promotion dispatch dropped (buffer full, stream connected)", "thrall_id", thrallID)
+			slog.Warn("promotion dispatch dropped (buffer full, stream connected)", "envoy_id", envoyID)
 			if onTimeout != nil {
 				go onTimeout()
 			}
@@ -139,7 +139,7 @@ func (sm *streamManager) queueForPromotion(thrallID string, msg *pb.ServerStream
 	timer := time.AfterFunc(sm.promotionTimeout, func() {
 		sm.mu.Lock()
 		// Remove this specific pending entry.
-		pending := sm.pending[thrallID]
+		pending := sm.pending[envoyID]
 		remaining := pending[:0]
 		for _, p := range pending {
 			if p.msg != msg {
@@ -147,38 +147,38 @@ func (sm *streamManager) queueForPromotion(thrallID string, msg *pb.ServerStream
 			}
 		}
 		if len(remaining) == 0 {
-			delete(sm.pending, thrallID)
+			delete(sm.pending, envoyID)
 		} else {
-			sm.pending[thrallID] = remaining
+			sm.pending[envoyID] = remaining
 		}
 		// Clear fleet flag if no more pending.
-		if len(sm.pending[thrallID]) == 0 && sm.fleetIndex != nil {
-			sm.fleetIndex.ClearStreamRequested(thrallID)
+		if len(sm.pending[envoyID]) == 0 && sm.fleetIndex != nil {
+			sm.fleetIndex.ClearStreamRequested(envoyID)
 		}
 		sm.mu.Unlock()
 
-		slog.Warn("stream promotion timed out", "thrall_id", thrallID)
+		slog.Warn("stream promotion timed out", "envoy_id", envoyID)
 		if onTimeout != nil {
 			onTimeout()
 		}
 	})
 
-	sm.pending[thrallID] = append(sm.pending[thrallID], &pendingPromotion{
+	sm.pending[envoyID] = append(sm.pending[envoyID], &pendingPromotion{
 		msg:       msg,
 		onTimeout: onTimeout,
 		timer:     timer,
 	})
 
 	if sm.fleetIndex != nil {
-		sm.fleetIndex.SetStreamRequested(thrallID, true)
+		sm.fleetIndex.SetStreamRequested(envoyID, true)
 	}
 }
 
 // workCompleted decrements the work counter on a promoted stream.
 // When the counter reaches zero, sends a StreamRelease message.
-func (sm *streamManager) workCompleted(thrallID string) {
+func (sm *streamManager) workCompleted(envoyID string) {
 	sm.mu.RLock()
-	as, ok := sm.streams[thrallID]
+	as, ok := sm.streams[envoyID]
 	sm.mu.RUnlock()
 	if !ok || !as.promoted {
 		return
@@ -195,9 +195,9 @@ func (sm *streamManager) workCompleted(thrallID string) {
 		}
 		select {
 		case as.send <- msg:
-			slog.Info("sent stream release", "thrall_id", thrallID)
+			slog.Info("sent stream release", "envoy_id", envoyID)
 		default:
-			slog.Warn("stream release dropped (buffer full)", "thrall_id", thrallID)
+			slog.Warn("stream release dropped (buffer full)", "envoy_id", envoyID)
 		}
 	}
 }
@@ -205,9 +205,9 @@ func (sm *streamManager) workCompleted(thrallID string) {
 // pushPolicy sends a policy update to a specific agent. Non-blocking — if the
 // agent's send buffer is full, the message is dropped (agent will get it on
 // next check-in within the stream).
-func (sm *streamManager) pushPolicy(thrallID string, msg *pb.ServerStreamMessage) {
+func (sm *streamManager) pushPolicy(envoyID string, msg *pb.ServerStreamMessage) {
 	sm.mu.RLock()
-	as, ok := sm.streams[thrallID]
+	as, ok := sm.streams[envoyID]
 	sm.mu.RUnlock()
 	if !ok {
 		return
@@ -215,7 +215,7 @@ func (sm *streamManager) pushPolicy(thrallID string, msg *pb.ServerStreamMessage
 	select {
 	case as.send <- msg:
 	default:
-		slog.Warn("stream send buffer full, dropping policy push", "thrall_id", thrallID)
+		slog.Warn("stream send buffer full, dropping policy push", "envoy_id", envoyID)
 	}
 }
 
@@ -227,23 +227,23 @@ func (sm *streamManager) pushPolicyAll(msg *pb.ServerStreamMessage) {
 		select {
 		case as.send <- msg:
 		default:
-			slog.Warn("stream send buffer full, dropping policy push", "thrall_id", as.thrallID)
+			slog.Warn("stream send buffer full, dropping policy push", "envoy_id", as.envoyID)
 		}
 	}
 }
 
-// forcePush sends a force-push signal to a specific agent. If thrallID is empty,
+// forcePush sends a force-push signal to a specific agent. If envoyID is empty,
 // sends to all connected agents.
-func (sm *streamManager) forcePush(thrallID string) int {
+func (sm *streamManager) forcePush(envoyID string) int {
 	msg := &pb.ServerStreamMessage{
 		Msg: &pb.ServerStreamMessage_ForcePush{
 			ForcePush: &pb.StreamForcePush{},
 		},
 	}
 
-	if thrallID != "" {
+	if envoyID != "" {
 		sm.mu.RLock()
-		as, ok := sm.streams[thrallID]
+		as, ok := sm.streams[envoyID]
 		sm.mu.RUnlock()
 		if !ok {
 			return 0
@@ -276,16 +276,16 @@ func (sm *streamManager) connectedCount() int {
 	return len(sm.streams)
 }
 
-// isConnected returns true if the thrall has an active stream.
-func (sm *streamManager) isConnected(thrallID string) bool {
+// isConnected returns true if the envoy has an active stream.
+func (sm *streamManager) isConnected(envoyID string) bool {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	_, ok := sm.streams[thrallID]
+	_, ok := sm.streams[envoyID]
 	return ok
 }
 
-// connectedThrallIDs returns the set of currently connected thrall IDs.
-func (sm *streamManager) connectedThrallIDs() map[string]bool {
+// connectedEnvoyIDs returns the set of currently connected envoy IDs.
+func (sm *streamManager) connectedEnvoyIDs() map[string]bool {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	ids := make(map[string]bool, len(sm.streams))
@@ -298,9 +298,9 @@ func (sm *streamManager) connectedThrallIDs() map[string]bool {
 // dispatchPush sends a PushDispatch to a specific agent. Uses a blocking
 // send with a short timeout to avoid silent drops (Pitfall 6).
 // Returns false if the agent is not connected or the send buffer is full.
-func (sm *streamManager) dispatchPush(thrallID string, msg *pb.ServerStreamMessage) bool {
+func (sm *streamManager) dispatchPush(envoyID string, msg *pb.ServerStreamMessage) bool {
 	sm.mu.RLock()
-	as, ok := sm.streams[thrallID]
+	as, ok := sm.streams[envoyID]
 	sm.mu.RUnlock()
 	if !ok {
 		return false
@@ -309,7 +309,7 @@ func (sm *streamManager) dispatchPush(thrallID string, msg *pb.ServerStreamMessa
 	case as.send <- msg:
 		return true
 	default:
-		slog.Warn("push dispatch dropped (buffer full)", "thrall_id", thrallID)
+		slog.Warn("push dispatch dropped (buffer full)", "envoy_id", envoyID)
 		return false
 	}
 }

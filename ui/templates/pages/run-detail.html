@@ -5,7 +5,7 @@
     </div>
     <h1>Run {{truncUUID .Run.ID}}</h1>
     <p>
-        Thrall: <a href="/thralls/{{.ThrallID}}">{{.Run.Hostname}}</a>
+        Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Run.Hostname}}</a>
         &middot; {{template "status-badge" dict "Status" .Run.Status}}
         &middot; {{formatTime .Run.StartedAt}}
     </p>

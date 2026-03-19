@@ -2,7 +2,7 @@
 
 These projections are based on benchmarked per-request costs from the codebase, not measured end-to-end under production load. Actual performance will vary with hardware, network conditions, policy complexity, and fleet composition.
 
-This document analyzes Hobnob server performance under 30-second check-in intervals on modest hardware. 30-second intervals are the recommended setting for fleets where responsiveness matters — drift correction within 30 seconds, stale detection within 90 seconds, and a dashboard that feels alive.
+This document analyzes Vigo server performance under 30-second check-in intervals on modest hardware. 30-second intervals are the recommended setting for fleets where responsiveness matters — drift correction within 30 seconds, stale detection within 90 seconds, and a dashboard that feels alive.
 
 All numbers reference benchmarked values from the codebase or are derived from measured operations. See [performance-1m.md](performance-1m.md) for the per-request cost derivations.
 
@@ -20,11 +20,11 @@ All numbers reference benchmarked values from the codebase or are derived from m
 | Drift correction latency | 15-30 seconds (avg half-interval) |
 | Stale detection (3x interval) | 90 seconds |
 | Config publish to full fleet convergence | ~30 seconds |
-| New thrall visible on dashboard | ~30 seconds |
+| New envoy visible on dashboard | ~30 seconds |
 | Force-push effect | Within next check-in (~15s avg) |
 | Dashboard compliance counter freshness | Updates every few seconds |
 
-This feels like a live system. An operator pushes config and sees thralls converge before they can switch browser tabs.
+This feels like a live system. An operator pushes config and sees envoys converge before they can switch browser tabs.
 
 ## Request Rates
 
@@ -52,15 +52,15 @@ Realistic per-check-in CPU cost including gRPC framing, protobuf deserialization
 | 15,000 | 500 | ~15% of 1 core | ~36% of 1 core |
 | 25,000 | 833 | ~25% of 1 core | ~60% of 1 core |
 
-With 4 cores available, CPU is not a concern up to 25,000 thralls. The theoretical single-core limit is ~3,000-5,000 no-change check-ins/sec; with 4 cores, ~12,000-20,000 RPS before saturation.
+With 4 cores available, CPU is not a concern up to 25,000 envoys. The theoretical single-core limit is ~3,000-5,000 no-change check-ins/sec; with 4 cores, ~12,000-20,000 RPS before saturation.
 
-**Config change storm**: After `hobnobcli config publish`, all thralls receive a full bundle on their next check-in. At 10,000 thralls, this means ~333 full-bundle responses/sec sustained over ~30 seconds. CPU impact: ~24% of one core for 30 seconds. Noticeable but well within headroom.
+**Config change storm**: After `vigogo config publish`, all envoys receive a full bundle on their next check-in. At 10,000 envoys, this means ~333 full-bundle responses/sec sustained over ~30 seconds. CPU impact: ~24% of one core for 30 seconds. Noticeable but well within headroom.
 
 ## Memory Usage
 
 Memory is dominated by gRPC connection buffers (64 KiB per persistent mTLS connection), not by the FleetIndex or check-in frequency. The interval does not change per-connection memory — only the number of concurrent connections matters.
 
-| Component | 1,000 thralls | 5,000 thralls | 10,000 thralls | 25,000 thralls |
+| Component | 1,000 envoys | 5,000 envoys | 10,000 envoys | 25,000 envoys |
 |-----------|---------------|---------------|----------------|----------------|
 | Go runtime + gRPC server | ~150 MiB | ~180 MiB | ~200 MiB | ~300 MiB |
 | FleetIndex (state + indexes) | 1.6 MiB | 8 MiB | 16 MiB | 39 MiB |
@@ -70,7 +70,7 @@ Memory is dominated by gRPC connection buffers (64 KiB per persistent mTLS conne
 | SQLite page cache | 100-300 MiB | 100-300 MiB | 100-500 MiB | 200-500 MiB |
 | **Total** | **~350 MiB** | **~850 MiB** | **~1.4 GiB** | **~2.6 GiB** |
 
-At 10,000 thralls, memory sits at ~1.4 GiB of 8 GB — comfortable with 5.6 GiB headroom. The constraint arrives around 25,000 thralls where gRPC buffers alone consume 1.6 GiB.
+At 10,000 envoys, memory sits at ~1.4 GiB of 8 GB — comfortable with 5.6 GiB headroom. The constraint arrives around 25,000 envoys where gRPC buffers alone consume 1.6 GiB.
 
 ## Network Bandwidth
 
@@ -83,13 +83,13 @@ Request sizes: ~3 KiB check-in request (includes traits JSON + signature), ~100 
 | 10,000 | ~1 MB/s | ~10 MB/s |
 | 25,000 | ~2.5 MB/s | ~25 MB/s |
 
-Steady-state includes both request (3 KiB) and response (100 bytes) traffic. Even at 25,000 thralls, sustained bandwidth is 2.5 MB/s — 2% of a 1 Gbps link.
+Steady-state includes both request (3 KiB) and response (100 bytes) traffic. Even at 25,000 envoys, sustained bandwidth is 2.5 MB/s — 2% of a 1 Gbps link.
 
 ## SQLite Write Load
 
-The flusher runs every 10 seconds. At 30-second check-in intervals, every thrall checks in ~3 times per flush window, but the flusher only writes the latest state — so the number of dirty thralls per flush equals the fleet size (same as 1-minute intervals).
+The flusher runs every 10 seconds. At 30-second check-in intervals, every envoy checks in ~3 times per flush window, but the flusher only writes the latest state — so the number of dirty envoys per flush equals the fleet size (same as 1-minute intervals).
 
-| Fleet Size | Dirty thralls per flush | Batch transactions | SQLite write time |
+| Fleet Size | Dirty envoys per flush | Batch transactions | SQLite write time |
 |------------|-------------------------|--------------------|-------------------|
 | 1,000 | ~1,000 | 2 | ~5 ms |
 | 5,000 | ~5,000 | 10 | ~25 ms |
@@ -116,15 +116,15 @@ Memory and SQLite load are identical across intervals because they scale by flee
 
 ## Capacity Recommendations
 
-### No Tuning: Up to 10,000 Thralls
+### No Tuning: Up to 10,000 Envoys
 
-Default settings handle 10,000 thralls at 30-second check-ins:
+Default settings handle 10,000 envoys at 30-second check-ins:
 - ~10% of one core (sustained), ~24% on config change burst
 - ~1.4 GiB memory
 - ~1 MB/s network
 - 50 ms SQLite flush every 10 seconds
 
-### With Tuning: 10,000-15,000 Thralls
+### With Tuning: 10,000-15,000 Envoys
 
 ```yaml
 checkin:
@@ -137,12 +137,12 @@ tuning:
   grpc_write_buffer: 16384
 ```
 
-Reduces gRPC buffer memory by half (320 MiB at 10k instead of 640 MiB). Comfortable up to 15,000 thralls on 8 GB.
+Reduces gRPC buffer memory by half (320 MiB at 10k instead of 640 MiB). Comfortable up to 15,000 envoys on 8 GB.
 
-### Beyond 15,000 Thralls
+### Beyond 15,000 Envoys
 
 Options:
-1. **Upgrade to 8 vCPU / 16 GB** — handles ~30,000 thralls at 30s intervals with tuning
+1. **Upgrade to 8 vCPU / 16 GB** — handles ~30,000 envoys at 30s intervals with tuning
 2. **Spanner (hub-spoke)** — shard fleet across spoke servers, each handling its own subset
 
 ### Streaming vs. Polling at 30 Seconds
@@ -151,7 +151,7 @@ At 30-second polling, the latency for ad-hoc pushes is "up to 30 seconds" (avera
 
 ## Bottleneck Hierarchy (30-Second Intervals)
 
-1. **Memory (gRPC buffers)** — 640 MiB at 10k connections. First hard limit at ~20k thralls on 8 GB (with tuned 16 KiB buffers, ~25k).
-2. **CPU (ED25519 verify)** — 10% of one core at 10k thralls. Saturates all 4 cores at ~40k-60k thralls.
-3. **SQLite flusher** — 125 ms at 25k thralls. Not a concern until ~80k+ thralls per flush window.
-4. **Network** — 2.5 MB/s at 25k thralls. Under 3% of 1 Gbps.
+1. **Memory (gRPC buffers)** — 640 MiB at 10k connections. First hard limit at ~20k envoys on 8 GB (with tuned 16 KiB buffers, ~25k).
+2. **CPU (ED25519 verify)** — 10% of one core at 10k envoys. Saturates all 4 cores at ~40k-60k envoys.
+3. **SQLite flusher** — 125 ms at 25k envoys. Not a concern until ~80k+ envoys per flush window.
+4. **Network** — 2.5 MB/s at 25k envoys. Under 3% of 1 Gbps.

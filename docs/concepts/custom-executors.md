@@ -1,6 +1,6 @@
 # Custom Executors
 
-Custom executors let you extend Hobnob with your own resource types. They communicate with the agent via a JSON stdin/stdout protocol.
+Custom executors let you extend Vigo with your own resource types. They communicate with the agent via a JSON stdin/stdout protocol.
 
 ## How It Works
 
@@ -11,7 +11,7 @@ Custom executors let you extend Hobnob with your own resource types. They commun
 ```yaml
 - name: my-custom-resource
   type: custom
-  script: /opt/hobnob/executors/my-executor.sh
+  script: /opt/vigo/executors/my-executor.sh
   params:
     key1: value1
     key2: value2
@@ -69,7 +69,7 @@ The script must write JSON to stdout:
 
 ## Example: Custom Service Check
 
-`/opt/hobnob/executors/health-check.sh`:
+`/opt/vigo/executors/health-check.sh`:
 
 ```bash
 #!/bin/bash
@@ -95,7 +95,7 @@ Usage in a module:
 ```yaml
 - name: app-health
   type: custom
-  script: /opt/hobnob/executors/health-check.sh
+  script: /opt/vigo/executors/health-check.sh
   params:
     url: "http://localhost:8080/health"
     expected_status: "200"
@@ -110,7 +110,7 @@ Custom executors must be idempotent:
 3. If not → apply change → `{"changed": true}`
 4. On error → `{"error": "description"}`
 
-The agent runs the executor on every check-in. If the script always returns `changed: true`, the thrall will show as "drifted" in compliance.
+The agent runs the executor on every check-in. If the script always returns `changed: true`, the envoy will show as "drifted" in compliance.
 
 ## Script Requirements
 

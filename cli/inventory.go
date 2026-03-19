@@ -19,13 +19,13 @@ var inventoryShow []string
 
 var inventoryCmd = &cobra.Command{
 	Use:   "inventory",
-	Short: "Search the fleet by trait values (e.g., OS, memory, packages) and display matching thralls",
-	Long: `Query enrolled thralls by their collected traits.
+	Short: "Search the fleet by trait values (e.g., OS, memory, packages) and display matching envoys",
+	Long: `Query enrolled envoys by their collected traits.
 
 Examples:
-  hobnobcli inventory --where os.distro=ubuntu
-  hobnobcli inventory --where os.distro=ubuntu --show network.ip
-  hobnobcli inventory --where os.family=debian --where virtual.type=kvm --show os.distro,os.version`,
+  vigogo inventory --where os.distro=ubuntu
+  vigogo inventory --where os.distro=ubuntu --show network.ip
+  vigogo inventory --where os.family=debian --where virtual.type=kvm --show os.distro,os.version`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 
@@ -45,25 +45,25 @@ Examples:
 
 		var resp struct {
 			Count   int `json:"count"`
-			Thralls []struct {
+			Envoys []struct {
 				Hostname    string         `json:"hostname"`
 				IPAddress   string         `json:"ip_address"`
 				CollectedAt string         `json:"collected_at"`
 				Traits      map[string]any `json:"traits"`
-			} `json:"thralls"`
+			} `json:"envoys"`
 		}
 		if err := client.get(path, &resp); err != nil {
 			return err
 		}
 
 		if resp.Count == 0 {
-			fmt.Println("No matching thralls found.")
+			fmt.Println("No matching envoys found.")
 			return nil
 		}
 
 		// If --show was provided, render a table with columns.
 		if len(inventoryShow) > 0 {
-			return renderTable(resp.Thralls, inventoryShow)
+			return renderTable(resp.Envoys, inventoryShow)
 		}
 
 		// Otherwise print JSON.
@@ -76,7 +76,7 @@ Examples:
 	},
 }
 
-func renderTable(thralls []struct {
+func renderTable(envoys []struct {
 	Hostname    string         `json:"hostname"`
 	IPAddress   string         `json:"ip_address"`
 	CollectedAt string         `json:"collected_at"`
@@ -92,7 +92,7 @@ func renderTable(thralls []struct {
 	fmt.Fprintln(w, header)
 
 	// Rows.
-	for _, t := range thralls {
+	for _, t := range envoys {
 		row := t.Hostname
 		for _, f := range showFields {
 			val := ""
@@ -104,7 +104,7 @@ func renderTable(thralls []struct {
 		fmt.Fprintln(w, row)
 	}
 
-	fmt.Fprintf(w, "\n%d thralls\n", len(thralls))
+	fmt.Fprintf(w, "\n%d envoys\n", len(envoys))
 	return w.Flush()
 }
 

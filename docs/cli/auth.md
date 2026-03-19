@@ -1,4 +1,4 @@
-# hobnobcli auth
+# vigogo auth
 
 Manage CLI authentication tokens for the REST API.
 
@@ -14,17 +14,17 @@ When pointing the CLI at a remote server (`--server http://remote:8443`), an API
 
 ```bash
 # Generate a token from the web UI admin panel or via local CLI
-hobnobcli auth set-token hbt_abc123...
+vigogo auth set-token vgot_abc123...
 ```
 
 ## Subcommands
 
 ### set-token
 
-Store an API token for CLI use. The token is saved to `~/.config/hobnob/token` (mode 0600).
+Store an API token for CLI use. The token is saved to `~/.config/vigo/token` (mode 0600).
 
 ```bash
-hobnobcli auth set-token hbt_abc123...
+vigogo auth set-token vgot_abc123...
 ```
 
 ### status
@@ -32,7 +32,7 @@ hobnobcli auth set-token hbt_abc123...
 Show the currently stored token and its validity.
 
 ```bash
-hobnobcli auth status
+vigogo auth status
 ```
 
 ### clear
@@ -40,7 +40,7 @@ hobnobcli auth status
 Remove the stored API token.
 
 ```bash
-hobnobcli auth clear
+vigogo auth clear
 ```
 
 ### create-token
@@ -48,7 +48,7 @@ hobnobcli auth clear
 Create a new API token on the server. The plaintext token is shown once and cannot be retrieved again.
 
 ```bash
-hobnobcli auth create-token --name "ci-automation" --expires-in "720h"
+vigogo auth create-token --name "ci-automation" --expires-in "720h"
 ```
 
 Output:
@@ -56,10 +56,10 @@ Output:
 Token created.
   ID:    tok_a1b2c3d4
   Name:  ci-automation
-  Token: hbt_abc123...
+  Token: vgot_abc123...
 
 Save this token — it will not be shown again.
-To use it: hobnobcli auth set-token hbt_abc123...
+To use it: vigogo auth set-token vgot_abc123...
 ```
 
 **Flags:**
@@ -74,14 +74,14 @@ To use it: hobnobcli auth set-token hbt_abc123...
 List your API tokens on the server. Shows ID, name, prefix, creation date, and expiry.
 
 ```bash
-hobnobcli auth list-tokens
+vigogo auth list-tokens
 ```
 
 Output:
 ```
 ID              NAME            PREFIX    CREATED     EXPIRES
-tok_a1b2c3d4    ci-automation   hbt_abc   2026-03-16  2026-04-15
-tok_e5f6a7b8    monitoring      hbt_def   2026-03-10  never
+tok_a1b2c3d4    ci-automation   vgot_abc   2026-03-16  2026-04-15
+tok_e5f6a7b8    monitoring      vgot_def   2026-03-10  never
 ```
 
 ### revoke-token
@@ -89,7 +89,7 @@ tok_e5f6a7b8    monitoring      hbt_def   2026-03-10  never
 Revoke an API token by ID. The token is immediately invalidated.
 
 ```bash
-hobnobcli auth revoke-token tok_a1b2c3d4
+vigogo auth revoke-token tok_a1b2c3d4
 ```
 
 ### emergency-access
@@ -97,7 +97,7 @@ hobnobcli auth revoke-token tok_a1b2c3d4
 Record an emergency access event in the tamper-evident audit trail (HIPAA 164.312(a)(2)(ii)). Use this when invoking break-glass procedures — e.g., during an IdP outage, account lockout, or incident response.
 
 ```bash
-hobnobcli auth emergency-access --reason "OIDC provider outage, reviewing compliance status"
+vigogo auth emergency-access --reason "OIDC provider outage, reviewing compliance status"
 ```
 
 The event is recorded as `emergency.access` in the SHA-256 hash chain and cannot be retroactively modified.

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 func TestRunBatcherSubmitAndFlush(t *testing.T) {
@@ -19,7 +19,7 @@ func TestRunBatcherSubmitAndFlush(t *testing.T) {
 	for i := range 3 {
 		rb.Submit(RunBatchEntry{
 			RunID:        "",
-			ThrallID:     "thrall-1",
+			EnvoyID:     "envoy-1",
 			Hostname:     "web-1",
 			Status:       "success",
 			ModuleCount:  2,
@@ -87,7 +87,7 @@ func TestRunBatcherShutdown(t *testing.T) {
 	rb := NewRunBatcher(store)
 
 	rb.Submit(RunBatchEntry{
-		ThrallID:    "thrall-1",
+		EnvoyID:    "envoy-1",
 		Hostname:    "web-1",
 		Status:      "success",
 		ModuleCount: 1,
@@ -120,7 +120,7 @@ func TestRunBatcherConcurrent(t *testing.T) {
 			defer wg.Done()
 			for i := range 10 {
 				rb.Submit(RunBatchEntry{
-					ThrallID:    "thrall-1",
+					EnvoyID:    "envoy-1",
 					Hostname:    "web-1",
 					Status:      "success",
 					ModuleCount: int64(g*10 + i),

@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/hobnob/hobnob/server/config"
+	"github.com/daniel-alexander4/vigo/server/config"
 )
 
-func makeTestConfig() *config.ThrallConfig {
+func makeTestConfig() *config.EnvoyConfig {
 	nginx := config.ModuleConfig{
 		Name: "nginx",
 		Resources: []config.ResourceConfig{
@@ -28,7 +28,7 @@ func makeTestConfig() *config.ThrallConfig {
 	}
 	postgres.ContentHash = config.HashModuleContent(postgres)
 
-	return &config.ThrallConfig{
+	return &config.EnvoyConfig{
 		MatchPattern: "*.web.example.com",
 		Environment:  "production",
 		Roles:        []string{"webserver"},
@@ -79,7 +79,7 @@ func TestPolicyCache_VersionChange_Invalidates(t *testing.T) {
 func TestPolicyCache_DifferentPatterns(t *testing.T) {
 	pc := newPolicyCache()
 	cfg1 := makeTestConfig()
-	cfg2 := &config.ThrallConfig{
+	cfg2 := &config.EnvoyConfig{
 		MatchPattern: "*.db.example.com",
 		Modules: []config.ModuleConfig{
 			{Name: "pg", Resources: []config.ResourceConfig{{Name: "conf", Type: "file"}}},

@@ -1,6 +1,6 @@
 # NetBSD Support
 
-Hobnob supports NetBSD with native integration for rc.d services and pkgin package management. The agent shares BSD-common executors with FreeBSD and OpenBSD.
+Vigo supports NetBSD with native integration for rc.d services and pkgin package management. The agent shares BSD-common executors with FreeBSD and OpenBSD.
 
 ## Supported Versions
 
@@ -12,20 +12,20 @@ Hobnob supports NetBSD with native integration for rc.d services and pkgin packa
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-The bootstrap script detects NetBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/hobnob`, and installs an rc.d service script.
+The bootstrap script detects NetBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/vigo`, and installs an rc.d service script.
 
 ## rc.d Service
 
-The agent runs as an rc.d service at `/usr/local/etc/rc.d/hobnob_thrall`.
+The agent runs as an rc.d service at `/usr/local/etc/rc.d/vigo_envoy`.
 
 ```sh
 # Enable at boot
-echo 'hobnob_thrall="YES"' >> /etc/rc.conf
+echo 'vigo_envoy="YES"' >> /etc/rc.conf
 
 # Service management
-/usr/local/etc/rc.d/hobnob_thrall start
-/usr/local/etc/rc.d/hobnob_thrall stop
-/usr/local/etc/rc.d/hobnob_thrall status
+/usr/local/etc/rc.d/vigo_envoy start
+/usr/local/etc/rc.d/vigo_envoy stop
+/usr/local/etc/rc.d/vigo_envoy status
 ```
 
 ## Package Management
@@ -100,7 +100,7 @@ NetBSD has access to all cross-platform executors plus shared BSD executors:
 ## Example: NetBSD Web Server
 
 ```yaml
-# modules/netbsd-web.hnb
+# modules/netbsd-web.vgo
 name: netbsd-web
 
 vars:

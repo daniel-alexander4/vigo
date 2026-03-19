@@ -10,9 +10,9 @@ vars:
 resources:
   - name: limits-conf
     type: file
-    target_path: /etc/security/limits.d/99-hobnob.conf
+    target_path: /etc/security/limits.d/99-vigo.conf
     content: |
-      # /etc/security/limits.d/99-hobnob.conf — managed by hobnob
+      # /etc/security/limits.d/99-vigo.conf — managed by vigo
 
       * soft nofile {{ .Vars.nofile_soft }}
       * hard nofile {{ .Vars.nofile_hard }}

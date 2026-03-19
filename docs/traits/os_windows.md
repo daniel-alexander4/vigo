@@ -27,7 +27,7 @@ Architecture is detected from the `PROCESSOR_ARCHITECTURE` environment variable,
 ```yaml
 - name: install-defender-config
   type: file
-  target_path: C:\ProgramData\hobnob\defender.conf
+  target_path: C:\ProgramData\vigo\defender.conf
   when: "os_family('windows')"
 ```
 
@@ -35,7 +35,7 @@ Architecture is detected from the `PROCESSOR_ARCHITECTURE` environment variable,
 ```yaml
 - name: system-info
   type: file
-  target_path: C:\ProgramData\hobnob\system-info.txt
+  target_path: C:\ProgramData\vigo\system-info.txt
   content: |
     OS: {{ .Traits.os.name }}
     Version: {{ .Traits.os.version }}

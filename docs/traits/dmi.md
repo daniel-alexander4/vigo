@@ -33,7 +33,7 @@ Reads files from `/sys/class/dmi/id/`: `bios_vendor`, `bios_version`, `bios_date
 ```yaml
 - name: hardware-info
   type: file
-  target_path: /var/lib/hobnob/hardware-info.txt
+  target_path: /var/lib/vigo/hardware-info.txt
   content: |
     Product: {{ .Traits.dmi.product_name }}
     Board: {{ .Traits.dmi.board_name }}

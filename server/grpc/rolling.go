@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // DispatchParams holds all parameters for push dispatch.
@@ -161,8 +161,8 @@ func (s *AgentService) runRollingExecution(
 		// Register notifiers and track targets for this batch.
 		doneChans := make([]chan struct{}, 0, len(batch))
 		for _, tr := range batch {
-			s.pushRouter.trackTarget(pushRunID, tr.info.ThrallID, tr.targetID)
-			ch := s.pushRouter.registerNotifier(pushRunID, tr.info.ThrallID)
+			s.pushRouter.trackTarget(pushRunID, tr.info.EnvoyID, tr.targetID)
+			ch := s.pushRouter.registerNotifier(pushRunID, tr.info.EnvoyID)
 			doneChans = append(doneChans, ch)
 		}
 
@@ -180,7 +180,7 @@ func (s *AgentService) runRollingExecution(
 				},
 			}
 
-			if !s.streamMgr.dispatchPush(tr.info.ThrallID, msg) {
+			if !s.streamMgr.dispatchPush(tr.info.EnvoyID, msg) {
 				// Stream closed between target creation and dispatch.
 				if err := s.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
 					ID:         tr.targetID,
@@ -190,8 +190,8 @@ func (s *AgentService) runRollingExecution(
 					slog.Error("failed to mark target offline",
 						"target_id", tr.targetID, "error", err)
 				}
-				s.pushRouter.removeTarget(pushRunID, tr.info.ThrallID)
-				s.pushRouter.notifyCompletion(pushRunID, tr.info.ThrallID)
+				s.pushRouter.removeTarget(pushRunID, tr.info.EnvoyID)
+				s.pushRouter.notifyCompletion(pushRunID, tr.info.EnvoyID)
 			}
 		}
 
@@ -214,7 +214,7 @@ func (s *AgentService) runRollingExecution(
 
 		// Clean up notifiers.
 		for _, tr := range batch {
-			s.pushRouter.removeNotifier(pushRunID, tr.info.ThrallID)
+			s.pushRouter.removeNotifier(pushRunID, tr.info.EnvoyID)
 		}
 
 		// Check max_failures threshold.

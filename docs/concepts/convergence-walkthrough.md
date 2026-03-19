@@ -1,10 +1,10 @@
 # Convergence Walkthrough
 
-A step-by-step trace of what happens when you add a new module, publish it, and a thrall converges — with realistic timing and traffic flow for each phase.
+A step-by-step trace of what happens when you add a new module, publish it, and a envoy converges — with realistic timing and traffic flow for each phase.
 
 ## Scenario
 
-You add an nginx module that installs a package, writes a config file, and starts the service. A thrall named `web-01.example.com` picks it up on its next check-in.
+You add an nginx module that installs a package, writes a config file, and starts the service. A envoy named `web-01.example.com` picks it up on its next check-in.
 
 ## Timeline
 
@@ -12,28 +12,28 @@ You add an nginx module that installs a package, writes a config file, and start
 
 ## Traffic Flow
 
-The key insight: **most traffic bypasses the server entirely**. The server only sends declarative intent — the thrall does the actual work directly.
+The key insight: **most traffic bypasses the server entirely**. The server only sends declarative intent — the envoy does the actual work directly.
 
 ### What goes through the server (gRPC/mTLS, port 1530)
 
 | Direction | Payload | Size | Frequency |
 |-----------|---------|------|-----------|
-| Thrall → Server | CheckIn (UUID, traits, fingerprint) | 2-5 KB | Every 5 min |
-| Server → Thrall | PolicyBundle (modules, resources, rendered content) | 5-50 KB | Only when config changed |
-| Server → Thrall | no_change response | ~100 B | When fingerprint matches |
-| Thrall → Server | ReportResult (per-resource outcomes) | 1-10 KB | After each convergence |
+| Envoy → Server | CheckIn (UUID, traits, fingerprint) | 2-5 KB | Every 5 min |
+| Server → Envoy | PolicyBundle (modules, resources, rendered content) | 5-50 KB | Only when config changed |
+| Server → Envoy | no_change response | ~100 B | When fingerprint matches |
+| Envoy → Server | ReportResult (per-resource outcomes) | 1-10 KB | After each convergence |
 
-### What goes directly from thrall to the internet (or LAN)
+### What goes directly from envoy to the internet (or LAN)
 
 | Operation | Destination | Size | Notes |
 |-----------|-------------|------|-------|
-| `apt-get install` / `dnf install` | Package mirror | 1-500 MB | Downloaded by the thrall, not proxied through the server |
-| `git clone` (git executor) | Git remote | varies | Thrall clones directly |
-| `curl` in archive executor | URL in resource config | varies | Thrall downloads directly |
-| Docker image pulls | Registry (Docker Hub, GHCR) | 50-500 MB | Thrall pulls directly |
-| Repository key downloads | Key server URL | 1-5 KB | Thrall fetches directly |
+| `apt-get install` / `dnf install` | Package mirror | 1-500 MB | Downloaded by the envoy, not proxied through the server |
+| `git clone` (git executor) | Git remote | varies | Envoy clones directly |
+| `curl` in archive executor | URL in resource config | varies | Envoy downloads directly |
+| Docker image pulls | Registry (Docker Hub, GHCR) | 50-500 MB | Envoy pulls directly |
+| Repository key downloads | Key server URL | 1-5 KB | Envoy fetches directly |
 
-### What stays local on the thrall
+### What stays local on the envoy
 
 | Operation | Notes |
 |-----------|-------|
@@ -50,13 +50,13 @@ The key insight: **most traffic bypasses the server entirely**. The server only 
 |-------|----------|-------|
 | Config publish (validate + sync + reload) | < 1s | Operator → Server |
 | Wait for next check-in | 0-5 min (configurable) | — |
-| Check-in round-trip (cache hit) | < 1 ms | Thrall ↔ Server |
+| Check-in round-trip (cache hit) | < 1 ms | Envoy ↔ Server |
 | Check-in round-trip (cache miss, config compilation) | 10-50 ms | Server |
-| Bundle transfer | < 10 ms (LAN) | Server → Thrall |
-| Package install | 5-60s | Thrall → Internet |
-| File write + permission set | < 5 ms | Thrall local |
-| Service restart | 1-5s | Thrall local |
-| Result report | < 5 ms | Thrall → Server |
+| Bundle transfer | < 10 ms (LAN) | Server → Envoy |
+| Package install | 5-60s | Envoy → Internet |
+| File write + permission set | < 5 ms | Envoy local |
+| Service restart | 1-5s | Envoy local |
+| Result report | < 5 ms | Envoy → Server |
 | **Total (first convergence)** | **~30s + wait** | |
 | **Subsequent check-ins (no change)** | **< 50 ms** | |
 
@@ -65,14 +65,14 @@ The key insight: **most traffic bypasses the server entirely**. The server only 
 Skip the check-in wait by forcing an immediate convergence:
 
 ```bash
-hobnobcli push --target "web-01.example.com"
+vigogo push --target "web-01.example.com"
 ```
 
-The server sets `stream_requested` on the thrall. If the thrall has an active stream, the push is immediate. If it's polling, it takes effect on the next check-in (up to one interval).
+The server sets `stream_requested` on the envoy. If the envoy has an active stream, the push is immediate. If it's polling, it takes effect on the next check-in (up to one interval).
 
 ## Offline Convergence
 
-If the server is unreachable, the thrall continues applying its last cached policy bundle from LMDB. Package installs that require internet access will still fail if the thrall has no network, but all local operations (file writes, service management, user creation) continue working.
+If the server is unreachable, the envoy continues applying its last cached policy bundle from LMDB. Package installs that require internet access will still fail if the envoy has no network, but all local operations (file writes, service management, user creation) continue working.
 
 ## Related
 

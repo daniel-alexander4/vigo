@@ -17,7 +17,7 @@ var serverURL string
 var version = "dev"
 
 func main() {
-	// When invoked as "hnbvi", behave as "hobnobcli vi <args>".
+	// When invoked as "hnbvi", behave as "vigogo vi <args>".
 	if base := filepath.Base(os.Args[0]); base == "hnbvi" {
 		args := append([]string{"vi"}, os.Args[1:]...)
 		rootCmd.SetArgs(args)
@@ -30,20 +30,20 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:           "hobnobcli",
-	Short:         "Administrative CLI for the Hobnob distributed state enforcement engine",
-	Long:          "hobnobcli communicates with the Hobnob server's REST API to manage enrollment,\nthrall lifecycle, config publishing, orchestration, secrets, and fleet operations.",
+	Use:           "vigogo",
+	Short:         "Administrative CLI for the Vigo distributed state enforcement engine",
+	Long:          "vigogo communicates with the Vigo server's REST API to manage enrollment,\nenvoy lifecycle, config publishing, orchestration, secrets, and fleet operations.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "https://localhost:8443",
-		"Base URL for the Hobnob REST API")
+		"Base URL for the Vigo REST API")
 
 	rootCmd.AddCommand(
 		approvedCmd,
-		thrallsCmd,
+		envoysCmd,
 		runsCmd,
 		pushCmd,
 		queryCmd,

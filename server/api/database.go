@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // DatabaseHandler serves /api/v1/db/* endpoints for database operations.

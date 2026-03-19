@@ -32,4 +32,4 @@ resources:
 
 ## Platform
 
-Available on all platforms. Runs on the gateway thrall.
+Available on all platforms. Runs on the gateway envoy.

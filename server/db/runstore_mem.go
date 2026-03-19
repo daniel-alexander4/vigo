@@ -17,19 +17,19 @@ import (
 
 const numShards = 64
 
-// MemRunStore stores runs in memory using per-thrall ring buffers, sharded
+// MemRunStore stores runs in memory using per-envoy ring buffers, sharded
 // across 64 independent locks to reduce contention. Faster than the DB
 // backend but data is lost on server restart.
 // Enable via tuning.run_store: "memory" in server.yaml.
 type MemRunStore struct {
 	shards   [numShards]runShard
-	capacity int // max runs per thrall
+	capacity int // max runs per envoy
 }
 
 type runShard struct {
 	mu       sync.RWMutex
 	byID     map[string]*memRun          // run UUID string → run + results
-	byThrall map[string]*thrallRunBuffer // thrall UUID string → ring of run IDs
+	byEnvoy map[string]*envoyRunBuffer // envoy UUID string → ring of run IDs
 }
 
 type memRun struct {
@@ -37,13 +37,13 @@ type memRun struct {
 	results []RunResult
 }
 
-// thrallRunBuffer is a bounded ring buffer of run IDs per thrall.
-type thrallRunBuffer struct {
+// envoyRunBuffer is a bounded ring buffer of run IDs per envoy.
+type envoyRunBuffer struct {
 	runs []string // newest first
 }
 
 // NewMemRunStore creates an in-memory run store keeping at most capacity
-// runs per thrall.
+// runs per envoy.
 func NewMemRunStore(capacity int) *MemRunStore {
 	if capacity < 1 {
 		capacity = 20
@@ -52,22 +52,22 @@ func NewMemRunStore(capacity int) *MemRunStore {
 	for i := range s.shards {
 		s.shards[i] = runShard{
 			byID:     make(map[string]*memRun),
-			byThrall: make(map[string]*thrallRunBuffer),
+			byEnvoy: make(map[string]*envoyRunBuffer),
 		}
 	}
 	return s
 }
 
-// shard returns the shard for a given thrall ID.
-func (s *MemRunStore) shard(thrallID string) *runShard {
+// shard returns the shard for a given envoy ID.
+func (s *MemRunStore) shard(envoyID string) *runShard {
 	h := fnv.New32a()
-	h.Write([]byte(thrallID))
+	h.Write([]byte(envoyID))
 	return &s.shards[h.Sum32()%numShards]
 }
 
 // shardByRunID finds which shard contains a run ID. Since run IDs are UUIDs
-// and we index by thrall, we need to check all shards for by-ID lookups.
-// For hot-path operations (CreateRunResult, FinishRun) we store the thrall ID
+// and we index by envoy, we need to check all shards for by-ID lookups.
+// For hot-path operations (CreateRunResult, FinishRun) we store the envoy ID
 // in memRun so we can shard directly.
 func (s *MemRunStore) findRunShard(runID string) (*runShard, *memRun) {
 	for i := range s.shards {
@@ -85,19 +85,19 @@ func (s *MemRunStore) findRunShard(runID string) (*runShard, *memRun) {
 func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, error) {
 	run := Run{
 		ID:          uuid.New().String(),
-		ThrallID:    arg.ThrallID,
+		EnvoyID:    arg.EnvoyID,
 		StartedAt:   time.Now(),
 		Status:      arg.Status,
 		ModuleCount: arg.ModuleCount,
 	}
 
-	sh := s.shard(arg.ThrallID)
+	sh := s.shard(arg.EnvoyID)
 	sh.mu.Lock()
 	sh.byID[run.ID] = &memRun{run: run}
-	buf := sh.byThrall[arg.ThrallID]
+	buf := sh.byEnvoy[arg.EnvoyID]
 	if buf == nil {
-		buf = &thrallRunBuffer{}
-		sh.byThrall[arg.ThrallID] = buf
+		buf = &envoyRunBuffer{}
+		sh.byEnvoy[arg.EnvoyID] = buf
 	}
 	// Prepend (newest first).
 	buf.runs = append([]string{run.ID}, buf.runs...)
@@ -246,12 +246,12 @@ func (s *MemRunStore) ListRunResults(_ context.Context, runID string) ([]RunResu
 	return results, nil
 }
 
-func (s *MemRunStore) ListRunsByThrall(_ context.Context, arg ListRunsByThrallParams) ([]Run, error) {
-	sh := s.shard(arg.ThrallID)
+func (s *MemRunStore) ListRunsByEnvoy(_ context.Context, arg ListRunsByEnvoyParams) ([]Run, error) {
+	sh := s.shard(arg.EnvoyID)
 	sh.mu.RLock()
 	defer sh.mu.RUnlock()
 
-	buf, ok := sh.byThrall[arg.ThrallID]
+	buf, ok := sh.byEnvoy[arg.EnvoyID]
 	if !ok {
 		return []Run{}, nil
 	}
@@ -270,19 +270,19 @@ func (s *MemRunStore) ListRunsByThrall(_ context.Context, arg ListRunsByThrallPa
 	return runs, nil
 }
 
-func (s *MemRunStore) LatestRunPerThrall(_ context.Context, thrallIDs []string) (map[string]*Run, error) {
-	result := make(map[string]*Run, len(thrallIDs))
-	for _, thrallID := range thrallIDs {
-		sh := s.shard(thrallID)
+func (s *MemRunStore) LatestRunPerEnvoy(_ context.Context, envoyIDs []string) (map[string]*Run, error) {
+	result := make(map[string]*Run, len(envoyIDs))
+	for _, envoyID := range envoyIDs {
+		sh := s.shard(envoyID)
 		sh.mu.RLock()
-		buf, ok := sh.byThrall[thrallID]
+		buf, ok := sh.byEnvoy[envoyID]
 		if !ok || len(buf.runs) == 0 {
 			sh.mu.RUnlock()
 			continue
 		}
 		if mr, ok := sh.byID[buf.runs[0]]; ok {
 			run := mr.run
-			result[thrallID] = &run
+			result[envoyID] = &run
 		}
 		sh.mu.RUnlock()
 	}

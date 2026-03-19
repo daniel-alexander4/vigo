@@ -13,8 +13,8 @@ import (
 
 var queryCmd = &cobra.Command{
 	Use:   "query <trait-path> --target <spec>",
-	Short: "Query a trait value from connected thralls in real time, with cached fallback for offline nodes",
-	Long:  "Queries current trait values from connected thralls and cached values from offline thralls.\nExamples:\n  hobnobcli query os.distro --target '*.web.*'\n  hobnobcli query memory.total_mb --target 'os.family=debian'",
+	Short: "Query a trait value from connected envoys in real time, with cached fallback for offline nodes",
+	Long:  "Queries current trait values from connected envoys and cached values from offline envoys.\nExamples:\n  vigogo query os.distro --target '*.web.*'\n  vigogo query memory.total_mb --target 'os.family=debian'",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
@@ -109,7 +109,7 @@ var queryCmd = &cobra.Command{
 		}
 
 		if resp.Counts.Responded == 0 && resp.Counts.Offline == 0 && resp.Counts.TimedOut == 0 {
-			fmt.Println("No thralls matched the target spec.")
+			fmt.Println("No envoys matched the target spec.")
 		}
 
 		return nil

@@ -64,7 +64,7 @@ resources:
     runtime_version: v4.0
     identity_type: SpecificUser
     username: "DOMAIN\\svc-api"
-    password: "secret:hobnob/iis/api-pool-password"
+    password: "secret:vigo/iis/api-pool-password"
     recycle_interval_mins: "0"
 ```
 

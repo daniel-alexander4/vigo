@@ -113,7 +113,7 @@ async function generateBootstrapToken() {
     var resp = await fetch('/api/v1/tokens', { method: 'POST' });
     if (resp.ok) {
         var data = await resp.json();
-        var cmd = 'curl -fsSL http://{{.ServerAddr}}/bootstrap | HOBNOB_TOKEN=' + data.token + ' bash';
+        var cmd = 'curl -fsSL http://{{.ServerAddr}}/bootstrap | VIGO_TOKEN=' + data.token + ' bash';
         document.getElementById('bootstrap-command').textContent = cmd;
         document.getElementById('bootstrap-result').style.display = 'block';
     } else {

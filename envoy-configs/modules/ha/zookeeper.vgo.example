@@ -36,7 +36,7 @@ resources:
     type: file
     target_path: /etc/zookeeper/conf/zoo.cfg
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       tickTime={{ .Vars.zk_tick_time }}
       dataDir={{ .Vars.zk_data_dir }}
       clientPort={{ .Vars.zk_client_port }}

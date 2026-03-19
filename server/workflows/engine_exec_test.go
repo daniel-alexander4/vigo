@@ -13,8 +13,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/db"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
 )
 
 // mockPushRunner records DispatchPush calls and returns configurable results.

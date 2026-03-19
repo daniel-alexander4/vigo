@@ -3,12 +3,12 @@
 
 //! gRPC client wrapper with mTLS and ED25519 signing.
 //!
-//! Mirrors the Go `checkin.Client` — wraps `HobnobAgentClient` with automatic
+//! Mirrors the Go `checkin.Client` — wraps `VigoAgentClient` with automatic
 //! request signing and TLS configuration.
 
 use crate::auth::signer;
 use crate::proto::{
-    hobnob_agent_client::HobnobAgentClient, CheckInRequest, CheckInResponse,
+    vigo_agent_client::VigoAgentClient, CheckInRequest, CheckInResponse,
     DownloadCustomTraitRequest, ModuleResult, RegisterRequest, RegisterResponse,
     ReportResultRequest, ReportResultResponse, ReportTraitsRequest,
 };
@@ -26,8 +26,8 @@ const FAILOVER_THRESHOLD: u32 = 3;
 const PRIMARY_PROBE_CYCLES: u32 = 20;
 
 pub struct Client {
-    agent: HobnobAgentClient<Channel>,
-    thrall_id: String,
+    agent: VigoAgentClient<Channel>,
+    envoy_id: String,
     signing_key: SigningKey,
 
     // Failover state.
@@ -49,14 +49,14 @@ pub struct Client {
 }
 
 impl Client {
-    /// Connect to the Hobnob server with mTLS.
+    /// Connect to the Vigo server with mTLS.
     /// If `client_cert` and `client_key` are None, connects with CA-only verification.
     pub async fn connect(
         server_addr: &str,
         ca_file: Option<&str>,
         client_cert_file: Option<&str>,
         client_key_file: Option<&str>,
-        thrall_id: &str,
+        envoy_id: &str,
         signing_key: SigningKey,
     ) -> Result<Self> {
         // Read TLS material once, reuse for reconnections.
@@ -85,8 +85,8 @@ impl Client {
         let channel = Self::build_channel(server_addr, ca_pem.as_deref(), identity_pem.as_ref()).await?;
 
         Ok(Self {
-            agent: HobnobAgentClient::new(channel),
-            thrall_id: thrall_id.to_string(),
+            agent: VigoAgentClient::new(channel),
+            envoy_id: envoy_id.to_string(),
             signing_key,
             servers: vec![server_addr.to_string()],
             active_server_idx: 0,
@@ -210,7 +210,7 @@ impl Client {
         .await
         {
             Ok(channel) => {
-                self.agent = HobnobAgentClient::new(channel);
+                self.agent = VigoAgentClient::new(channel);
                 true
             }
             Err(e) => {
@@ -245,11 +245,11 @@ impl Client {
         {
             Ok(channel) => {
                 // Probe with a lightweight check-in.
-                let mut probe_client = HobnobAgentClient::new(channel.clone());
+                let mut probe_client = VigoAgentClient::new(channel.clone());
                 let ts = Self::timestamp_str();
                 let sig = crate::auth::signer::sign_payload(b"", &ts, &self.signing_key);
                 let req = CheckInRequest {
-                    thrall_id: self.thrall_id.clone(),
+                    envoy_id: self.envoy_id.clone(),
                     state_fingerprint: String::new(),
                     signature: sig,
                     timestamp: Some(Self::now_timestamp()),
@@ -267,7 +267,7 @@ impl Client {
                             primary = %self.servers[0],
                             "primary recovered, reconnecting"
                         );
-                        self.agent = HobnobAgentClient::new(channel);
+                        self.agent = VigoAgentClient::new(channel);
                         self.active_server_idx = 0;
                         self.consecutive_failures = 0;
                         true
@@ -279,9 +279,9 @@ impl Client {
         }
     }
 
-    /// Get the thrall ID this client authenticates as.
-    pub fn thrall_id(&self) -> &str {
-        &self.thrall_id
+    /// Get the envoy ID this client authenticates as.
+    pub fn envoy_id(&self) -> &str {
+        &self.envoy_id
     }
 
     /// Get current Unix timestamp as decimal string (matches Go's strconv.FormatInt).
@@ -316,7 +316,7 @@ impl Client {
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
 
         let req = CheckInRequest {
-            thrall_id: self.thrall_id.clone(),
+            envoy_id: self.envoy_id.clone(),
             state_fingerprint: state_fingerprint.to_string(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
@@ -374,7 +374,7 @@ impl Client {
 
         let req = ReportResultRequest {
             run_id: run_id.to_string(),
-            thrall_id: self.thrall_id.clone(),
+            envoy_id: self.envoy_id.clone(),
             results,
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
@@ -389,11 +389,11 @@ impl Client {
         Ok(resp.into_inner())
     }
 
-    /// ReportResult for a different thrall (used by gateway proxy for device results).
+    /// ReportResult for a different envoy (used by gateway proxy for device results).
     pub async fn report_result_for(
         &mut self,
         run_id: &str,
-        thrall_id: &str,
+        envoy_id: &str,
         results: Vec<ModuleResult>,
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
@@ -401,7 +401,7 @@ impl Client {
 
         let req = ReportResultRequest {
             run_id: run_id.to_string(),
-            thrall_id: thrall_id.to_string(),
+            envoy_id: envoy_id.to_string(),
             results,
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
@@ -422,7 +422,7 @@ impl Client {
         let sig = signer::sign_payload(traits_json, &ts, &self.signing_key);
 
         let req = ReportTraitsRequest {
-            thrall_id: self.thrall_id.clone(),
+            envoy_id: self.envoy_id.clone(),
             traits_json: traits_json.to_vec(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
@@ -436,13 +436,13 @@ impl Client {
         Ok(())
     }
 
-    /// ReportTraits for a different thrall (used by gateway proxy for device traits).
-    pub async fn report_traits_for(&mut self, thrall_id: &str, traits_json: &[u8]) -> Result<()> {
+    /// ReportTraits for a different envoy (used by gateway proxy for device traits).
+    pub async fn report_traits_for(&mut self, envoy_id: &str, traits_json: &[u8]) -> Result<()> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(traits_json, &ts, &self.signing_key);
 
         let req = ReportTraitsRequest {
-            thrall_id: thrall_id.to_string(),
+            envoy_id: envoy_id.to_string(),
             traits_json: traits_json.to_vec(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
@@ -501,7 +501,7 @@ impl Client {
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
 
         CheckInRequest {
-            thrall_id: self.thrall_id.clone(),
+            envoy_id: self.envoy_id.clone(),
             state_fingerprint: state_fingerprint.to_string(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
@@ -525,7 +525,7 @@ impl Client {
 
         ReportResultRequest {
             run_id: run_id.to_string(),
-            thrall_id: self.thrall_id.clone(),
+            envoy_id: self.envoy_id.clone(),
             results,
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
@@ -533,7 +533,7 @@ impl Client {
     }
 
     /// Get a clone of the underlying gRPC agent client (for stream mode).
-    pub fn agent_client(&self) -> HobnobAgentClient<Channel> {
+    pub fn agent_client(&self) -> VigoAgentClient<Channel> {
         self.agent.clone()
     }
 
@@ -556,8 +556,8 @@ impl Client {
         }
 
         Self {
-            agent: HobnobAgentClient::new(channel),
-            thrall_id: "test-thrall".into(),
+            agent: VigoAgentClient::new(channel),
+            envoy_id: "test-envoy".into(),
             signing_key: SigningKey::generate(&mut OsRng),
             servers,
             active_server_idx: 0,

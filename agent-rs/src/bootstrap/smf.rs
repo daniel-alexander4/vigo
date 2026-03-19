@@ -1,15 +1,15 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! SMF service installation for the Hobnob agent on illumos (OmniOS, OpenIndiana, SmartOS).
+//! SMF service installation for the Vigo agent on illumos (OmniOS, OpenIndiana, SmartOS).
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
-const MANIFEST_PATH: &str = "/var/svc/manifest/system/hobnob-thrall.xml";
-const FMRI: &str = "svc:/system/hobnob-thrall:default";
+const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
+const MANIFEST_PATH: &str = "/var/svc/manifest/system/vigo-envoy.xml";
+const FMRI: &str = "svc:/system/vigo-envoy:default";
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
@@ -21,8 +21,8 @@ fn smf_manifest() -> String {
     format!(
         r#"<?xml version="1.0"?>
 <!DOCTYPE service_bundle SYSTEM "/usr/share/lib/xml/dtd/service_bundle.dtd.1">
-<service_bundle type="manifest" name="hobnob-thrall">
-  <service name="system/hobnob-thrall" type="service" version="1">
+<service_bundle type="manifest" name="vigo-envoy">
+  <service name="system/vigo-envoy" type="service" version="1">
     <create_default_instance enabled="false"/>
     <single_instance/>
 
@@ -48,7 +48,7 @@ fn smf_manifest() -> String {
 
     <template>
       <common_name>
-        <loctext xml:lang="C">Hobnob Configuration Management Agent</loctext>
+        <loctext xml:lang="C">Vigo Configuration Management Agent</loctext>
       </common_name>
     </template>
   </service>
@@ -77,7 +77,7 @@ pub async fn install_service(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(INSTALL_PATH, std::fs::Permissions::from_mode(0o755))?;
         }
-        info!(path = INSTALL_PATH, "installed hobnob binary");
+        info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
     // Write SMF manifest.
@@ -103,8 +103,8 @@ pub async fn install_service(
         bail!("svcadm enable exited with {}", status);
     }
 
-    println!("Hobnob agent service installed and started (SMF).");
-    println!("  svcs hobnob-thrall    # check status");
+    println!("Vigo agent service installed and started (SMF).");
+    println!("  svcs vigo-envoy    # check status");
 
     Ok(grpc_addr)
 }
@@ -116,11 +116,11 @@ mod tests {
     #[test]
     fn test_smf_manifest() {
         let manifest = smf_manifest();
-        assert!(manifest.contains("hobnob-thrall"));
-        assert!(manifest.contains("/usr/local/sbin/hobnob"));
+        assert!(manifest.contains("vigo-envoy"));
+        assert!(manifest.contains("/usr/local/sbin/vigo"));
         assert!(!manifest.contains("--server"), "service should read config from file");
         assert!(manifest.contains("service_bundle"));
-        assert!(manifest.contains("system/hobnob-thrall"));
+        assert!(manifest.contains("system/vigo-envoy"));
         assert!(manifest.contains("milestone/network"));
     }
 }

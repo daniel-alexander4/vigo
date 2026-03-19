@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // Writer appends tamper-evident entries to the audit trail. It maintains

@@ -14,10 +14,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/spanner"
-	"github.com/hobnob/hobnob/server/license"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/license"
 )
 
 // CheckStatus represents the outcome of a single health check.
@@ -109,7 +109,7 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkSpanner(),
 		h.checkSMTP(),
 		h.checkConfig(),
-		h.checkStaleThralls(ctx),
+		h.checkStaleEnvoys(ctx),
 	}
 
 	overall := "healthy"
@@ -176,7 +176,7 @@ func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
 
 	switch status.Stage {
 	case license.StageCompliant:
-		msg := fmt.Sprintf("%s, %d/%d thralls", status.Stage, status.ActiveThralls, status.MaxThralls)
+		msg := fmt.Sprintf("%s, %d/%d envoys", status.Stage, status.ActiveEnvoys, status.MaxEnvoys)
 		if status.DaysRemaining > 0 && status.DaysRemaining <= 30 {
 			return DoctorCheck{Name: "license", Status: StatusWarn, Message: fmt.Sprintf("%s, expires in %d days", msg, status.DaysRemaining)}
 		}
@@ -232,15 +232,15 @@ func (h *DoctorHandler) checkConfig() DoctorCheck {
 	return DoctorCheck{Name: "config", Status: StatusPass, Message: msg}
 }
 
-func (h *DoctorHandler) checkStaleThralls(ctx context.Context) DoctorCheck {
-	thralls, err := h.queries.ListThralls(ctx)
+func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
+	envoys, err := h.queries.ListEnvoys(ctx)
 	if err != nil {
-		return DoctorCheck{Name: "stale_thralls", Status: StatusFail, Message: err.Error()}
+		return DoctorCheck{Name: "stale_envoys", Status: StatusFail, Message: err.Error()}
 	}
 
 	staleThreshold := 2 * h.baseInterval
 	var stale []string
-	for _, t := range thralls {
+	for _, t := range envoys {
 		if t.Revoked != 0 {
 			continue
 		}
@@ -253,14 +253,14 @@ func (h *DoctorHandler) checkStaleThralls(ctx context.Context) DoctorCheck {
 	}
 
 	if len(stale) == 0 {
-		return DoctorCheck{Name: "stale_thralls", Status: StatusPass}
+		return DoctorCheck{Name: "stale_envoys", Status: StatusPass}
 	}
 
 	msg := fmt.Sprintf("%d stale", len(stale))
 	if len(stale) <= 5 {
 		msg += ": " + joinHostnames(stale)
 	}
-	return DoctorCheck{Name: "stale_thralls", Status: StatusWarn, Message: msg}
+	return DoctorCheck{Name: "stale_envoys", Status: StatusWarn, Message: msg}
 }
 
 func joinHostnames(names []string) string {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -19,9 +19,9 @@ import (
 var testCmd = &cobra.Command{
 	Use:   "test [file-or-dir]",
 	Short: "Run config tests that validate resolved policy against expected outcomes",
-	Long: `Validate .hnb config files against expected outcomes using test definitions.
+	Long: `Validate .vgo config files against expected outcomes using test definitions.
 
-Test files (*.test.hnb) declare a hostname, optional mock traits, and
+Test files (*.test.vgo) declare a hostname, optional mock traits, and
 expected resources/modules. The test runner loads the full config tree,
 resolves config as if the hostname checked in, and verifies the result
 matches expectations.
@@ -35,14 +35,14 @@ Runs entirely offline — no server connection needed.`,
 }
 
 func init() {
-	testCmd.Flags().String("config-dir", "/srv/hobnob/policy/stage", "Config directory to load")
+	testCmd.Flags().String("config-dir", "/srv/vigo/policy/stage", "Config directory to load")
 	testCmd.Flags().BoolP("verbose", "v", false, "Show resolved resources on pass")
 }
 
 // testDef is a parsed test definition file.
 type testDef struct {
 	Name   string            `yaml:"name"`
-	Thrall string            `yaml:"thrall"`
+	Envoy string            `yaml:"envoy"`
 	Traits map[string]any    `yaml:"traits"`
 	Expect testExpectations  `yaml:"expect"`
 }
@@ -90,7 +90,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 
 	if len(testFiles) == 0 {
 		fmt.Println("No test files found.")
-		fmt.Println("Create test files with .test.hnb extension in policy/stage/tests/")
+		fmt.Println("Create test files with .test.vgo extension in policy/stage/tests/")
 		return nil
 	}
 
@@ -117,8 +117,8 @@ func runTest(cmd *cobra.Command, args []string) error {
 			errors++
 			continue
 		}
-		if td.Thrall == "" {
-			fmt.Printf("  ERROR  %s: 'thrall' field is required\n", filepath.Base(tf))
+		if td.Envoy == "" {
+			fmt.Printf("  ERROR  %s: 'envoy' field is required\n", filepath.Base(tf))
 			errors++
 			continue
 		}
@@ -150,9 +150,9 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 	var failures []string
 
 	// Resolve config for the given hostname.
-	cfg := store.Get(td.Thrall)
+	cfg := store.Get(td.Envoy)
 	if cfg == nil {
-		return []string{"no config matched for hostname " + td.Thrall}
+		return []string{"no config matched for hostname " + td.Envoy}
 	}
 
 	// Render templates in content fields using mock traits + resolved vars.
@@ -264,8 +264,8 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 	}
 
 	if verbose && len(failures) == 0 {
-		fmt.Printf("           thrall=%s modules=%d resources=%d vars=%d\n",
-			td.Thrall, len(cfg.Modules), totalResources, len(cfg.Vars))
+		fmt.Printf("           envoy=%s modules=%d resources=%d vars=%d\n",
+			td.Envoy, len(cfg.Modules), totalResources, len(cfg.Vars))
 	}
 
 	return failures
@@ -277,7 +277,7 @@ func discoverTests(dir string) []string {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		if strings.HasSuffix(path, ".test.hnb") || strings.HasSuffix(path, ".test.yaml") {
+		if strings.HasSuffix(path, ".test.vgo") || strings.HasSuffix(path, ".test.yaml") {
 			files = append(files, path)
 		}
 		return nil

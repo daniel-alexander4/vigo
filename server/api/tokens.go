@@ -10,12 +10,12 @@ import (
 	"net/http"
 	"time"
 
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
 )
 
 // TokensHandler provides REST endpoints for API token management.
 type TokensHandler struct {
-	tokenStore  *hobnobauth.TokenStore
+	tokenStore  *vigoauth.TokenStore
 	authMethod  string
 	auditWriter auditRecorder
 }
@@ -24,13 +24,13 @@ type TokensHandler struct {
 func (h *TokensHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // NewTokensHandler creates a tokens API handler.
-func NewTokensHandler(tokenStore *hobnobauth.TokenStore, authMethod string) *TokensHandler {
+func NewTokensHandler(tokenStore *vigoauth.TokenStore, authMethod string) *TokensHandler {
 	return &TokensHandler{tokenStore: tokenStore, authMethod: authMethod}
 }
 
 // RegisterRoutes mounts token management endpoints.
 func (h *TokensHandler) RegisterRoutes(mux *http.ServeMux) {
-	authMW := hobnobauth.RequireAuth(h.authMethod)
+	authMW := vigoauth.RequireAuth(h.authMethod)
 	mux.Handle("POST /api/v1/auth/tokens", authMW(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("GET /api/v1/auth/tokens", authMW(http.HandlerFunc(h.handleList)))
 	mux.Handle("DELETE /api/v1/auth/tokens/{id}", authMW(http.HandlerFunc(h.handleDelete)))
@@ -57,7 +57,7 @@ type tokenListItem struct {
 }
 
 func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
-	u := hobnobauth.UserFromContext(r.Context())
+	u := vigoauth.UserFromContext(r.Context())
 	if u == nil {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -99,7 +99,7 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TokensHandler) handleList(w http.ResponseWriter, r *http.Request) {
-	u := hobnobauth.UserFromContext(r.Context())
+	u := vigoauth.UserFromContext(r.Context())
 	if u == nil {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -135,7 +135,7 @@ func (h *TokensHandler) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TokensHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
-	u := hobnobauth.UserFromContext(r.Context())
+	u := vigoauth.UserFromContext(r.Context())
 	if u == nil {
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 		return

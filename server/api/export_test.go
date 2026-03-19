@@ -18,14 +18,14 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 )
 
 // openExportTestDB creates an in-memory SQLite database with enough schema
-// for export tests (thralls + runs + run_results).
+// for export tests (envoys + runs + run_results).
 func openExportTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
@@ -35,7 +35,7 @@ func openExportTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { sqlDB.Close() })
 
 	_, err = sqlDB.Exec(`
-		CREATE TABLE thralls (
+		CREATE TABLE envoys (
 			id                       TEXT PRIMARY KEY,
 			hostname                 TEXT NOT NULL,
 			ip_address               TEXT NOT NULL,
@@ -51,7 +51,7 @@ func openExportTestDB(t *testing.T) *sql.DB {
 		);
 		CREATE TABLE runs (
 			id            TEXT PRIMARY KEY,
-			thrall_id     TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+			envoy_id     TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
 			started_at    DATETIME NOT NULL DEFAULT (datetime('now')),
 			finished_at   DATETIME,
 			status        TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'partial')),
@@ -79,24 +79,24 @@ func openExportTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-// insertExportTestData inserts a thrall, run, and run results for testing.
-// Returns the thrall ID and run ID.
+// insertExportTestData inserts a envoy, run, and run results for testing.
+// Returns the envoy ID and run ID.
 func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTime time.Time) (string, string) {
 	t.Helper()
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 	runID := uuid.New().String()
 
 	_, err := sqlDB.Exec(
-		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
-		thrallID, hostname, "10.0.0.1", "pubkey-pem",
+		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		envoyID, hostname, "10.0.0.1", "pubkey-pem",
 	)
 	if err != nil {
-		t.Fatalf("insert thrall: %v", err)
+		t.Fatalf("insert envoy: %v", err)
 	}
 
 	_, err = sqlDB.Exec(
-		`INSERT INTO runs (id, thrall_id, status, module_count) VALUES (?, ?, 'success', 2)`,
-		runID, thrallID,
+		`INSERT INTO runs (id, envoy_id, status, module_count) VALUES (?, ?, 'success', 2)`,
+		runID, envoyID,
 	)
 	if err != nil {
 		t.Fatalf("insert run: %v", err)
@@ -121,7 +121,7 @@ func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTi
 		t.Fatalf("insert run_result: %v", err)
 	}
 
-	return thrallID, runID
+	return envoyID, runID
 }
 
 func TestExportSIEMBasic(t *testing.T) {
@@ -158,8 +158,8 @@ func TestExportSIEMBasic(t *testing.T) {
 			if e.Hostname != "web01" {
 				t.Errorf("expected hostname web01, got %s", e.Hostname)
 			}
-			if e.Source != "hobnob" {
-				t.Errorf("expected source hobnob, got %s", e.Source)
+			if e.Source != "vigo" {
+				t.Errorf("expected source vigo, got %s", e.Source)
 			}
 			if !e.Changed {
 				t.Error("expected changed=true for nginx-pkg")
@@ -226,7 +226,7 @@ func TestExportSIEMSinceFilter(t *testing.T) {
 	}
 }
 
-func TestExportSIEMThrallFilter(t *testing.T) {
+func TestExportSIEMEnvoyFilter(t *testing.T) {
 	sqlDB := openExportTestDB(t)
 	now := time.Now().UTC()
 	insertExportTestData(t, sqlDB, "web01", now)
@@ -236,7 +236,7 @@ func TestExportSIEMThrallFilter(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/export/siem?thrall=web01", nil)
+	req := httptest.NewRequest("GET", "/api/v1/export/siem?envoy=web01", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -284,7 +284,7 @@ func TestExportSIEMLimit(t *testing.T) {
 
 func TestExportCMDBBasic(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
+	fi.AddEnvoy(fleet.EnvoyState{
 		ID:               "t1",
 		Hostname:         "web01.prod",
 		IP:               "10.0.0.1",
@@ -327,8 +327,8 @@ func TestExportCMDBBasic(t *testing.T) {
 	if r.Hostname != "web01.prod" {
 		t.Errorf("hostname: expected web01.prod, got %s", r.Hostname)
 	}
-	if r.ThrallID != "t1" {
-		t.Errorf("thrall_id: expected t1, got %s", r.ThrallID)
+	if r.EnvoyID != "t1" {
+		t.Errorf("envoy_id: expected t1, got %s", r.EnvoyID)
 	}
 	if r.OS != "debian" {
 		t.Errorf("os: expected debian, got %s", r.OS)
@@ -346,12 +346,12 @@ func TestExportCMDBBasic(t *testing.T) {
 
 func TestExportCMDBStatusFilter(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
+	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t1", Hostname: "web01", IP: "10.0.0.1",
 		ComplianceStatus: "compliant", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
-	fi.AddThrall(fleet.ThrallState{
+	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t2", Hostname: "web02", IP: "10.0.0.2",
 		ComplianceStatus: "drifted", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
@@ -382,12 +382,12 @@ func TestExportCMDBStatusFilter(t *testing.T) {
 
 func TestExportCMDBEnvironmentFilter(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{
+	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t1", Hostname: "web01.prod", IP: "10.0.0.1",
 		ComplianceStatus: "compliant", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
-	fi.AddThrall(fleet.ThrallState{
+	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t2", Hostname: "web02.staging", IP: "10.0.0.2",
 		ComplianceStatus: "compliant", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
@@ -452,7 +452,7 @@ func TestExportOSCALStub(t *testing.T) {
 	if !ok {
 		t.Fatal("missing metadata")
 	}
-	if meta["title"] != "Hobnob HIPAA Assessment Results" {
+	if meta["title"] != "Vigo HIPAA Assessment Results" {
 		t.Errorf("unexpected title: %v", meta["title"])
 	}
 	if meta["oscal-version"] != "1.1.2" {
@@ -475,28 +475,28 @@ func TestExportOSCALStub(t *testing.T) {
 }
 
 // newTestConfigStore creates a ConfigStore backed by a temp directory with a
-// nodes.hnb file mapping hostnames to environments. Each entry matches a specific
+// nodes.vgo file mapping hostnames to environments. Each entry matches a specific
 // hostname and sets the given environment.
 func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigStore {
 	t.Helper()
 	dir := t.TempDir()
 
-	// ConfigStore expects thralls/, modules/, and roles/ subdirectories.
-	for _, sub := range []string{"thralls", "modules", "roles"} {
+	// ConfigStore expects envoys/, modules/, and roles/ subdirectories.
+	for _, sub := range []string{"envoys", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
 	}
 
-	// Build thralls/nodes.hnb YAML.
+	// Build envoys/nodes.vgo YAML.
 	var entries []string
 	for hostname, env := range envMap {
 		entries = append(entries, fmt.Sprintf("  - match: %q\n    environment: %q", hostname, env))
 	}
-	nodesYAML := "thralls:\n" + strings.Join(entries, "\n")
+	nodesYAML := "envoys:\n" + strings.Join(entries, "\n")
 
-	if err := os.WriteFile(filepath.Join(dir, "thralls", "nodes.hnb"), []byte(nodesYAML), 0644); err != nil {
-		t.Fatalf("write nodes.hnb: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "envoys", "nodes.vgo"), []byte(nodesYAML), 0644); err != nil {
+		t.Fatalf("write nodes.vgo: %v", err)
 	}
 
 	// Use a local provider with no secrets (no secret: refs in our test config).

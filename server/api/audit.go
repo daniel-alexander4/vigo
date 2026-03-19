@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hobnob/hobnob/server/audit"
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/audit"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // AuditHandler provides a unified audit view across event types.
@@ -185,7 +185,7 @@ func (h *AuditHandler) VerifyChain(w http.ResponseWriter, r *http.Request) {
 
 // RecordEmergencyAccess records an emergency access event in the tamper-evident
 // audit chain (HIPAA 164.312(a)(2)(ii)). This endpoint is called by
-// `hobnobcli auth emergency-access` when an operator invokes emergency access
+// `vigogo auth emergency-access` when an operator invokes emergency access
 // procedures (e.g., break-glass scenarios, account lockouts, system failures).
 func (h *AuditHandler) RecordEmergencyAccess(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -201,7 +201,7 @@ func (h *AuditHandler) RecordEmergencyAccess(w http.ResponseWriter, r *http.Requ
 	}
 
 	actor := "localhost"
-	if u := hobnobauth.UserFromContext(r.Context()); u != nil {
+	if u := vigoauth.UserFromContext(r.Context()); u != nil {
 		actor = u.Username
 	}
 

@@ -13,8 +13,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/db"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // openUsersTestDB creates an in-memory SQLite database with the users table.
@@ -56,7 +56,7 @@ func userRequestWithUser(method, path string, body []byte, userID, username, rol
 	} else {
 		req = httptest.NewRequest(method, path, nil)
 	}
-	ctx := hobnobauth.ContextWithUser(req.Context(), &hobnobauth.User{
+	ctx := vigoauth.ContextWithUser(req.Context(), &vigoauth.User{
 		ID:       userID,
 		Username: username,
 		Role:     role,
@@ -68,7 +68,7 @@ func userRequestWithUser(method, path string, body []byte, userID, username, rol
 
 func TestUsers_CreateUser(t *testing.T) {
 	_, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -82,7 +82,7 @@ func TestUsers_CreateUser(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var user hobnobauth.User
+	var user vigoauth.User
 	json.NewDecoder(rec.Body).Decode(&user)
 	if user.Username != "bob" {
 		t.Errorf("expected username bob, got %s", user.Username)
@@ -97,7 +97,7 @@ func TestUsers_CreateUser(t *testing.T) {
 
 func TestUsers_CreateUserMissingUsername(t *testing.T) {
 	_, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -114,7 +114,7 @@ func TestUsers_CreateUserMissingUsername(t *testing.T) {
 
 func TestUsers_CreateUserInvalidRole(t *testing.T) {
 	_, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -131,7 +131,7 @@ func TestUsers_CreateUserInvalidRole(t *testing.T) {
 
 func TestUsers_CreateUserDefaultsToViewer(t *testing.T) {
 	_, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -145,7 +145,7 @@ func TestUsers_CreateUserDefaultsToViewer(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var user hobnobauth.User
+	var user vigoauth.User
 	json.NewDecoder(rec.Body).Decode(&user)
 	if user.Role != "viewer" {
 		t.Errorf("expected default role viewer, got %s", user.Role)
@@ -154,7 +154,7 @@ func TestUsers_CreateUserDefaultsToViewer(t *testing.T) {
 
 func TestUsers_ListUsers(t *testing.T) {
 	sqlDB, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -175,7 +175,7 @@ func TestUsers_ListUsers(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var users []*hobnobauth.User
+	var users []*vigoauth.User
 	json.NewDecoder(rec.Body).Decode(&users)
 	if len(users) != 2 {
 		t.Errorf("expected 2 users, got %d", len(users))
@@ -184,7 +184,7 @@ func TestUsers_ListUsers(t *testing.T) {
 
 func TestUsers_DeleteUser(t *testing.T) {
 	sqlDB, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -206,7 +206,7 @@ func TestUsers_DeleteUser(t *testing.T) {
 
 func TestUsers_DeleteSelfBlocked(t *testing.T) {
 	sqlDB, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -229,7 +229,7 @@ func TestUsers_DeleteSelfBlocked(t *testing.T) {
 
 func TestUsers_RBACViewerCannotListUsers(t *testing.T) {
 	_, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -246,7 +246,7 @@ func TestUsers_RBACViewerCannotListUsers(t *testing.T) {
 
 func TestUsers_RBACViewerCannotCreate(t *testing.T) {
 	_, queries := openUsersTestDB(t)
-	store := hobnobauth.NewUserStore(queries)
+	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)

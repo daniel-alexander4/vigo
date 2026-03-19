@@ -12,39 +12,39 @@ import (
 // Mirrors the agent-side list in agent-rs/src/guardrails.rs.
 var protectedPaths = []string{
 	// Agent
-	"/usr/local/sbin/hobnob",
-	"/etc/hobnob-thrall/",
-	"/etc/hobnob/",
-	"/var/lib/hobnob/",
-	"/etc/systemd/system/hobnob-thrall.service",
+	"/usr/local/sbin/vigo",
+	"/etc/vigo-envoy/",
+	"/etc/vigo/",
+	"/var/lib/vigo/",
+	"/etc/systemd/system/vigo-envoy.service",
 	// Server
-	"/usr/local/sbin/hobd",
-	"/usr/local/bin/hobnobcli",
-	"/usr/local/sbin/hobnob-license-manager",
-	"/srv/hobnob/",
-	"/etc/systemd/system/hobd.service",
+	"/usr/local/sbin/vigosrv",
+	"/usr/local/bin/vigogo",
+	"/usr/local/sbin/vigo-license-manager",
+	"/srv/vigo/",
+	"/etc/systemd/system/vigosrv.service",
 }
 
 // Protected services — cannot be stopped/disabled/masked.
-var protectedServices = []string{"hobnob-thrall", "hobd"}
+var protectedServices = []string{"vigo-envoy", "vigosrv"}
 
 // Protected packages — cannot be removed.
-var protectedPackages = []string{"hobnob", "hobd", "hobnobcli"}
+var protectedPackages = []string{"vigo", "vigosrv", "vigogo"}
 
 // Dangerous command patterns for exec resources.
 var dangerousPatterns = []string{
-	"systemctl stop hobnob",
-	"systemctl disable hobnob",
-	"systemctl mask hobnob",
-	"systemctl stop hobd",
-	"systemctl disable hobd",
-	"systemctl mask hobd",
-	"service hobnob-thrall stop",
-	"service hobd stop",
-	"pkill hobnob",
-	"pkill hobd",
-	"killall hobnob",
-	"killall hobd",
+	"systemctl stop vigo",
+	"systemctl disable vigo",
+	"systemctl mask vigo",
+	"systemctl stop vigosrv",
+	"systemctl disable vigosrv",
+	"systemctl mask vigosrv",
+	"service vigo-envoy stop",
+	"service vigosrv stop",
+	"pkill vigo",
+	"pkill vigosrv",
+	"killall vigo",
+	"killall vigosrv",
 }
 
 // ValidateSelfProtection checks a module's resources for guardrail violations.

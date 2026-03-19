@@ -1,6 +1,6 @@
 # Agent CLI Reference
 
-`hobnob` is the Rust agent binary that runs on managed machines (thralls). It is a separate binary from `hobnobcli` (the admin CLI).
+`vigo` is the Rust agent binary that runs on managed machines (envoys). It is a separate binary from `vigogo` (the admin CLI).
 
 In normal operation the agent runs as a daemon via a system service. It also provides subcommands for registration, one-shot convergence, diagnostics, and trait inspection.
 
@@ -8,15 +8,15 @@ In normal operation the agent runs as a daemon via a system service. It also pro
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--data-dir <PATH>` | `/etc/hobnob-thrall` | Agent data directory |
+| `--data-dir <PATH>` | `/etc/vigo-envoy` | Agent data directory |
 | `--server <ADDR>` | `localhost:1530` | Server gRPC address |
 | `--ca-file <PATH>` | | CA certificate file |
 | `--cert-file <PATH>` | | Client certificate file |
 | `--key-file <PATH>` | | Client key file |
 | `--log-level <LEVEL>` | `info` | Log level (trace, debug, info, warn, error) |
 | `--api-addr <URL>` | `https://localhost:8443` | Server REST API address |
-| `--executors-dir <PATH>` | `/etc/hobnob-thrall/executors` | Custom executor scripts directory |
-| `--snapshot-dir <PATH>` | `/var/lib/hobnob/snapshots` | File snapshots directory |
+| `--executors-dir <PATH>` | `/etc/vigo-envoy/executors` | Custom executor scripts directory |
+| `--snapshot-dir <PATH>` | `/var/lib/vigo/snapshots` | File snapshots directory |
 | `--snapshot-retention <N>` | `5` | Max snapshots per file |
 | `--trait-refresh-cycles <N>` | `10` | Trait refresh interval in check-in cycles |
 | `--result-cache-cycles <N>` | `5` | Result cache lifetime in cycles |
@@ -45,9 +45,9 @@ Settings are resolved in order: CLI flags > `<data-dir>/config` > defaults. The 
 With no subcommand, the agent runs as a daemon: it checks in with the server on a regular interval, applies resources, reports results, and handles streaming tasks. This is the normal mode when running as a system service.
 
 ```bash
-hobnob
-hobnob --once          # single cycle, then exit
-hobnob --dry-run       # preview mode
+vigo
+vigo --once          # single cycle, then exit
+vigo --dry-run       # preview mode
 ```
 
 ---
@@ -57,7 +57,7 @@ hobnob --dry-run       # preview mode
 Register this machine with the server using a one-time enrollment token.
 
 ```bash
-hobnob register --token <TOKEN> [--force]
+vigo register --token <TOKEN> [--force]
 ```
 
 | Flag | Description |
@@ -65,7 +65,7 @@ hobnob register --token <TOKEN> [--force]
 | `--token <TOKEN>` | One-time enrollment token (required) |
 | `--force` | Revoke any existing enrollment for this hostname and re-register |
 
-The server validates the token and hostname pattern, stores the agent's ED25519 public key, and returns a thrall UUID. The UUID and server address are saved to the config file for subsequent runs.
+The server validates the token and hostname pattern, stores the agent's ED25519 public key, and returns a envoy UUID. The UUID and server address are saved to the config file for subsequent runs.
 
 ---
 
@@ -74,12 +74,12 @@ The server validates the token and hostname pattern, stores the agent's ED25519 
 Full bootstrap: generate TLS keypair/CSR, register via the REST API, receive signed certificates, and optionally install a system service.
 
 ```bash
-hobnob bootstrap --server <URL> [--token <TOKEN>] [--install-service] [--grpc-port <PORT>] [--force]
+vigo bootstrap --server <URL> [--token <TOKEN>] [--install-service] [--grpc-port <PORT>] [--force]
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--server <URL>` | Server REST API URL (required, e.g. `https://hobnob.example.com:8443`) |
+| `--server <URL>` | Server REST API URL (required, e.g. `https://vigo.example.com:8443`) |
 | `--token <TOKEN>` | Enrollment token (optional if trusted enrollment is configured) |
 | `--install-service` | Install and start the platform service (systemd, launchd, rc.d, rcctl, SMF, Windows Service) |
 | `--grpc-port <PORT>` | Server gRPC port (default: `1530`) |
@@ -94,7 +94,7 @@ In practice, the bootstrap shell script from `curl -sSfk https://<server>:8443/b
 Run a single convergence cycle: check in, apply resources, report results, then exit.
 
 ```bash
-hobnob run [--module <name>] [--dry-run]
+vigo run [--module <name>] [--dry-run]
 ```
 
 | Flag | Description |
@@ -111,12 +111,12 @@ Produces a color-coded trace to stderr showing each resource's status (created, 
 Show local agent state by reading from the config file and LMDB state store. No server communication occurs -- this command works even when the server is unreachable.
 
 ```bash
-hobnob status
+vigo status
 ```
 
 Displays:
 
-- **Thrall ID** -- the UUID assigned during registration, or `(not registered)` if the agent has not enrolled
+- **Envoy ID** -- the UUID assigned during registration, or `(not registered)` if the agent has not enrolled
 - **Server** -- the gRPC address the agent connects to
 - **Spoke** -- the spoke address if the agent was routed by a spanner hub
 - **Fallback servers** -- configured failover server addresses
@@ -130,11 +130,11 @@ Displays:
 ### Example Output
 
 ```
-Thrall ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
-Server:           hobnob.example.com:1530
-Fallback servers: hobnob2.example.com:1530
-Data directory:   /etc/hobnob-thrall
-State store:      /var/lib/hobnob/state
+Envoy ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
+Server:           vigo.example.com:1530
+Fallback servers: vigo2.example.com:1530
+Data directory:   /etc/vigo-envoy
+State store:      /var/lib/vigo/state
 
 Policy:
   Cached:         yes
@@ -168,11 +168,11 @@ Server pubkey:    present
 When the LMDB state store is not accessible (e.g., running as a non-root user on a machine where the state directory is root-owned), the output gracefully degrades:
 
 ```
-Thrall ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
-Server:           hobnob.example.com:1530
+Envoy ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
+Server:           vigo.example.com:1530
 Fallback servers: none
-Data directory:   /etc/hobnob-thrall
-State store:      /var/lib/hobnob/state
+Data directory:   /etc/vigo-envoy
+State store:      /var/lib/vigo/state
 
 Policy:           (state store unavailable: permission denied)
 Traits:           (state store unavailable)
@@ -187,9 +187,9 @@ Server pubkey:    absent
 Run trait collectors and print the results as JSON to stdout. With no arguments, runs all collectors.
 
 ```bash
-hobnob traits                    # all collectors
-hobnob traits os network         # specific collectors
-hobnob traits os.family           # dot-path query (returns a single value)
+vigo traits                    # all collectors
+vigo traits os network         # specific collectors
+vigo traits os.family           # dot-path query (returns a single value)
 ```
 
 When given collector names, only those collectors run. When given a dot-separated path, it runs all collectors and extracts the value at that path.
@@ -201,7 +201,7 @@ When given collector names, only those collectors run. When given a dot-separate
 Print the agent version and exit.
 
 ```bash
-hobnob version
+vigo version
 ```
 
 ---

@@ -4,7 +4,7 @@ title: Business Associate Agreement Template
 
 # Business Associate Agreement (BAA) Template
 
-This template covers the key provisions required when Hobnob is used to manage systems containing electronic Protected Health Information (ePHI). Customize this for your organization and have legal counsel review before execution.
+This template covers the key provisions required when Vigo is used to manage systems containing electronic Protected Health Information (ePHI). Customize this for your organization and have legal counsel review before execution.
 
 ---
 
@@ -25,7 +25,7 @@ Terms used in this BAA shall have the meanings set forth in the HIPAA Rules (45 
 - **Protected Health Information (PHI):** Any individually identifiable health information transmitted or maintained in any form.
 - **Electronic Protected Health Information (ePHI):** PHI transmitted or maintained in electronic media.
 - **HIPAA Rules:** The Privacy Rule, Security Rule, Breach Notification Rule, and Enforcement Rule.
-- **Configuration Management System:** The Hobnob software used to enforce desired state on managed systems.
+- **Configuration Management System:** The Vigo software used to enforce desired state on managed systems.
 
 ### 2. Obligations of Business Associate
 
@@ -64,7 +64,7 @@ Business Associate may use or disclose PHI only as necessary to:
 
 Business Associate shall not use or disclose PHI in a manner that would violate the HIPAA Rules if done by Covered Entity.
 
-### 4. Technical Safeguards Implemented by Hobnob
+### 4. Technical Safeguards Implemented by Vigo
 
 | HIPAA Requirement | Implementation |
 |-------------------|----------------|

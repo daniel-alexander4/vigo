@@ -1,10 +1,10 @@
 #~ Manages directory, file, exec resources for server backup
-name: hobnob-server-backup
+name: vigo-server-backup
 
 vars:
-  backup_dest: "/srv/backups.hobnob"
-  backup_db_src: "/srv/hobnob/db/hobnob.db"
-  backup_src: "/srv/hobnob"
+  backup_dest: "/srv/backups.vigo"
+  backup_db_src: "/srv/vigo/db/vigo.db"
+  backup_src: "/srv/vigo"
   backup_hour_start: "2"
   backup_hour_end: "4"
 
@@ -20,7 +20,7 @@ resources:
   #~ Deploy backup script
   - name: backup-script
     type: file
-    target_path: /usr/local/bin/hobnob-backup.sh
+    target_path: /usr/local/bin/vigo-backup.sh
     owner: root
     group: root
     mode: "0700"
@@ -30,13 +30,13 @@ resources:
       DEST="{{ .Vars.backup_dest }}"
       DB_SRC="{{ .Vars.backup_db_src }}"
       SRC="{{ .Vars.backup_src }}"
-      STAMP="/tmp/.hobnob-backup-$(date +%Y%m%d)"
+      STAMP="/tmp/.vigo-backup-$(date +%Y%m%d)"
 
       # Consistent SQLite snapshot first.
       if [ -f "$DB_SRC" ]; then
         SNAP_DIR="$DEST/db"
         mkdir -p "$SNAP_DIR"
-        sqlite3 "$DB_SRC" "VACUUM INTO '$SNAP_DIR/hobnob.db'"
+        sqlite3 "$DB_SRC" "VACUUM INTO '$SNAP_DIR/vigo.db'"
       fi
 
       # Unlock backup dir.
@@ -44,9 +44,9 @@ resources:
 
       # Rsync everything except the live DB files (we snapshot those above).
       rsync -a --delete \
-        --exclude 'db/hobnob.db' \
-        --exclude 'db/hobnob.db-wal' \
-        --exclude 'db/hobnob.db-shm' \
+        --exclude 'db/vigo.db' \
+        --exclude 'db/vigo.db-wal' \
+        --exclude 'db/vigo.db-shm' \
         "$SRC/" "$DEST/"
 
       # Lock backup dir.
@@ -59,7 +59,7 @@ resources:
   #~ Run backup once daily during the configured hour window
   - name: run-backup
     type: exec
-    command: /usr/local/bin/hobnob-backup.sh
+    command: /usr/local/bin/vigo-backup.sh
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
-    onlyif: "! test -f /tmp/.hobnob-backup-$(date +%Y%m%d)"
+    onlyif: "! test -f /tmp/.vigo-backup-$(date +%Y%m%d)"
     depends_on: [backup-script]

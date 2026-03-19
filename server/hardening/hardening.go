@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package hardening provides binary integrity verification and anti-tamper
-// checks for the hobd server binary.
+// checks for the vigosrv server binary.
 package hardening
 
 import (

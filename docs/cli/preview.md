@@ -1,26 +1,26 @@
-# hobnobcli preview
+# vigogo preview
 
-Dry-run to preview planned changes for thralls without applying them.
+Dry-run to preview planned changes for envoys without applying them.
 
 ## Usage
 
 ```bash
-hobnobcli preview [hostname-or-uuid] [flags]
+vigogo preview [hostname-or-uuid] [flags]
 ```
 
 ## Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--all` | | `false` | Preview all thralls |
-| `--env` | | | Filter thralls by environment |
+| `--all` | | `false` | Preview all envoys |
+| `--env` | | | Filter envoys by environment |
 
 ## Examples
 
-### Preview changes for a specific thrall
+### Preview changes for a specific envoy
 
 ```bash
-hobnobcli preview web-01.example.com
+vigogo preview web-01.example.com
 ```
 
 ```
@@ -30,10 +30,10 @@ nginx       file       /etc/nginx/nginx.conf     update
 nginx       service    nginx                     restart
 ```
 
-### Preview changes for all thralls
+### Preview changes for all envoys
 
 ```bash
-hobnobcli preview --all
+vigogo preview --all
 ```
 
 ```
@@ -48,7 +48,7 @@ No changes planned for e5f6g7h8
 ### Preview changes for a specific environment
 
 ```bash
-hobnobcli preview --env staging
+vigogo preview --env staging
 ```
 
 Output is colorized when writing to a terminal: `create` in green, `update` in yellow, `delete` in red.
@@ -56,5 +56,5 @@ Output is colorized when writing to a terminal: `create` in green, `update` in y
 ## Related
 
 - [push](push.md) -- trigger immediate check-in
-- [validate](validate.md) -- validate .hnb configuration files
+- [validate](validate.md) -- validate .vgo configuration files
 - [rollback](rollback.md) -- rollback to a previous state

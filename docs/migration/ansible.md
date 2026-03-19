@@ -1,27 +1,27 @@
 # Migrating from Ansible
 
-Hobnob and Ansible solve the same problem but with opposite architectures. The biggest shift is from push-based (SSH from a control node) to pull-based (agents poll a server). If you're comfortable with Ansible's YAML and role structure, Hobnob's config format will feel natural — the differences are in execution model, templating, and state management.
+Vigo and Ansible solve the same problem but with opposite architectures. The biggest shift is from push-based (SSH from a control node) to pull-based (agents poll a server). If you're comfortable with Ansible's YAML and role structure, Vigo's config format will feel natural — the differences are in execution model, templating, and state management.
 
 ## Architecture Differences
 
-Ansible pushes configuration over SSH from a control node. There is no persistent agent — each run connects, executes tasks, and disconnects. Hobnob runs a persistent agent on each managed node that pulls desired state from a central server over gRPC/mTLS on a configurable interval.
+Ansible pushes configuration over SSH from a control node. There is no persistent agent — each run connects, executes tasks, and disconnects. Vigo runs a persistent agent on each managed node that pulls desired state from a central server over gRPC/mTLS on a configurable interval.
 
-Ansible processes tasks sequentially in playbook order. Hobnob builds a resource DAG from `depends_on`, `notify`, and `subscribes` declarations, then executes resources respecting the dependency graph.
+Ansible processes tasks sequentially in playbook order. Vigo builds a resource DAG from `depends_on`, `notify`, and `subscribes` declarations, then executes resources respecting the dependency graph.
 
-Ansible is agentless but requires SSH access and Python on target hosts. Hobnob's agent is a single static Rust binary with no runtime dependencies — it handles its own TLS, state caching, and offline convergence.
+Ansible is agentless but requires SSH access and Python on target hosts. Vigo's agent is a single static Rust binary with no runtime dependencies — it handles its own TLS, state caching, and offline convergence.
 
-Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, variable files. Hobnob restricts Go templates to `content:` attributes only. All other fields are literal values.
+Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, variable files. Vigo restricts Go templates to `content:` attributes only. All other fields are literal values.
 
 ## Concept Mapping
 
-| Ansible Concept | Hobnob Equivalent | Notes |
+| Ansible Concept | Vigo Equivalent | Notes |
 |---|---|---|
-| Playbook | `nodes.hnb` + roles | Node-to-role assignment replaces playbook targeting |
-| Role | Module + Role | An Ansible role maps to a Hobnob module; a Hobnob role groups modules |
+| Playbook | `nodes.vgo` + roles | Node-to-role assignment replaces playbook targeting |
+| Role | Module + Role | An Ansible role maps to a Vigo module; a Vigo role groups modules |
 | Task | Resource | Declarative, idempotent unit of work |
 | Handler | `notify` / `subscribes` | Same semantics — triggered on change, run at end |
-| Inventory | `nodes.hnb` | Glob patterns instead of host groups |
-| `host_vars` | Node-level `vars:` | Per-host overrides in `nodes.hnb` |
+| Inventory | `nodes.vgo` | Glob patterns instead of host groups |
+| `host_vars` | Node-level `vars:` | Per-host overrides in `nodes.vgo` |
 | `group_vars` | Module `vars:` / Role `vars:` | Default values at module or role level |
 | Facts (`ansible_*`) | Traits | Discovered automatically by the agent |
 | `gather_facts` | Always-on trait collection | Traits collected every check-in — no toggle |
@@ -31,15 +31,15 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 | `become: yes` | Agent runs as root | No sudo — agent runs as root by design |
 | `register:` | No equivalent | Resources don't capture output for later use |
 | Vault | `secret:` prefix | Resolved server-side at bundle compile time |
-| `ansible-pull` | Default mode | Hobnob is always pull — this is the primary model |
-| Galaxy role | Module `.hnb` file | No package registry — YAML files in version control |
+| `ansible-pull` | Default mode | Vigo is always pull — this is the primary model |
+| Galaxy role | Module `.vgo` file | No package registry — YAML files in version control |
 | `tags:` | No equivalent | All resources in a module always apply (use `when:` to conditionally skip) |
 | `delegate_to:` | Tasks / Workflows | Cross-node orchestration uses the task system |
 | `--check` mode | Dry-run in check phase | Each resource checks before acting — inherent to the model |
 
 ## Resource Type Mapping
 
-| Ansible Module | Hobnob Executor | Notes |
+| Ansible Module | Vigo Executor | Notes |
 |---|---|---|
 | `ansible.builtin.package` | `package` | Auto-detects package manager |
 | `ansible.builtin.copy` / `template` | `file` | `content:` for templates, `sourcepath:` for copies |
@@ -127,9 +127,9 @@ http {
 }
 ```
 
-### Hobnob Version
+### Vigo Version
 
-`policy/stage/modules/nginx.hnb`:
+`policy/stage/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -181,7 +181,7 @@ resources:
     enabled: true
 ```
 
-`policy/stage/roles/webserver.hnb`:
+`policy/stage/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -189,10 +189,10 @@ modules:
   - nginx
 ```
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     environment: production
     roles: [webserver]
@@ -206,23 +206,23 @@ thralls:
 ### Key Differences
 
 - **Templates inline or in `templates/`.** Small templates go inline in `content:`. Larger files use `source: templates/nginx.conf.tmpl` — the server reads and renders the file from the `templates/` directory. Same concept as Ansible's `templates/`, but no Jinja2.
-- **No handlers directory.** Ansible's handler/notify pattern maps directly to Hobnob's `notify:` list on the resource. No separate `handlers/main.yml` file.
+- **No handlers directory.** Ansible's handler/notify pattern maps directly to Vigo's `notify:` list on the resource. No separate `handlers/main.yml` file.
 - **No defaults directory.** Module-level `vars:` replaces `defaults/main.yml`. Same concept, inline in the module file.
-- **One file per module.** An Ansible role is 4+ files across multiple directories. A Hobnob module is a single `.hnb` file.
+- **One file per module.** An Ansible role is 4+ files across multiple directories. A Vigo module is a single `.vgo` file.
 - **Template syntax.** `{{ variable }}` in Jinja2 becomes `{{ .Vars.variable }}` in Go templates. Note the `.Vars.` prefix.
 
 ## Variable and Data Hierarchy
 
-Ansible has a famously complex [variable precedence](https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html#understanding-variable-precedence) with 22 levels. Hobnob has three:
+Ansible has a famously complex [variable precedence](https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html#understanding-variable-precedence) with 22 levels. Vigo has three:
 
-1. **Module defaults** — `vars:` in the module `.hnb` file
-2. **Role vars** — `vars:` in the role `.hnb` file
-3. **Node vars** — `vars:` in the `nodes.hnb` entry
+1. **Module defaults** — `vars:` in the module `.vgo` file
+2. **Role vars** — `vars:` in the role `.vgo` file
+3. **Node vars** — `vars:` in the `nodes.vgo` entry
 
 Node vars override role vars, which override module defaults. For environment-specific overrides:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     roles: [webserver]
     vars:
@@ -236,9 +236,9 @@ For external data files, `vars_from:` loads a YAML file at check-in time — sim
 
 ## Templates
 
-Ansible uses Jinja2 templates everywhere. Hobnob uses Go templates in `content:` only.
+Ansible uses Jinja2 templates everywhere. Vigo uses Go templates in `content:` only.
 
-| Ansible Jinja2 | Hobnob Go Template |
+| Ansible Jinja2 | Vigo Go Template |
 |---|---|
 | `{{ variable }}` | `{{ .Vars.variable }}` |
 | `{{ ansible_hostname }}` | `{{ .Traits.identity.hostname }}` |
@@ -248,7 +248,7 @@ Ansible uses Jinja2 templates everywhere. Hobnob uses Go templates in `content:`
 | `{{ variable \| lower }}` | `{{ lower .Vars.variable }}` |
 | `{{ variable \| default('x') }}` | `{{ default .Vars.variable "x" }}` |
 
-**Critical restriction:** Hobnob templates work only inside `content:` attributes. You cannot use `{{ }}` in `package:`, `target_path:`, `command:`, or any other field. For dynamic behavior in non-content fields, use `when:` expressions with separate resources.
+**Critical restriction:** Vigo templates work only inside `content:` attributes. You cannot use `{{ }}` in `package:`, `target_path:`, `command:`, or any other field. For dynamic behavior in non-content fields, use `when:` expressions with separate resources.
 
 ## Conditionals and Targeting
 
@@ -262,7 +262,7 @@ Ansible conditionals use Jinja2 syntax:
   when: ansible_os_family == "Debian"
 ```
 
-Hobnob uses `when:` with builtin functions:
+Vigo uses `when:` with builtin functions:
 
 ```yaml
 - name: nginx-package-debian
@@ -278,7 +278,7 @@ Hobnob uses `when:` with builtin functions:
   when: "os_family('redhat')"
 ```
 
-Ansible's `when:` accepts full Jinja2 expressions. Hobnob's `when:` uses its own expression syntax with 15 builtins and boolean operators (`&&`, `||`, `!`).
+Ansible's `when:` accepts full Jinja2 expressions. Vigo's `when:` uses its own expression syntax with 15 builtins and boolean operators (`&&`, `||`, `!`).
 
 ## Secrets
 
@@ -288,35 +288,35 @@ Ansible Vault encrypts entire files or individual variables:
 ansible-vault encrypt_string 'supersecret' --name 'db_password'
 ```
 
-Hobnob uses the `secret:` prefix in any value:
+Vigo uses the `secret:` prefix in any value:
 
 ```yaml
-content: "secret:hobnob/nginx/ssl_key"
+content: "secret:vigo/nginx/ssl_key"
 ```
 
 Secrets are resolved server-side at bundle compile time. The encrypted value never appears in configs, logs, or agent traffic. No vault password file to manage.
 
 ## Common Gotchas
 
-1. **No push mode.** Ansible pushes on demand. Hobnob agents pull on an interval. For immediate application, use `hobnobcli push` to bump specific thralls, or use the task system for ad-hoc commands.
+1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. For immediate application, use `vigogo push` to bump specific envoys, or use the task system for ad-hoc commands.
 
-2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Hobnob resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or `vars_from:` (for external data).
+2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Vigo resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or `vars_from:` (for external data).
 
-3. **Templates only in `content:`.** Ansible's Jinja2 works everywhere — task arguments, `when:`, variable files. Hobnob restricts templates to `content:`. Resist the urge to template `target_path:` or `command:`.
+3. **Templates only in `content:`.** Ansible's Jinja2 works everywhere — task arguments, `when:`, variable files. Vigo restricts templates to `content:`. Resist the urge to template `target_path:` or `command:`.
 
-4. **No task ordering by file position.** Ansible runs tasks in the order they appear. Hobnob builds a DAG — without explicit `depends_on` or `notify`, resources may execute in any order. Always declare dependencies explicitly.
+4. **No task ordering by file position.** Ansible runs tasks in the order they appear. Vigo builds a DAG — without explicit `depends_on` or `notify`, resources may execute in any order. Always declare dependencies explicitly.
 
-5. **No `become:` / sudo.** The Hobnob agent runs as root. There's no privilege escalation model — if the agent needs to do it, it does it as root.
+5. **No `become:` / sudo.** The Vigo agent runs as root. There's no privilege escalation model — if the agent needs to do it, it does it as root.
 
-6. **No `--limit` or `--tags`.** Ansible can target subsets of hosts or tasks per run. Hobnob applies all matching resources every check-in. Use `when:` to conditionally skip resources, and glob patterns in `nodes.hnb` for host targeting.
+6. **No `--limit` or `--tags`.** Ansible can target subsets of hosts or tasks per run. Vigo applies all matching resources every check-in. Use `when:` to conditionally skip resources, and glob patterns in `nodes.vgo` for host targeting.
 
-7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `hobnobcli push run` or `hobnobcli query run` — these dispatch through the agent stream.
+7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `vigogo push run` or `vigogo query run` — these dispatch through the agent stream.
 
-8. **Agent must be installed first.** Ansible needs only SSH. Hobnob requires bootstrapping the agent binary on each node. Use `curl -sSfk https://<server>:8443/bootstrap | sudo sh` for automated enrollment.
+8. **Agent must be installed first.** Ansible needs only SSH. Vigo requires bootstrapping the agent binary on each node. Use `curl -sSfk https://<server>:8443/bootstrap | sudo sh` for automated enrollment.
 
 ## Related
 
-- [Config Format](../concepts/config-format.md) — Modules, roles, nodes.hnb, vars
+- [Config Format](../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
 - [Resource DAG](../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../concepts/when-expressions.md) — Conditional expressions and builtins

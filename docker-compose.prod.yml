@@ -1,27 +1,27 @@
 # Production compose — pulls pre-built image from registry.
 #
 # Quick start:
-#   mkdir -p /srv/hobnob
-#   docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
-#   cd /srv/hobnob && docker compose up -d
+#   mkdir -p /srv/vigo
+#   docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
+#   cd /srv/vigo && docker compose up -d
 #
-# Optional services — set HOBNOB_SERVICES in .env:
-#   HOBNOB_SERVICES=ollama              # local AI assistant
-#   HOBNOB_SERVICES=postgres            # Postgres instead of SQLite
-#   HOBNOB_SERVICES=ollama,postgres     # both
+# Optional services — set VIGO_SERVICES in .env:
+#   VIGO_SERVICES=ollama              # local AI assistant
+#   VIGO_SERVICES=postgres            # Postgres instead of SQLite
+#   VIGO_SERVICES=ollama,postgres     # both
 
 services:
-  hobnob:
-    image: ghcr.io/daniel-alexander4/hobnob:latest
-    container_name: hobnob
+  vigo:
+    image: ghcr.io/daniel-alexander4/vigo:latest
+    container_name: vigo
     restart: unless-stopped
     ports:
       - "1530:1530"   # gRPC (agent check-in)
       - "8443:8443"   # REST API + Web UI (HTTPS)
     env_file:
-      - /srv/hobnob/.env
+      - /srv/vigo/.env
     volumes:
-      - /srv/hobnob:/srv/hobnob
+      - /srv/vigo:/srv/vigo
       - /usr/local/bin:/host-bin
     depends_on:
       postgres:
@@ -30,26 +30,26 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: hobnob-postgres
+    container_name: vigo-postgres
     restart: unless-stopped
     profiles: ["postgres"]
     environment:
-      POSTGRES_DB: hobnob
-      POSTGRES_USER: hobnob
-      POSTGRES_PASSWORD: hobnob
+      POSTGRES_DB: vigo
+      POSTGRES_USER: vigo
+      POSTGRES_PASSWORD: vigo
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hobnob"]
+      test: ["CMD-SHELL", "pg_isready -U vigo"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   ollama:
     image: ollama/ollama:latest
-    container_name: hobnob-ollama
+    container_name: vigo-ollama
     restart: unless-stopped
     profiles: ["ollama"]
     ports:

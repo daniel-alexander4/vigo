@@ -11,16 +11,16 @@ import (
 )
 
 const createSecretRotationEvent = `-- name: CreateSecretRotationEvent :one
-INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_thralls)
+INSERT INTO secret_rotation_events (secret_path, old_version, new_version, affected_envoys)
 VALUES (?, ?, ?, ?)
-RETURNING id, secret_path, old_version, new_version, rotated_at, affected_thralls
+RETURNING id, secret_path, old_version, new_version, rotated_at, affected_envoys
 `
 
 type CreateSecretRotationEventParams struct {
-	SecretPath      string         `json:"secret_path"`
-	OldVersion      sql.NullString `json:"old_version"`
-	NewVersion      sql.NullString `json:"new_version"`
-	AffectedThralls int64          `json:"affected_thralls"`
+	SecretPath     string         `json:"secret_path"`
+	OldVersion     sql.NullString `json:"old_version"`
+	NewVersion     sql.NullString `json:"new_version"`
+	AffectedEnvoys int64          `json:"affected_envoys"`
 }
 
 func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecretRotationEventParams) (SecretRotationEvent, error) {
@@ -28,7 +28,7 @@ func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecre
 		arg.SecretPath,
 		arg.OldVersion,
 		arg.NewVersion,
-		arg.AffectedThralls,
+		arg.AffectedEnvoys,
 	)
 	var i SecretRotationEvent
 	err := row.Scan(
@@ -37,7 +37,7 @@ func (q *Queries) CreateSecretRotationEvent(ctx context.Context, arg CreateSecre
 		&i.OldVersion,
 		&i.NewVersion,
 		&i.RotatedAt,
-		&i.AffectedThralls,
+		&i.AffectedEnvoys,
 	)
 	return i, err
 }

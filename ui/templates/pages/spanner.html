@@ -14,8 +14,8 @@
         <div class="stat-card__label">Healthy</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value">{{.TotalThralls}}</div>
-        <div class="stat-card__label">Total Thralls</div>
+        <div class="stat-card__value">{{.TotalEnvoys}}</div>
+        <div class="stat-card__label">Total Envoys</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-success">{{.TotalCompliant}}</div>
@@ -43,7 +43,7 @@
                 <th>Spoke ID</th>
                 <th>Address</th>
                 <th>Patterns</th>
-                <th>Thralls</th>
+                <th>Envoys</th>
                 <th>Compliant</th>
                 <th>Compliance</th>
                 <th>Latency</th>
@@ -56,8 +56,8 @@
                 <td><a href="/spanner/spokes/{{.ID}}"><strong>{{.ID}}</strong></a></td>
                 <td class="text-muted">{{.Addr}}</td>
                 <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
-                <td>{{.ThrallCount}}</td>
-                <td>{{.Compliant}}/{{.ThrallCount}}</td>
+                <td>{{.EnvoyCount}}</td>
+                <td>{{.Compliant}}/{{.EnvoyCount}}</td>
                 <td>{{printf "%.1f" .CompliancePct}}%</td>
                 <td>{{.LatencyMs}}ms</td>
                 <td>

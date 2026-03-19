@@ -50,7 +50,7 @@ resources:
     target_path: /etc/audit/rules.d/cis.rules
     content: |
       # CIS RHEL 9 — Audit Rules
-      # Managed by Hobnob
+      # Managed by Vigo
 
       # Time changes
       -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change

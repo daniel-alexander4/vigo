@@ -34,7 +34,7 @@ impl KernelModuleExecutor {
     }
 
     fn conf_path(name: &str) -> String {
-        format!("/etc/modules-load.d/hobnob-{}.conf", name)
+        format!("/etc/modules-load.d/vigo-{}.conf", name)
     }
 
     fn is_persisted(name: &str) -> bool {

@@ -21,7 +21,7 @@ Status filter buttons:
 | Command | Truncated command string (full command shown on hover) |
 | Target | Hostname glob or trait filter used for targeting |
 | Status | Color-coded badge: running, complete, failed, cancelled |
-| Targets | Number of thralls targeted |
+| Targets | Number of envoys targeted |
 | Operator | Who initiated the push |
 | Created | Push creation timestamp |
 

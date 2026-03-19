@@ -1,6 +1,6 @@
 # Bootstrap Enrollment
 
-Bootstrap is the process by which a new machine becomes a managed thrall. The server provides a one-line bootstrap script that handles agent installation and enrollment.
+Bootstrap is the process by which a new machine becomes a managed envoy. The server provides a one-line bootstrap script that handles agent installation and enrollment.
 
 ## How It Works
 
@@ -18,19 +18,19 @@ The `-k` flag allows curl to connect to the server's self-signed TLS certificate
 
 The script:
 1. Detects OS (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos) and architecture
-2. Stops any existing hobnob-thrall service and removes previous enrollment data for a clean start
+2. Stops any existing vigo-envoy service and removes previous enrollment data for a clean start
 3. Downloads the correct agent binary from the server (always replaces existing)
 4. Verifies the SHA256 checksum of the downloaded binary (aborts on mismatch)
 5. Generates an ED25519 keypair
 6. Calls the server's bootstrap registration endpoint
 7. Receives a client UUID and signed TLS certificate
-8. Writes agent config to `/etc/hobnob-thrall/config`
+8. Writes agent config to `/etc/vigo-envoy/config`
 9. Installs the appropriate service for the platform:
-   - **Linux:** systemd unit (`hobnob-thrall.service`)
-   - **macOS:** launchd plist (`com.hobnob.thrall`)
-   - **FreeBSD / NetBSD:** rc.d script (`/usr/local/etc/rc.d/hobnob_thrall`)
+   - **Linux:** systemd unit (`vigo-envoy.service`)
+   - **macOS:** launchd plist (`com.vigo.envoy`)
+   - **FreeBSD / NetBSD:** rc.d script (`/usr/local/etc/rc.d/vigo_envoy`)
    - **OpenBSD:** registered via `rcctl`
-   - **illumos:** SMF service manifest (`svc:/system/hobnob-thrall:default`)
+   - **illumos:** SMF service manifest (`svc:/system/vigo-envoy:default`)
 10. Starts the service
 
 ### Windows Bootstrap
@@ -58,14 +58,14 @@ bootstrap:
       cidrs: ["192.168.0.0/16"]
 ```
 
-Thralls matching both the hostname glob and source CIDR enroll without a token.
+Envoys matching both the hostname glob and source CIDR enroll without a token.
 
 ### One-Time Token
 
 For stricter environments, generate a token:
 
 ```bash
-hobnobcli tokens generate --pattern "web3.example.com"
+vigogo tokens generate --pattern "web3.example.com"
 ```
 
 Pass the token to the bootstrap script:
@@ -81,10 +81,10 @@ Tokens are:
 
 ### Approved Patterns
 
-Pre-approve hostname patterns so matching thralls can enroll:
+Pre-approve hostname patterns so matching envoys can enroll:
 
 ```bash
-hobnobcli approved add "*.prod.example.com"
+vigogo approved add "*.prod.example.com"
 ```
 
 ## Certificate Signing
@@ -116,7 +116,7 @@ For distribution builds, agent binaries can also be signed with an ED25519 key (
 3. If a signature is present, fetches the signing public key from the server and verifies the ED25519 signature over the SHA256 digest
 4. Atomically replaces the binary and exec-restarts
 
-This means even a compromised server cannot push a malicious binary without the offline signing key. Updates can be triggered remotely via `hobnobcli thralls rebootstrap`.
+This means even a compromised server cannot push a malicious binary without the offline signing key. Updates can be triggered remotely via `vigogo envoys rebootstrap`.
 
 ## Security
 
@@ -129,15 +129,15 @@ This means even a compromised server cannot push a malicious binary without the 
 
 ## Troubleshooting
 
-**"An active thrall with this hostname already exists":**
-- A thrall with the same hostname is already enrolled. The bootstrap script handles this automatically (it always passes `--force` to revoke and re-enroll). If using `hobnob register` directly, pass `--force`:
+**"An active envoy with this hostname already exists":**
+- A envoy with the same hostname is already enrolled. The bootstrap script handles this automatically (it always passes `--force` to revoke and re-enroll). If using `vigo register` directly, pass `--force`:
 
 ```bash
-hobnob register --token <token> --force
+vigo register --token <token> --force
 ```
 
 **Agent fails to register:**
-- Check that the server's gRPC port (1530) is reachable from the thrall
+- Check that the server's gRPC port (1530) is reachable from the envoy
 - Verify the token hasn't already been used
 - Check hostname matches the token pattern or trusted enrollment pattern
 
@@ -147,7 +147,7 @@ hobnob register --token <token> --force
 
 **Agent binary download fails:**
 - Ensure the server's container image includes agent binaries for the target platform
-- Check that the `/srv/hobnob/` volume is correctly mounted
+- Check that the `/srv/vigo/` volume is correctly mounted
 
 ## Related
 

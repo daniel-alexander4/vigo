@@ -1,8 +1,8 @@
 # Spanner
 
-Spanner enables hub-spoke scaling for large fleets. A hub server aggregates data from spoke servers, each of which handles a partition of thralls.
+Spanner enables hub-spoke scaling for large fleets. A hub server aggregates data from spoke servers, each of which handles a partition of envoys.
 
-> **License requirement:** Spanner requires a paid license. The built-in free license (25 thralls) does not support hub or spoke mode. The server will refuse to start if `spanner.role` is set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](../operations/licensing.md#machine-fingerprint-binding) — if you migrate the hub to a new machine, you will need a new license.
+> **License requirement:** Spanner requires a paid license. The built-in free license (25 envoys) does not support hub or spoke mode. The server will refuse to start if `spanner.role` is set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](../operations/licensing.md#machine-fingerprint-binding) — if you migrate the hub to a new machine, you will need a new license.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ spanner:
 ### spoke
 
 A partition server that:
-- Handles agent check-ins for its assigned thralls
+- Handles agent check-ins for its assigned envoys
 - Stores runs, traits, and results locally
 - Responds to admin queries from the hub
 - Does not serve the web UI, webhooks, or bootstrap
@@ -51,10 +51,10 @@ spanner:
 
 ## Enrollment Routing
 
-When a thrall bootstraps through the hub, the hub routes the enrollment to the correct spoke based on hostname pattern matching:
+When a envoy bootstraps through the hub, the hub routes the enrollment to the correct spoke based on hostname pattern matching:
 
 ```
-Thrall: web3.dc1.example.com
+Envoy: web3.dc1.example.com
     ↓
 Hub: match "*.dc1.*" → route to spoke dc1
     ↓
@@ -66,7 +66,7 @@ Spoke dc1: complete enrollment, store pubkey
 CLI and API queries go through the hub, which fans out to all spokes:
 
 ```bash
-hobnobcli thralls list
+vigogo envoys list
 ```
 
 ```
@@ -81,7 +81,7 @@ Return to CLI
 
 ## Config Sync
 
-When `hobnobcli config publish` runs on the hub, the config is automatically pushed to all spokes. The hub creates a tar.gz of the `.live/` directory and sends it via the `SyncConfig` RPC. Spokes extract the archive, overwrite their local `.live/` directory, and reload. This is best-effort — if a spoke is unreachable, it's skipped and logged.
+When `vigogo config publish` runs on the hub, the config is automatically pushed to all spokes. The hub creates a tar.gz of the `.live/` directory and sends it via the `SyncConfig` RPC. Spokes extract the archive, overwrite their local `.live/` directory, and reload. This is best-effort — if a spoke is unreachable, it's skipped and logged.
 
 ## Spoke Health
 
@@ -89,7 +89,7 @@ The hub monitors spoke health via periodic gRPC probes. Spokes can also push the
 - Spoke status (online/offline)
 - Per-spoke compliance breakdown
 - Per-spoke latency metrics
-- Thrall count per spoke
+- Envoy count per spoke
 
 ### Spoke Status Reporting
 
@@ -132,20 +132,20 @@ spanner:
     interval: "30s"   # health check interval (default 30s)
 ```
 
-When a spoke fails `threshold` consecutive health checks (default: 3 failures = 90 seconds), the hub automatically drains all its thralls to other spokes based on hostname pattern matching. When the spoke recovers, it's marked healthy again and can accept new thralls.
+When a spoke fails `threshold` consecutive health checks (default: 3 failures = 90 seconds), the hub automatically drains all its envoys to other spokes based on hostname pattern matching. When the spoke recovers, it's marked healthy again and can accept new envoys.
 
-## Thrall Reassignment
+## Envoy Reassignment
 
-Move thralls between spokes:
+Move envoys between spokes:
 
 ```bash
-hobnobcli spanner reassign --hostname "web3.dc1.*" --to dc2
+vigogo spanner reassign --hostname "web3.dc1.*" --to dc2
 ```
 
-Drain all thralls from a spoke:
+Drain all envoys from a spoke:
 
 ```bash
-hobnobcli spanner drain --spoke dc1 --to dc2
+vigogo spanner drain --spoke dc1 --to dc2
 ```
 
 The agent handles reconnection automatically — on next check-in, it's redirected to the new spoke.
@@ -155,10 +155,10 @@ The agent handles reconnection automatically — on next check-in, it's redirect
 View detailed spoke information:
 
 ```bash
-hobnobcli spanner spoke dc1
+vigogo spanner spoke dc1
 ```
 
-The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke compliance, recent runs, and thrall list.
+The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke compliance, recent runs, and envoy list.
 
 ## Related
 

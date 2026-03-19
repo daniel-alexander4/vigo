@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
-// InventoryHandler serves the REST endpoint for querying thralls by traits.
+// InventoryHandler serves the REST endpoint for querying envoys by traits.
 type InventoryHandler struct {
 	queries *db.Queries
 }
@@ -28,7 +28,7 @@ func (h *InventoryHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/inventory", h.HandleInventory)
 }
 
-// inventoryEntry is a single thrall in the inventory response.
+// inventoryEntry is a single envoy in the inventory response.
 type inventoryEntry struct {
 	Hostname    string         `json:"hostname"`
 	IPAddress   string         `json:"ip_address"`
@@ -36,7 +36,7 @@ type inventoryEntry struct {
 	Traits      map[string]any `json:"traits,omitempty"`
 }
 
-// HandleInventory returns thralls filtered by trait values.
+// HandleInventory returns envoys filtered by trait values.
 //
 // Query parameters:
 //   - where: repeatable, each is "dot.path=value" (equality match)
@@ -67,7 +67,7 @@ func (h *InventoryHandler) HandleInventory(w http.ResponseWriter, r *http.Reques
 	for _, t := range all {
 		var traits map[string]any
 		if err := json.Unmarshal([]byte(t.Traits), &traits); err != nil {
-			continue // skip thralls with unparseable traits
+			continue // skip envoys with unparseable traits
 		}
 
 		if !matchesFilters(traits, filters) {
@@ -98,7 +98,7 @@ func (h *InventoryHandler) HandleInventory(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"count":   len(results),
-		"thralls": results,
+		"envoys": results,
 	})
 }
 

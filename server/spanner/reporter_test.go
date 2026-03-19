@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -34,7 +34,7 @@ func (f *fakeComplianceSource) ComplianceCounts() (int, int, int, int, int, int)
 
 // countingAdminService counts ReportSpokeStatus calls and optionally fails.
 type countingAdminService struct {
-	pb.UnimplementedHobnobAdminServer
+	pb.UnimplementedVigoAdminServer
 	calls   atomic.Int32
 	failErr error // if non-nil, all calls return this error
 }
@@ -55,7 +55,7 @@ func startReporterFakeHub(t *testing.T, svc *countingAdminService) string {
 		t.Fatal(err)
 	}
 	srv := grpc.NewServer()
-	pb.RegisterHobnobAdminServer(srv, svc)
+	pb.RegisterVigoAdminServer(srv, svc)
 	go srv.Serve(lis)
 	t.Cleanup(func() { srv.GracefulStop() })
 	return lis.Addr().String()
@@ -236,7 +236,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 func TestReporterReport_SendsCorrectData(t *testing.T) {
 	// Verify the reporter sends correct compliance data.
 	var received *pb.SpokeStatusReport
-	svc := &pb.UnimplementedHobnobAdminServer{}
+	svc := &pb.UnimplementedVigoAdminServer{}
 	_ = svc
 
 	// Use a real fake service that captures the request.
@@ -272,8 +272,8 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 				if received.SpokeId != "spoke-east" {
 					t.Errorf("SpokeId = %q, want spoke-east", received.SpokeId)
 				}
-				if received.ThrallCount != 100 {
-					t.Errorf("ThrallCount = %d, want 100", received.ThrallCount)
+				if received.EnvoyCount != 100 {
+					t.Errorf("EnvoyCount = %d, want 100", received.EnvoyCount)
 				}
 				if received.Compliant != 80 {
 					t.Errorf("Compliant = %d, want 80", received.Compliant)
@@ -303,7 +303,7 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 
 // capturingAdminService captures the last ReportSpokeStatus request.
 type capturingAdminService struct {
-	pb.UnimplementedHobnobAdminServer
+	pb.UnimplementedVigoAdminServer
 	last atomic.Value // *pb.SpokeStatusReport
 }
 
@@ -327,7 +327,7 @@ func startCapturingFakeHub(t *testing.T, svc *capturingAdminService) string {
 		t.Fatal(err)
 	}
 	srv := grpc.NewServer()
-	pb.RegisterHobnobAdminServer(srv, svc)
+	pb.RegisterVigoAdminServer(srv, svc)
 	go srv.Serve(lis)
 	t.Cleanup(func() { srv.GracefulStop() })
 	return lis.Addr().String()

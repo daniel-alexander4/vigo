@@ -1,6 +1,6 @@
 # Windows Support
 
-Hobnob fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 22 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
+Vigo fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 22 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.
 
 ## Bootstrap
 
@@ -16,19 +16,19 @@ This downloads the agent binary, generates keys, enrolls with the server, and re
 
 ```powershell
 # Download agent binary
-Invoke-WebRequest -Uri "https://<server>:8443/api/v1/agent/download/windows/amd64" -OutFile "C:\Program Files\hobnob\hobnob.exe"
+Invoke-WebRequest -Uri "https://<server>:8443/api/v1/agent/download/windows/amd64" -OutFile "C:\Program Files\vigo\vigo.exe"
 
 # Register as Windows Service
-sc.exe create hobnob-thrall binPath= "\"C:\Program Files\hobnob\hobnob.exe\" --server <server>:1530 --data-dir C:\ProgramData\hobnob" start= auto
-sc.exe failure hobnob-thrall reset= 86400 actions= restart/60000/restart/60000/restart/60000
-sc.exe start hobnob-thrall
+sc.exe create vigo-envoy binPath= "\"C:\Program Files\vigo\vigo.exe\" --server <server>:1530 --data-dir C:\ProgramData\vigo" start= auto
+sc.exe failure vigo-envoy reset= 86400 actions= restart/60000/restart/60000/restart/60000
+sc.exe start vigo-envoy
 ```
 
 Both amd64 and arm64 architectures are supported.
 
 ## Cross-Platform Configs
 
-Hobnob configs are portable — use the standard resource types and the agent dispatches to the correct Windows implementation automatically:
+Vigo configs are portable — use the standard resource types and the agent dispatches to the correct Windows implementation automatically:
 
 ```yaml
 resources:
@@ -119,7 +119,7 @@ Manage Windows Firewall rules via `netsh advfirewall`.
   protocol: tcp
   action: allow
   direction: in
-  # auto-generated rule name: hobnob-80-tcp-in
+  # auto-generated rule name: vigo-80-tcp-in
 
 - name: allow-custom-app
   type: firewall
@@ -149,7 +149,7 @@ Manage scheduled tasks via `schtasks.exe`. Accepts standard cron syntax — the 
 ```yaml
 - name: daily-backup
   type: cron
-  name: "Hobnob Daily Backup"
+  name: "Vigo Daily Backup"
   command: "C:\\Scripts\\backup.ps1"
   schedule: "0 2 * * *"    # 2 AM daily → DAILY /ST 02:00
 
@@ -410,7 +410,7 @@ Manage IIS application pools with fine-grained control over .NET runtime, pipeli
   app_pool: AppPool
   identity_type: SpecificUser
   username: "DOMAIN\\svc-app"
-  password: "secret:hobnob/iis/pool-password"
+  password: "secret:vigo/iis/pool-password"
 ```
 
 **Identity types:** `ApplicationPoolIdentity` (default), `LocalSystem`, `LocalService`, `NetworkService`, `SpecificUser`.
@@ -425,7 +425,7 @@ Manage certificates in Windows certificate stores. Import PFX/CER/CRT files and 
 - name: import-ssl-cert
   type: certificate_windows
   source: "C:\\certs\\app.pfx"
-  password: "secret:hobnob/certs/app-password"
+  password: "secret:vigo/certs/app-password"
   thumbprint: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
   exportable: "true"
 
@@ -453,7 +453,7 @@ Manage Active Directory domain join and leave operations.
   type: domain_membership
   domain: corp.example.com
   username: "admin@corp.example.com"
-  password: "secret:hobnob/ad/join-password"
+  password: "secret:vigo/ad/join-password"
   ou_path: "OU=WebServers,DC=corp,DC=example,DC=com"
 
 - name: leave-domain
@@ -461,7 +461,7 @@ Manage Active Directory domain join and leave operations.
   domain: corp.example.com
   state: absent
   username: "admin@corp.example.com"
-  password: "secret:hobnob/ad/leave-password"
+  password: "secret:vigo/ad/leave-password"
 ```
 
 By default, the machine restarts after join/leave. Set `restart: "false"` to defer the reboot and use `reboot_windows` with `depends_on` for controlled restarts.

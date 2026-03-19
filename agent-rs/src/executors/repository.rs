@@ -44,7 +44,7 @@ impl RepoManager for AptRepoManager {
             // Download key and dearmor it. APT requires binary (dearmored) keyring format
             // when referenced via signed-by in sources. The key URL typically returns an
             // ASCII-armored GPG key that must be converted.
-            let tmp_key = format!("/tmp/hobnob-key-{}.asc", name);
+            let tmp_key = format!("/tmp/vigo-key-{}.asc", name);
             let downloaded = match self.runner.run("curl", &["-fsSL", key_url, "-o", &tmp_key]) {
                 Ok(o) if o.status.success() => true,
                 _ => {

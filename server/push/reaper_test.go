@@ -11,7 +11,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // openReaperTestDB creates an in-memory SQLite database with push tables.
@@ -44,7 +44,7 @@ func openReaperTestDB(t *testing.T) *sql.DB {
 		CREATE TABLE push_run_targets (
 			id             TEXT PRIMARY KEY,
 			push_run_id    TEXT NOT NULL,
-			thrall_id      TEXT NOT NULL,
+			envoy_id      TEXT NOT NULL,
 			hostname       TEXT NOT NULL,
 			status         TEXT NOT NULL DEFAULT 'pending',
 			exit_code      INTEGER,
@@ -79,8 +79,8 @@ func insertPushRun(t *testing.T, sqlDB *sql.DB, id, status, createdAt string, ti
 func insertPushRunTarget(t *testing.T, sqlDB *sql.DB, id, pushRunID, status string) {
 	t.Helper()
 	_, err := sqlDB.Exec(
-		`INSERT INTO push_run_targets (id, push_run_id, thrall_id, hostname, status)
-		 VALUES (?, ?, 'thrall-1', 'host1.example.com', ?)`,
+		`INSERT INTO push_run_targets (id, push_run_id, envoy_id, hostname, status)
+		 VALUES (?, ?, 'envoy-1', 'host1.example.com', ?)`,
 		id, pushRunID, status,
 	)
 	if err != nil {

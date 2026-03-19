@@ -13,25 +13,25 @@ import (
 
 // TestStateFlusher_ConcurrentMarkAndDrain exercises concurrent MarkDirty and
 // DrainDirty calls to verify the FleetIndex dirty set is race-free. 100
-// goroutines mark thralls while 10 goroutines drain concurrently. The test
+// goroutines mark envoys while 10 goroutines drain concurrently. The test
 // first runs all marks + drains in parallel, then performs a final drain.
 // The union of all drained IDs must equal the full set of marked IDs.
 func TestStateFlusher_ConcurrentMarkAndDrain(t *testing.T) {
 	fi := NewFleetIndex()
-	const numThralls = 100
+	const numEnvoys = 100
 
-	// Seed thralls. Each goroutine will mark exactly one unique thrall.
-	for i := 0; i < numThralls; i++ {
-		fi.AddThrall(ThrallState{
+	// Seed envoys. Each goroutine will mark exactly one unique envoy.
+	for i := 0; i < numEnvoys; i++ {
+		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d.example.com", i),
 			ComplianceStatus: "unknown",
 		}, nil)
 	}
 
-	// Phase 1: Mark all thralls dirty from 100 goroutines (one per thrall).
+	// Phase 1: Mark all envoys dirty from 100 goroutines (one per envoy).
 	var markWg sync.WaitGroup
-	for i := 0; i < numThralls; i++ {
+	for i := 0; i < numEnvoys; i++ {
 		markWg.Add(1)
 		go func(n int) {
 			defer markWg.Done()
@@ -41,7 +41,7 @@ func TestStateFlusher_ConcurrentMarkAndDrain(t *testing.T) {
 	markWg.Wait()
 
 	// Phase 2: 10 goroutines drain concurrently. Since all marks are done,
-	// the union of all drains must cover every thrall exactly once.
+	// the union of all drains must cover every envoy exactly once.
 	totalDrained := make(map[string]bool)
 	var mu sync.Mutex
 	var drainWg sync.WaitGroup
@@ -65,9 +65,9 @@ func TestStateFlusher_ConcurrentMarkAndDrain(t *testing.T) {
 		totalDrained[id] = true
 	}
 
-	// Every thrall must have been drained.
-	if len(totalDrained) != numThralls {
-		t.Errorf("expected %d drained thralls, got %d", numThralls, len(totalDrained))
+	// Every envoy must have been drained.
+	if len(totalDrained) != numEnvoys {
+		t.Errorf("expected %d drained envoys, got %d", numEnvoys, len(totalDrained))
 	}
 
 	// Dirty set must be empty now.
@@ -82,10 +82,10 @@ func TestStateFlusher_ConcurrentMarkAndDrain(t *testing.T) {
 // write to it.
 func TestStateFlusher_ConcurrentMarkAndFlush(t *testing.T) {
 	fi := NewFleetIndex()
-	const numThralls = 100
+	const numEnvoys = 100
 
-	for i := 0; i < numThralls; i++ {
-		fi.AddThrall(ThrallState{
+	for i := 0; i < numEnvoys; i++ {
+		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d.example.com", i),
 			ComplianceStatus: "unknown",
@@ -94,13 +94,13 @@ func TestStateFlusher_ConcurrentMarkAndFlush(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	// 50 goroutines marking thralls dirty (simulating check-in handlers).
+	// 50 goroutines marking envoys dirty (simulating check-in handlers).
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
 			for j := 0; j < 10; j++ {
-				id := fmt.Sprintf("t-%d", (n*10+j)%numThralls)
+				id := fmt.Sprintf("t-%d", (n*10+j)%numEnvoys)
 				fi.MarkDirty(id)
 				fi.MarkSeen(id, time.Now())
 			}
@@ -179,12 +179,12 @@ func TestStateFlusher_ZeroOffset(t *testing.T) {
 }
 
 // TestStateFlusher_DrainReturnsSnapshot verifies that DrainDirty returns a
-// deep copy of thrall state, not a reference to the FleetIndex's internal
+// deep copy of envoy state, not a reference to the FleetIndex's internal
 // state. Mutations to the drained copy must not affect the FleetIndex.
 func TestStateFlusher_DrainReturnsSnapshot(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID:                    "t-1",
 		Hostname:              "snap.example.com",
 		IP:                    "10.0.0.1",
@@ -213,9 +213,9 @@ func TestStateFlusher_DrainReturnsSnapshot(t *testing.T) {
 	snap.ComplianceStatus = "MUTATED"
 
 	// Verify the FleetIndex's original is unchanged.
-	orig := fi.GetThrall("t-1")
+	orig := fi.GetEnvoy("t-1")
 	if orig == nil {
-		t.Fatal("original thrall should still exist in index")
+		t.Fatal("original envoy should still exist in index")
 	}
 	if orig.Hostname != "snap.example.com" {
 		t.Errorf("Hostname = %q, want %q (snapshot mutation leaked)", orig.Hostname, "snap.example.com")

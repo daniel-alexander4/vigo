@@ -45,7 +45,7 @@ func TestBackup_SnapshotWithAdmin(t *testing.T) {
 	// gets past auth and attempts the backup (which may fail on missing files,
 	// but at least exercises the plumbing).
 	dir := t.TempDir()
-	handler := NewBackupHandler(dir+"/server.yaml", dir, "sqlite", dir+"/hobnob.db", "test", "none")
+	handler := NewBackupHandler(dir+"/server.yaml", dir, "sqlite", dir+"/vigo.db", "test", "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

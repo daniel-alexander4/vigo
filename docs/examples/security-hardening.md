@@ -4,7 +4,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 
 ## Firewall Module
 
-`policy/stage/modules/firewall.hnb`:
+`policy/stage/modules/firewall.vgo`:
 
 ```yaml
 name: firewall
@@ -57,7 +57,7 @@ resources:
 
 ## SSH Hardening Module
 
-`policy/stage/modules/ssh-hardening.hnb`:
+`policy/stage/modules/ssh-hardening.vgo`:
 
 ```yaml
 name: ssh-hardening
@@ -96,7 +96,7 @@ resources:
 
 ## Fail2ban Module
 
-`policy/stage/modules/fail2ban.hnb`:
+`policy/stage/modules/fail2ban.vgo`:
 
 ```yaml
 name: fail2ban
@@ -138,7 +138,7 @@ resources:
 
 ## Sudo Module
 
-`policy/stage/modules/sudo-config.hnb`:
+`policy/stage/modules/sudo-config.vgo`:
 
 ```yaml
 name: sudo-config
@@ -152,12 +152,12 @@ resources:
 
   - name: sudoers-config
     type: file
-    target_path: /etc/sudoers.d/hobnob-managed
+    target_path: /etc/sudoers.d/vigo-managed
     owner: root
     group: root
     mode: "0440"
     content: |
-      # Managed by Hobnob - do not edit manually
+      # Managed by Vigo - do not edit manually
       %{{ .Vars.sudo_group }} ALL=(ALL) NOPASSWD: ALL
       Defaults    env_reset
       Defaults    secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -166,7 +166,7 @@ resources:
 
 ## Role Definition
 
-`policy/stage/roles/hardened.hnb`:
+`policy/stage/roles/hardened.vgo`:
 
 ```yaml
 name: hardened
@@ -179,10 +179,10 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.example.com"
     roles: [hardened]
     vars:

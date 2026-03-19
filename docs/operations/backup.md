@@ -1,6 +1,6 @@
 # Backup & Recovery
 
-Hobnob uses [Litestream](https://litestream.io) for continuous SQLite WAL replication. When configured, the server manages a Litestream subprocess that streams WAL changes to a remote replica in near-real-time.
+Vigo uses [Litestream](https://litestream.io) for continuous SQLite WAL replication. When configured, the server manages a Litestream subprocess that streams WAL changes to a remote replica in near-real-time.
 
 Backup is only applicable when `database.driver` is `sqlite` (the default).
 
@@ -10,9 +10,9 @@ Add a `backup:` section to `server.yaml`:
 
 ```yaml
 backup:
-  url: s3://my-bucket/hobnob/backup
-  access_key_id: "secret:hobnob/backup/aws_access_key"
-  secret_access_key: "secret:hobnob/backup/aws_secret_key"
+  url: s3://my-bucket/vigo/backup
+  access_key_id: "secret:vigo/backup/aws_access_key"
+  secret_access_key: "secret:vigo/backup/aws_secret_key"
   region: us-east-1
   retention: "720h"       # 30 days (default)
   sync_interval: "1s"     # WAL sync frequency (default)
@@ -33,11 +33,11 @@ For S3-compatible endpoints, set `endpoint` and `force_path_style`:
 
 ```yaml
 backup:
-  url: s3://hobnob-backup/data
+  url: s3://vigo-backup/data
   endpoint: https://minio.internal:9000
   force_path_style: true
-  access_key_id: "secret:hobnob/backup/access_key"
-  secret_access_key: "secret:hobnob/backup/secret_key"
+  access_key_id: "secret:vigo/backup/access_key"
+  secret_access_key: "secret:vigo/backup/secret_key"
 ```
 
 ## Configuration Options
@@ -68,18 +68,18 @@ The `litestream` binary must be in the server's PATH. Install it from https://li
 
 To restore from a backup:
 
-1. Stop the Hobnob server.
+1. Stop the Vigo server.
 
 2. Remove or rename the existing database file.
 
 3. Run the restore command:
    ```bash
-   litestream restore -config /path/to/litestream.yml -o /path/to/hobnob.db /path/to/hobnob.db
+   litestream restore -config /path/to/litestream.yml -o /path/to/vigo.db /path/to/vigo.db
    ```
 
-   Or let the Hobnob server handle it -- the `Replicator.Restore()` method performs the same operation programmatically.
+   Or let the Vigo server handle it -- the `Replicator.Restore()` method performs the same operation programmatically.
 
-4. Start the Hobnob server. The FleetIndex will rehydrate from the restored database.
+4. Start the Vigo server. The FleetIndex will rehydrate from the restored database.
 
 ## Monitoring
 
@@ -98,7 +98,7 @@ No server API is needed — these commands operate directly on the local filesys
 ### Create a Backup
 
 ```bash
-hobnobcli backup create /tmp/hobnob-backup.tar.gz
+vigogo backup create /tmp/vigo-backup.tar.gz
 ```
 
 The command reads `server.yaml` to find the database path, then:
@@ -116,8 +116,8 @@ Every backup automatically generates a SHA-256 checksum sidecar file (`.sha256`)
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--server-yaml` | `/srv/hobnob/server.yaml` | Path to server.yaml |
-| `--server-root` | `/srv/hobnob` | Root directory containing policy/, secrets/, tls/ |
+| `--server-yaml` | `/srv/vigo/server.yaml` | Path to server.yaml |
+| `--server-root` | `/srv/vigo` | Root directory containing policy/, secrets/, tls/ |
 | `--encrypt` | `false` | Encrypt the archive with AES-256-GCM (prompts for password) |
 
 ### Encrypted Backups
@@ -126,10 +126,10 @@ For HIPAA-compliant environments, encrypt backups at rest:
 
 ```bash
 # Create an encrypted backup (prompts for password)
-hobnobcli backup create /tmp/hobnob-backup.tar.gz --encrypt
+vigogo backup create /tmp/vigo-backup.tar.gz --encrypt
 
 # Restore an encrypted backup (prompts for password)
-hobnobcli backup restore /tmp/hobnob-backup.tar.gz --decrypt
+vigogo backup restore /tmp/vigo-backup.tar.gz --decrypt
 ```
 
 Encryption uses AES-256-GCM with an Argon2id-derived key. The password is never stored — keep it in a secure location (e.g., a password manager or HSM).
@@ -137,7 +137,7 @@ Encryption uses AES-256-GCM with an Argon2id-derived key. The password is never 
 ### Inspect a Backup
 
 ```bash
-hobnobcli backup inspect /tmp/hobnob-backup.tar.gz
+vigogo backup inspect /tmp/vigo-backup.tar.gz
 ```
 
 Prints the manifest JSON without extracting the full archive.
@@ -146,39 +146,39 @@ Prints the manifest JSON without extracting the full archive.
 
 ```bash
 # Stop the server first
-systemctl stop hobd
+systemctl stop vigosrv
 
 # Preview what will be restored
-hobnobcli backup restore /tmp/hobnob-backup.tar.gz --dry-run
+vigogo backup restore /tmp/vigo-backup.tar.gz --dry-run
 
 # Restore everything
-hobnobcli backup restore /tmp/hobnob-backup.tar.gz
+vigogo backup restore /tmp/vigo-backup.tar.gz
 
 # Publish configs and restart
-hobnobcli config publish
-systemctl start hobd
+vigogo config publish
+systemctl start vigosrv
 ```
 
 **Flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--target` | `/srv/hobnob` | Root directory to restore into |
+| `--target` | `/srv/vigo` | Root directory to restore into |
 | `--db-only` | `false` | Restore only the database, skip config/secrets/tls |
 | `--dry-run` | `false` | Show what would be restored without writing |
 
 ### Archive Layout
 
 ```
-hobnob-backup-2026-03-13T14:30:00Z.tar.gz
+vigo-backup-2026-03-13T14:30:00Z.tar.gz
 ├── manifest.json
 ├── db/
-│   └── hobnob.db
+│   └── vigo.db
 ├── policy/
 │   └── stage/
 │       ├── modules/
 │       ├── roles/
-│       ├── thralls/
+│       ├── envoys/
 │       └── vars/
 ├── secrets/
 │   └── (encrypted files, directory structure preserved)
@@ -192,10 +192,10 @@ hobnob-backup-2026-03-13T14:30:00Z.tar.gz
 The **Admin > Backup** page provides a visual overview of backup configuration and manual controls:
 
 - **Backup status** — shows whether Litestream replication is configured and running.
-- **Create Snapshot** — triggers an on-demand backup via `POST /api/v1/backup/snapshot`. Equivalent to `hobnobcli backup create`.
+- **Create Snapshot** — triggers an on-demand backup via `POST /api/v1/backup/snapshot`. Equivalent to `vigogo backup create`.
 - **Download Backup** — downloads the latest snapshot as a `.tar.gz` archive via `GET /api/v1/backup/download`.
 
-Both actions require admin authentication. Restore remains CLI-only (`hobnobcli backup restore`) because it requires stopping the server first.
+Both actions require admin authentication. Restore remains CLI-only (`vigogo backup restore`) because it requires stopping the server first.
 
 ### Scheduled Snapshots
 
@@ -203,42 +203,42 @@ Use cron for periodic snapshots. Litestream handles continuous replication; manu
 
 ```bash
 # Daily backup at 2 AM, retain 7 days
-0 2 * * * /usr/local/bin/hobnobcli backup create /backup/hobnob-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'hobnob-*.tar.gz' -mtime +7 -delete
+0 2 * * * /usr/local/bin/vigogo backup create /backup/vigo-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'vigo-*.tar.gz' -mtime +7 -delete
 ```
 
 ## Built-in Filesystem Backup
 
-Hobnob ships a `hobnob-server-backup` module that automatically backs up the entire `/srv/hobnob` directory to `/srv/backups.hobnob/` daily via rsync. This is the recommended baseline for filesystem protection.
+Vigo ships a `vigo-server-backup` module that automatically backs up the entire `/srv/vigo` directory to `/srv/backups.vigo/` daily via rsync. This is the recommended baseline for filesystem protection.
 
 ### How it works
 
-When the server host is enrolled as a thrall and the `hobnob-server-backup` module is assigned to its hostname in your thrall mappings, the agent on the server host will:
+When the server host is enrolled as a envoy and the `vigo-server-backup` module is assigned to its hostname in your envoy mappings, the agent on the server host will:
 
-1. Creates `/srv/backups.hobnob/` with mode `0555` (read-only)
-2. Installs `/usr/local/bin/hobnob-backup.sh` which:
+1. Creates `/srv/backups.vigo/` with mode `0555` (read-only)
+2. Installs `/usr/local/bin/vigo-backup.sh` which:
    - Snapshots the SQLite database using `VACUUM INTO` (consistent, safe with concurrent writers)
    - Unlocks the backup directory (`chmod 755`)
-   - Rsyncs `/srv/hobnob/` with `--delete`, excluding the live DB files (the snapshot replaces them)
+   - Rsyncs `/srv/vigo/` with `--delete`, excluding the live DB files (the snapshot replaces them)
    - Locks the backup directory back to `0555`
 3. Creates a daily cron job (`@daily`) to run the script
 
 ### Setup
 
-Add the `hobnob-server-backup` module to your server's thrall mapping:
+Add the `vigo-server-backup` module to your server's envoy mapping:
 
 ```yaml
-thralls:
-  - match: "my-hobnob-server"
-    modules: [hobnob-server-backup]
+envoys:
+  - match: "my-vigo-server"
+    modules: [vigo-server-backup]
 ```
 
 The server's hostname (from `os.Hostname()`) is used for matching. The module uses sensible defaults but all paths are configurable via vars:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `backup_dest` | `/srv/backups.hobnob` | Backup destination directory |
-| `backup_db_src` | `/srv/hobnob/db/hobnob.db` | SQLite database path |
-| `backup_src` | `/srv/hobnob` | Source directory to back up |
+| `backup_dest` | `/srv/backups.vigo` | Backup destination directory |
+| `backup_db_src` | `/srv/vigo/db/vigo.db` | SQLite database path |
+| `backup_src` | `/srv/vigo` | Source directory to back up |
 
 ### Security
 
@@ -246,19 +246,19 @@ The backup directory is non-writable (`0555`) except during the brief backup win
 
 ## Additional Backup Recommendations
 
-Litestream covers the SQLite database with near-real-time replication. The built-in `hobnob-server-backup` module covers the full filesystem. For maximum protection:
+Litestream covers the SQLite database with near-real-time replication. The built-in `vigo-server-backup` module covers the full filesystem. For maximum protection:
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
-| `policy/stage/` | Modules, roles, thrall mappings, vars | High — your entire policy |
+| `policy/stage/` | Modules, roles, envoy mappings, vars | High — your entire policy |
 | `secrets/` | AES-256-GCM encrypted files + `.master.key` | Critical — unrecoverable without master key |
 | `tls/` | CA cert/key, server cert/key | High — agents authenticate against these |
 | `server.yaml` | Server configuration | Medium — can be recreated |
-| `db/hobnob.db` | SQLite database | Covered by Litestream if configured |
+| `db/vigo.db` | SQLite database | Covered by Litestream if configured |
 
 1. **Keep `policy/stage/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
-2. **Use the built-in `hobnob-server-backup` module** for daily rsync to `/srv/backups.hobnob/`. This covers all critical files with a consistent DB snapshot.
+2. **Use the built-in `vigo-server-backup` module** for daily rsync to `/srv/backups.vigo/`. This covers all critical files with a consistent DB snapshot.
 
 3. **Configure Litestream for near-zero database RPO.** The daily rsync provides a recovery point but Litestream replicates WAL changes within seconds.
 

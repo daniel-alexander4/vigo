@@ -10,14 +10,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const defaultKeyDir = "/srv/hobnob/license/keys"
+const defaultKeyDir = "/srv/vigo/license/keys"
 
 var keyDir string
 
 var rootCmd = &cobra.Command{
-	Use:   "hobnob-license-manager",
-	Short: "Internal tool for managing Hobnob licenses",
-	Long:  "hobnob-license-manager generates Ed25519 keypairs, creates and tracks signed license files, and manages customer license lifecycle.",
+	Use:   "vigo-license-manager",
+	Short: "Internal tool for managing Vigo licenses",
+	Long:  "vigo-license-manager generates Ed25519 keypairs, creates and tracks signed license files, and manages customer license lifecycle.",
 }
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 }
 
 func init() {
-	envKeyDir := os.Getenv("HOBNOB_KEY_DIR")
+	envKeyDir := os.Getenv("VIGO_KEY_DIR")
 	if envKeyDir == "" {
 		envKeyDir = defaultKeyDir
 	}

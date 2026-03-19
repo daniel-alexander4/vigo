@@ -10,22 +10,22 @@ import (
 )
 
 const createPlan = `-- name: CreatePlan :one
-INSERT INTO plans (thrall_id, modules)
+INSERT INTO plans (envoy_id, modules)
 VALUES (?, ?)
-RETURNING id, thrall_id, created_at, modules
+RETURNING id, envoy_id, created_at, modules
 `
 
 type CreatePlanParams struct {
-	ThrallID string `json:"thrall_id"`
-	Modules  string `json:"modules"`
+	EnvoyID string `json:"envoy_id"`
+	Modules string `json:"modules"`
 }
 
 func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, error) {
-	row := q.db.QueryRowContext(ctx, createPlan, arg.ThrallID, arg.Modules)
+	row := q.db.QueryRowContext(ctx, createPlan, arg.EnvoyID, arg.Modules)
 	var i Plan
 	err := row.Scan(
 		&i.ID,
-		&i.ThrallID,
+		&i.EnvoyID,
 		&i.CreatedAt,
 		&i.Modules,
 	)
@@ -67,7 +67,7 @@ func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultPara
 }
 
 const getPlanByID = `-- name: GetPlanByID :one
-SELECT id, thrall_id, created_at, modules
+SELECT id, envoy_id, created_at, modules
 FROM plans
 WHERE id = ?
 `
@@ -77,7 +77,7 @@ func (q *Queries) GetPlanByID(ctx context.Context, id string) (Plan, error) {
 	var i Plan
 	err := row.Scan(
 		&i.ID,
-		&i.ThrallID,
+		&i.EnvoyID,
 		&i.CreatedAt,
 		&i.Modules,
 	)

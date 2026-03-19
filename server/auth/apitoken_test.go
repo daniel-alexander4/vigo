@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,14 +18,14 @@ func TestGenerateAPIToken(t *testing.T) {
 	require.NoError(t, err)
 
 	// Token should have the prefix.
-	assert.True(t, len(plain) > 4)
-	assert.Equal(t, "hbt_", plain[:4])
+	assert.True(t, len(plain) > 5)
+	assert.Equal(t, "vgot_", plain[:5])
 
 	// Hash should be valid bcrypt.
 	assert.True(t, ValidateAPIToken(plain, hash))
 
 	// Different plaintext should not match.
-	assert.False(t, ValidateAPIToken("hbt_wrong", hash))
+	assert.False(t, ValidateAPIToken("vgot_wrong", hash))
 }
 
 func TestTokenCreateAndValidate(t *testing.T) {
@@ -55,11 +55,11 @@ func TestTokenCreateAndValidate(t *testing.T) {
 	assert.Equal(t, u.ID, resolved.ID)
 
 	// Invalid token should return nil.
-	resolved, err = tokenStore.ValidateAndResolve(ctx, "hbt_invalid", userStore)
+	resolved, err = tokenStore.ValidateAndResolve(ctx, "vgot_invalid", userStore)
 	require.NoError(t, err)
 	assert.Nil(t, resolved)
 
-	// Non-hbt_ prefix should return nil.
+	// Non-vgot_ prefix should return nil.
 	resolved, err = tokenStore.ValidateAndResolve(ctx, "not-a-token", userStore)
 	require.NoError(t, err)
 	assert.Nil(t, resolved)
@@ -120,8 +120,8 @@ func TestTokenListAndDelete(t *testing.T) {
 }
 
 func TestExtractBearerToken(t *testing.T) {
-	assert.Equal(t, "hbt_abc", ExtractBearerToken("Bearer hbt_abc"))
-	assert.Equal(t, "hbt_abc", ExtractBearerToken("bearer hbt_abc"))
+	assert.Equal(t, "vgot_abc", ExtractBearerToken("Bearer vgot_abc"))
+	assert.Equal(t, "vgot_abc", ExtractBearerToken("bearer vgot_abc"))
 	assert.Equal(t, "", ExtractBearerToken(""))
 	assert.Equal(t, "", ExtractBearerToken("Basic abc"))
 	assert.Equal(t, "", ExtractBearerToken("Bear"))

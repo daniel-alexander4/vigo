@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 // RemediationHandler manages automated drift detection → fix → verify cycles.
@@ -41,7 +41,7 @@ type RemediationRun struct {
 // RemediationTarget is a single node in a remediation cycle.
 type RemediationTarget struct {
 	Hostname       string `json:"hostname"`
-	ThrallID       string `json:"thrall_id"`
+	EnvoyID       string `json:"envoy_id"`
 	InitialStatus  string `json:"initial_status"`
 	Action         string `json:"action"`  // "force_push", "skipped"
 	FinalStatus    string `json:"final_status,omitempty"`
@@ -78,14 +78,14 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	operator := "system"
-	if u := hobnobauth.UserFromContext(r.Context()); u != nil {
+	if u := vigoauth.UserFromContext(r.Context()); u != nil {
 		operator = u.Username
 	}
 
 	// Find non-compliant nodes.
-	allThralls := h.fleetIndex.AllThralls()
+	allEnvoys := h.fleetIndex.AllEnvoys()
 	var targets []RemediationTarget
-	for _, t := range allThralls {
+	for _, t := range allEnvoys {
 		if t.Revoked {
 			continue
 		}
@@ -97,7 +97,7 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 			}
 			targets = append(targets, RemediationTarget{
 				Hostname:      t.Hostname,
-				ThrallID:      t.ID,
+				EnvoyID:      t.ID,
 				InitialStatus: t.ComplianceStatus,
 				Action:        action,
 			})
@@ -155,7 +155,7 @@ func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 		t := &run.Targets[i]
 		// Trigger a force-push via FleetIndex (marks node for immediate check-in).
 		if h.fleetIndex != nil {
-			h.fleetIndex.MarkDirty(t.ThrallID)
+			h.fleetIndex.MarkDirty(t.EnvoyID)
 		}
 		t.Action = "force_push"
 		forced++
@@ -172,16 +172,16 @@ func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 			if t.FinalStatus != "" {
 				continue
 			}
-			thrall := h.fleetIndex.GetThrall(t.ThrallID)
-			if thrall == nil {
+			envoy := h.fleetIndex.GetEnvoy(t.EnvoyID)
+			if envoy == nil {
 				t.FinalStatus = "unknown"
 				continue
 			}
-			if thrall.ComplianceStatus == "compliant" {
+			if envoy.ComplianceStatus == "compliant" {
 				t.FinalStatus = "compliant"
-			} else if thrall.LastSeen.After(run.StartedAt) {
+			} else if envoy.LastSeen.After(run.StartedAt) {
 				// Node checked in since remediation started but still non-compliant.
-				t.FinalStatus = thrall.ComplianceStatus
+				t.FinalStatus = envoy.ComplianceStatus
 			} else {
 				allResolved = false
 			}

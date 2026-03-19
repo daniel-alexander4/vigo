@@ -15,9 +15,9 @@ resources:
 
   - name: dnsmasq-conf
     type: file
-    target_path: /etc/dnsmasq.d/hobnob.conf
+    target_path: /etc/dnsmasq.d/vigo.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       listen-address={{ .Vars.dns_listen }}
       port=53
       cache-size={{ .Vars.dns_cache_size }}

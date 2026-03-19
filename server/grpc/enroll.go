@@ -7,39 +7,39 @@ import (
 	"context"
 	"log/slog"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// SetReassignment handles the HobnobAdmin.SetReassignment RPC. This is a
+// SetReassignment handles the VigoAdmin.SetReassignment RPC. This is a
 // hub→spoke internal RPC: the hub calls this on the SOURCE spoke to mark a
-// thrall for reassignment. On the thrall's next check-in, the spoke returns
+// envoy for reassignment. On the envoy's next check-in, the spoke returns
 // the reassign_addr and reassign_id so the agent can reconnect to the new spoke.
 func (s *AdminService) SetReassignment(ctx context.Context, req *pb.SetReassignmentRequest) (*pb.SetReassignmentResponse, error) {
-	if req.ThrallId == "" || req.TargetAddr == "" || req.NewThrallId == "" {
-		return nil, status.Error(codes.InvalidArgument, "thrall_id, target_addr, and new_thrall_id are required")
+	if req.EnvoyId == "" || req.TargetAddr == "" || req.NewEnvoyId == "" {
+		return nil, status.Error(codes.InvalidArgument, "envoy_id, target_addr, and new_envoy_id are required")
 	}
 
 	if s.reassignStore != nil {
-		s.reassignStore.Set(req.ThrallId, ReassignInfo{
+		s.reassignStore.Set(req.EnvoyId, ReassignInfo{
 			TargetAddr:  req.TargetAddr,
-			NewThrallID: req.NewThrallId,
+			NewEnvoyID: req.NewEnvoyId,
 		})
 		slog.Info("reassignment set",
-			"thrall_id", req.ThrallId,
+			"envoy_id", req.EnvoyId,
 			"target_addr", req.TargetAddr,
-			"new_thrall_id", req.NewThrallId,
+			"new_envoy_id", req.NewEnvoyId,
 		)
 	}
 
 	return &pb.SetReassignmentResponse{}, nil
 }
 
-// EnrollThrall handles the HobnobAdmin.EnrollThrall RPC. This is a hub→spoke
+// EnrollEnvoy handles the VigoAdmin.EnrollEnvoy RPC. This is a hub→spoke
 // internal RPC: the hub validates the enrollment token centrally, then calls
-// this on the target spoke to create the thrall record without re-validation.
-func (s *AdminService) EnrollThrall(ctx context.Context, req *pb.EnrollThrallRequest) (*pb.EnrollThrallResponse, error) {
+// this on the target spoke to create the envoy record without re-validation.
+func (s *AdminService) EnrollEnvoy(ctx context.Context, req *pb.EnrollEnvoyRequest) (*pb.EnrollEnvoyResponse, error) {
 	hostname := req.GetHostname()
 	ipAddress := req.GetIpAddress()
 	pubkeyPEM := req.GetPubkeyPem()
@@ -48,17 +48,17 @@ func (s *AdminService) EnrollThrall(ctx context.Context, req *pb.EnrollThrallReq
 		return nil, status.Error(codes.InvalidArgument, "hostname and pubkey_pem are required")
 	}
 
-	thrallID, err := s.registry.CreateThrall(ctx, hostname, ipAddress, pubkeyPEM, req.GetForce())
+	envoyID, err := s.registry.CreateEnvoy(ctx, hostname, ipAddress, pubkeyPEM, req.GetForce())
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "creating thrall: %v", err)
+		return nil, status.Errorf(codes.Internal, "creating envoy: %v", err)
 	}
 
-	slog.Info("thrall enrolled via hub",
+	slog.Info("envoy enrolled via hub",
 		"hostname", hostname,
-		"node_id", thrallID,
+		"node_id", envoyID,
 	)
 
-	return &pb.EnrollThrallResponse{
-		ThrallId: thrallID,
+	return &pb.EnrollEnvoyResponse{
+		EnvoyId: envoyID,
 	}, nil
 }

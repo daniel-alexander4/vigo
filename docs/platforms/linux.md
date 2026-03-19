@@ -5,7 +5,7 @@ weight: 10
 
 # Linux Agent Support
 
-Linux is the primary platform for the Hobnob agent. The agent ships as a statically linked musl binary that runs on any Linux distribution without external dependencies.
+Linux is the primary platform for the Vigo agent. The agent ships as a statically linked musl binary that runs on any Linux distribution without external dependencies.
 
 ## Supported Distributions
 
@@ -27,33 +27,33 @@ The musl static binary means no glibc dependency -- it works on any Linux kernel
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-The bootstrap script detects the architecture, downloads the agent binary to `/usr/local/sbin/hobnob`, generates ED25519 keys, enrolls with the server using the one-time token, and installs a systemd service unit.
+The bootstrap script detects the architecture, downloads the agent binary to `/usr/local/sbin/vigo`, generates ED25519 keys, enrolls with the server using the one-time token, and installs a systemd service unit.
 
 **Manual installation:**
 
 ```sh
 # Download agent binary
-curl -o /usr/local/sbin/hobnob https://<server>:8443/api/v1/agent/download/linux/amd64
-chmod +x /usr/local/sbin/hobnob
+curl -o /usr/local/sbin/vigo https://<server>:8443/api/v1/agent/download/linux/amd64
+chmod +x /usr/local/sbin/vigo
 
 # Enroll and start
-/usr/local/sbin/hobnob --server <server>:1530 --enroll --token <token>
-systemctl enable --now hobnob-thrall
+/usr/local/sbin/vigo --server <server>:1530 --enroll --token <token>
+systemctl enable --now vigo-envoy
 ```
 
 ## systemd Service
 
-The agent runs as a systemd service at `hobnob-thrall.service`.
+The agent runs as a systemd service at `vigo-envoy.service`.
 
 ```sh
 # Check status
-systemctl status hobnob-thrall
+systemctl status vigo-envoy
 
 # Restart
-systemctl restart hobnob-thrall
+systemctl restart vigo-envoy
 
 # View logs
-journalctl -u hobnob-thrall -f
+journalctl -u vigo-envoy -f
 ```
 
 The service is configured with automatic restart on failure and `WatchdogSec` for health monitoring.
@@ -251,12 +251,12 @@ Use traits in `when:` expressions and templates:
 ## Example: LAMP Stack Module
 
 ```yaml
-# modules/lamp.hnb
+# modules/lamp.vgo
 name: lamp-stack
 
 vars:
   http_port: 80
-  mysql_root_password: "secret:hobnob/mysql/root-password"
+  mysql_root_password: "secret:vigo/mysql/root-password"
   php_version: "8.2"
   document_root: /var/www/html
 
@@ -362,7 +362,7 @@ resources:
     target_path: "{{ .Vars.document_root }}/index.php"
     content: |
       <?php
-      echo "Managed by Hobnob on {{ .Traits.identity.hostname }}";
+      echo "Managed by Vigo on {{ .Traits.identity.hostname }}";
       phpinfo();
     notify: [restart-apache]
 
@@ -390,7 +390,7 @@ make build-agent
 
 # Cross-compile static musl binaries for both architectures
 make dist-agent
-# Output: dist/agent/linux/amd64/hobnob, dist/agent/linux/arm64/hobnob
+# Output: dist/agent/linux/amd64/vigo, dist/agent/linux/arm64/vigo
 ```
 
 ## Related

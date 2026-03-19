@@ -18,7 +18,7 @@ func TestSignAndVerifyBinary(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a fake binary.
-	binaryPath := filepath.Join(dir, "hobd")
+	binaryPath := filepath.Join(dir, "vigosrv")
 	binaryContent := []byte("this is a test binary with some content 1234567890")
 	if err := os.WriteFile(binaryPath, binaryContent, 0755); err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestSignAndVerifyBinary(t *testing.T) {
 	}
 
 	// Sign.
-	sigPath := filepath.Join(dir, "hobd.sig")
+	sigPath := filepath.Join(dir, "vigosrv.sig")
 	if err := SignBinary(binaryPath, keyPath, sigPath); err != nil {
 		t.Fatalf("SignBinary: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestSignBinaryTamperedFails(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create and sign a binary.
-	binaryPath := filepath.Join(dir, "hobd")
+	binaryPath := filepath.Join(dir, "vigosrv")
 	if err := os.WriteFile(binaryPath, []byte("original content"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestSignBinaryTamperedFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sigPath := filepath.Join(dir, "hobd.sig")
+	sigPath := filepath.Join(dir, "vigosrv.sig")
 	if err := SignBinary(binaryPath, keyPath, sigPath); err != nil {
 		t.Fatal(err)
 	}

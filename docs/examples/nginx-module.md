@@ -4,7 +4,7 @@ A complete nginx module demonstrating the package-config-service pattern with `n
 
 ## Module Definition
 
-`policy/stage/modules/nginx.hnb`:
+`policy/stage/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -60,13 +60,13 @@ resources:
 
 1. **nginx-package** installs the nginx package. This runs first because the service and config depend on the package being present.
 
-2. **nginx-config** writes the nginx configuration file using Go templates. The `content:` attribute uses `.Vars.nginx_worker_processes` and other variables that can be overridden per-thrall. The `notify: [nginx-service]` means that when the config file changes, the nginx service is restarted.
+2. **nginx-config** writes the nginx configuration file using Go templates. The `content:` attribute uses `.Vars.nginx_worker_processes` and other variables that can be overridden per-envoy. The `notify: [nginx-service]` means that when the config file changes, the nginx service is restarted.
 
 3. **nginx-service** ensures nginx is running and enabled at boot. It only restarts when notified by the config file resource.
 
 ## Role Assignment
 
-`policy/stage/roles/webserver.hnb`:
+`policy/stage/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -76,10 +76,10 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     environment: production
     roles: [webserver]
@@ -113,7 +113,7 @@ Extend the module with an SSL vhost:
     owner: root
     group: root
     mode: "0600"
-    content: "secret:hobnob/nginx/ssl_key"
+    content: "secret:vigo/nginx/ssl_key"
     notify:
       - nginx-service
 ```

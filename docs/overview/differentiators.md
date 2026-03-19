@@ -1,6 +1,6 @@
-# Hobnob Differentiators
+# Vigo Differentiators
 
-What Hobnob does in the areas of safety, reliability, and simplicity that other state enforcement and configuration management systems do not.
+What Vigo does in the areas of safety, reliability, and simplicity that other state enforcement and configuration management systems do not.
 
 ## Safety
 
@@ -20,7 +20,7 @@ What Hobnob does in the areas of safety, reliability, and simplicity that other 
 
 - **Gradual license enforcement that never locks out existing nodes.** If you exceed your license, you get 15 days of warnings, then 15 days where only new enrollments are blocked, then shutdown. At no point are already-managed machines cut off from convergence.
 
-- **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, push dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. `hobnobcli audit verify` or the web UI validates the entire chain in seconds. Meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, and SOX requirements. No other CM tool provides cryptographic tamper evidence on its audit trail.
+- **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, push dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. `vigogo audit verify` or the web UI validates the entire chain in seconds. Meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, and SOX requirements. No other CM tool provides cryptographic tamper evidence on its audit trail.
 
 - **Two-person change approval.** When enabled, config publish creates a pending change that a different admin must approve. The approver cannot be the same user as the publisher. Pending changes expire after a configurable timeout. Satisfies SOX segregation of duties and FDA change control requirements.
 
@@ -28,7 +28,7 @@ What Hobnob does in the areas of safety, reliability, and simplicity that other 
 
 - **Source-available agent.** The code that runs as root on your machines is readable and auditable under the Elastic License 2.0. You do not have to trust a proprietary binary with root access on every machine in your fleet.
 
-- **Agent transparency.** `hobnob status` shows the enforced policy, collected traits, and pending results on any managed machine. The machine's local admin can verify exactly what the agent is doing without server access.
+- **Agent transparency.** `vigo status` shows the enforced policy, collected traits, and pending results on any managed machine. The machine's local admin can verify exactly what the agent is doing without server access.
 
 ## Reliability
 
@@ -54,7 +54,7 @@ What Hobnob does in the areas of safety, reliability, and simplicity that other 
 
 - **~5 MB static agent binary with zero runtime dependencies.** No Ruby, no Python, no JVM, no package manager ecosystem on managed nodes. Copy the binary, run it.
 
-- **One config format, one config path.** There is exactly one way to configure Hobnob: edit YAML files in a directory and publish. There is no API that writes config, no database that stores config, no UI that modifies config, no secondary system that overlays config. One source of truth, one format, one tool to manage it.
+- **One config format, one config path.** There is exactly one way to configure Vigo: edit YAML files in a directory and publish. There is no API that writes config, no database that stores config, no UI that modifies config, no secondary system that overlays config. One source of truth, one format, one tool to manage it.
 
 - **No DSL.** The configuration language is YAML. Go templates appear only inside `content:` attributes. There is no custom language to learn, no compiler, no parser quirks, no language versioning.
 
@@ -62,6 +62,6 @@ What Hobnob does in the areas of safety, reliability, and simplicity that other 
 
 - **Bootstrap is one command.** `curl -sSfk https://server:8443/bootstrap | sudo sh` downloads the binary, generates TLS certificates via CSR signing, registers with the server, installs the system service, and verifies connectivity. Under management in seconds.
 
-- **Reload with no restart.** `hobnobcli config publish` validates, syncs, and triggers the server to reload — all in one command. No process restart, no HUP signal.
+- **Reload with no restart.** `vigogo config publish` validates, syncs, and triggers the server to reload — all in one command. No process restart, no HUP signal.
 
 - **Seven OS families from one codebase.** Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows. Write `type: service` and it dispatches to systemd, launchctl, rc.d, rcctl, SMF, or sc.exe. The config author doesn't need to know which OS the target runs.

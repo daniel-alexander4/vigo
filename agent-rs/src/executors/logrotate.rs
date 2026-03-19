@@ -236,7 +236,7 @@ mod tests {
         let exec = LogrotateExecutor;
         let result = exec.execute(
             &make_params(&[
-                ("name", "hobnob-test-nonexistent-logrotate-99999"),
+                ("name", "vigo-test-nonexistent-logrotate-99999"),
                 ("state", "absent"),
             ]),
             true,

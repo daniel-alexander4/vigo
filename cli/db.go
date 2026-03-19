@@ -150,8 +150,8 @@ var dbQueryCmd = &cobra.Command{
 (INSERT, UPDATE, DELETE, DROP, etc.) are blocked.
 
 Examples:
-  hobnobcli db query "SELECT id, hostname FROM thralls LIMIT 10"
-  hobnobcli db query "SELECT COUNT(*) FROM runs WHERE status = 'failure'"`,
+  vigogo db query "SELECT id, hostname FROM envoys LIMIT 10"
+  vigogo db query "SELECT COUNT(*) FROM runs WHERE status = 'failure'"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -200,13 +200,13 @@ var dbResetCmd = &cobra.Command{
 	Long: `Deletes the SQLite database file and WAL. The server will recreate the
 database from migrations on next restart.
 
-WARNING: This permanently destroys all data — thralls, runs, traits,
+WARNING: This permanently destroys all data — envoys, runs, traits,
 tokens, users, audit history. This action cannot be undone.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
 		if !force {
 			fmt.Println("WARNING: This will permanently delete ALL data in the database.")
-			fmt.Println("All thralls, runs, traits, tokens, users, and audit history will be lost.")
+			fmt.Println("All envoys, runs, traits, tokens, users, and audit history will be lost.")
 			fmt.Println("The server must be restarted after reset.")
 			fmt.Print("\nType 'yes' to confirm: ")
 			reader := bufio.NewReader(os.Stdin)
@@ -232,7 +232,7 @@ tokens, users, audit history. This action cannot be undone.`,
 		fmt.Println("Database reset requested. Stop the server and delete the database file manually:")
 		fmt.Println()
 		fmt.Println("  1. Stop the server: docker compose down")
-		fmt.Println("  2. Delete the database: rm -f /srv/hobnob/db/hobnob.db*")
+		fmt.Println("  2. Delete the database: rm -f /srv/vigo/db/vigo.db*")
 		fmt.Println("  3. Restart: docker compose up -d")
 		fmt.Println()
 		fmt.Println("The server recreates the database from migrations on startup.")

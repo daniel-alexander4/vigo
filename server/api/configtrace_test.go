@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 )
 
 // newConfigTraceTestStore creates a ConfigStore with a basic config layout
@@ -28,8 +28,8 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
 		}
 	}
 
-	// Write nodes.hnb with thrall entries (not common.hnb, which is for inheritance).
-	nodesYAML := `thralls:
+	// Write nodes.vgo with envoy entries (not common.vgo, which is for inheritance).
+	nodesYAML := `envoys:
   - match: "web01.prod"
     modules:
       - nginx
@@ -39,8 +39,8 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
       - nginx
     environment: staging
 `
-	if err := os.WriteFile(filepath.Join(dir, "nodes.hnb"), []byte(nodesYAML), 0644); err != nil {
-		t.Fatalf("write nodes.hnb: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "nodes.vgo"), []byte(nodesYAML), 0644); err != nil {
+		t.Fatalf("write nodes.vgo: %v", err)
 	}
 
 	// Write a module.
@@ -51,8 +51,8 @@ resources:
     type: package
     package: nginx
 `
-	if err := os.WriteFile(filepath.Join(dir, "modules", "nginx.hnb"), []byte(moduleYAML), 0644); err != nil {
-		t.Fatalf("write nginx.hnb: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "modules", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
+		t.Fatalf("write nginx.vgo: %v", err)
 	}
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())

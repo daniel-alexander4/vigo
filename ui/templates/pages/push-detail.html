@@ -37,7 +37,7 @@
 </div>
 
 <div class="table-container"{{if .IsRunning}} hx-get="/push/{{.Push.ID}}" hx-trigger="every 3s" hx-select=".table-container" hx-swap="outerHTML"{{end}}>
-    <h3>Per-Thrall Results</h3>
+    <h3>Per-Envoy Results</h3>
     <table class="table">
         <thead>
             <tr>

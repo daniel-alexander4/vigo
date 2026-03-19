@@ -17,9 +17,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/hobnob/hobnob/server/db"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
-	"github.com/hobnob/hobnob/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/db"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
 // StepDef defines a single workflow step.

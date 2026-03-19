@@ -9,22 +9,22 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/hobnob/hobnob/server/validate"
+	"github.com/daniel-alexander4/vigo/server/validate"
 	"github.com/spf13/cobra"
 )
 
-// hnbConfigRoot is the base directory for .hnb config files.
+// hnbConfigRoot is the base directory for .vgo config files.
 // vi only allows editing files within this tree.
-const hnbConfigRoot = "/srv/hobnob/policy"
+const hnbConfigRoot = "/srv/vigo/policy"
 
 var viCmd = &cobra.Command{
-	Use:   "vi <file.hnb>",
-	Short: "Open a .hnb config file in an editor with YAML validation on save",
-	Long: `Opens a .hnb file in vim with hobnob-aware syntax highlighting.
+	Use:   "vi <file.vgo>",
+	Short: "Open a .vgo config file in an editor with YAML validation on save",
+	Long: `Opens a .vgo file in vim with vigo-aware syntax highlighting.
 
-Files must be within /srv/hobnob/policy/. Paths can be relative —
+Files must be within /srv/vigo/policy/. Paths can be relative —
 if the file is not found at the given path, it is resolved relative
-to /srv/hobnob/policy/stage/.
+to /srv/vigo/policy/stage/.
 
 On save, the file is checked for YAML correctness and idempotency. If
 validation fails, the write is aborted and errors are shown. Use :w! to
@@ -42,8 +42,8 @@ Can also be invoked as 'hnbvi' for convenience.`,
 }
 
 // resolveHnbPath resolves a file path within the policy config directory.
-// Accepts absolute paths (must be within /srv/hobnob/policy/) or relative
-// paths (resolved against /srv/hobnob/policy/stage/).
+// Accepts absolute paths (must be within /srv/vigo/policy/) or relative
+// paths (resolved against /srv/vigo/policy/stage/).
 func resolveHnbPath(input string) (string, error) {
 	var absPath string
 	if filepath.IsAbs(input) {
@@ -104,10 +104,10 @@ func runEditor(absPath string) error {
 		return fmt.Errorf("writing ftdetect file: %w", err)
 	}
 
-	// Resolve the hobnobcli binary for validation callbacks.
+	// Resolve the vigogo binary for validation callbacks.
 	cliPath, err := os.Executable()
 	if err != nil {
-		cliPath = "hobnobcli"
+		cliPath = "vigogo"
 	}
 
 	// Build vimrc.
@@ -143,16 +143,16 @@ func runEditor(absPath string) error {
 	return nil
 }
 
-// hobSyntax is a vim syntax file for .hnb files. It extends YAML with
-// hobnob-specific keyword highlighting.
-const hobSyntax = `" Vim syntax file for Hobnob .hnb configuration files
-" Language: Hobnob Configuration (YAML-based)
+// hobSyntax is a vim syntax file for .vgo files. It extends YAML with
+// vigo-specific keyword highlighting.
+const hobSyntax = `" Vim syntax file for Vigo .vgo configuration files
+" Language: Vigo Configuration (YAML-based)
 
 " Start with YAML as the base syntax
 runtime! syntax/yaml.vim
 
-" Hobnob top-level keys
-syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|thralls\|depends_on\|when\|environment\|environment_overrides\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+" Vigo top-level keys
+syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|envoys\|depends_on\|when\|environment\|environment_overrides\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi hobTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes
@@ -192,12 +192,12 @@ hi hobMatch   ctermfg=15  guifg=#ffffff cterm=bold gui=bold
 hi! yamlComment ctermfg=34 guifg=#00af00
 `
 
-// hobFtdetect sets up filetype detection for .hnb files.
-const hobFtdetect = `au BufRead,BufNewFile *.hnb set filetype=hnb`
+// hobFtdetect sets up filetype detection for .vgo files.
+const hobFtdetect = `au BufRead,BufNewFile *.vgo set filetype=hnb`
 
 // hobVimrc is the custom vimrc template. %s placeholders:
-// 1: tmpDir (runtimepath), 2: hobnobcli path
-const hobVimrc = `" Hobnob editor vimrc — auto-generated, do not edit
+// 1: tmpDir (runtimepath), 2: vigogo path
+const hobVimrc = `" Vigo editor vimrc — auto-generated, do not edit
 set nocompatible
 set runtimepath+=%s
 filetype plugin on
@@ -211,7 +211,7 @@ set autoindent
 
 " Validate on write
 function! HobValidate()
-  let l:tmpfile = tempname() . '.hnb'
+  let l:tmpfile = tempname() . '.vgo'
   call writefile(getline(1, '$'), l:tmpfile)
   let l:output = system('%s validate ' . shellescape(l:tmpfile))
   let l:exit_code = v:shell_error
@@ -223,13 +223,13 @@ function! HobValidate()
     endfor
     echohl None
     echomsg 'Validation failed — write aborted. Use :w! to force.'
-    throw 'hobnob:validation_failed'
+    throw 'vigo:validation_failed'
   endif
 endfunction
 
-augroup hobnob_validate
+augroup vigo_validate
   autocmd!
-  autocmd BufWritePre *.hnb call HobValidate()
+  autocmd BufWritePre *.vgo call HobValidate()
 augroup END
 
 " Status line shows file type

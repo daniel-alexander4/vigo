@@ -1,7 +1,7 @@
--- Consolidated Postgres schema for Hobnob.
+-- Consolidated Postgres schema for Vigo.
 -- All tables use TEXT UUIDs with auto-generated v4 defaults via gen_random_uuid().
 
-CREATE TABLE IF NOT EXISTS thralls (
+CREATE TABLE IF NOT EXISTS envoys (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     hostname    TEXT NOT NULL,
     ip_address  TEXT NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS thralls (
     maintenance_until TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_thralls_hostname ON thralls (hostname);
+CREATE INDEX IF NOT EXISTS idx_envoys_hostname ON envoys (hostname);
 
 CREATE TABLE IF NOT EXISTS approved_patterns (
     id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -24,12 +24,12 @@ CREATE TABLE IF NOT EXISTS approved_patterns (
     token_hash TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     used_at    TIMESTAMP,
-    used_by    TEXT REFERENCES thralls (id)
+    used_by    TEXT REFERENCES envoys (id)
 );
 
 CREATE TABLE IF NOT EXISTS runs (
     id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    thrall_id     TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    envoy_id     TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
     started_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_at   TIMESTAMP,
     status        TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'partial')),
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS runs (
     skipped_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_runs_thrall_id ON runs (thrall_id);
+CREATE INDEX IF NOT EXISTS idx_runs_envoy_id ON runs (envoy_id);
 
 CREATE TABLE IF NOT EXISTS run_results (
     id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -56,18 +56,18 @@ CREATE TABLE IF NOT EXISTS run_results (
 
 CREATE INDEX IF NOT EXISTS idx_run_results_run_id ON run_results (run_id);
 
-CREATE TABLE IF NOT EXISTS thrall_traits (
+CREATE TABLE IF NOT EXISTS envoy_traits (
     id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    envoy_id    TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
     traits       TEXT NOT NULL DEFAULT '{}',
     collected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_thrall_traits_thrall_id_collected ON thrall_traits (thrall_id, collected_at);
+CREATE INDEX IF NOT EXISTS idx_envoy_traits_envoy_id_collected ON envoy_traits (envoy_id, collected_at);
 
 CREATE TABLE IF NOT EXISTS plans (
     id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    thrall_id  TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    envoy_id  TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modules    TEXT NOT NULL DEFAULT '[]'
 );
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS plan_results (
 
 CREATE TABLE IF NOT EXISTS file_snapshots (
     id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    envoy_id    TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
     file_path    TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     content      BYTEA,
@@ -97,12 +97,12 @@ CREATE TABLE IF NOT EXISTS secret_rotation_events (
     old_version      TEXT,
     new_version      TEXT,
     rotated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    affected_thralls INTEGER NOT NULL DEFAULT 0
+    affected_envoys INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS package_audit (
     id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    thrall_id         TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    envoy_id         TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
     package_name      TEXT NOT NULL,
     installed_version TEXT,
     desired_version   TEXT,
@@ -164,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_task_runs_created_at ON task_runs (created_at);
 CREATE TABLE IF NOT EXISTS task_run_targets (
     id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     task_run_id  TEXT NOT NULL REFERENCES task_runs (id) ON DELETE CASCADE,
-    thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+    envoy_id    TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
     hostname     TEXT NOT NULL,
     status       TEXT NOT NULL CHECK (status IN ('pending', 'dispatched', 'complete', 'failed', 'timeout', 'offline', 'rejected', 'skipped')) DEFAULT 'pending',
     exit_code    INTEGER,
@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS task_run_targets (
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_run_targets_task_run_id ON task_run_targets (task_run_id);
-CREATE INDEX IF NOT EXISTS idx_task_run_targets_thrall_id ON task_run_targets (thrall_id);
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_envoy_id ON task_run_targets (envoy_id);
 
 CREATE TABLE IF NOT EXISTS workflow_runs (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,

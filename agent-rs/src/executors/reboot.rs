@@ -29,7 +29,7 @@ impl Executor for RebootExecutor {
         let message = params
             .get("message")
             .map(|s| s.as_str())
-            .unwrap_or("System reboot triggered by Hobnob");
+            .unwrap_or("System reboot triggered by Vigo");
         let reboot_required_file = params.get("reboot_required_file").cloned().unwrap_or_default();
 
         match state {
@@ -108,7 +108,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("state", "present"),
-                ("reboot_required_file", "/tmp/nonexistent_hobnob_reboot_test_file"),
+                ("reboot_required_file", "/tmp/nonexistent_vigo_reboot_test_file"),
             ]),
             false,
         );

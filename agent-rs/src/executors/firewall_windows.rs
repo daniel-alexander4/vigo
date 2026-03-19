@@ -89,7 +89,7 @@ impl Executor for FirewallWindowsExecutor {
         let effective_rule_name = if !rule_name.is_empty() {
             rule_name.clone()
         } else {
-            format!("hobnob-{}-{}-{}", port, protocol, direction)
+            format!("vigo-{}-{}-{}", port, protocol, direction)
         };
 
         let dir_value = match direction {

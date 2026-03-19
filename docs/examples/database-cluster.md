@@ -4,7 +4,7 @@ This example sets up PostgreSQL with managed credentials using `secret:` referen
 
 ## PostgreSQL Module
 
-`policy/stage/modules/postgresql.hnb`:
+`policy/stage/modules/postgresql.vgo`:
 
 ```yaml
 name: postgresql
@@ -75,7 +75,7 @@ resources:
 
 ## Application Database Setup
 
-`policy/stage/modules/app-database.hnb`:
+`policy/stage/modules/app-database.vgo`:
 
 ```yaml
 name: app-database
@@ -96,10 +96,10 @@ resources:
 
   - name: set-app-user-password
     type: exec
-    stdin: "secret:hobnob/app/db_password"
+    stdin: "secret:vigo/app/db_password"
     command: "psql -c \"ALTER ROLE {{ .Vars.app_db_user }} PASSWORD '$(cat -)';\""
     user: postgres
-    watch_secret: ["hobnob/app/db_password"]
+    watch_secret: ["vigo/app/db_password"]
     when: "changed"
 
   - name: grant-app-privileges
@@ -112,7 +112,7 @@ resources:
 
 Create a shared variable file for database credentials used across multiple node entries.
 
-`policy/stage/vars/db-vars.hnb`:
+`policy/stage/vars/db-vars.vgo`:
 
 ```yaml
 app_db_name: myapp
@@ -122,7 +122,7 @@ pg_allowed_cidr: "10.0.0.0/8"
 
 ## Role Definition
 
-`policy/stage/roles/database-server.hnb`:
+`policy/stage/roles/database-server.vgo`:
 
 ```yaml
 name: database-server
@@ -133,14 +133,14 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "db-*.example.com"
     environment: production
     roles: [database-server]
-    vars_from: db-vars.hnb
+    vars_from: db-vars.vgo
     vars:
       pg_max_connections: "200"
       pg_shared_buffers: 2GB
@@ -162,7 +162,7 @@ thralls:
 
 The `secret:` prefix in the `stdin` parameter of the `set-app-user-password` resource means:
 
-1. The server resolves `secret:hobnob/app/db_password` through the secrets provider at check-in time
+1. The server resolves `secret:vigo/app/db_password` through the secrets provider at check-in time
 2. The resolved value is passed to the agent in the policy bundle
 3. The agent pipes the value to the command's stdin
 4. The password never appears in command strings, logs, or config files
@@ -170,11 +170,11 @@ The `secret:` prefix in the `stdin` parameter of the `set-app-user-password` res
 For the `local` secrets backend, create the secret file:
 
 ```bash
-mkdir -p /srv/hobnob/secrets/hobnob/app
-echo -n 'my-secure-password' > /srv/hobnob/secrets/hobnob/app/db_password
-chmod 600 /srv/hobnob/secrets/hobnob/app/db_password
+mkdir -p /srv/vigo/secrets/vigo/app
+echo -n 'my-secure-password' > /srv/vigo/secrets/vigo/app/db_password
+chmod 600 /srv/vigo/secrets/vigo/app/db_password
 ```
 
 ## vars_from
 
-The `vars_from: db-vars.hnb` directive loads variables from a separate file, keeping shared configuration DRY across multiple node entries. Variables from `vars_from` have lower priority than inline `vars`, so they can be overridden per-node.
+The `vars_from: db-vars.vgo` directive loads variables from a separate file, keeping shared configuration DRY across multiple node entries. Variables from `vars_from` have lower priority than inline `vars`, so they can be overridden per-node.

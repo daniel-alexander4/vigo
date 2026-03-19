@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hobnob/hobnob/server/db"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/db"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
 )
 
 // PushDispatcher dispatches ad-hoc commands to connected agents.

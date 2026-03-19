@@ -16,7 +16,7 @@ resources:
     type: file
     target_path: /etc/audit/auditd.conf
     content: |
-      # /etc/audit/auditd.conf — managed by hobnob
+      # /etc/audit/auditd.conf — managed by vigo
       log_file = {{ .Vars.audit_log_file }}
       log_format = ENRICHED
       log_group = root
@@ -41,9 +41,9 @@ resources:
 
   - name: auditd-rules
     type: file
-    target_path: /etc/audit/rules.d/hobnob.rules
+    target_path: /etc/audit/rules.d/vigo.rules
     content: |
-      # /etc/audit/rules.d/hobnob.rules — managed by hobnob
+      # /etc/audit/rules.d/vigo.rules — managed by vigo
 
       # Monitor identity files
       -w /etc/passwd -p wa -k identity

@@ -11,7 +11,7 @@ resources:
           type: file
           target_path: /etc/selinux/config
           content: |
-            # /etc/selinux/config — managed by hobnob
+            # /etc/selinux/config — managed by vigo
             SELINUX={{ .Vars.selinux_mode }}
             SELINUXTYPE=targeted
           owner: root

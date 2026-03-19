@@ -1,22 +1,22 @@
 # Testing
 
-Hobnob ships with two test suites:
+Vigo ships with two test suites:
 
-- **`test-cli.sh`** — CLI integration tests. Installed to `/srv/hobnob/scripts/` on every server. Requires only a running server and `hobnobcli`.
+- **`test-cli.sh`** — CLI integration tests. Installed to `/srv/vigo/scripts/` on every server. Requires only a running server and `vigogo`.
 - **`test-unit.sh`** — Go and Rust unit tests. Requires the source tree and build toolchains. Run from the repo checkout only.
 
 ## CLI Integration Tests
 
-`test-cli.sh` exercises every `hobnobcli` subcommand against the running server. It verifies that enrollment, config publishing, push dispatch, compliance export, secrets management, and all other operations work end-to-end.
+`test-cli.sh` exercises every `vigogo` subcommand against the running server. It verifies that enrollment, config publishing, push dispatch, compliance export, secrets management, and all other operations work end-to-end.
 
 ### Running
 
 ```bash
 # From the server host (requires the server to be running):
-sudo /srv/hobnob/scripts/test-cli.sh
+sudo /srv/vigo/scripts/test-cli.sh
 
 # Or specify a different server:
-sudo /srv/hobnob/scripts/test-cli.sh --server https://hobnob.example.com:8443
+sudo /srv/vigo/scripts/test-cli.sh --server https://vigo.example.com:8443
 ```
 
 Run as root to include tests that require filesystem access (config publish, backup create/restore).
@@ -31,7 +31,7 @@ The script runs 107 test calls across 30 sections:
 | audit | 2 | Audit trail list and chain verification |
 | license | 2 | License status and machine fingerprint |
 | db | 6 | Stats, tables, integrity, checkpoint, vacuum, raw query |
-| thralls | 10 | List, show, traits, preview, tag/untag, packages, maintenance, push |
+| envoys | 10 | List, show, traits, preview, tag/untag, packages, maintenance, push |
 | runs | 2 | Run history list and detail |
 | approved + tokens | 4 | Enrollment pattern lifecycle (add/revoke) with one-time tokens |
 | config | 8 | History, publish (dry-run), trace, tree, pending, search, rollback |
@@ -39,7 +39,7 @@ The script runs 107 test calls across 30 sections:
 | inventory | 2 | Fleet search by trait values |
 | push | 3 | Push list, dispatch echo command, status check |
 | packages | 1 | Package version drift detection |
-| query | 1 | Live trait query to enrolled thrall |
+| query | 1 | Live trait query to enrolled envoy |
 | export | 3 | SIEM, CMDB, and OSCAL compliance export |
 | webusers | 3 | Web user create/delete lifecycle |
 | auth | 4 | Auth status, API token create/list/revoke |
@@ -50,7 +50,7 @@ The script runs 107 test calls across 30 sections:
 | backup | 3 | Create, inspect, restore (dry-run) |
 | test | 1 | Config validation |
 | server | 2 | Peer replication status, TLS cert generation |
-| validate | 1 | Single-file .hnb validation |
+| validate | 1 | Single-file .vgo validation |
 | env | 1 | Environment promote error handling |
 | ask | 1 | AI assistant (skipped if AI not enabled) |
 | rollback | 1 | Rollback error handling |
@@ -61,7 +61,7 @@ The script runs 107 test calls across 30 sections:
 A healthy server produces output like:
 
 ```
-hobnobcli test suite
+vigogo test suite
 Server: https://localhost:8443
 
 [preflight]
@@ -93,10 +93,10 @@ Any `FAIL` result indicates a real problem. Failed tests show the exit code and 
 
 ### Requirements
 
-- `hobnobcli` in PATH (installed automatically by the Docker entrypoint)
+- `vigogo` in PATH (installed automatically by the Docker entrypoint)
 - `curl` and `jq` available on the host
 - Server running and reachable at the specified URL
-- At least one enrolled thrall for full coverage (thrall-dependent tests skip gracefully otherwise)
+- At least one enrolled envoy for full coverage (envoy-dependent tests skip gracefully otherwise)
 
 ## Unit Tests
 
@@ -112,7 +112,7 @@ Any `FAIL` result indicates a real problem. Failed tests show the exit code and 
 ./scripts/test-unit.sh --windows    # Include Windows cross-compile check
 ```
 
-This script is **not** installed to `/srv/hobnob/scripts/` — it requires the source tree and Go/Rust toolchains.
+This script is **not** installed to `/srv/vigo/scripts/` — it requires the source tree and Go/Rust toolchains.
 
 ### What It Tests
 
@@ -145,11 +145,11 @@ This script is **not** installed to `/srv/hobnob/scripts/` — it requires the s
 ### Expected Output
 
 ```
-hobnob unit test suite
+vigo unit test suite
 
 [go tests]
-  PASS  github.com/hobnob/hobnob/server/api 0.296s
-  PASS  github.com/hobnob/hobnob/server/grpc 1.978s
+  PASS  github.com/vigo/vigo/server/api 0.296s
+  PASS  github.com/vigo/vigo/server/grpc 1.978s
   ...
 
   Go: 35 packages pass, 0 fail (900 test functions)
@@ -178,6 +178,6 @@ Unit tests are primarily useful during development or when verifying a build fro
 | After initial install | `test-cli.sh` | Verify server is healthy and all features work |
 | After upgrade | `test-cli.sh` | Catch regressions before resuming normal operations |
 | Investigating issues | `test-cli.sh` | Isolate which subsystem is broken |
-| After config changes | `test-cli.sh` | Verify config publish pipeline and thrall resolution |
+| After config changes | `test-cli.sh` | Verify config publish pipeline and envoy resolution |
 | Building from source | `test-unit.sh` | Verify compilation and internal correctness |
 | Before submitting patches | `test-unit.sh` | Ensure no regressions in core logic |

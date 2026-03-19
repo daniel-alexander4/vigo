@@ -17,7 +17,7 @@ pub mod windows_service;
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 ///
-/// "http://hobd.example.com:8443" + "1530" → "hobd.example.com:1530"
+/// "http://vigosrv.example.com:8443" + "1530" → "vigosrv.example.com:1530"
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
     let mut host = bootstrap_server;
     host = host.strip_prefix("http://").unwrap_or(host);
@@ -39,16 +39,16 @@ mod tests {
     #[test]
     fn test_derive_grpc_addr() {
         assert_eq!(
-            derive_grpc_addr("http://hobd.example.com:8443", "1530"),
-            "hobd.example.com:1530"
+            derive_grpc_addr("http://vigosrv.example.com:8443", "1530"),
+            "vigosrv.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("https://hobd.example.com:8443", "1530"),
-            "hobd.example.com:1530"
+            derive_grpc_addr("https://vigosrv.example.com:8443", "1530"),
+            "vigosrv.example.com:1530"
         );
         assert_eq!(
-            derive_grpc_addr("hobd.example.com", "1530"),
-            "hobd.example.com:1530"
+            derive_grpc_addr("vigosrv.example.com", "1530"),
+            "vigosrv.example.com:1530"
         );
     }
 }

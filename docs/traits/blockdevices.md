@@ -33,7 +33,7 @@ Reads entries from `/sys/block/`, skipping loop, ram, and device-mapper (`dm-`) 
 ```yaml
 - name: disk-inventory
   type: file
-  target_path: /var/lib/hobnob/disks.txt
+  target_path: /var/lib/vigo/disks.txt
   content: |
     {{ range $name, $dev := .Traits.blockdevices }}{{ $name }}: {{ $dev.size_bytes }} bytes{{ if $dev.model }} ({{ $dev.model }}){{ end }}
     {{ end }}

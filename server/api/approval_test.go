@@ -15,10 +15,10 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 // openApprovalTestDB creates an in-memory SQLite database with the
@@ -72,7 +72,7 @@ func requestWithUser(method, path string, body []byte, username string) *http.Re
 		req = httptest.NewRequest(method, path, nil)
 	}
 	if username != "" {
-		ctx := hobnobauth.ContextWithUser(req.Context(), &hobnobauth.User{
+		ctx := vigoauth.ContextWithUser(req.Context(), &vigoauth.User{
 			ID:       username + "-id",
 			Username: username,
 			Role:     "admin",
@@ -87,7 +87,7 @@ func TestCreatePendingChange(t *testing.T) {
 	_, queries := openApprovalTestDB(t)
 	_, mux := newApprovalTestHandler(t, queries)
 
-	body, _ := json.Marshal(map[string]string{"diff_summary": "changed nginx.hnb"})
+	body, _ := json.Marshal(map[string]string{"diff_summary": "changed nginx.vgo"})
 	req := requestWithUser("POST", "/api/v1/config/changes", body, "alice")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -107,8 +107,8 @@ func TestCreatePendingChange(t *testing.T) {
 	if resp["requested_by"] != "alice" {
 		t.Errorf("expected requested_by alice, got %v", resp["requested_by"])
 	}
-	if resp["diff_summary"] != "changed nginx.hnb" {
-		t.Errorf("expected diff_summary 'changed nginx.hnb', got %v", resp["diff_summary"])
+	if resp["diff_summary"] != "changed nginx.vgo" {
+		t.Errorf("expected diff_summary 'changed nginx.vgo', got %v", resp["diff_summary"])
 	}
 	if resp["id"] == nil || resp["id"].(float64) < 1 {
 		t.Errorf("expected valid id, got %v", resp["id"])

@@ -57,7 +57,7 @@ WIN_FAIL=0
 WIN_TOTAL=0
 FAILURES=()
 
-echo -e "${BOLD}hobnob unit test suite${NC}"
+echo -e "${BOLD}vigo unit test suite${NC}"
 echo ""
 
 # -------------------------------------------------------------------

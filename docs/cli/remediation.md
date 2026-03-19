@@ -1,4 +1,4 @@
-# hobnobcli remediation
+# vigogo remediation
 
 Manage automated drift remediation.
 
@@ -9,7 +9,7 @@ Manage automated drift remediation.
 Trigger remediation for all non-compliant nodes (recurring drift or errors).
 
 ```bash
-hobnobcli remediation run [flags]
+vigogo remediation run [flags]
 ```
 
 **Flags:**
@@ -22,10 +22,10 @@ hobnobcli remediation run [flags]
 
 ```bash
 # Preview what would be remediated
-hobnobcli remediation run --dry-run
+vigogo remediation run --dry-run
 
 # Execute remediation
-hobnobcli remediation run
+vigogo remediation run
 ```
 
 ### status
@@ -33,7 +33,7 @@ hobnobcli remediation run
 Show current fleet remediation posture — how many nodes need remediation.
 
 ```bash
-hobnobcli remediation status
+vigogo remediation status
 ```
 
 ### list
@@ -41,5 +41,5 @@ hobnobcli remediation status
 List recent remediation runs.
 
 ```bash
-hobnobcli remediation list
+vigogo remediation list
 ```

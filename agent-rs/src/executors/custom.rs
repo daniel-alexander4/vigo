@@ -170,12 +170,12 @@ mod tests {
     #[test]
     fn missing_script_errors() {
         let exec = CustomExecutor {
-            script_path: "/tmp/hobnob-test-nonexistent-script-12345".into(),
+            script_path: "/tmp/vigo-test-nonexistent-script-12345".into(),
         };
         let result = exec.execute(&make_params(&[("name", "test")]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("running /tmp/hobnob-test-nonexistent-script-12345"),
+            result.error.as_deref().unwrap().contains("running /tmp/vigo-test-nonexistent-script-12345"),
             "unexpected error: {:?}",
             result.error
         );

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
 )
 
 type stubQueryDispatcher struct {
@@ -110,7 +110,7 @@ func TestQueryHandler_MissingTarget(t *testing.T) {
 }
 
 func TestQueryHandler_DispatchError(t *testing.T) {
-	dispatcher := &stubQueryDispatcher{err: fmt.Errorf("no thralls matched")}
+	dispatcher := &stubQueryDispatcher{err: fmt.Errorf("no envoys matched")}
 	handler := NewQueryHandler(dispatcher)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)

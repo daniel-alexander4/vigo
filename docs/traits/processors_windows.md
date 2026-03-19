@@ -29,7 +29,7 @@ Runs `wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed /v
 ```yaml
 - name: cpu-info
   type: file
-  target_path: C:\ProgramData\hobnob\cpu.txt
+  target_path: C:\ProgramData\vigo\cpu.txt
   content: |
     CPU: {{ .Traits.processors.model }}
     Cores: {{ .Traits.processors.physical_cores }} physical, {{ .Traits.processors.logical_cores }} logical

@@ -9,7 +9,7 @@ Four stat cards at the top:
 | Card | Description |
 |------|-------------|
 | Status | Current enforcement stage (Compliant, Grace Period, Enrollment Block, Service Stop). Green when compliant, yellow for grace, red for block/stop. |
-| Nodes Used | Active thralls vs. licensed maximum (e.g., `12 / 25`). |
+| Nodes Used | Active envoys vs. licensed maximum (e.g., `12 / 25`). |
 | Usage | Percentage of licensed nodes in use. Green under 75%, yellow 75–90%, red above 90%. |
 | Days Remaining | Days until license expiry. Yellow when under 30 days. |
 
@@ -20,8 +20,8 @@ A details table showing:
 - **Customer** — Customer name (omitted for free tier)
 - **License ID** — Unique license identifier
 - **Tier** — License tier with display name (e.g., "Free (25 nodes)")
-- **Max Nodes** — Maximum thralls allowed
-- **Active Nodes** — Current active (non-revoked) thrall count
+- **Max Nodes** — Maximum envoys allowed
+- **Active Nodes** — Current active (non-revoked) envoy count
 - **Expires** — License expiration date
 - **Days Remaining** — Days until expiry
 - **Enforcement Stage** — Current stage with color-coded badge
@@ -32,7 +32,7 @@ A details table showing:
 When running on the built-in free license, an upgrade section shows how to install a paid license:
 
 ```
-hobnobcli license install --file=license.lic
+vigogo license install --file=license.lic
 ```
 
 ## Warning Banner

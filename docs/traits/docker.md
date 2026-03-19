@@ -35,7 +35,7 @@ First checks if `docker` is available via `which`. If not installed, returns def
 ```yaml
 - name: docker-report
   type: file
-  target_path: /var/lib/hobnob/docker.txt
+  target_path: /var/lib/vigo/docker.txt
   content: |
     Docker {{ .Traits.docker.version }}
     Running containers: {{ .Traits.docker.running_count }}

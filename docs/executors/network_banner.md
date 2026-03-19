@@ -32,10 +32,10 @@ resources:
     type: network_banner
     device_type: cisco_ios
     banner_type: motd
-    text: "Managed by Hobnob. Do not make manual changes."
+    text: "Managed by Vigo. Do not make manual changes."
     state: present
 ```
 
 ## Platform
 
-Available on all platforms. Runs on the gateway thrall.
+Available on all platforms. Runs on the gateway envoy.

@@ -10,15 +10,15 @@ import (
 func TestFleetIndexDeviceType(t *testing.T) {
 	fi := NewFleetIndex()
 
-	// Add a normal gateway thrall.
-	fi.AddThrall(ThrallState{
+	// Add a normal gateway envoy.
+	fi.AddEnvoy(EnvoyState{
 		ID:               "gw-1",
 		Hostname:         "netmgmt01.example.com",
 		ComplianceStatus: "compliant",
 	}, genKey(t))
 
-	// Add a device thrall with Gateway and DeviceType.
-	fi.AddThrall(ThrallState{
+	// Add a device envoy with Gateway and DeviceType.
+	fi.AddEnvoy(EnvoyState{
 		ID:               "dev-1",
 		Hostname:         "core-sw01.example.com",
 		ComplianceStatus: "unknown",
@@ -26,7 +26,7 @@ func TestFleetIndexDeviceType(t *testing.T) {
 		DeviceType:       "cisco_ios",
 	}, nil)
 
-	fi.AddThrall(ThrallState{
+	fi.AddEnvoy(EnvoyState{
 		ID:               "dev-2",
 		Hostname:         "edge-rtr01.example.com",
 		ComplianceStatus: "unknown",
@@ -34,10 +34,10 @@ func TestFleetIndexDeviceType(t *testing.T) {
 		DeviceType:       "juniper_junos",
 	}, nil)
 
-	// GetThrall should return device fields.
-	got := fi.GetThrall("dev-1")
+	// GetEnvoy should return device fields.
+	got := fi.GetEnvoy("dev-1")
 	if got == nil {
-		t.Fatal("expected device thrall, got nil")
+		t.Fatal("expected device envoy, got nil")
 	}
 	if got.DeviceType != "cisco_ios" {
 		t.Errorf("DeviceType = %q, want cisco_ios", got.DeviceType)
@@ -52,10 +52,10 @@ func TestFleetIndexDeviceType(t *testing.T) {
 		t.Errorf("ComplianceSummary.Total = %d, want 3 (1 gateway + 2 devices)", summary.Total)
 	}
 
-	// Device should appear in AllThralls.
-	all := fi.AllThralls()
+	// Device should appear in AllEnvoys.
+	all := fi.AllEnvoys()
 	if len(all) != 3 {
-		t.Errorf("AllThralls returned %d, want 3", len(all))
+		t.Errorf("AllEnvoys returned %d, want 3", len(all))
 	}
 }
 

@@ -1,8 +1,8 @@
 # gRPC Admin Service
 
-The `HobnobAdmin` service provides administrative operations. It runs on port 8443 via grpc-gateway, which translates REST requests into gRPC calls. The CLI (`hobnobcli`) and web UI communicate through these endpoints.
+The `VigoAdmin` service provides administrative operations. It runs on port 8443 via grpc-gateway, which translates REST requests into gRPC calls. The CLI (`vigogo`) and web UI communicate through these endpoints.
 
-Proto definition: `proto/hobnob.proto`, service `HobnobAdmin`.
+Proto definition: `proto/vigo.proto`, service `VigoAdmin`.
 
 ## RPCs
 
@@ -42,41 +42,41 @@ Returns all patterns with usage status:
 | `pattern` | string | The glob pattern |
 | `created_at` | Timestamp | Creation time |
 | `used` | bool | Whether the pattern has been consumed |
-| `used_by` | string | Thrall UUID that consumed it |
+| `used_by` | string | Envoy UUID that consumed it |
 
 ---
 
-### Thrall Management
+### Envoy Management
 
 | RPC | Method | Path | Description |
 |-----|--------|------|-------------|
-| `ListThralls` | GET | `/api/v1/thralls` | List all enrolled thralls |
-| `GetThrall` | GET | `/api/v1/thralls/{id}` | Get details for a single thrall |
-| `RevokeThrall` | POST | `/api/v1/thralls/{id}/revoke` | Revoke a thrall, blocking future check-ins |
-| `DeleteThrall` | DELETE | `/api/v1/thralls/{id}` | Permanently remove a thrall and all history |
-| `ForcePush` | POST | `/api/v1/push` | Trigger immediate check-in for one or all thralls |
-| `DryRun` | POST | `/api/v1/thralls/{thrall_id}/dry-run` | Compute a plan without applying changes |
+| `ListEnvoys` | GET | `/api/v1/envoys` | List all enrolled envoys |
+| `GetEnvoy` | GET | `/api/v1/envoys/{id}` | Get details for a single envoy |
+| `RevokeEnvoy` | POST | `/api/v1/envoys/{id}/revoke` | Revoke a envoy, blocking future check-ins |
+| `DeleteEnvoy` | DELETE | `/api/v1/envoys/{id}` | Permanently remove a envoy and all history |
+| `ForcePush` | POST | `/api/v1/push` | Trigger immediate check-in for one or all envoys |
+| `DryRun` | POST | `/api/v1/envoys/{envoy_id}/dry-run` | Compute a plan without applying changes |
 
-#### Thrall Response
+#### Envoy Response
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | UUID |
-| `hostname` | string | Thrall hostname |
+| `hostname` | string | Envoy hostname |
 | `ip_address` | string | IP address |
 | `enrolled_at` | Timestamp | Enrollment time |
 | `last_seen` | Timestamp | Last check-in time |
-| `revoked` | bool | Whether the thrall is revoked |
+| `revoked` | bool | Whether the envoy is revoked |
 | `revoked_at` | Timestamp | Revocation time (if revoked) |
-| `pending_rotated_secrets` | repeated string | Secrets awaiting rotation on this thrall |
+| `pending_rotated_secrets` | repeated string | Secrets awaiting rotation on this envoy |
 
 #### ForcePush
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `thrall_id` | string | Target thrall UUID (empty = all thralls) |
+| `envoy_id` | string | Target envoy UUID (empty = all envoys) |
 
-Response: `{ thralls_notified: int32 }`
+Response: `{ envoys_notified: int32 }`
 
 #### DryRun Response
 
@@ -95,7 +95,7 @@ Returns a list of `PlannedAction`:
 
 | RPC | Method | Path | Description |
 |-----|--------|------|-------------|
-| `ListRuns` | GET | `/api/v1/runs` | List recent runs, optionally filtered by thrall |
+| `ListRuns` | GET | `/api/v1/runs` | List recent runs, optionally filtered by envoy |
 | `GetRun` | GET | `/api/v1/runs/{id}` | Get run details with per-module results |
 
 #### Run Response
@@ -103,7 +103,7 @@ Returns a list of `PlannedAction`:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Run UUID |
-| `thrall_id` | string | Thrall UUID |
+| `envoy_id` | string | Envoy UUID |
 | `started_at` | Timestamp | Run start time |
 | `finished_at` | Timestamp | Run end time |
 | `status` | string | running, success, failure, partial |
@@ -119,13 +119,13 @@ Returns a list of `PlannedAction`:
 | RPC | Method | Path | Description |
 |-----|--------|------|-------------|
 | `GetComplianceSummary` | GET | `/api/v1/compliance` | Fleet-wide compliance status |
-| `GetThrallCompliance` | GET | `/api/v1/thralls/{id}/compliance` | Single-thrall compliance with history |
+| `GetEnvoyCompliance` | GET | `/api/v1/envoys/{id}/compliance` | Single-envoy compliance with history |
 
 #### ComplianceSummary Response
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `total` | int32 | Total enrolled thralls |
+| `total` | int32 | Total enrolled envoys |
 | `compliant` | int32 | Fully compliant |
 | `drifted` | int32 | Converged with changes |
 | `failing` | int32 | Last run failed |
@@ -151,11 +151,11 @@ See [Webhooks](webhooks.md) for payload format and signing details.
 
 | RPC | Method | Path | Description |
 |-----|--------|------|-------------|
-| `Rollback` | POST | `/api/v1/thralls/{thrall_id}/rollback` | Revert to a previous run's state |
+| `Rollback` | POST | `/api/v1/envoys/{envoy_id}/rollback` | Revert to a previous run's state |
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `thrall_id` | string | Target thrall |
+| `envoy_id` | string | Target envoy |
 | `run_id` | string | Optional: specific run to roll back to |
 | `file_path` | string | Optional: rollback a single file |
 
@@ -190,5 +190,5 @@ These RPCs are used for hub-to-spoke communication in spanner deployments:
 
 | RPC | Description |
 |-----|-------------|
-| `EnrollThrall` | Hub routes enrollment to target spoke (bypasses token re-validation) |
-| `SetReassignment` | Hub marks a thrall for reassignment to a different spoke |
+| `EnrollEnvoy` | Hub routes enrollment to target spoke (bypasses token re-validation) |
+| `SetReassignment` | Hub marks a envoy for reassignment to a different spoke |

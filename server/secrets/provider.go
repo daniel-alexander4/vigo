@@ -9,7 +9,7 @@ package secrets
 import "context"
 
 // NullProvider is a no-op secrets provider that returns empty strings for all
-// keys. Used by offline tools (hobnobcli test, hobnobcli validate) that need
+// keys. Used by offline tools (vigogo test, vigogo validate) that need
 // to load config without resolving secrets.
 type NullProvider struct{}
 
@@ -21,7 +21,7 @@ func (NullProvider) Close() error                                          { ret
 // The rest of the codebase depends only on this interface, never on a
 // concrete implementation.
 type Provider interface {
-	// Get retrieves a secret string by its path/key (e.g. "hobnob/db/dsn").
+	// Get retrieves a secret string by its path/key (e.g. "vigo/db/dsn").
 	Get(ctx context.Context, key string) (string, error)
 
 	// GetBytes retrieves a binary secret (e.g. a TLS cert/key PEM block).

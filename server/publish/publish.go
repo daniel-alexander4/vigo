@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package publish implements a staging pipeline for thrall configuration.
-// Operators edit .hnb files in the stage directory. The publish command
+// Package publish implements a staging pipeline for envoy configuration.
+// Operators edit .vgo files in the stage directory. The publish command
 // validates them using the same NewConfigStore logic the server uses, then
 // atomically syncs to the .live directory the server reads from.
 package publish
@@ -20,19 +20,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/modlint"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/modlint"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	// StageDir is where operators edit .hnb files.
-	StageDir = "/srv/hobnob/policy/stage"
+	// StageDir is where operators edit .vgo files.
+	StageDir = "/srv/vigo/policy/stage"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
-	LiveDir = "/srv/hobnob/policy/.live"
+	LiveDir = "/srv/vigo/policy/.live"
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.
@@ -54,7 +54,7 @@ func (s *stubProvider) GetBytes(_ context.Context, _ string) ([]byte, error) { r
 func (s *stubProvider) Close() error                                         { return nil }
 
 // HistoryDir is the directory for config snapshots used by rollback.
-var HistoryDir = "/srv/hobnob/config-history"
+var HistoryDir = "/srv/vigo/config-history"
 
 // Options controls publish/validation behavior.
 type Options struct {
@@ -89,7 +89,7 @@ func ValidateSource(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("normalizing permissions: %w", err)
 	}
 
-	// Normalize whitespace in all .hnb/.yaml files: strip trailing whitespace
+	// Normalize whitespace in all .vgo/.yaml files: strip trailing whitespace
 	// from every line. This prevents invisible formatting issues from editors
 	// that add trailing spaces or mixed line endings.
 	if err := normalizeWhitespace(StageDir); err != nil {
@@ -168,7 +168,7 @@ func Publish(opts Options) (*Result, error) {
 	res.Files = files
 
 	// Lock down .live so only the publish command (running as root) can write.
-	// The server reads via the hobnob group. Operators cannot write directly.
+	// The server reads via the vigo group. Operators cannot write directly.
 	lockdownLiveDir(LiveDir)
 
 	// Snapshot .live for rollback support.
@@ -237,7 +237,7 @@ func hashTree(root string) (map[string]string, error) {
 			return nil
 		}
 		// Skip non-config files (binaries, temp files, etc.) but include
-		// .hnb, .yaml, .yml, .tmpl, and .example files.
+		// .vgo, .yaml, .yml, .tmpl, and .example files.
 		if !isPublishableFile(d.Name()) {
 			return nil
 		}
@@ -261,7 +261,7 @@ func hashTree(root string) (map[string]string, error) {
 func isPublishableFile(name string) bool {
 	ext := filepath.Ext(name)
 	switch ext {
-	case ".hnb", ".yaml", ".yml", ".tmpl", ".conf", ".j2":
+	case ".vgo", ".yaml", ".yml", ".tmpl", ".conf", ".j2":
 		return true
 	}
 	return false
@@ -377,7 +377,7 @@ type moduleFile struct {
 }
 
 // extractURLsFromFiles parses the given module files (relative paths like
-// "modules/nginx.hnb") and returns all http/https URLs found.
+// "modules/nginx.vgo") and returns all http/https URLs found.
 func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error) {
 	urlFields := map[string][]string{
 		"archive":    {"url"},
@@ -607,16 +607,16 @@ func unlockLiveDir(live string) {
 	})
 }
 
-// PublishFile copies a single .hnb file into stage/, validates the full
+// PublishFile copies a single .vgo file into stage/, validates the full
 // config tree, and syncs only that file to .live/. The file path must be
-// relative to the stage directory (e.g., "modules/nginx.hnb").
+// relative to the stage directory (e.g., "modules/nginx.vgo").
 func PublishFile(srcPath string, opts Options) (*Result, error) {
 	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
 		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
 	}
 
 	// Determine the relative path within the config tree.
-	// Accept either an absolute path or a relative path like "modules/nginx.hnb".
+	// Accept either an absolute path or a relative path like "modules/nginx.vgo".
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
 		// Check if the file is already inside stage/.
@@ -721,7 +721,7 @@ func normalizeStagePermissions(dir string) error {
 }
 
 // normalizeWhitespace walks the stage directory and strips trailing
-// whitespace from every line of .hnb, .yaml, and .yml files. Files are
+// whitespace from every line of .vgo, .yaml, and .yml files. Files are
 // rewritten in-place only if they changed. This prevents editor artifacts
 // (trailing spaces, mixed line endings) from causing spurious diffs.
 func normalizeWhitespace(dir string) error {
@@ -730,7 +730,7 @@ func normalizeWhitespace(dir string) error {
 			return err
 		}
 		ext := filepath.Ext(path)
-		if ext != ".hnb" && ext != ".yaml" && ext != ".yml" {
+		if ext != ".vgo" && ext != ".yaml" && ext != ".yml" {
 			return nil
 		}
 
@@ -779,7 +779,7 @@ func normalizeWhitespace(dir string) error {
 var _ secrets.Provider = (*stubProvider)(nil)
 
 // lintModules runs the modlint pipeline on the given module files (relative
-// paths like "modules/nginx.hnb"). Linted output is written back in place.
+// paths like "modules/nginx.vgo"). Linted output is written back in place.
 // Returns an error if any module has validation errors that cannot be auto-fixed.
 func lintModules(baseDir string, relPaths []string) error {
 	var lintErrors []string

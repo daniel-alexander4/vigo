@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package compliance computes compliance status for managed thralls based on
+// Package compliance computes compliance status for managed envoys based on
 // their last run results and last-seen timestamps.
 package compliance
 
@@ -15,17 +15,17 @@ type RunInfo struct {
 }
 
 // RecurringDriftThreshold is the number of consecutive runs with changes
-// before a thrall is flagged as "recurring drift".
+// before a envoy is flagged as "recurring drift".
 const RecurringDriftThreshold = 3
 
-// ComputeStatus determines the compliance status for a single thrall.
+// ComputeStatus determines the compliance status for a single envoy.
 // Returns one of: "compliant", "recurring drift", "errors", "lost contact", "no data".
 //
 // recentRuns should be the last N runs in reverse chronological order (newest first).
 // Only the first RecurringDriftThreshold entries are examined for drift detection.
 //
 // Priority order:
-//  1. Lost Contact - thrall has not checked in within 2x base interval
+//  1. Lost Contact - envoy has not checked in within 2x base interval
 //  2. No Data - no run data available
 //  3. Errors - last run had failures
 //  4. Recurring Drift - last 3+ consecutive runs all had changes

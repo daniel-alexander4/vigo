@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! Resource executors for the Hobnob agent.
+//! Resource executors for the Vigo agent.
 //!
 //! Every executor implements the [`Executor`] trait. Executors are idempotent:
 //! they check current state before acting and only modify the system when drift

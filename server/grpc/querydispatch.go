@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 )
 
 // queryRouter tracks in-flight live queries and routes incoming
@@ -25,11 +25,11 @@ type queryRouter struct {
 
 type pendingQuery struct {
 	resultCh  chan queryResult
-	hostnames map[string]string // thrallID → hostname
+	hostnames map[string]string // envoyID → hostname
 }
 
 type queryResult struct {
-	thrallID string
+	envoyID string
 	hostname string
 	value    string
 	found    bool
@@ -54,21 +54,21 @@ func (r *queryRouter) remove(queryID string) {
 }
 
 // handleQueryResponse routes an incoming QueryResponse to the waiting caller.
-func (r *queryRouter) handleQueryResponse(thrallID string, resp *pb.QueryResponse) {
+func (r *queryRouter) handleQueryResponse(envoyID string, resp *pb.QueryResponse) {
 	r.mu.Lock()
 	pq, ok := r.pending[resp.QueryId]
 	r.mu.Unlock()
 	if !ok {
 		slog.Warn("received query response for unknown query",
-			"query_id", resp.QueryId, "thrall_id", thrallID)
+			"query_id", resp.QueryId, "envoy_id", envoyID)
 		return
 	}
 
-	hostname := pq.hostnames[thrallID]
+	hostname := pq.hostnames[envoyID]
 
 	select {
 	case pq.resultCh <- queryResult{
-		thrallID: thrallID,
+		envoyID: envoyID,
 		hostname: hostname,
 		value:    resp.Value,
 		found:    resp.Found,
@@ -77,9 +77,9 @@ func (r *queryRouter) handleQueryResponse(thrallID string, resp *pb.QueryRespons
 	}
 }
 
-// QueryEntry is a single thrall's result in a live query.
+// QueryEntry is a single envoy's result in a live query.
 type QueryEntry struct {
-	ThrallID    string `json:"thrallId"`
+	EnvoyID    string `json:"envoyId"`
 	Hostname    string `json:"hostname"`
 	Value       string `json:"value,omitempty"`
 	Found       bool   `json:"found"`
@@ -118,14 +118,14 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 	}
 
 	queryID := uuid.New().String()
-	connected := s.streamMgr.connectedThrallIDs()
+	connected := s.streamMgr.connectedEnvoyIDs()
 
 	// Separate connected, promotable, and offline targets.
 	var connectedTargets, promotableTargets, offlineTargets []targetInfo
 	for _, t := range targets {
-		if connected[t.ThrallID] {
+		if connected[t.EnvoyID] {
 			connectedTargets = append(connectedTargets, t)
-		} else if s.isRecentlyActive(t.ThrallID) {
+		} else if s.isRecentlyActive(t.EnvoyID) {
 			promotableTargets = append(promotableTargets, t)
 		} else {
 			offlineTargets = append(offlineTargets, t)
@@ -136,14 +136,14 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 	dispatchable := append(connectedTargets, promotableTargets...)
 	hostnames := make(map[string]string, len(dispatchable))
 	for _, t := range dispatchable {
-		hostnames[t.ThrallID] = t.Hostname
+		hostnames[t.EnvoyID] = t.Hostname
 	}
 	resultCh := make(chan queryResult, len(dispatchable))
 	pq := &pendingQuery{resultCh: resultCh, hostnames: hostnames}
 	s.queryRouter.register(queryID, pq)
 	defer s.queryRouter.remove(queryID)
 
-	// Dispatch to connected thralls.
+	// Dispatch to connected envoys.
 	dispatched := make(map[string]targetInfo)
 	for _, t := range connectedTargets {
 		msg := &pb.ServerStreamMessage{
@@ -154,14 +154,14 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 				},
 			},
 		}
-		if s.streamMgr.dispatchPush(t.ThrallID, msg) {
-			dispatched[t.ThrallID] = t
+		if s.streamMgr.dispatchPush(t.EnvoyID, msg) {
+			dispatched[t.EnvoyID] = t
 		} else {
 			offlineTargets = append(offlineTargets, t)
 		}
 	}
 
-	// Queue promotable thralls for stream promotion.
+	// Queue promotable envoys for stream promotion.
 	for _, t := range promotableTargets {
 		msg := &pb.ServerStreamMessage{
 			Msg: &pb.ServerStreamMessage_QueryRequest{
@@ -171,25 +171,25 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 				},
 			},
 		}
-		thrallID := t.ThrallID
-		s.streamMgr.queueForPromotion(t.ThrallID, msg, func() {
+		envoyID := t.EnvoyID
+		s.streamMgr.queueForPromotion(t.EnvoyID, msg, func() {
 			// On timeout, promotable target becomes offline — query timeout
 			// handles this naturally (results won't arrive).
-			slog.Debug("query promotion timed out", "thrall_id", thrallID, "query_id", queryID)
+			slog.Debug("query promotion timed out", "envoy_id", envoyID, "query_id", queryID)
 		})
-		dispatched[t.ThrallID] = t
+		dispatched[t.EnvoyID] = t
 	}
 
-	// Fetch cached traits for offline thralls.
+	// Fetch cached traits for offline envoys.
 	pointer := "/" + strings.ReplaceAll(traitPath, ".", "/")
 	var offline []QueryEntry
 	for _, t := range offlineTargets {
 		entry := QueryEntry{
-			ThrallID: t.ThrallID,
+			EnvoyID: t.EnvoyID,
 			Hostname: t.Hostname,
 			Status:   "offline",
 		}
-		traits, dbErr := s.queries.GetLatestThrallTraits(ctx, t.ThrallID)
+		traits, dbErr := s.queries.GetLatestEnvoyTraits(ctx, t.EnvoyID)
 		if dbErr == nil {
 			var traitsMap map[string]any
 			if json.Unmarshal([]byte(traits.Traits), &traitsMap) == nil {
@@ -215,9 +215,9 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 		select {
 		case r := <-resultCh:
 			remaining--
-			delete(dispatched, r.thrallID)
+			delete(dispatched, r.envoyID)
 			responded = append(responded, QueryEntry{
-				ThrallID: r.thrallID,
+				EnvoyID: r.envoyID,
 				Hostname: r.hostname,
 				Value:    r.value,
 				Found:    r.found,
@@ -234,7 +234,7 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 	var timedOut []QueryEntry
 	for _, t := range dispatched {
 		timedOut = append(timedOut, QueryEntry{
-			ThrallID: t.ThrallID,
+			EnvoyID: t.EnvoyID,
 			Hostname: t.Hostname,
 			Status:   "timed_out",
 		})

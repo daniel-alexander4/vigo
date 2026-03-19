@@ -1,6 +1,6 @@
-# Thralls
+# Envoys
 
-The Thralls page lists all enrolled managed nodes. Available at `/thralls`.
+The Envoys page lists all enrolled managed nodes. Available at `/envoys`.
 
 ## Layout
 
@@ -8,37 +8,37 @@ The Thralls page lists all enrolled managed nodes. Available at `/thralls`.
 
 Status filter buttons across the top:
 
-- **All** -- show all thralls
-- **Compliant** -- only compliant thralls
-- **Drifted** -- thralls where the last run made changes
-- **Failing** -- thralls where the last run failed
-- **Stale** -- thralls that have not checked in within the stale threshold
-- **Unknown** -- thralls with no run data
+- **All** -- show all envoys
+- **Compliant** -- only compliant envoys
+- **Drifted** -- envoys where the last run made changes
+- **Failing** -- envoys where the last run failed
+- **Stale** -- envoys that have not checked in within the stale threshold
+- **Unknown** -- envoys with no run data
 
-### Thralls Table
+### Envoys Table
 
 Auto-refreshes every 30 seconds via HTMX.
 
 | Column | Description |
 |--------|-------------|
-| Hostname | Clickable link to thrall detail page (`/thralls/{id}`) |
+| Hostname | Clickable link to envoy detail page (`/envoys/{id}`) |
 | IP Address | Monospaced IP address |
 | Enrolled | Enrollment timestamp |
 | Last Seen | Last check-in timestamp |
 | Status | Color-coded compliance badge |
 
-### Thrall Count
+### Envoy Count
 
-Displayed in the page header: "{N} enrolled thralls".
+Displayed in the page header: "{N} enrolled envoys".
 
 ## Key Actions
 
-- **Filter by status**: Click a status button to show only matching thralls
-- **View detail**: Click a hostname to see the thrall detail page with full traits, run history, and config
-- **Force push**: Available on the thrall detail page
+- **Filter by status**: Click a status button to show only matching envoys
+- **View detail**: Click a hostname to see the envoy detail page with full traits, run history, and config
+- **Force push**: Available on the envoy detail page
 
 ## Data Sources
 
-- Thrall list: FleetIndex (`AllThralls()`) or database `ListThralls` query
-- Compliance status: FleetIndex pre-computed per-thrall compliance
+- Envoy list: FleetIndex (`AllEnvoys()`) or database `ListEnvoys` query
+- Compliance status: FleetIndex pre-computed per-envoy compliance
 - Filter is applied server-side using URL query parameter `?status=compliant`

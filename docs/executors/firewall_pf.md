@@ -13,8 +13,8 @@ Manages PF (Packet Filter) firewall rules and state on macOS and BSD systems.
 
 ## States
 
-- **`present`** -- Ensure the PF rule exists in the `hobnob` anchor.
-- **`absent`** -- Remove the PF rule by flushing the `hobnob` anchor.
+- **`present`** -- Ensure the PF rule exists in the `vigo` anchor.
+- **`absent`** -- Remove the PF rule by flushing the `vigo` anchor.
 
 ## Idempotency
 
@@ -59,7 +59,7 @@ macOS and BSD (FreeBSD, OpenBSD). On Linux, the same `type: firewall` maps to th
 
 ## Notes
 
-- Rules are managed via the `hobnob` anchor (`pfctl -a hobnob`).
-- Flushing a rule (`state: absent`) flushes all rules in the `hobnob` anchor.
+- Rules are managed via the `vigo` anchor (`pfctl -a vigo`).
+- Flushing a rule (`state: absent`) flushes all rules in the `vigo` anchor.
 - For complex rulesets, consider using a `file` resource for `/etc/pf.conf` with a `notify` to reload via `exec`.
 - The `enabled` parameter controls PF itself and returns immediately without processing rules.

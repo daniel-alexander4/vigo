@@ -1074,7 +1074,7 @@ mod tests {
         let t = empty_traits();
         // Non-existent flag should be false.
         assert!(!evaluate_builtin("flag_set", &["nonexistent_test_flag_xyz".to_string()], &t).unwrap());
-        // We can't easily test true without creating /var/lib/hobnob/flags/... which requires root.
+        // We can't easily test true without creating /var/lib/vigo/flags/... which requires root.
     }
 
     #[test]

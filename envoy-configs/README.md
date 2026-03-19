@@ -1,12 +1,12 @@
-# thrall-configs
+# envoy-configs
 
-Configuration files that define the desired state of managed thralls. These YAML files (with `.hnb` extension) are the single source of truth -- no config is written via API, CLI, or UI.
+Configuration files that define the desired state of managed envoys. These YAML files (with `.vgo` extension) are the single source of truth -- no config is written via API, CLI, or UI.
 
 ## Summary
 
-- YAML syntax with `.hnb` file extension
-- Three concepts: modules (reusable resource sets), roles (module groups), thrall entries (hostname-to-role mapping)
-- Directory structure defines inheritance via `common.hnb` files
+- YAML syntax with `.vgo` file extension
+- Three concepts: modules (reusable resource sets), roles (module groups), envoy entries (hostname-to-role mapping)
+- Directory structure defines inheritance via `common.vgo` files
 - Single source of truth: edit files, publish to reload the server
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Secret references use `secret:` prefix, resolved at server load time
@@ -14,21 +14,21 @@ Configuration files that define the desired state of managed thralls. These YAML
 ## Directory Structure
 
 ```
-thrall-configs/
-  common.hnb            # Modules/vars inherited by ALL thrall entries
-  roles.hnb             # All role definitions in one file
+envoy-configs/
+  common.vgo            # Modules/vars inherited by ALL envoy entries
+  roles.vgo             # All role definitions in one file
   modules/              # Reusable resource definitions
-    nginx.hnb
-    openssh.hnb
+    nginx.vgo
+    openssh.vgo
   templates/            # Template files referenced by source:
   default/
-    all.hnb             # Thrall entries (match: patterns -> roles/modules)
+    all.vgo             # Envoy entries (match: patterns -> roles/modules)
   production/
-    common.hnb          # Extra modules/vars for all prod thralls
+    common.vgo          # Extra modules/vars for all prod envoys
     web/
-      web.hnb           # match: "web*.prod.example.com"
+      web.vgo           # match: "web*.prod.example.com"
   staging/
-    common.hnb          # match: "*.staging.example.com"
+    common.vgo          # match: "*.staging.example.com"
 ```
 
 Module subdirectories are supported for organization:
@@ -36,11 +36,11 @@ Module subdirectories are supported for organization:
 ```
 modules/
   web/
-    nginx.hnb
-    haproxy.hnb
+    nginx.vgo
+    haproxy.vgo
   security/
-    openssh.hnb
-    fail2ban.hnb
+    openssh.vgo
+    fail2ban.vgo
 ```
 
 ## Quickstart
@@ -48,13 +48,13 @@ modules/
 1. Copy the example files:
 
 ```bash
-cp common.hnb.example common.hnb
-cp roles.hnb.example roles.hnb
+cp common.vgo.example common.vgo
+cp roles.vgo.example roles.vgo
 mkdir -p default
-cp default/all.hnb.example default/all.hnb
+cp default/all.vgo.example default/all.vgo
 ```
 
-2. Edit `common.hnb` to set modules every machine gets:
+2. Edit `common.vgo` to set modules every machine gets:
 
 ```yaml
 modules: [standard-users, diag-tools]
@@ -63,10 +63,10 @@ vars:
   org_name: "My Company"
 ```
 
-3. Edit `default/all.hnb` to map hostnames to roles/modules:
+3. Edit `default/all.vgo` to map hostnames to roles/modules:
 
 ```yaml
-thralls:
+envoys:
   - match: "web-*.example.com"
     roles: [webserver]
 
@@ -78,9 +78,9 @@ thralls:
 
 ## File Types
 
-### common.hnb (inheritance)
+### common.vgo (inheritance)
 
-A `common.hnb` at any directory level defines modules, roles, and vars inherited by all thrall entries in that directory and its subdirectories. No `match:` or `thralls:` keys.
+A `common.vgo` at any directory level defines modules, roles, and vars inherited by all envoy entries in that directory and its subdirectories. No `match:` or `envoys:` keys.
 
 ```yaml
 modules: [standard-users, diag-tools]
@@ -89,9 +89,9 @@ vars:
   ntp_server: "pool.ntp.org"
 ```
 
-Root-level `common.hnb` applies to entries in subdirectories only. A `common.hnb` in `production/` applies to all entries under `production/`.
+Root-level `common.vgo` applies to entries in subdirectories only. A `common.vgo` in `production/` applies to all entries under `production/`.
 
-### roles.hnb (role definitions)
+### roles.vgo (role definitions)
 
 Single file at the root. Groups modules into named profiles.
 
@@ -105,12 +105,12 @@ roles:
     modules: [openssh, fail2ban]
 ```
 
-### Thrall entry files (leaf files with match:)
+### Envoy entry files (leaf files with match:)
 
-Any `.hnb` file that is not `common.hnb` or `roles.hnb`. Must have `thralls:` with `match:` entries.
+Any `.vgo` file that is not `common.vgo` or `roles.vgo`. Must have `envoys:` with `match:` entries.
 
 ```yaml
-thralls:
+envoys:
   - match: "web-*.prod.example.com"
     environment: production
     roles: [webserver]
@@ -158,14 +158,14 @@ resources:
 
 ## Inheritance
 
-Directory structure defines what modules/vars thrall entries inherit:
+Directory structure defines what modules/vars envoy entries inherit:
 
 ```
-common.hnb              -> modules: [standard-users]     # ALL entries get this
+common.vgo              -> modules: [standard-users]     # ALL entries get this
 production/
-  common.hnb            -> modules: [monitoring]          # prod entries also get this
+  common.vgo            -> modules: [monitoring]          # prod entries also get this
   web/
-    web.hnb             -> match: "web*.prod.example.com" # inherits standard-users + monitoring
+    web.vgo             -> match: "web*.prod.example.com" # inherits standard-users + monitoring
 ```
 
 - Parent modules come before child modules in the DAG
@@ -175,9 +175,9 @@ production/
 ## Variable Precedence
 
 1. Module default vars (lowest priority)
-2. Inherited vars from `common.hnb` (root to leaf order)
-3. Thrall-level vars
-4. `environment_overrides` for the thrall's environment (highest priority)
+2. Inherited vars from `common.vgo` (root to leaf order)
+3. Envoy-level vars
+4. `environment_overrides` for the envoy's environment (highest priority)
 
 ## Templates
 
@@ -226,6 +226,6 @@ Aliases: `require` = `depends_on`. `before` = reverse `depends_on`.
 ## Validation
 
 ```bash
-hobnobcli validate modules/nginx.hnb
-hobnobcli vi modules/nginx.hnb
+vigogo validate modules/nginx.vgo
+vigogo vi modules/nginx.vgo
 ```

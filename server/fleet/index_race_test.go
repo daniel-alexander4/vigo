@@ -20,7 +20,7 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			id := fmt.Sprintf("w-%d", n)
-			fi.AddThrall(ThrallState{
+			fi.AddEnvoy(EnvoyState{
 				ID:               id,
 				Hostname:         fmt.Sprintf("host-%d.example.com", n),
 				ComplianceStatus: "unknown",
@@ -34,7 +34,7 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				fi.GetThrall(fmt.Sprintf("w-%d", n%50))
+				fi.GetEnvoy(fmt.Sprintf("w-%d", n%50))
 			}
 		}(i)
 	}
@@ -44,7 +44,7 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			fi.RemoveThrall(fmt.Sprintf("w-%d", n))
+			fi.RemoveEnvoy(fmt.Sprintf("w-%d", n))
 		}(i)
 	}
 
@@ -56,7 +56,7 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 	const n = 100
 
 	for i := 0; i < n; i++ {
-		fi.AddThrall(ThrallState{
+		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
 			ComplianceStatus: "unknown",
@@ -108,7 +108,7 @@ func TestConcurrentMarkSeenDrainDirty(t *testing.T) {
 	const n = 100
 
 	for i := 0; i < n; i++ {
-		fi.AddThrall(ThrallState{
+		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
 			ComplianceStatus: "unknown",
@@ -150,9 +150,9 @@ func TestConcurrentMarkSeenDrainDirty(t *testing.T) {
 		totalDrained[id] = true
 	}
 
-	// Every thrall should have been drained at least once.
+	// Every envoy should have been drained at least once.
 	if len(totalDrained) != n {
-		t.Errorf("expected %d drained thralls, got %d", n, len(totalDrained))
+		t.Errorf("expected %d drained envoys, got %d", n, len(totalDrained))
 	}
 }
 
@@ -161,7 +161,7 @@ func TestConcurrentSetForcePushAll(t *testing.T) {
 	const n = 50
 
 	for i := 0; i < n; i++ {
-		fi.AddThrall(ThrallState{
+		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
 			ComplianceStatus: "unknown",
@@ -184,15 +184,15 @@ func TestConcurrentSetForcePushAll(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			fi.GetThrall(fmt.Sprintf("t-%d", idx))
+			fi.GetEnvoy(fmt.Sprintf("t-%d", idx))
 		}(i)
 	}
 
 	wg.Wait()
 
-	// After all SetForcePushAll calls, every active thrall should have ForcePush.
+	// After all SetForcePushAll calls, every active envoy should have ForcePush.
 	for i := 0; i < n; i++ {
-		ts := fi.GetThrall(fmt.Sprintf("t-%d", i))
+		ts := fi.GetEnvoy(fmt.Sprintf("t-%d", i))
 		if ts != nil && !ts.ForcePush {
 			t.Errorf("t-%d: ForcePush should be true after SetForcePushAll", i)
 		}

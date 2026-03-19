@@ -1,6 +1,6 @@
 # Gap Analysis
 
-A comparison of Hobnob against mature configuration management systems (Puppet, Ansible, Chef, SaltStack), identifying remaining gaps for production readiness.
+A comparison of Vigo against mature configuration management systems (Puppet, Ansible, Chef, SaltStack), identifying remaining gaps for production readiness.
 
 Last updated: 2026-03-15
 
@@ -10,13 +10,13 @@ Last updated: 2026-03-15
 
 | # | Gap | Severity | Status |
 |---|-----|----------|--------|
-| 1 | Rate limiting on check-in RPC | Critical | Resolved — token-bucket per-thrall + global |
-| 2 | Maintenance windows / change freeze | Critical | Resolved — per-thrall + global freeze_until |
+| 1 | Rate limiting on check-in RPC | Critical | Resolved — token-bucket per-envoy + global |
+| 2 | Maintenance windows / change freeze | Critical | Resolved — per-envoy + global freeze_until |
 | 3 | Config change attribution | Critical | Resolved — publish audit trail with operator, diffs |
 | 4 | Resource execution timeouts | Critical | Resolved — per-resource timeout via runner |
 | 5 | Horizontal scaling / HA | Critical | Partially resolved — spanner + auto-failover. P2P design doc written |
 | 6 | Config rollback | High | Resolved — timestamped snapshots, version-based rollback |
-| 7 | Node tagging / classification | High | Resolved — tags on thralls, tag-based targeting |
+| 7 | Node tagging / classification | High | Resolved — tags on envoys, tag-based targeting |
 | 8 | Per-resource rollback beyond files | High | **Deferred** |
 | 9 | Drift alerting | High | Resolved — compliance threshold monitoring + SMTP |
 | 10 | Audit log CLI / UI | High | Resolved — audit trail with filtering |
@@ -27,7 +27,7 @@ Last updated: 2026-03-15
 | 15 | Listening ports trait | Medium | Resolved — ports trait collector |
 | 16 | Fuzz testing | Medium | Resolved — Go fuzz targets added |
 | 17 | OpenAPI spec | Medium | Resolved — generated from REST handlers |
-| 18 | Multi-node impact analysis | Medium | Resolved — hobnobcli preview with pattern targeting |
+| 18 | Multi-node impact analysis | Medium | Resolved — vigogo preview with pattern targeting |
 | 19 | Line-level config diff | Medium | Resolved — publish pipeline shows unified diffs |
 | 20 | Phased rollout | Medium | **Deferred** — rolling execution covers batch + health check |
 | 21 | Web UI authentication | High | Resolved — basic auth default, OIDC, isowebauth |
@@ -59,7 +59,7 @@ Rolling execution supports batch sizing and health checks, but no multi-stage ca
 
 ### Web UI Authentication (Gap 21)
 
-Authentication is always required. Three pluggable methods: basic (default, username/password with bcrypt hashes in secrets store), OIDC, isowebauth. Admin account auto-seeded on first startup. Sessions backed by SQLite (SCS). API tokens (`hbt_` prefix, bcrypt at rest). Two roles: admin/viewer. Localhost CLI requests trusted with implicit admin access (peer auth model).
+Authentication is always required. Three pluggable methods: basic (default, username/password with bcrypt hashes in secrets store), OIDC, isowebauth. Admin account auto-seeded on first startup. Sessions backed by SQLite (SCS). API tokens (`vgot_` prefix, bcrypt at rest). Two roles: admin/viewer. Localhost CLI requests trusted with implicit admin access (peer auth model).
 
 ### Admin UI (Gap 22)
 
@@ -68,7 +68,7 @@ Dedicated admin area with its own layout and sidebar navigation. Six admin pages
 - **Enrollment** — approved pattern management
 - **Tokens** — bootstrap token generation, API token CRUD
 - **Webhooks** — webhook endpoint management
-- **Health** — system diagnostics (database, TLS, secrets, license, config, stale thralls)
+- **Health** — system diagnostics (database, TLS, secrets, license, config, stale envoys)
 - **Backup** — status display, on-demand snapshot creation, browser download
 
 Top bar with user identity and pill-shaped logout button across all pages.
@@ -79,7 +79,7 @@ Hub automatically pushes `.live/` config directory to all spokes on config publi
 
 ### Spanner Auto-Failover (Gap 24)
 
-Background goroutine on hub periodically probes spoke health (default 30s). After configurable consecutive failures (default 3 = 90s), automatically drains all thralls to other healthy spokes based on hostname pattern matching. Spokes marked healthy again on recovery. Configurable via `spanner.auto_failover` in server.yaml.
+Background goroutine on hub periodically probes spoke health (default 30s). After configurable consecutive failures (default 3 = 90s), automatically drains all envoys to other healthy spokes based on hostname pattern matching. Spokes marked healthy again on recovery. Configurable via `spanner.auto_failover` in server.yaml.
 
 ### Spanner Spoke Reporting (Gap 25)
 
@@ -91,7 +91,7 @@ Two new REST endpoints: `POST /api/v1/backup/snapshot` (create archive) and `GET
 
 ### Additional Improvements
 
-- **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (hobnob, hobd, hobnob-license-manager). CLI stays at `/usr/local/bin/hobnobcli`.
+- **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (vigo, vigosrv, vigo-license-manager). CLI stays at `/usr/local/bin/vigogo`.
 - **Package timeout**: default increased from 60s to 300s for package and repository executors (arm64/low-powered hardware was timing out during apt installs).
 - **P2P spanner architecture document**: design doc for future peer-to-peer spanner eliminating hub as SPOF. Covers git-based config, peer discovery, leader election. Not implemented — hub-spoke sufficient for current use.
 
@@ -102,16 +102,16 @@ Two new REST endpoints: `POST /api/v1/backup/snapshot` (create archive) and `GET
 All items below were implemented between 2026-03-12 and 2026-03-14.
 
 **Critical (4/5 resolved):**
-- Rate limiting: token-bucket interceptor, per-thrall + global, configurable in server.yaml
-- Maintenance windows: per-thrall `maintenance_until` + global `freeze_until` config publish block
+- Rate limiting: token-bucket interceptor, per-envoy + global, configurable in server.yaml
+- Maintenance windows: per-envoy `maintenance_until` + global `freeze_until` config publish block
 - Config attribution: `config_publishes` DB table with operator, changed files, diffs; REST API + CLI
 - Execution timeouts: runner enforces per-resource timeout via thread::scope + channel (Rust agent)
 
 **High (5/6 resolved):**
 - Config rollback: `SnapshotLive()` after every publish, `RollbackToVersion()` via CLI/API, 20 versions retained
-- Node tagging: `tags` field on thralls, `hobnobcli nodes tag/untag`, tag-based targeting in tasks/queries
+- Node tagging: `tags` field on envoys, `vigogo nodes tag/untag`, tag-based targeting in tasks/queries
 - Drift alerting: `ComplianceMonitor` checks thresholds every metrics interval, fires SMTP on breach
-- Audit log: unified audit trail for config publishes, task/workflow dispatch; CLI `hobnobcli audit list`
+- Audit log: unified audit trail for config publishes, task/workflow dispatch; CLI `vigogo audit list`
 - Environment promotion: `environment_overrides` in node configs, per-environment variable overrides
 
 **Medium (7/9 resolved):**
@@ -120,7 +120,7 @@ All items below were implemented between 2026-03-12 and 2026-03-14.
 - Listening ports trait: `ports` collector reports TCP/UDP listeners with PID
 - Fuzz testing: Go fuzz targets for YAML parsing and when-expression evaluation
 - OpenAPI spec: auto-generated from REST handler registration
-- Multi-node impact analysis: `hobnobcli preview --pattern "*.web.*"` shows changes across matching nodes
+- Multi-node impact analysis: `vigogo preview --pattern "*.web.*"` shows changes across matching nodes
 - Line-level config diff: publish pipeline computes and displays unified diffs for all changed files
 
 ---
@@ -129,8 +129,8 @@ All items below were implemented between 2026-03-12 and 2026-03-14.
 
 ### UI
 
-- No bulk actions (select multiple thralls for bulk operations)
-- No web-based config editor (operators edit .hnb files on disk)
+- No bulk actions (select multiple envoys for bulk operations)
+- No web-based config editor (operators edit .vgo files on disk)
 - No topology visualization (no visual DAG for depends_on/notify relationships)
 - No real-time event stream (HTMX auto-refresh, no SSE/WebSocket)
 

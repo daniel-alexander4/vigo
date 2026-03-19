@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package grpc provides the mTLS gRPC server for Hobnob, implementing
-// both HobnobAgent and HobnobAdmin service handlers.
+// Package grpc provides the mTLS gRPC server for Vigo, implementing
+// both VigoAgent and VigoAdmin service handlers.
 package grpc
 
 import (
@@ -13,17 +13,17 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/spanner"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/license"
-	"github.com/hobnob/hobnob/server/registry"
-	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/push"
-	"github.com/hobnob/hobnob/server/traits"
-	"github.com/hobnob/hobnob/server/webhook"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/license"
+	"github.com/daniel-alexander4/vigo/server/registry"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/traits"
+	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -75,7 +75,7 @@ type ServerConfig struct {
 	KeepaliveTimeout    time.Duration // 0 → default 10s
 	StreamSendBuffer    int           // 0 → default 8
 	Hub              *spanner.Hub // non-nil when role=hub
-	SMTPNotifier     *hobnobsmtp.Notifier
+	SMTPNotifier     *vigosmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
 	PushStore        *push.Store
 	FleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
@@ -199,7 +199,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 			agentSvc.bundlePubKeyPEM = pem
 		}
 	}
-	pb.RegisterHobnobAgentServer(srv, agentSvc)
+	pb.RegisterVigoAgentServer(srv, agentSvc)
 
 	adminSvc := &AdminService{
 		registry:      cfg.Registry,
@@ -212,7 +212,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		reassignStore: reassignStore,
 		auditWriter:   cfg.AuditWriter,
 	}
-	pb.RegisterHobnobAdminServer(srv, adminSvc)
+	pb.RegisterVigoAdminServer(srv, adminSvc)
 
 	return srv, certCache, traitsBatch, traitsPruner, agentSvc, nil
 }

@@ -17,15 +17,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/publish"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/publish"
 	"github.com/spf13/cobra"
 )
 
 var configPublishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Validate .hnb files in stage/, sync to .live/, and trigger a server config reload",
-	Long: fmt.Sprintf(`Validates all .hnb config files in %s using the same
+	Short: "Validate .vgo files in stage/, sync to .live/, and trigger a server config reload",
+	Long: fmt.Sprintf(`Validates all .vgo config files in %s using the same
 logic as the server's config loader. If valid, atomically syncs to %s.
 
 By default, all http/https URLs in changed modules are checked for aliveness.
@@ -77,7 +77,7 @@ Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDi
 				return err
 			}
 			printFileList(res)
-			fmt.Printf("\nValidation passed: %d modules, %d roles, %d thrall entries\n",
+			fmt.Printf("\nValidation passed: %d modules, %d roles, %d envoy entries\n",
 				res.Modules, res.Roles, res.Entries)
 			return nil
 		}
@@ -92,7 +92,7 @@ Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDi
 			fmt.Println("\nNothing to publish — stage matches live.")
 			return nil
 		}
-		fmt.Printf("\nPublished: %d modules, %d roles, %d thrall entries (%d files synced)\n",
+		fmt.Printf("\nPublished: %d modules, %d roles, %d envoy entries (%d files synced)\n",
 			res.Modules, res.Roles, res.Entries, res.Files)
 
 		if showDiff && res.DiffSummary != "" {
@@ -107,10 +107,10 @@ Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDi
 }
 
 // printFileList shows all examined files with status indicators:
-//   (unchanged)  modules/nginx.hnb
-//   (new)        modules/plex.hnb
-//   (changed)    thralls/web.hnb
-//   (removed)    roles/old.hnb
+//   (unchanged)  modules/nginx.vgo
+//   (new)        modules/plex.vgo
+//   (changed)    envoys/web.vgo
+//   (removed)    roles/old.vgo
 func printFileList(res *publish.Result) {
 	changedSet := make(map[string]bool, len(res.Changed))
 	for _, p := range res.Changed {
@@ -155,7 +155,7 @@ func suggestFixes(err error, disabled bool) {
 	if errors.As(err, &ie) {
 		// Idempotency/validation errors — include each module's YAML.
 		var b strings.Builder
-		b.WriteString("You are reviewing Hobnob .hnb config files that failed validation.\n")
+		b.WriteString("You are reviewing Vigo .vgo config files that failed validation.\n")
 		b.WriteString("For each error below, show the corrected YAML for just the failing resource.\n")
 		b.WriteString("Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
 
@@ -189,17 +189,17 @@ func suggestFixes(err error, disabled bool) {
 func buildGenericFixPrompt(err error) string {
 	errMsg := err.Error()
 
-	// Try to find a file path in the error (e.g., "parsing /srv/hobnob/policy/stage/modules/foo.hnb: ...")
+	// Try to find a file path in the error (e.g., "parsing /srv/vigo/policy/stage/modules/foo.vgo: ...")
 	var filePath string
 	for _, part := range strings.Fields(errMsg) {
-		if strings.HasSuffix(part, ".hnb") || strings.HasSuffix(part, ".hnb:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
+		if strings.HasSuffix(part, ".vgo") || strings.HasSuffix(part, ".vgo:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
 			filePath = strings.TrimSuffix(part, ":")
 			break
 		}
 	}
 
 	var b strings.Builder
-	b.WriteString("A Hobnob .hnb config file failed to load with this error:\n\n")
+	b.WriteString("A Vigo .vgo config file failed to load with this error:\n\n")
 	fmt.Fprintf(&b, "  %s\n\n", errMsg)
 	b.WriteString("Show the corrected YAML. Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
 
@@ -327,7 +327,7 @@ func submitPendingChange(client *apiClient, diffSummary string) {
 	}
 	fmt.Printf("\nApproval required — change %d submitted (expires %s).\n", resp.ID, formatTimestamp(resp.ExpiresAt))
 	fmt.Printf("A different user must approve it:\n")
-	fmt.Printf("  hobnobcli config approve %d\n", resp.ID)
+	fmt.Printf("  vigogo config approve %d\n", resp.ID)
 }
 
 // recordPublish sends publish metadata to the server for audit (best-effort).
@@ -348,7 +348,7 @@ func init() {
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
-	configPublishCmd.Flags().String("file", "", "publish a single .hnb file (path relative to stage/)")
+	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stage/)")
 
 	configCmd.AddCommand(configPublishCmd)
 }

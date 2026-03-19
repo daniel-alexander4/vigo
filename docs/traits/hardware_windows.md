@@ -31,7 +31,7 @@ Uses three `wmic` commands:
 ```yaml
 - name: hardware-info
   type: file
-  target_path: C:\ProgramData\hobnob\hardware.txt
+  target_path: C:\ProgramData\vigo\hardware.txt
   content: |
     CPUs: {{ .Traits.hardware.cpu_count }}
     Memory: {{ .Traits.hardware.memory_mb }} MB

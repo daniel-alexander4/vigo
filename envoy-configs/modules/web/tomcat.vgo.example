@@ -38,7 +38,7 @@ resources:
     target_path: /etc/tomcat10/server.xml
     content: |
       <?xml version="1.0" encoding="UTF-8"?>
-      <!-- Managed by Hobnob — do not edit manually -->
+      <!-- Managed by Vigo — do not edit manually -->
       <Server port="8005" shutdown="SHUTDOWN">
 
         <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
@@ -78,7 +78,7 @@ resources:
     target_path: /etc/tomcat/server.xml
     content: |
       <?xml version="1.0" encoding="UTF-8"?>
-      <!-- Managed by Hobnob — do not edit manually -->
+      <!-- Managed by Vigo — do not edit manually -->
       <Server port="8005" shutdown="SHUTDOWN">
 
         <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
@@ -117,7 +117,7 @@ resources:
     type: file
     target_path: /etc/default/tomcat10
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       JAVA_OPTS="-Djava.awt.headless=true"
       CATALINA_OPTS="-Xms{{ .Vars.tomcat_heap_min }} -Xmx{{ .Vars.tomcat_heap_max }} -XX:+UseG1GC"
     owner: root
@@ -131,7 +131,7 @@ resources:
     type: file
     target_path: /etc/sysconfig/tomcat
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       JAVA_OPTS="-Djava.awt.headless=true"
       CATALINA_OPTS="-Xms{{ .Vars.tomcat_heap_min }} -Xmx{{ .Vars.tomcat_heap_max }} -XX:+UseG1GC"
     owner: root

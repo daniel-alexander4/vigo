@@ -1,69 +1,69 @@
--- name: CreateThrall :one
-INSERT INTO thralls (hostname, ip_address, pubkey_pem)
+-- name: CreateEnvoy :one
+INSERT INTO envoys (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
 RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until;
 
--- name: GetThrallByID :one
+-- name: GetEnvoyByID :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
-FROM thralls
+FROM envoys
 WHERE id = ?;
 
--- name: GetThrallByHostname :one
+-- name: GetEnvoyByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
-FROM thralls
+FROM envoys
 WHERE hostname = ?;
 
--- name: GetActiveThrallByHostname :one
+-- name: GetActiveEnvoyByHostname :one
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
-FROM thralls
+FROM envoys
 WHERE hostname = ? AND revoked = 0;
 
--- name: ListThralls :many
+-- name: ListEnvoys :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
-FROM thralls
+FROM envoys
 ORDER BY enrolled_at DESC;
 
--- name: ListActiveThralls :many
+-- name: ListActiveEnvoys :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
-FROM thralls
+FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC;
 
--- name: RevokeThrall :exec
-UPDATE thralls
+-- name: RevokeEnvoy :exec
+UPDATE envoys
 SET revoked = true, revoked_at = datetime('now')
 WHERE id = ?;
 
 -- name: UpdateLastSeen :exec
-UPDATE thralls
+UPDATE envoys
 SET last_seen = datetime('now')
 WHERE id = ?;
 
 -- name: SetForcePush :exec
-UPDATE thralls
+UPDATE envoys
 SET force_push = true
 WHERE id = ?;
 
 -- name: ClearForcePush :exec
-UPDATE thralls
+UPDATE envoys
 SET force_push = false
 WHERE id = ?;
 
--- name: DeleteThrall :exec
-DELETE FROM thralls
+-- name: DeleteEnvoy :exec
+DELETE FROM envoys
 WHERE id = ?;
 
--- name: UpdateThrallTags :exec
-UPDATE thralls
+-- name: UpdateEnvoyTags :exec
+UPDATE envoys
 SET tags = ?
 WHERE id = ?;
 
--- name: UpdateThrallMaintenance :exec
-UPDATE thralls
+-- name: UpdateEnvoyMaintenance :exec
+UPDATE envoys
 SET maintenance_until = ?
 WHERE id = ?;
 
--- name: ClearThrallMaintenance :exec
-UPDATE thralls
+-- name: ClearEnvoyMaintenance :exec
+UPDATE envoys
 SET maintenance_until = NULL
 WHERE id = ?;

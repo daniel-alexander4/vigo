@@ -318,7 +318,7 @@ func TestExecWithWatchSecret_IsClean(t *testing.T) {
 				Name:        "set-password",
 				Type:        "exec",
 				Attributes:  map[string]any{"command": "grafana-cli admin reset-admin-password 'secret'"},
-				WatchSecret: []string{"hobnob/grafana/admin-password"},
+				WatchSecret: []string{"vigo/grafana/admin-password"},
 			},
 		},
 	}

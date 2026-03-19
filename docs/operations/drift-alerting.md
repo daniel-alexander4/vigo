@@ -9,18 +9,18 @@ Set the threshold in `server.yaml` under the SMTP events section:
 ```yaml
 smtp:
   host: smtp.example.com
-  from: hobnob@example.com
+  from: vigo@example.com
   recipients: [ops@example.com]
   events:
     compliance.threshold:
       threshold: 95  # alert when compliance drops below 95%
 ```
 
-The threshold is the percentage of non-revoked thralls that must be compliant. If not configured, no compliance threshold alerts are sent.
+The threshold is the percentage of non-revoked envoys that must be compliant. If not configured, no compliance threshold alerts are sent.
 
 ## Behavior
 
-1. Every 60 seconds, the monitor calculates `compliant_thralls / total_thralls * 100`
+1. Every 60 seconds, the monitor calculates `compliant_envoys / total_envoys * 100`
 2. If the percentage drops below the threshold, an alert fires via:
    - Webhook (`compliance.threshold` event)
    - SMTP email notification

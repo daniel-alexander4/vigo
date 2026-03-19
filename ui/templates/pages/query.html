@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Live Query</h1>
-    <p>Query trait values from connected thralls in real time</p>
+    <p>Query trait values from connected envoys in real time</p>
 </div>
 
 <form class="query-form mb-2" id="query-form" hx-boost="false" onsubmit="return submitQuery(event)">
@@ -72,7 +72,7 @@
                 <div class="hint-popup__title">Target Formats</div>
                 <div class="hint-popup__group">
                     <div class="hint-popup__heading">Hostname Glob</div>
-                    <div class="hint-popup__item"><code>*</code> all thralls</div>
+                    <div class="hint-popup__item"><code>*</code> all envoys</div>
                     <div class="hint-popup__item"><code>*.web.*</code> web tier hosts</div>
                     <div class="hint-popup__item"><code>db-*</code> database hosts</div>
                     <div class="hint-popup__item"><code>web-0[1-3]</code> web-01 through web-03</div>
@@ -176,7 +176,7 @@ function renderQueryResults(data, traitPath) {
     }
 
     if (responded.length === 0 && offline.length === 0 && timedOut.length === 0) {
-        html += '<tr><td colspan="3" class="text-muted" style="text-align:center; padding:40px;">No thralls matched the target spec.</td></tr>';
+        html += '<tr><td colspan="3" class="text-muted" style="text-align:center; padding:40px;">No envoys matched the target spec.</td></tr>';
     }
 
     html += '</tbody></table>';

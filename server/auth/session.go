@@ -33,7 +33,7 @@ func NewSessionManager(sqlDB *sql.DB, idleTimeout time.Duration) *SessionManager
 	sm.Store = sqlite3store.New(sqlDB)
 	sm.Lifetime = 24 * time.Hour
 	sm.IdleTimeout = idleTimeout
-	sm.Cookie.Name = "hobnob_session"
+	sm.Cookie.Name = "vigo_session"
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Secure = false // set to true in production behind TLS

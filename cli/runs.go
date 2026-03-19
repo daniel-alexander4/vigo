@@ -13,20 +13,20 @@ import (
 
 var runsCmd = &cobra.Command{
 	Use:   "runs",
-	Short: "View convergence run history showing what changed on each thrall",
+	Short: "View convergence run history showing what changed on each envoy",
 }
 
 var runsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List recent convergence runs with status and resource change counts",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		thrallID, _ := cmd.Flags().GetString("thrall")
+		envoyID, _ := cmd.Flags().GetString("envoy")
 		limit, _ := cmd.Flags().GetInt("limit")
 
 		path := "/api/v1/runs"
 		sep := "?"
-		if thrallID != "" {
-			path += fmt.Sprintf("%sthrall_id=%s", sep, thrallID)
+		if envoyID != "" {
+			path += fmt.Sprintf("%senvoy_id=%s", sep, envoyID)
 			sep = "&"
 		}
 		if limit > 0 {
@@ -37,7 +37,7 @@ var runsListCmd = &cobra.Command{
 		var resp struct {
 			Runs []struct {
 				ID           string `json:"id"`
-				ThrallID       string `json:"thrallId"`
+				EnvoyID       string `json:"envoyId"`
 				StartedAt    string `json:"startedAt"`
 				Status       string `json:"status"`
 				ChangedCount int32  `json:"changedCount"`
@@ -54,10 +54,10 @@ var runsListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("THRALL"), header("STARTED"), header("STATUS"), header("CHANGED"), header("FAILED"))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ENVOY"), header("STARTED"), header("STATUS"), header("CHANGED"), header("FAILED"))
 		for _, r := range resp.Runs {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%d\n",
-				dim(r.ID), r.ThrallID,
+				dim(r.ID), r.EnvoyID,
 				dim(formatTimestamp(r.StartedAt)),
 				colorStatus(r.Status), r.ChangedCount, r.FailedCount)
 		}
@@ -74,7 +74,7 @@ var runsShowCmd = &cobra.Command{
 		var resp struct {
 			Run struct {
 				ID           string `json:"id"`
-				ThrallID       string `json:"thrallId"`
+				EnvoyID       string `json:"envoyId"`
 				StartedAt    string `json:"startedAt"`
 				FinishedAt   string `json:"finishedAt"`
 				Status       string `json:"status"`
@@ -99,7 +99,7 @@ var runsShowCmd = &cobra.Command{
 
 		r := resp.Run
 		fmt.Printf("Run:      %s\n", r.ID)
-		fmt.Printf("Thrall:     %s\n", r.ThrallID)
+		fmt.Printf("Envoy:     %s\n", r.EnvoyID)
 		fmt.Printf("Started:  %s\n", formatTimestamp(r.StartedAt))
 		fmt.Printf("Finished: %s\n", formatTimestamp(r.FinishedAt))
 		fmt.Printf("Status:   %s\n", colorStatus(r.Status))
@@ -127,7 +127,7 @@ var runsShowCmd = &cobra.Command{
 }
 
 func init() {
-	runsListCmd.Flags().String("thrall", "", "Filter by thrall ID")
+	runsListCmd.Flags().String("envoy", "", "Filter by envoy ID")
 	runsListCmd.Flags().Int("limit", 20, "Maximum number of runs to display")
 	runsCmd.AddCommand(runsListCmd, runsShowCmd)
 }

@@ -18,8 +18,8 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/db"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
 )
 
 // openPushTestDB creates an in-memory SQLite database with push_runs and push_run_targets tables.
@@ -49,7 +49,7 @@ func openPushTestDB(t *testing.T) *sql.DB {
 		CREATE TABLE push_run_targets (
 			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
 			push_run_id    TEXT NOT NULL REFERENCES push_runs (id) ON DELETE CASCADE,
-			thrall_id      TEXT NOT NULL,
+			envoy_id      TEXT NOT NULL,
 			hostname       TEXT NOT NULL,
 			status         TEXT NOT NULL DEFAULT 'pending',
 			exit_code      INTEGER,
@@ -188,7 +188,7 @@ func TestPushHandler_DispatchMissingTarget(t *testing.T) {
 
 func TestPushHandler_DispatchError(t *testing.T) {
 	sqlDB := openPushTestDB(t)
-	dispatcher := &stubDispatcher{returnErr: fmt.Errorf("no thralls matched")}
+	dispatcher := &stubDispatcher{returnErr: fmt.Errorf("no envoys matched")}
 	handler := NewPushHandler(db.New(sqlDB), dispatcher, false)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -280,7 +280,7 @@ func TestPushHandler_Get(t *testing.T) {
 
 	targetID := uuid.New().String()
 	_, err = sqlDB.Exec(
-		`INSERT INTO push_run_targets (id, push_run_id, thrall_id, hostname, status, exit_code, stdout, duration_ms, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO push_run_targets (id, push_run_id, envoy_id, hostname, status, exit_code, stdout, duration_ms, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		targetID, pushRunID, uuid.New().String(), "web01.prod", "complete", 0, " 10:30:00 up 5 days\n", 42, now,
 	)
 	if err != nil {

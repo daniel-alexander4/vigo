@@ -350,7 +350,7 @@ fn run_with_secret_file(
     env_pairs: &[(String, String)],
 ) -> Result<std::process::Output, String> {
     let tmp_dir = std::env::temp_dir();
-    let tmp_path = tmp_dir.join(format!("hobnob-secret-{}", uuid::Uuid::new_v4()));
+    let tmp_path = tmp_dir.join(format!("vigo-secret-{}", uuid::Uuid::new_v4()));
     let tmp_path_str = tmp_path.to_string_lossy().to_string();
 
     {

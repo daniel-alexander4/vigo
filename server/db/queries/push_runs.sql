@@ -17,7 +17,7 @@ SET status = ?2, started_at = ?3, finished_at = ?4
 WHERE id = ?1;
 
 -- name: CreatePushRunTarget :one
-INSERT INTO push_run_targets (push_run_id, thrall_id, hostname, status)
+INSERT INTO push_run_targets (push_run_id, envoy_id, hostname, status)
 VALUES (?, ?, ?, ?)
 RETURNING *;
 

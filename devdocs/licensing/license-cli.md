@@ -1,6 +1,6 @@
-# hobnobcli license
+# vigogo license
 
-Manage the Hobnob license, including installation, status checking, and offline inspection.
+Manage the Vigo license, including installation, status checking, and offline inspection.
 
 ## Subcommands
 
@@ -14,15 +14,15 @@ Manage the Hobnob license, including installation, status checking, and offline 
 ## Usage
 
 ```bash
-hobnobcli license [subcommand] [flags]
+vigogo license [subcommand] [flags]
 ```
 
 ## install
 
-Install a license file on the server. Validates the license, checks expiry, copies it to the license directory, and signals the running `hobd` process for live reload via SIGHUP.
+Install a license file on the server. Validates the license, checks expiry, copies it to the license directory, and signals the running `vigosrv` process for live reload via SIGHUP.
 
 ```bash
-hobnobcli license install --file <path>
+vigogo license install --file <path>
 ```
 
 ### Flags
@@ -34,15 +34,15 @@ hobnobcli license install --file <path>
 ### Example
 
 ```bash
-hobnobcli license install --file ./hobnob-enterprise.lic
+vigogo license install --file ./vigo-enterprise.lic
 ```
 
 ```
-License installed: /srv/hobnob/licenses/hobnob-enterprise.lic
+License installed: /srv/vigo/licenses/vigo-enterprise.lic
   License ID:  lic-a1b2c3d4
   Customer:    Acme Corp
   Tier:        Enterprise
-  Max thralls: 500
+  Max envoys: 500
   Expires:     2027-03-13
 
 Server notified — license reloaded.
@@ -53,13 +53,13 @@ Server notified — license reloaded.
 Show the current license status from the running server, including enforcement stage and violation details.
 
 ```bash
-hobnobcli license status
+vigogo license status
 ```
 
 ### Example
 
 ```bash
-hobnobcli license status
+vigogo license status
 ```
 
 ```
@@ -74,7 +74,7 @@ License:
   Expires:     2027-03-13
   Days left:   365
 
-Thralls: 12 / 500
+Envoys: 12 / 500
 ```
 
 ### Enforcement stages
@@ -91,7 +91,7 @@ Thralls: 12 / 500
 Decode and display a license file without needing a running server. Useful for verifying license files before installation.
 
 ```bash
-hobnobcli license inspect [file]
+vigogo license inspect [file]
 ```
 
 If no file is specified, inspects the license in the default license directory.
@@ -99,7 +99,7 @@ If no file is specified, inspects the license in the default license directory.
 ### Example
 
 ```bash
-hobnobcli license inspect ./hobnob-enterprise.lic
+vigogo license inspect ./vigo-enterprise.lic
 ```
 
 ```
@@ -108,7 +108,7 @@ SIGNATURE: VALID
 License ID:    lic-a1b2c3d4
 Customer:      Acme Corp (cust-001)
 Tier:          Enterprise
-Max thralls:   500
+Max envoys:   500
 Issued:        2026-01-01
 Expires:       2027-03-13
 Version:       1
@@ -128,19 +128,19 @@ Raw payload:
 Display the SHA256 machine fingerprint used for paid license binding. The fingerprint is computed from the machine ID, primary MAC address, and CA certificate fingerprint.
 
 ```bash
-hobnobcli license fingerprint
+vigogo license fingerprint
 ```
 
 ### Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--ca-file` | | `/srv/hobnob/tls/ca` | Path to the CA certificate file |
+| `--ca-file` | | `/srv/vigo/tls/ca` | Path to the CA certificate file |
 
 ### Example
 
 ```bash
-hobnobcli license fingerprint
+vigogo license fingerprint
 ```
 
 ```
@@ -151,7 +151,7 @@ Send this fingerprint when requesting a paid license. Free tier licenses do not 
 
 ```bash
 # Use a custom CA file path
-hobnobcli license fingerprint --ca-file /etc/hobnob/tls/ca
+vigogo license fingerprint --ca-file /etc/vigo/tls/ca
 ```
 
 ## Related

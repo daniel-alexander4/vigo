@@ -24,7 +24,7 @@ func TestEnforcerCompliant(t *testing.T) {
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
 		Tier:         "standard",
-		MaxThralls:   100,
+		MaxEnvoys:   100,
 		IssuedAt:     "2025-01-01",
 		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
 		Version:      1,
@@ -59,8 +59,8 @@ func TestEnforcerCompliant(t *testing.T) {
 	if s.Stage != StageCompliant {
 		t.Errorf("expected Compliant, got %v", s.Stage)
 	}
-	if s.ActiveThralls != 10 {
-		t.Errorf("expected 10 active thralls, got %d", s.ActiveThralls)
+	if s.ActiveEnvoys != 10 {
+		t.Errorf("expected 10 active envoys, got %d", s.ActiveEnvoys)
 	}
 	if shutdownCalled {
 		t.Error("shutdown should not have been called")
@@ -75,7 +75,7 @@ func TestEnforcerExpired(t *testing.T) {
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
 		Tier:         "standard",
-		MaxThralls:   100,
+		MaxEnvoys:   100,
 		IssuedAt:     "2020-01-01",
 		ExpiresAt:    "2020-06-01", // expired
 		Version:      1,
@@ -111,7 +111,7 @@ func TestEnforcerOverLimit(t *testing.T) {
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
 		Tier:         "standard",
-		MaxThralls:   5,
+		MaxEnvoys:   5,
 		IssuedAt:     "2025-01-01",
 		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
 		Version:      1,
@@ -141,7 +141,7 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 
 	// Restore the real public key so the embedded free license verifies.
 	origKey := PublicKeyHex
-	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
@@ -155,8 +155,8 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 	if s.Stage != StageCompliant {
 		t.Errorf("stage = %v, want Compliant", s.Stage)
 	}
-	if s.MaxThralls != 25 {
-		t.Errorf("max_thralls = %d, want 25", s.MaxThralls)
+	if s.MaxEnvoys != 25 {
+		t.Errorf("max_envoys = %d, want 25", s.MaxEnvoys)
 	}
 	if s.License.LicenseID != "free-25" {
 		t.Errorf("license_id = %q, want %q", s.License.LicenseID, "free-25")
@@ -187,7 +187,7 @@ func TestEnforcerReload(t *testing.T) {
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test-1",
 		Tier:         "standard",
-		MaxThralls:   100,
+		MaxEnvoys:   100,
 		IssuedAt:     "2020-01-01",
 		ExpiresAt:    "2020-06-01",
 		Version:      1,
@@ -263,7 +263,7 @@ func TestEnforcerTimeline(t *testing.T) {
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
 		Tier:         "standard",
-		MaxThralls:   5,
+		MaxEnvoys:   5,
 		IssuedAt:     "2025-01-01",
 		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
 		Version:      1,
@@ -335,7 +335,7 @@ func TestCheckInWarning(t *testing.T) {
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
 		Tier:         "standard",
-		MaxThralls:   5,
+		MaxEnvoys:   5,
 		IssuedAt:     "2025-01-01",
 		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
 		Version:      1,
@@ -374,7 +374,7 @@ func TestIsFreeLicense(t *testing.T) {
 	// With the built-in free license (no .lic on disk).
 	dir := t.TempDir()
 	origKey := PublicKeyHex
-	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
@@ -396,7 +396,7 @@ func TestIsFreeLicense(t *testing.T) {
 		CustomerID:   "paid-001",
 		LicenseID:    "lic-paid-100",
 		Tier:         "standard",
-		MaxThralls:   100,
+		MaxEnvoys:   100,
 		IssuedAt:     "2025-01-01",
 		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
 		Version:      1,
@@ -411,7 +411,7 @@ func TestIsFreeLicense(t *testing.T) {
 	}
 }
 
-// writeLic writes a signed license to dir/hobnob.lic.
+// writeLic writes a signed license to dir/vigo.lic.
 func writeLic(t *testing.T, dir string, payload Payload, priv ed25519.PrivateKey) {
 	t.Helper()
 	canonical, _ := CanonicalJSON(payload)
@@ -421,5 +421,5 @@ func writeLic(t *testing.T, dir string, payload Payload, priv ed25519.PrivateKey
 		Signature: base64.StdEncoding.EncodeToString(sig),
 	}
 	data, _ := json.MarshalIndent(lic, "", "  ")
-	os.WriteFile(filepath.Join(dir, "hobnob.lic"), data, 0644)
+	os.WriteFile(filepath.Join(dir, "vigo.lic"), data, 0644)
 }

@@ -1,6 +1,6 @@
 # OpenBSD Support
 
-Hobnob supports OpenBSD with native integration for rcctl service management and pkg_add package management. The agent shares BSD-common executors with FreeBSD and NetBSD for hostname, timezone, sysctl, and pf firewall management.
+Vigo supports OpenBSD with native integration for rcctl service management and pkg_add package management. The agent shares BSD-common executors with FreeBSD and NetBSD for hostname, timezone, sysctl, and pf firewall management.
 
 ## Supported Versions
 
@@ -18,7 +18,7 @@ If `curl` is not installed (it is not in the OpenBSD base system), use `ftp` ins
 ftp -o - https://<server>:8443/bootstrap | sudo sh
 ```
 
-The bootstrap script detects OpenBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/hobnob`, and registers the service via `rcctl`.
+The bootstrap script detects OpenBSD via `uname -s`, downloads the agent binary to `/usr/local/sbin/vigo`, and registers the service via `rcctl`.
 
 ## rcctl Service
 
@@ -26,12 +26,12 @@ The agent runs as a daemon managed by `rcctl`.
 
 ```sh
 # Enable at boot
-rcctl enable hobnob_thrall
+rcctl enable vigo_envoy
 
 # Service management
-rcctl start hobnob_thrall
-rcctl stop hobnob_thrall
-rcctl check hobnob_thrall
+rcctl start vigo_envoy
+rcctl stop vigo_envoy
+rcctl check vigo_envoy
 ```
 
 ## Package Management
@@ -110,7 +110,7 @@ OpenBSD has access to all cross-platform executors, the OpenBSD-specific service
 ## Example: OpenBSD Router/Firewall
 
 ```yaml
-# modules/openbsd-router.hnb
+# modules/openbsd-router.vgo
 name: openbsd-router
 
 vars:

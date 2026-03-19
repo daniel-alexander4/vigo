@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // openTestDB creates an in-memory SQLite database with the schema applied.
@@ -28,7 +28,7 @@ func openTestDB(t *testing.T) *sql.DB {
 
 	// Minimal schema for traits tests.
 	_, err = sqlDB.Exec(`
-		CREATE TABLE thralls (
+		CREATE TABLE envoys (
 			id                       TEXT PRIMARY KEY,
 			hostname                 TEXT NOT NULL,
 			ip_address               TEXT NOT NULL,
@@ -42,9 +42,9 @@ func openTestDB(t *testing.T) *sql.DB {
 			tags                     TEXT NOT NULL DEFAULT '',
 			maintenance_until        DATETIME
 		);
-		CREATE TABLE thrall_traits (
+		CREATE TABLE envoy_traits (
 			id           TEXT PRIMARY KEY,
-			thrall_id    TEXT NOT NULL REFERENCES thralls (id) ON DELETE CASCADE,
+			envoy_id    TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
 			traits       TEXT NOT NULL DEFAULT '{}',
 			collected_at DATETIME NOT NULL DEFAULT (datetime('now'))
 		);
@@ -57,23 +57,23 @@ func openTestDB(t *testing.T) *sql.DB {
 
 func TestTraitsHandler_Success(t *testing.T) {
 	sqlDB := openTestDB(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
-	// Insert a thrall.
+	// Insert a envoy.
 	_, err := sqlDB.Exec(
-		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
-		thrallID, "web01", "10.0.0.1", "pubkey-pem",
+		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		envoyID, "web01", "10.0.0.1", "pubkey-pem",
 	)
 	if err != nil {
-		t.Fatalf("insert thrall: %v", err)
+		t.Fatalf("insert envoy: %v", err)
 	}
 
 	// Insert traits with a fixed timestamp.
 	collectedAt := time.Date(2026, 3, 7, 10, 30, 0, 0, time.UTC)
 	traitsJSON := `{"os":{"distro":"ubuntu","version":"22.04"}}`
 	_, err = sqlDB.Exec(
-		`INSERT INTO thrall_traits (id, thrall_id, traits, collected_at) VALUES (?, ?, ?, ?)`,
-		uuid.New().String(), thrallID, traitsJSON, collectedAt.Format("2006-01-02 15:04:05"),
+		`INSERT INTO envoy_traits (id, envoy_id, traits, collected_at) VALUES (?, ?, ?, ?)`,
+		uuid.New().String(), envoyID, traitsJSON, collectedAt.Format("2006-01-02 15:04:05"),
 	)
 	if err != nil {
 		t.Fatalf("insert traits: %v", err)
@@ -83,7 +83,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/thralls/web01/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/web01/traits", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -134,7 +134,7 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/thralls/nonexistent/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/traits", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -144,29 +144,29 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["message"] != "thrall 'nonexistent' not found" {
-		t.Errorf("expected thrall not found error, got %q", resp["message"])
+	if resp["message"] != "envoy 'nonexistent' not found" {
+		t.Errorf("expected envoy not found error, got %q", resp["message"])
 	}
 }
 
 func TestTraitsHandler_NoFacts(t *testing.T) {
 	sqlDB := openTestDB(t)
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 
-	// Insert a thrall without traits.
+	// Insert a envoy without traits.
 	_, err := sqlDB.Exec(
-		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
-		thrallID, "web01", "10.0.0.1", "pubkey-pem",
+		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		envoyID, "web01", "10.0.0.1", "pubkey-pem",
 	)
 	if err != nil {
-		t.Fatalf("insert thrall: %v", err)
+		t.Fatalf("insert envoy: %v", err)
 	}
 
 	handler := NewTraitsHandler(db.New(sqlDB))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/thralls/web01/traits", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/web01/traits", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -176,7 +176,7 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	expected := "no traits available for 'web01' -- thrall has not reported traits yet"
+	expected := "no traits available for 'web01' -- envoy has not reported traits yet"
 	if resp["message"] != expected {
 		t.Errorf("expected %q, got %q", expected, resp["message"])
 	}

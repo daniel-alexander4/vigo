@@ -1,8 +1,8 @@
 # gRPC Agent Service
 
-The `HobnobAgent` service handles all communication between the Rust agent and the server. It runs on port 1530 over mTLS. Every unary RPC includes an ED25519 signature in the request, verified by the server against the agent's stored public key.
+The `VigoAgent` service handles all communication between the Rust agent and the server. It runs on port 1530 over mTLS. Every unary RPC includes an ED25519 signature in the request, verified by the server against the agent's stored public key.
 
-Proto definition: `proto/hobnob.proto`, service `HobnobAgent`.
+Proto definition: `proto/vigo.proto`, service `VigoAgent`.
 
 ## RPCs
 
@@ -18,21 +18,21 @@ Enrolls a new agent with the server.
 | `ip_address` | string | Agent's IP address |
 | `pubkey_pem` | string | ED25519 public key in PEM format |
 | `token` | string | One-time enrollment token (plaintext; server validates against bcrypt hash) |
-| `force` | bool | If true, revoke any existing active thrall with the same hostname and re-enroll |
+| `force` | bool | If true, revoke any existing active envoy with the same hostname and re-enroll |
 
 **Response: `RegisterResponse`**
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `success` | bool | Whether enrollment succeeded |
-| `thrall_id` | string | UUID assigned by the server |
+| `envoy_id` | string | UUID assigned by the server |
 | `message` | string | Human-readable status message |
 | `spoke_addr` | string | If set, the agent should connect to this spoke instead |
 | `server_pubkey_pem` | string | Server's ED25519 public key for bundle signature verification |
 
 **Auth:** Token-based. The hostname must match an approved pattern, and the token must match the bcrypt hash stored for that pattern.
 
-**Hostname uniqueness:** Registration is rejected if an active (non-revoked) thrall with the same hostname already exists. Set `force: true` to revoke the old thrall and re-enroll. This also overrides the ENRL-07 revoked-hostname block.
+**Hostname uniqueness:** Registration is rejected if an active (non-revoked) envoy with the same hostname already exists. Set `force: true` to revoke the old envoy and re-enroll. This also overrides the ENRL-07 revoked-hostname block.
 
 ---
 
@@ -44,7 +44,7 @@ The agent's pull loop. Returns the modules to apply based on current state.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `thrall_id` | string | Agent's UUID |
+| `envoy_id` | string | Agent's UUID |
 | `state_fingerprint` | string | Hash of the agent's current state |
 | `signature` | bytes | ED25519 signature |
 | `timestamp` | Timestamp | Request timestamp (must be within signature window) |
@@ -83,7 +83,7 @@ Submits per-module execution results after a convergence run.
 | Field | Type | Description |
 |-------|------|-------------|
 | `run_id` | string | Run UUID |
-| `thrall_id` | string | Agent's UUID |
+| `envoy_id` | string | Agent's UUID |
 | `results` | repeated ModuleResult | Per-resource outcomes |
 | `signature` | bytes | ED25519 signature |
 | `timestamp` | Timestamp | Request timestamp |
@@ -116,7 +116,7 @@ Submits collected traits (facts) from the agent.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `thrall_id` | string | Agent's UUID |
+| `envoy_id` | string | Agent's UUID |
 | `traits_json` | bytes | JSON-encoded traits map |
 | `signature` | bytes | ED25519 signature |
 | `timestamp` | Timestamp | Request timestamp |

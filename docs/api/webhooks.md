@@ -7,8 +7,8 @@ Webhooks deliver event notifications to external HTTP endpoints as they happen. 
 Register a webhook via the CLI or REST API:
 
 ```bash
-hobnobcli webhooks add \
-  --url https://ops.example.com/hooks/hobnob \
+vigogo webhooks add \
+  --url https://ops.example.com/hooks/vigo \
   --secret "my-signing-secret" \
   --events run.success,run.failure,drift.detected
 ```
@@ -19,7 +19,7 @@ Or via REST:
 curl -X POST https://server:8443/api/v1/webhooks \
   -H 'Content-Type: application/json' \
   -d '{
-    "url": "https://ops.example.com/hooks/hobnob",
+    "url": "https://ops.example.com/hooks/vigo",
     "secret": "my-signing-secret",
     "events": ["run.success", "run.failure", "drift.detected"]
   }'
@@ -32,11 +32,11 @@ curl -X POST https://server:8443/api/v1/webhooks \
 | `run.success` | A convergence run completed successfully |
 | `run.failure` | A convergence run failed |
 | `run.partial` | A convergence run partially succeeded |
-| `thrall.enrolled` | A new thrall was enrolled |
-| `drift.detected` | Drift was detected on a thrall (converged with changes) |
-| `secret.rotated` | A secret was rotated, affecting one or more thralls |
+| `envoy.enrolled` | A new envoy was enrolled |
+| `drift.detected` | Drift was detected on a envoy (converged with changes) |
+| `secret.rotated` | A secret was rotated, affecting one or more envoys |
 | `config.reload.failure` | A config reload failed |
-| `thrall.stale` | A thrall has not checked in within the stale threshold |
+| `envoy.stale` | A envoy has not checked in within the stale threshold |
 | `compliance.threshold` | Fleet compliance dropped below the configured threshold |
 
 ## Payload Format
@@ -47,7 +47,7 @@ All webhook deliveries are HTTP POST requests with a JSON body:
 {
   "event": "run.failure",
   "timestamp": "2026-03-13T10:00:00Z",
-  "thrall": {
+  "envoy": {
     "id": "abc-123",
     "hostname": "web-01.example.com",
     "ip": "10.0.1.10"
@@ -62,7 +62,7 @@ All webhook deliveries are HTTP POST requests with a JSON body:
 }
 ```
 
-The `thrall` and `run` fields are present when relevant to the event. The `details` field carries event-specific data (e.g., for `secret.rotated`, it contains the secret path and affected node count).
+The `envoy` and `run` fields are present when relevant to the event. The `details` field carries event-specific data (e.g., for `secret.rotated`, it contains the secret path and affected node count).
 
 ### Secret Rotation Payload
 
@@ -71,7 +71,7 @@ The `thrall` and `run` fields are present when relevant to the event. The `detai
   "event": "secret.rotated",
   "timestamp": "2026-03-13T10:00:00Z",
   "details": {
-    "secret_path": "hobnob/db/password",
+    "secret_path": "vigo/db/password",
     "affected_nodes": 5
   }
 }
@@ -83,8 +83,8 @@ Every delivery includes two custom headers:
 
 | Header | Description |
 |--------|-------------|
-| `X-Hobnob-Signature` | `sha256=<hex-encoded HMAC-SHA256>` computed over the raw JSON body using the webhook's secret |
-| `X-Hobnob-Event` | The event name (e.g., `run.failure`) |
+| `X-Vigo-Signature` | `sha256=<hex-encoded HMAC-SHA256>` computed over the raw JSON body using the webhook's secret |
+| `X-Vigo-Event` | The event name (e.g., `run.failure`) |
 
 To verify a delivery, compute `HMAC-SHA256(secret, body)` and compare with the signature header:
 
@@ -126,10 +126,10 @@ A delivery is considered successful if the endpoint returns HTTP status < 300. A
 
 ```bash
 # List all webhooks
-hobnobcli webhooks list
+vigogo webhooks list
 
 # Delete a webhook
-hobnobcli webhooks delete <webhook-id>
+vigogo webhooks delete <webhook-id>
 ```
 
 Webhooks are disabled in spoke mode. Only the hub (or standalone server) dispatches webhook events.

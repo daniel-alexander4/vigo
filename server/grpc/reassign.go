@@ -5,19 +5,19 @@ package grpc
 
 import "sync"
 
-// ReassignStore holds pending reassignment info for thralls that are being
+// ReassignStore holds pending reassignment info for envoys that are being
 // moved to a different spoke. The AdminService writes entries via the
-// SetReassignment RPC, and the checkin handler pops them when the thrall
+// SetReassignment RPC, and the checkin handler pops them when the envoy
 // next checks in.
 type ReassignStore struct {
 	mu sync.RWMutex
 	m  map[string]ReassignInfo
 }
 
-// ReassignInfo describes where a thrall should reconnect after reassignment.
+// ReassignInfo describes where a envoy should reconnect after reassignment.
 type ReassignInfo struct {
 	TargetAddr  string
-	NewThrallID string
+	NewEnvoyID string
 }
 
 // NewReassignStore creates an empty ReassignStore.
@@ -25,21 +25,21 @@ func NewReassignStore() *ReassignStore {
 	return &ReassignStore{m: make(map[string]ReassignInfo)}
 }
 
-// Set records a pending reassignment for the given thrall.
-func (s *ReassignStore) Set(thrallID string, info ReassignInfo) {
+// Set records a pending reassignment for the given envoy.
+func (s *ReassignStore) Set(envoyID string, info ReassignInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[thrallID] = info
+	s.m[envoyID] = info
 }
 
-// Pop retrieves and removes the reassignment info for a thrall.
+// Pop retrieves and removes the reassignment info for a envoy.
 // Returns the info and true if found, or zero value and false if not.
-func (s *ReassignStore) Pop(thrallID string) (ReassignInfo, bool) {
+func (s *ReassignStore) Pop(envoyID string) (ReassignInfo, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	info, ok := s.m[thrallID]
+	info, ok := s.m[envoyID]
 	if ok {
-		delete(s.m, thrallID)
+		delete(s.m, envoyID)
 	}
 	return info, ok
 }

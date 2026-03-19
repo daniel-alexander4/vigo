@@ -5,7 +5,7 @@ weight: 60
 
 # illumos Agent Support
 
-Hobnob supports illumos-based systems including OmniOS, OpenIndiana, and SmartOS. The agent provides native integration with SMF (Service Management Facility) and IPS (Image Packaging System).
+Vigo supports illumos-based systems including OmniOS, OpenIndiana, and SmartOS. The agent provides native integration with SMF (Service Management Facility) and IPS (Image Packaging System).
 
 ## Supported Distributions
 
@@ -25,20 +25,20 @@ The bootstrap script detects illumos via `uname -s` returning `SunOS`, downloads
 
 ## SMF Service
 
-The agent runs as an SMF service with FMRI `svc:/system/hobnob-thrall:default`.
+The agent runs as an SMF service with FMRI `svc:/system/vigo-envoy:default`.
 
 ```sh
 # Check status
-svcs hobnob-thrall
+svcs vigo-envoy
 
 # Restart
-svcadm restart hobnob-thrall
+svcadm restart vigo-envoy
 
 # View logs
-svcs -x hobnob-thrall
+svcs -x vigo-envoy
 ```
 
-The SMF manifest is installed at `/var/svc/manifest/system/hobnob-thrall.xml`.
+The SMF manifest is installed at `/var/svc/manifest/system/vigo-envoy.xml`.
 
 ## Executors
 
@@ -86,7 +86,7 @@ rustup target add x86_64-unknown-illumos
 make dist-agent-illumos
 ```
 
-The binary is output to `dist/agent/illumos/amd64/hobnob`.
+The binary is output to `dist/agent/illumos/amd64/vigo`.
 
 ## Limitations
 

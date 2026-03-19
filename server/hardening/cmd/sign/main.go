@@ -5,7 +5,7 @@
 //
 // Usage:
 //
-//	go run ./server/hardening/cmd/sign -key signing.key -binary bin/hobd
+//	go run ./server/hardening/cmd/sign -key signing.key -binary bin/vigosrv
 //	go run ./server/hardening/cmd/sign -genkey -output signing.key
 package main
 
@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hobnob/hobnob/server/hardening"
+	"github.com/daniel-alexander4/vigo/server/hardening"
 )
 
 func main() {

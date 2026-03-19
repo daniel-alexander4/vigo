@@ -26,9 +26,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/compliance"
-	"github.com/hobnob/hobnob/server/db"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // ---------- Approved Patterns ----------
@@ -100,71 +100,71 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 	return &pb.RevokeApprovedPatternResponse{}, nil
 }
 
-// ---------- Thralls ----------
+// ---------- Envoys ----------
 
-func (s *AdminService) ListThralls(ctx context.Context, req *pb.ListThrallsRequest) (*pb.ListThrallsResponse, error) {
+func (s *AdminService) ListEnvoys(ctx context.Context, req *pb.ListEnvoysRequest) (*pb.ListEnvoysResponse, error) {
 	// Hub mode: aggregate from all spokes.
 	if s.hub != nil {
-		thralls, err := s.hub.AggregateListThralls(ctx)
+		envoys, err := s.hub.AggregateListEnvoys(ctx)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating thralls from spokes: %v", err)
+			return nil, status.Errorf(codes.Internal, "aggregating envoys from spokes: %v", err)
 		}
-		return &pb.ListThrallsResponse{Thralls: thralls}, nil
+		return &pb.ListEnvoysResponse{Envoys: envoys}, nil
 	}
 
-	var thralls []db.Thrall
+	var envoys []db.Envoy
 	var err error
 	if req.GetIncludeRevoked() {
-		thralls, err = s.queries.ListThralls(ctx)
+		envoys, err = s.queries.ListEnvoys(ctx)
 	} else {
-		thralls, err = s.queries.ListActiveThralls(ctx)
+		envoys, err = s.queries.ListActiveEnvoys(ctx)
 	}
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing thralls: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing envoys: %v", err)
 	}
 
-	resp := &pb.ListThrallsResponse{}
-	for _, n := range thralls {
-		pt := dbThrallToProto(n)
+	resp := &pb.ListEnvoysResponse{}
+	for _, n := range envoys {
+		pt := dbEnvoyToProto(n)
 		if s.fleetIndex != nil {
-			if ts, ok, _ := s.fleetIndex.GetThrallLite(n.ID); ok {
+			if ts, ok, _ := s.fleetIndex.GetEnvoyLite(n.ID); ok {
 				pt.AgentVersion = ts.AgentVersion
 			}
 		}
-		resp.Thralls = append(resp.Thralls, pt)
+		resp.Envoys = append(resp.Envoys, pt)
 	}
 
 	return resp, nil
 }
 
-func (s *AdminService) GetThrall(ctx context.Context, req *pb.GetThrallRequest) (*pb.GetThrallResponse, error) {
+func (s *AdminService) GetEnvoy(ctx context.Context, req *pb.GetEnvoyRequest) (*pb.GetEnvoyResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
 
-	n, err := s.queries.GetThrallByID(ctx, req.Id)
+	n, err := s.queries.GetEnvoyByID(ctx, req.Id)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "envoy not found: %v", err)
 	}
 
-	pt := dbThrallToProto(n)
+	pt := dbEnvoyToProto(n)
 	if s.fleetIndex != nil {
-		if ts, ok, _ := s.fleetIndex.GetThrallLite(req.Id); ok {
+		if ts, ok, _ := s.fleetIndex.GetEnvoyLite(req.Id); ok {
 			pt.AgentVersion = ts.AgentVersion
 		}
 	}
-	return &pb.GetThrallResponse{
-		Thrall: pt,
+	return &pb.GetEnvoyResponse{
+		Envoy: pt,
 	}, nil
 }
 
-func (s *AdminService) RevokeThrall(ctx context.Context, req *pb.RevokeThrallRequest) (*pb.RevokeThrallResponse, error) {
+func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyRequest) (*pb.RevokeEnvoyResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
 
-	if err := s.queries.RevokeThrall(ctx, req.Id); err != nil {
-		return nil, status.Errorf(codes.Internal, "revoking thrall: %v", err)
+	if err := s.queries.RevokeEnvoy(ctx, req.Id); err != nil {
+		return nil, status.Errorf(codes.Internal, "revoking envoy: %v", err)
 	}
 
 	// Dual-write: update FleetIndex.
@@ -172,44 +172,44 @@ func (s *AdminService) RevokeThrall(ctx context.Context, req *pb.RevokeThrallReq
 		s.fleetIndex.SetRevoked(req.Id, true)
 	}
 
-	slog.Warn("thrall revoked", "thrall_id", req.Id)
+	slog.Warn("envoy revoked", "envoy_id", req.Id)
 
 	// Record tamper-evident audit event.
-	recordAudit(ctx, s.auditWriter, "thrall.revoke", "admin", req.Id+" revoked", "")
+	recordAudit(ctx, s.auditWriter, "envoy.revoke", "admin", req.Id+" revoked", "")
 
-	return &pb.RevokeThrallResponse{}, nil
+	return &pb.RevokeEnvoyResponse{}, nil
 }
 
-// ---------- DeleteThrall ----------
+// ---------- DeleteEnvoy ----------
 
-func (s *AdminService) DeleteThrall(ctx context.Context, req *pb.DeleteThrallRequest) (*pb.DeleteThrallResponse, error) {
+func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyRequest) (*pb.DeleteEnvoyResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
 
 	// Look up hostname before deleting for the audit trail.
 	hostname := req.Id
 	if s.fleetIndex != nil {
-		if t := s.fleetIndex.GetThrall(req.Id); t != nil {
+		if t := s.fleetIndex.GetEnvoy(req.Id); t != nil {
 			hostname = t.Hostname
 		}
 	}
 
-	if err := s.queries.DeleteThrall(ctx, req.Id); err != nil {
-		return nil, status.Errorf(codes.Internal, "deleting thrall: %v", err)
+	if err := s.queries.DeleteEnvoy(ctx, req.Id); err != nil {
+		return nil, status.Errorf(codes.Internal, "deleting envoy: %v", err)
 	}
 
 	// Dual-write: remove from FleetIndex.
 	if s.fleetIndex != nil {
-		s.fleetIndex.RemoveThrall(req.Id)
+		s.fleetIndex.RemoveEnvoy(req.Id)
 	}
 
-	slog.Warn("thrall deleted", "thrall_id", req.Id, "hostname", hostname)
+	slog.Warn("envoy deleted", "envoy_id", req.Id, "hostname", hostname)
 
 	// Record tamper-evident audit event (CASCADE deletes traits, runs, snapshots).
-	recordAudit(ctx, s.auditWriter, "thrall.delete", "admin", hostname+" deleted (cascade)", "")
+	recordAudit(ctx, s.auditWriter, "envoy.delete", "admin", hostname+" deleted (cascade)", "")
 
-	return &pb.DeleteThrallResponse{}, nil
+	return &pb.DeleteEnvoyResponse{}, nil
 }
 
 // ---------- ForcePush ----------
@@ -217,29 +217,29 @@ func (s *AdminService) DeleteThrall(ctx context.Context, req *pb.DeleteThrallReq
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
 	// Hub mode: forward to all spokes.
 	if s.hub != nil {
-		total, err := s.hub.ForwardForcePush(ctx, req.GetThrallId())
+		total, err := s.hub.ForwardForcePush(ctx, req.GetEnvoyId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "forwarding force push to spokes: %v", err)
 		}
-		return &pb.ForcePushResponse{ThrallsNotified: total}, nil
+		return &pb.ForcePushResponse{EnvoysNotified: total}, nil
 	}
 
-	if req.ThrallId != "" {
-		// Single thrall
-		if _, err := uuid.Parse(req.ThrallId); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+	if req.EnvoyId != "" {
+		// Single envoy
+		if _, err := uuid.Parse(req.EnvoyId); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 		}
-		if err := s.queries.SetForcePush(ctx, req.ThrallId); err != nil {
+		if err := s.queries.SetForcePush(ctx, req.EnvoyId); err != nil {
 			return nil, status.Errorf(codes.Internal, "setting force push: %v", err)
 		}
 		// Dual-write: update FleetIndex.
 		if s.fleetIndex != nil {
-			s.fleetIndex.SetForcePush(req.ThrallId, true)
+			s.fleetIndex.SetForcePush(req.EnvoyId, true)
 		}
-		return &pb.ForcePushResponse{ThrallsNotified: 1}, nil
+		return &pb.ForcePushResponse{EnvoysNotified: 1}, nil
 	}
 
-	// All non-revoked thralls — single batch UPDATE.
+	// All non-revoked envoys — single batch UPDATE.
 	affected, err := s.queries.SetForcePushAllActive(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "batch setting force push: %v", err)
@@ -250,7 +250,7 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 		s.fleetIndex.SetForcePushAll()
 	}
 
-	return &pb.ForcePushResponse{ThrallsNotified: int32(affected)}, nil
+	return &pb.ForcePushResponse{EnvoysNotified: int32(affected)}, nil
 }
 
 // ---------- Runs ----------
@@ -262,7 +262,7 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		if limit <= 0 {
 			limit = 20
 		}
-		runs, err := s.hub.AggregateListRuns(ctx, req.GetThrallId(), limit)
+		runs, err := s.hub.AggregateListRuns(ctx, req.GetEnvoyId(), limit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "aggregating runs from spokes: %v", err)
 		}
@@ -274,13 +274,13 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		limit = 20
 	}
 
-	if req.ThrallId != "" {
-		if _, err := uuid.Parse(req.ThrallId); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+	if req.EnvoyId != "" {
+		if _, err := uuid.Parse(req.EnvoyId); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 		}
 
-		runs, err := s.runStore.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
-			ThrallID: req.ThrallId,
+		runs, err := s.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
+			EnvoyID: req.EnvoyId,
 			Limit:  limit,
 		})
 		if err != nil {
@@ -353,17 +353,17 @@ func (s *AdminService) GenerateToken(ctx context.Context, _ *pb.GenerateTokenReq
 // ---------- DryRun ----------
 
 func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.DryRunResponse, error) {
-	if _, err := uuid.Parse(req.ThrallId); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+	if _, err := uuid.Parse(req.EnvoyId); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
-	thrallID := req.ThrallId
+	envoyID := req.EnvoyId
 
-	thrall, err := s.queries.GetThrallByID(ctx, thrallID)
+	envoy, err := s.queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "envoy not found: %v", err)
 	}
 
-	cfg := s.configStore.Get(thrall.Hostname)
+	cfg := s.configStore.Get(envoy.Hostname)
 	if len(cfg.Modules) == 0 {
 		return &pb.DryRunResponse{}, nil
 	}
@@ -375,7 +375,7 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	}
 
 	plan, err := s.queries.CreatePlan(ctx, db.CreatePlanParams{
-		ThrallID:  thrallID,
+		EnvoyID:  envoyID,
 		Modules: string(modulesJSON),
 	})
 	if err != nil {
@@ -495,24 +495,24 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 		return s.hub.AggregateComplianceSummary(ctx)
 	}
 
-	// Get all thralls from DB, then look up latest runs via RunStore.
-	thralls, err := s.queries.ListThralls(ctx)
+	// Get all envoys from DB, then look up latest runs via RunStore.
+	envoys, err := s.queries.ListEnvoys(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing thralls: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing envoys: %v", err)
 	}
 
-	thrallIDs := make([]string, len(thralls))
-	for i, n := range thralls {
-		thrallIDs[i] = n.ID
+	envoyIDs := make([]string, len(envoys))
+	for i, n := range envoys {
+		envoyIDs[i] = n.ID
 	}
 
-	latestRuns, err := s.runStore.LatestRunPerThrall(ctx, thrallIDs)
+	latestRuns, err := s.runStore.LatestRunPerEnvoy(ctx, envoyIDs)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "fetching latest runs: %v", err)
 	}
 
 	counts := make(map[string]int32)
-	for _, n := range thralls {
+	for _, n := range envoys {
 		var recent []compliance.RunInfo
 		if run, ok := latestRuns[n.ID]; ok {
 			recent = []compliance.RunInfo{{
@@ -529,9 +529,9 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 		counts[compliance.ComputeStatus(recent, lastSeen, s.baseInterval)]++
 	}
 
-	total := int32(len(thralls))
+	total := int32(len(envoys))
 
-	// Lost-contact thralls excluded from compliance percentage — they represent
+	// Lost-contact envoys excluded from compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := total - counts["lost contact"]
 	var pct float32
@@ -550,20 +550,20 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	}, nil
 }
 
-func (s *AdminService) GetThrallCompliance(ctx context.Context, req *pb.GetThrallComplianceRequest) (*pb.GetThrallComplianceResponse, error) {
+func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyComplianceRequest) (*pb.GetEnvoyComplianceResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
-	thrallID := req.Id
+	envoyID := req.Id
 
-	n, err := s.queries.GetThrallByID(ctx, thrallID)
+	n, err := s.queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "envoy not found: %v", err)
 	}
 
 	var lastRunProto *pb.Run
-	runs, err := s.runStore.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
-		ThrallID: thrallID,
+	runs, err := s.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
+		EnvoyID: envoyID,
 		Limit:    int64(compliance.RecurringDriftThreshold),
 	})
 	var recent []compliance.RunInfo
@@ -600,7 +600,7 @@ func (s *AdminService) GetThrallCompliance(ctx context.Context, req *pb.GetThral
 		})
 	}
 
-	return &pb.GetThrallComplianceResponse{
+	return &pb.GetEnvoyComplianceResponse{
 		Status:  compStatus,
 		LastRun: lastRunProto,
 		History: snapshots,
@@ -610,21 +610,21 @@ func (s *AdminService) GetThrallCompliance(ctx context.Context, req *pb.GetThral
 // ---------- Rollback ----------
 
 func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*pb.RollbackResponse, error) {
-	if _, err := uuid.Parse(req.ThrallId); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+	if _, err := uuid.Parse(req.EnvoyId); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
-	thrallID := req.ThrallId
+	envoyID := req.EnvoyId
 
-	// Verify thrall exists.
-	_, err := s.queries.GetThrallByID(ctx, thrallID)
+	// Verify envoy exists.
+	_, err := s.queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "thrall not found: %v", err)
+		return nil, status.Errorf(codes.NotFound, "envoy not found: %v", err)
 	}
 
 	// If a specific file_path is provided, verify snapshots exist.
 	if req.FilePath != "" {
 		snapshots, err := s.queries.ListFileSnapshots(ctx, db.ListFileSnapshotsParams{
-			ThrallID:   thrallID,
+			EnvoyID:   envoyID,
 			FilePath: req.FilePath,
 		})
 		if err != nil {
@@ -647,7 +647,7 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 	}
 
 	// Set force_push flag so agent picks up rollback on next check-in.
-	if err := s.queries.SetForcePush(ctx, thrallID); err != nil {
+	if err := s.queries.SetForcePush(ctx, envoyID); err != nil {
 		return nil, status.Errorf(codes.Internal, "setting force push for rollback: %v", err)
 	}
 
@@ -660,12 +660,12 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 // ---------- Packages ----------
 
 func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesRequest) (*pb.ListPackagesResponse, error) {
-	if req.ThrallId != "" {
-		if _, err := uuid.Parse(req.ThrallId); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid thrall id: %v", err)
+	if req.EnvoyId != "" {
+		if _, err := uuid.Parse(req.EnvoyId); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 		}
 
-		pkgs, err := s.queries.ListPackageAuditByThrall(ctx, req.ThrallId)
+		pkgs, err := s.queries.ListPackageAuditByEnvoy(ctx, req.EnvoyId)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listing package audit: %v", err)
 		}
@@ -673,7 +673,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 		result := make([]*pb.PackageInfo, 0, len(pkgs))
 		for _, p := range pkgs {
 			pi := &pb.PackageInfo{
-				ThrallId:      p.ThrallID,
+				EnvoyId:      p.EnvoyID,
 				Hostname:    p.Hostname,
 				PackageName: p.PackageName,
 			}
@@ -696,7 +696,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 	result := make([]*pb.PackageInfo, 0, len(pkgs))
 	for _, p := range pkgs {
 		pi := &pb.PackageInfo{
-			ThrallId:      p.ThrallID,
+			EnvoyId:      p.EnvoyID,
 			Hostname:    p.Hostname,
 			PackageName: p.PackageName,
 		}
@@ -720,7 +720,7 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	resp := &pb.ListPackageDriftResponse{}
 	for _, d := range drifts {
 		pd := &pb.PackageDrift{
-			ThrallId:      d.ThrallID,
+			EnvoyId:      d.EnvoyID,
 			Hostname:    d.Hostname,
 			PackageName: d.PackageName,
 			DetectedAt:  timestamppb.New(d.DetectedAt),
@@ -747,7 +747,7 @@ func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest
 		return nil, status.Errorf(codes.InvalidArgument, "from_env and to_env are required")
 	}
 
-	// Compute diff by reading all thrall configs that contain the module.
+	// Compute diff by reading all envoy configs that contain the module.
 	// PromoteEnv is read-only audit -- never writes config files.
 	diff := s.configStore.ComputeEnvDiff(req.ModuleName, req.FromEnv, req.ToEnv)
 
@@ -894,7 +894,7 @@ func (s *AdminService) ReportSpokeStatus(ctx context.Context, req *pb.SpokeStatu
 
 	slog.Debug("received spoke status report",
 		"spoke_id", req.SpokeId,
-		"thrall_count", req.ThrallCount,
+		"envoy_count", req.EnvoyCount,
 		"compliant", req.Compliant,
 	)
 
@@ -903,8 +903,8 @@ func (s *AdminService) ReportSpokeStatus(ctx context.Context, req *pb.SpokeStatu
 
 // ---------- Helpers ----------
 
-func dbThrallToProto(n db.Thrall) *pb.Thrall {
-	pn := &pb.Thrall{
+func dbEnvoyToProto(n db.Envoy) *pb.Envoy {
+	pn := &pb.Envoy{
 		Id:         n.ID,
 		Hostname:   n.Hostname,
 		IpAddress:  n.IpAddress,
@@ -929,7 +929,7 @@ func dbThrallToProto(n db.Thrall) *pb.Thrall {
 func dbRunToProto(r db.Run) *pb.Run {
 	pr := &pb.Run{
 		Id:           r.ID,
-		ThrallId:       r.ThrallID,
+		EnvoyId:       r.EnvoyID,
 		StartedAt:    timestamppb.New(r.StartedAt),
 		Status:       r.Status,
 		ModuleCount:  int32(r.ModuleCount),

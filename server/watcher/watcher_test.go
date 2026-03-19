@@ -36,12 +36,12 @@ func (m *mockVersionProvider) setVersion(key string, v int) {
 	m.versions[key] = v
 }
 
-// mockThrallStore implements ThrallStore for testing.
-type mockThrallStore struct {
+// mockEnvoyStore implements EnvoyStore for testing.
+type mockEnvoyStore struct {
 	refs map[string][]string // secret path -> hostnames
 }
 
-func (m *mockThrallStore) ThrallsReferencingSecret(path string) []string {
+func (m *mockEnvoyStore) EnvoysReferencingSecret(path string) []string {
 	return m.refs[path]
 }
 
@@ -49,7 +49,7 @@ func (m *mockThrallStore) ThrallsReferencingSecret(path string) []string {
 type mockDB struct {
 	mu              sync.Mutex
 	forcePushed     []string
-	rotatedSecrets  map[string][]string // thrall ID -> secret paths
+	rotatedSecrets  map[string][]string // envoy ID -> secret paths
 	rotationEvents  []RotationRecord
 	nodesByHost   map[string]string
 }
@@ -78,7 +78,7 @@ func (m *mockDB) AppendRotatedSecret(ctx context.Context, id, secretPath string)
 	return nil
 }
 
-func (m *mockDB) GetThrallByHostname(ctx context.Context, hostname string) (string, error) {
+func (m *mockDB) GetEnvoyByHostname(ctx context.Context, hostname string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	id, ok := m.nodesByHost[hostname]
@@ -101,19 +101,19 @@ func (m *mockDispatcher) DispatchRotation(ctx context.Context, event string, sec
 }
 
 func TestRotationTrigger(t *testing.T) {
-	thrallID := uuid.New().String()
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockThrallStore{refs: map[string][]string{
-		"hobnob/db/dsn": {"web-01.example.com"},
+	envoyID := uuid.New().String()
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/db/dsn": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{
+		"vigo/db/dsn": {"web-01.example.com"},
 	}}
 	database := &mockDB{
 		nodesByHost: map[string]string{
-			"web-01.example.com": thrallID,
+			"web-01.example.com": envoyID,
 		},
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -122,16 +122,16 @@ func TestRotationTrigger(t *testing.T) {
 	w.initVersions(ctx)
 
 	// Simulate version bump.
-	provider.setVersion("hobnob/db/dsn", 2)
+	provider.setVersion("vigo/db/dsn", 2)
 
 	// Run one check.
 	w.checkRotations(ctx)
 
 	// Verify force push was triggered.
 	database.mu.Lock()
-	assert.Contains(t, database.forcePushed, thrallID)
+	assert.Contains(t, database.forcePushed, envoyID)
 	assert.Len(t, database.rotationEvents, 1)
-	assert.Equal(t, "hobnob/db/dsn", database.rotationEvents[0].SecretPath)
+	assert.Equal(t, "vigo/db/dsn", database.rotationEvents[0].SecretPath)
 	database.mu.Unlock()
 
 	// Verify webhook dispatched.
@@ -141,19 +141,19 @@ func TestRotationTrigger(t *testing.T) {
 }
 
 func TestNotifyFuncCalledOnRotation(t *testing.T) {
-	thrallID := uuid.New().String()
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockThrallStore{refs: map[string][]string{
-		"hobnob/db/dsn": {"web-01.example.com"},
+	envoyID := uuid.New().String()
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/db/dsn": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{
+		"vigo/db/dsn": {"web-01.example.com"},
 	}}
 	database := &mockDB{
 		nodesByHost: map[string]string{
-			"web-01.example.com": thrallID,
+			"web-01.example.com": envoyID,
 		},
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	var mu sync.Mutex
 	var notified []string
@@ -168,52 +168,52 @@ func TestNotifyFuncCalledOnRotation(t *testing.T) {
 	ctx := context.Background()
 	w.initVersions(ctx)
 
-	provider.setVersion("hobnob/db/dsn", 2)
+	provider.setVersion("vigo/db/dsn", 2)
 	w.checkRotations(ctx)
 
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, []string{"secret.rotated"}, notified)
 	require.Len(t, notifiedDetails, 1)
-	assert.Equal(t, "hobnob/db/dsn", notifiedDetails[0]["path"])
+	assert.Equal(t, "vigo/db/dsn", notifiedDetails[0]["path"])
 	assert.Equal(t, 1, notifiedDetails[0]["affected"])
 }
 
 func TestRotationAppendsRotatedSecret(t *testing.T) {
-	thrallID := uuid.New().String()
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockThrallStore{refs: map[string][]string{
-		"hobnob/db/dsn": {"web-01.example.com"},
+	envoyID := uuid.New().String()
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/db/dsn": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{
+		"vigo/db/dsn": {"web-01.example.com"},
 	}}
 	database := &mockDB{
 		nodesByHost: map[string]string{
-			"web-01.example.com": thrallID,
+			"web-01.example.com": envoyID,
 		},
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
 
-	provider.setVersion("hobnob/db/dsn", 2)
+	provider.setVersion("vigo/db/dsn", 2)
 	w.checkRotations(ctx)
 
 	database.mu.Lock()
 	defer database.mu.Unlock()
 
 	// Should have appended the rotated secret path.
-	assert.Contains(t, database.rotatedSecrets[thrallID], "hobnob/db/dsn")
+	assert.Contains(t, database.rotatedSecrets[envoyID], "vigo/db/dsn")
 }
 
 func TestNoActionWhenVersionsUnchanged(t *testing.T) {
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockThrallStore{refs: map[string][]string{}}
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/db/dsn": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{}}
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -228,12 +228,12 @@ func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 }
 
 func TestWatcherRunLoop(t *testing.T) {
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockThrallStore{refs: map[string][]string{}}
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/db/dsn": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{}}
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 50*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 50*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -269,12 +269,12 @@ func (m *errorVersionProvider) setError(on bool) {
 }
 
 func TestExponentialBackoffOnFailure(t *testing.T) {
-	provider := &errorVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockThrallStore{refs: map[string][]string{}}
+	provider := &errorVersionProvider{versions: map[string]int{"vigo/db/dsn": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{}}
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -306,12 +306,12 @@ func TestExponentialBackoffOnFailure(t *testing.T) {
 }
 
 func TestBackoffCapsAt32x(t *testing.T) {
-	provider := &errorVersionProvider{versions: map[string]int{"hobnob/db/dsn": 1}}
-	store := &mockThrallStore{refs: map[string][]string{}}
+	provider := &errorVersionProvider{versions: map[string]int{"vigo/db/dsn": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{}}
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -332,25 +332,25 @@ func TestBackoffCapsAt32x(t *testing.T) {
 }
 
 func TestNoActionOnVersionDowngrade(t *testing.T) {
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 5}}
-	store := &mockThrallStore{refs: map[string][]string{
-		"hobnob/db/dsn": {"web-01.example.com"},
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/db/dsn": 5}}
+	store := &mockEnvoyStore{refs: map[string][]string{
+		"vigo/db/dsn": {"web-01.example.com"},
 	}}
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 	database := &mockDB{
 		nodesByHost: map[string]string{
-			"web-01.example.com": thrallID,
+			"web-01.example.com": envoyID,
 		},
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
 
 	// Downgrade version from 5 to 3 — should not trigger any action.
-	provider.setVersion("hobnob/db/dsn", 3)
+	provider.setVersion("vigo/db/dsn", 3)
 	w.checkRotations(ctx)
 
 	database.mu.Lock()
@@ -364,19 +364,19 @@ func TestNoActionOnVersionDowngrade(t *testing.T) {
 }
 
 func TestNoActionOnSameVersion(t *testing.T) {
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/db/dsn": 3}}
-	store := &mockThrallStore{refs: map[string][]string{
-		"hobnob/db/dsn": {"web-01.example.com"},
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/db/dsn": 3}}
+	store := &mockEnvoyStore{refs: map[string][]string{
+		"vigo/db/dsn": {"web-01.example.com"},
 	}}
-	thrallID := uuid.New().String()
+	envoyID := uuid.New().String()
 	database := &mockDB{
 		nodesByHost: map[string]string{
-			"web-01.example.com": thrallID,
+			"web-01.example.com": envoyID,
 		},
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -398,9 +398,9 @@ func TestMultipleAffectedNodes(t *testing.T) {
 	node1 := uuid.New().String()
 	node2 := uuid.New().String()
 
-	provider := &mockVersionProvider{versions: map[string]int{"hobnob/tls/cert": 1}}
-	store := &mockThrallStore{refs: map[string][]string{
-		"hobnob/tls/cert": {"web-01.example.com", "web-02.example.com"},
+	provider := &mockVersionProvider{versions: map[string]int{"vigo/tls/cert": 1}}
+	store := &mockEnvoyStore{refs: map[string][]string{
+		"vigo/tls/cert": {"web-01.example.com", "web-02.example.com"},
 	}}
 	database := &mockDB{
 		nodesByHost: map[string]string{
@@ -410,12 +410,12 @@ func TestMultipleAffectedNodes(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"hobnob/tls/cert"})
+	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/tls/cert"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
 
-	provider.setVersion("hobnob/tls/cert", 2)
+	provider.setVersion("vigo/tls/cert", 2)
 	w.checkRotations(ctx)
 
 	database.mu.Lock()

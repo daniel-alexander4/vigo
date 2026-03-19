@@ -1,15 +1,15 @@
-# Hobnob Commercial Terms
+# Vigo Commercial Terms
 
 Effective 2026-03-16. Alexander4, LLC reserves the right to update these terms.
 
 ## Licensing
 
-Hobnob uses a split-license model:
+Vigo uses a split-license model:
 
-- **Agent** (`hobnob`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code. You may not offer Hobnob as a managed service, redistribute modified versions, or remove license keys.
-- **Server** (`hobd`) and **CLI** (`hobnobcli`): Proprietary. Distributed as compiled binaries and container images.
+- **Agent** (`vigo`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code. You may not offer Vigo as a managed service, redistribute modified versions, or remove license keys.
+- **Server** (`vigosrv`) and **CLI** (`vigogo`): Proprietary. Distributed as compiled binaries and container images.
 
-You may use Hobnob to manage up to 25 nodes at no cost. Beyond 25 nodes,
+You may use Vigo to manage up to 25 nodes at no cost. Beyond 25 nodes,
 a commercial license is required.
 
 All features are included in every tier. There are no enterprise-only
@@ -122,7 +122,7 @@ terminated, a pro-rata refund is issued for the remaining term.
 
 ## Grace Period
 
-If your active node count exceeds your licensed limit, Hobnob enters a
+If your active node count exceeds your licensed limit, Vigo enters a
 15-day grace period. During grace, the server operates normally but logs
 a warning on every check-in. After 15 days, new node enrollments are
 rejected for an additional 15 days. After 30 total days, the server
@@ -134,7 +134,7 @@ compliant status at any time — the grace clock resets immediately.
 
 ## Contact
 
-Email: hobnob.licensing@alexander4.org
+Email: vigo.licensing@alexander4.org
 
 All commercial inquiries and custom terms should be directed to this
 address.

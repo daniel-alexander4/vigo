@@ -15,7 +15,7 @@ resources:
     type: file
     target_path: /etc/chrony/chrony.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
 
       # NTP servers
       server {{ .Vars.chrony_server_1 }} iburst
@@ -47,7 +47,7 @@ resources:
     type: file
     target_path: /etc/chrony.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
 
       # NTP servers
       server {{ .Vars.chrony_server_1 }} iburst

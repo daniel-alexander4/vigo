@@ -1,10 +1,10 @@
 #!/bin/sh
 set -e
 
-# Hobnob server entrypoint — seeds config on first run, then starts hobd.
-# All persistent state lives under /srv/hobnob (bind-mounted from host).
+# Vigo server entrypoint — seeds config on first run, then starts vigosrv.
+# All persistent state lives under /srv/vigo (bind-mounted from host).
 
-DATA_DIR="/srv/hobnob"
+DATA_DIR="/srv/vigo"
 HNB_STAGE="${DATA_DIR}/policy/stage"
 HNB_LIVE="${DATA_DIR}/policy/.live"
 EXAMPLES_DIR="${DATA_DIR}/policy/examples"
@@ -38,11 +38,11 @@ done
 if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" <<'ENVEOF'
 # ╔═══════════════════════════════════════════════════════════════════════════╗
-# ║  Hobnob — Optional Services                                            ║
+# ║  Vigo — Optional Services                                            ║
 # ║  All other configuration belongs in server.yaml.                       ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 
-# Uncomment to start additional containers alongside hobnob.
+# Uncomment to start additional containers alongside vigo.
 # Only needed for locally-hosted services. External AI providers (Claude,
 # OpenAI) are configured in server.yaml and do not require a container here.
 # COMPOSE_PROFILES=ollama              # local Ollama AI (free, CPU-only, ~4GB RAM)
@@ -74,7 +74,7 @@ fi
 # Seed starter config files (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# Starter policy config: common.hnb, roles.hnb, modules/motd.hnb
+# Starter policy config: common.vgo, roles.vgo, modules/motd.vgo
 if [ -d "${SEED_DIR}/policy" ]; then
     find "${SEED_DIR}/policy" -type f | while IFS= read -r src; do
         rel="${src#${SEED_DIR}/policy/}"
@@ -103,8 +103,8 @@ fi
 # Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-find "${SEED_DIR}/thrall-configs" -name '*.hnb.example' -type f | while IFS= read -r src; do
-    rel="${src#${SEED_DIR}/thrall-configs/}"
+find "${SEED_DIR}/envoy-configs" -name '*.vgo.example' -type f | while IFS= read -r src; do
+    rel="${src#${SEED_DIR}/envoy-configs/}"
     dest="${EXAMPLES_DIR}/${rel}"
     if [ ! -f "$dest" ]; then
         mkdir -p "$(dirname "$dest")"
@@ -136,31 +136,31 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ -d /host-bin ]; then
-    cp /usr/local/bin/hobnobcli /host-bin/hobnobcli
-    ln -sf hobnobcli /host-bin/hnbvi
-    echo "Installed hobnobcli and hnbvi to host."
+    cp /usr/local/bin/vigogo /host-bin/vigogo
+    ln -sf vigogo /host-bin/hnbvi
+    echo "Installed vigogo and hnbvi to host."
 fi
 
 echo "Config seeding complete."
 
 # ---------------------------------------------------------------------------
-# Seed-only mode: populate /srv/hobnob and exit without starting the server.
-# Usage: docker run --rm -v /srv/hobnob:/srv/hobnob hobnob --seed-only
+# Seed-only mode: populate /srv/vigo and exit without starting the server.
+# Usage: docker run --rm -v /srv/vigo:/srv/vigo vigo --seed-only
 # ---------------------------------------------------------------------------
 
 if [ "${1:-}" = "--seed-only" ]; then
-    echo "Seeding complete. Run 'cd /srv/hobnob && docker compose up -d' to start."
+    echo "Seeding complete. Run 'cd /srv/vigo && docker compose up -d' to start."
     exit 0
 fi
 
 # ---------------------------------------------------------------------------
-# Start hobd
+# Start vigosrv
 # ---------------------------------------------------------------------------
 
 cd "$DATA_DIR"
 
-export HOBNOB_CONFIG_FILE="server.yaml"
-export HOBNOB_MIGRATIONS_DIR="/migrations"
-export HOBNOB_AGENT_DIR="/dist/agent"
+export VIGO_CONFIG_FILE="server.yaml"
+export VIGO_MIGRATIONS_DIR="/migrations"
+export VIGO_AGENT_DIR="/dist/agent"
 
-exec hobd "$@"
+exec vigosrv "$@"

@@ -15,7 +15,7 @@ import (
 )
 
 // TOTPIssuer is the issuer name shown in authenticator apps.
-const TOTPIssuer = "Hobnob"
+const TOTPIssuer = "Vigo"
 
 // recoveryCodeCount is the number of recovery codes generated.
 const recoveryCodeCount = 8

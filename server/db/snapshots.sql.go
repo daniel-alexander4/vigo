@@ -11,12 +11,12 @@ import (
 )
 
 const insertFileSnapshot = `-- name: InsertFileSnapshot :exec
-INSERT INTO file_snapshots (thrall_id, file_path, content_hash, content, run_id)
+INSERT INTO file_snapshots (envoy_id, file_path, content_hash, content, run_id)
 VALUES (?1, ?2, ?3, ?4, ?5)
 `
 
 type InsertFileSnapshotParams struct {
-	ThrallID    string         `json:"thrall_id"`
+	EnvoyID     string         `json:"envoy_id"`
 	FilePath    string         `json:"file_path"`
 	ContentHash string         `json:"content_hash"`
 	Content     []byte         `json:"content"`
@@ -25,7 +25,7 @@ type InsertFileSnapshotParams struct {
 
 func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshotParams) error {
 	_, err := q.db.ExecContext(ctx, insertFileSnapshot,
-		arg.ThrallID,
+		arg.EnvoyID,
 		arg.FilePath,
 		arg.ContentHash,
 		arg.Content,
@@ -35,19 +35,19 @@ func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshot
 }
 
 const listFileSnapshots = `-- name: ListFileSnapshots :many
-SELECT id, thrall_id, file_path, content_hash, content, created_at, run_id
+SELECT id, envoy_id, file_path, content_hash, content, created_at, run_id
 FROM file_snapshots
-WHERE thrall_id = ?1 AND file_path = ?2
+WHERE envoy_id = ?1 AND file_path = ?2
 ORDER BY created_at DESC
 `
 
 type ListFileSnapshotsParams struct {
-	ThrallID string `json:"thrall_id"`
+	EnvoyID  string `json:"envoy_id"`
 	FilePath string `json:"file_path"`
 }
 
 func (q *Queries) ListFileSnapshots(ctx context.Context, arg ListFileSnapshotsParams) ([]FileSnapshot, error) {
-	rows, err := q.db.QueryContext(ctx, listFileSnapshots, arg.ThrallID, arg.FilePath)
+	rows, err := q.db.QueryContext(ctx, listFileSnapshots, arg.EnvoyID, arg.FilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (q *Queries) ListFileSnapshots(ctx context.Context, arg ListFileSnapshotsPa
 		var i FileSnapshot
 		if err := rows.Scan(
 			&i.ID,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.FilePath,
 			&i.ContentHash,
 			&i.Content,

@@ -1,0 +1,1281 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "vigo.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "VigoAgent"
+    },
+    {
+      "name": "VigoAdmin"
+    },
+    {
+      "name": "VigoPeer"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/approved": {
+      "get": {
+        "summary": "ListApprovedPatterns lists all approved enrollment patterns.",
+        "operationId": "VigoAdmin_ListApprovedPatterns",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListApprovedPatternsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VigoAdmin"
+        ]
+      },
+      "post": {
+        "summary": "AddApprovedPattern adds a hostname/IP wildcard pattern with a one-time token.",
+        "operationId": "VigoAdmin_AddApprovedPattern",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddApprovedPatternResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1AddApprovedPatternRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/approved/{id}": {
+      "delete": {
+        "summary": "RevokeApprovedPattern removes an approved pattern.",
+        "operationId": "VigoAdmin_RevokeApprovedPattern",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeApprovedPatternResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/compliance": {
+      "get": {
+        "summary": "GetComplianceSummary returns aggregate compliance status across all envoys.",
+        "operationId": "VigoAdmin_GetComplianceSummary",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetComplianceSummaryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/env/promote": {
+      "post": {
+        "summary": "PromoteEnv promotes environment variables from one tier to another.",
+        "operationId": "VigoAdmin_PromoteEnv",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PromoteEnvResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1PromoteEnvRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/envoys": {
+      "get": {
+        "summary": "ListEnvoys lists all enrolled envoys.",
+        "operationId": "VigoAdmin_ListEnvoys",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListEnvoysResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "includeRevoked",
+            "description": "if true, include revoked envoys in the response",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/envoys/{envoyId}/dry-run": {
+      "post": {
+        "summary": "DryRun computes a plan without applying changes.",
+        "operationId": "VigoAdmin_DryRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DryRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "envoyId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/VigoAdminDryRunBody"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/envoys/{envoyId}/rollback": {
+      "post": {
+        "summary": "Rollback reverts a envoy to a previous run's state.",
+        "operationId": "VigoAdmin_Rollback",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RollbackResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "envoyId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/VigoAdminRollbackBody"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/envoys/{id}": {
+      "get": {
+        "summary": "GetEnvoy returns details for a single envoy.",
+        "operationId": "VigoAdmin_GetEnvoy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetEnvoyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      },
+      "delete": {
+        "summary": "DeleteEnvoy permanently removes a envoy and all its history from the database.",
+        "operationId": "VigoAdmin_DeleteEnvoy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteEnvoyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/envoys/{id}/compliance": {
+      "get": {
+        "summary": "GetEnvoyCompliance returns compliance details for a single envoy.",
+        "operationId": "VigoAdmin_GetEnvoyCompliance",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetEnvoyComplianceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/envoys/{id}/revoke": {
+      "post": {
+        "summary": "RevokeEnvoy revokes an enrolled envoy, blocking future check-ins.",
+        "operationId": "VigoAdmin_RevokeEnvoy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RevokeEnvoyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/VigoAdminRevokeEnvoyBody"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/packages": {
+      "get": {
+        "summary": "ListPackages lists package audit records, optionally filtered by envoy.",
+        "operationId": "VigoAdmin_ListPackages",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPackagesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "envoyId",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/packages/drift": {
+      "get": {
+        "summary": "ListPackageDrift lists packages where installed version differs from desired.",
+        "operationId": "VigoAdmin_ListPackageDrift",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListPackageDriftResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/push": {
+      "post": {
+        "summary": "ForcePush triggers an immediate check-in for a envoy or all envoys.",
+        "operationId": "VigoAdmin_ForcePush",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ForcePushResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ForcePushRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "summary": "ListRuns lists recent runs, optionally filtered by envoy.",
+        "operationId": "VigoAdmin_ListRuns",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRunsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "envoyId",
+            "description": "optional filter",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "description": "default 20",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}": {
+      "get": {
+        "summary": "GetRun returns details for a single run including per-module results.",
+        "operationId": "VigoAdmin_GetRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/tokens": {
+      "post": {
+        "summary": "GenerateToken generates a cryptographically random one-time enrollment token.",
+        "operationId": "VigoAdmin_GenerateToken",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GenerateTokenResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GenerateTokenRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "summary": "ListWebhooks lists all registered webhooks.",
+        "operationId": "VigoAdmin_ListWebhooks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListWebhooksResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VigoAdmin"
+        ]
+      },
+      "post": {
+        "summary": "AddWebhook registers a new webhook endpoint.",
+        "operationId": "VigoAdmin_AddWebhook",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AddWebhookResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1AddWebhookRequest"
+            }
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}": {
+      "delete": {
+        "summary": "DeleteWebhook removes a webhook by ID.",
+        "operationId": "VigoAdmin_DeleteWebhook",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteWebhookResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "VigoAdminDryRunBody": {
+      "type": "object"
+    },
+    "VigoAdminRevokeEnvoyBody": {
+      "type": "object"
+    },
+    "VigoAdminRollbackBody": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "title": "optional: rollback to specific run"
+        },
+        "filePath": {
+          "type": "string",
+          "title": "optional: rollback a single file"
+        }
+      }
+    },
+    "googleRpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "v1AddApprovedPatternRequest": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string",
+          "title": "plaintext token; server will bcrypt hash it"
+        }
+      }
+    },
+    "v1AddApprovedPatternResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1AddWebhookRequest": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1AddWebhookResponse": {
+      "type": "object",
+      "properties": {
+        "webhook": {
+          "$ref": "#/definitions/v1WebhookInfo"
+        }
+      }
+    },
+    "v1ApprovedPattern": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "used": {
+          "type": "boolean"
+        },
+        "usedBy": {
+          "type": "string",
+          "title": "envoy UUID if used"
+        }
+      }
+    },
+    "v1ComplianceSnapshot": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "compliant": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "recurringDrift": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "errors": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "lostContact": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "noData": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1DeleteEnvoyResponse": {
+      "type": "object"
+    },
+    "v1DeleteWebhookResponse": {
+      "type": "object"
+    },
+    "v1DryRunResponse": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PlannedAction"
+          }
+        }
+      }
+    },
+    "v1Envoy": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "ipAddress": {
+          "type": "string"
+        },
+        "enrolledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastSeen": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revoked": {
+          "type": "boolean"
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "pendingRotatedSecrets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "agentVersion": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ForcePushRequest": {
+      "type": "object",
+      "properties": {
+        "envoyId": {
+          "type": "string",
+          "title": "empty = all envoys"
+        }
+      }
+    },
+    "v1ForcePushResponse": {
+      "type": "object",
+      "properties": {
+        "envoysNotified": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1GenerateTokenRequest": {
+      "type": "object"
+    },
+    "v1GenerateTokenResponse": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        }
+      }
+    },
+    "v1GetComplianceSummaryResponse": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "compliant": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "recurringDrift": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "errors": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "lostContact": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "noData": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "compliancePct": {
+          "type": "number",
+          "format": "float"
+        }
+      }
+    },
+    "v1GetEnvoyComplianceResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "lastRun": {
+          "$ref": "#/definitions/v1Run"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ComplianceSnapshot"
+          }
+        }
+      }
+    },
+    "v1GetEnvoyResponse": {
+      "type": "object",
+      "properties": {
+        "envoy": {
+          "$ref": "#/definitions/v1Envoy"
+        }
+      }
+    },
+    "v1GetRunResponse": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "$ref": "#/definitions/v1Run"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ModuleResult"
+          }
+        }
+      }
+    },
+    "v1ListApprovedPatternsResponse": {
+      "type": "object",
+      "properties": {
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ApprovedPattern"
+          }
+        }
+      }
+    },
+    "v1ListEnvoysResponse": {
+      "type": "object",
+      "properties": {
+        "envoys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Envoy"
+          }
+        }
+      }
+    },
+    "v1ListPackageDriftResponse": {
+      "type": "object",
+      "properties": {
+        "drifts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PackageDrift"
+          }
+        }
+      }
+    },
+    "v1ListPackagesResponse": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PackageInfo"
+          }
+        }
+      }
+    },
+    "v1ListRunsResponse": {
+      "type": "object",
+      "properties": {
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Run"
+          }
+        }
+      }
+    },
+    "v1ListWebhooksResponse": {
+      "type": "object",
+      "properties": {
+        "webhooks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WebhookInfo"
+          }
+        }
+      }
+    },
+    "v1ModuleResult": {
+      "type": "object",
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "resourceName": {
+          "type": "string"
+        },
+        "actionTaken": {
+          "type": "string",
+          "title": "none, created, updated, deleted"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "errorMessage": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "previousContent": {
+          "type": "string",
+          "format": "byte",
+          "title": "file executor: content before overwrite (for snapshots)"
+        },
+        "contentHash": {
+          "type": "string",
+          "title": "file executor: SHA-256 of the new content"
+        },
+        "filePath": {
+          "type": "string",
+          "title": "file executor: absolute path of the managed file"
+        }
+      }
+    },
+    "v1PackageDrift": {
+      "type": "object",
+      "properties": {
+        "envoyId": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "packageName": {
+          "type": "string"
+        },
+        "installedVersion": {
+          "type": "string"
+        },
+        "desiredVersion": {
+          "type": "string"
+        },
+        "detectedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1PackageInfo": {
+      "type": "object",
+      "properties": {
+        "envoyId": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "packageName": {
+          "type": "string"
+        },
+        "installedVersion": {
+          "type": "string"
+        },
+        "desiredVersion": {
+          "type": "string"
+        }
+      }
+    },
+    "v1PlannedAction": {
+      "type": "object",
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "resourceName": {
+          "type": "string"
+        },
+        "plannedAction": {
+          "type": "string",
+          "title": "create, update, delete, none"
+        }
+      }
+    },
+    "v1PromoteEnvRequest": {
+      "type": "object",
+      "properties": {
+        "moduleName": {
+          "type": "string"
+        },
+        "fromEnv": {
+          "type": "string"
+        },
+        "toEnv": {
+          "type": "string"
+        }
+      }
+    },
+    "v1PromoteEnvResponse": {
+      "type": "object",
+      "properties": {
+        "promotionId": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1RevokeApprovedPatternResponse": {
+      "type": "object"
+    },
+    "v1RevokeEnvoyResponse": {
+      "type": "object"
+    },
+    "v1RollbackResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "v1Run": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "envoyId": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "title": "running, success, failure, partial"
+        },
+        "moduleCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "changedCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "failedCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "skippedCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1WebhookInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

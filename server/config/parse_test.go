@@ -173,7 +173,7 @@ resources:
   - name: grafana-set-password
     type: exec
     command: "grafana-cli admin reset-admin-password 'secret'"
-    watch_secret: ["hobnob/grafana/admin-password"]
+    watch_secret: ["vigo/grafana/admin-password"]
 `)
 
 	def, err := ParseModuleFile(data)
@@ -188,8 +188,8 @@ resources:
 	if len(res.WatchSecret) != 1 {
 		t.Fatalf("watch_secret count = %d, want 1", len(res.WatchSecret))
 	}
-	if res.WatchSecret[0] != "hobnob/grafana/admin-password" {
-		t.Errorf("watch_secret[0] = %q, want %q", res.WatchSecret[0], "hobnob/grafana/admin-password")
+	if res.WatchSecret[0] != "vigo/grafana/admin-password" {
+		t.Errorf("watch_secret[0] = %q, want %q", res.WatchSecret[0], "vigo/grafana/admin-password")
 	}
 }
 

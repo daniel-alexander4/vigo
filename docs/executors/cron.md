@@ -103,6 +103,6 @@ Linux only. On Windows, the same `type: cron` maps to the [cron_windows](cron_wi
 
 ## Notes
 
-- Cron files are written to `/etc/cron.d/<name>` with a comment header identifying Hobnob as the manager.
+- Cron files are written to `/etc/cron.d/<name>` with a comment header identifying Vigo as the manager.
 - When both `schedule` and individual time fields are provided, `schedule` takes precedence.
 - The cron file format includes the user field: `<schedule> <user> <job>`.

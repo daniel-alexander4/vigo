@@ -1,26 +1,26 @@
 # Migrating from Puppet
 
-Hobnob is the most conceptually similar tool to Puppet — both are pull-based, compile a desired-state catalog on the server, and apply idempotent resources on the agent. If you think in Puppet, Hobnob will feel familiar.
+Vigo is the most conceptually similar tool to Puppet — both are pull-based, compile a desired-state catalog on the server, and apply idempotent resources on the agent. If you think in Puppet, Vigo will feel familiar.
 
 ## Architecture Differences
 
-Both Puppet and Hobnob follow a pull model: an agent contacts a central server, receives desired state, and converges locally. The server compiles a catalog (Puppet) or bundle (Hobnob) based on the node's identity and facts/traits.
+Both Puppet and Vigo follow a pull model: an agent contacts a central server, receives desired state, and converges locally. The server compiles a catalog (Puppet) or bundle (Vigo) based on the node's identity and facts/traits.
 
-Puppet uses its own DSL for manifests and ERB/EPP for templates. Hobnob uses plain YAML for everything and Go templates for `content:` attributes only. There is no compilation step — the YAML is the config.
+Puppet uses its own DSL for manifests and ERB/EPP for templates. Vigo uses plain YAML for everything and Go templates for `content:` attributes only. There is no compilation step — the YAML is the config.
 
-Puppet stores catalog state in PuppetDB and queries it for exported resources and reporting. Hobnob keeps an in-memory FleetIndex (rehydrated from SQLite on startup) and never touches the database on the check-in hot path.
+Puppet stores catalog state in PuppetDB and queries it for exported resources and reporting. Vigo keeps an in-memory FleetIndex (rehydrated from SQLite on startup) and never touches the database on the check-in hot path.
 
-Puppet's agent runs on a 30-minute interval by default. Hobnob's agent interval is configurable and supports compiled promises with offline convergence — the agent caches its last bundle and continues applying it when the server is unreachable.
+Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is configurable and supports compiled promises with offline convergence — the agent caches its last bundle and continues applying it when the server is unreachable.
 
 ## Concept Mapping
 
-| Puppet Concept | Hobnob Equivalent | Notes |
+| Puppet Concept | Vigo Equivalent | Notes |
 |---|---|---|
-| Manifest (`.pp` file) | Module (`.hnb` file) | YAML instead of Puppet DSL |
-| Class / Defined Type | Module | One module = one `.hnb` file with resources |
+| Manifest (`.pp` file) | Module (`.vgo` file) | YAML instead of Puppet DSL |
+| Class / Defined Type | Module | One module = one `.vgo` file with resources |
 | Profile | Module | Same level of abstraction |
 | Role | Role | Named list of modules |
-| `site.pp` / ENC | `nodes.hnb` | First-match-wins glob patterns |
+| `site.pp` / ENC | `nodes.vgo` | First-match-wins glob patterns |
 | Hiera | `vars` / `environment_overrides` | 3 levels: module defaults → role vars → node vars |
 | Facter fact | Trait | Collected automatically, available in `when:` and templates |
 | Catalog | Bundle | Server-compiled desired state sent to agent |
@@ -29,18 +29,18 @@ Puppet's agent runs on a 30-minute interval by default. Hobnob's agent interval 
 | `notify` | `notify` | Trigger downstream resource re-application |
 | `subscribe` | `subscribes` | Pull-based trigger |
 | `ensure => absent` | `state: absent` | Same semantics |
-| Puppet Forge module | Module `.hnb` file | No package manager — just YAML files |
+| Puppet Forge module | Module `.vgo` file | No package manager — just YAML files |
 | PuppetDB | FleetIndex + SQLite | In-memory index, no external database |
 | hiera-eyaml | `secret:` prefix | Resolved at bundle compile time |
 | ERB template | Go template in `content:` | Templates only in `content:` — never in `target_path:`, `package:`, etc. |
-| `environments/` | `environment_overrides` in `nodes.hnb` | Environment-specific overrides, not directory-based |
-| Puppet agent | hobnob agent | Rust binary, LMDB state store |
-| Puppet server | hobd | Go binary, gRPC + REST |
-| `puppet cert` | `hobnobcli tokens` | One-time token enrollment instead of certificate signing |
+| `environments/` | `environment_overrides` in `nodes.vgo` | Environment-specific overrides, not directory-based |
+| Puppet agent | vigo agent | Rust binary, LMDB state store |
+| Puppet server | vigosrv | Go binary, gRPC + REST |
+| `puppet cert` | `vigogo tokens` | One-time token enrollment instead of certificate signing |
 
 ## Resource Type Mapping
 
-| Puppet Resource | Hobnob Executor | Notes |
+| Puppet Resource | Vigo Executor | Notes |
 |---|---|---|
 | `package` | `package` | Auto-detects package manager |
 | `file` | `file` | Go templates in `content:`, or `sourcepath:` for copies |
@@ -113,9 +113,9 @@ http {
 }
 ```
 
-### Hobnob Version
+### Vigo Version
 
-`policy/stage/modules/nginx.hnb`:
+`policy/stage/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -167,7 +167,7 @@ resources:
     enabled: true
 ```
 
-`policy/stage/roles/webserver.hnb`:
+`policy/stage/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -175,10 +175,10 @@ modules:
   - nginx
 ```
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     environment: production
     roles: [webserver]
@@ -192,22 +192,22 @@ thralls:
 ### Key Differences
 
 - **Templates inline or in `templates/`.** Small templates go inline in `content:`. Larger files use `source: templates/nginx.conf.tmpl` — the server reads and renders the file from the `templates/` directory. No ERB — Go template syntax only.
-- **No `require =>`** needed for the package → config ordering. Hobnob uses `notify:` from config to service, and the resource DAG handles the rest. You can add explicit `depends_on: [nginx-package]` if you prefer.
+- **No `require =>`** needed for the package → config ordering. Vigo uses `notify:` from config to service, and the resource DAG handles the rest. You can add explicit `depends_on: [nginx-package]` if you prefer.
 - **Variables are flat.** Puppet class parameters become `vars:` entries. No scope hierarchy — module defaults, then node-level overrides. That's it.
 - **No catalog compilation.** The YAML is interpreted directly. No parser, no AST, no compilation errors to debug.
 
 ## Variable and Data Hierarchy
 
-Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family → environment → datacenter → FQDN). Hobnob deliberately has three:
+Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family → environment → datacenter → FQDN). Vigo deliberately has three:
 
-1. **Module defaults** — `vars:` in the module `.hnb` file
-2. **Role vars** — `vars:` in the role `.hnb` file (if needed)
-3. **Node vars** — `vars:` in the `nodes.hnb` entry
+1. **Module defaults** — `vars:` in the module `.vgo` file
+2. **Role vars** — `vars:` in the role `.vgo` file (if needed)
+3. **Node vars** — `vars:` in the `nodes.vgo` entry
 
 Node vars override role vars, which override module defaults. That's the entire hierarchy. For environment-specific values, use `environment_overrides:`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     roles: [webserver]
     vars:
@@ -221,9 +221,9 @@ For external data, `vars_from:` loads values from a YAML file at check-in time.
 
 ## Templates
 
-Puppet uses ERB (or EPP). Hobnob uses Go templates. Key syntax differences:
+Puppet uses ERB (or EPP). Vigo uses Go templates. Key syntax differences:
 
-| Puppet ERB | Hobnob Go Template |
+| Puppet ERB | Vigo Go Template |
 |---|---|
 | `<%= @variable %>` | `{{ .Vars.variable }}` |
 | `<%= scope['module::param'] %>` | `{{ .Vars.param }}` |
@@ -246,7 +246,7 @@ if $facts['os']['family'] == 'Debian' {
 }
 ```
 
-Hobnob equivalent using `when:`:
+Vigo equivalent using `when:`:
 
 ```yaml
 resources:
@@ -263,27 +263,27 @@ resources:
     when: "os_family('redhat')"
 ```
 
-Hobnob's `when:` expressions support 15 builtin functions (`os_family()`, `is_container`, `has_trait()`, `trait_value()`, etc.) with boolean operators (`&&`, `||`, `!`).
+Vigo's `when:` expressions support 15 builtin functions (`os_family()`, `is_container`, `has_trait()`, `trait_value()`, etc.) with boolean operators (`&&`, `||`, `!`).
 
 ## Secrets
 
-Puppet uses hiera-eyaml to encrypt values in Hiera YAML files. Hobnob uses the `secret:` prefix:
+Puppet uses hiera-eyaml to encrypt values in Hiera YAML files. Vigo uses the `secret:` prefix:
 
 ```yaml
 # Puppet (hiera-eyaml)
 nginx::ssl_key: ENC[PKCS7,MIIBe...]
 
-# Hobnob
-content: "secret:hobnob/nginx/ssl_key"
+# Vigo
+content: "secret:vigo/nginx/ssl_key"
 ```
 
 The secrets provider resolves `secret:` references at bundle compile time. The default `local` backend maps paths to AES-256-GCM encrypted files. Secrets never appear in plaintext in configs, logs, or gRPC payloads.
 
 ## Common Gotchas
 
-1. **No auto-require.** Puppet automatically orders `Package` before `File` before `Service`. Hobnob requires explicit `depends_on:` or `notify:`/`subscribes:` for ordering. Without them, resources may execute in any order.
+1. **No auto-require.** Puppet automatically orders `Package` before `File` before `Service`. Vigo requires explicit `depends_on:` or `notify:`/`subscribes:` for ordering. Without them, resources may execute in any order.
 
-2. **Templates only in `content:`.** Puppet lets you template any attribute value. Hobnob restricts Go templates to the `content:` attribute. For OS-conditional packages, use `when:` with separate resources — don't try to template the `package:` field.
+2. **Templates only in `content:`.** Puppet lets you template any attribute value. Vigo restricts Go templates to the `content:` attribute. For OS-conditional packages, use `when:` with separate resources — don't try to template the `package:` field.
 
 3. **No exported resources.** Puppet's `@@` exported resources and PuppetDB collectors don't have a direct equivalent. Use `vars_from:` to share data between nodes, or coordinate through task/workflow orchestration.
 
@@ -291,15 +291,15 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 
 5. **No `ensure => absent` for everything.** Not all executors support `state: absent`. Check the executor documentation for available states.
 
-6. **First-match-wins.** Puppet's node classification can merge multiple matching entries. Hobnob's `nodes.hnb` uses first-match-wins — only the first matching glob applies. Order your entries from most specific to least specific.
+6. **First-match-wins.** Puppet's node classification can merge multiple matching entries. Vigo's `nodes.vgo` uses first-match-wins — only the first matching glob applies. Order your entries from most specific to least specific.
 
-7. **No Puppet Forge.** There's no package manager for modules. Modules are plain `.hnb` YAML files in your config directory. Copy, adapt, and version-control them directly.
+7. **No Puppet Forge.** There's no package manager for modules. Modules are plain `.vgo` YAML files in your config directory. Copy, adapt, and version-control them directly.
 
-8. **Exec refresh.** Puppet's `exec` resources use `refreshonly => true` to only run on notification. Hobnob uses `when: "changed"` — the resource is skipped on normal check-ins and only runs when triggered by `notify`, `subscribes`, or `watch_secret`.
+8. **Exec refresh.** Puppet's `exec` resources use `refreshonly => true` to only run on notification. Vigo uses `when: "changed"` — the resource is skipped on normal check-ins and only runs when triggered by `notify`, `subscribes`, or `watch_secret`.
 
 ## Related
 
-- [Config Format](../concepts/config-format.md) — Modules, roles, nodes.hnb, vars
+- [Config Format](../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
 - [Resource DAG](../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../concepts/when-expressions.md) — Conditional expressions and builtins

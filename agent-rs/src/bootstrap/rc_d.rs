@@ -1,21 +1,21 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! rc.d service installation for the Hobnob agent on FreeBSD/NetBSD.
+//! rc.d service installation for the Vigo agent on FreeBSD/NetBSD.
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
-const SERVICE_NAME: &str = "hobnob_thrall";
+const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
+const SERVICE_NAME: &str = "vigo_envoy";
 
 /// Path to the rc.d script.
 fn rc_d_path() -> &'static str {
     if std::env::consts::OS == "netbsd" {
-        "/etc/rc.d/hobnob_thrall"
+        "/etc/rc.d/vigo_envoy"
     } else {
-        "/usr/local/etc/rc.d/hobnob_thrall"
+        "/usr/local/etc/rc.d/vigo_envoy"
     }
 }
 
@@ -29,7 +29,7 @@ fn rc_script() -> String {
     format!(
         r#"#!/bin/sh
 #
-# PROVIDE: hobnob_thrall
+# PROVIDE: vigo_envoy
 # REQUIRE: NETWORKING
 # KEYWORD: shutdown
 
@@ -70,7 +70,7 @@ pub async fn install_service(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(INSTALL_PATH, std::fs::Permissions::from_mode(0o755))?;
         }
-        info!(path = INSTALL_PATH, "installed hobnob binary");
+        info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
     // Write rc.d script.
@@ -113,7 +113,7 @@ pub async fn install_service(
         bail!("service {} start exited with {}", SERVICE_NAME, status);
     }
 
-    println!("Hobnob agent service installed and started.");
+    println!("Vigo agent service installed and started.");
     println!("  service {} status    # check status", SERVICE_NAME);
 
     Ok(grpc_addr)
@@ -126,9 +126,9 @@ mod tests {
     #[test]
     fn test_rc_script() {
         let script = rc_script();
-        assert!(script.contains("hobnob_thrall"));
-        assert!(script.contains("/usr/local/sbin/hobnob"));
+        assert!(script.contains("vigo_envoy"));
+        assert!(script.contains("/usr/local/sbin/vigo"));
         assert!(!script.contains("--server"), "service should read config from file");
-        assert!(script.contains("PROVIDE: hobnob_thrall"));
+        assert!(script.contains("PROVIDE: vigo_envoy"));
     }
 }

@@ -1,12 +1,12 @@
 # Security Scanning
 
-Hobnob can deploy and manage security scanning tools across your fleet, collect scan results as traits, and display fleet-wide security posture on the Compliance & Security dashboard.
+Vigo can deploy and manage security scanning tools across your fleet, collect scan results as traits, and display fleet-wide security posture on the Compliance & Security dashboard.
 
 ## Overview
 
-The `security-scanning` example module installs seven open-source security tools on managed thralls. A built-in trait collector (`security_scan`) reads their output and reports summary data as traits — visible on the dashboard, queryable via CLI and API.
+The `security-scanning` example module installs seven open-source security tools on managed envoys. A built-in trait collector (`security_scan`) reads their output and reports summary data as traits — visible on the dashboard, queryable via CLI and API.
 
-**Hobnob does not replicate what these tools do.** It deploys them, schedules scans, collects summaries, and provides fleet-wide visibility. The tools handle all scanning logic, CVE database lookups, and detection.
+**Vigo does not replicate what these tools do.** It deploys them, schedules scans, collects summaries, and provides fleet-wide visibility. The tools handle all scanning logic, CVE database lookups, and detection.
 
 ## Tools
 
@@ -25,11 +25,11 @@ The `security-scanning` example module installs seven open-source security tools
 1. Copy the example module into your policy stage directory:
 
 ```bash
-cp /srv/hobnob/examples/modules/security/security-scanning.hnb.example \
-   /srv/hobnob/policy/stage/modules/security-scanning.hnb
+cp /srv/vigo/examples/modules/security/security-scanning.vgo.example \
+   /srv/vigo/policy/stage/modules/security-scanning.vgo
 ```
 
-2. Add it to your `common.hnb` (or a specific node mapping):
+2. Add it to your `common.vgo` (or a specific node mapping):
 
 ```yaml
 modules: [motd, security-scanning]
@@ -38,10 +38,10 @@ modules: [motd, security-scanning]
 3. Publish:
 
 ```bash
-hobnobcli config publish
+vigogo config publish
 ```
 
-Thralls will install the tools and begin scanning on their next check-in cycle.
+Envoys will install the tools and begin scanning on their next check-in cycle.
 
 ## How Results Flow
 
@@ -50,7 +50,7 @@ Module installs tools + schedules scans
         ↓
 Exec resources run scans during configured hour window (default 2:00–5:00 AM)
         ↓
-Each tool writes output to /var/lib/hobnob/security/
+Each tool writes output to /var/lib/vigo/security/
         ↓
 Built-in security_scan trait collector reads output files
         ↓
@@ -61,7 +61,7 @@ Dashboard aggregates fleet-wide, links CVEs to NVD
 
 ## Scan Output
 
-All tools write to `/var/lib/hobnob/security/` on each thrall:
+All tools write to `/var/lib/vigo/security/` on each envoy:
 
 | File | Tool |
 |------|------|
@@ -134,22 +134,22 @@ Tools that aren't installed produce no data — their section is simply absent.
 
 ## Querying
 
-Find all thralls with critical CVEs:
+Find all envoys with critical CVEs:
 
 ```bash
-hobnobcli inventory --where "security_scan.trivy.critical > 0"
+vigogo inventory --where "security_scan.trivy.critical > 0"
 ```
 
-Find thralls with rootkit warnings:
+Find envoys with rootkit warnings:
 
 ```bash
-hobnobcli inventory --where "security_scan.rkhunter.clean = false"
+vigogo inventory --where "security_scan.rkhunter.clean = false"
 ```
 
 Show Lynis scores across the fleet:
 
 ```bash
-hobnobcli inventory --show "security_scan.lynis.score"
+vigogo inventory --show "security_scan.lynis.score"
 ```
 
 ## CVE Deduplication
@@ -172,16 +172,16 @@ NVD provides descriptions, CVSS scores, affected versions, and links to patches 
 
 ## Customizing Scan Schedules
 
-Override the default scan window (2:00–5:00 AM) per thrall or fleet-wide via vars:
+Override the default scan window (2:00–5:00 AM) per envoy or fleet-wide via vars:
 
 ```yaml
-# In common.hnb or a node mapping
+# In common.vgo or a node mapping
 vars:
   scan_hour_start: "1"
   scan_hour_end: "3"
 ```
 
-Each tool runs once per day. The sentinel file pattern (`/tmp/.hobnob-<tool>-YYYYMMDD`) prevents repeated scans within the same day.
+Each tool runs once per day. The sentinel file pattern (`/tmp/.vigo-<tool>-YYYYMMDD`) prevents repeated scans within the same day.
 
 ## Customizing Timeouts
 
@@ -226,11 +226,11 @@ After legitimate system changes (package upgrades, new binaries), update the bas
 aide --init && cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
 ```
 
-Or push this via a Hobnob exec resource.
+Or push this via a Vigo exec resource.
 
 ## Windows
 
-A separate `security-scanning-windows.hnb.example` module provides security scanning for Windows thralls:
+A separate `security-scanning-windows.vgo.example` module provides security scanning for Windows envoys:
 
 | Tool | Purpose | Install Method |
 |------|---------|---------------|
@@ -241,13 +241,13 @@ A separate `security-scanning-windows.hnb.example` module provides security scan
 Enable it the same way as the Linux module:
 
 ```yaml
-# In common.hnb or a Windows-specific node mapping
+# In common.vgo or a Windows-specific node mapping
 modules: [security-scanning-windows]
 ```
 
 All `when:` guards include `os_family('windows')` so it's safe to include alongside the Linux module — each runs only on its platform.
 
-Scan output is written to `C:\ProgramData\Hobnob\security\`:
+Scan output is written to `C:\ProgramData\Vigo\security\`:
 
 | File | Tool |
 |------|------|
@@ -255,12 +255,12 @@ Scan output is written to `C:\ProgramData\Hobnob\security\`:
 | `defender.json` | Windows Defender status |
 | `updates.json` | Missing Windows Updates with CVE IDs |
 
-The same `security_scan` trait collector reads these files on Windows, so results appear on the dashboard alongside Linux thralls.
+The same `security_scan` trait collector reads these files on Windows, so results appear on the dashboard alongside Linux envoys.
 
 ## Network-Based Scanners
 
-Tools like OpenVAS/Greenbone, Nessus, Qualys, and Rapid7 InsightVM are centralized network scanners — they run on a dedicated host and scan targets remotely. They don't fit the local-agent-per-thrall model.
+Tools like OpenVAS/Greenbone, Nessus, Qualys, and Rapid7 InsightVM are centralized network scanners — they run on a dedicated host and scan targets remotely. They don't fit the local-agent-per-envoy model.
 
-A separate `openvas.hnb.example` module is provided for installing Greenbone Community Edition on a scanner host. Its results are not collected by the `security_scan` trait collector.
+A separate `openvas.vgo.example` module is provided for installing Greenbone Community Edition on a scanner host. Its results are not collected by the `security_scan` trait collector.
 
-For enterprise scanner integration, deploy the scanner's agent via a custom Hobnob module and optionally write a custom trait collector to surface results on the dashboard.
+For enterprise scanner integration, deploy the scanner's agent via a custom Vigo module and optionally write a custom trait collector to surface results on the dashboard.

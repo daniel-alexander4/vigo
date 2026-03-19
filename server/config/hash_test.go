@@ -116,7 +116,7 @@ func TestHashModuleContent_WatchSecretAffectsHash(t *testing.T) {
 				Name:        "r",
 				Type:        "exec",
 				Attributes:  map[string]any{"command": "reset-pw"},
-				WatchSecret: []string{"hobnob/grafana/admin-password"},
+				WatchSecret: []string{"vigo/grafana/admin-password"},
 			},
 		},
 	}

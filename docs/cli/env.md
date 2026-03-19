@@ -1,4 +1,4 @@
-# hobnobcli env
+# vigogo env
 
 Manage environment tier operations for promoting variables between environments.
 
@@ -11,7 +11,7 @@ Manage environment tier operations for promoting variables between environments.
 ## Usage
 
 ```bash
-hobnobcli env [subcommand] [flags]
+vigogo env [subcommand] [flags]
 ```
 
 ## promote
@@ -19,7 +19,7 @@ hobnobcli env [subcommand] [flags]
 Show the variable differences between two environment tiers for a module. This is an informational command -- config files are not modified automatically.
 
 ```bash
-hobnobcli env promote <module> --from <env> --to <env>
+vigogo env promote <module> --from <env> --to <env>
 ```
 
 ### Flags
@@ -32,7 +32,7 @@ hobnobcli env promote <module> --from <env> --to <env>
 ### Example
 
 ```bash
-hobnobcli env promote nginx --from staging --to production
+vigogo env promote nginx --from staging --to production
 ```
 
 ```
@@ -48,4 +48,4 @@ Config files not modified. Edit YAML files manually to apply.
 ## Related
 
 - [preview](preview.md) -- preview planned changes
-- [validate](validate.md) -- validate .hnb configuration files
+- [validate](validate.md) -- validate .vgo configuration files

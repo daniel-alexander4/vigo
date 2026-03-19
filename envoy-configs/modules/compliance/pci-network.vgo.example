@@ -25,7 +25,7 @@ resources:
     target_path: /etc/iptables/rules.v4
     content: |
       # PCI DSS v4.0 Req 1 — Network Security Controls
-      # Managed by Hobnob
+      # Managed by Vigo
       *filter
       :INPUT DROP [0:0]
       :FORWARD DROP [0:0]

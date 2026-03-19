@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 )
 
 // newPreviewTestDeps creates a ConfigStore and FleetIndex for preview tests.
@@ -26,8 +26,8 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
 		os.MkdirAll(filepath.Join(dir, sub), 0755)
 	}
 
-	// Write nodes.hnb with entries (not common.hnb, which is for inheritance).
-	nodesYAML := `thralls:
+	// Write nodes.vgo with entries (not common.vgo, which is for inheritance).
+	nodesYAML := `envoys:
   - match: "web01.prod"
     modules:
       - nginx
@@ -38,7 +38,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
     modules:
       - postgres
 `
-	os.WriteFile(filepath.Join(dir, "nodes.hnb"), []byte(nodesYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "nodes.vgo"), []byte(nodesYAML), 0644)
 
 	moduleYAML := `name: nginx
 
@@ -47,7 +47,7 @@ resources:
     type: package
     package: nginx
 `
-	os.WriteFile(filepath.Join(dir, "modules", "nginx.hnb"), []byte(moduleYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "modules", "nginx.vgo"), []byte(moduleYAML), 0644)
 
 	pgYAML := `name: postgres
 
@@ -56,7 +56,7 @@ resources:
     type: package
     package: postgresql
 `
-	os.WriteFile(filepath.Join(dir, "modules", "postgres.hnb"), []byte(pgYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "modules", "postgres.vgo"), []byte(pgYAML), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {
@@ -69,14 +69,14 @@ resources:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	// Add thralls to the FleetIndex.
+	// Add envoys to the FleetIndex.
 	fi := fleet.NewFleetIndex()
 	for _, h := range []struct{ id, hostname string }{
 		{"t1", "web01.prod"},
 		{"t2", "web02.prod"},
 		{"t3", "db01.prod"},
 	} {
-		fi.AddThrall(fleet.ThrallState{
+		fi.AddEnvoy(fleet.EnvoyState{
 			ID: h.id, Hostname: h.hostname, IP: "10.0.0.1",
 			EnrolledAt: time.Now().UTC(), LastSeen: time.Now().UTC(),
 		}, nil)
@@ -85,7 +85,7 @@ resources:
 	return store, fi
 }
 
-func TestPreview_AffectedThralls(t *testing.T) {
+func TestPreview_AffectedEnvoys(t *testing.T) {
 	store, fi := newPreviewTestDeps(t)
 
 	handler := NewPreviewHandler(store, fi)
@@ -104,7 +104,7 @@ func TestPreview_AffectedThralls(t *testing.T) {
 		Module   string `json:"module"`
 		Affected []struct {
 			Hostname string `json:"hostname"`
-			ThrallID string `json:"thrall_id"`
+			EnvoyID string `json:"envoy_id"`
 		} `json:"affected"`
 		Count int `json:"count"`
 	}
@@ -114,11 +114,11 @@ func TestPreview_AffectedThralls(t *testing.T) {
 		t.Errorf("expected module nginx, got %s", resp.Module)
 	}
 	if resp.Count != 2 {
-		t.Errorf("expected 2 affected thralls for nginx, got %d", resp.Count)
+		t.Errorf("expected 2 affected envoys for nginx, got %d", resp.Count)
 	}
 }
 
-func TestPreview_NoAffectedThralls(t *testing.T) {
+func TestPreview_NoAffectedEnvoys(t *testing.T) {
 	store, fi := newPreviewTestDeps(t)
 
 	handler := NewPreviewHandler(store, fi)

@@ -1,5 +1,5 @@
 # Role definitions — group modules into reusable profiles.
-# Assign roles to thrall entries instead of listing modules individually.
+# Assign roles to envoy entries instead of listing modules individually.
 #
 # Example:
 #   roles:

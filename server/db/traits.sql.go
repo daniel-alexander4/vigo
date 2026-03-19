@@ -9,65 +9,65 @@ import (
 	"context"
 )
 
-const getLatestThrallTraits = `-- name: GetLatestThrallTraits :one
-SELECT id, thrall_id, traits, collected_at
-FROM thrall_traits
-WHERE thrall_id = ?
+const getLatestEnvoyTraits = `-- name: GetLatestEnvoyTraits :one
+SELECT id, envoy_id, traits, collected_at
+FROM envoy_traits
+WHERE envoy_id = ?
 ORDER BY collected_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetLatestThrallTraits(ctx context.Context, thrallID string) (ThrallTrait, error) {
-	row := q.db.QueryRowContext(ctx, getLatestThrallTraits, thrallID)
-	var i ThrallTrait
+func (q *Queries) GetLatestEnvoyTraits(ctx context.Context, envoyID string) (EnvoyTrait, error) {
+	row := q.db.QueryRowContext(ctx, getLatestEnvoyTraits, envoyID)
+	var i EnvoyTrait
 	err := row.Scan(
 		&i.ID,
-		&i.ThrallID,
+		&i.EnvoyID,
 		&i.Traits,
 		&i.CollectedAt,
 	)
 	return i, err
 }
 
-const insertThrallTraits = `-- name: InsertThrallTraits :one
-INSERT INTO thrall_traits (thrall_id, traits)
+const insertEnvoyTraits = `-- name: InsertEnvoyTraits :one
+INSERT INTO envoy_traits (envoy_id, traits)
 VALUES (?, ?)
-RETURNING id, thrall_id, traits, collected_at
+RETURNING id, envoy_id, traits, collected_at
 `
 
-type InsertThrallTraitsParams struct {
-	ThrallID string `json:"thrall_id"`
-	Traits   string `json:"traits"`
+type InsertEnvoyTraitsParams struct {
+	EnvoyID string `json:"envoy_id"`
+	Traits  string `json:"traits"`
 }
 
-func (q *Queries) InsertThrallTraits(ctx context.Context, arg InsertThrallTraitsParams) (ThrallTrait, error) {
-	row := q.db.QueryRowContext(ctx, insertThrallTraits, arg.ThrallID, arg.Traits)
-	var i ThrallTrait
+func (q *Queries) InsertEnvoyTraits(ctx context.Context, arg InsertEnvoyTraitsParams) (EnvoyTrait, error) {
+	row := q.db.QueryRowContext(ctx, insertEnvoyTraits, arg.EnvoyID, arg.Traits)
+	var i EnvoyTrait
 	err := row.Scan(
 		&i.ID,
-		&i.ThrallID,
+		&i.EnvoyID,
 		&i.Traits,
 		&i.CollectedAt,
 	)
 	return i, err
 }
 
-const pruneThrallTraits = `-- name: PruneThrallTraits :exec
-DELETE FROM thrall_traits
+const pruneEnvoyTraits = `-- name: PruneEnvoyTraits :exec
+DELETE FROM envoy_traits
 WHERE id IN (
-  SELECT nt.id FROM thrall_traits nt
-  WHERE nt.thrall_id = ?
+  SELECT nt.id FROM envoy_traits nt
+  WHERE nt.envoy_id = ?
   ORDER BY nt.collected_at ASC
-  LIMIT max(0, (SELECT count(*) FROM thrall_traits nt2 WHERE nt2.thrall_id = ?) - 10)
+  LIMIT max(0, (SELECT count(*) FROM envoy_traits nt2 WHERE nt2.envoy_id = ?) - 10)
 )
 `
 
-type PruneThrallTraitsParams struct {
-	ThrallID   string `json:"thrall_id"`
-	ThrallID_2 string `json:"thrall_id_2"`
+type PruneEnvoyTraitsParams struct {
+	EnvoyID   string `json:"envoy_id"`
+	EnvoyID_2 string `json:"envoy_id_2"`
 }
 
-func (q *Queries) PruneThrallTraits(ctx context.Context, arg PruneThrallTraitsParams) error {
-	_, err := q.db.ExecContext(ctx, pruneThrallTraits, arg.ThrallID, arg.ThrallID_2)
+func (q *Queries) PruneEnvoyTraits(ctx context.Context, arg PruneEnvoyTraitsParams) error {
+	_, err := q.db.ExecContext(ctx, pruneEnvoyTraits, arg.EnvoyID, arg.EnvoyID_2)
 	return err
 }

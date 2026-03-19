@@ -14,7 +14,7 @@ import (
 func TestOpenAPI_ServeSpec(t *testing.T) {
 	dir := t.TempDir()
 	specPath := filepath.Join(dir, "openapi.json")
-	specContent := `{"openapi":"3.0.0","info":{"title":"Hobnob","version":"1.0"}}`
+	specContent := `{"openapi":"3.0.0","info":{"title":"Vigo","version":"1.0"}}`
 	if err := os.WriteFile(specPath, []byte(specContent), 0644); err != nil {
 		t.Fatalf("write spec: %v", err)
 	}

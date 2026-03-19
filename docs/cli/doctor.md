@@ -1,11 +1,11 @@
-# hobnobcli doctor
+# vigogo doctor
 
-Run health checks against the Hobnob server to verify it is operating correctly.
+Run health checks against the Vigo server to verify it is operating correctly.
 
 ## Usage
 
 ```bash
-hobnobcli doctor [flags]
+vigogo doctor [flags]
 ```
 
 ## Flags
@@ -22,7 +22,7 @@ hobnobcli doctor [flags]
 Queries the running server's `/api/v1/doctor` endpoint and displays the health check results.
 
 ```bash
-hobnobcli doctor
+vigogo doctor
 ```
 
 ```
@@ -38,10 +38,10 @@ hobnobcli doctor
 
 ### Pre-start mode
 
-Runs local checks without a running server. Useful for validating configuration before starting `hobd`.
+Runs local checks without a running server. Useful for validating configuration before starting `vigosrv`.
 
 ```bash
-hobnobcli doctor --pre-start
+vigogo doctor --pre-start
 ```
 
 Checks performed in pre-start mode:
@@ -52,14 +52,14 @@ Checks performed in pre-start mode:
 | `secrets_provider` | Initialize the secrets provider |
 | `secret_resolution` | Resolve `secret:` references in config |
 | `tls_certs` | Check cert files exist, parse, and verify expiry |
-| `config_dir` | Verify `policy/stage/` exists with `modules/`, `roles/`, `thralls/` subdirs |
-| `config_validation` | Load and validate all `.hnb` module files |
+| `config_dir` | Verify `policy/stage/` exists with `modules/`, `roles/`, `envoys/` subdirs |
+| `config_validation` | Load and validate all `.vgo` module files |
 | `spanner` | Validate spanner configuration |
 
 ### Example pre-start output
 
 ```bash
-hobnobcli doctor --pre-start --config /srv/hobnob/server.yaml
+vigogo doctor --pre-start --config /srv/vigo/server.yaml
 ```
 
 ```
@@ -93,4 +93,4 @@ hobnobcli doctor --pre-start --config /srv/hobnob/server.yaml
 
 ## Related
 
-- [validate](validate.md) -- validate .hnb configuration files
+- [validate](validate.md) -- validate .vgo configuration files

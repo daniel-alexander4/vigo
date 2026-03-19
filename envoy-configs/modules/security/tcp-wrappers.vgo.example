@@ -21,7 +21,7 @@ resources:
     type: file
     target_path: /etc/hosts.allow
     content: |
-      # /etc/hosts.allow — managed by hobnob
+      # /etc/hosts.allow — managed by vigo
       {{ .Vars.allowed_services }}: {{ .Vars.allowed_sshd_networks }}
     owner: root
     group: root
@@ -32,7 +32,7 @@ resources:
     type: file
     target_path: /etc/hosts.deny
     content: |
-      # /etc/hosts.deny — managed by hobnob
+      # /etc/hosts.deny — managed by vigo
       ALL: ALL
     owner: root
     group: root

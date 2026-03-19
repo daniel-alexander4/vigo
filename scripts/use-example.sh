@@ -6,23 +6,23 @@
 #   use-example.sh --all             Copy all example modules
 #
 # Examples:
-#   use-example.sh hobnob-server-backup
+#   use-example.sh vigo-server-backup
 #   use-example.sh openssh
 #   use-example.sh --all
 
 set -e
 
-EXAMPLES_DIR="${HOBNOB_EXAMPLES_DIR:-/srv/hobnob/policy/examples}"
-STAGE_DIR="${HOBNOB_STAGE_DIR:-/srv/hobnob/policy/stage}"
+EXAMPLES_DIR="${VIGO_EXAMPLES_DIR:-/srv/vigo/policy/examples}"
+STAGE_DIR="${VIGO_STAGE_DIR:-/srv/vigo/policy/stage}"
 
 usage() {
     echo "Usage: $0 <module-name> | --all"
     echo ""
-    echo "Copies example .hnb files from examples/ into stage/,"
+    echo "Copies example .vgo files from examples/ into stage/,"
     echo "preserving directory structure and stripping the .example suffix."
     echo ""
-    echo "  $0 openssh              Copy modules/security/openssh.hnb.example"
-    echo "  $0 hobnob-server-backup Copy modules/system/hobnob-server-backup.hnb.example"
+    echo "  $0 openssh              Copy modules/security/openssh.vgo.example"
+    echo "  $0 vigo-server-backup Copy modules/system/vigo-server-backup.vgo.example"
     echo "  $0 --all                Copy all example modules"
     exit 1
 }
@@ -50,7 +50,7 @@ fi
 if [ "$1" = "--all" ]; then
     echo "Copying all examples to stage..."
     count=0
-    find "$EXAMPLES_DIR" -name '*.hnb.example' -type f | sort | while IFS= read -r src; do
+    find "$EXAMPLES_DIR" -name '*.vgo.example' -type f | sort | while IFS= read -r src; do
         copy_example "$src"
         count=$((count + 1))
     done
@@ -61,7 +61,7 @@ fi
 # Find the named module in examples.
 name="$1"
 found=""
-for match in $(find "$EXAMPLES_DIR" -name "${name}.hnb.example" -type f); do
+for match in $(find "$EXAMPLES_DIR" -name "${name}.vgo.example" -type f); do
     found="$match"
     break
 done
@@ -70,9 +70,9 @@ if [ -z "$found" ]; then
     echo "No example found for '${name}'"
     echo ""
     echo "Available examples:"
-    find "$EXAMPLES_DIR" -name '*.hnb.example' -type f | sort | while IFS= read -r f; do
+    find "$EXAMPLES_DIR" -name '*.vgo.example' -type f | sort | while IFS= read -r f; do
         rel="${f#${EXAMPLES_DIR}/}"
-        basename="${rel%.hnb.example}"
+        basename="${rel%.vgo.example}"
         echo "  $(basename "$basename")"
     done
     exit 1
@@ -80,4 +80,4 @@ fi
 
 echo "Copying example to stage..."
 copy_example "$found"
-echo "Done. Run 'hobnobcli config publish' to activate."
+echo "Done. Run 'vigogo config publish' to activate."

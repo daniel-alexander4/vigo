@@ -14,7 +14,7 @@ resources:
     type: file
     target_path: /etc/smartmontools/smartd.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       #
       # DEVICESCAN: scan all devices and apply these directives
       #   -H   check SMART health status
@@ -35,7 +35,7 @@ resources:
     type: file
     target_path: /etc/smartd.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       #
       # DEVICESCAN: scan all devices and apply these directives
       #   -H   check SMART health status

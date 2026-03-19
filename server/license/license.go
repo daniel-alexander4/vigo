@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const DefaultLicenseDir = "/srv/hobnob/license"
+const DefaultLicenseDir = "/srv/vigo/license"
 
 // Payload contains the license terms. Field order does not matter for
 // verification because we canonicalize before signing/verifying.
@@ -24,7 +24,7 @@ type Payload struct {
 	CustomerID   string `json:"customer_id"`
 	LicenseID    string `json:"license_id"`
 	Tier         string `json:"tier"` // "free", "standard", "growth", "enterprise"
-	MaxThralls   int    `json:"max_thralls"`
+	MaxEnvoys   int    `json:"max_thralls"`
 	Fingerprint  string `json:"fingerprint,omitempty"` // machine fingerprint (empty = unbound, e.g. free tier)
 	IssuedAt     string `json:"issued_at"`
 	ExpiresAt    string `json:"expires_at"`
@@ -116,7 +116,7 @@ func (l *License) Verify() error {
 // VerifyWithKey checks the signature against the given hex-encoded public key.
 func (l *License) VerifyWithKey(pubKeyHex string) error {
 	if pubKeyHex == "" {
-		return fmt.Errorf("no public key configured — rebuild with hobnob-license-manager keys inject")
+		return fmt.Errorf("no public key configured — rebuild with vigo-license-manager keys inject")
 	}
 
 	pubBytes, err := hex.DecodeString(pubKeyHex)

@@ -16,7 +16,7 @@ resources:
     type: file
     target_path: /etc/postfix/main.cf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       smtpd_banner = $myhostname ESMTP
       biff = no
       append_dot_mydomain = no

@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 use tonic::Streaming;
 use tracing::warn;
 
-use crate::proto::hobnob_agent_client::HobnobAgentClient;
+use crate::proto::vigo_agent_client::VigoAgentClient;
 use tonic::transport::Channel;
 
 /// Channel-based stream handle for sending and receiving on a bidi stream.
@@ -84,7 +84,7 @@ impl StreamHandle {
 
 /// Open a bidirectional stream, perform the handshake, and return a StreamHandle.
 pub async fn open(
-    client: &mut HobnobAgentClient<Channel>,
+    client: &mut VigoAgentClient<Channel>,
     handshake_req: CheckInRequest,
 ) -> Result<(StreamHandle, CheckInResponse)> {
     // Create channel for outgoing requests.
@@ -241,7 +241,7 @@ mod tests {
         let (_done_tx, mut done_rx) = tokio::sync::watch::channel(false);
 
         let req = CheckInRequest {
-            thrall_id: "test-uuid".into(),
+            envoy_id: "test-uuid".into(),
             state_fingerprint: "fp-1".into(),
             ..Default::default()
         };
@@ -252,7 +252,7 @@ mod tests {
             // Verify it's a CheckIn message.
             match msg.msg {
                 Some(agent_stream_message::Msg::CheckIn(ci)) => {
-                    assert_eq!(ci.thrall_id, "test-uuid");
+                    assert_eq!(ci.envoy_id, "test-uuid");
                     assert_eq!(ci.state_fingerprint, "fp-1");
                 }
                 other => panic!("expected CheckIn, got {:?}", other),
@@ -341,7 +341,7 @@ mod tests {
 
         let req = ReportResultRequest {
             run_id: "run-1".into(),
-            thrall_id: "uuid-1".into(),
+            envoy_id: "uuid-1".into(),
             ..Default::default()
         };
 
@@ -351,7 +351,7 @@ mod tests {
         match msg.msg {
             Some(agent_stream_message::Msg::ReportResult(rr)) => {
                 assert_eq!(rr.run_id, "run-1");
-                assert_eq!(rr.thrall_id, "uuid-1");
+                assert_eq!(rr.envoy_id, "uuid-1");
             }
             other => panic!("expected ReportResult, got {:?}", other),
         }

@@ -15,10 +15,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
-// openTestDB creates an in-memory SQLite database with the minimal thralls
+// openTestDB creates an in-memory SQLite database with the minimal envoys
 // table required by the Collector.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -29,7 +29,7 @@ func openTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { sqlDB.Close() })
 
 	_, err = sqlDB.Exec(`
-		CREATE TABLE thralls (
+		CREATE TABLE envoys (
 			id                       TEXT PRIMARY KEY,
 			hostname                 TEXT NOT NULL,
 			ip_address               TEXT NOT NULL,
@@ -50,8 +50,8 @@ func openTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-// insertThrall inserts a thrall row with the given attributes.
-func insertThrall(t *testing.T, sqlDB *sql.DB, id, hostname string, lastSeen *time.Time, revoked bool) {
+// insertEnvoy inserts a envoy row with the given attributes.
+func insertEnvoy(t *testing.T, sqlDB *sql.DB, id, hostname string, lastSeen *time.Time, revoked bool) {
 	t.Helper()
 	var ls interface{}
 	if lastSeen != nil {
@@ -62,12 +62,12 @@ func insertThrall(t *testing.T, sqlDB *sql.DB, id, hostname string, lastSeen *ti
 		rev = 1
 	}
 	_, err := sqlDB.Exec(
-		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem, last_seen, revoked)
+		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem, last_seen, revoked)
 		 VALUES (?, ?, '10.0.0.1', 'pubkey', ?, ?)`,
 		id, hostname, ls, rev,
 	)
 	if err != nil {
-		t.Fatalf("insert thrall %s: %v", id, err)
+		t.Fatalf("insert envoy %s: %v", id, err)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 	sqlDB := openTestDB(t)
 	now := time.Now()
 
-	// Insert a handful of thralls so there's real data to read.
+	// Insert a handful of envoys so there's real data to read.
 	for i := 0; i < 10; i++ {
 		revoked := i >= 8
 		var ls *time.Time
@@ -86,7 +86,7 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 			seen := now.Add(-time.Duration(i) * time.Minute)
 			ls = &seen
 		}
-		insertThrall(t, sqlDB, fmt.Sprintf("t-%d", i), fmt.Sprintf("h-%d.example.com", i), ls, revoked)
+		insertEnvoy(t, sqlDB, fmt.Sprintf("t-%d", i), fmt.Sprintf("h-%d.example.com", i), ls, revoked)
 	}
 
 	c := NewCollector(db.New(sqlDB), sqlDB)
@@ -106,14 +106,14 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 	// No panics or races = pass.
 }
 
-// TestCollector_UpdateGaugesConsistency inserts a known set of thralls,
+// TestCollector_UpdateGaugesConsistency inserts a known set of envoys,
 // calls UpdateGauges once, and verifies the Prometheus gauge values
 // match expectations.
 func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	sqlDB := openTestDB(t)
 	now := time.Now()
 
-	// 5 total thralls:
+	// 5 total envoys:
 	// - t-0: active (seen 1 min ago), not revoked
 	// - t-1: active (seen 30 min ago), not revoked
 	// - t-2: stale (seen 2 hours ago), not revoked
@@ -124,11 +124,11 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	seen2 := now.Add(-2 * time.Hour)
 	seen4 := now.Add(-5 * time.Minute)
 
-	insertThrall(t, sqlDB, "t-0", "active0.example.com", &seen0, false)
-	insertThrall(t, sqlDB, "t-1", "active1.example.com", &seen1, false)
-	insertThrall(t, sqlDB, "t-2", "stale.example.com", &seen2, false)
-	insertThrall(t, sqlDB, "t-3", "noseen.example.com", nil, false)
-	insertThrall(t, sqlDB, "t-4", "revoked.example.com", &seen4, true)
+	insertEnvoy(t, sqlDB, "t-0", "active0.example.com", &seen0, false)
+	insertEnvoy(t, sqlDB, "t-1", "active1.example.com", &seen1, false)
+	insertEnvoy(t, sqlDB, "t-2", "stale.example.com", &seen2, false)
+	insertEnvoy(t, sqlDB, "t-3", "noseen.example.com", nil, false)
+	insertEnvoy(t, sqlDB, "t-4", "revoked.example.com", &seen4, true)
 
 	c := NewCollector(db.New(sqlDB), sqlDB)
 	ctx := context.Background()
@@ -137,20 +137,20 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 		t.Fatalf("UpdateGauges: %v", err)
 	}
 
-	// ThrallsTotal = 5 (all thralls, including revoked).
-	gotTotal := testutil.ToFloat64(ThrallsTotal)
+	// EnvoysTotal = 5 (all envoys, including revoked).
+	gotTotal := testutil.ToFloat64(EnvoysTotal)
 	if gotTotal != 5 {
-		t.Errorf("ThrallsTotal = %v, want 5", gotTotal)
+		t.Errorf("EnvoysTotal = %v, want 5", gotTotal)
 	}
 
-	// ThrallsActive = 2 (t-0 and t-1 seen within the last hour; t-4 is seen
+	// EnvoysActive = 2 (t-0 and t-1 seen within the last hour; t-4 is seen
 	// recently but revoked still counts as "active" in the metric since it only
 	// checks LastSeen).
-	// Actually the code checks recentlyActive for ALL thralls, revoked or not.
+	// Actually the code checks recentlyActive for ALL envoys, revoked or not.
 	// t-0 (1 min), t-1 (30 min), t-4 (5 min) = 3 active.
-	gotActive := testutil.ToFloat64(ThrallsActive)
+	gotActive := testutil.ToFloat64(EnvoysActive)
 	if gotActive != 3 {
-		t.Errorf("ThrallsActive = %v, want 3", gotActive)
+		t.Errorf("EnvoysActive = %v, want 3", gotActive)
 	}
 
 	// CompliancePct = compliant / totalNonRevoked.

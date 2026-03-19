@@ -167,10 +167,10 @@ func TestPushRouterNotifiers(t *testing.T) {
 	router := newPushRouter(nil)
 
 	// Register a notifier.
-	ch := router.registerNotifier("run-1", "thrall-a")
+	ch := router.registerNotifier("run-1", "envoy-a")
 
 	// Notify completion.
-	router.notifyCompletion("run-1", "thrall-a")
+	router.notifyCompletion("run-1", "envoy-a")
 
 	// Channel should be closed.
 	select {
@@ -184,11 +184,11 @@ func TestPushRouterNotifiers(t *testing.T) {
 func TestPushRouterNotifierRemove(t *testing.T) {
 	router := newPushRouter(nil)
 
-	ch := router.registerNotifier("run-1", "thrall-a")
-	router.removeNotifier("run-1", "thrall-a")
+	ch := router.registerNotifier("run-1", "envoy-a")
+	router.removeNotifier("run-1", "envoy-a")
 
 	// Notify should be a no-op after removal.
-	router.notifyCompletion("run-1", "thrall-a")
+	router.notifyCompletion("run-1", "envoy-a")
 
 	select {
 	case <-ch:
@@ -201,9 +201,9 @@ func TestPushRouterNotifierRemove(t *testing.T) {
 func TestPushRouterNotifierUnknown(t *testing.T) {
 	router := newPushRouter(nil)
 
-	// Should not panic for unknown task/thrall.
-	router.notifyCompletion("run-1", "thrall-a")
-	router.removeNotifier("run-1", "thrall-a")
+	// Should not panic for unknown task/envoy.
+	router.notifyCompletion("run-1", "envoy-a")
+	router.removeNotifier("run-1", "envoy-a")
 }
 
 func TestValidateHealthCheck_RejectsShellChaining(t *testing.T) {
@@ -261,7 +261,7 @@ func TestValidateHealthCheck_RejectsTooLong(t *testing.T) {
 func makeTargets(hostnames ...string) []targetInfo {
 	targets := make([]targetInfo, len(hostnames))
 	for i, h := range hostnames {
-		targets[i] = targetInfo{ThrallID: "thrall-" + h, Hostname: h}
+		targets[i] = targetInfo{EnvoyID: "envoy-" + h, Hostname: h}
 	}
 	return targets
 }

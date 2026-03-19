@@ -1,6 +1,6 @@
 # Peer Replication
 
-Peer replication gives a Hobnob server a hot standby. One server is the **primary** (accepts writes, pushes config); the others are **peers** (receive synced files, accept read-only check-ins). If the primary goes down, promote a peer to primary and agents fail over automatically.
+Peer replication gives a Vigo server a hot standby. One server is the **primary** (accepts writes, pushes config); the others are **peers** (receive synced files, accept read-only check-ins). If the primary goes down, promote a peer to primary and agents fail over automatically.
 
 This is file-level replication, not database replication. The SQLite database, FleetIndex, and run history are not synced -- they rebuild from agent check-ins after promotion.
 
@@ -48,7 +48,7 @@ peers:
 
 | Directory/File | Synced | Purpose |
 |---------------|--------|---------|
-| `policy/` | Yes | Policy config (modules, roles, thrall mappings) |
+| `policy/` | Yes | Policy config (modules, roles, envoy mappings) |
 | `secrets/` | Yes | Encrypted secret files |
 | `tls/` | Yes | CA, server cert, server key |
 | `server.yaml` | Yes | Server configuration |
@@ -99,13 +99,13 @@ When the primary is down, promote a peer to become the new primary.
 
 ```bash
 # Promote the server you're connected to:
-hobnobcli server promote
+vigogo server promote
 
 # Promote a specific server by address:
-hobnobcli server promote --target peer1.example.com:8443
+vigogo server promote --target peer1.example.com:8443
 
 # Check replication status:
-hobnobcli server status
+vigogo server status
 ```
 
 ### What promotion does
@@ -119,7 +119,7 @@ hobnobcli server status
 ### Status output
 
 ```
-$ hobnobcli server status
+$ vigogo server status
   Role:           primary
   Last sync:      2026-03-16T10:30:00Z
   Files synced:   47
@@ -129,7 +129,7 @@ $ hobnobcli server status
 On a peer:
 
 ```
-$ hobnobcli server status
+$ vigogo server status
   Role:           peer
   Primary:        primary.example.com:1530
   Last sync:      2026-03-16T10:30:15Z
@@ -168,7 +168,7 @@ Peer replication works at any level of the spanner topology:
 
 - **Standalone server**: `peers:` adds redundancy to a single-server deployment.
 - **Hub**: `peers:` on the hub gives hub redundancy. Spokes reconnect to the hub's peer on failover.
-- **Spoke**: `peers:` on a spoke gives spoke redundancy. Thralls assigned to that spoke fail over to the spoke's peer.
+- **Spoke**: `peers:` on a spoke gives spoke redundancy. Envoys assigned to that spoke fail over to the spoke's peer.
 
 ### Spoke-to-hub failover
 

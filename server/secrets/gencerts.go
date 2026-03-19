@@ -85,7 +85,7 @@ func generateSelfSignedCerts(tlsDir string, extraSANs []string) error {
 	now := time.Now()
 	caTemplate := &x509.Certificate{
 		SerialNumber:          caSerial,
-		Subject:               pkix.Name{CommonName: "Hobnob CA"},
+		Subject:               pkix.Name{CommonName: "Vigo CA"},
 		NotBefore:             now,
 		NotAfter:              now.AddDate(10, 0, 0),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,

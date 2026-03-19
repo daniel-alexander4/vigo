@@ -11,15 +11,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // AskRequest is the input to the assistant.
 type AskRequest struct {
 	Question string `json:"question"`
 	Context  struct {
-		Thrall string `json:"thrall,omitempty"`
+		Envoy string `json:"envoy,omitempty"`
 	} `json:"context,omitempty"`
 	History []HistoryMessage `json:"history,omitempty"`
 }
@@ -37,7 +37,7 @@ type AskResponse struct {
 	TokensUsed int      `json:"tokens_used"`
 }
 
-// Assistant wraps an LLM provider with hobnob tools and system context.
+// Assistant wraps an LLM provider with vigo tools and system context.
 type Assistant struct {
 	provider     Provider
 	tools        *toolDeps
@@ -104,16 +104,16 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 		{Role: RoleSystem, Content: a.systemPrompt},
 	}
 
-	// Augment question with thrall context if provided.
+	// Augment question with envoy context if provided.
 	question := req.Question
-	if req.Context.Thrall != "" {
-		question = fmt.Sprintf("[Context: thrall=%s] %s", req.Context.Thrall, question)
+	if req.Context.Envoy != "" {
+		question = fmt.Sprintf("[Context: envoy=%s] %s", req.Context.Envoy, question)
 	}
 
 	// Determine context mode.
 	mode := a.cfg.ContextMode
 	if mode == "auto" || mode == "prefetch" {
-		prefetched := a.prefetchData(ctx, question, req.Context.Thrall)
+		prefetched := a.prefetchData(ctx, question, req.Context.Envoy)
 		if prefetched != "" {
 			question = question + "\n\n--- Prefetched Data ---\n" + prefetched
 		}
@@ -221,13 +221,13 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 	}
 
 	question := req.Question
-	if req.Context.Thrall != "" {
-		question = fmt.Sprintf("[Context: thrall=%s] %s", req.Context.Thrall, question)
+	if req.Context.Envoy != "" {
+		question = fmt.Sprintf("[Context: envoy=%s] %s", req.Context.Envoy, question)
 	}
 
 	mode := a.cfg.ContextMode
 	if mode == "auto" || mode == "prefetch" {
-		prefetched := a.prefetchData(ctx, question, req.Context.Thrall)
+		prefetched := a.prefetchData(ctx, question, req.Context.Envoy)
 		if prefetched != "" {
 			question = question + "\n\n--- Prefetched Data ---\n" + prefetched
 		}
@@ -309,17 +309,17 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 }
 
 // prefetchData extracts entities from the question and pre-fetches relevant data.
-func (a *Assistant) prefetchData(ctx context.Context, question, thrallHint string) string {
+func (a *Assistant) prefetchData(ctx context.Context, question, envoyHint string) string {
 	var parts []string
 	lower := strings.ToLower(question)
 
-	hostname := thrallHint
+	hostname := envoyHint
 	if hostname == "" {
 		hostname = extractHostname(question)
 	}
 	if hostname != "" {
-		if data, err := a.tools.getThrall(ctx, map[string]any{"hostname": hostname}); err == nil {
-			parts = append(parts, "## Thrall: "+hostname+"\n"+data)
+		if data, err := a.tools.getEnvoy(ctx, map[string]any{"hostname": hostname}); err == nil {
+			parts = append(parts, "## Envoy: "+hostname+"\n"+data)
 		}
 		if data, err := a.tools.getTraits(ctx, map[string]any{"hostname": hostname}); err == nil {
 			if len(data) > 4000 {
@@ -352,9 +352,9 @@ func (a *Assistant) prefetchData(ctx context.Context, question, thrallHint strin
 		}
 	}
 
-	if containsAny(lower, "thrall", "thralls", "node", "nodes", "fleet", "how many") {
-		if data, err := a.tools.listThralls(ctx, map[string]any{"limit": float64(20)}); err == nil {
-			parts = append(parts, "## Thralls\n"+data)
+	if containsAny(lower, "envoy", "envoys", "node", "nodes", "fleet", "how many") {
+		if data, err := a.tools.listEnvoys(ctx, map[string]any{"limit": float64(20)}); err == nil {
+			parts = append(parts, "## Envoys\n"+data)
 		}
 	}
 

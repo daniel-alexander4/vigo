@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 

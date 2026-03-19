@@ -31,7 +31,7 @@
           ]
         }
       },
-      "targets": [{ "expr": "hobnob_spanner_spoke_up", "legendFormat": "{{spoke_id}}" }]
+      "targets": [{ "expr": "vigo_spanner_spoke_up", "legendFormat": "{{spoke_id}}" }]
     },
     {
       "title": "Spoke Latency",
@@ -40,16 +40,16 @@
       "gridPos": { "h": 6, "w": 12, "x": 12, "y": 1 },
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, rate(hobnob_spanner_spoke_latency_seconds_bucket[5m]))", "legendFormat": "{{spoke_id}} p50" },
-        { "expr": "histogram_quantile(0.95, rate(hobnob_spanner_spoke_latency_seconds_bucket[5m]))", "legendFormat": "{{spoke_id}} p95" }
+        { "expr": "histogram_quantile(0.50, rate(vigo_spanner_spoke_latency_seconds_bucket[5m]))", "legendFormat": "{{spoke_id}} p50" },
+        { "expr": "histogram_quantile(0.95, rate(vigo_spanner_spoke_latency_seconds_bucket[5m]))", "legendFormat": "{{spoke_id}} p95" }
       ]
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["hobnob", "spanner"],
+  "tags": ["vigo", "spanner"],
   "time": { "from": "now-6h", "to": "now" },
-  "title": "Hobnob — Spanner",
-  "uid": "hobnob-spanner",
+  "title": "Vigo — Spanner",
+  "uid": "vigo-spanner",
   "version": 1
 }

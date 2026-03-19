@@ -18,7 +18,7 @@ The remediation system detects non-compliant nodes (recurring drift or errors) a
 ### Check remediation posture
 
 ```bash
-hobnobcli remediation status
+vigogo remediation status
 ```
 
 Returns the number of nodes needing remediation and a breakdown by status:
@@ -36,7 +36,7 @@ Returns the number of nodes needing remediation and a breakdown by status:
 ### Preview remediation targets (dry run)
 
 ```bash
-hobnobcli remediation run --dry-run
+vigogo remediation run --dry-run
 ```
 
 Shows which nodes would be remediated without taking action:
@@ -46,8 +46,8 @@ Shows which nodes would be remediated without taking action:
   "status": "dry_run",
   "count": 3,
   "targets": [
-    {"hostname": "web-01.prod", "thrall_id": "abc123", "initial_status": "recurring drift", "action": "would_force_push"},
-    {"hostname": "db-02.prod", "thrall_id": "def456", "initial_status": "errors", "action": "would_force_push"}
+    {"hostname": "web-01.prod", "envoy_id": "abc123", "initial_status": "recurring drift", "action": "would_force_push"},
+    {"hostname": "db-02.prod", "envoy_id": "def456", "initial_status": "errors", "action": "would_force_push"}
   ]
 }
 ```
@@ -55,7 +55,7 @@ Shows which nodes would be remediated without taking action:
 ### Execute remediation
 
 ```bash
-hobnobcli remediation run
+vigogo remediation run
 ```
 
 Triggers force-push reconvergence on all non-compliant nodes. Returns immediately with a run ID:
@@ -71,7 +71,7 @@ Triggers force-push reconvergence on all non-compliant nodes. Returns immediatel
 ### List remediation runs
 
 ```bash
-hobnobcli remediation list
+vigogo remediation list
 ```
 
 ### View remediation run details
@@ -135,9 +135,9 @@ Two audit events are recorded for each remediation cycle:
 
 The remediation system works alongside compliance reports to form a closed loop:
 
-1. Generate a compliance report: `hobnobcli report compliance`
+1. Generate a compliance report: `vigogo report compliance`
 2. Review non-compliant nodes in the report
-3. Run remediation: `hobnobcli remediation run`
+3. Run remediation: `vigogo remediation run`
 4. Generate a follow-up report to verify improvement
 
 For automated compliance workflows, chain these commands:
@@ -145,10 +145,10 @@ For automated compliance workflows, chain these commands:
 ```bash
 #!/bin/bash
 # Weekly compliance cycle
-hobnobcli report compliance --format html --output /reports/pre-remediation-$(date +%Y%m%d).html
-hobnobcli remediation run
+vigogo report compliance --format html --output /reports/pre-remediation-$(date +%Y%m%d).html
+vigogo remediation run
 sleep 300  # wait for reconvergence
-hobnobcli report compliance --format html --output /reports/post-remediation-$(date +%Y%m%d).html
+vigogo report compliance --format html --output /reports/post-remediation-$(date +%Y%m%d).html
 ```
 
 ## SLA Tracking
@@ -163,6 +163,6 @@ Query these from the audit trail:
 
 ```bash
 # Recent remediation events
-hobnobcli audit list --type remediation.start --since 30d
-hobnobcli audit list --type remediation.complete --since 30d
+vigogo audit list --type remediation.start --since 30d
+vigogo audit list --type remediation.complete --since 30d
 ```

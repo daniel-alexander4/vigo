@@ -20,7 +20,7 @@ resources:
     type: file
     target_path: /etc/audit/rules.d/pci-dss.rules
     content: |
-      # PCI DSS v4.0 Audit Rules — managed by Hobnob
+      # PCI DSS v4.0 Audit Rules — managed by Vigo
 
       # ── Req 10.2.1.1 — User access to cardholder data ──
       -w {{ .Vars.cde_data_dir }} -p rwxa -k cardholder-access

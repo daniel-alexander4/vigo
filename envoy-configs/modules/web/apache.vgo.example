@@ -46,7 +46,7 @@ resources:
     type: file
     target_path: /etc/apache2/apache2.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
 
       ServerRoot "/etc/apache2"
       ServerAdmin {{ .Vars.server_admin }}
@@ -99,7 +99,7 @@ resources:
     type: file
     target_path: /etc/httpd/conf/httpd.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
 
       ServerRoot "/etc/httpd"
       ServerAdmin {{ .Vars.server_admin }}

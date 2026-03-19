@@ -16,8 +16,8 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/workflows"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/workflows"
 )
 
 // openWorkflowTestDB creates an in-memory SQLite database with workflow tables.

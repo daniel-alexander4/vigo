@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Factory reset a hobnob thrall: stop service, remove all agent and server state,
-# purge thrall history from the database, so the thrall can be re-bootstrapped from scratch.
+# Factory reset a vigo envoy: stop service, remove all agent and server state,
+# purge envoy history from the database, so the envoy can be re-bootstrapped from scratch.
 #
 # Usage:
-#   sudo scripts/reset-node.sh              # reset local thrall + purge DB
-#   sudo scripts/reset-node.sh --no-db      # reset local thrall only (skip DB)
+#   sudo scripts/reset-node.sh              # reset local envoy + purge DB
+#   sudo scripts/reset-node.sh --no-db      # reset local envoy only (skip DB)
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run as root: sudo $0" >&2
@@ -20,15 +20,15 @@ for arg in "$@"; do
   esac
 done
 
-echo "Stopping and removing hobnob service..."
-systemctl stop hobnob-thrall 2>/dev/null || true
-systemctl disable hobnob-thrall 2>/dev/null || true
-rm -f /etc/systemd/system/hobnob-thrall.service
+echo "Stopping and removing vigo service..."
+systemctl stop vigo-envoy 2>/dev/null || true
+systemctl disable vigo-envoy 2>/dev/null || true
+rm -f /etc/systemd/system/vigo-envoy.service
 systemctl daemon-reload
-systemctl reset-failed hobnob-thrall 2>/dev/null || true
+systemctl reset-failed vigo-envoy 2>/dev/null || true
 
-# Also clean up old isogov/hobnob service names if present.
-for old in hobnob isogov isogov-agent; do
+# Also clean up old isogov/vigo service names if present.
+for old in vigo isogov isogov-agent; do
   systemctl stop "$old" 2>/dev/null || true
   systemctl disable "$old" 2>/dev/null || true
   rm -f "/etc/systemd/system/${old}.service"
@@ -37,18 +37,18 @@ done
 systemctl daemon-reload
 
 echo "Removing agent binaries (current + legacy)..."
-rm -f /usr/local/sbin/hobnob
+rm -f /usr/local/sbin/vigo
 rm -f /usr/local/bin/isogov-agent
 
-echo "Removing agent data (/etc/hobnob-thrall)..."
-rm -rf /etc/hobnob-thrall
+echo "Removing agent data (/etc/vigo-envoy)..."
+rm -rf /etc/vigo-envoy
 
-echo "Removing agent LMDB state (/var/lib/hobnob)..."
-rm -rf /var/lib/hobnob
+echo "Removing agent LMDB state (/var/lib/vigo)..."
+rm -rf /var/lib/vigo
 
-echo "Removing server data (/srv/hobnob), preserving license..."
-find /srv/hobnob -mindepth 1 \
-  -path /srv/hobnob/license -prune -o \
+echo "Removing server data (/srv/vigo), preserving license..."
+find /srv/vigo -mindepth 1 \
+  -path /srv/vigo/license -prune -o \
   -print0 | xargs -0 rm -rf
 
-echo "Done. Thrall is clean — ready to re-bootstrap."
+echo "Done. Envoy is clean — ready to re-bootstrap."

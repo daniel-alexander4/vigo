@@ -1,13 +1,13 @@
 # License
 
-Hobnob includes a built-in free license for up to 25 thralls. Beyond that, a license file is required. Enforcement is gradual — operations are never abruptly disrupted.
+Vigo includes a built-in free license for up to 25 envoys. Beyond that, a license file is required. Enforcement is gradual — operations are never abruptly disrupted.
 
 ## Licensing Model
 
-Hobnob uses a split-license model:
+Vigo uses a split-license model:
 
-- **Agent** (`hobnob`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code — critical since it runs as root on managed machines.
-- **Server** (`hobd`) and **CLI** (`hobnobcli`): Proprietary. Distributed as compiled binaries and container images.
+- **Agent** (`vigo`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code — critical since it runs as root on managed machines.
+- **Server** (`vigosrv`) and **CLI** (`vigogo`): Proprietary. Distributed as compiled binaries and container images.
 
 ## Pricing
 
@@ -26,33 +26,33 @@ All features are included at every tier — there are no enterprise-only feature
 
 ### Loyalty Discount
 
-After year 5 of continuous renewal, per-node rates decrease linearly from 100% to a floor of 75% at year 12+. See [COMMERCIAL-TERMS.md](https://github.com/hobnob/hobnob/blob/main/COMMERCIAL-TERMS.md) for the full schedule.
+After year 5 of continuous renewal, per-node rates decrease linearly from 100% to a floor of 75% at year 12+. See [COMMERCIAL-TERMS.md](https://github.com/vigo/vigo/blob/main/COMMERCIAL-TERMS.md) for the full schedule.
 
 ## Free Tier
 
-Every Hobnob server starts with a built-in free license:
-- **25 thralls** included
+Every Vigo server starts with a built-in free license:
+- **25 envoys** included
 - No license file needed
 - No expiration
 - All features except [spanner](spanner.md) — hub/spoke mode requires a paid license
 
 ## Enforcement Stages
 
-When the thrall count exceeds the license limit, enforcement proceeds through three stages over 30 days:
+When the envoy count exceeds the license limit, enforcement proceeds through three stages over 30 days:
 
 ![License Enforcement Timeline](img/license-enforcement.svg)
 
 ### Stage 1: Grace (days 0–15)
 
-- Existing thralls continue to check in normally
+- Existing envoys continue to check in normally
 - A warning is logged on every check-in
-- New thralls can still enroll
-- **Grace clock resets immediately** when returning to compliance (thrall count drops below limit)
+- New envoys can still enroll
+- **Grace clock resets immediately** when returning to compliance (envoy count drops below limit)
 
 ### Stage 2: Enrollment Block (days 15–30)
 
-- Existing thralls continue to check in normally
-- New thralls **cannot enroll** — the Register RPC returns an error
+- Existing envoys continue to check in normally
+- New envoys **cannot enroll** — the Register RPC returns an error
 - Warning continues on every check-in
 
 ### Stage 3: Service Stop (day 30)
@@ -65,14 +65,14 @@ When the thrall count exceeds the license limit, enforcement proceeds through th
 ### CLI
 
 ```bash
-hobnobcli license status
+vigogo license status
 ```
 
 Output:
 
 ```
 License ID:    built-in-free-25
-Max Thralls:   25
+Max Envoys:   25
 Current:       12
 Stage:         compliant
 Expires:       never
@@ -88,16 +88,16 @@ Five license metrics are exposed at `GET /metrics`:
 
 | Metric | Description |
 |--------|-------------|
-| `hobnob_license_thralls_used` | Current active (non-revoked) thralls |
-| `hobnob_license_thralls_max` | Maximum allowed by the license |
-| `hobnob_license_stage` | Enforcement stage (0–3) |
-| `hobnob_license_days_remaining` | Days until expiry (negative if expired) |
-| `hobnob_license_expiry_timestamp` | Unix timestamp of expiration |
+| `vigo_license_envoys_used` | Current active (non-revoked) envoys |
+| `vigo_license_envoys_max` | Maximum allowed by the license |
+| `vigo_license_stage` | Enforcement stage (0–3) |
+| `vigo_license_days_remaining` | Days until expiry (negative if expired) |
+| `vigo_license_expiry_timestamp` | Unix timestamp of expiration |
 
 Suggested alerts:
-- `hobnob_license_stage > 0` — any enforcement violation
-- `hobnob_license_thralls_used / hobnob_license_thralls_max > 0.9` — approaching node limit
-- `hobnob_license_days_remaining < 30` — license expiring soon
+- `vigo_license_stage > 0` — any enforcement violation
+- `vigo_license_envoys_used / vigo_license_envoys_max > 0.9` — approaching node limit
+- `vigo_license_days_remaining < 30` — license expiring soon
 
 ## Machine Fingerprint Binding
 
@@ -112,7 +112,7 @@ The three inputs are:
 
 ### Free tier
 
-Free tier licenses (25 thralls) are **not** fingerprint-bound and work on any machine.
+Free tier licenses (25 envoys) are **not** fingerprint-bound and work on any machine.
 
 ### Fingerprint mismatch
 
@@ -126,7 +126,7 @@ Common causes of fingerprint mismatch:
 ### Getting your fingerprint
 
 ```bash
-hobnobcli license fingerprint
+vigogo license fingerprint
 ```
 
 Output:
@@ -141,7 +141,7 @@ Send this value when requesting a paid license. See [CLI reference](../cli/licen
 Reload the license without restarting the server:
 
 ```bash
-kill -HUP $(pidof hobd)
+kill -HUP $(pidof vigosrv)
 ```
 
 The server handles SIGHUP by re-reading the license file from the license directory.
@@ -152,10 +152,10 @@ Configure in `server.yaml`:
 
 ```yaml
 paths:
-  license_dir: "/srv/hobnob/license"
+  license_dir: "/srv/vigo/license"
 ```
 
-Default: `/srv/hobnob/license`. Place the license file at `<license_dir>/license.json`.
+Default: `/srv/vigo/license`. Place the license file at `<license_dir>/license.json`.
 
 ## Related
 

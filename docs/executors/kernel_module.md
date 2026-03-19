@@ -20,7 +20,7 @@ Loads and unloads Linux kernel modules, with optional persistence across reboots
 
 ## Idempotency
 
-Parses `lsmod` output to check if the module is currently loaded. Checks for the existence of `/etc/modules-load.d/hobnob-<module>.conf` for persistence. Module name matching normalizes hyphens to underscores.
+Parses `lsmod` output to check if the module is currently loaded. Checks for the existence of `/etc/modules-load.d/vigo-<module>.conf` for persistence. Module name matching normalizes hyphens to underscores.
 
 ## Examples
 
@@ -80,5 +80,5 @@ Linux only.
 ## Notes
 
 - Uses `modprobe` to load and `modprobe -r` to unload modules.
-- Persistence files are written to `/etc/modules-load.d/hobnob-<module>.conf`.
+- Persistence files are written to `/etc/modules-load.d/vigo-<module>.conf`.
 - Module name comparison normalizes hyphens to underscores (e.g., `br-netfilter` matches `br_netfilter` in lsmod).

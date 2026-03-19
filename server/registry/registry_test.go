@@ -20,9 +20,9 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/registry"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/registry"
 )
 
 var testDB *sql.DB
@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 	// Actually, golang-migrate sqlite3 driver supports ":memory:" via the DSN.
 	// But it opens its own connection, which won't share the in-memory DB.
 	// Use a temp file instead.
-	tmpDir, err := os.MkdirTemp("", "hobnob-registry-test-*")
+	tmpDir, err := os.MkdirTemp("", "vigo-registry-test-*")
 	if err != nil {
 		log.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -97,7 +97,7 @@ func newTestRegistry(t *testing.T) *registry.Registry {
 	t.Helper()
 	ctx := context.Background()
 	// Delete in correct order for foreign key constraints.
-	for _, table := range []string{"run_results", "runs", "thrall_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "thralls"} {
+	for _, table := range []string{"run_results", "runs", "envoy_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "envoys"} {
 		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("failed to delete from %s: %v", table, err)
 		}
@@ -202,22 +202,22 @@ func TestRegisterSuccess(t *testing.T) {
 		t.Fatal("expected non-empty client ID")
 	}
 
-	// Verify thrall was created in DB
-	thrall, err := db.New(testDB).GetThrallByID(ctx, clientID)
+	// Verify envoy was created in DB
+	envoy, err := db.New(testDB).GetEnvoyByID(ctx, clientID)
 	if err != nil {
-		t.Fatalf("GetThrallByID failed: %v", err)
+		t.Fatalf("GetEnvoyByID failed: %v", err)
 	}
-	if thrall.Hostname != "app01.web.example.com" {
-		t.Errorf("hostname = %q, want %q", thrall.Hostname, "app01.web.example.com")
+	if envoy.Hostname != "app01.web.example.com" {
+		t.Errorf("hostname = %q, want %q", envoy.Hostname, "app01.web.example.com")
 	}
-	if thrall.IpAddress != "192.168.1.10" {
-		t.Errorf("ip_address = %q, want %q", thrall.IpAddress, "192.168.1.10")
+	if envoy.IpAddress != "192.168.1.10" {
+		t.Errorf("ip_address = %q, want %q", envoy.IpAddress, "192.168.1.10")
 	}
-	if thrall.PubkeyPem != "ed25519-pubkey" {
-		t.Errorf("pubkey_pem = %q, want %q", thrall.PubkeyPem, "ed25519-pubkey")
+	if envoy.PubkeyPem != "ed25519-pubkey" {
+		t.Errorf("pubkey_pem = %q, want %q", envoy.PubkeyPem, "ed25519-pubkey")
 	}
-	if thrall.Revoked != 0 {
-		t.Error("newly created thrall should not be revoked")
+	if envoy.Revoked != 0 {
+		t.Error("newly created envoy should not be revoked")
 	}
 }
 
@@ -345,37 +345,37 @@ func TestRegisterWrongToken(t *testing.T) {
 	}
 }
 
-func TestRevokeThrall(t *testing.T) {
+func TestRevokeEnvoy(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a thrall
+	// Create and register a envoy
 	token := "revoke-test-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
+	envoyID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	// Revoke the thrall
-	err = reg.RevokeThrall(ctx, thrallID)
+	// Revoke the envoy
+	err = reg.RevokeEnvoy(ctx, envoyID)
 	if err != nil {
-		t.Fatalf("RevokeThrall failed: %v", err)
+		t.Fatalf("RevokeEnvoy failed: %v", err)
 	}
 
 	// Verify revocation state in DB
-	thrall, err := db.New(testDB).GetThrallByID(ctx, thrallID)
+	envoy, err := db.New(testDB).GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		t.Fatalf("GetThrallByID failed: %v", err)
+		t.Fatalf("GetEnvoyByID failed: %v", err)
 	}
-	if thrall.Revoked == 0 {
-		t.Error("expected thrall to be revoked")
+	if envoy.Revoked == 0 {
+		t.Error("expected envoy to be revoked")
 	}
-	if !thrall.RevokedAt.Valid {
+	if !envoy.RevokedAt.Valid {
 		t.Error("expected revoked_at to be set")
 	}
 }
@@ -384,28 +384,28 @@ func TestRevokedNodeCheckIn(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a thrall
+	// Create and register a envoy
 	token := "checkin-test-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
+	envoyID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
 	// Revoke
-	err = reg.RevokeThrall(ctx, thrallID)
+	err = reg.RevokeEnvoy(ctx, envoyID)
 	if err != nil {
-		t.Fatalf("RevokeThrall failed: %v", err)
+		t.Fatalf("RevokeEnvoy failed: %v", err)
 	}
 
-	// ValidateNode should return error for revoked thrall
-	err = reg.ValidateThrall(ctx, thrallID)
+	// ValidateNode should return error for revoked envoy
+	err = reg.ValidateEnvoy(ctx, envoyID)
 	if err == nil {
-		t.Fatal("ValidateNode should return error for revoked thrall")
+		t.Fatal("ValidateNode should return error for revoked envoy")
 	}
 }
 
@@ -413,25 +413,25 @@ func TestRevokedCannotReenroll(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and register a thrall
+	// Create and register a envoy
 	token1 := "first-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1, false)
+	envoyID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-1", token1, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
 	// Revoke
-	err = reg.RevokeThrall(ctx, thrallID)
+	err = reg.RevokeEnvoy(ctx, envoyID)
 	if err != nil {
-		t.Fatalf("RevokeThrall failed: %v", err)
+		t.Fatalf("RevokeEnvoy failed: %v", err)
 	}
 
-	// Try to re-enroll the same hostname (ENRL-07: revoked thralls cannot re-enroll)
+	// Try to re-enroll the same hostname (ENRL-07: revoked envoys cannot re-enroll)
 	token2 := "second-token"
 	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token2)
 	if err != nil {
@@ -440,7 +440,7 @@ func TestRevokedCannotReenroll(t *testing.T) {
 
 	_, err = reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey-2", token2, false)
 	if err == nil {
-		t.Fatal("Register should fail for hostname of a revoked thrall (ENRL-07)")
+		t.Fatal("Register should fail for hostname of a revoked envoy (ENRL-07)")
 	}
 }
 
@@ -448,9 +448,9 @@ func TestValidateNodeNonExistent(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	err := reg.ValidateThrall(ctx, "00000000-0000-0000-0000-000000000000")
+	err := reg.ValidateEnvoy(ctx, "00000000-0000-0000-0000-000000000000")
 	if err == nil {
-		t.Fatal("ValidateNode should return error for non-existent thrall")
+		t.Fatal("ValidateNode should return error for non-existent envoy")
 	}
 }
 
@@ -458,21 +458,21 @@ func TestValidateNodeActive(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	token := "active-thrall-token"
+	token := "active-envoy-token"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern failed: %v", err)
 	}
 
-	thrallID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
+	envoyID, err := reg.Register(ctx, "web01.example.com", "10.0.1.1", "pubkey", token, false)
 	if err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
-	// Active thrall should validate successfully
-	err = reg.ValidateThrall(ctx, thrallID)
+	// Active envoy should validate successfully
+	err = reg.ValidateEnvoy(ctx, envoyID)
 	if err != nil {
-		t.Fatalf("ValidateNode should succeed for active thrall: %v", err)
+		t.Fatalf("ValidateNode should succeed for active envoy: %v", err)
 	}
 }
 
@@ -565,12 +565,12 @@ func TestTrustedRegisterSuccess(t *testing.T) {
 		{Pattern: "*.web.example.com", CIDRs: []string{"10.0.1.0/24"}},
 	}
 
-	thrallID, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.100", false)
+	envoyID, err := reg.TrustedRegister(ctx, "app01.web.example.com", "10.0.1.5", "ed25519-pubkey", patterns, "10.0.1.100", false)
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed: %v", err)
 	}
-	if thrallID == "" {
-		t.Fatal("expected non-empty thrall ID")
+	if envoyID == "" {
+		t.Fatal("expected non-empty envoy ID")
 	}
 }
 
@@ -598,12 +598,12 @@ func TestTrustedRegisterNoCIDRsAllowsAny(t *testing.T) {
 		{Pattern: "*.open.example.com"},
 	}
 
-	thrallID, err := reg.TrustedRegister(ctx, "app01.open.example.com", "anywhere", "ed25519-pubkey", patterns, "203.0.113.50", false)
+	envoyID, err := reg.TrustedRegister(ctx, "app01.open.example.com", "anywhere", "ed25519-pubkey", patterns, "203.0.113.50", false)
 	if err != nil {
 		t.Fatalf("TrustedRegister should succeed with no CIDR restriction: %v", err)
 	}
-	if thrallID == "" {
-		t.Fatal("expected non-empty thrall ID")
+	if envoyID == "" {
+		t.Fatal("expected non-empty envoy ID")
 	}
 }
 
@@ -625,16 +625,16 @@ func TestTrustedRegisterRevokedHostname(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create and revoke a thrall with token flow.
+	// Create and revoke a envoy with token flow.
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", "tok")
 	if err != nil {
 		t.Fatal(err)
 	}
-	thrallID, err := reg.Register(ctx, "revoked.example.com", "10.0.1.1", "pk1", "tok", false)
+	envoyID, err := reg.Register(ctx, "revoked.example.com", "10.0.1.1", "pk1", "tok", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
+	if err := reg.RevokeEnvoy(ctx, envoyID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -652,12 +652,12 @@ func TestRevokeNonExistentNode(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Revoking a non-existent thrall should not error (idempotent)
+	// Revoking a non-existent envoy should not error (idempotent)
 	// or could return an error -- depends on design. Testing behavior.
-	err := reg.RevokeThrall(ctx, "00000000-0000-0000-0000-000000000000")
+	err := reg.RevokeEnvoy(ctx, "00000000-0000-0000-0000-000000000000")
 	// We accept either behavior but log it
 	if err != nil {
-		fmt.Printf("RevokeThrall for non-existent thrall returned error: %v (acceptable)\n", err)
+		fmt.Printf("RevokeEnvoy for non-existent envoy returned error: %v (acceptable)\n", err)
 	}
 }
 
@@ -750,35 +750,35 @@ func TestMatchesCIDR(t *testing.T) {
 	}
 }
 
-func TestRevokeNonExistentThrallReturnsError(t *testing.T) {
+func TestRevokeNonExistentEnvoyReturnsError(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	err := reg.RevokeThrall(ctx, "00000000-0000-0000-0000-000000000000")
+	err := reg.RevokeEnvoy(ctx, "00000000-0000-0000-0000-000000000000")
 	if err == nil {
-		t.Fatal("expected error when revoking non-existent thrall")
+		t.Fatal("expected error when revoking non-existent envoy")
 	}
 }
 
-func TestCreateThrallDirect(t *testing.T) {
+func TestCreateEnvoyDirect(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	id, err := reg.CreateThrall(ctx, "direct.example.com", "10.0.0.1", "ed25519-pubkey", false)
+	id, err := reg.CreateEnvoy(ctx, "direct.example.com", "10.0.0.1", "ed25519-pubkey", false)
 	if err != nil {
-		t.Fatalf("CreateThrall: %v", err)
+		t.Fatalf("CreateEnvoy: %v", err)
 	}
 	if id == "" {
 		t.Fatal("expected non-empty ID")
 	}
 
 	// Verify in DB.
-	thrall, err := db.New(testDB).GetThrallByID(ctx, id)
+	envoy, err := db.New(testDB).GetEnvoyByID(ctx, id)
 	if err != nil {
-		t.Fatalf("GetThrallByID: %v", err)
+		t.Fatalf("GetEnvoyByID: %v", err)
 	}
-	if thrall.Hostname != "direct.example.com" {
-		t.Errorf("hostname = %q, want direct.example.com", thrall.Hostname)
+	if envoy.Hostname != "direct.example.com" {
+		t.Errorf("hostname = %q, want direct.example.com", envoy.Hostname)
 	}
 }
 
@@ -786,7 +786,7 @@ func TestRegisterDuplicateHostnameRejected(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Register a thrall with token-based flow.
+	// Register a envoy with token-based flow.
 	token1 := "dup-token-1"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
 	if err != nil {
@@ -797,7 +797,7 @@ func TestRegisterDuplicateHostnameRejected(t *testing.T) {
 		t.Fatalf("first Register: %v", err)
 	}
 
-	// Attempt to register another thrall with the same hostname (different pubkey, new pattern+token).
+	// Attempt to register another envoy with the same hostname (different pubkey, new pattern+token).
 	token2 := "dup-token-2"
 	_, err = reg.AddApprovedPattern(ctx, "*.example.com", token2)
 	if err != nil {
@@ -813,7 +813,7 @@ func TestRegisterDuplicateHostnameForce(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Register the first thrall.
+	// Register the first envoy.
 	token1 := "force-token-1"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
 	if err != nil {
@@ -835,16 +835,16 @@ func TestRegisterDuplicateHostnameForce(t *testing.T) {
 		t.Fatalf("force Register: %v", err)
 	}
 	if newID == oldID {
-		t.Fatal("expected new thrall to have a different ID from the old one")
+		t.Fatal("expected new envoy to have a different ID from the old one")
 	}
 
-	// Verify the old thrall is revoked.
-	oldThrall, err := db.New(testDB).GetThrallByID(ctx, oldID)
+	// Verify the old envoy is revoked.
+	oldEnvoy, err := db.New(testDB).GetEnvoyByID(ctx, oldID)
 	if err != nil {
-		t.Fatalf("GetThrallByID (old): %v", err)
+		t.Fatalf("GetEnvoyByID (old): %v", err)
 	}
-	if oldThrall.Revoked == 0 {
-		t.Error("expected old thrall to be revoked after force registration")
+	if oldEnvoy.Revoked == 0 {
+		t.Error("expected old envoy to be revoked after force registration")
 	}
 }
 
@@ -852,18 +852,18 @@ func TestRegisterForceRevokedHostname(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Register and then revoke a thrall.
+	// Register and then revoke a envoy.
 	token1 := "revoke-force-token-1"
 	_, err := reg.AddApprovedPattern(ctx, "*.example.com", token1)
 	if err != nil {
 		t.Fatalf("AddApprovedPattern: %v", err)
 	}
-	thrallID, err := reg.Register(ctx, "revforce.example.com", "10.0.0.1", "pubkey-1", token1, false)
+	envoyID, err := reg.Register(ctx, "revforce.example.com", "10.0.0.1", "pubkey-1", token1, false)
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	if err := reg.RevokeThrall(ctx, thrallID); err != nil {
-		t.Fatalf("RevokeThrall: %v", err)
+	if err := reg.RevokeEnvoy(ctx, envoyID); err != nil {
+		t.Fatalf("RevokeEnvoy: %v", err)
 	}
 
 	// Without force, re-enrolling a revoked hostname fails (ENRL-07).
@@ -888,7 +888,7 @@ func TestRegisterForceRevokedHostname(t *testing.T) {
 		t.Fatalf("force Register over revoked hostname should succeed: %v", err)
 	}
 	if newID == "" {
-		t.Fatal("expected non-empty thrall ID")
+		t.Fatal("expected non-empty envoy ID")
 	}
 }
 
@@ -900,7 +900,7 @@ func TestTrustedRegisterDuplicateHostnameRejected(t *testing.T) {
 		{Pattern: "*.example.com", CIDRs: []string{"10.0.0.0/8"}},
 	}
 
-	// Register first thrall via trusted enrollment.
+	// Register first envoy via trusted enrollment.
 	_, err := reg.TrustedRegister(ctx, "trusted-dup.example.com", "10.0.0.1", "pubkey-1", patterns, "10.0.0.50", false)
 	if err != nil {
 		t.Fatalf("first TrustedRegister: %v", err)
@@ -921,7 +921,7 @@ func TestTrustedRegisterDuplicateHostnameForce(t *testing.T) {
 		{Pattern: "*.example.com", CIDRs: []string{"10.0.0.0/8"}},
 	}
 
-	// Register first thrall.
+	// Register first envoy.
 	oldID, err := reg.TrustedRegister(ctx, "trusted-force.example.com", "10.0.0.1", "pubkey-old", patterns, "10.0.0.50", false)
 	if err != nil {
 		t.Fatalf("first TrustedRegister: %v", err)
@@ -933,31 +933,31 @@ func TestTrustedRegisterDuplicateHostnameForce(t *testing.T) {
 		t.Fatalf("force TrustedRegister: %v", err)
 	}
 	if newID == oldID {
-		t.Fatal("expected new thrall to have a different ID from the old one")
+		t.Fatal("expected new envoy to have a different ID from the old one")
 	}
 
-	// Verify old thrall is revoked.
-	oldThrall, err := db.New(testDB).GetThrallByID(ctx, oldID)
+	// Verify old envoy is revoked.
+	oldEnvoy, err := db.New(testDB).GetEnvoyByID(ctx, oldID)
 	if err != nil {
-		t.Fatalf("GetThrallByID (old): %v", err)
+		t.Fatalf("GetEnvoyByID (old): %v", err)
 	}
-	if oldThrall.Revoked == 0 {
-		t.Error("expected old thrall to be revoked after force trusted registration")
+	if oldEnvoy.Revoked == 0 {
+		t.Error("expected old envoy to be revoked after force trusted registration")
 	}
 }
 
-func TestCreateThrallDuplicateHostnameRejected(t *testing.T) {
+func TestCreateEnvoyDuplicateHostnameRejected(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
-	// Create first thrall directly.
-	_, err := reg.CreateThrall(ctx, "create-dup.example.com", "10.0.0.1", "pubkey-1", false)
+	// Create first envoy directly.
+	_, err := reg.CreateEnvoy(ctx, "create-dup.example.com", "10.0.0.1", "pubkey-1", false)
 	if err != nil {
-		t.Fatalf("first CreateThrall: %v", err)
+		t.Fatalf("first CreateEnvoy: %v", err)
 	}
 
-	// Second CreateThrall with same hostname should be rejected.
-	_, err = reg.CreateThrall(ctx, "create-dup.example.com", "10.0.0.2", "pubkey-2", false)
+	// Second CreateEnvoy with same hostname should be rejected.
+	_, err = reg.CreateEnvoy(ctx, "create-dup.example.com", "10.0.0.2", "pubkey-2", false)
 	if !errors.Is(err, registry.ErrHostnameInUse) {
 		t.Fatalf("expected ErrHostnameInUse, got: %v", err)
 	}

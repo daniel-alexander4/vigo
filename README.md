@@ -1,4 +1,4 @@
-# Hobnob
+# Vigo
 
 Distributed state enforcement for servers, network devices, and workstations. Agents on managed nodes pull desired state from a central server via gRPC over mTLS, apply idempotent changes, and report results back.
 
@@ -9,13 +9,13 @@ Distributed state enforcement for servers, network devices, and workstations. Ag
 ### 1. Start the server
 
 ```bash
-sudo mkdir -p /srv/hobnob
-docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
-cd /srv/hobnob
+sudo mkdir -p /srv/vigo
+docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
+cd /srv/vigo
 docker compose up -d
 ```
 
-The first command seeds `/srv/hobnob/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs. The second starts the server. Dashboard at `https://localhost:8443/`.
+The first command seeds `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs. The second starts the server. Dashboard at `https://localhost:8443/`.
 
 ### 2. Bootstrap managed nodes
 
@@ -33,10 +33,10 @@ The server generates a script on the fly that downloads the agent binary for the
 
 ### 3. Define desired state
 
-Map hostnames to modules and roles in `.hnb` files (YAML syntax):
+Map hostnames to modules and roles in `.vgo` files (YAML syntax):
 
 ```yaml
-# thrall-configs/nodes.hnb
+# envoy-configs/nodes.vgo
 nodes:
   - match: "web01.example.com"
     environment: production
@@ -57,9 +57,9 @@ nodes:
 ### 4. Publish and verify
 
 ```bash
-hobnobcli config publish
-hobnobcli thralls list
-hobnobcli runs list
+vigogo config publish
+vigogo envoys list
+vigogo runs list
 ```
 
 Or open the web dashboard at `https://<server-ip>:8443/`.
@@ -69,7 +69,7 @@ Or open the web dashboard at `https://<server-ip>:8443/`.
 ### Nginx with templated config
 
 ```yaml
-# thrall-configs/modules/nginx.hnb
+# envoy-configs/modules/nginx.vgo
 name: nginx
 vars:
   worker_processes: "auto"
@@ -100,10 +100,10 @@ resources:
 ### PostgreSQL with secrets
 
 ```yaml
-# thrall-configs/modules/postgresql.hnb
+# envoy-configs/modules/postgresql.vgo
 name: postgresql
 vars:
-  pg_password: "secret:hobnob/postgres/password"
+  pg_password: "secret:vigo/postgres/password"
   shared_buffers: "256MB"
   max_connections: "100"
 resources:
@@ -146,10 +146,10 @@ resources:
 ### Docker container with resource wiring
 
 ```yaml
-# thrall-configs/modules/redis.hnb
+# envoy-configs/modules/redis.vgo
 name: redis
 vars:
-  redis_password: "secret:hobnob/redis/password"
+  redis_password: "secret:vigo/redis/password"
   maxmemory: "256mb"
 resources:
   - name: redis-conf
@@ -176,7 +176,7 @@ resources:
 ### OS-conditional packages
 
 ```yaml
-# thrall-configs/modules/webserver.hnb
+# envoy-configs/modules/webserver.vgo
 name: webserver
 vars:
   is_debian:
@@ -205,7 +205,7 @@ resources:
 ### User accounts with SSH keys
 
 ```yaml
-# thrall-configs/modules/ops-users.hnb
+# envoy-configs/modules/ops-users.vgo
 name: ops-users
 resources:
   - name: deploy-user
@@ -227,7 +227,7 @@ resources:
 ### Exec with idempotency guards
 
 ```yaml
-# thrall-configs/modules/certbot.hnb
+# envoy-configs/modules/certbot.vgo
 name: certbot
 vars:
   domain: "example.com"
@@ -247,7 +247,7 @@ resources:
 ### Firewall rules
 
 ```yaml
-# thrall-configs/modules/firewall.hnb
+# envoy-configs/modules/firewall.vgo
 name: firewall
 resources:
   - name: allow-ssh
@@ -275,7 +275,7 @@ resources:
 ### Cron job
 
 ```yaml
-# thrall-configs/modules/backups.hnb
+# envoy-configs/modules/backups.vgo
 name: backups
 resources:
   - name: backup-script
@@ -299,7 +299,7 @@ resources:
 ### Network device configuration
 
 ```yaml
-# thrall-configs/modules/switch-baseline.hnb
+# envoy-configs/modules/switch-baseline.vgo
 name: switch-baseline
 resources:
   - name: set-ntp
@@ -323,17 +323,17 @@ resources:
 ### Roles and node mappings
 
 ```yaml
-# thrall-configs/roles/webserver.hnb
+# envoy-configs/roles/webserver.vgo
 name: webserver
 modules: [nginx, certbot, firewall, ops-users, node-exporter]
 
-# thrall-configs/roles/database.hnb
+# envoy-configs/roles/database.vgo
 name: database
 modules: [postgresql, backups, firewall, ops-users, node-exporter]
 ```
 
 ```yaml
-# thrall-configs/nodes.hnb
+# envoy-configs/nodes.vgo
 nodes:
   - match: "web*.example.com"
     environment: production
@@ -373,9 +373,9 @@ nodes:
                        └────────┘   └──────────┘  └────────┘
 ```
 
-- **hobd** — Go server: gRPC (port 1530) + REST API + web UI + metrics (port 8443)
-- **hobnob** — Rust agent daemon on each managed node
-- **hobnobcli** — Go admin CLI, talks to server REST API
+- **vigosrv** — Go server: gRPC (port 1530) + REST API + web UI + metrics (port 8443)
+- **vigo** — Rust agent daemon on each managed node
+- **vigogo** — Go admin CLI, talks to server REST API
 
 ## Resource types
 
@@ -404,8 +404,8 @@ All executors are idempotent — they check current state before acting. `exec` 
 Dispatch commands to targeted nodes in real-time:
 
 ```bash
-hobnobcli push run restart-nginx --target "*.web.example.com"
-hobnobcli push status <run-id>
+vigogo push run restart-nginx --target "*.web.example.com"
+vigogo push status <run-id>
 ```
 
 ### Workflows
@@ -432,7 +432,7 @@ steps:
 Query fleet state in real-time:
 
 ```bash
-hobnobcli query run "df -h /var" --target "*.db.example.com"
+vigogo query run "df -h /var" --target "*.db.example.com"
 ```
 
 ## Authentication
@@ -443,7 +443,7 @@ Three pluggable methods:
 - **oidc** — OpenID Connect SSO
 - **isowebauth** — SSH key signing via desktop app
 
-API tokens (`hbt_` prefix) for programmatic access. Two roles: admin and viewer. SCS sessions backed by SQLite.
+API tokens (`vgot_` prefix) for programmatic access. Two roles: admin and viewer. SCS sessions backed by SQLite.
 
 ## Secrets
 
@@ -451,14 +451,14 @@ Config values use the `secret:` prefix — resolved server-side before anything 
 
 ```yaml
 vars:
-  db_password: "secret:hobnob/db/password"
+  db_password: "secret:vigo/db/password"
 ```
 
 Two backends: **local** (default, AES-256-GCM encrypted files on disk) and **isopass** (production, HTTP-based). Automatic re-convergence on secret rotation. Secrets never appear in plaintext in configs, logs, gRPC payloads, or run results.
 
 ## Spanner
 
-Hub-spoke scaling for large fleets. A hub aggregates data from spokes, each handling a partition of nodes. Per-spoke compliance metrics, drill-down views, and thrall reassignment with drain support.
+Hub-spoke scaling for large fleets. A hub aggregates data from spokes, each handling a partition of nodes. Per-spoke compliance metrics, drill-down views, and envoy reassignment with drain support.
 
 ## License
 

@@ -26,7 +26,7 @@ func colorAction(action string) string {
 
 var previewCmd = &cobra.Command{
 	Use:   "preview [hostname-or-uuid]",
-	Short: "Dry-run config resolution for a thrall to see what resources would change without applying",
+	Short: "Dry-run config resolution for a envoy to see what resources would change without applying",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
 		env, _ := cmd.Flags().GetString("env")
@@ -45,7 +45,7 @@ var previewCmd = &cobra.Command{
 
 func previewNode(idOrHostname string) error {
 	client := newAPIClient()
-	thrallID, err := resolveThrall(client, idOrHostname)
+	envoyID, err := resolveEnvoy(client, idOrHostname)
 	if err != nil {
 		return err
 	}
@@ -57,12 +57,12 @@ func previewNode(idOrHostname string) error {
 			PlannedAction string `json:"plannedAction"`
 		} `json:"actions"`
 	}
-	if err := client.post("/api/v1/thralls/"+thrallID+"/dry-run", map[string]any{}, &resp); err != nil {
+	if err := client.post("/api/v1/envoys/"+envoyID+"/dry-run", map[string]any{}, &resp); err != nil {
 		return err
 	}
 
 	if len(resp.Actions) == 0 {
-		fmt.Printf("No changes planned for %s\n", thrallID)
+		fmt.Printf("No changes planned for %s\n", envoyID)
 		return nil
 	}
 
@@ -78,16 +78,16 @@ func previewNode(idOrHostname string) error {
 func previewMultiple(envFilter string) error {
 	client := newAPIClient()
 	var listResp struct {
-		Thralls []struct {
+		Envoys []struct {
 			ID       string `json:"id"`
 			Hostname string `json:"hostname"`
-		} `json:"thralls"`
+		} `json:"envoys"`
 	}
-	if err := client.get("/api/v1/thralls", &listResp); err != nil {
+	if err := client.get("/api/v1/envoys", &listResp); err != nil {
 		return err
 	}
 
-	for _, c := range listResp.Thralls {
+	for _, c := range listResp.Envoys {
 		fmt.Printf("--- %s (%s) ---\n", c.Hostname, c.ID)
 		if err := previewNode(c.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "Error previewing %s: %v\n", c.Hostname, err)
@@ -98,6 +98,6 @@ func previewMultiple(envFilter string) error {
 }
 
 func init() {
-	previewCmd.Flags().Bool("all", false, "Preview all thralls")
-	previewCmd.Flags().String("env", "", "Filter thralls by environment")
+	previewCmd.Flags().Bool("all", false, "Preview all envoys")
+	previewCmd.Flags().String("env", "", "Filter envoys by environment")
 }

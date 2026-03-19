@@ -24,9 +24,9 @@ type RunStore interface {
 	GetRunByID(ctx context.Context, id string) (Run, error)
 	ListAllRuns(ctx context.Context, limit int64) ([]Run, error)
 	ListRunResults(ctx context.Context, runID string) ([]RunResult, error)
-	ListRunsByThrall(ctx context.Context, arg ListRunsByThrallParams) ([]Run, error)
+	ListRunsByEnvoy(ctx context.Context, arg ListRunsByEnvoyParams) ([]Run, error)
 
-	// LatestRunPerThrall returns the most recent run for each given thrall ID.
+	// LatestRunPerEnvoy returns the most recent run for each given envoy ID.
 	// DB backend uses a single optimized query; memory backend does map lookups.
-	LatestRunPerThrall(ctx context.Context, thrallIDs []string) (map[string]*Run, error)
+	LatestRunPerEnvoy(ctx context.Context, envoyIDs []string) (map[string]*Run, error)
 }

@@ -1,11 +1,11 @@
-# hobnobcli rollback
+# vigogo rollback
 
-Rollback a thrall to a previous state using either a run ID or a specific file path.
+Rollback a envoy to a previous state using either a run ID or a specific file path.
 
 ## Usage
 
 ```bash
-hobnobcli rollback <hostname-or-uuid> [flags]
+vigogo rollback <hostname-or-uuid> [flags]
 ```
 
 ## Flags
@@ -22,7 +22,7 @@ Exactly one of `--run` or `--file` is required.
 ### Rollback to a previous run
 
 ```bash
-hobnobcli rollback web-01.example.com --run r1a2b3c4
+vigogo rollback web-01.example.com --run r1a2b3c4
 ```
 
 ```
@@ -32,7 +32,7 @@ Rollback successful: Restored 3 resources from run r1a2b3c4
 ### Rollback a specific file
 
 ```bash
-hobnobcli rollback web-01.example.com --file /etc/nginx/nginx.conf
+vigogo rollback web-01.example.com --file /etc/nginx/nginx.conf
 ```
 
 ```

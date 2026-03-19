@@ -29,7 +29,7 @@ Runs `whoami` to get the current username, stripping the `DOMAIN\` prefix if pre
 ```yaml
 - name: agent-info
   type: file
-  target_path: C:\ProgramData\hobnob\agent-info.txt
+  target_path: C:\ProgramData\vigo\agent-info.txt
   content: |
     Running as: {{ .Traits.identity.username }}
     Admin: {{ .Traits.identity.privileged }}

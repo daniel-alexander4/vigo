@@ -4,7 +4,7 @@ title: Compliance
 
 # Compliance
 
-Guides for deploying Hobnob in regulated environments.
+Guides for deploying Vigo in regulated environments.
 
 ## Topics
 

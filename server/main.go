@@ -29,32 +29,32 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	hobnobai "github.com/hobnob/hobnob/server/ai"
-	"github.com/hobnob/hobnob/server/api"
-	"github.com/hobnob/hobnob/server/audit"
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/backup"
-	"github.com/hobnob/hobnob/server/bootstrap"
-	"github.com/hobnob/hobnob/server/ca"
-	"github.com/hobnob/hobnob/server/compliance"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/publish"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/spanner"
-	"github.com/hobnob/hobnob/server/hardening"
-	"github.com/hobnob/hobnob/server/fleet"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
-	"github.com/hobnob/hobnob/server/license"
-	"github.com/hobnob/hobnob/server/metrics"
-	"github.com/hobnob/hobnob/server/registry"
-	"github.com/hobnob/hobnob/server/secrets"
-	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/push"
-	"github.com/hobnob/hobnob/server/peer"
-	"github.com/hobnob/hobnob/server/watcher"
-	"github.com/hobnob/hobnob/server/webhook"
-	"github.com/hobnob/hobnob/server/workflows"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	vigoai "github.com/daniel-alexander4/vigo/server/ai"
+	"github.com/daniel-alexander4/vigo/server/api"
+	"github.com/daniel-alexander4/vigo/server/audit"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/backup"
+	"github.com/daniel-alexander4/vigo/server/bootstrap"
+	"github.com/daniel-alexander4/vigo/server/ca"
+	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/publish"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/hardening"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/license"
+	"github.com/daniel-alexander4/vigo/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/registry"
+	"github.com/daniel-alexander4/vigo/server/secrets"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/peer"
+	"github.com/daniel-alexander4/vigo/server/watcher"
+	"github.com/daniel-alexander4/vigo/server/webhook"
+	"github.com/daniel-alexander4/vigo/server/workflows"
 )
 
 // version is set at build time via -ldflags="-X main.version=1.2.3".
@@ -85,7 +85,7 @@ func run() error {
 
 	// Determine config file path (the one env var that must remain — it
 	// bootstraps everything else).
-	configFile := envOrDefault("HOBNOB_CONFIG_FILE", "server.yaml")
+	configFile := envOrDefault("VIGO_CONFIG_FILE", "server.yaml")
 	serverRoot := filepath.Dir(configFile)
 
 	// Load secrets backend config (first pass — no secret resolution).
@@ -119,12 +119,12 @@ func run() error {
 	}
 
 	// Resolve directory paths: env var > server.yaml paths: > default.
-	migrationsDir := envOrDefault("HOBNOB_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
-	traitsDir := envOrDefault("HOBNOB_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
-	docsDir := envOrDefault("HOBNOB_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "docs"))
-	pushDir := envOrDefault("HOBNOB_PUSH_DIR", stringOrDefault(cfg.Paths.Tasks, "tasks"))
-	workflowsDir := envOrDefault("HOBNOB_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, "workflows"))
-	agentDir := envOrDefault("HOBNOB_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
+	migrationsDir := envOrDefault("VIGO_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
+	traitsDir := envOrDefault("VIGO_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
+	docsDir := envOrDefault("VIGO_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "docs"))
+	pushDir := envOrDefault("VIGO_PUSH_DIR", stringOrDefault(cfg.Paths.Tasks, "tasks"))
+	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, "workflows"))
+	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
 
@@ -219,7 +219,7 @@ func run() error {
 	}
 	slog.Info("migrations complete")
 
-	// Initialize query layer early — needed for license thrall count.
+	// Initialize query layer early — needed for license envoy count.
 	// For Postgres, wrap DB with placeholder rewriter so sqlc-generated
 	// queries (which use ?) work with Postgres ($1, $2, ...).
 	var dbtx db.DBTX = sqlDB
@@ -232,13 +232,13 @@ func run() error {
 	auditWriter := audit.NewWriter(queries)
 
 	// Load and validate license.
-	thrallCounter := func(ctx context.Context) (int, error) {
-		thralls, err := queries.ListThralls(ctx)
+	envoyCounter := func(ctx context.Context) (int, error) {
+		envoys, err := queries.ListEnvoys(ctx)
 		if err != nil {
 			return 0, err
 		}
 		count := 0
-		for _, t := range thralls {
+		for _, t := range envoys {
 			if t.Revoked == 0 {
 				count++
 			}
@@ -246,7 +246,7 @@ func run() error {
 		return count, nil
 	}
 
-	enforcer, err := license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile, thrallCounter, func() { cancel() })
+	enforcer, err := license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile, envoyCounter, func() { cancel() })
 	if err != nil {
 		return fmt.Errorf("license: %w", err)
 	}
@@ -289,11 +289,11 @@ func run() error {
 
 	// Wire audit writer into auth provider for login/logout/failed-auth logging.
 	switch p := authProvider.(type) {
-	case *hobnobauth.BasicProvider:
+	case *vigoauth.BasicProvider:
 		p.SetAuditWriter(auditWriter)
-	case *hobnobauth.OIDCProvider:
+	case *vigoauth.OIDCProvider:
 		p.SetAuditWriter(auditWriter)
-	case *hobnobauth.IsowebauthProvider:
+	case *vigoauth.IsowebauthProvider:
 		p.SetAuditWriter(auditWriter)
 	}
 
@@ -357,31 +357,31 @@ func run() error {
 	}
 
 	// Create SMTP notifier (disabled when smtp.host is empty).
-	var smtpEvents map[string]*hobnobsmtp.EventOverride
+	var smtpEvents map[string]*vigosmtp.EventOverride
 	if len(cfg.SMTP.Events) > 0 {
-		smtpEvents = make(map[string]*hobnobsmtp.EventOverride, len(cfg.SMTP.Events))
+		smtpEvents = make(map[string]*vigosmtp.EventOverride, len(cfg.SMTP.Events))
 		for name, ec := range cfg.SMTP.Events {
-			smtpEvents[name] = &hobnobsmtp.EventOverride{
+			smtpEvents[name] = &vigosmtp.EventOverride{
 				Recipients: ec.Recipients,
 			}
 		}
 	}
 
-	var digestCfg *hobnobsmtp.DigestConfig
+	var digestCfg *vigosmtp.DigestConfig
 	if cfg.SMTP.Digest.Interval != "" {
 		if interval, pErr := time.ParseDuration(cfg.SMTP.Digest.Interval); pErr == nil && interval > 0 {
 			digestEvents := make(map[string]bool, len(cfg.SMTP.Digest.Events))
 			for _, e := range cfg.SMTP.Digest.Events {
 				digestEvents[e] = true
 			}
-			digestCfg = &hobnobsmtp.DigestConfig{
+			digestCfg = &vigosmtp.DigestConfig{
 				Interval: interval,
 				Events:   digestEvents,
 			}
 		}
 	}
 
-	smtpNotifier := hobnobsmtp.NewNotifier(hobnobsmtp.Config{
+	smtpNotifier := vigosmtp.NewNotifier(vigosmtp.Config{
 		Host:       cfg.SMTP.Host,
 		Port:       cfg.SMTP.Port,
 		From:       cfg.SMTP.From,
@@ -398,7 +398,7 @@ func run() error {
 
 	// Wire SMTP notification for config reload failures.
 	configStore.SetOnReloadFailure(func(err error) {
-		smtpNotifier.Notify(hobnobsmtp.Event{
+		smtpNotifier.Notify(vigosmtp.Event{
 			Name:      "config.reload.failure",
 			Timestamp: time.Now().UTC(),
 			Details:   map[string]any{"error": err.Error()},
@@ -440,7 +440,7 @@ func run() error {
 		return fmt.Errorf("rehydrating fleet index: %w", err)
 	}
 
-	// Self-enroll: the server registers itself as its own thrall so it can
+	// Self-enroll: the server registers itself as its own envoy so it can
 	// manage its own state (backups, monitoring, etc.) via standard modules.
 	// Create async run batcher for delta events.
 	runBatcher := fleet.NewRunBatcher(runStore)
@@ -523,7 +523,7 @@ func run() error {
 		}
 		peerSvc.SetPeers(peerAddrs, peerTLS)
 
-		pb.RegisterHobnobPeerServer(grpcSrv, peerSvc)
+		pb.RegisterVigoPeerServer(grpcSrv, peerSvc)
 		slog.Info("peer replication enabled", "role", peerRole, "peers", len(cfg.Peers.Servers))
 
 		// Primary role: start pushing file changes to peers.
@@ -593,7 +593,7 @@ func run() error {
 			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, dispatcher, pollInterval, watchPaths)
 			w.SetConfigReloader(configStore)
 			w.SetNotifyFunc(func(event string, details map[string]any) {
-				smtpNotifier.Notify(hobnobsmtp.Event{
+				smtpNotifier.Notify(vigosmtp.Event{
 					Name:      event,
 					Timestamp: time.Now().UTC(),
 					Details:   details,
@@ -642,7 +642,7 @@ func run() error {
 	metricsCollector := metrics.NewCollector(queries, sqlDB)
 	go metricsCollector.Run(ctx, metricsInterval)
 
-	// Start stale thrall checker — fires thrall.stale SMTP events on transition.
+	// Start stale envoy checker — fires envoy.stale SMTP events on transition.
 	go runStaleChecker(ctx, queries, fleetIndex, smtpNotifier, baseInterval)
 
 	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer + DB).
@@ -706,8 +706,8 @@ func run() error {
 	peerHandler := api.NewPeerHandler(peerSvc)
 
 	// Auth-related API handlers.
-	userStore := hobnobauth.NewUserStore(queries)
-	tokenStore := hobnobauth.NewTokenStore(queries)
+	userStore := vigoauth.NewUserStore(queries)
+	tokenStore := vigoauth.NewTokenStore(queries)
 	usersHandler := api.NewUsersHandler(userStore, authMethod)
 	usersHandler.SetAuditWriter(auditWriter)
 	usersHandler.SetSecretsProvider(provider)
@@ -722,7 +722,7 @@ func run() error {
 		}); err != nil {
 			slog.Warn("failed to seed admin user", "error", err)
 		} else {
-			slog.Info("seeded default admin account (no password — run: hobnobcli secrets set-web-password hobnob/web/auth/admin)")
+			slog.Info("seeded default admin account (no password — run: vigogo secrets set-web-password vigo/web/auth/admin)")
 		}
 	}
 
@@ -745,9 +745,9 @@ func run() error {
 
 	// Initialize AI assistant (optional — disabled by default).
 	var aiHandler *api.AIHandler
-	var assistant *hobnobai.Assistant
+	var assistant *vigoai.Assistant
 	if cfg.AI.Enabled {
-		if err := hobnobai.ValidateConfig(cfg.AI); err != nil {
+		if err := vigoai.ValidateConfig(cfg.AI); err != nil {
 			return fmt.Errorf("ai config: %w", err)
 		}
 
@@ -755,13 +755,13 @@ func run() error {
 		if aiErr != nil {
 			slog.Warn("AI assistant disabled: provider init failed", "error", aiErr)
 		} else {
-			assistant = hobnobai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, cfg.AI, docsDir)
+			assistant = vigoai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, cfg.AI, docsDir)
 			aiHandler = api.NewAIHandler(assistant)
 			slog.Info("AI assistant enabled", "provider", aiProvider.Name(), "model", cfg.AI.Model)
 
 			// Pre-warm Ollama model in background so first user request doesn't
 			// hit a 60-90 second cold-load delay.
-			if ollamaP, ok := aiProvider.(*hobnobai.OllamaProvider); ok {
+			if ollamaP, ok := aiProvider.(*vigoai.OllamaProvider); ok {
 				go ollamaP.WarmModel(cfg.AI.Model)
 			}
 		}
@@ -1042,7 +1042,7 @@ func parseMemoryLimit(s string) int64 {
 	return 0
 }
 
-// runStaleChecker periodically scans thralls and fires a thrall.stale SMTP
+// runStaleChecker periodically scans envoys and fires a envoy.stale SMTP
 // persistComplianceSnapshot writes the current compliance counters to the
 // compliance_history table for long-term storage (survives server restarts).
 func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
@@ -1062,16 +1062,16 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 	}
 }
 
-// notification when a thrall transitions from non-stale to stale. A thrall
+// notification when a envoy transitions from non-stale to stale. A envoy
 // is stale if it hasn't checked in within 2x the base interval. The checker
 // runs at the base interval frequency.
-func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, notifier *hobnobsmtp.Notifier, baseInterval time.Duration) {
+func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, notifier *vigosmtp.Notifier, baseInterval time.Duration) {
 	if notifier == nil || !notifier.Enabled() {
 		return
 	}
 
 	staleThreshold := 2 * baseInterval
-	wasStale := make(map[string]bool) // thrall ID → was stale last tick
+	wasStale := make(map[string]bool) // envoy ID → was stale last tick
 
 	ticker := time.NewTicker(baseInterval)
 	defer ticker.Stop()
@@ -1083,9 +1083,9 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 		case <-ticker.C:
 			// Use FleetIndex when available (zero DB queries).
 			if fleetIdx != nil {
-				allThralls := fleetIdx.AllThralls()
+				allEnvoys := fleetIdx.AllEnvoys()
 				nowStale := make(map[string]bool, len(wasStale))
-				for _, ts := range allThralls {
+				for _, ts := range allEnvoys {
 					if ts.Revoked || ts.LastSeen.IsZero() {
 						continue
 					}
@@ -1096,10 +1096,10 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 					if wasStale[ts.ID] {
 						continue
 					}
-					notifier.Notify(hobnobsmtp.Event{
-						Name:      "thrall.stale",
+					notifier.Notify(vigosmtp.Event{
+						Name:      "envoy.stale",
 						Timestamp: time.Now().UTC(),
-						Thrall: &hobnobsmtp.ThrallInfo{
+						Envoy: &vigosmtp.EnvoyInfo{
 							ID: ts.ID, Hostname: ts.Hostname, IP: ts.IP,
 						},
 						Details: map[string]any{
@@ -1111,14 +1111,14 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 				continue
 			}
 
-			thralls, err := queries.ListThralls(ctx)
+			envoys, err := queries.ListEnvoys(ctx)
 			if err != nil {
-				slog.Error("stale checker: listing thralls", "error", err)
+				slog.Error("stale checker: listing envoys", "error", err)
 				continue
 			}
 
 			nowStale := make(map[string]bool, len(wasStale))
-			for _, t := range thralls {
+			for _, t := range envoys {
 				if t.Revoked != 0 {
 					continue
 				}
@@ -1134,10 +1134,10 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 					continue // already notified
 				}
 
-				notifier.Notify(hobnobsmtp.Event{
-					Name:      "thrall.stale",
+				notifier.Notify(vigosmtp.Event{
+					Name:      "envoy.stale",
 					Timestamp: time.Now().UTC(),
-					Thrall: &hobnobsmtp.ThrallInfo{
+					Envoy: &vigosmtp.EnvoyInfo{
 						ID:       t.ID,
 						Hostname: t.Hostname,
 						IP:       t.IpAddress,
@@ -1153,9 +1153,9 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 }
 
 // runComplianceChecker periodically computes the compliance percentage across
-// all active thralls and fires a compliance.threshold SMTP notification when
+// all active envoys and fires a compliance.threshold SMTP notification when
 // it drops below the configured threshold. Only fires once per transition.
-func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, notifier *hobnobsmtp.Notifier, baseInterval time.Duration, threshold int) {
+func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, notifier *vigosmtp.Notifier, baseInterval time.Duration, threshold int) {
 	if notifier == nil || !notifier.Enabled() || threshold <= 0 {
 		return
 	}
@@ -1182,7 +1182,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 				belowNow := pct < threshold
 
 				if belowNow && !wasBelowThreshold {
-					notifier.Notify(hobnobsmtp.Event{
+					notifier.Notify(vigosmtp.Event{
 						Name:      "compliance.threshold",
 						Timestamp: time.Now().UTC(),
 						Details: map[string]any{
@@ -1197,27 +1197,27 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 				continue
 			}
 
-			thralls, err := queries.ListThralls(ctx)
+			envoys, err := queries.ListEnvoys(ctx)
 			if err != nil {
-				slog.Error("compliance checker: listing thralls", "error", err)
+				slog.Error("compliance checker: listing envoys", "error", err)
 				continue
 			}
 
-			// Collect active thrall IDs.
+			// Collect active envoy IDs.
 			var ids []string
-			thrallMap := make(map[string]db.Thrall)
-			for _, t := range thralls {
+			envoyMap := make(map[string]db.Envoy)
+			for _, t := range envoys {
 				if t.Revoked != 0 {
 					continue
 				}
 				ids = append(ids, t.ID)
-				thrallMap[t.ID] = t
+				envoyMap[t.ID] = t
 			}
 			if len(ids) == 0 {
 				continue
 			}
 
-			latestRuns, err := runStore.LatestRunPerThrall(ctx, ids)
+			latestRuns, err := runStore.LatestRunPerEnvoy(ctx, ids)
 			if err != nil {
 				slog.Error("compliance checker: fetching latest runs", "error", err)
 				continue
@@ -1225,7 +1225,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 
 			compliantCount := 0
 			for _, id := range ids {
-				t := thrallMap[id]
+				t := envoyMap[id]
 				var recent []compliance.RunInfo
 				if run, ok := latestRuns[id]; ok {
 					recent = []compliance.RunInfo{{
@@ -1246,7 +1246,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 			belowNow := pct < threshold
 
 			if belowNow && !wasBelowThreshold {
-				notifier.Notify(hobnobsmtp.Event{
+				notifier.Notify(vigosmtp.Event{
 					Name:      "compliance.threshold",
 					Timestamp: time.Now().UTC(),
 					Details: map[string]any{
@@ -1264,10 +1264,10 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 
 // createAIProvider creates the LLM provider based on the AI config section.
 // Returns an error if the provider cannot be initialized (e.g. Ollama unreachable).
-func createAIProvider(ctx context.Context, cfg config.AISection) (hobnobai.Provider, error) {
+func createAIProvider(ctx context.Context, cfg config.AISection) (vigoai.Provider, error) {
 	switch cfg.Provider {
 	case "ollama", "":
-		p := hobnobai.NewOllamaProvider(cfg.BaseURL)
+		p := vigoai.NewOllamaProvider(cfg.BaseURL)
 		if err := p.EnsureModel(ctx, cfg.Model); err != nil {
 			return nil, fmt.Errorf("ollama: %w", err)
 		}
@@ -1276,21 +1276,21 @@ func createAIProvider(ctx context.Context, cfg config.AISection) (hobnobai.Provi
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("claude provider requires ai.api_key")
 		}
-		return hobnobai.NewClaudeProvider(cfg.APIKey), nil
+		return vigoai.NewClaudeProvider(cfg.APIKey), nil
 	case "openai":
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("openai provider requires ai.api_key")
 		}
-		return hobnobai.NewOpenAIProvider(cfg.APIKey), nil
+		return vigoai.NewOpenAIProvider(cfg.APIKey), nil
 	case "openai-compat":
-		return hobnobai.NewOpenAICompatProvider(cfg.BaseURL, cfg.APIKey), nil
+		return vigoai.NewOpenAICompatProvider(cfg.BaseURL, cfg.APIKey), nil
 	default:
 		return nil, fmt.Errorf("unknown AI provider: %s", cfg.Provider)
 	}
 }
 
 // createAuthProvider builds the appropriate auth provider from config.
-func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sql.DB, queries *db.Queries, secretsProvider secrets.Provider) (hobnobauth.Provider, error) {
+func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sql.DB, queries *db.Queries, secretsProvider secrets.Provider) (vigoauth.Provider, error) {
 	method := cfg.Auth.Method
 	if method == "" {
 		method = "basic"
@@ -1308,16 +1308,16 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 
 	switch method {
 	case "basic":
-		sessions := hobnobauth.NewSessionManager(sqlDB, idleTimeout)
-		userStore := hobnobauth.NewUserStore(queries)
-		tokenStore := hobnobauth.NewTokenStore(queries)
-		return hobnobauth.NewBasicProvider(sessions, userStore, tokenStore, secretsProvider), nil
+		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
+		userStore := vigoauth.NewUserStore(queries)
+		tokenStore := vigoauth.NewTokenStore(queries)
+		return vigoauth.NewBasicProvider(sessions, userStore, tokenStore, secretsProvider), nil
 
 	case "oidc":
-		sessions := hobnobauth.NewSessionManager(sqlDB, idleTimeout)
-		userStore := hobnobauth.NewUserStore(queries)
-		tokenStore := hobnobauth.NewTokenStore(queries)
-		return hobnobauth.NewOIDCProvider(ctx, hobnobauth.OIDCConfig{
+		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
+		userStore := vigoauth.NewUserStore(queries)
+		tokenStore := vigoauth.NewTokenStore(queries)
+		return vigoauth.NewOIDCProvider(ctx, vigoauth.OIDCConfig{
 			Issuer:       cfg.Auth.OIDC.Issuer,
 			ClientID:     cfg.Auth.OIDC.ClientID,
 			ClientSecret: cfg.Auth.OIDC.ClientSecret,
@@ -1326,10 +1326,10 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		}, sessions, userStore, tokenStore)
 
 	case "isowebauth":
-		sessions := hobnobauth.NewSessionManager(sqlDB, idleTimeout)
-		userStore := hobnobauth.NewUserStore(queries)
-		tokenStore := hobnobauth.NewTokenStore(queries)
-		return hobnobauth.NewIsowebauthProvider(hobnobauth.IsowebauthConfig{
+		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
+		userStore := vigoauth.NewUserStore(queries)
+		tokenStore := vigoauth.NewTokenStore(queries)
+		return vigoauth.NewIsowebauthProvider(vigoauth.IsowebauthConfig{
 			Namespace: cfg.Auth.Isowebauth.Namespace,
 		}, sessions, userStore, tokenStore)
 

@@ -1,6 +1,6 @@
-# hobnobcli spanner
+# vigogo spanner
 
-Manage and inspect hub-spoke spanner status, including spoke health, compliance, thrall reassignment, and spoke draining.
+Manage and inspect hub-spoke spanner status, including spoke health, compliance, envoy reassignment, and spoke draining.
 
 > **Note:** Spanner requires a paid license. The server will not start in hub or spoke mode on the built-in free license.
 
@@ -11,16 +11,16 @@ Manage and inspect hub-spoke spanner status, including spoke health, compliance,
 | `status` | Show spanner role and spoke health |
 | `spokes` | List all spokes |
 | `spoke` | Show spoke detail and compliance |
-| `spoke-thralls` | List thralls on a spoke |
+| `spoke-envoys` | List envoys on a spoke |
 | `spoke-runs` | List runs on a spoke |
 | `spoke-push` | Force push on a spoke |
-| `reassign` | Reassign a thrall from one spoke to another |
-| `drain` | Drain all thralls from a spoke |
+| `reassign` | Reassign a envoy from one spoke to another |
+| `drain` | Drain all envoys from a spoke |
 
 ## Usage
 
 ```bash
-hobnobcli spanner [subcommand] [flags]
+vigogo spanner [subcommand] [flags]
 ```
 
 ## status
@@ -28,21 +28,21 @@ hobnobcli spanner [subcommand] [flags]
 Show the spanner role and an overview of all spokes with health, compliance, and latency.
 
 ```bash
-hobnobcli spanner status
+vigogo spanner status
 ```
 
 ### Example
 
 ```bash
-hobnobcli spanner status
+vigogo spanner status
 ```
 
 ```
   Role: hub
   Spokes: 3 (3 healthy)
-  Total Thralls: 45
+  Total Envoys: 45
 
-  ID      ADDRESS               THRALLS  COMPLIANT  COMPLIANCE  LATENCY  PATTERNS         STATUS
+  ID      ADDRESS               ENVOYS  COMPLIANT  COMPLIANCE  LATENCY  PATTERNS         STATUS
   east    spoke-east:1530       20       18/20      90.0%       12ms     *.east.*         healthy
   west    spoke-west:1530       15       15/15      100.0%      8ms      *.west.*         healthy
   eu      spoke-eu:1530         10       8/10       80.0%       45ms     *.eu.*           healthy
@@ -53,13 +53,13 @@ hobnobcli spanner status
 List all spokes in a compact table format.
 
 ```bash
-hobnobcli spanner spokes
+vigogo spanner spokes
 ```
 
 ### Example output
 
 ```
-  ID      ADDRESS               THRALLS  COMPLIANCE  LATENCY  STATUS
+  ID      ADDRESS               ENVOYS  COMPLIANCE  LATENCY  STATUS
   east    spoke-east:1530       20       90.0%       12ms     healthy
   west    spoke-west:1530       15       100.0%      8ms      healthy
   eu      spoke-eu:1530         10       80.0%       45ms     healthy
@@ -70,13 +70,13 @@ hobnobcli spanner spokes
 Show detailed information for a specific spoke, including compliance breakdown.
 
 ```bash
-hobnobcli spanner spoke <spoke-id>
+vigogo spanner spoke <spoke-id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli spanner spoke east
+vigogo spanner spoke east
 ```
 
 ```
@@ -86,7 +86,7 @@ hobnobcli spanner spoke east
   Latency: 12ms
   Patterns: *.east.*
 
-  Thralls: 20
+  Envoys: 20
   Compliance: 90.0%
     Compliant: 18
     Drifted:   1
@@ -95,18 +95,18 @@ hobnobcli spanner spoke east
     Unknown:   0
 ```
 
-## spoke-thralls
+## spoke-envoys
 
-List all thralls enrolled on a specific spoke.
+List all envoys enrolled on a specific spoke.
 
 ```bash
-hobnobcli spanner spoke-thralls <spoke-id>
+vigogo spanner spoke-envoys <spoke-id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli spanner spoke-thralls east
+vigogo spanner spoke-envoys east
 ```
 
 ```
@@ -121,59 +121,59 @@ hobnobcli spanner spoke-thralls east
 List recent runs on a specific spoke.
 
 ```bash
-hobnobcli spanner spoke-runs <spoke-id>
+vigogo spanner spoke-runs <spoke-id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli spanner spoke-runs east
+vigogo spanner spoke-runs east
 ```
 
 ```
-  ID          THRALL      STATUS     MODULES  CHANGED  FAILED
+  ID          ENVOY      STATUS     MODULES  CHANGED  FAILED
   r1a2b3c4    a1b2c3d4    success    5        2        0
   r5e6f7g8    e5f6g7h8    success    3        0        0
 ```
 
 ## spoke-push
 
-Force push an immediate check-in on a spoke, optionally targeting a specific thrall.
+Force push an immediate check-in on a spoke, optionally targeting a specific envoy.
 
 ```bash
-hobnobcli spanner spoke-push <spoke-id> [flags]
+vigogo spanner spoke-push <spoke-id> [flags]
 ```
 
 ### Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--thrall-id` | | | Target a specific thrall by ID |
+| `--envoy-id` | | | Target a specific envoy by ID |
 
 ### Examples
 
 ```bash
-hobnobcli spanner spoke-push east
+vigogo spanner spoke-push east
 ```
 
 ```
-  Force push sent to spoke east: 20 thralls notified.
+  Force push sent to spoke east: 20 envoys notified.
 ```
 
 ```bash
-hobnobcli spanner spoke-push east --thrall-id a1b2c3d4
+vigogo spanner spoke-push east --envoy-id a1b2c3d4
 ```
 
 ```
-  Force push sent to spoke east: 1 thralls notified.
+  Force push sent to spoke east: 1 envoys notified.
 ```
 
 ## reassign
 
-Reassign a thrall from one spoke to another. The agent reconnects on its next check-in.
+Reassign a envoy from one spoke to another. The agent reconnects on its next check-in.
 
 ```bash
-hobnobcli spanner reassign <thrall-id> --from <spoke-id> --to <spoke-id>
+vigogo spanner reassign <envoy-id> --from <spoke-id> --to <spoke-id>
 ```
 
 ### Flags
@@ -186,11 +186,11 @@ hobnobcli spanner reassign <thrall-id> --from <spoke-id> --to <spoke-id>
 ### Example
 
 ```bash
-hobnobcli spanner reassign a1b2c3d4 --from east --to west
+vigogo spanner reassign a1b2c3d4 --from east --to west
 ```
 
 ```
-  Thrall a1b2c3d4 reassigned.
+  Envoy a1b2c3d4 reassigned.
   New ID:     x9y8z7w6
   Target:     spoke-west:1530
   The agent will reconnect on its next check-in.
@@ -198,10 +198,10 @@ hobnobcli spanner reassign a1b2c3d4 --from east --to west
 
 ## drain
 
-Drain all thralls from a spoke, redistributing them to another spoke or auto-routing by pattern.
+Drain all envoys from a spoke, redistributing them to another spoke or auto-routing by pattern.
 
 ```bash
-hobnobcli spanner drain <spoke-id> [flags]
+vigogo spanner drain <spoke-id> [flags]
 ```
 
 ### Flags
@@ -215,7 +215,7 @@ hobnobcli spanner drain <spoke-id> [flags]
 #### Drain to a specific spoke
 
 ```bash
-hobnobcli spanner drain east --to west
+vigogo spanner drain east --to west
 ```
 
 ```
@@ -225,16 +225,16 @@ hobnobcli spanner drain east --to west
 #### Drain with auto-routing
 
 ```bash
-hobnobcli spanner drain east
+vigogo spanner drain east
 ```
 
 ```
   Spoke east drained: 18 moved, 2 failed.
-  Error: thrall a1b2c3d4 has no matching spoke pattern
-  Error: thrall e5f6g7h8 has no matching spoke pattern
+  Error: envoy a1b2c3d4 has no matching spoke pattern
+  Error: envoy e5f6g7h8 has no matching spoke pattern
 ```
 
 ## Related
 
-- [thralls](thralls.md) -- manage enrolled thralls
-- [push](push.md) -- push to local thralls
+- [envoys](envoys.md) -- manage enrolled envoys
+- [push](push.md) -- push to local envoys

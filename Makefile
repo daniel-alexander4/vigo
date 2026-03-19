@@ -16,14 +16,14 @@ GO_LDFLAGS := -ldflags="-s -w -buildid= $(GO_VERSION_FLAG)"
 GO_HARDENED := -trimpath $(GO_LDFLAGS)
 
 build: build-agent
-	go build -ldflags="-X main.version=$(VERSION)" -o bin/hobd ./server
-	go build -ldflags="-X main.version=$(VERSION)" -o bin/hobnobcli ./cli
-	go build -o bin/hobnob-license-manager ./license-manager
-	ln -sf hobnobcli bin/hnbvi
+	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
+	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigogo ./cli
+	go build -o bin/vigo-license-manager ./license-manager
+	ln -sf vigogo bin/hnbvi
 
 build-agent:
 	cd agent-rs && cargo build --release
-	cp agent-rs/target/release/hobnob bin/hobnob
+	cp agent-rs/target/release/vigo bin/vigo
 
 test:
 	go test $(shell go list ./... | grep -v test/integration) -v -race -count=1
@@ -52,21 +52,21 @@ lint-agent:
 #
 # To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
 dist: dist-agent
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/hobd ./server
-	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/hobnobcli ./cli
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
+	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigogo ./cli
 
 # Obfuscated distribution build using garble.
 # Requires: go install mvdan.cc/garble@latest
 dist-obfuscated: dist-agent
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 garble -literals -tiny build $(GO_HARDENED) -o dist/server/linux/amd64/hobd ./server
-	GOOS=linux GOARCH=amd64 garble -literals -tiny build $(GO_HARDENED) -o dist/cli/linux/amd64/hobnobcli ./cli
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 garble -literals -tiny build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
+	GOOS=linux GOARCH=amd64 garble -literals -tiny build $(GO_HARDENED) -o dist/cli/linux/amd64/vigogo ./cli
 
 # Sign distribution binaries with ED25519 key for tamper detection.
 # Usage: make dist-sign SIGN_KEY=/path/to/signing.key
 SIGN_KEY ?= signing.key
 dist-sign: dist-sign-agent
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
-	@for bin in dist/server/linux/amd64/hobd dist/cli/linux/amd64/hobnobcli; do \
+	@for bin in dist/server/linux/amd64/vigosrv dist/cli/linux/amd64/vigogo; do \
 		if [ -f "$$bin" ]; then \
 			go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
 			echo "signed $$bin"; \
@@ -77,7 +77,7 @@ dist-sign: dist-sign-agent
 # Usage: make dist-sign-agent SIGN_KEY=/path/to/signing.key
 dist-sign-agent:
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
-	@find dist/agent -type f \( -name 'hobnob' -o -name 'hobnob.exe' \) 2>/dev/null | while read bin; do \
+	@find dist/agent -type f \( -name 'vigo' -o -name 'vigo.exe' \) 2>/dev/null | while read bin; do \
 		go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
 		echo "signed $$bin"; \
 	done
@@ -89,9 +89,9 @@ dist-sign-agent:
 dist-agent:
 	mkdir -p dist/agent/linux/amd64 dist/agent/linux/arm64
 	cd agent-rs && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
-	cp agent-rs/target/x86_64-unknown-linux-musl/release/hobnob dist/agent/linux/amd64/hobnob
+	cp agent-rs/target/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
 	cd agent-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
-	cp agent-rs/target/aarch64-unknown-linux-musl/release/hobnob dist/agent/linux/arm64/hobnob
+	cp agent-rs/target/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
 
 # Cross-compile Rust agent for Windows.
 # Prerequisites:
@@ -100,7 +100,7 @@ dist-agent:
 dist-agent-windows:
 	mkdir -p dist/agent/windows/amd64
 	cd agent-rs && cross build --release --target x86_64-pc-windows-msvc
-	cp agent-rs/target/x86_64-pc-windows-msvc/release/hobnob.exe dist/agent/windows/amd64/hobnob.exe
+	cp agent-rs/target/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
 
 # Cross-compile Rust agent for macOS.
 # Prerequisites (from Linux):
@@ -109,9 +109,9 @@ dist-agent-windows:
 dist-agent-macos:
 	mkdir -p dist/agent/darwin/amd64 dist/agent/darwin/arm64
 	cd agent-rs && cargo build --release --target x86_64-apple-darwin
-	cp agent-rs/target/x86_64-apple-darwin/release/hobnob dist/agent/darwin/amd64/hobnob
+	cp agent-rs/target/x86_64-apple-darwin/release/vigo dist/agent/darwin/amd64/vigo
 	cd agent-rs && cargo build --release --target aarch64-apple-darwin
-	cp agent-rs/target/aarch64-apple-darwin/release/hobnob dist/agent/darwin/arm64/hobnob
+	cp agent-rs/target/aarch64-apple-darwin/release/vigo dist/agent/darwin/arm64/vigo
 
 # Cross-compile Rust agent for FreeBSD (Rust Tier 2).
 # Prerequisites:
@@ -120,7 +120,7 @@ dist-agent-macos:
 dist-agent-freebsd:
 	mkdir -p dist/agent/freebsd/amd64
 	cd agent-rs && cross build --release --target x86_64-unknown-freebsd
-	cp agent-rs/target/x86_64-unknown-freebsd/release/hobnob dist/agent/freebsd/amd64/hobnob
+	cp agent-rs/target/x86_64-unknown-freebsd/release/vigo dist/agent/freebsd/amd64/vigo
 
 # Build Rust agent for illumos (native build only).
 # Prerequisites:
@@ -129,7 +129,7 @@ dist-agent-freebsd:
 dist-agent-illumos:
 	mkdir -p dist/agent/illumos/amd64
 	cd agent-rs && cargo build --release --target x86_64-unknown-illumos
-	cp agent-rs/target/x86_64-unknown-illumos/release/hobnob dist/agent/illumos/amd64/hobnob
+	cp agent-rs/target/x86_64-unknown-illumos/release/vigo dist/agent/illumos/amd64/vigo
 
 # --- Codegen ---
 
@@ -147,23 +147,23 @@ certs:
 	@echo "Generating CA keypair..."
 	openssl genrsa -out certs/ca.key 4096
 	openssl req -new -x509 -key certs/ca.key -out certs/ca.crt -days 3650 \
-		-subj "/CN=Hobnob CA"
+		-subj "/CN=Vigo CA"
 	@echo "Generating server keypair..."
 	openssl genrsa -out certs/server.key 4096
 	openssl req -new -key certs/server.key -out certs/server.csr \
-		-subj "/CN=hobnob" \
-		-addext "subjectAltName=DNS:localhost,DNS:hobnob,DNS:server,IP:127.0.0.1"
+		-subj "/CN=vigo" \
+		-addext "subjectAltName=DNS:localhost,DNS:vigo,DNS:server,IP:127.0.0.1"
 	openssl x509 -req -in certs/server.csr -CA certs/ca.crt -CAkey certs/ca.key \
 		-CAcreateserial -out certs/server.crt -days 365 \
 		-copy_extensions copyall
 	rm -f certs/server.csr certs/ca.srl
 	@echo "Certificates generated in certs/"
 
-# --- Docker Compose (reads HOBNOB_SERVICES from server .env) ---
+# --- Docker Compose (reads VIGO_SERVICES from server .env) ---
 
-ENVFILE ?= /srv/hobnob/.env
+ENVFILE ?= /srv/vigo/.env
 
-IMAGE ?= ghcr.io/daniel-alexander4/hobnob:latest
+IMAGE ?= ghcr.io/daniel-alexander4/vigo:latest
 
 push-image:
 	docker build -f Dockerfile.server -t $(IMAGE) .

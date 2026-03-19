@@ -1,5 +1,5 @@
 (function() {
-    var STORAGE_KEY = 'hobnob_ai_drawer';
+    var STORAGE_KEY = 'vigo_ai_drawer';
     var busy = false;
     var open = false;
     var history = [];

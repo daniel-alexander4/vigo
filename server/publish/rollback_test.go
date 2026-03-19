@@ -16,7 +16,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 	// Create some content in live.
 	modDir := filepath.Join(liveDir, "modules")
 	os.MkdirAll(modDir, 0755)
-	os.WriteFile(filepath.Join(modDir, "nginx.hnb"), []byte("name: nginx\nresources: []\n"), 0644)
+	os.WriteFile(filepath.Join(modDir, "nginx.vgo"), []byte("name: nginx\nresources: []\n"), 0644)
 
 	// Snapshot.
 	version, err := SnapshotLive(liveDir, historyDir, 5)
@@ -40,7 +40,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 	}
 
 	// Modify live.
-	os.WriteFile(filepath.Join(modDir, "nginx.hnb"), []byte("name: nginx\nresources: [changed]\n"), 0644)
+	os.WriteFile(filepath.Join(modDir, "nginx.vgo"), []byte("name: nginx\nresources: [changed]\n"), 0644)
 
 	// Rollback.
 	if err := RollbackToVersion(historyDir, version, liveDir); err != nil {
@@ -48,7 +48,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 	}
 
 	// Verify content is restored.
-	data, err := os.ReadFile(filepath.Join(liveDir, "modules", "nginx.hnb"))
+	data, err := os.ReadFile(filepath.Join(liveDir, "modules", "nginx.vgo"))
 	if err != nil {
 		t.Fatalf("reading restored file: %v", err)
 	}
@@ -63,11 +63,11 @@ func TestSnapshotPruning(t *testing.T) {
 
 	modDir := filepath.Join(liveDir, "modules")
 	os.MkdirAll(modDir, 0755)
-	os.WriteFile(filepath.Join(modDir, "test.hnb"), []byte("test"), 0644)
+	os.WriteFile(filepath.Join(modDir, "test.vgo"), []byte("test"), 0644)
 
 	// Create 5 snapshots with max=3.
 	for i := 0; i < 5; i++ {
-		os.WriteFile(filepath.Join(modDir, "test.hnb"), []byte("iteration"), 0644)
+		os.WriteFile(filepath.Join(modDir, "test.vgo"), []byte("iteration"), 0644)
 		if _, err := SnapshotLive(liveDir, historyDir, 3); err != nil {
 			t.Fatalf("snapshot %d: %v", i, err)
 		}

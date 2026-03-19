@@ -1,4 +1,4 @@
-# hobnobcli packages
+# vigogo packages
 
 Query package audit information across your fleet.
 
@@ -6,48 +6,48 @@ Query package audit information across your fleet.
 
 | Subcommand | Description |
 |------------|-------------|
-| `list` | List packages across thralls |
+| `list` | List packages across envoys |
 | `drift` | List packages where installed version differs from desired |
 
 ## Usage
 
 ```bash
-hobnobcli packages [subcommand] [flags]
+vigogo packages [subcommand] [flags]
 ```
 
 ## list
 
-List packages across thralls with installed and desired version information.
+List packages across envoys with installed and desired version information.
 
 ```bash
-hobnobcli packages list [flags]
+vigogo packages list [flags]
 ```
 
 ### Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--thrall` | | | Filter by thrall ID |
+| `--envoy` | | | Filter by envoy ID |
 
 ### Examples
 
 #### List all packages
 
 ```bash
-hobnobcli packages list
+vigogo packages list
 ```
 
 ```
-THRALL                PACKAGE    INSTALLED  DESIRED
+ENVOY                PACKAGE    INSTALLED  DESIRED
 web-01.example.com    nginx      1.24.0     1.24.0
 web-01.example.com    openssl    3.0.13     3.0.13
 db-01.internal.net    postgres   16.2       16.2
 ```
 
-#### List packages for a specific thrall
+#### List packages for a specific envoy
 
 ```bash
-hobnobcli packages list --thrall a1b2c3d4
+vigogo packages list --envoy a1b2c3d4
 ```
 
 ## drift
@@ -55,17 +55,17 @@ hobnobcli packages list --thrall a1b2c3d4
 List packages where the installed version differs from the desired version.
 
 ```bash
-hobnobcli packages drift
+vigogo packages drift
 ```
 
 ### Example
 
 ```bash
-hobnobcli packages drift
+vigogo packages drift
 ```
 
 ```
-THRALL                PACKAGE    INSTALLED  DESIRED    DETECTED
+ENVOY                PACKAGE    INSTALLED  DESIRED    DETECTED
 web-02.example.com    nginx      1.22.1     1.24.0     2026-03-13 12:00
 db-01.internal.net    postgres   15.6       16.2       2026-03-13 11:45
 ```
@@ -76,6 +76,6 @@ No package drift detected
 
 ## Related
 
-- [thralls](thralls.md) -- manage enrolled thralls
+- [envoys](envoys.md) -- manage enrolled envoys
 - [runs](runs.md) -- view run history
 - [preview](preview.md) -- preview planned changes

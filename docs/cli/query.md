@@ -1,11 +1,11 @@
-# hobnobcli query
+# vigogo query
 
-Query trait values from targeted thralls in real time, with cached fallback for offline nodes.
+Query trait values from targeted envoys in real time, with cached fallback for offline nodes.
 
 ## Usage
 
 ```bash
-hobnobcli query <trait-path> --target <spec> [flags]
+vigogo query <trait-path> --target <spec> [flags]
 ```
 
 ## Flags
@@ -20,7 +20,7 @@ hobnobcli query <trait-path> --target <spec> [flags]
 ### Query OS distribution across web servers
 
 ```bash
-hobnobcli query os.distro --target "*.web.*"
+vigogo query os.distro --target "*.web.*"
 ```
 
 ```
@@ -39,7 +39,7 @@ web-04.example.com    ubuntu    offline cached 2026-03-12 18:00
 ### Query memory across Debian hosts
 
 ```bash
-hobnobcli query hardware.memory_mb --target "os.family=debian"
+vigogo query hardware.memory_mb --target "os.family=debian"
 ```
 
 ```
@@ -57,7 +57,7 @@ app-01.example.com    16384   responded
 ### Query with timeout handling
 
 ```bash
-hobnobcli query os.version --target "*.web.*" --timeout 5
+vigogo query os.version --target "*.web.*" --timeout 5
 ```
 
 ```
@@ -74,6 +74,6 @@ web-03.example.com    timed_out
 
 ## Related
 
-- [thralls](thralls.md) -- view traits for a specific thrall
-- [inventory](inventory.md) -- query thralls by traits
+- [envoys](envoys.md) -- view traits for a specific envoy
+- [inventory](inventory.md) -- query envoys by traits
 - [push](push.md) -- dispatch ad-hoc commands

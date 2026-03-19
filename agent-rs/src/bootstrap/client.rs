@@ -20,7 +20,7 @@ pub struct RegisterRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterResponse {
-    pub thrall_id: String,
+    pub envoy_id: String,
     pub signed_cert_pem: String,
     pub ca_cert_pem: String,
     #[serde(default)]
@@ -75,8 +75,8 @@ pub async fn register(server: &str, req: &RegisterRequest) -> Result<RegisterRes
     let resp: RegisterResponse =
         serde_json::from_slice(&resp_bytes).context("parse bootstrap JSON response")?;
 
-    if resp.thrall_id.is_empty() {
-        bail!("server returned empty thrall_id");
+    if resp.envoy_id.is_empty() {
+        bail!("server returned empty envoy_id");
     }
 
     Ok(resp)
@@ -134,12 +134,12 @@ mod tests {
     #[test]
     fn test_register_response_deserialization() {
         let json = r#"{
-            "thrall_id": "550e8400-e29b-41d4-a716-446655440000",
+            "envoy_id": "550e8400-e29b-41d4-a716-446655440000",
             "signed_cert_pem": "-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----\n",
             "ca_cert_pem": "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----\n"
         }"#;
         let resp: RegisterResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.thrall_id, "550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(resp.envoy_id, "550e8400-e29b-41d4-a716-446655440000");
         assert!(resp.signed_cert_pem.contains("BEGIN CERTIFICATE"));
         assert!(resp.ca_cert_pem.contains("BEGIN CERTIFICATE"));
     }

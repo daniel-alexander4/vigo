@@ -39,11 +39,11 @@ func TestLocalProviderSetAndGet(t *testing.T) {
 	p, _ := setupLocalProvider(t)
 	defer p.Close()
 
-	if err := p.Set("hobnob/db/dsn", "my-database.db"); err != nil {
+	if err := p.Set("vigo/db/dsn", "my-database.db"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	val, err := p.Get(context.Background(), "vigo/db/dsn")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -57,11 +57,11 @@ func TestLocalProviderSetTrimsWhitespace(t *testing.T) {
 	defer p.Close()
 
 	// Simulate copy-paste with trailing newline, tabs, spaces.
-	if err := p.Set("hobnob/api/key", "  sk-abc123\n\t "); err != nil {
+	if err := p.Set("vigo/api/key", "  sk-abc123\n\t "); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/api/key")
+	val, err := p.Get(context.Background(), "vigo/api/key")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -75,11 +75,11 @@ func TestLocalProviderSetTrimsCarriageReturn(t *testing.T) {
 	defer p.Close()
 
 	// Windows-style line ending from copy-paste.
-	if err := p.Set("hobnob/api/key", "mypassword\r\n"); err != nil {
+	if err := p.Set("vigo/api/key", "mypassword\r\n"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/api/key")
+	val, err := p.Get(context.Background(), "vigo/api/key")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -93,11 +93,11 @@ func TestLocalProviderSetStripsBOM(t *testing.T) {
 	defer p.Close()
 
 	// UTF-8 BOM from Windows Notepad copy-paste.
-	if err := p.Set("hobnob/api/key", "\xEF\xBB\xBFsk-abc123"); err != nil {
+	if err := p.Set("vigo/api/key", "\xEF\xBB\xBFsk-abc123"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/api/key")
+	val, err := p.Get(context.Background(), "vigo/api/key")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -111,11 +111,11 @@ func TestLocalProviderSetStripsZeroWidth(t *testing.T) {
 	defer p.Close()
 
 	// Zero-width space from Slack/web paste.
-	if err := p.Set("hobnob/api/key", "sk-abc\u200B123"); err != nil {
+	if err := p.Set("vigo/api/key", "sk-abc\u200B123"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/api/key")
+	val, err := p.Get(context.Background(), "vigo/api/key")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -129,11 +129,11 @@ func TestLocalProviderSetStripsNullAndBidi(t *testing.T) {
 	defer p.Close()
 
 	// Null byte + bidi override (Trojan Source style).
-	if err := p.Set("hobnob/api/key", "pass\x00word\u202Etest"); err != nil {
+	if err := p.Set("vigo/api/key", "pass\x00word\u202Etest"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/api/key")
+	val, err := p.Get(context.Background(), "vigo/api/key")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -147,11 +147,11 @@ func TestLocalProviderSetNBSPToSpace(t *testing.T) {
 	defer p.Close()
 
 	// Non-breaking space from web page copy-paste — converted to regular space, then trimmed.
-	if err := p.Set("hobnob/api/key", "\u00A0sk-abc123\u00A0"); err != nil {
+	if err := p.Set("vigo/api/key", "\u00A0sk-abc123\u00A0"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/api/key")
+	val, err := p.Get(context.Background(), "vigo/api/key")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -164,11 +164,11 @@ func TestLocalProviderGetBytes(t *testing.T) {
 	p, _ := setupLocalProvider(t)
 	defer p.Close()
 
-	if err := p.Set("hobnob/tls/cert", "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----"); err != nil {
+	if err := p.Set("vigo/tls/cert", "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.GetBytes(context.Background(), "hobnob/tls/cert")
+	val, err := p.GetBytes(context.Background(), "vigo/tls/cert")
 	if err != nil {
 		t.Fatalf("GetBytes: %v", err)
 	}
@@ -192,12 +192,12 @@ func TestLocalProviderBuiltinFallback(t *testing.T) {
 	defer p.Close()
 
 	// Core keys fall back to built-in defaults when not stored.
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	val, err := p.Get(context.Background(), "vigo/db/dsn")
 	if err != nil {
 		t.Fatalf("Get builtin: %v", err)
 	}
-	if val != "/srv/hobnob/db/hobnob.db" {
-		t.Errorf("builtin fallback = %q, want %q", val, "/srv/hobnob/db/hobnob.db")
+	if val != "/srv/vigo/db/vigo.db" {
+		t.Errorf("builtin fallback = %q, want %q", val, "/srv/vigo/db/vigo.db")
 	}
 }
 
@@ -206,11 +206,11 @@ func TestLocalProviderOverridesBuiltin(t *testing.T) {
 	defer p.Close()
 
 	// Stored value overrides built-in default.
-	if err := p.Set("hobnob/db/dsn", "custom.db"); err != nil {
+	if err := p.Set("vigo/db/dsn", "custom.db"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	val, err := p.Get(context.Background(), "vigo/db/dsn")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -380,11 +380,11 @@ func TestAutoKeyProviderSetAndGet(t *testing.T) {
 	p := setupAutoKeyProvider(t)
 	defer p.Close()
 
-	if err := p.Set("hobnob/db/dsn", "my-database.db"); err != nil {
+	if err := p.Set("vigo/db/dsn", "my-database.db"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	val, err := p.Get(context.Background(), "vigo/db/dsn")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -469,12 +469,12 @@ func TestAutoKeyProviderBuiltinFallback(t *testing.T) {
 	p := setupAutoKeyProvider(t)
 	defer p.Close()
 
-	val, err := p.Get(context.Background(), "hobnob/db/dsn")
+	val, err := p.Get(context.Background(), "vigo/db/dsn")
 	if err != nil {
 		t.Fatalf("Get builtin: %v", err)
 	}
-	if val != "/srv/hobnob/db/hobnob.db" {
-		t.Errorf("builtin fallback = %q, want %q", val, "/srv/hobnob/db/hobnob.db")
+	if val != "/srv/vigo/db/vigo.db" {
+		t.Errorf("builtin fallback = %q, want %q", val, "/srv/vigo/db/vigo.db")
 	}
 }
 
@@ -547,7 +547,7 @@ func TestEnsureTLSCertsIdempotent(t *testing.T) {
 func TestEnsureTLSCertsExtraSANs(t *testing.T) {
 	tlsDir := t.TempDir()
 
-	if err := EnsureTLSCerts(tlsDir, "192.168.1.2", "hobnob.example.com"); err != nil {
+	if err := EnsureTLSCerts(tlsDir, "192.168.1.2", "vigo.example.com"); err != nil {
 		t.Fatalf("EnsureTLSCerts: %v", err)
 	}
 
@@ -576,12 +576,12 @@ func TestEnsureTLSCertsExtraSANs(t *testing.T) {
 	// Check that the extra DNS name is present.
 	foundDNS := false
 	for _, name := range cert.DNSNames {
-		if name == "hobnob.example.com" {
+		if name == "vigo.example.com" {
 			foundDNS = true
 		}
 	}
 	if !foundDNS {
-		t.Errorf("cert DNSNames %v missing hobnob.example.com", cert.DNSNames)
+		t.Errorf("cert DNSNames %v missing vigo.example.com", cert.DNSNames)
 	}
 }
 

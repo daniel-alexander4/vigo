@@ -23,13 +23,13 @@ var exportSIEMCmd = &cobra.Command{
 	Long: `Export run results as SIEM-consumable JSON events.
 
 Examples:
-  hobnobcli export siem
-  hobnobcli export siem --since 2026-03-12T00:00:00Z
-  hobnobcli export siem --thrall web-01.prod.example.com --limit 500
-  hobnobcli export siem --output events.json`,
+  vigogo export siem
+  vigogo export siem --since 2026-03-12T00:00:00Z
+  vigogo export siem --envoy web-01.prod.example.com --limit 500
+  vigogo export siem --output events.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		since, _ := cmd.Flags().GetString("since")
-		thrall, _ := cmd.Flags().GetString("thrall")
+		envoy, _ := cmd.Flags().GetString("envoy")
 		limit, _ := cmd.Flags().GetInt("limit")
 		output, _ := cmd.Flags().GetString("output")
 
@@ -37,8 +37,8 @@ Examples:
 		if since != "" {
 			params.Set("since", since)
 		}
-		if thrall != "" {
-			params.Set("thrall", thrall)
+		if envoy != "" {
+			params.Set("envoy", envoy)
 		}
 		if limit > 0 {
 			params.Set("limit", fmt.Sprintf("%d", limit))
@@ -62,13 +62,13 @@ Examples:
 var exportCMDBCmd = &cobra.Command{
 	Use:   "cmdb",
 	Short: "Export fleet inventory (OS, hardware, compliance) as JSON for CMDB import",
-	Long: `Export thrall data as CMDB-consumable JSON records.
+	Long: `Export envoy data as CMDB-consumable JSON records.
 
 Examples:
-  hobnobcli export cmdb
-  hobnobcli export cmdb --status drifted
-  hobnobcli export cmdb --environment prod
-  hobnobcli export cmdb --output cmdb.json`,
+  vigogo export cmdb
+  vigogo export cmdb --status drifted
+  vigogo export cmdb --environment prod
+  vigogo export cmdb --output cmdb.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		status, _ := cmd.Flags().GetString("status")
 		environment, _ := cmd.Flags().GetString("environment")
@@ -103,8 +103,8 @@ var exportOSCALCmd = &cobra.Command{
 	Long: `Export a minimal OSCAL Assessment Results JSON envelope.
 
 Examples:
-  hobnobcli export oscal
-  hobnobcli export oscal --output oscal.json`,
+  vigogo export oscal
+  vigogo export oscal --output oscal.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		output, _ := cmd.Flags().GetString("output")
 
@@ -138,7 +138,7 @@ func writeExportOutput(raw json.RawMessage, outputPath string) error {
 
 func init() {
 	exportSIEMCmd.Flags().String("since", "", "Only include events after this time (RFC3339)")
-	exportSIEMCmd.Flags().String("thrall", "", "Filter by thrall hostname")
+	exportSIEMCmd.Flags().String("envoy", "", "Filter by envoy hostname")
 	exportSIEMCmd.Flags().Int("limit", 0, "Maximum number of events (default: 1000, max: 10000)")
 	exportSIEMCmd.Flags().String("output", "", "Write output to file instead of stdout")
 

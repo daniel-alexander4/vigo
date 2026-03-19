@@ -1,29 +1,29 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/thralls">Thralls</a> &rsaquo; {{.Thrall.Hostname}}
+        <a href="/envoys">Envoys</a> &rsaquo; {{.Envoy.Hostname}}
     </div>
-    <h1>{{.Thrall.Hostname}}</h1>
-    <p class="mono">{{.Thrall.IPAddress}} &middot; Enrolled {{formatTime .Thrall.EnrolledAt}}</p>
+    <h1>{{.Envoy.Hostname}}</h1>
+    <p class="mono">{{.Envoy.IPAddress}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}}</p>
 </div>
 
-<div class="thrall-header mb-2">
-    {{template "status-badge" dict "Status" .Thrall.Status}}
-    <span class="text-muted ml-1">Last seen: {{formatTime .Thrall.LastSeen}}</span>
-    <a href="/config/{{.Thrall.Hostname}}" class="btn btn--sm" style="margin-left:auto;">View Config</a>
+<div class="envoy-header mb-2">
+    {{template "status-badge" dict "Status" .Envoy.Status}}
+    <span class="text-muted ml-1">Last seen: {{formatTime .Envoy.LastSeen}}</span>
+    <a href="/config/{{.Envoy.Hostname}}" class="btn btn--sm" style="margin-left:auto;">View Config</a>
 </div>
 
-<div class="thrall-layout">
-    <div class="thrall-main">
-        <div hx-get="/ui/fragments/thrall-runs/{{.Thrall.ID}}" hx-trigger="load" hx-swap="innerHTML">
+<div class="envoy-layout">
+    <div class="envoy-main">
+        <div hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}" hx-trigger="load" hx-swap="innerHTML">
             <p class="text-muted" style="padding:20px;">Loading run history...</p>
         </div>
     </div>
 
-    <div class="thrall-sidebar">
+    <div class="envoy-sidebar">
         <div class="facts-panel">
             <h3>Facts</h3>
-            <div hx-get="/ui/fragments/thrall-facts/{{.Thrall.ID}}" hx-trigger="load" hx-swap="innerHTML">
+            <div hx-get="/ui/fragments/envoy-facts/{{.Envoy.ID}}" hx-trigger="load" hx-swap="innerHTML">
                 <p class="text-muted">Loading facts...</p>
             </div>
         </div>
@@ -31,7 +31,7 @@
 </div>
 {{end}}
 
-{{define "thrall-runs-fragment"}}
+{{define "envoy-runs-fragment"}}
 {{if .DriftHistory}}
 <div class="table-container mb-2">
     <h3>Drift History</h3>
@@ -94,7 +94,7 @@
             {{end}}
             {{if not .Runs}}
             <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs recorded for this thrall.</td>
+                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs recorded for this envoy.</td>
             </tr>
             {{end}}
         </tbody>
@@ -102,7 +102,7 @@
 </div>
 {{end}}
 
-{{define "thrall-facts-fragment"}}
+{{define "envoy-facts-fragment"}}
 {{if .Facts}}
 <dl class="facts-list">
     {{range $key, $val := .Facts}}

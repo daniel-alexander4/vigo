@@ -14,12 +14,12 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-// openThrallsTestDB creates an in-memory SQLite database with the thralls table.
-func openThrallsTestDB(t *testing.T) (*sql.DB, *db.Queries) {
+// openEnvoysTestDB creates an in-memory SQLite database with the envoys table.
+func openEnvoysTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 	t.Helper()
 	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
@@ -28,7 +28,7 @@ func openThrallsTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 	t.Cleanup(func() { sqlDB.Close() })
 
 	_, err = sqlDB.Exec(`
-		CREATE TABLE thralls (
+		CREATE TABLE envoys (
 			id                       TEXT PRIMARY KEY,
 			hostname                 TEXT NOT NULL,
 			ip_address               TEXT NOT NULL,
@@ -49,30 +49,30 @@ func openThrallsTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 	return sqlDB, db.New(sqlDB)
 }
 
-func TestThralls_SetTags(t *testing.T) {
-	sqlDB, queries := openThrallsTestDB(t)
+func TestEnvoys_SetTags(t *testing.T) {
+	sqlDB, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	// Insert a thrall in the DB and FleetIndex.
-	thrallID := "t-001"
+	// Insert a envoy in the DB and FleetIndex.
+	envoyID := "t-001"
 	_, err := sqlDB.Exec(
-		`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
-		thrallID, "web01.prod", "10.0.0.1", "pubkey-pem",
+		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		envoyID, "web01.prod", "10.0.0.1", "pubkey-pem",
 	)
 	if err != nil {
-		t.Fatalf("insert thrall: %v", err)
+		t.Fatalf("insert envoy: %v", err)
 	}
-	fi.AddThrall(fleet.ThrallState{
-		ID: thrallID, Hostname: "web01.prod", IP: "10.0.0.1",
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID: envoyID, Hostname: "web01.prod", IP: "10.0.0.1",
 		EnrolledAt: time.Now().UTC(), LastSeen: time.Now().UTC(),
 	}, nil)
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
 	body := `{"tags":["web","production"]}`
-	req := httptest.NewRequest("PUT", "/api/v1/thralls/"+thrallID+"/tags", bytes.NewBufferString(body))
+	req := httptest.NewRequest("PUT", "/api/v1/envoys/"+envoyID+"/tags", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -92,22 +92,22 @@ func TestThralls_SetTags(t *testing.T) {
 	}
 }
 
-func TestThralls_GetTags(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_GetTags(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	thrallID := "t-002"
-	fi.AddThrall(fleet.ThrallState{
-		ID: thrallID, Hostname: "web02.prod", IP: "10.0.0.2",
+	envoyID := "t-002"
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID: envoyID, Hostname: "web02.prod", IP: "10.0.0.2",
 		Tags:       []string{"staging", "db"},
 		EnrolledAt: time.Now().UTC(), LastSeen: time.Now().UTC(),
 	}, nil)
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/thralls/"+thrallID+"/tags", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/"+envoyID+"/tags", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -123,15 +123,15 @@ func TestThralls_GetTags(t *testing.T) {
 	}
 }
 
-func TestThralls_GetTagsNotFound(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_GetTagsNotFound(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/thralls/nonexistent/tags", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/tags", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -140,23 +140,23 @@ func TestThralls_GetTagsNotFound(t *testing.T) {
 	}
 }
 
-func TestThralls_SetMaintenance(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_SetMaintenance(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	thrallID := "t-003"
-	fi.AddThrall(fleet.ThrallState{
-		ID: thrallID, Hostname: "web03.prod", IP: "10.0.0.3",
+	envoyID := "t-003"
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID: envoyID, Hostname: "web03.prod", IP: "10.0.0.3",
 		EnrolledAt: time.Now().UTC(), LastSeen: time.Now().UTC(),
 	}, nil)
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
 	until := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
 	body := `{"until":"` + until + `"}`
-	req := httptest.NewRequest("PUT", "/api/v1/thralls/"+thrallID+"/maintenance", bytes.NewBufferString(body))
+	req := httptest.NewRequest("PUT", "/api/v1/envoys/"+envoyID+"/maintenance", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -172,16 +172,16 @@ func TestThralls_SetMaintenance(t *testing.T) {
 	}
 }
 
-func TestThralls_SetMaintenanceInvalidTimestamp(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_SetMaintenanceInvalidTimestamp(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
 	body := `{"until":"not-a-timestamp"}`
-	req := httptest.NewRequest("PUT", "/api/v1/thralls/t-001/maintenance", bytes.NewBufferString(body))
+	req := httptest.NewRequest("PUT", "/api/v1/envoys/t-001/maintenance", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -191,23 +191,23 @@ func TestThralls_SetMaintenanceInvalidTimestamp(t *testing.T) {
 	}
 }
 
-func TestThralls_ClearMaintenance(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_ClearMaintenance(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	thrallID := "t-004"
-	fi.AddThrall(fleet.ThrallState{
-		ID: thrallID, Hostname: "web04.prod", IP: "10.0.0.4",
+	envoyID := "t-004"
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID: envoyID, Hostname: "web04.prod", IP: "10.0.0.4",
 		EnrolledAt:       time.Now().UTC(),
 		LastSeen:         time.Now().UTC(),
 		MaintenanceUntil: time.Now().Add(1 * time.Hour),
 	}, nil)
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("DELETE", "/api/v1/thralls/"+thrallID+"/maintenance", nil)
+	req := httptest.NewRequest("DELETE", "/api/v1/envoys/"+envoyID+"/maintenance", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -222,22 +222,22 @@ func TestThralls_ClearMaintenance(t *testing.T) {
 	}
 }
 
-func TestThralls_GetCompliance(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_GetCompliance(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	thrallID := "t-005"
-	fi.AddThrall(fleet.ThrallState{
-		ID: thrallID, Hostname: "web05.prod", IP: "10.0.0.5",
+	envoyID := "t-005"
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID: envoyID, Hostname: "web05.prod", IP: "10.0.0.5",
 		ComplianceStatus: "compliant",
 		EnrolledAt:       time.Now().UTC(), LastSeen: time.Now().UTC(),
 	}, nil)
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/thralls/"+thrallID+"/compliance", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/"+envoyID+"/compliance", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -252,15 +252,15 @@ func TestThralls_GetCompliance(t *testing.T) {
 	}
 }
 
-func TestThralls_GetComplianceNotFound(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_GetComplianceNotFound(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/thralls/nonexistent/compliance", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/compliance", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -269,21 +269,21 @@ func TestThralls_GetComplianceNotFound(t *testing.T) {
 	}
 }
 
-func TestThralls_ForceUpdate(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_ForceUpdate(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	thrallID := "t-006"
-	fi.AddThrall(fleet.ThrallState{
-		ID: thrallID, Hostname: "web06.prod", IP: "10.0.0.6",
+	envoyID := "t-006"
+	fi.AddEnvoy(fleet.EnvoyState{
+		ID: envoyID, Hostname: "web06.prod", IP: "10.0.0.6",
 		EnrolledAt: time.Now().UTC(), LastSeen: time.Now().UTC(),
 	}, nil)
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("POST", "/api/v1/thralls/"+thrallID+"/update", nil)
+	req := httptest.NewRequest("POST", "/api/v1/envoys/"+envoyID+"/update", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -298,15 +298,15 @@ func TestThralls_ForceUpdate(t *testing.T) {
 	}
 }
 
-func TestThralls_ForceUpdateNotFound(t *testing.T) {
-	_, queries := openThrallsTestDB(t)
+func TestEnvoys_ForceUpdateNotFound(t *testing.T) {
+	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	handler := NewThrallsHandler(queries, fi)
+	handler := NewEnvoysHandler(queries, fi)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("POST", "/api/v1/thralls/nonexistent/update", nil)
+	req := httptest.NewRequest("POST", "/api/v1/envoys/nonexistent/update", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

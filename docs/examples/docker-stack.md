@@ -4,7 +4,7 @@ This example uses the `docker_image`, `docker_container`, and `docker_compose` [
 
 ## Module Definition
 
-`policy/stage/modules/redis.hnb`:
+`policy/stage/modules/redis.vgo`:
 
 ```yaml
 name: redis
@@ -32,7 +32,7 @@ resources:
 
 ## Multi-Container Stack
 
-`policy/stage/modules/app-stack.hnb`:
+`policy/stage/modules/app-stack.vgo`:
 
 ```yaml
 name: app-stack
@@ -58,7 +58,7 @@ resources:
       - "8080:8080"
     environment:
       REDIS_URL: "redis://localhost:{{ .Vars.redis_port }}"
-      DATABASE_URL: "secret:hobnob/webapp/database_url"
+      DATABASE_URL: "secret:vigo/webapp/database_url"
     restart_policy: unless-stopped
     depends_on:
       - redis-container
@@ -66,7 +66,7 @@ resources:
 
 ## Role Definition
 
-`policy/stage/roles/docker-app.hnb`:
+`policy/stage/roles/docker-app.vgo`:
 
 ```yaml
 name: docker-app
@@ -77,10 +77,10 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.app.example.com"
     environment: production
     roles: [docker-app]
@@ -101,14 +101,14 @@ thralls:
 To deploy a new version across your fleet in batches:
 
 ```bash
-# Update the app_tag in nodes.hnb, then:
-hobnobcli push --target "*.app.example.com"
+# Update the app_tag in nodes.vgo, then:
+vigogo push --target "*.app.example.com"
 ```
 
 Or use a push for more control:
 
 ```bash
-hobnobcli push run \
+vigogo push run \
   --command "docker pull myregistry.example.com/webapp:v2.2.0" \
   --target "*.app.example.com" \
   --batch-size 25% \
@@ -119,7 +119,7 @@ hobnobcli push run \
 
 For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
 
-`policy/stage/modules/compose-app.hnb`:
+`policy/stage/modules/compose-app.vgo`:
 
 ```yaml
 name: compose-app

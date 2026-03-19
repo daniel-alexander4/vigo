@@ -89,7 +89,7 @@ pub fn converge(
     traits: &serde_json::Value,
 ) -> Vec<ResourceResult> {
     if modules.is_empty() {
-        warn!("no modules to apply — check thralls.hnb");
+        warn!("no modules to apply — check envoys.vgo");
         return Vec::new();
     }
 

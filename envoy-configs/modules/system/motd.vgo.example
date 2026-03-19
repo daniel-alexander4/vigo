@@ -14,7 +14,7 @@ resources:
         Host: {{ .Traits.identity.hostname }}
         OS:   {{ .Traits.os.distro }} {{ .Traits.os.version }}
       ----------------------------------------
-        Managed by Hobnob. Unauthorized access
+        Managed by Vigo. Unauthorized access
         is prohibited. Contact {{ .Vars.contact_email }}
       ========================================
     owner: root

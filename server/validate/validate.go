@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package validate provides static idempotency analysis for Hobnob resource
+// Package validate provides static idempotency analysis for Vigo resource
 // definitions. It checks that every resource in a module definition is provably
 // idempotent before the config is allowed to go live.
 //

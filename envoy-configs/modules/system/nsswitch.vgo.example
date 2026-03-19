@@ -8,7 +8,7 @@ resources:
     type: file
     target_path: /etc/nsswitch.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       {{ if eq .Vars.use_ldap "true" }}
       passwd:     files ldap
       group:      files ldap

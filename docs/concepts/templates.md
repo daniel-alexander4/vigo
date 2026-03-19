@@ -1,6 +1,6 @@
 # Templates
 
-Hobnob uses Go template syntax for dynamic content in resource definitions. Templates are rendered agent-side during policy evaluation.
+Vigo uses Go template syntax for dynamic content in resource definitions. Templates are rendered agent-side during policy evaluation.
 
 ## Where Templates Are Allowed
 
@@ -44,7 +44,7 @@ resources:
 
 ### .Traits
 
-Thrall traits (auto-discovered facts):
+Envoy traits (auto-discovered facts):
 
 ```yaml
 resources:
@@ -157,14 +157,14 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 ```yaml
 - name: node-info
   type: file
-  target_path: /etc/hobnob-node-info
+  target_path: /etc/vigo-node-info
   content: |
     hostname={{ .Traits.network.hostname }}
     os={{ .Traits.os.distro }}
     version={{ .Traits.os.version }}
     arch={{ .Traits.os.arch }}
     ip={{ index .Traits.network.ip_addresses 0 }}
-    managed_by=hobnob
+    managed_by=vigo
 ```
 
 ## Common Mistakes

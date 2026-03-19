@@ -7,45 +7,45 @@ package ai
 func toolDefs() []ToolDef {
 	return []ToolDef{
 		{
-			Name:        "list_thralls",
-			Description: "List enrolled thralls (managed machines). Optionally filter by status (active/revoked/stale) and limit results.",
+			Name:        "list_envoys",
+			Description: "List enrolled envoys (managed machines). Optionally filter by status (active/revoked/stale) and limit results.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"status": map[string]any{"type": "string", "enum": []string{"active", "revoked", "stale"}, "description": "Filter by thrall status"},
-					"limit":  map[string]any{"type": "integer", "description": "Max thralls to return (default 50)"},
+					"status": map[string]any{"type": "string", "enum": []string{"active", "revoked", "stale"}, "description": "Filter by envoy status"},
+					"limit":  map[string]any{"type": "integer", "description": "Max envoys to return (default 50)"},
 				},
 			}),
 		},
 		{
-			Name:        "get_thrall",
-			Description: "Get details for a single thrall by hostname or ID.",
+			Name:        "get_envoy",
+			Description: "Get details for a single envoy by hostname or ID.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"hostname": map[string]any{"type": "string", "description": "Thrall hostname"},
-					"id":       map[string]any{"type": "string", "description": "Thrall UUID"},
+					"hostname": map[string]any{"type": "string", "description": "Envoy hostname"},
+					"id":       map[string]any{"type": "string", "description": "Envoy UUID"},
 				},
 			}),
 		},
 		{
 			Name:        "get_traits",
-			Description: "Get the latest discovered traits (facts) for a thrall — OS, hardware, network, packages, etc.",
+			Description: "Get the latest discovered traits (facts) for a envoy — OS, hardware, network, packages, etc.",
 			Parameters: jsonSchema(map[string]any{
 				"type":     "object",
 				"properties": map[string]any{
-					"hostname": map[string]any{"type": "string", "description": "Thrall hostname"},
+					"hostname": map[string]any{"type": "string", "description": "Envoy hostname"},
 				},
 				"required": []string{"hostname"},
 			}),
 		},
 		{
 			Name:        "list_runs",
-			Description: "List convergence runs. Optionally filter by thrall hostname and limit results.",
+			Description: "List convergence runs. Optionally filter by envoy hostname and limit results.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"hostname": map[string]any{"type": "string", "description": "Filter runs by thrall hostname"},
+					"hostname": map[string]any{"type": "string", "description": "Filter runs by envoy hostname"},
 					"limit":    map[string]any{"type": "integer", "description": "Max runs to return (default 20)"},
 				},
 			}),
@@ -63,28 +63,28 @@ func toolDefs() []ToolDef {
 		},
 		{
 			Name:        "get_compliance",
-			Description: "Get compliance status. If hostname is provided, returns status for that thrall. Otherwise returns fleet-wide summary.",
+			Description: "Get compliance status. If hostname is provided, returns status for that envoy. Otherwise returns fleet-wide summary.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"hostname": map[string]any{"type": "string", "description": "Thrall hostname (omit for fleet summary)"},
+					"hostname": map[string]any{"type": "string", "description": "Envoy hostname (omit for fleet summary)"},
 				},
 			}),
 		},
 		{
 			Name:        "get_config",
-			Description: "Get the effective resolved configuration for a thrall (secrets redacted). Shows modules, resources, vars.",
+			Description: "Get the effective resolved configuration for a envoy (secrets redacted). Shows modules, resources, vars.",
 			Parameters: jsonSchema(map[string]any{
 				"type":     "object",
 				"properties": map[string]any{
-					"hostname": map[string]any{"type": "string", "description": "Thrall hostname"},
+					"hostname": map[string]any{"type": "string", "description": "Envoy hostname"},
 				},
 				"required": []string{"hostname"},
 			}),
 		},
 		{
 			Name:        "query_inventory",
-			Description: "Query thralls by trait values. Use 'where' filters like 'os.distro=ubuntu' and 'show' to select which trait paths to display.",
+			Description: "Query envoys by trait values. Use 'where' filters like 'os.distro=ubuntu' and 'show' to select which trait paths to display.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -103,7 +103,7 @@ func toolDefs() []ToolDef {
 		},
 		{
 			Name:        "list_package_drift",
-			Description: "List packages that differ across thralls (installed on some but not others, or different versions).",
+			Description: "List packages that differ across envoys (installed on some but not others, or different versions).",
 			Parameters: jsonSchema(map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
@@ -111,7 +111,7 @@ func toolDefs() []ToolDef {
 		},
 		{
 			Name:        "get_module_definition",
-			Description: "Read the raw .hnb definition of a module (resources, vars, depends_on).",
+			Description: "Read the raw .vgo definition of a module (resources, vars, depends_on).",
 			Parameters: jsonSchema(map[string]any{
 				"type":     "object",
 				"properties": map[string]any{
@@ -138,11 +138,11 @@ func toolDefs() []ToolDef {
 		},
 		{
 			Name:        "dry_run",
-			Description: "Compute a dry-run plan for a thrall — shows what would change without applying.",
+			Description: "Compute a dry-run plan for a envoy — shows what would change without applying.",
 			Parameters: jsonSchema(map[string]any{
 				"type":     "object",
 				"properties": map[string]any{
-					"hostname": map[string]any{"type": "string", "description": "Thrall hostname"},
+					"hostname": map[string]any{"type": "string", "description": "Envoy hostname"},
 				},
 				"required": []string{"hostname"},
 			}),

@@ -1,6 +1,6 @@
 # Developer Documentation
 
-Internal documentation for Hobnob contributors. These files are **not** shipped to customers — only `docs/` is seeded into the container image.
+Internal documentation for Vigo contributors. These files are **not** shipped to customers — only `docs/` is seeded into the container image.
 
 ## Contents
 

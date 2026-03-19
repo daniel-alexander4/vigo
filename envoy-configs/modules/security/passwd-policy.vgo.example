@@ -15,7 +15,7 @@ resources:
     type: file
     target_path: /etc/login.defs
     content: |
-      # /etc/login.defs — managed by hobnob
+      # /etc/login.defs — managed by vigo
       MAIL_DIR        /var/mail
       FAILLOG_ENAB    yes
       LOG_UNKFAIL_ENAB no
@@ -65,7 +65,7 @@ resources:
           type: file
           target_path: /etc/security/pwquality.conf
           content: |
-            # /etc/security/pwquality.conf — managed by hobnob
+            # /etc/security/pwquality.conf — managed by vigo
             minlen = {{ .Vars.pass_min_len }}
             dcredit = {{ .Vars.pwquality_dcredit }}
             ucredit = {{ .Vars.pwquality_ucredit }}

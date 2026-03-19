@@ -27,7 +27,7 @@ Parses the first field of `/proc/uptime` (total seconds since boot). The boot ti
 ```yaml
 - name: uptime-report
   type: file
-  target_path: /var/lib/hobnob/uptime.txt
+  target_path: /var/lib/vigo/uptime.txt
   content: |
     System booted: {{ .Traits.uptime.boot_time }}
     Uptime: {{ .Traits.uptime.seconds }} seconds

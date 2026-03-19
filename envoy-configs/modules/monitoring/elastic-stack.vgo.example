@@ -1,7 +1,7 @@
 name: elastic-stack
 
 vars:
-  es_cluster_name: "hobnob-cluster"
+  es_cluster_name: "vigo-cluster"
   es_http_port: "9200"
   kibana_port: "5601"
   logstash_workers: "2"
@@ -52,7 +52,7 @@ resources:
     type: file
     target_path: /etc/elasticsearch/elasticsearch.yml
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       cluster.name: {{ .Vars.es_cluster_name }}
       node.name: {{ .Traits.identity.hostname }}
       path.data: /var/lib/elasticsearch
@@ -85,7 +85,7 @@ resources:
     type: file
     target_path: /etc/kibana/kibana.yml
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       server.port: {{ .Vars.kibana_port }}
       server.host: "0.0.0.0"
       server.name: {{ .Traits.identity.hostname }}
@@ -102,7 +102,7 @@ resources:
     type: file
     target_path: /etc/logstash/logstash.yml
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       node.name: {{ .Traits.identity.hostname }}
       path.data: /var/lib/logstash
       pipeline.workers: {{ .Vars.logstash_workers }}

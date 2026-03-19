@@ -10,20 +10,20 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// ReportTraits handles the HobnobAgent.ReportTraits RPC. It stores the agent's
+// ReportTraits handles the VigoAgent.ReportTraits RPC. It stores the agent's
 // collected traits as JSONB in the database and prunes old entries to enforce
 // a 10-snapshot retention policy (DB-04).
 func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsRequest) (*pb.ReportTraitsResponse, error) {
-	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
-	thrallID := req.GetThrallId()
+	envoyID := req.GetEnvoyId()
 
 	traitsJSON := req.GetTraitsJson()
 	if len(traitsJSON) == 0 {
@@ -41,13 +41,13 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	}
 
 	// Store the traits.
-	_, err := s.queries.InsertThrallTraits(ctx, db.InsertThrallTraitsParams{
-		ThrallID: thrallID,
+	_, err := s.queries.InsertEnvoyTraits(ctx, db.InsertEnvoyTraitsParams{
+		EnvoyID: envoyID,
 		Traits: string(traitsJSON),
 	})
 	if err != nil {
-		slog.Error("failed to insert thrall traits",
-			"node_id", thrallID,
+		slog.Error("failed to insert envoy traits",
+			"node_id", envoyID,
 			"error", err,
 		)
 		return nil, status.Errorf(codes.Internal, "storing traits: %v", err)
@@ -55,11 +55,11 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 
 	// Schedule async pruning to enforce 10-snapshot retention.
 	if s.traitsPruner != nil {
-		s.traitsPruner.Mark(thrallID)
+		s.traitsPruner.Mark(envoyID)
 	}
 
 	slog.Info("traits reported",
-		"node_id", thrallID,
+		"node_id", envoyID,
 		"traits_size", len(traitsJSON),
 	)
 

@@ -45,7 +45,7 @@ func migrate(db *sql.DB) error {
 			license_id    TEXT PRIMARY KEY,
 			customer_id   TEXT NOT NULL REFERENCES customers(customer_id),
 			tier          TEXT NOT NULL DEFAULT '',
-			max_thralls   INTEGER NOT NULL,
+			max_envoys   INTEGER NOT NULL,
 			issued_at     TEXT NOT NULL,
 			expires_at    TEXT NOT NULL,
 			version       INTEGER NOT NULL DEFAULT 1,

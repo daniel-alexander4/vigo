@@ -101,7 +101,7 @@ impl Executor for ArchiveExecutor {
         }
 
         // Download to temp dir.
-        let tmp_dir = format!("/tmp/hobnob-archive-{}", uuid::Uuid::new_v4());
+        let tmp_dir = format!("/tmp/vigo-archive-{}", uuid::Uuid::new_v4());
         if let Err(e) = std::fs::create_dir_all(&tmp_dir) {
             result.error = Some(format!("create temp dir: {}", e));
             result.duration_ms = start.elapsed().as_millis() as i32;

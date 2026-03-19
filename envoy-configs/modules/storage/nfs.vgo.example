@@ -41,7 +41,7 @@ resources:
     type: file
     target_path: /etc/exports
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       {{ .Vars.nfs_export_path }} {{ .Vars.nfs_export_clients }}
     owner: root
     group: root

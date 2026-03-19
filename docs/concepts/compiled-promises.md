@@ -31,16 +31,16 @@ checkin:
 |-------|----------|
 | `24h` (default) | Bundles expire after 24 hours. Agent proactively renews at 80% (19.2h) |
 | `0` | Bundles never expire (not recommended for production) |
-| `168h` | One week validity (for intermittently-connected thralls) |
+| `168h` | One week validity (for intermittently-connected envoys) |
 
 When a bundle expires, the agent stops converging and waits for server contact.
 
 ## LMDB State Store
 
-The agent persists state in LMDB at `/var/lib/hobnob/state/`:
+The agent persists state in LMDB at `/var/lib/vigo/state/`:
 
 ```
-/var/lib/hobnob/state/
+/var/lib/vigo/state/
 ├── policy/          # Cached policy bundle + signature
 ├── checksums/       # File content checksums (for drift detection)
 ├── traits/          # Cached traits with TTL
@@ -89,7 +89,7 @@ Agent-side: No configuration needed. The agent automatically:
 - Falls back to cached bundles when offline
 - Drains pending results on reconnect
 
-To inspect the agent's cached bundle, pending results queue, and traits cache, run `hobnob status` on the thrall. See [Agent CLI](../cli/agent.md#status) for details.
+To inspect the agent's cached bundle, pending results queue, and traits cache, run `vigo status` on the envoy. See [Agent CLI](../cli/agent.md#status) for details.
 
 ## Related
 

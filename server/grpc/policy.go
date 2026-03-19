@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
 )
 
-// buildPolicyBundle converts a resolved ThrallConfig into a PolicyBundle proto.
+// buildPolicyBundle converts a resolved EnvoyConfig into a PolicyBundle proto.
 // Secrets are already resolved in the config (at load time). Vars are merged.
 // Template strings and when expressions are left raw — the agent evaluates
 // them locally with its own traits.
@@ -19,7 +19,7 @@ import (
 // If cachedHashes is non-nil, modules whose content hash matches the agent's
 // cached version are sent as stubs (name + hash only, no resources), saving
 // bandwidth when only a subset of modules changed.
-func buildPolicyBundle(cfg *config.ThrallConfig, version uint64, cachedHashes map[string]string, traits map[string]any) (*pb.PolicyBundle, error) {
+func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map[string]string, traits map[string]any) (*pb.PolicyBundle, error) {
 	bundle := &pb.PolicyBundle{
 		PolicyVersion:  version,
 		MatchedPattern: cfg.MatchPattern,
@@ -29,7 +29,7 @@ func buildPolicyBundle(cfg *config.ThrallConfig, version uint64, cachedHashes ma
 
 	// Resolve match vars (trait-conditional string vars) into the vars map
 	// before serialization. These use when expressions evaluated server-side
-	// against the thrall's traits.
+	// against the envoy's traits.
 	if len(cfg.MatchVars) > 0 && traits != nil {
 		config.ResolveMatchVars(cfg.Vars, &cfg.VarOrder, cfg.MatchVars, cfg.MatchVarDefaults, traits)
 	}

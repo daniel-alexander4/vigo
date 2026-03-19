@@ -33,7 +33,7 @@ func testPayload() Payload {
 		CustomerID:   "test-001",
 		LicenseID:    "lic-20250301-test",
 		Tier:         "standard",
-		MaxThralls:   100,
+		MaxEnvoys:   100,
 		IssuedAt:     "2025-03-01",
 		ExpiresAt:    "2027-03-01",
 		Version:      1,
@@ -102,7 +102,7 @@ func TestVerifyTamperedPayload(t *testing.T) {
 	pubHex := hex.EncodeToString(pub)
 
 	// Tamper with the payload.
-	lic.Payload.MaxThralls = 99999
+	lic.Payload.MaxEnvoys = 99999
 	if err := lic.VerifyWithKey(pubHex); err == nil {
 		t.Fatal("expected tampered payload to fail verification")
 	}
@@ -191,7 +191,7 @@ func TestExpiresTime(t *testing.T) {
 
 func TestFreeLicense(t *testing.T) {
 	origKey := PublicKeyHex
-	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	lic, err := FreeLicense()
@@ -199,8 +199,8 @@ func TestFreeLicense(t *testing.T) {
 		t.Fatalf("FreeLicense: %v", err)
 	}
 
-	if lic.Payload.MaxThralls != 25 {
-		t.Errorf("max_thralls = %d, want 25", lic.Payload.MaxThralls)
+	if lic.Payload.MaxEnvoys != 25 {
+		t.Errorf("max_envoys = %d, want 25", lic.Payload.MaxEnvoys)
 	}
 	if lic.Payload.LicenseID != "free-25" {
 		t.Errorf("license_id = %q, want %q", lic.Payload.LicenseID, "free-25")
@@ -215,7 +215,7 @@ func TestFreeLicense(t *testing.T) {
 
 func TestLoadDirFallsBackToFree(t *testing.T) {
 	origKey := PublicKeyHex
-	setPublicKeyForTest("9c0f498c964ef115929368dcb3abdac6a75c503bf70ab2767d2c8290fe96a5a8")
+	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	dir := t.TempDir() // empty — no .lic files
@@ -227,8 +227,8 @@ func TestLoadDirFallsBackToFree(t *testing.T) {
 	if path != "(built-in free-25)" {
 		t.Errorf("path = %q, want %q", path, "(built-in free-25)")
 	}
-	if lic.Payload.MaxThralls != 25 {
-		t.Errorf("max_thralls = %d, want 25", lic.Payload.MaxThralls)
+	if lic.Payload.MaxEnvoys != 25 {
+		t.Errorf("max_envoys = %d, want 25", lic.Payload.MaxEnvoys)
 	}
 }
 
@@ -239,7 +239,7 @@ func TestLoadDirPrefersOnDisk(t *testing.T) {
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	payload := testPayload()
-	payload.MaxThralls = 500
+	payload.MaxEnvoys = 500
 	lic := signLicense(t, payload, priv)
 
 	dir := t.TempDir()
@@ -250,8 +250,8 @@ func TestLoadDirPrefersOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
-	if loaded.Payload.MaxThralls != 500 {
-		t.Errorf("max_thralls = %d, want 500 (on-disk license should take priority)", loaded.Payload.MaxThralls)
+	if loaded.Payload.MaxEnvoys != 500 {
+		t.Errorf("max_envoys = %d, want 500 (on-disk license should take priority)", loaded.Payload.MaxEnvoys)
 	}
 	if path == "(built-in free-25)" {
 		t.Error("should have loaded on-disk license, not embedded free")

@@ -57,7 +57,7 @@ resources:
     target_path: /etc/audit/rules.d/cis.rules
     content: |
       # CIS Ubuntu 22.04 — Audit Rules
-      # Managed by Hobnob
+      # Managed by Vigo
 
       # 4.1.3 — Date and time modification
       -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change

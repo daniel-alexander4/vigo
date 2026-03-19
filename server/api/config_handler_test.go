@@ -14,10 +14,10 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/publish"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/publish"
 )
 
 // openConfigTestDB creates an in-memory SQLite database with config-related tables.
@@ -40,7 +40,7 @@ func openConfigTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 		);
 		CREATE INDEX idx_config_publishes_published_at ON config_publishes (published_at);
 
-		CREATE TABLE thralls (
+		CREATE TABLE envoys (
 			id                       TEXT PRIMARY KEY,
 			hostname                 TEXT NOT NULL,
 			ip_address               TEXT NOT NULL,
@@ -68,7 +68,7 @@ func TestConfig_RecordPublish(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	body := `{"operator":"alice","changed_files":["modules/nginx.hnb"],"removed_files":[],"diff_summary":"updated nginx module"}`
+	body := `{"operator":"alice","changed_files":["modules/nginx.vgo"],"removed_files":[],"diff_summary":"updated nginx module"}`
 	req := httptest.NewRequest("POST", "/api/v1/config/publishes", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -92,7 +92,7 @@ func TestConfig_ListPublishes(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		_, err := sqlDB.Exec(
 			`INSERT INTO config_publishes (operator, changed_files, removed_files) VALUES (?, ?, ?)`,
-			"admin", `["file.hnb"]`, `[]`,
+			"admin", `["file.vgo"]`, `[]`,
 		)
 		if err != nil {
 			t.Fatalf("insert publish: %v", err)
@@ -126,7 +126,7 @@ func TestConfig_GetPublish(t *testing.T) {
 	var publishID string
 	err := sqlDB.QueryRow(
 		`INSERT INTO config_publishes (operator, changed_files, removed_files, diff_summary) VALUES (?, ?, ?, ?) RETURNING id`,
-		"alice", `["modules/nginx.hnb"]`, `["modules/old.hnb"]`, "updated nginx",
+		"alice", `["modules/nginx.vgo"]`, `["modules/old.vgo"]`, "updated nginx",
 	).Scan(&publishID)
 	if err != nil {
 		t.Fatalf("insert publish: %v", err)

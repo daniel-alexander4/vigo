@@ -14,14 +14,14 @@
 
 <section class="comparison">
     <div class="comparison__inner">
-        <h2>How Hobnob compares</h2>
-        <p class="comparison__baseline">All figures based on a single server with <strong>4 vCPU, 8 GB RAM, SSD</strong>. Vendor-documented requirements where available. Hobnob figures are theoretical (benchmark-derived). <a href="/comparison">Full methodology &rarr;</a></p>
+        <h2>How Vigo compares</h2>
+        <p class="comparison__baseline">All figures based on a single server with <strong>4 vCPU, 8 GB RAM, SSD</strong>. Vendor-documented requirements where available. Vigo figures are theoretical (benchmark-derived). <a href="/comparison">Full methodology &rarr;</a></p>
         <div class="comparison__table-wrapper">
         <table class="comparison__table">
             <thead>
                 <tr>
                     <th></th>
-                    <th class="comparison__highlight">Hobnob</th>
+                    <th class="comparison__highlight">Vigo</th>
                     <th>Puppet</th>
                     <th>Ansible</th>
                     <th>Chef</th>
@@ -149,7 +149,7 @@
                 </tr>
             </tbody>
         </table>
-        <p class="comparison__footnote">* Hobnob figures are theoretical &mdash; derived from internal benchmarks, not production deployments. Competitor estimates at sub-5-minute intervals are extrapolated from their architectures: Puppet and Chef perform server-side catalog compilation (1&ndash;3 seconds CPU per node per check-in); Salt uses lighter state compilation over ZeroMQ; CFEngine serves compiled policy but its Enterprise PostgreSQL reporting hub is the bottleneck (~8 MB/node). ** CFEngine Enterprise hub figure. Puppet PE requires 10&ndash;24 GB RAM for 100&ndash;2,500 nodes (PE 2025 docs). None of these tools officially support sub-5-minute check-in intervals. <a href="/comparison">Full comparison with sources &rarr;</a></p>
+        <p class="comparison__footnote">* Vigo figures are theoretical &mdash; derived from internal benchmarks, not production deployments. Competitor estimates at sub-5-minute intervals are extrapolated from their architectures: Puppet and Chef perform server-side catalog compilation (1&ndash;3 seconds CPU per node per check-in); Salt uses lighter state compilation over ZeroMQ; CFEngine serves compiled policy but its Enterprise PostgreSQL reporting hub is the bottleneck (~8 MB/node). ** CFEngine Enterprise hub figure. Puppet PE requires 10&ndash;24 GB RAM for 100&ndash;2,500 nodes (PE 2025 docs). None of these tools officially support sub-5-minute check-in intervals. <a href="/comparison">Full comparison with sources &rarr;</a></p>
         </div>
     </div>
 </section>
@@ -178,7 +178,7 @@
             <div class="advantage__icon">&#128196;</div>
             <h3>Simplicity</h3>
             <p class="advantage__stat">YAML. Not a DSL.</p>
-            <p>No custom language to learn. No compiler. No Ruby, no Python, no JVM on managed nodes. A sysadmin unfamiliar with Hobnob can read a config file and understand what it does. One format, one directory, one publish command.</p>
+            <p>No custom language to learn. No compiler. No Ruby, no Python, no JVM on managed nodes. A sysadmin unfamiliar with Vigo can read a config file and understand what it does. One format, one directory, one publish command.</p>
         </div>
         <div class="advantage">
             <div class="advantage__icon">&#128295;</div>
@@ -199,7 +199,7 @@
     <div class="quickstart__inner">
         <h2>Server up and running with one command</h2>
         <div class="code-block">
-            <code>docker run -d --name hobnob -p 8443:8443 -p 1530:1530 -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest</code>
+            <code>docker run -d --name vigo -p 8443:8443 -p 1530:1530 -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest</code>
         </div>
         <p>That's it. TLS certificates, database, secrets, and example configs are auto-generated on first start. Open <code>https://localhost:8443</code> to see the dashboard.</p>
     </div>
@@ -250,7 +250,7 @@
         <h2>Try it now</h2>
         <p>Free for 25 nodes. No credit card. All features included.</p>
         <div class="hero__actions">
-            <a href="/docs/getting-started/installation" class="btn btn--primary">Install Hobnob</a>
+            <a href="/docs/getting-started/installation" class="btn btn--primary">Install Vigo</a>
             <a href="/docs" class="btn btn--secondary">Read the Docs</a>
         </div>
     </div>

@@ -41,7 +41,7 @@ func NewIsowebauthProvider(cfg IsowebauthConfig, sessions *SessionManager, userS
 
 	ns := cfg.Namespace
 	if ns == "" {
-		ns = "hobnob"
+		ns = "vigo"
 	}
 
 	return &IsowebauthProvider{
@@ -215,7 +215,7 @@ func (p *IsowebauthProvider) handleLogout(w http.ResponseWriter, r *http.Request
 // This shells out to ssh-keygen because Go's x/crypto/ssh doesn't support
 // the OpenSSH signature format that isowebauth produces.
 func verifySSHSignature(username, pubkey, challenge, signature, namespace string) error {
-	tmpDir, err := os.MkdirTemp("", "hobnob-iwa-*")
+	tmpDir, err := os.MkdirTemp("", "vigo-iwa-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
@@ -268,13 +268,13 @@ const isowebauthLoginHTML = `<!DOCTYPE html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hobnob - Sign In</title>
+    <title>Vigo - Sign In</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
-            <h1 class="login-title">Hobnob</h1>
+            <h1 class="login-title">Vigo</h1>
             <p class="login-subtitle">Sign in with your SSH key</p>
             <form id="login-form" onsubmit="return handleLogin(event)">
                 <div class="form-group">
@@ -287,7 +287,7 @@ const isowebauthLoginHTML = `<!DOCTYPE html>
                 </button>
                 <p class="login-error" id="login-error" style="display:none"></p>
                 <p class="login-hint">
-                    Requires the <a href="https://github.com/hobnob/isowebauth" target="_blank">isowebauth</a> app running on your machine.
+                    Requires the <a href="https://github.com/vigo/isowebauth" target="_blank">isowebauth</a> app running on your machine.
                 </p>
             </form>
         </div>

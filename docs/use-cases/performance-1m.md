@@ -2,7 +2,7 @@
 
 These projections are based on benchmarked per-request costs from the codebase, not measured end-to-end under production load. Actual performance will vary with hardware, network conditions, policy complexity, and fleet composition.
 
-This document analyzes Hobnob server performance under 1-minute check-in intervals on modest hardware. All numbers reference benchmarked values from the codebase or are derived from measured operations.
+This document analyzes Vigo server performance under 1-minute check-in intervals on modest hardware. All numbers reference benchmarked values from the codebase or are derived from measured operations.
 
 See also: [30-second intervals](performance-30s.md) | [15-second intervals](performance-15s.md)
 
@@ -17,9 +17,9 @@ See also: [30-second intervals](performance-30s.md) | [15-second intervals](perf
 
 The check-in hot path is designed for zero synchronous database operations:
 
-- **FleetIndex**: In-memory thrall index with O(1) lookups. Rehydrated from SQLite on startup, dirty state flushed every 10 seconds in 500-row batches.
-- **Policy cache**: One cached bundle per match pattern (not per thrall). Cache hit: 17 ns. Miss triggers rebuild at ~3 us.
-- **No-change short-circuit**: When policy hasn't changed and the thrall isn't force-pushed, the server returns a 100-byte "nothing changed" response in ~55 us total.
+- **FleetIndex**: In-memory envoy index with O(1) lookups. Rehydrated from SQLite on startup, dirty state flushed every 10 seconds in 500-row batches.
+- **Policy cache**: One cached bundle per match pattern (not per envoy). Cache hit: 17 ns. Miss triggers rebuild at ~3 us.
+- **No-change short-circuit**: When policy hasn't changed and the envoy isn't force-pushed, the server returns a 100-byte "nothing changed" response in ~55 us total.
 - **Async writes**: Last-seen timestamps, traits, and flag changes are batched and flushed to SQLite every 10 seconds, outside any hot-path lock.
 
 ## Check-in Cost Breakdown
@@ -29,7 +29,7 @@ The check-in hot path is designed for zero synchronous database operations:
 | Operation | Cost | Notes |
 |-----------|------|-------|
 | ED25519 signature verification | 52.5 us | Interceptor, non-negotiable |
-| FleetIndex GetThrallLite | 0.36 us | RLock, shallow copy |
+| FleetIndex GetEnvoyLite | 0.36 us | RLock, shallow copy |
 | FleetIndex GetPubKey | 0.15 us | Pre-parsed key, O(1) map |
 | Policy version compare + flags | ~0.5 us | In-memory comparisons |
 | TraitsBatcher hash-dedup | ~1 us | SHA-256 of traits JSON |
@@ -83,14 +83,14 @@ ED25519 verification dominates at 52.5 us/op. With full handler overhead (~55 us
 
 Go's goroutine scheduler distributes work across all 4 cores. A single core saturates at roughly 3,000-5,000 no-change check-ins/sec or 1,200-2,000 full-bundle check-ins/sec. With 4 cores, theoretical throughput is 12,000-20,000 RPS before CPU saturation.
 
-**Config change storm**: When config is published, all thralls receive a full bundle on their next check-in. For a 10,000-thrall fleet at 1-minute intervals, this means ~167 full-bundle responses per second sustained over ~60 seconds. CPU impact: ~12% of one core. Not a concern.
+**Config change storm**: When config is published, all envoys receive a full bundle on their next check-in. For a 10,000-envoy fleet at 1-minute intervals, this means ~167 full-bundle responses per second sustained over ~60 seconds. CPU impact: ~12% of one core. Not a concern.
 
 ### Memory Usage
 
-| Component | 1,000 thralls | 10,000 thralls | 50,000 thralls |
+| Component | 1,000 envoys | 10,000 envoys | 50,000 envoys |
 |-----------|---------------|----------------|----------------|
 | Go runtime + gRPC server | ~150 MiB | ~200 MiB | ~300 MiB |
-| FleetIndex (thrall state) | 1.4 MiB | 14 MiB | 70 MiB |
+| FleetIndex (envoy state) | 1.4 MiB | 14 MiB | 70 MiB |
 | FleetIndex (inverted indexes) | 0.2 MiB | 1.6 MiB | 8 MiB |
 | Policy cache | <1 MiB | <1 MiB | <1 MiB |
 | gRPC buffers (32 KiB r+w per conn) | 64 MiB | 640 MiB | 3.2 GiB |
@@ -100,10 +100,10 @@ Go's goroutine scheduler distributes work across all 4 cores. A single core satu
 
 **The gRPC connection buffer is the largest memory consumer**, not the FleetIndex. Each persistent mTLS connection allocates 64 KiB (32 KiB read + 32 KiB write) by default. At 10,000 connections this is 640 MiB.
 
-Mitigation options for 25,000+ thralls:
+Mitigation options for 25,000+ envoys:
 - Reduce `tuning.grpc_read_buffer` and `tuning.grpc_write_buffer` to 16 KiB (halves connection memory)
 - Set `tuning.max_connection_age` to force periodic reconnects, reducing idle connection count
-- Use adaptive stream promotion (default) so only active thralls hold streams
+- Use adaptive stream promotion (default) so only active envoys hold streams
 - Set `tuning.memory_limit: "6GiB"` to cap Go heap and trigger earlier GC
 
 ### Network Bandwidth
@@ -115,33 +115,33 @@ Mitigation options for 25,000+ thralls:
 | 10,000 | ~50 KB/s | ~5 MB/s (30s burst) |
 | 50,000 | ~250 KB/s | ~25 MB/s (30s burst) |
 
-Assumes 100-byte no-change response, 30 KiB average full bundle (with stub optimization reducing unchanged modules to ~100 bytes each). Even at 50,000 thralls, network is not the bottleneck on a 1 Gbps link.
+Assumes 100-byte no-change response, 30 KiB average full bundle (with stub optimization reducing unchanged modules to ~100 bytes each). Even at 50,000 envoys, network is not the bottleneck on a 1 Gbps link.
 
 ### SQLite Write Load
 
 The flusher batches all writes into 10-second windows. Three flushers are staggered at 0s, 3.3s, and 6.6s offsets to avoid lock contention.
 
-| Fleet Size | Dirty thralls per flush | Batch transactions per flush | SQLite write time |
+| Fleet Size | Dirty envoys per flush | Batch transactions per flush | SQLite write time |
 |------------|-------------------------|------------------------------|-------------------|
 | 1,000 | ~1,000 | 2 (500/chunk) | ~5 ms |
 | 10,000 | ~10,000 | 20 | ~50 ms |
 | 50,000 | ~50,000 | 100 | ~250 ms |
 
-At 1-minute intervals, every thrall checks in within each 10-second flush window, so the full fleet is dirty each cycle. WAL mode allows concurrent reads during writes, so check-in handlers are never blocked by the flusher.
+At 1-minute intervals, every envoy checks in within each 10-second flush window, so the full fleet is dirty each cycle. WAL mode allows concurrent reads during writes, so check-in handlers are never blocked by the flusher.
 
-**Traits writes** are hash-deduplicated: if a thrall's traits JSON hasn't changed (SHA-256 match), no write occurs. For a stable fleet, 95%+ of check-ins skip the traits write entirely. Only environment changes (new package installed, IP change, etc.) trigger a traits INSERT.
+**Traits writes** are hash-deduplicated: if a envoy's traits JSON hasn't changed (SHA-256 match), no write occurs. For a stable fleet, 95%+ of check-ins skip the traits write entirely. Only environment changes (new package installed, IP change, etc.) trigger a traits INSERT.
 
 ## Capacity Recommendations
 
-### Sweet Spot: Up to 10,000 Thralls
+### Sweet Spot: Up to 10,000 Envoys
 
-No tuning required. Default settings handle 10,000 thralls at 1-minute check-ins with:
+No tuning required. Default settings handle 10,000 envoys at 1-minute check-ins with:
 - ~5% CPU utilization (sustained)
 - ~1.4 GiB memory
 - ~50 KB/s network
 - 50 ms SQLite flush every 10 seconds
 
-### Comfortable: 10,000-25,000 Thralls
+### Comfortable: 10,000-25,000 Envoys
 
 Add these tuning options to `server.yaml`:
 
@@ -155,12 +155,12 @@ tuning:
 
 This reduces gRPC buffer memory by half and gives Go more heap room before GC kicks in.
 
-### Scaling Beyond: 25,000+ Thralls
+### Scaling Beyond: 25,000+ Envoys
 
 Two options:
 
-1. **Upgrade to 8 vCPU / 16 GB** and apply tuning above. Handles ~50,000 thralls.
-2. **Use spanner (hub-spoke)** to shard the fleet across multiple spoke servers. Each spoke handles its own subset of thralls with independent FleetIndex and SQLite database. The hub aggregates compliance, routes enrollment, and fans out queries.
+1. **Upgrade to 8 vCPU / 16 GB** and apply tuning above. Handles ~50,000 envoys.
+2. **Use spanner (hub-spoke)** to shard the fleet across multiple spoke servers. Each spoke handles its own subset of envoys with independent FleetIndex and SQLite database. The hub aggregates compliance, routes enrollment, and fans out queries.
 
 ### When to Use Streaming Instead of Polling
 
@@ -172,16 +172,16 @@ If the fleet runs frequent ad-hoc pushes or live queries, streaming reduces late
 
 From most to least likely to saturate first on 4 vCPU / 8 GB:
 
-1. **Memory (gRPC connection buffers)** — 640 MiB at 10k connections. First constraint hit at ~25k thralls on 8 GB.
+1. **Memory (gRPC connection buffers)** — 640 MiB at 10k connections. First constraint hit at ~25k envoys on 8 GB.
 2. **CPU (ED25519 verification)** — 52.5 us per check-in. Saturates one core at ~19k RPS. With 4 cores, theoretical limit ~76k RPS.
-3. **SQLite flusher** — 250 ms per flush at 50k thralls. Still well within the 10-second window.
-4. **Network** — 25 MB/s burst at 50k thralls after config change. Under 3% of 1 Gbps.
+3. **SQLite flusher** — 250 ms per flush at 50k envoys. Still well within the 10-second window.
+4. **Network** — 25 MB/s burst at 50k envoys after config change. Under 3% of 1 Gbps.
 5. **Config pattern matching** — Cached after first lookup. Negligible.
 
 ## Key Design Properties
 
 - **Zero synchronous DB ops on check-in**: FleetIndex serves all reads; writes are async.
-- **Policy cache scales by pattern count, not fleet size**: 100 match patterns = 100 cache entries, regardless of whether 10 or 10,000 thralls match each one.
+- **Policy cache scales by pattern count, not fleet size**: 100 match patterns = 100 cache entries, regardless of whether 10 or 10,000 envoys match each one.
 - **No-change short-circuit**: Dominates idle fleet behavior (95%+ of cycles), returning in ~55 us with a 100-byte response.
 - **Jitter prevents thundering herd**: Default 10% jitter spreads 1-minute check-ins across a 12-second window. No synchronization between agents.
 - **Flusher lock is non-blocking**: Snapshots dirty state in <5 ms, then performs DB writes outside the lock. Check-in handlers never wait on SQLite.

@@ -314,7 +314,7 @@ fn handle_present(
     let dir = Path::new(path)
         .parent()
         .unwrap_or_else(|| Path::new("."));
-    let tmp_path = dir.join(format!(".hobnob-{}", uuid::Uuid::new_v4()));
+    let tmp_path = dir.join(format!(".vigo-{}", uuid::Uuid::new_v4()));
     let tmp_path_str = tmp_path.display().to_string();
 
     {

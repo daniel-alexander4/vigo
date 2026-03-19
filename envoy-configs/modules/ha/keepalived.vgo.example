@@ -5,7 +5,7 @@ vars:
   virtual_ip: "10.0.0.100"
   vrrp_priority: "100"
   vrrp_router_id: "51"
-  vrrp_password: "secret:hobnob/keepalived/vrrp-password"
+  vrrp_password: "secret:vigo/keepalived/vrrp-password"
 
 resources:
   - name: install-keepalived
@@ -17,7 +17,7 @@ resources:
     type: file
     target_path: /etc/keepalived/keepalived.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       vrrp_instance VI_1 {
           state BACKUP
           interface {{ .Vars.vrrp_interface }}

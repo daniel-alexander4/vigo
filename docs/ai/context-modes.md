@@ -12,7 +12,7 @@ ai:
 ```
 
 **How it works:**
-1. The system prompt describes the Hobnob fleet and available tools
+1. The system prompt describes the Vigo fleet and available tools
 2. The LLM decides which tools to call based on the question
 3. Tool results are fed back to the LLM
 4. The loop repeats until the LLM produces a final answer (up to `max_tool_rounds`)
@@ -31,10 +31,10 @@ ai:
 **How it works:**
 1. The question is scanned for keywords (hostnames, "compliance", "module", "package", etc.)
 2. Relevant data is fetched proactively:
-   - If a hostname is detected: thrall details, traits, recent runs, config
+   - If a hostname is detected: envoy details, traits, recent runs, config
    - If compliance-related words: fleet compliance summary
    - If module/role words: module and role lists
-   - If thrall/fleet words: thrall list
+   - If envoy/fleet words: envoy list
    - If package/drift words: package drift data
 3. All fetched data is appended to the question as "Prefetched Data"
 4. The LLM answers using only the prefetched context (no tool calls)
@@ -65,7 +65,7 @@ ai:
 
 ## docs_mode
 
-Controls whether Hobnob documentation is injected into the system prompt, giving the LLM knowledge about Hobnob concepts and configuration.
+Controls whether Vigo documentation is injected into the system prompt, giving the LLM knowledge about Vigo concepts and configuration.
 
 ```yaml
 ai:
@@ -78,7 +78,7 @@ ai:
 |------|-------------|
 | `full` | Loads the complete docs corpus from the docs directory and includes it in the system prompt. Provides the richest context but uses more tokens. |
 | `condensed` | Loads the docs and applies condensation (removes examples, shortens descriptions). Balanced between context quality and token usage. |
-| `off` | No documentation is injected. The LLM relies entirely on its training data and tool results. Saves tokens but may produce less accurate answers about Hobnob-specific concepts. |
+| `off` | No documentation is injected. The LLM relies entirely on its training data and tool results. Saves tokens but may produce less accurate answers about Vigo-specific concepts. |
 
 The docs directory path is configured at server startup. When available, the corpus is loaded once and cached in the assistant's system prompt.
 

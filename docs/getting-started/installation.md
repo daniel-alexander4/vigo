@@ -1,20 +1,20 @@
 # Installation
 
-Hobnob has three components: the server (`hobd`), the CLI (`hobnobcli`), and the agent (`hobnob`). The server and CLI ship as a container image. The agent is installed on each managed machine via a bootstrap script.
+Vigo has three components: the server (`vigosrv`), the CLI (`vigogo`), and the agent (`vigo`). The server and CLI ship as a container image. The agent is installed on each managed machine via a bootstrap script.
 
 ## Server
 
 ### 1. Seed the data directory
 
 ```bash
-sudo mkdir -p /srv/hobnob
-docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
+sudo mkdir -p /srv/vigo
+docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
 ```
 
-This populates `/srv/hobnob/` with everything needed to run the server:
+This populates `/srv/vigo/` with everything needed to run the server:
 
 ```
-/srv/hobnob/
+/srv/vigo/
 ├── docker-compose.yml       # production compose file
 ├── server.yaml              # server config
 ├── .env                     # non-secret env vars
@@ -23,44 +23,44 @@ This populates `/srv/hobnob/` with everything needed to run the server:
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
 ├── policy/
-│   ├── stage/               # edit .hnb config files here
+│   ├── stage/               # edit .vgo config files here
 │   │   ├── modules/
 │   │   ├── roles/
-│   │   ├── thralls/
+│   │   ├── envoys/
 │   │   ├── templates/
 │   │   └── vars/
 │   └── .live/               # published config (do not edit directly)
 ├── config-history/          # rollback snapshots
-├── examples/                # example .hnb modules, roles, and nodes
+├── examples/                # example .vgo modules, roles, and nodes
 └── docs/                    # browsable documentation
 ```
 
 ### 2. Start the server
 
 ```bash
-cd /srv/hobnob
+cd /srv/vigo
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `hobnobcli webusers create --username admin --role admin` and set a password with `hobnobcli secrets set-web-password hobnob/web/auth/admin`, then sign in at `https://localhost:8443/login`.
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `vigogo webusers create --username admin --role admin` and set a password with `vigogo secrets set-web-password vigo/web/auth/admin`, then sign in at `https://localhost:8443/login`.
 
 ### 3. Verify
 
 ```bash
 docker compose ps                    # container running
 curl -sk https://localhost:8443/healthz # health check
-hobnobcli doctor                     # full diagnostic
+vigogo doctor                     # full diagnostic
 ```
 
 ### Optional services
 
-Edit `HOBNOB_SERVICES` in `/srv/hobnob/.env` to enable optional containers:
+Edit `VIGO_SERVICES` in `/srv/vigo/.env` to enable optional containers:
 
 ```bash
 # In .env, uncomment one of:
-HOBNOB_SERVICES=ollama              # local AI assistant (free, CPU-only)
-HOBNOB_SERVICES=postgres            # Postgres instead of SQLite
-HOBNOB_SERVICES=ollama,postgres     # both
+VIGO_SERVICES=ollama              # local AI assistant (free, CPU-only)
+VIGO_SERVICES=postgres            # Postgres instead of SQLite
+VIGO_SERVICES=ollama,postgres     # both
 ```
 
 ### Configuration
@@ -70,31 +70,31 @@ Edit `server.yaml` for server settings (check-in interval, TLS paths, spanner, S
 ### Upgrading
 
 ```bash
-cd /srv/hobnob
+cd /srv/vigo
 docker compose pull
 docker compose up -d
 ```
 
-Your config, database, secrets, and TLS certs persist in `/srv/hobnob/` across upgrades.
+Your config, database, secrets, and TLS certs persist in `/srv/vigo/` across upgrades.
 
 ## CLI
 
-The container automatically installs `hobnobcli` and `hnbvi` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
+The container automatically installs `vigogo` and `hnbvi` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
 
 ```bash
-docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
-ln -sf hobnobcli /usr/local/bin/hnbvi
+docker cp vigo:/usr/local/bin/vigogo /usr/local/bin/vigogo
+ln -sf vigogo /usr/local/bin/hnbvi
 ```
 
 The CLI auto-detects the server at `https://localhost:8443`. For remote servers:
 
 ```bash
-export HOBNOB_SERVER="http://hobnob-server:8443"
+export VIGO_SERVER="http://vigo-server:8443"
 ```
 
 ## Agent
 
-The agent runs on managed machines (thralls). It supports Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows.
+The agent runs on managed machines (envoys). It supports Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows.
 
 ### Linux
 
@@ -102,7 +102,7 @@ The agent runs on managed machines (thralls). It supports Linux, macOS, FreeBSD,
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-Downloads the agent binary, generates a keypair, registers with the server, and installs a systemd service (`hobnob-thrall`).
+Downloads the agent binary, generates a keypair, registers with the server, and installs a systemd service (`vigo-envoy`).
 
 ### macOS
 
@@ -110,7 +110,7 @@ Downloads the agent binary, generates a keypair, registers with the server, and 
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-Detects macOS and installs a launchd plist (`com.hobnob.thrall`).
+Detects macOS and installs a launchd plist (`com.vigo.envoy`).
 
 ### FreeBSD / NetBSD
 
@@ -118,7 +118,7 @@ Detects macOS and installs a launchd plist (`com.hobnob.thrall`).
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-Installs an rc.d service script at `/usr/local/etc/rc.d/hobnob_thrall`.
+Installs an rc.d service script at `/usr/local/etc/rc.d/vigo_envoy`.
 
 ### OpenBSD
 
@@ -156,15 +156,15 @@ See [Bootstrap](bootstrap.md) for details on the enrollment flow, token-based au
 ## Agent directory layout
 
 ```
-/etc/hobnob-thrall/            # config + identity
-├── thrall.uuid                # registration ID
+/etc/vigo-envoy/            # config + identity
+├── envoy.uuid                # registration ID
 ├── certs/                     # TLS keypair
 │   ├── ca.crt
 │   ├── tls.crt
 │   └── tls.key
 └── executors/                 # custom executor scripts
 
-/var/lib/hobnob/               # persistent state
+/var/lib/vigo/               # persistent state
 ├── state/                     # LMDB (policy cache, checksums, traits, pending results)
 ├── snapshots/                 # file snapshots for rollback
 └── flags/                     # flag markers for when: expressions

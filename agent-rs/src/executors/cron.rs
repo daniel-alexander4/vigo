@@ -61,7 +61,7 @@ impl Executor for CronExecutor {
         let user = params.get("user").map(|s| s.as_str()).unwrap_or("root");
 
         // Build content: header, optional environment lines, then schedule line.
-        let mut content = String::from("# Managed by hobnob -- do not edit\n");
+        let mut content = String::from("# Managed by vigo -- do not edit\n");
         if let Some(env_param) = params.get("environment") {
             for pair in env_param.split(',') {
                 let pair = pair.trim();
@@ -269,7 +269,7 @@ mod tests {
         // Replicate the content-building logic from execute.
         let schedule = build_schedule(&params).unwrap();
         let user = params.get("user").map(|s| s.as_str()).unwrap_or("root");
-        let mut content = String::from("# Managed by hobnob -- do not edit\n");
+        let mut content = String::from("# Managed by vigo -- do not edit\n");
         if let Some(env_param) = params.get("environment") {
             for pair in env_param.split(',') {
                 let pair = pair.trim();
@@ -283,7 +283,7 @@ mod tests {
 
         assert_eq!(
             content,
-            "# Managed by hobnob -- do not edit\nMAILTO=root\nPATH=/usr/bin:/bin\n0 2 * * * root /usr/bin/backup.sh\n"
+            "# Managed by vigo -- do not edit\nMAILTO=root\nPATH=/usr/bin:/bin\n0 2 * * * root /usr/bin/backup.sh\n"
         );
     }
 
@@ -293,7 +293,7 @@ mod tests {
         // state=absent on a file that won't exist under /etc/cron.d/ (nonexistent name).
         let result = exec.execute(
             &make_params(&[
-                ("name", "hobnob-test-nonexistent-cron-99999"),
+                ("name", "vigo-test-nonexistent-cron-99999"),
                 ("state", "absent"),
             ]),
             true,

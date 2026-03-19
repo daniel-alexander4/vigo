@@ -37,10 +37,10 @@ func (m *mockProvider) Close() error { return nil }
 // --- helpers ---
 
 // setupDir creates a config directory with modules/ subdir and a default
-// subdirectory for thrall entries.
+// subdirectory for envoy entries.
 func setupDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "thrall-configs")
+	dir := filepath.Join(t.TempDir(), "envoy-configs")
 	for _, sub := range []string{"default", "modules"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
@@ -59,7 +59,7 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// writeRoles writes a roles.hnb file at the base dir from individual role
+// writeRoles writes a roles.vgo file at the base dir from individual role
 // YAML snippets. Each snippet is a single role definition (name: ..., modules: ...).
 // They are wrapped in a top-level "roles:" list.
 func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
@@ -71,7 +71,7 @@ func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	writeFile(t, filepath.Join(dir, "roles.hnb"), b.String())
+	writeFile(t, filepath.Join(dir, "roles.vgo"), b.String())
 }
 
 // --- Tests ---
@@ -89,7 +89,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "default", "webservers.yaml"), `
-thralls:
+envoys:
   - match: "test.example.com"
     environment: production
     modules: [nginx]
@@ -101,8 +101,8 @@ thralls:
 	}
 
 	cfg := store.Get("test.example.com")
-	if cfg.Thrall != "test.example.com" {
-		t.Errorf("Thrall = %q, want test.example.com", cfg.Thrall)
+	if cfg.Envoy != "test.example.com" {
+		t.Errorf("Envoy = %q, want test.example.com", cfg.Envoy)
 	}
 	if len(cfg.Modules) != 1 {
 		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
@@ -135,8 +135,8 @@ resources:
 - name: webserver
   modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.example.com"
     environment: production
     roles: [webserver]
@@ -173,8 +173,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.example.com"
     environment: production
     modules: [nginx]
@@ -207,17 +207,17 @@ resources:
     target_path: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web.example.com"
     environment: production
     modules: [app]
     vars:
-      db_dsn: "secret:hobnob/db/dsn"
+      db_dsn: "secret:vigo/db/dsn"
 `)
 
 	mp := &mockProvider{secrets: map[string]string{
-		"hobnob/db/dsn":   "/srv/hobnob/db/hobnob.db",
+		"vigo/db/dsn":   "/srv/vigo/db/vigo.db",
 		"myapp/db/config": "host=db port=5432 user=myapp",
 	}}
 	store, err := NewConfigStore(dir, mp, true)
@@ -226,7 +226,7 @@ thralls:
 	}
 
 	cfg := store.Get("web.example.com")
-	if cfg.Vars["db_dsn"] != "/srv/hobnob/db/hobnob.db" {
+	if cfg.Vars["db_dsn"] != "/srv/vigo/db/vigo.db" {
 		t.Errorf("db_dsn = %q, want resolved DSN", cfg.Vars["db_dsn"])
 	}
 }
@@ -238,13 +238,13 @@ func TestKnownSecretEnforcement(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "bad.example.com"
     environment: production
     modules: [app]
     vars:
-      dsn: "plaintext-hobnob.db"
+      dsn: "plaintext-vigo.db"
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -260,8 +260,8 @@ func TestHardFailUnresolvable(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "fail.example.com"
     environment: production
     modules: [app]
@@ -286,8 +286,8 @@ resources:
     path: /etc/app/config
     content: "secret:app/config/content"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web-*.prod.example.com"
     environment: production
     modules: [app]
@@ -345,19 +345,19 @@ func TestSecretErrorHintCategories(t *testing.T) {
 		want    string
 	}{
 		// Local backend hints.
-		{"local not found", "local", fmt.Errorf("secret %q not found in /srv/hobnob/secrets", "x"), "hobnobcli secrets set"},
+		{"local not found", "local", fmt.Errorf("secret %q not found in /srv/vigo/secrets", "x"), "vigogo secrets set"},
 		{"local wrong key", "local", fmt.Errorf("decrypting: message authentication failed (wrong master key?)"), "re-encrypt"},
 		{"local too short", "local", fmt.Errorf("ciphertext too short"), "plaintext from a previous"},
 		// Isopass backend hints.
 		{"isopass not found", "isopass", fmt.Errorf("secret %q not found in isopass", "x"), "isopass set"},
-		{"isopass unreachable", "isopass", fmt.Errorf("isopass unreachable at https://x"), "HOBNOB_ISOPASS_URL"},
-		{"isopass auth failed", "isopass", fmt.Errorf("isopass authentication failed"), "HOBNOB_ISOPASS_TOKEN"},
+		{"isopass unreachable", "isopass", fmt.Errorf("isopass unreachable at https://x"), "VIGO_ISOPASS_URL"},
+		{"isopass auth failed", "isopass", fmt.Errorf("isopass authentication failed"), "VIGO_ISOPASS_TOKEN"},
 		// Backend-agnostic.
 		{"plaintext value", "", fmt.Errorf("must use \"secret:\" prefix"), "secret:<path>"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			se := &SecretError{Match: "test", Attr: "x", Secret: "hobnob/db/dsn", Backend: tt.backend, Err: tt.err}
+			se := &SecretError{Match: "test", Attr: "x", Secret: "vigo/db/dsn", Backend: tt.backend, Err: tt.err}
 			if !strings.Contains(se.Hint(), tt.want) {
 				t.Errorf("hint = %q, want substring %q", se.Hint(), tt.want)
 			}
@@ -376,8 +376,8 @@ resources: []
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "*.prod.example.com"
     environment: production
     modules: [base, nginx]
@@ -416,8 +416,8 @@ resources: []
 name: pattern
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.prod.example.com"
     environment: staging
     modules: [explicit]
@@ -453,13 +453,13 @@ resources: []
 `)
 	// Two separate client files
 	writeFile(t, filepath.Join(dir, "default", "webservers.yaml"), `
-thralls:
+envoys:
   - match: "web-*"
     environment: production
     modules: [nginx]
 `)
 	writeFile(t, filepath.Join(dir, "default", "databases.yaml"), `
-thralls:
+envoys:
   - match: "db-*"
     environment: production
     modules: [postgres]
@@ -505,8 +505,8 @@ func TestEnvVarMerge(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "envtest.example.com"
     environment: production
     modules: [app]
@@ -556,9 +556,9 @@ resources: []
 		t.Fatalf("expected empty environment before reload, got %q", cfg.Environment)
 	}
 
-	// Write a new thrall file and reload.
+	// Write a new envoy file and reload.
 	writeFile(t, filepath.Join(dir, "default", "new-hosts.yaml"), `
-thralls:
+envoys:
   - match: "new.example.com"
     environment: staging
     modules: [app]
@@ -581,8 +581,8 @@ func TestBadConfigKeepsOld(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "good.example.com"
     environment: production
     modules: [app]
@@ -598,8 +598,8 @@ thralls:
 	}
 
 	// Write invalid YAML and reload.
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   invalid yaml: [[[
 `)
 
@@ -617,8 +617,8 @@ thralls:
 func TestUnknownModuleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "bad.example.com"
     modules: [nonexistent]
 `)
@@ -632,8 +632,8 @@ thralls:
 func TestUnknownRoleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "bad.example.com"
     roles: [nonexistent]
 `)
@@ -669,8 +669,8 @@ resources: []
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "dup.example.com"
     roles: [web]
     modules: [nginx]
@@ -702,8 +702,8 @@ resources:
 name: other
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web-*"
     modules: [app]
   - match: "db-*"
@@ -718,12 +718,12 @@ thralls:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	patterns := store.ThrallsReferencingSecret("myapp/db/config")
+	patterns := store.EnvoysReferencingSecret("myapp/db/config")
 	if len(patterns) != 1 || patterns[0] != "web-*" {
 		t.Errorf("expected [web-*], got %v", patterns)
 	}
 
-	patterns = store.ThrallsReferencingSecret("nonexistent")
+	patterns = store.EnvoysReferencingSecret("nonexistent")
 	if len(patterns) != 0 {
 		t.Errorf("expected empty, got %v", patterns)
 	}
@@ -751,8 +751,8 @@ resources:
     owner: root
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web.example.com"
     modules: [nginx]
 `)
@@ -798,8 +798,8 @@ resources:
     source: templates/test.tmpl
     content: "inline content"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -825,8 +825,8 @@ resources:
     target_path: /etc/test
     source: templates/nonexistent.tmpl
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -861,8 +861,8 @@ resources:
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web.example.com"
     modules: [nginx]
 `)
@@ -1037,8 +1037,8 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web.example.com"
     modules: [webserver]
 `)
@@ -1088,8 +1088,8 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1115,8 +1115,8 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1151,8 +1151,8 @@ vars:
     gte: 4096
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "multi.example.com"
     modules: [mod_a, mod_b]
 `)
@@ -1194,8 +1194,8 @@ vars:
     in: [debian, ubuntu]
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "override.example.com"
     modules: [mod]
     vars:
@@ -1244,8 +1244,8 @@ resources:
           command: "apt-get update"
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "deb.example.com"
     modules: [debian-tools]
 `)
@@ -1301,8 +1301,8 @@ resources:
     state: running
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "mix.example.com"
     modules: [mixed]
 `)
@@ -1359,8 +1359,8 @@ resources:
           depends_on: [setup-repo]
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "dep.example.com"
     modules: [cross-dep]
 `)
@@ -1404,8 +1404,8 @@ resources:
           when: "not is_container"
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "dual.example.com"
     modules: [dual-cond]
 `)
@@ -1439,8 +1439,8 @@ resources:
       resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "bad.example.com"
     modules: [bad-block]
 `)
@@ -1482,8 +1482,8 @@ resources:
       when: "is_debian"
     - certbot
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web.example.com"
     roles: [webserver]
 `)
@@ -1520,8 +1520,8 @@ resources:
     package: redis
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "db.example.com"
     modules:
       - name: redis
@@ -1560,8 +1560,8 @@ resources: []
     - name: certbot
       when: "is_debian or is_ubuntu"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "mix.example.com"
     roles: [web]
 `)
@@ -1610,8 +1610,8 @@ resources:
 - name: webserver
   modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.example.com"
     roles: [webserver]
   - match: "web02.example.com"
@@ -1643,15 +1643,15 @@ thralls:
 func TestIdempotencyValidation_BlocksUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: yolo-exec
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1678,15 +1678,15 @@ thralls:
 func TestIdempotencyValidation_DangerousModeAllowsUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: yolo-exec
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
   - match: "test.example.com"
     modules: [bad]
 `)
@@ -1704,7 +1704,7 @@ thralls:
 func TestIdempotencyValidation_GuardedExecPasses(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "good.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "good.vgo"), `
 name: good
 resources:
   - name: guarded-exec
@@ -1712,8 +1712,8 @@ resources:
     command: "touch /tmp/done"
     creates: "/tmp/done"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
   - match: "test.example.com"
     modules: [good]
 `)
@@ -1727,7 +1727,7 @@ thralls:
 func TestHnbFileExtension_LoadedByConfigStore(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1739,8 +1739,8 @@ resources:
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
   - match: "test.example.com"
     roles: [web]
 `)
@@ -1762,14 +1762,14 @@ thralls:
 func TestMultipleIdempotencyErrorsCollected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad1.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad1.vgo"), `
 name: bad1
 resources:
   - name: yolo-exec
     type: exec
     command: "echo one"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "bad2.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad2.vgo"), `
 name: bad2
 resources:
   - name: another-yolo
@@ -1779,8 +1779,8 @@ resources:
     type: exec
     command: "echo three"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
   - match: "test.example.com"
     modules: [bad1, bad2]
 `)
@@ -1837,8 +1837,8 @@ thralls:
 func TestDuplicateModulesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
-	for _, name := range []string{"docker", "grafana", "thrall-exporter"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+	for _, name := range []string{"docker", "grafana", "envoy-exporter"} {
+		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -1848,13 +1848,13 @@ resources:
 `, name, name, name))
 	}
 	// Duplicate modules: keys — should merge, not overwrite.
-	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
   - match: "danlap"
     environment: production
     modules: [docker]
     modules: [grafana]
-    modules: [thrall-exporter]
+    modules: [envoy-exporter]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -1871,7 +1871,7 @@ thralls:
 		t.Fatalf("expected 3 modules, got %d: %v", len(cfg.Modules), names)
 	}
 
-	want := []string{"docker", "grafana", "thrall-exporter"}
+	want := []string{"docker", "grafana", "envoy-exporter"}
 	for i, m := range cfg.Modules {
 		if m.Name != want[i] {
 			t.Errorf("module %d: got %q, want %q", i, m.Name, want[i])
@@ -1891,7 +1891,7 @@ func TestDuplicateRolesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
 	for _, name := range []string{"nginx", "redis"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -1907,8 +1907,8 @@ resources:
 - name: cache
   modules: [redis]
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
   - match: "test"
     roles: [web]
     roles: [cache]
@@ -1966,8 +1966,8 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "app.example.com"
     modules: [base-packages, app-config]
 `)
@@ -2011,8 +2011,8 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "app.example.com"
     modules: [base-packages]
 `)
@@ -2050,8 +2050,8 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "app.example.com"
     modules: [base-packages, app-config]
 `)
@@ -2084,14 +2084,14 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "web.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "web.vgo"), `
 server_name: "web01.example.com"
 port: "9090"
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "web01.example.com"
-    vars_from: "vars/web.hnb"
+    vars_from: "vars/web.vgo"
     modules: [app]
 `)
 
@@ -2125,20 +2125,20 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "common.vgo"), `
 port: "3000"
 log_level: "info"
 `)
-	writeFile(t, filepath.Join(dir, "vars", "host.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "host.vgo"), `
 port: "4000"
 server_name: "host1"
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
     vars_from:
-      - "vars/common.hnb"
-      - "vars/host.hnb"
+      - "vars/common.vgo"
+      - "vars/host.vgo"
     modules: [app]
 `)
 
@@ -2172,14 +2172,14 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "defaults.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "defaults.vgo"), `
 port: "3000"
 log_level: "info"
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
-    vars_from: "vars/defaults.hnb"
+    vars_from: "vars/defaults.vgo"
     vars:
       port: "9999"
     modules: [app]
@@ -2217,15 +2217,15 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "data.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "data.vgo"), `
 a: "file"
 b: "file"
 d: "file"
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
-    vars_from: "vars/data.hnb"
+    vars_from: "vars/data.vgo"
     vars:
       a: "inline"
     modules: [app]
@@ -2264,9 +2264,9 @@ resources:
     state: present
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
-    vars_from: "vars/nonexistent.hnb"
+    vars_from: "vars/nonexistent.vgo"
     modules: [app]
 `)
 
@@ -2274,7 +2274,7 @@ thralls:
 	if err == nil {
 		t.Fatal("expected error for missing vars_from file")
 	}
-	if !strings.Contains(err.Error(), "nonexistent.hnb") {
+	if !strings.Contains(err.Error(), "nonexistent.vgo") {
 		t.Errorf("error should mention the missing file, got: %v", err)
 	}
 }
@@ -2291,7 +2291,7 @@ resources:
     state: present
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
     vars_from: "../../../etc/passwd"
     modules: [app]
@@ -2320,11 +2320,11 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "empty.hnb"), ``)
+	writeFile(t, filepath.Join(dir, "vars", "empty.vgo"), ``)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
-    vars_from: "vars/empty.hnb"
+    vars_from: "vars/empty.vgo"
     modules: [app]
 `)
 
@@ -2352,14 +2352,14 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "secrets.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "secrets.vgo"), `
 api_key: "secret:app/api_key"
 debug: "false"
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
-    vars_from: "vars/secrets.hnb"
+    vars_from: "vars/secrets.vgo"
     modules: [app]
 `)
 
@@ -2391,13 +2391,13 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "data.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "data.vgo"), `
 color: "blue"
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
-    vars_from: "vars/data.hnb"
+    vars_from: "vars/data.vgo"
     modules: [app]
 `)
 
@@ -2426,14 +2426,14 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "vars", "data.hnb"), `
+	writeFile(t, filepath.Join(dir, "vars", "data.vgo"), `
 b_file: "from_file"
 a_file: "from_file"
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1.example.com"
-    vars_from: "vars/data.hnb"
+    vars_from: "vars/data.vgo"
     vars:
       c_inline: "from_inline"
     modules: [app]
@@ -2478,8 +2478,8 @@ resources:
 `)
 	// Two glob patterns that both match "web01.prod.example.com".
 	// First match should win.
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web*.prod.example.com"
     modules: [nginx]
   - match: "*.prod.example.com"
@@ -2509,10 +2509,10 @@ thralls:
 	}
 }
 
-func TestEmptyThrallsDir(t *testing.T) {
+func TestEmptyEnvoysDir(t *testing.T) {
 	dir := setupDir(t)
 
-	// No thrall files, no modules, no roles — just empty dirs.
+	// No envoy files, no modules, no roles — just empty dirs.
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
@@ -2538,8 +2538,8 @@ resources:
     package: myapp
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "app01.example.com"
     environment: production
     modules: [app]
@@ -2583,8 +2583,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.example.com"
     modules: [webserver]
     vars:
@@ -2616,8 +2616,8 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.example.com"
     modules: [app]
     vars_from:
@@ -2644,8 +2644,8 @@ resources:
     target_path: /etc/app/config
     source: "../../etc/shadow"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.example.com"
     modules: [app]
 `)
@@ -2670,8 +2670,8 @@ resources:
     target_path: /etc/app/config
     source: "/etc/passwd"
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "web01.example.com"
     modules: [app]
 `)
@@ -2693,8 +2693,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "*.example.com"
     modules: [nginx]
 `)
@@ -2714,8 +2714,8 @@ thralls:
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				cfg := store.Get("web01.example.com")
-				if cfg.Thrall != "web01.example.com" {
-					t.Errorf("Get() returned wrong thrall: %q", cfg.Thrall)
+				if cfg.Envoy != "web01.example.com" {
+					t.Errorf("Get() returned wrong envoy: %q", cfg.Envoy)
 				}
 			}
 		}()
@@ -2746,8 +2746,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "*.example.com"
     modules: [nginx]
 `)
@@ -2779,8 +2779,8 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "*.example.com"
     modules: [nginx]
 `)
@@ -2796,8 +2796,8 @@ thralls:
 	}
 
 	// Write invalid module reference.
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "*.example.com"
     modules: [nonexistent_module_xyz]
 `)
@@ -2872,8 +2872,8 @@ resources:
     target_path: /etc/evil.conf
     source: templates/evil.conf
 `)
-	writeFile(t, filepath.Join(dir, "default", "thralls.yaml"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+envoys:
   - match: "test.example.com"
     modules: [evil]
 `)
@@ -2927,7 +2927,7 @@ resources:
     - nginx
 `)
 	writeFile(t, filepath.Join(dir, "default", "web.yaml"), `
-thralls:
+envoys:
   - match: "web01.example.com"
     roles: [webserver]
 `)
@@ -2976,7 +2976,7 @@ resources:
     - a
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "x"
     roles: [outer]
 `)
@@ -3020,7 +3020,7 @@ resources:
     - web
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "x"
     roles: [webserver]
 `)
@@ -3066,7 +3066,7 @@ port: "9090"
 `)
 
 	writeFile(t, filepath.Join(dir, "default", "web.yaml"), `
-thralls:
+envoys:
   - match: "web01.example.com"
     modules: [app]
     vars_from:
@@ -3104,7 +3104,7 @@ key: val
 `)
 
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "host1"
     modules: [app]
     vars_from:
@@ -3159,7 +3159,7 @@ resources:
     - nginx
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "web01.example.com"
     environment: production
     roles: [web]
@@ -3224,7 +3224,7 @@ resources:
     target_path: /tmp/a
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "other"
     modules: [a]
 `)
@@ -3250,7 +3250,7 @@ resources:
     target_path: /tmp/app
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
-thralls:
+envoys:
   - match: "web-*.example.com"
     modules: [app]
 `)
@@ -3274,7 +3274,7 @@ thralls:
 // --- Directory Inheritance Tests ---
 
 // setupInheritanceDir creates a config directory using the new flat layout
-// (no thralls/ subdirectory, common.hnb for inheritance).
+// (no envoys/ subdirectory, common.vgo for inheritance).
 func setupInheritanceDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "config")
@@ -3287,21 +3287,21 @@ func setupInheritanceDir(t *testing.T) string {
 func TestInheritance_BasicModules(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
     type: package
     package: openssh-server
 `)
-	writeFile(t, filepath.Join(dir, "modules", "monitoring.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "monitoring.vgo"), `
 name: monitoring
 resources:
   - name: install-monitoring
     type: package
     package: prometheus-node-exporter
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -3309,15 +3309,15 @@ resources:
     package: nginx
 `)
 
-	// Root common.hnb — inherited by all subdirs.
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	// Root common.vgo — inherited by all subdirs.
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [sshd, monitoring]
 `)
 
 	// Leaf entry in a subdirectory.
 	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "web", "web.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "web", "web.vgo"), `
+envoys:
   - match: "web*.example.com"
     modules: [nginx]
 `)
@@ -3357,7 +3357,7 @@ func TestInheritance_MultiLevel(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "logging", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3366,18 +3366,18 @@ resources:
 `, name, name, name))
 	}
 
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [sshd]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "production"), 0o755)
-	writeFile(t, filepath.Join(dir, "production", "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "production", "common.vgo"), `
 modules: [logging]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "production", "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "production", "web", "web.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "production", "web", "web.vgo"), `
+envoys:
   - match: "web*.prod.example.com"
     modules: [nginx]
 `)
@@ -3412,7 +3412,7 @@ func TestInheritance_ExcludeModules(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "monitoring", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3421,13 +3421,13 @@ resources:
 `, name, name, name))
 	}
 
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [sshd, monitoring]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "containers"), 0o755)
-	writeFile(t, filepath.Join(dir, "containers", "containers.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "containers", "containers.vgo"), `
+envoys:
   - match: "docker*.example.com"
     modules: [nginx]
     exclude_modules: [monitoring]
@@ -3462,7 +3462,7 @@ thralls:
 func TestInheritance_VarsOverride(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install-app
@@ -3470,7 +3470,7 @@ resources:
     package: app
 `)
 
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [app]
 vars:
   log_level: info
@@ -3478,8 +3478,8 @@ vars:
 `)
 
 	os.MkdirAll(filepath.Join(dir, "staging"), 0o755)
-	writeFile(t, filepath.Join(dir, "staging", "staging.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "staging", "staging.vgo"), `
+envoys:
   - match: "*.staging.example.com"
     vars:
       log_level: debug
@@ -3505,18 +3505,18 @@ thralls:
 }
 
 func TestInheritance_SubdirInheritsFromRoot(t *testing.T) {
-	// Entries in subdirectories inherit from root common.hnb.
-	// Entries in any subdirectory (including one named "thralls") inherit.
+	// Entries in subdirectories inherit from root common.vgo.
+	// Entries in any subdirectory (including one named "envoys") inherit.
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
     type: package
     package: openssh-server
 `)
-	writeFile(t, filepath.Join(dir, "modules", "app.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install-app
@@ -3524,13 +3524,13 @@ resources:
     package: myapp
 `)
 
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [sshd]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "servers"), 0o755)
-	writeFile(t, filepath.Join(dir, "servers", "all.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "servers", "all.vgo"), `
+envoys:
   - match: "srv*.example.com"
     modules: [app]
 `)
@@ -3565,7 +3565,7 @@ func TestInheritance_TraceShowsChain(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3574,13 +3574,13 @@ resources:
 `, name, name, name))
 	}
 
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [sshd]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "web", "web.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "web", "web.vgo"), `
+envoys:
   - match: "web*.example.com"
     modules: [nginx]
 `)
@@ -3598,8 +3598,8 @@ thralls:
 	if len(trace.Inheritance) != 1 {
 		t.Fatalf("expected 1 inheritance level, got %d", len(trace.Inheritance))
 	}
-	if trace.Inheritance[0].File != "common.hnb" {
-		t.Errorf("inheritance[0].File = %q, want common.hnb", trace.Inheritance[0].File)
+	if trace.Inheritance[0].File != "common.vgo" {
+		t.Errorf("inheritance[0].File = %q, want common.vgo", trace.Inheritance[0].File)
 	}
 	if len(trace.Inheritance[0].Modules) != 1 || trace.Inheritance[0].Modules[0] != "sshd" {
 		t.Errorf("inheritance[0].Modules = %v, want [sshd]", trace.Inheritance[0].Modules)
@@ -3610,7 +3610,7 @@ func TestInheritance_InheritedRoles(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "monitoring", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".hnb"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3619,21 +3619,21 @@ resources:
 `, name, name, name))
 	}
 
-	// roles.hnb at root.
-	writeFile(t, filepath.Join(dir, "roles.hnb"), `
+	// roles.vgo at root.
+	writeFile(t, filepath.Join(dir, "roles.vgo"), `
 roles:
   - name: base-security
     modules: [sshd]
 `)
 
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 roles: [base-security]
 modules: [monitoring]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "web", "web.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "web", "web.vgo"), `
+envoys:
   - match: "web*.example.com"
     modules: [nginx]
 `)
@@ -3667,7 +3667,7 @@ thralls:
 func TestInheritance_CommonVarsFromFile(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.hnb"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install-app
@@ -3675,20 +3675,20 @@ resources:
     package: app
 `)
 
-	// common.hnb with vars defined at directory level.
+	// common.vgo with vars defined at directory level.
 	os.MkdirAll(filepath.Join(dir, "production"), 0o755)
-	writeFile(t, filepath.Join(dir, "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [app]
 vars:
   region: us-west
 `)
-	writeFile(t, filepath.Join(dir, "production", "common.hnb"), `
+	writeFile(t, filepath.Join(dir, "production", "common.vgo"), `
 vars:
   environment: production
 `)
 
-	writeFile(t, filepath.Join(dir, "production", "prod.hnb"), `
-thralls:
+	writeFile(t, filepath.Join(dir, "production", "prod.vgo"), `
+envoys:
   - match: "*.prod.example.com"
     vars:
       instance_type: large

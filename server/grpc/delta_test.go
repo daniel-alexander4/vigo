@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 func newTestDeltaService() (*AgentService, *fleet.FleetIndex, *fleet.RunBatcher) {
 	idx := fleet.NewFleetIndex()
-	idx.AddThrall(fleet.ThrallState{
-		ID:       "thrall-1",
+	idx.AddEnvoy(fleet.EnvoyState{
+		ID:       "envoy-1",
 		Hostname: "web-1",
 		IP:       "10.0.0.1",
 	}, nil)
@@ -63,7 +63,7 @@ func TestHandleRunDelta(t *testing.T) {
 		},
 	}
 
-	ack := svc.handleDelta("thrall-1", "web-1", delta)
+	ack := svc.handleDelta("envoy-1", "web-1", delta)
 
 	// Verify ACK sequence matches.
 	if ack.AckedSequence != 1 {
@@ -71,9 +71,9 @@ func TestHandleRunDelta(t *testing.T) {
 	}
 
 	// Verify FleetIndex was updated.
-	ts := idx.GetThrall("thrall-1")
+	ts := idx.GetEnvoy("envoy-1")
 	if ts == nil {
-		t.Fatal("thrall not found in index")
+		t.Fatal("envoy not found in index")
 	}
 	if ts.LastRunStatus != "success" {
 		t.Errorf("expected last_run_status=success, got %s", ts.LastRunStatus)
@@ -100,7 +100,7 @@ func TestHandleHeartbeat(t *testing.T) {
 
 	// Set an old LastSeen via MarkSeen (which marks dirty), then drain to clear.
 	old := time.Now().Add(-10 * time.Minute)
-	idx.MarkSeen("thrall-1", old)
+	idx.MarkSeen("envoy-1", old)
 	idx.DrainDirty() // clear dirty set
 
 	delta := &pb.DeltaEvent{
@@ -108,16 +108,16 @@ func TestHandleHeartbeat(t *testing.T) {
 		Event:    &pb.DeltaEvent_Heartbeat{Heartbeat: &pb.HeartbeatDelta{}},
 	}
 
-	ack := svc.handleDelta("thrall-1", "web-1", delta)
+	ack := svc.handleDelta("envoy-1", "web-1", delta)
 
 	if ack.AckedSequence != 5 {
 		t.Errorf("expected acked_sequence=5, got %d", ack.AckedSequence)
 	}
 
 	// Verify LastSeen was updated in-memory.
-	ts := idx.GetThrall("thrall-1")
+	ts := idx.GetEnvoy("envoy-1")
 	if ts == nil {
-		t.Fatal("thrall not found")
+		t.Fatal("envoy not found")
 	}
 	if time.Since(ts.LastSeen) > time.Second {
 		t.Errorf("expected LastSeen to be recent, got %v", ts.LastSeen)
@@ -137,7 +137,7 @@ func TestDeltaAckSequence(t *testing.T) {
 			Sequence: seq,
 			Event:    &pb.DeltaEvent_Heartbeat{Heartbeat: &pb.HeartbeatDelta{}},
 		}
-		ack := svc.handleDelta("thrall-1", "web-1", delta)
+		ack := svc.handleDelta("envoy-1", "web-1", delta)
 		if ack.AckedSequence != seq {
 			t.Errorf("expected acked_sequence=%d, got %d", seq, ack.AckedSequence)
 		}
@@ -170,9 +170,9 @@ func TestDeltaRunFailure(t *testing.T) {
 		},
 	}
 
-	svc.handleDelta("thrall-1", "web-1", delta)
+	svc.handleDelta("envoy-1", "web-1", delta)
 
-	ts := idx.GetThrall("thrall-1")
+	ts := idx.GetEnvoy("envoy-1")
 	if ts.LastRunStatus != "failure" {
 		t.Errorf("expected last_run_status=failure, got %s", ts.LastRunStatus)
 	}

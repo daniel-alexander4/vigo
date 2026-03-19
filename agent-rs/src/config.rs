@@ -49,7 +49,7 @@ pub fn save(data_dir: &Path, values: &[(&str, &str)]) -> Result<(), std::io::Err
     let mut keys: Vec<_> = existing.keys().cloned().collect();
     keys.sort();
 
-    let mut content = String::from("# Hobnob agent configuration\n");
+    let mut content = String::from("# Vigo agent configuration\n");
     for key in &keys {
         content.push_str(&format!("{} = {}\n", key, existing[key]));
     }

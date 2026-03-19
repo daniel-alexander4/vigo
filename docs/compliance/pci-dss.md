@@ -4,7 +4,7 @@ title: PCI DSS v4.0 Compliance
 
 # PCI DSS v4.0 Compliance
 
-PCI DSS (Payment Card Industry Data Security Standard) v4.0 defines security requirements for systems that store, process, or transmit cardholder data. Hobnob maps **42 PCI DSS requirements** across 9 of the 12 requirement categories and provides **4 enforcement modules** for automated hardening.
+PCI DSS (Payment Card Industry Data Security Standard) v4.0 defines security requirements for systems that store, process, or transmit cardholder data. Vigo maps **42 PCI DSS requirements** across 9 of the 12 requirement categories and provides **4 enforcement modules** for automated hardening.
 
 ## Coverage Summary
 
@@ -23,7 +23,7 @@ PCI DSS (Payment Card Industry Data Security Standard) v4.0 defines security req
 
 ## Enforcement Modules
 
-Hobnob provides four PCI-specific enforcement modules in `thrall-configs/modules/compliance/`:
+Vigo provides four PCI-specific enforcement modules in `envoy-configs/modules/compliance/`:
 
 ### pci-hardening
 
@@ -80,7 +80,7 @@ Enforces Req 11.5 (file integrity monitoring):
 - Daily integrity checks via cron (3:30 AM)
 - Initializes baseline database on first run
 
-This works alongside Hobnob's built-in drift detection, which also functions as FIM for all managed files.
+This works alongside Vigo's built-in drift detection, which also functions as FIM for all managed files.
 
 **Customizable vars:**
 
@@ -108,8 +108,8 @@ Enforces Req 1 (network security):
 Override per node to allow application-specific ports:
 
 ```yaml
-# In nodes.hnb
-thralls:
+# In nodes.vgo
+envoys:
   - match: "web-*.prod.example.com"
     vars:
       allowed_tcp_ports: "22 80 443"
@@ -124,35 +124,35 @@ thralls:
 
 ```bash
 # JSON report
-hobnobcli report pci
+vigogo report pci
 
-# HTML report (printable, Hobnob-branded)
-hobnobcli report pci --format html --output pci-report.html
+# HTML report (printable, Vigo-branded)
+vigogo report pci --format html --output pci-report.html
 ```
 
 ### REST API
 
 ```bash
 # JSON
-curl -s https://hobnob:8443/api/v1/report/pci | jq .
+curl -s https://vigo:8443/api/v1/report/pci | jq .
 
 # HTML
-curl -s https://hobnob:8443/api/v1/report/pci.html > pci-report.html
+curl -s https://vigo:8443/api/v1/report/pci.html > pci-report.html
 ```
 
 ## Deployment Checklist
 
 1. Copy the PCI modules to your policy directory:
    ```bash
-   cp /path/to/thrall-configs/modules/compliance/pci-*.hnb.example \
-      /srv/hobnob/policy/stage/modules/
-   # Rename .hnb.example to .hnb
-   for f in /srv/hobnob/policy/stage/modules/pci-*.hnb.example; do
+   cp /path/to/envoy-configs/modules/compliance/pci-*.vgo.example \
+      /srv/vigo/policy/stage/modules/
+   # Rename .vgo.example to .vgo
+   for f in /srv/vigo/policy/stage/modules/pci-*.vgo.example; do
      mv "$f" "${f%.example}"
    done
    ```
 
-2. Create a PCI role in `roles.hnb`:
+2. Create a PCI role in `roles.vgo`:
    ```yaml
    roles:
      - name: pci-cardholder
@@ -167,7 +167,7 @@ curl -s https://hobnob:8443/api/v1/report/pci.html > pci-report.html
 
 3. Assign the role to PCI-scope nodes in your node mappings:
    ```yaml
-   thralls:
+   envoys:
      - match: "*.pci.example.com"
        roles: [pci-cardholder]
        vars:
@@ -177,14 +177,14 @@ curl -s https://hobnob:8443/api/v1/report/pci.html > pci-report.html
 
 4. Publish and verify:
    ```bash
-   hobnobcli config publish
+   vigogo config publish
    # Wait for agents to check in, then verify compliance
-   hobnobcli report pci
+   vigogo report pci
    ```
 
-## Hobnob as File Integrity Monitoring (Req 11.5)
+## Vigo as File Integrity Monitoring (Req 11.5)
 
-Hobnob provides two layers of FIM:
+Vigo provides two layers of FIM:
 
 1. **AIDE module** (`pci-fim`) — traditional FIM tool, daily scans, detects changes to all system files including unmanaged ones
 2. **Built-in drift detection** — every managed file is checked on each agent check-in (default every 5 minutes); changes trigger compliance alerts via webhook/SMTP

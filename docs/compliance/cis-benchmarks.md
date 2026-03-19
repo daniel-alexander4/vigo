@@ -4,7 +4,7 @@ title: CIS Benchmarks
 
 # CIS Benchmarks
 
-CIS (Center for Internet Security) Benchmarks are consensus-based security configuration guides. Hobnob provides pre-built enforcement modules for Ubuntu 22.04, RHEL 9, and Windows Server 2022 covering **Level 1** controls across all major benchmark sections.
+CIS (Center for Internet Security) Benchmarks are consensus-based security configuration guides. Vigo provides pre-built enforcement modules for Ubuntu 22.04, RHEL 9, and Windows Server 2022 covering **Level 1** controls across all major benchmark sections.
 
 ## Module Inventory
 
@@ -42,19 +42,19 @@ Same structure as Ubuntu with RHEL-specific differences:
 
 ```bash
 # Ubuntu
-cp /path/to/examples/cis-benchmarks/ubuntu/*.hnb /srv/hobnob/policy/stage/modules/
+cp /path/to/examples/cis-benchmarks/ubuntu/*.vgo /srv/vigo/policy/stage/modules/
 
 # RHEL
-cp /path/to/examples/cis-benchmarks/rhel/*.hnb /srv/hobnob/policy/stage/modules/
+cp /path/to/examples/cis-benchmarks/rhel/*.vgo /srv/vigo/policy/stage/modules/
 
 # Windows (for Windows nodes)
-cp /path/to/examples/cis-benchmarks/windows/*.hnb /srv/hobnob/policy/stage/modules/
+cp /path/to/examples/cis-benchmarks/windows/*.vgo /srv/vigo/policy/stage/modules/
 ```
 
 ### 2. Create roles
 
 ```yaml
-# roles.hnb
+# roles.vgo
 roles:
   - name: cis-ubuntu-l1
     modules:
@@ -85,7 +85,7 @@ roles:
 
 ```yaml
 # Node mappings
-thralls:
+envoys:
   - match: "*.ubuntu.example.com"
     roles: [cis-ubuntu-l1]
   - match: "*.rhel.example.com"
@@ -97,8 +97,8 @@ thralls:
 ### 4. Publish and verify
 
 ```bash
-hobnobcli config publish
-hobnobcli report cis
+vigogo config publish
+vigogo report cis
 ```
 
 ## Customization
@@ -108,7 +108,7 @@ hobnobcli report cis
 Most modules expose configurable variables:
 
 ```yaml
-thralls:
+envoys:
   - match: "bastion.example.com"
     roles: [cis-ubuntu-l1]
     vars:
@@ -123,7 +123,7 @@ If a control conflicts with your environment, remove that resource from the modu
 
 ```yaml
 # Example: keep IPv6 enabled on specific hosts
-thralls:
+envoys:
   - match: "ipv6-host.example.com"
     roles: [cis-ubuntu-l1]
     exclude_modules: [cis-network]  # Use a custom network module without IPv6 disable
@@ -142,10 +142,10 @@ The provided modules focus on Level 1. To add Level 2 controls, copy a module an
 
 ```bash
 # JSON report
-hobnobcli report cis
+vigogo report cis
 
 # HTML report
-hobnobcli report cis --format html --output cis-report.html
+vigogo report cis --format html --output cis-report.html
 ```
 
 ## Control ID Format
@@ -158,7 +158,7 @@ Each resource is named with the CIS control ID for audit traceability:
 - name: "W-1.1.4-min-password-len"  # CIS Windows Section 1.1.4
 ```
 
-This makes it straightforward to map Hobnob compliance reports to CIS audit worksheets.
+This makes it straightforward to map Vigo compliance reports to CIS audit worksheets.
 
 ## Cross-Reference to Other Frameworks
 

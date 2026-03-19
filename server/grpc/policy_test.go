@@ -6,8 +6,8 @@ package grpc
 import (
 	"testing"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
 )
 
 func TestHashPolicyModule_Deterministic(t *testing.T) {
@@ -104,7 +104,7 @@ func TestBuildPolicyBundle_NoCachedHashes_FullModules(t *testing.T) {
 	}
 	mod.ContentHash = config.HashModuleContent(mod)
 
-	cfg := &config.ThrallConfig{
+	cfg := &config.EnvoyConfig{
 		MatchPattern: "*.web.example.com",
 		Modules:      []config.ModuleConfig{mod},
 	}
@@ -147,7 +147,7 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 	}
 	pgMod.ContentHash = config.HashModuleContent(pgMod)
 
-	cfg := &config.ThrallConfig{
+	cfg := &config.EnvoyConfig{
 		Modules: []config.ModuleConfig{nginxMod, pgMod},
 	}
 
@@ -209,20 +209,20 @@ func TestInjectSecretTriggers(t *testing.T) {
 						Name:             "grafana-set-password",
 						Type:             "exec",
 						Attributes:       map[string]string{"command": "grafana-cli reset"},
-						WatchSecret: []string{"hobnob/grafana/admin-password"},
+						WatchSecret: []string{"vigo/grafana/admin-password"},
 					},
 					{
 						Name:             "grafana-tls",
 						Type:             "exec",
 						Attributes:       map[string]string{"command": "update-tls"},
-						WatchSecret: []string{"hobnob/grafana/tls-cert"},
+						WatchSecret: []string{"vigo/grafana/tls-cert"},
 					},
 				},
 			},
 		},
 	}
 
-	injectSecretTriggers(bundle, []string{"hobnob/grafana/admin-password"})
+	injectSecretTriggers(bundle, []string{"vigo/grafana/admin-password"})
 
 	res := bundle.Modules[0].Resources
 
@@ -252,14 +252,14 @@ func TestInjectSecretTriggers_StubModuleSkipped(t *testing.T) {
 					{
 						Name:             "res",
 						Type:             "exec",
-						WatchSecret: []string{"hobnob/secret"},
+						WatchSecret: []string{"vigo/secret"},
 					},
 				},
 			},
 		},
 	}
 
-	injectSecretTriggers(bundle, []string{"hobnob/secret"})
+	injectSecretTriggers(bundle, []string{"vigo/secret"})
 
 	// Stub module resources should not be modified.
 	if bundle.Modules[0].Resources[0].Attributes != nil {
@@ -275,13 +275,13 @@ func TestBuildPolicyBundle_WatchSecretSerialized(t *testing.T) {
 				Name:             "set-pw",
 				Type:             "exec",
 				Attributes:       map[string]any{"command": "reset-pw"},
-				WatchSecret: []string{"hobnob/grafana/admin-password"},
+				WatchSecret: []string{"vigo/grafana/admin-password"},
 			},
 		},
 	}
 	mod.ContentHash = config.HashModuleContent(mod)
 
-	cfg := &config.ThrallConfig{Modules: []config.ModuleConfig{mod}}
+	cfg := &config.EnvoyConfig{Modules: []config.ModuleConfig{mod}}
 
 	bundle, err := buildPolicyBundle(cfg, 1, nil, nil)
 	if err != nil {
@@ -289,8 +289,8 @@ func TestBuildPolicyBundle_WatchSecretSerialized(t *testing.T) {
 	}
 
 	res := bundle.Modules[0].Resources[0]
-	if len(res.WatchSecret) != 1 || res.WatchSecret[0] != "hobnob/grafana/admin-password" {
-		t.Errorf("watch_secret = %v, want [hobnob/grafana/admin-password]", res.WatchSecret)
+	if len(res.WatchSecret) != 1 || res.WatchSecret[0] != "vigo/grafana/admin-password" {
+		t.Errorf("watch_secret = %v, want [vigo/grafana/admin-password]", res.WatchSecret)
 	}
 }
 
@@ -333,7 +333,7 @@ func TestBuildPolicyBundle_CachedHashMismatch_SendsFull(t *testing.T) {
 	}
 	mod.ContentHash = config.HashModuleContent(mod)
 
-	cfg := &config.ThrallConfig{
+	cfg := &config.EnvoyConfig{
 		Modules: []config.ModuleConfig{mod},
 	}
 

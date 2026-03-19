@@ -15,12 +15,12 @@ func TestAPIClientGet(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/thralls" {
-			t.Errorf("expected /api/v1/thralls, got %s", r.URL.Path)
+		if r.URL.Path != "/api/v1/envoys" {
+			t.Errorf("expected /api/v1/envoys, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"thralls": []map[string]any{
+			"envoys": []map[string]any{
 				{"id": "abc-123", "hostname": "web1.example.com"},
 			},
 		})
@@ -31,19 +31,19 @@ func TestAPIClientGet(t *testing.T) {
 	c := newAPIClient()
 
 	var resp struct {
-		Thralls []struct {
+		Envoys []struct {
 			ID       string `json:"id"`
 			Hostname string `json:"hostname"`
-		} `json:"thralls"`
+		} `json:"envoys"`
 	}
-	if err := c.get("/api/v1/thralls", &resp); err != nil {
+	if err := c.get("/api/v1/envoys", &resp); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(resp.Thralls) != 1 {
-		t.Fatalf("expected 1 thrall, got %d", len(resp.Thralls))
+	if len(resp.Envoys) != 1 {
+		t.Fatalf("expected 1 envoy, got %d", len(resp.Envoys))
 	}
-	if resp.Thralls[0].ID != "abc-123" {
-		t.Errorf("expected id abc-123, got %s", resp.Thralls[0].ID)
+	if resp.Envoys[0].ID != "abc-123" {
+		t.Errorf("expected id abc-123, got %s", resp.Envoys[0].ID)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestAPIClientErrorResponse(t *testing.T) {
 	serverURL = ts.URL
 	c := newAPIClient()
 
-	err := c.get("/api/v1/thralls/missing", nil)
+	err := c.get("/api/v1/envoys/missing", nil)
 	if err == nil {
 		t.Fatal("expected error for 404 response")
 	}

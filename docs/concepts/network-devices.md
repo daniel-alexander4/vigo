@@ -1,35 +1,35 @@
 # Network Device Management
 
-Hobnob manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as first-class fleet members with compliance status, traits, and run history -- managed through a **gateway proxy** pattern over SSH. Five device types are supported: Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.
+Vigo manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as first-class fleet members with compliance status, traits, and run history -- managed through a **gateway proxy** pattern over SSH. Five device types are supported: Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.
 
 ## Architecture
 
 ```
                     +-----------+
-                    |  hobd     |
+                    |  vigosrv     |
                     |  server   |
                     +-----+-----+
                           | gRPC/mTLS
                     +-----+-----+
                     | Gateway   |    SSH
-                    | Thrall    +-----------> [Cisco Switch]
+                    | Envoy    +-----------> [Cisco Switch]
                     | (agent)   +-----------> [Juniper Router]
                     +-----------+-----------> [More devices...]
 ```
 
-A **gateway thrall** is a normal Linux/macOS server running the Hobnob agent. It acts as a proxy: during each check-in, the server sends the gateway its own policy *plus* a list of `ProxiedDevice` entries for all network devices assigned to it. The gateway then:
+A **gateway envoy** is a normal Linux/macOS server running the Vigo agent. It acts as a proxy: during each check-in, the server sends the gateway its own policy *plus* a list of `ProxiedDevice` entries for all network devices assigned to it. The gateway then:
 
 1. Connects to each device over SSH
 2. Collects device traits (model, firmware, interfaces, VLANs, routes)
 3. Runs convergence using SSH-backed executors
-4. Reports results and traits back to the server under each device's virtual thrall ID
+4. Reports results and traits back to the server under each device's virtual envoy ID
 
 ## Configuration
 
-Network devices are defined in `nodes.hnb` alongside regular thralls. A device entry has a `gateway:` field pointing to the managing thrall and a `device_type:` field.
+Network devices are defined in `nodes.vgo` alongside regular envoys. A device entry has a `gateway:` field pointing to the managing envoy and a `device_type:` field.
 
 ```yaml
-thralls:
+envoys:
   # Gateway -- normal Linux server
   - match: "netmgmt01.example.com"
     roles: [bastion]
@@ -59,7 +59,7 @@ thralls:
 |-------|----------|---------|-------------|
 | `match` | Yes | -- | Device hostname (used for fleet identification) |
 | `device_type` | Yes | -- | `cisco_ios`, `cisco_nxos`, or `juniper_junos` |
-| `gateway` | Yes | -- | Hostname of the gateway thrall managing this device |
+| `gateway` | Yes | -- | Hostname of the gateway envoy managing this device |
 | `credential` | Yes | -- | SSH credential using `secret:` prefix |
 | `username` | No | `admin` | SSH username |
 | `port` | No | `22` | SSH port |
@@ -70,7 +70,7 @@ thralls:
 ### Validation Rules
 
 - `device_type` and `gateway` must be set together
-- `gateway` must reference an existing thrall that is **not** itself a device
+- `gateway` must reference an existing envoy that is **not** itself a device
 - `credential` must use the `secret:` prefix
 - `device_type` must be one of: `cisco_ios`, `cisco_nxos`, `cisco_iosxr`, `arista_eos`, `juniper_junos`
 
@@ -142,7 +142,7 @@ Traits are available in templates (`{{ .Traits.device.model }}`) and `when:` exp
 ## Example Module
 
 ```yaml
-# policy/stage/modules/switch-base.hnb
+# policy/stage/modules/switch-base.vgo
 name: switch-base
 resources:
   - name: login-banner
@@ -167,9 +167,9 @@ resources:
 
 ## Compliance and Visibility
 
-Network devices participate fully in Hobnob's compliance system:
+Network devices participate fully in Vigo's compliance system:
 
 - **Status tracking** -- compliant, drifted, failing, stale, or unknown
 - **Run history** -- every convergence run is recorded with per-resource outcomes
-- **Fleet views** -- devices appear in `hobnobcli nodes list` and the web UI dashboard
-- **Trait queries** -- `hobnobcli nodes traits core-sw01.example.com` shows device facts
+- **Fleet views** -- devices appear in `vigogo nodes list` and the web UI dashboard
+- **Trait queries** -- `vigogo nodes traits core-sw01.example.com` shows device facts

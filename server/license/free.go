@@ -20,7 +20,7 @@ const freeLicenseJSON = `{
     "expires_at": "2099-12-31",
     "version": 1
   },
-  "signature": "ZUCT4IfyEt4eTAwsIHTQRg1p6mavSLCV+Dy5M2QucaD3pmkHDcdVQ51Zlw6jmm662IcF77vyq8SC7gnvdFLGAg=="
+  "signature": "wQcrMuEAeOIdc/JG7P3ZK+xk0vbp5kVL/DvQRmEoWByNgQatofHdX1/yNlxYvbEq7IqB/fsb1AEAYHs5Va6hAQ=="
 }`
 
 // FreeLicense returns the embedded 25-node community license.

@@ -30,7 +30,7 @@ Uses `nix::unistd` to call `getuid()`, `getgid()`, and `geteuid()`. Resolves the
 ```yaml
 - name: agent-info
   type: file
-  target_path: /var/lib/hobnob/agent-info.txt
+  target_path: /var/lib/vigo/agent-info.txt
   content: |
     Running as: {{ .Traits.identity.user }} (uid={{ .Traits.identity.uid }})
     Privileged: {{ .Traits.identity.privileged }}

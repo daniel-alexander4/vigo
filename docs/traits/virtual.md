@@ -37,7 +37,7 @@ Returns empty strings for `system` and `role` on bare metal, with `is_virtual` s
 ```yaml
 - name: vm-info
   type: file
-  target_path: /var/lib/hobnob/vm-info.txt
+  target_path: /var/lib/vigo/vm-info.txt
   content: |
     Virtual: {{ .Traits.virtual.is_virtual }}
     System: {{ .Traits.virtual.system }}

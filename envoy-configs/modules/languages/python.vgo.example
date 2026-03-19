@@ -27,7 +27,7 @@ resources:
     type: file
     target_path: /etc/pip.conf
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       [global]
       {{ if ne .Vars.pip_index_url "" }}index-url = {{ .Vars.pip_index_url }}{{ end }}
       {{ if ne .Vars.pip_trusted_host "" }}trusted-host = {{ .Vars.pip_trusted_host }}{{ end }}

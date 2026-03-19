@@ -4,7 +4,7 @@ title: Incident Response Plan
 
 # Incident Response Plan
 
-This plan covers security incidents involving the Hobnob configuration management system and the managed infrastructure it controls. It satisfies HIPAA 164.308(a)(6) — Security Incident Procedures.
+This plan covers security incidents involving the Vigo configuration management system and the managed infrastructure it controls. It satisfies HIPAA 164.308(a)(6) — Security Incident Procedures.
 
 ## Incident Classification
 
@@ -19,29 +19,29 @@ This plan covers security incidents involving the Hobnob configuration managemen
 
 ### Automated Detection
 
-Hobnob provides several built-in detection mechanisms:
+Vigo provides several built-in detection mechanisms:
 
 **Audit chain integrity:**
 ```bash
-hobnobcli audit verify
+vigogo audit verify
 ```
 A broken chain (`valid: false`) indicates tampering with the audit database.
 
 **Failed login monitoring:**
 ```bash
-hobnobcli audit list --type auth.login_failed --since 1h
+vigogo audit list --type auth.login_failed --since 1h
 ```
 Multiple failed logins from the same IP may indicate a brute-force attack.
 
 **Unauthorized access patterns:**
 ```bash
-hobnobcli audit list --since 24h
+vigogo audit list --since 24h
 ```
 Review for unexpected `emergency.access`, `user.create`, `user.role_change`, or `token.create` events.
 
 **Fleet compliance drift:**
 ```bash
-hobnobcli thralls list
+vigogo envoys list
 ```
 Sudden compliance drops across multiple nodes may indicate configuration tampering.
 
@@ -50,9 +50,9 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 
 ### Manual Detection
 
-- Review server logs: `journalctl -u hobnob` or Docker logs
-- Check for unauthorized configuration changes: `hobnobcli audit list --type config_publish`
-- Verify no unauthorized nodes enrolled: `hobnobcli thralls list`
+- Review server logs: `journalctl -u vigo` or Docker logs
+- Check for unauthorized configuration changes: `vigogo audit list --type config_publish`
+- Verify no unauthorized nodes enrolled: `vigogo envoys list`
 - Check for leaked secrets: search logs, config exports for plaintext credentials
 
 ## Response Procedures
@@ -60,23 +60,23 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 ### Phase 1: Containment (Immediate)
 
 **For compromised admin account:**
-1. Record emergency access: `hobnobcli auth emergency-access --reason "Compromised admin account: <username>"`
-2. Delete the compromised account: `hobnobcli webusers delete --username <compromised>`
+1. Record emergency access: `vigogo auth emergency-access --reason "Compromised admin account: <username>"`
+2. Delete the compromised account: `vigogo webusers delete --username <compromised>`
 3. Revoke all API tokens for the account
-4. Reset passwords for all admin accounts: `hobnobcli secrets set-web-password hobnob/web/auth/<username>`
+4. Reset passwords for all admin accounts: `vigogo secrets set-web-password vigo/web/auth/<username>`
 5. Review audit trail for actions taken by the compromised account
 
 **For compromised managed node:**
-1. Revoke the node immediately: `hobnobcli thralls revoke <id>`
-2. Record the incident: `hobnobcli auth emergency-access --reason "Compromised node: <hostname>"`
-3. SSH to the node and stop the agent: `systemctl stop hobnob-thrall`
+1. Revoke the node immediately: `vigogo envoys revoke <id>`
+2. Record the incident: `vigogo auth emergency-access --reason "Compromised node: <hostname>"`
+3. SSH to the node and stop the agent: `systemctl stop vigo-envoy`
 4. Isolate the node from the network if possible
 5. Preserve forensic evidence before remediation
 
 **For compromised server:**
-1. Take a backup immediately: `hobnobcli backup create /tmp/incident-backup.tar.gz --encrypt`
-2. Export the full audit trail: `hobnobcli audit list --limit 10000 > /tmp/audit-export.json`
-3. Verify audit chain integrity: `hobnobcli audit verify`
+1. Take a backup immediately: `vigogo backup create /tmp/incident-backup.tar.gz --encrypt`
+2. Export the full audit trail: `vigogo audit list --limit 10000 > /tmp/audit-export.json`
+3. Verify audit chain integrity: `vigogo audit verify`
 4. Rotate all secrets: TLS certificates, master encryption key, admin passwords
 5. Review all enrolled nodes for unauthorized changes
 
@@ -89,7 +89,7 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 
 ### Phase 2: Investigation
 
-1. **Establish timeline:** Use `hobnobcli audit list --since <start>` to reconstruct the sequence of events
+1. **Establish timeline:** Use `vigogo audit list --since <start>` to reconstruct the sequence of events
 2. **Identify scope:** Determine which nodes, users, and data were affected
 3. **Determine entry point:** Check for:
    - Compromised credentials (failed login patterns preceding successful login)
@@ -113,7 +113,7 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 
 1. Restore from a known-good backup if necessary
 2. Re-enroll any revoked nodes after verifying their integrity
-3. Publish a clean configuration: `hobnobcli config publish`
+3. Publish a clean configuration: `vigogo config publish`
 4. Monitor closely for 48-72 hours for signs of persistent access
 5. Verify all nodes converge to the desired state
 
@@ -153,7 +153,7 @@ Test this incident response plan at least annually:
 
 1. **Tabletop exercise:** Walk through a simulated incident scenario
 2. **Technical drill:** Practice containment procedures in a test environment
-3. **Audit verification:** Run `hobnobcli audit verify` and review recent events
+3. **Audit verification:** Run `vigogo audit verify` and review recent events
 4. **Backup restoration:** Test restoring from an encrypted backup
 5. **Update the plan** based on drill findings
 

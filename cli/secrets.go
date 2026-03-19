@@ -21,7 +21,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
@@ -40,11 +40,11 @@ var secretsSetCmd = &cobra.Command{
 
 The value can be provided in three ways (in priority order):
   1. --from-file <path>   Read value from a file
-  2. Positional argument   hobnobcli secrets set mykey myvalue
+  2. Positional argument   vigogo secrets set mykey myvalue
   3. Interactive prompt    Reads from terminal with echo disabled (default)
 
 When stdin is a pipe, reads from stdin automatically:
-  echo "myvalue" | hobnobcli secrets set mykey
+  echo "myvalue" | vigogo secrets set mykey
 
 WARNING: Passing the value as a CLI argument exposes it in shell
 history and process listings. Prefer --from-file or the interactive
@@ -136,11 +136,11 @@ Requires openssl to be installed (used for SHA-512 crypt hashing).`,
 
 var secretsSetWebPasswordCmd = &cobra.Command{
 	Use:   "set-web-password <key>",
-	Short: "Hash a password with bcrypt and store it for Hobnob web UI authentication",
+	Short: "Hash a password with bcrypt and store it for Vigo web UI authentication",
 	Long: `Prompts for a plaintext password, hashes it with bcrypt, and stores the
 result as an encrypted secret. Used for web UI login accounts.
 
-Typical key: hobnob/web/auth/<username>`,
+Typical key: vigo/web/auth/<username>`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pw, err := promptPassword()
@@ -234,14 +234,14 @@ func validatePasswordComplexity(pw string) error {
 
 func init() {
 	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
-	secretsCmd.PersistentFlags().String("secrets-dir", "/srv/hobnob/secrets", "Directory for secret files")
+	secretsCmd.PersistentFlags().String("secrets-dir", "/srv/vigo/secrets", "Directory for secret files")
 
 	secretsSetCmd.Flags().String("from-file", "", "Read secret value from a file")
 
 	secretsInitCmd.Flags().String("key-file", "", "Path to write the new master key")
 	secretsInitCmd.MarkFlagRequired("key-file")
 
-	secretsGenerateCertsCmd.Flags().String("tls-dir", "/srv/hobnob/tls", "Directory for TLS certificate files")
+	secretsGenerateCertsCmd.Flags().String("tls-dir", "/srv/vigo/tls", "Directory for TLS certificate files")
 	secretsGenerateCertsCmd.Flags().StringSlice("san", nil, "Additional SANs (DNS names or IPs)")
 	secretsGenerateCertsCmd.Flags().Int("ca-days", 3650, "CA certificate validity in days")
 	secretsGenerateCertsCmd.Flags().Int("server-days", 365, "Server certificate validity in days")
@@ -332,7 +332,7 @@ func runSecretsSet(cmd *cobra.Command, args []string) error {
 	// Notify the server so watch_secret resources trigger on next check-in.
 	client := newAPIClient()
 	if err := client.post("/api/v1/secrets/rotated", map[string]any{"path": key}, nil); err == nil {
-		fmt.Println("  Server notified — affected thralls will apply on next check-in.")
+		fmt.Println("  Server notified — affected envoys will apply on next check-in.")
 	}
 
 	return nil
@@ -433,7 +433,7 @@ func runSecretsInit(cmd *cobra.Command, _ []string) error {
 func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
 	tlsDir, _ := cmd.Flags().GetString("tls-dir")
 	if tlsDir == "" {
-		tlsDir = "/srv/hobnob/tls"
+		tlsDir = "/srv/vigo/tls"
 	}
 
 	force, _ := cmd.Flags().GetBool("force")
@@ -478,7 +478,7 @@ func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {
 	now := time.Now()
 	caTemplate := &x509.Certificate{
 		SerialNumber: caSerial,
-		Subject:      pkix.Name{CommonName: "Hobnob CA"},
+		Subject:      pkix.Name{CommonName: "Vigo CA"},
 		NotBefore:    now,
 		NotAfter:     now.AddDate(0, 0, caDays),
 		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageCRLSign,

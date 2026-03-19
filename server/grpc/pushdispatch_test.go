@@ -7,39 +7,39 @@ import (
 	"context"
 	"testing"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 )
 
 func TestPushRouterTrackAndLookup(t *testing.T) {
 	router := newPushRouter(nil)
 
-	router.trackTarget("run-1", "thrall-a", "target-1")
-	router.trackTarget("run-1", "thrall-b", "target-2")
-	router.trackTarget("run-2", "thrall-a", "target-3")
+	router.trackTarget("run-1", "envoy-a", "target-1")
+	router.trackTarget("run-1", "envoy-b", "target-2")
+	router.trackTarget("run-2", "envoy-a", "target-3")
 
 	// Lookup existing.
-	id, ok := router.lookupTarget("run-1", "thrall-a")
+	id, ok := router.lookupTarget("run-1", "envoy-a")
 	if !ok || id != "target-1" {
 		t.Errorf("expected target-1, got %s (ok=%v)", id, ok)
 	}
 
-	id, ok = router.lookupTarget("run-1", "thrall-b")
+	id, ok = router.lookupTarget("run-1", "envoy-b")
 	if !ok || id != "target-2" {
 		t.Errorf("expected target-2, got %s (ok=%v)", id, ok)
 	}
 
-	id, ok = router.lookupTarget("run-2", "thrall-a")
+	id, ok = router.lookupTarget("run-2", "envoy-a")
 	if !ok || id != "target-3" {
 		t.Errorf("expected target-3, got %s (ok=%v)", id, ok)
 	}
 
 	// Lookup non-existent.
-	_, ok = router.lookupTarget("run-1", "thrall-c")
+	_, ok = router.lookupTarget("run-1", "envoy-c")
 	if ok {
-		t.Error("expected not found for thrall-c")
+		t.Error("expected not found for envoy-c")
 	}
 
-	_, ok = router.lookupTarget("run-3", "thrall-a")
+	_, ok = router.lookupTarget("run-3", "envoy-a")
 	if ok {
 		t.Error("expected not found for run-3")
 	}
@@ -48,66 +48,66 @@ func TestPushRouterTrackAndLookup(t *testing.T) {
 func TestPushRouterRemoveTarget(t *testing.T) {
 	router := newPushRouter(nil)
 
-	router.trackTarget("run-1", "thrall-a", "target-1")
-	router.trackTarget("run-1", "thrall-b", "target-2")
+	router.trackTarget("run-1", "envoy-a", "target-1")
+	router.trackTarget("run-1", "envoy-b", "target-2")
 
-	router.removeTarget("run-1", "thrall-a")
+	router.removeTarget("run-1", "envoy-a")
 
-	_, ok := router.lookupTarget("run-1", "thrall-a")
+	_, ok := router.lookupTarget("run-1", "envoy-a")
 	if ok {
-		t.Error("expected thrall-a to be removed")
+		t.Error("expected envoy-a to be removed")
 	}
 
-	// thrall-b still exists.
-	id, ok := router.lookupTarget("run-1", "thrall-b")
+	// envoy-b still exists.
+	id, ok := router.lookupTarget("run-1", "envoy-b")
 	if !ok || id != "target-2" {
 		t.Errorf("expected target-2, got %s (ok=%v)", id, ok)
 	}
 
 	// Remove last target — should clean up the run entry.
-	router.removeTarget("run-1", "thrall-b")
-	_, ok = router.lookupTarget("run-1", "thrall-b")
+	router.removeTarget("run-1", "envoy-b")
+	_, ok = router.lookupTarget("run-1", "envoy-b")
 	if ok {
-		t.Error("expected thrall-b to be removed")
+		t.Error("expected envoy-b to be removed")
 	}
 }
 
 func TestStreamManagerIsConnected(t *testing.T) {
 	sm := newStreamManager(0, nil, 0)
 
-	_, cleanup := sm.register("thrall-1", "host-1")
+	_, cleanup := sm.register("envoy-1", "host-1")
 	defer cleanup()
 
-	if !sm.isConnected("thrall-1") {
-		t.Error("expected thrall-1 to be connected")
+	if !sm.isConnected("envoy-1") {
+		t.Error("expected envoy-1 to be connected")
 	}
 
-	if sm.isConnected("thrall-2") {
-		t.Error("expected thrall-2 to not be connected")
+	if sm.isConnected("envoy-2") {
+		t.Error("expected envoy-2 to not be connected")
 	}
 }
 
-func TestStreamManagerConnectedThrallIDs(t *testing.T) {
+func TestStreamManagerConnectedEnvoyIDs(t *testing.T) {
 	sm := newStreamManager(0, nil, 0)
 
-	_, cleanup1 := sm.register("thrall-1", "host-1")
+	_, cleanup1 := sm.register("envoy-1", "host-1")
 	defer cleanup1()
-	_, cleanup2 := sm.register("thrall-2", "host-2")
+	_, cleanup2 := sm.register("envoy-2", "host-2")
 	defer cleanup2()
 
-	ids := sm.connectedThrallIDs()
+	ids := sm.connectedEnvoyIDs()
 	if len(ids) != 2 {
 		t.Errorf("expected 2 connected, got %d", len(ids))
 	}
-	if !ids["thrall-1"] || !ids["thrall-2"] {
-		t.Error("expected both thrall-1 and thrall-2 to be in connected set")
+	if !ids["envoy-1"] || !ids["envoy-2"] {
+		t.Error("expected both envoy-1 and envoy-2 to be in connected set")
 	}
 }
 
 func TestStreamManagerDispatchPush(t *testing.T) {
 	sm := newStreamManager(0, nil, 0)
 
-	as, cleanup := sm.register("thrall-1", "host-1")
+	as, cleanup := sm.register("envoy-1", "host-1")
 	defer cleanup()
 
 	msg := &pb.ServerStreamMessage{
@@ -119,7 +119,7 @@ func TestStreamManagerDispatchPush(t *testing.T) {
 		},
 	}
 
-	ok := sm.dispatchPush("thrall-1", msg)
+	ok := sm.dispatchPush("envoy-1", msg)
 	if !ok {
 		t.Error("expected dispatch to succeed")
 	}
@@ -138,21 +138,21 @@ func TestStreamManagerDispatchPush(t *testing.T) {
 		t.Error("expected message on send channel")
 	}
 
-	// Dispatch to non-existent thrall.
-	ok = sm.dispatchPush("thrall-2", msg)
+	// Dispatch to non-existent envoy.
+	ok = sm.dispatchPush("envoy-2", msg)
 	if ok {
-		t.Error("expected dispatch to non-existent thrall to fail")
+		t.Error("expected dispatch to non-existent envoy to fail")
 	}
 }
 
 func TestStreamManagerDispatchCleanup(t *testing.T) {
 	sm := newStreamManager(0, nil, 0)
 
-	_, cleanup := sm.register("thrall-1", "host-1")
+	_, cleanup := sm.register("envoy-1", "host-1")
 	cleanup() // Disconnect.
 
-	if sm.isConnected("thrall-1") {
-		t.Error("expected thrall-1 to be disconnected after cleanup")
+	if sm.isConnected("envoy-1") {
+		t.Error("expected envoy-1 to be disconnected after cleanup")
 	}
 }
 

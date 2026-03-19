@@ -1,4 +1,4 @@
-// Minimal stub — the agent only uses HobnobAgent (no REST annotations).
+// Minimal stub — the agent only uses VigoAgent (no REST annotations).
 syntax = "proto3";
 package google.api;
 import "google/api/http.proto";

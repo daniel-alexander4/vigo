@@ -25,7 +25,7 @@ resources:
     type: file
     target_path: /etc/php/8.2/fpm/pool.d/www.conf
     content: |
-      ; Managed by Hobnob — do not edit manually
+      ; Managed by Vigo — do not edit manually
       [www]
 
       user = www-data
@@ -62,7 +62,7 @@ resources:
     type: file
     target_path: /etc/php-fpm.d/www.conf
     content: |
-      ; Managed by Hobnob — do not edit manually
+      ; Managed by Vigo — do not edit manually
       [www]
 
       user = apache

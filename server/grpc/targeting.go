@@ -11,53 +11,53 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-// targetInfo holds a resolved target thrall.
+// targetInfo holds a resolved target envoy.
 type targetInfo struct {
-	ThrallID string
+	EnvoyID string
 	Hostname string
 }
 
-// resolveTargets resolves a target spec to a list of thralls.
+// resolveTargets resolves a target spec to a list of envoys.
 // When a FleetIndex is provided, glob and trait resolution use in-memory lookups
 // instead of DB queries, eliminating O(N) database round-trips.
 //
 // The spec is disambiguated as follows:
-//   - UUID format → single thrall by ID (TGT-03)
+//   - UUID format → single envoy by ID (TGT-03)
 //   - Starts with "tag:" → tag filter, e.g. "tag:webserver" (TGT-04)
 //   - Contains "=" → trait filter, e.g. "os.distro=ubuntu" (TGT-02)
 //   - Contains "*" or "?" → hostname glob, e.g. "*.web.prod" (TGT-01)
-//   - Otherwise → single thrall by hostname (TGT-03)
+//   - Otherwise → single envoy by hostname (TGT-03)
 func resolveTargets(ctx context.Context, queries *db.Queries, spec string, fi *fleet.FleetIndex) ([]targetInfo, error) {
 	spec = strings.TrimSpace(spec)
 	if spec == "" {
 		return nil, fmt.Errorf("target spec is empty")
 	}
 
-	// UUID → single thrall by ID.
+	// UUID → single envoy by ID.
 	if _, err := uuid.Parse(spec); err == nil {
 		// FleetIndex path.
 		if fi != nil {
-			ts, exists, revoked := fi.GetThrallLite(spec)
+			ts, exists, revoked := fi.GetEnvoyLite(spec)
 			if !exists {
-				return nil, fmt.Errorf("thrall %s not found", spec)
+				return nil, fmt.Errorf("envoy %s not found", spec)
 			}
 			if revoked {
-				return nil, fmt.Errorf("thrall %s is revoked", spec)
+				return nil, fmt.Errorf("envoy %s is revoked", spec)
 			}
-			return []targetInfo{{ThrallID: ts.ID, Hostname: ts.Hostname}}, nil
+			return []targetInfo{{EnvoyID: ts.ID, Hostname: ts.Hostname}}, nil
 		}
-		thrall, err := queries.GetThrallByID(ctx, spec)
+		envoy, err := queries.GetEnvoyByID(ctx, spec)
 		if err != nil {
-			return nil, fmt.Errorf("thrall %s not found: %w", spec, err)
+			return nil, fmt.Errorf("envoy %s not found: %w", spec, err)
 		}
-		if thrall.Revoked != 0 {
-			return nil, fmt.Errorf("thrall %s is revoked", spec)
+		if envoy.Revoked != 0 {
+			return nil, fmt.Errorf("envoy %s is revoked", spec)
 		}
-		return []targetInfo{{ThrallID: thrall.ID, Hostname: thrall.Hostname}}, nil
+		return []targetInfo{{EnvoyID: envoy.ID, Hostname: envoy.Hostname}}, nil
 	}
 
 	// Tag filter → tag:<tagname>.
@@ -70,7 +70,7 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string, fi *f
 		return resolveByTrait(ctx, queries, spec, fi)
 	}
 
-	// Hostname glob → match against all thralls.
+	// Hostname glob → match against all envoys.
 	if strings.ContainsAny(spec, "*?") {
 		return resolveByGlob(ctx, queries, spec, fi)
 	}
@@ -79,51 +79,51 @@ func resolveTargets(ctx context.Context, queries *db.Queries, spec string, fi *f
 	if fi != nil {
 		id := fi.GetByHostname(spec)
 		if id == "" {
-			return nil, fmt.Errorf("thrall with hostname %q not found", spec)
+			return nil, fmt.Errorf("envoy with hostname %q not found", spec)
 		}
-		ts, exists, revoked := fi.GetThrallLite(id)
+		ts, exists, revoked := fi.GetEnvoyLite(id)
 		if !exists {
-			return nil, fmt.Errorf("thrall with hostname %q not found", spec)
+			return nil, fmt.Errorf("envoy with hostname %q not found", spec)
 		}
 		if revoked {
-			return nil, fmt.Errorf("thrall %q is revoked", spec)
+			return nil, fmt.Errorf("envoy %q is revoked", spec)
 		}
-		return []targetInfo{{ThrallID: ts.ID, Hostname: ts.Hostname}}, nil
+		return []targetInfo{{EnvoyID: ts.ID, Hostname: ts.Hostname}}, nil
 	}
-	thrall, err := queries.GetThrallByHostname(ctx, spec)
+	envoy, err := queries.GetEnvoyByHostname(ctx, spec)
 	if err != nil {
-		return nil, fmt.Errorf("thrall with hostname %q not found: %w", spec, err)
+		return nil, fmt.Errorf("envoy with hostname %q not found: %w", spec, err)
 	}
-	if thrall.Revoked != 0 {
-		return nil, fmt.Errorf("thrall %q is revoked", spec)
+	if envoy.Revoked != 0 {
+		return nil, fmt.Errorf("envoy %q is revoked", spec)
 	}
-	return []targetInfo{{ThrallID: thrall.ID, Hostname: thrall.Hostname}}, nil
+	return []targetInfo{{EnvoyID: envoy.ID, Hostname: envoy.Hostname}}, nil
 }
 
-// resolveByGlob matches a hostname glob pattern against all non-revoked thralls.
+// resolveByGlob matches a hostname glob pattern against all non-revoked envoys.
 // Uses FleetIndex when available (O(N) in-memory, no DB).
 func resolveByGlob(ctx context.Context, queries *db.Queries, pattern string, fi *fleet.FleetIndex) ([]targetInfo, error) {
 	// FleetIndex fast path: in-memory glob match.
 	if fi != nil {
 		fleetTargets := fi.ListByGlob(pattern)
 		if len(fleetTargets) == 0 {
-			return nil, fmt.Errorf("no thralls match pattern %q", pattern)
+			return nil, fmt.Errorf("no envoys match pattern %q", pattern)
 		}
 		targets := make([]targetInfo, len(fleetTargets))
 		for i, ft := range fleetTargets {
-			targets[i] = targetInfo{ThrallID: ft.ThrallID, Hostname: ft.Hostname}
+			targets[i] = targetInfo{EnvoyID: ft.EnvoyID, Hostname: ft.Hostname}
 		}
 		return targets, nil
 	}
 
 	// DB fallback.
-	thralls, err := queries.ListThralls(ctx)
+	envoys, err := queries.ListEnvoys(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("listing thralls: %w", err)
+		return nil, fmt.Errorf("listing envoys: %w", err)
 	}
 
 	var targets []targetInfo
-	for _, t := range thralls {
+	for _, t := range envoys {
 		if t.Revoked != 0 {
 			continue
 		}
@@ -132,17 +132,17 @@ func resolveByGlob(ctx context.Context, queries *db.Queries, pattern string, fi 
 			return nil, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
 		}
 		if matched {
-			targets = append(targets, targetInfo{ThrallID: t.ID, Hostname: t.Hostname})
+			targets = append(targets, targetInfo{EnvoyID: t.ID, Hostname: t.Hostname})
 		}
 	}
 
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("no thralls match pattern %q", pattern)
+		return nil, fmt.Errorf("no envoys match pattern %q", pattern)
 	}
 	return targets, nil
 }
 
-// resolveByTrait matches thralls whose latest traits contain key=value.
+// resolveByTrait matches envoys whose latest traits contain key=value.
 // Uses FleetIndex inverted trait index when available (O(1) lookup).
 // The key is a dot-separated JSON path (e.g. "os.distro").
 func resolveByTrait(ctx context.Context, queries *db.Queries, filter string, fi *fleet.FleetIndex) ([]targetInfo, error) {
@@ -161,31 +161,31 @@ func resolveByTrait(ctx context.Context, queries *db.Queries, filter string, fi 
 	if fi != nil {
 		fleetTargets := fi.ListByTrait(traitPath, wantValue)
 		if len(fleetTargets) == 0 {
-			return nil, fmt.Errorf("no thralls match trait filter %q", filter)
+			return nil, fmt.Errorf("no envoys match trait filter %q", filter)
 		}
 		targets := make([]targetInfo, len(fleetTargets))
 		for i, ft := range fleetTargets {
-			targets[i] = targetInfo{ThrallID: ft.ThrallID, Hostname: ft.Hostname}
+			targets[i] = targetInfo{EnvoyID: ft.EnvoyID, Hostname: ft.Hostname}
 		}
 		return targets, nil
 	}
 
-	// DB fallback: O(N) queries per thrall.
-	thralls, err := queries.ListThralls(ctx)
+	// DB fallback: O(N) queries per envoy.
+	envoys, err := queries.ListEnvoys(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("listing thralls: %w", err)
+		return nil, fmt.Errorf("listing envoys: %w", err)
 	}
 
 	// Build JSON pointer from dot path: "os.distro" → "/os/distro"
 	pointer := "/" + strings.ReplaceAll(traitPath, ".", "/")
 
 	var targets []targetInfo
-	for _, t := range thralls {
+	for _, t := range envoys {
 		if t.Revoked != 0 {
 			continue
 		}
 
-		traits, err := queries.GetLatestThrallTraits(ctx, t.ID)
+		traits, err := queries.GetLatestEnvoyTraits(ctx, t.ID)
 		if err != nil {
 			continue // No traits recorded — skip.
 		}
@@ -197,17 +197,17 @@ func resolveByTrait(ctx context.Context, queries *db.Queries, filter string, fi 
 
 		val := jsonPointerLookup(parsed, pointer)
 		if val != nil && fmt.Sprintf("%v", val) == wantValue {
-			targets = append(targets, targetInfo{ThrallID: t.ID, Hostname: t.Hostname})
+			targets = append(targets, targetInfo{EnvoyID: t.ID, Hostname: t.Hostname})
 		}
 	}
 
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("no thralls match trait filter %q", filter)
+		return nil, fmt.Errorf("no envoys match trait filter %q", filter)
 	}
 	return targets, nil
 }
 
-// resolveByTag matches thralls with the given tag via FleetIndex.
+// resolveByTag matches envoys with the given tag via FleetIndex.
 func resolveByTag(tag string, fi *fleet.FleetIndex) ([]targetInfo, error) {
 	tag = strings.TrimSpace(tag)
 	if tag == "" {
@@ -218,11 +218,11 @@ func resolveByTag(tag string, fi *fleet.FleetIndex) ([]targetInfo, error) {
 	}
 	fleetTargets := fi.ListByTag(tag)
 	if len(fleetTargets) == 0 {
-		return nil, fmt.Errorf("no thralls have tag %q", tag)
+		return nil, fmt.Errorf("no envoys have tag %q", tag)
 	}
 	targets := make([]targetInfo, len(fleetTargets))
 	for i, ft := range fleetTargets {
-		targets[i] = targetInfo{ThrallID: ft.ThrallID, Hostname: ft.Hostname}
+		targets[i] = targetInfo{EnvoyID: ft.EnvoyID, Hostname: ft.Hostname}
 	}
 	return targets, nil
 }

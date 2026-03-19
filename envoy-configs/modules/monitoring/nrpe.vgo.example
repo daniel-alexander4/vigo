@@ -36,7 +36,7 @@ resources:
     type: file
     target_path: /etc/nagios/nrpe.cfg
     content: |
-      # Managed by Hobnob — do not edit manually
+      # Managed by Vigo — do not edit manually
       log_facility=daemon
       pid_file=/var/run/nagios/nrpe.pid
       server_port=5666

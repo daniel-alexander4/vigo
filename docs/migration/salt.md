@@ -1,23 +1,23 @@
 # Migrating from Salt
 
-Hobnob and Salt share a YAML-first configuration philosophy, making Salt the smoothest migration path. Both use YAML for state definitions, have a concept of system facts (grains/traits), and support a pull-based agent model. The key differences are template rendering, data lookup, and execution model.
+Vigo and Salt share a YAML-first configuration philosophy, making Salt the smoothest migration path. Both use YAML for state definitions, have a concept of system facts (grains/traits), and support a pull-based agent model. The key differences are template rendering, data lookup, and execution model.
 
 ## Architecture Differences
 
-Salt supports both push (default via ZeroMQ) and pull (`salt-call --local` or salt-minion with `masterless` mode). Hobnob is pull-only — agents poll the server on a configurable interval over gRPC/mTLS.
+Salt supports both push (default via ZeroMQ) and pull (`salt-call --local` or salt-minion with `masterless` mode). Vigo is pull-only — agents poll the server on a configurable interval over gRPC/mTLS.
 
-Salt renders state files through Jinja2 before parsing them as YAML, meaning any YAML value can contain Jinja2 logic. Hobnob keeps YAML strictly literal — Go templates are only allowed inside `content:` attributes. This is a fundamental design difference that affects how you structure configs.
+Salt renders state files through Jinja2 before parsing them as YAML, meaning any YAML value can contain Jinja2 logic. Vigo keeps YAML strictly literal — Go templates are only allowed inside `content:` attributes. This is a fundamental design difference that affects how you structure configs.
 
-Salt's master stores pillar data, orchestrates via the event bus, and can push to minions in real-time. Hobnob's server compiles bundles on demand during each check-in. For real-time operations, Hobnob uses the task and query dispatch system through agent streams.
+Salt's master stores pillar data, orchestrates via the event bus, and can push to minions in real-time. Vigo's server compiles bundles on demand during each check-in. For real-time operations, Vigo uses the task and query dispatch system through agent streams.
 
-Salt requires Python on both master and minion. Hobnob's server is Go (hobd) and the agent is a single static Rust binary — no runtime dependencies on managed nodes.
+Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) and the agent is a single static Rust binary — no runtime dependencies on managed nodes.
 
 ## Concept Mapping
 
-| Salt Concept | Hobnob Equivalent | Notes |
+| Salt Concept | Vigo Equivalent | Notes |
 |---|---|---|
-| State file (`.sls`) | Module (`.hnb` file) | Both YAML, different rendering rules |
-| `top.sls` | `nodes.hnb` | Glob matching → role/module assignment |
+| State file (`.sls`) | Module (`.vgo` file) | Both YAML, different rendering rules |
+| `top.sls` | `nodes.vgo` | Glob matching → role/module assignment |
 | Formula | Module | Reusable state set — same concept |
 | Pillar | `vars` / `environment_overrides` | Server-side data for nodes |
 | Grains | Traits | System facts discovered by the agent |
@@ -26,22 +26,22 @@ Salt requires Python on both master and minion. Hobnob's server is Go (hobd) and
 | Requisite (`watch`) | `subscribes` | Re-apply when dependency changes |
 | Requisite (`require_in`) | `before` | Reverse dependency declaration |
 | Requisite (`listen`) | `notify` | Trigger downstream resources |
-| Jinja2 in states | Go template in `content:` only | Hobnob does not render templates in YAML structure |
+| Jinja2 in states | Go template in `content:` only | Vigo does not render templates in YAML structure |
 | `salt-call --local` | Offline convergence | Agent uses cached bundle when server is unreachable |
-| `salt-run` | `hobnobcli push run` | Orchestration on the server side |
+| `salt-run` | `vigogo push run` | Orchestration on the server side |
 | Salt event bus | Agent stream | Persistent gRPC stream for real-time dispatch |
-| `salt-cloud` | No equivalent | Hobnob does not provision infrastructure |
+| `salt-cloud` | No equivalent | Vigo does not provision infrastructure |
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |
 | Beacons | No equivalent | Agent does not emit events |
 | Reactor | Webhooks | Event-driven automation via webhook dispatch |
-| Environments | `environment_overrides:` in `nodes.hnb` | Environment-specific overrides |
-| `salt` CLI | `hobnobcli` | Server management CLI |
-| `salt-minion` | `hobnob` agent | Rust binary, LMDB state store |
-| `salt-master` | `hobd` | Go binary, gRPC + REST + Web UI |
+| Environments | `environment_overrides:` in `nodes.vgo` | Environment-specific overrides |
+| `salt` CLI | `vigogo` | Server management CLI |
+| `salt-minion` | `vigo` agent | Rust binary, LMDB state store |
+| `salt-master` | `vigosrv` | Go binary, gRPC + REST + Web UI |
 
 ## Resource Type Mapping
 
-| Salt State Module | Hobnob Executor | Notes |
+| Salt State Module | Vigo Executor | Notes |
 |---|---|---|
 | `pkg.installed` | `package` | Auto-detects package manager |
 | `file.managed` | `file` | `content:` or `sourcepath:` |
@@ -124,9 +124,9 @@ http {
 }
 ```
 
-### Hobnob Version
+### Vigo Version
 
-`policy/stage/modules/nginx.hnb`:
+`policy/stage/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -178,7 +178,7 @@ resources:
     enabled: true
 ```
 
-`policy/stage/roles/webserver.hnb`:
+`policy/stage/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -186,10 +186,10 @@ modules:
   - nginx
 ```
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     environment: production
     roles: [webserver]
@@ -202,27 +202,27 @@ thralls:
 
 ### Key Differences
 
-- **No Jinja2 in YAML structure.** Salt's biggest power and biggest footgun is Jinja2 rendering the YAML itself. Hobnob keeps YAML structure static — templates only work inside `content:` values.
-- **No `salt://` file server.** Salt serves templates and files via `salt://` URIs. Hobnob uses `content:` for inline templates or `source: templates/app.conf.tmpl` for external template files — no file server needed.
-- **Requisites map directly.** Salt's `require`/`watch`/`listen`/`require_in` map cleanly to Hobnob's `depends_on`/`subscribes`/`notify`/`before`. The semantics are nearly identical.
+- **No Jinja2 in YAML structure.** Salt's biggest power and biggest footgun is Jinja2 rendering the YAML itself. Vigo keeps YAML structure static — templates only work inside `content:` values.
+- **No `salt://` file server.** Salt serves templates and files via `salt://` URIs. Vigo uses `content:` for inline templates or `source: templates/app.conf.tmpl` for external template files — no file server needed.
+- **Requisites map directly.** Salt's `require`/`watch`/`listen`/`require_in` map cleanly to Vigo's `depends_on`/`subscribes`/`notify`/`before`. The semantics are nearly identical.
 - **No pillar.get() lookups.** Variables are accessed directly via `{{ .Vars.name }}` in templates or defined as module defaults — no lookup function needed.
 
 ## Variable and Data Hierarchy
 
-Salt's pillar data is hierarchical and can be merged across multiple sources. Hobnob simplifies this:
+Salt's pillar data is hierarchical and can be merged across multiple sources. Vigo simplifies this:
 
-| Salt Level | Hobnob Equivalent |
+| Salt Level | Vigo Equivalent |
 |---|---|
 | Pillar (formula defaults) | Module `vars:` |
-| Pillar (per-environment) | `environment_overrides:` in `nodes.hnb` |
-| Pillar (per-minion) | Node `vars:` in `nodes.hnb` |
+| Pillar (per-environment) | `environment_overrides:` in `nodes.vgo` |
+| Pillar (per-minion) | Node `vars:` in `nodes.vgo` |
 | Grains | Traits (`.Traits` in templates, builtins in `when:`) |
 | Mine | No equivalent — use `vars_from:` for shared data |
 
 Environment-specific overrides:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     roles: [webserver]
     vars:
@@ -234,9 +234,9 @@ thralls:
 
 ## Templates
 
-Salt uses Jinja2 in both state files and template files. Hobnob uses Go templates only in `content:`.
+Salt uses Jinja2 in both state files and template files. Vigo uses Go templates only in `content:`.
 
-| Salt Jinja2 | Hobnob Go Template |
+| Salt Jinja2 | Vigo Go Template |
 |---|---|
 | `{{ variable }}` | `{{ .Vars.variable }}` |
 | `{{ grains['os_family'] }}` | `{{ .Traits.os.family }}` |
@@ -246,7 +246,7 @@ Salt uses Jinja2 in both state files and template files. Hobnob uses Go template
 | `{{ salt['pillar.get']('key', 'default') }}` | `{{ default .Vars.key "default" }}` |
 | `{{ variable \| lower }}` | `{{ lower .Vars.variable }}` |
 
-**Critical restriction:** You cannot Jinja2-render the YAML structure in Hobnob. `{% if %}` blocks that conditionally include resources must become separate resources with `when:` expressions.
+**Critical restriction:** You cannot Jinja2-render the YAML structure in Vigo. `{% if %}` blocks that conditionally include resources must become separate resources with `when:` expressions.
 
 ## Conditionals and Targeting
 
@@ -260,7 +260,7 @@ nginx-package:
 {% endif %}
 ```
 
-Hobnob equivalent using `when:`:
+Vigo equivalent using `when:`:
 
 ```yaml
 - name: nginx-package
@@ -270,7 +270,7 @@ Hobnob equivalent using `when:`:
   when: "os_family('debian')"
 ```
 
-Salt can also use `onlyif`/`unless` on state calls. Hobnob's `when:` covers both structural conditionals and runtime guards.
+Salt can also use `onlyif`/`unless` on state calls. Vigo's `when:` covers both structural conditionals and runtime guards.
 
 ## Secrets
 
@@ -284,35 +284,35 @@ db_password: |
   -----END PGP MESSAGE-----
 ```
 
-Hobnob uses the `secret:` prefix:
+Vigo uses the `secret:` prefix:
 
 ```yaml
-content: "secret:hobnob/database/password"
+content: "secret:vigo/database/password"
 ```
 
 Secrets are resolved server-side at bundle compile time. No GPG key management on minions.
 
 ## Common Gotchas
 
-1. **No Jinja2 in YAML structure.** This is the #1 adjustment. Salt states commonly use `{% if %}` to conditionally include entire resource blocks. In Hobnob, every resource is always present in the YAML — use `when:` to conditionally skip execution.
+1. **No Jinja2 in YAML structure.** This is the #1 adjustment. Salt states commonly use `{% if %}` to conditionally include entire resource blocks. In Vigo, every resource is always present in the YAML — use `when:` to conditionally skip execution.
 
-2. **No execution modules.** Salt's `salt['cmd.run']()` or `salt['file.read']()` in Jinja2 has no equivalent. Hobnob does not execute arbitrary code during config compilation. Use traits for system facts, `vars_from:` for data, or pre-populate vars.
+2. **No execution modules.** Salt's `salt['cmd.run']()` or `salt['file.read']()` in Jinja2 has no equivalent. Vigo does not execute arbitrary code during config compilation. Use traits for system facts, `vars_from:` for data, or pre-populate vars.
 
-3. **No pillar merging.** Salt can merge pillar data from multiple sources and environments. Hobnob uses a simple three-level override: module defaults → role vars → node vars. Last writer wins at each level.
+3. **No pillar merging.** Salt can merge pillar data from multiple sources and environments. Vigo uses a simple three-level override: module defaults → role vars → node vars. Last writer wins at each level.
 
-4. **No `salt://` file URIs.** Salt serves files from the file_roots via `salt://`. Hobnob inlines templates in `content:` or uses `sourcepath:` for agent-local files. There is no file server.
+4. **No `salt://` file URIs.** Salt serves files from the file_roots via `salt://`. Vigo inlines templates in `content:` or uses `sourcepath:` for agent-local files. There is no file server.
 
-5. **Templates only in `content:`.** Salt renders Jinja2 in any YAML value. Hobnob restricts Go templates to `content:`. Do not attempt to template `package:`, `target_path:`, or `command:`.
+5. **Templates only in `content:`.** Salt renders Jinja2 in any YAML value. Vigo restricts Go templates to `content:`. Do not attempt to template `package:`, `target_path:`, or `command:`.
 
-6. **No compound targeting.** Salt's compound matchers (`G@os:CentOS and P@hostname:web.*`) don't have a direct equivalent. Use glob patterns in `nodes.hnb` and `when:` on individual resources for fine-grained targeting.
+6. **No compound targeting.** Salt's compound matchers (`G@os:CentOS and P@hostname:web.*`) don't have a direct equivalent. Use glob patterns in `nodes.vgo` and `when:` on individual resources for fine-grained targeting.
 
-7. **No event bus or reactor.** Salt's event-driven reactor system doesn't exist in Hobnob. For event-driven workflows, use webhooks or the task system.
+7. **No event bus or reactor.** Salt's event-driven reactor system doesn't exist in Vigo. For event-driven workflows, use webhooks or the task system.
 
-8. **Agent enrollment required.** Salt minions auto-register via key acceptance. Hobnob requires explicit enrollment via a one-time token generated with `hobnobcli tokens generate`.
+8. **Agent enrollment required.** Salt minions auto-register via key acceptance. Vigo requires explicit enrollment via a one-time token generated with `vigogo tokens generate`.
 
 ## Related
 
-- [Config Format](../concepts/config-format.md) — Modules, roles, nodes.hnb, vars
+- [Config Format](../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
 - [Resource DAG](../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../concepts/when-expressions.md) — Conditional expressions and builtins

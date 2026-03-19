@@ -2,7 +2,7 @@
 #~ This is a heavyweight deployment (PostgreSQL, Redis, ~5 GB NVT feeds).
 #~ Deploy on ONE machine — OpenVAS scans targets remotely over the network.
 #~
-#~ Not wired to the Hobnob security_scan trait collector. Manage scan
+#~ Not wired to the Vigo security_scan trait collector. Manage scan
 #~ results through the Greenbone Security Assistant (GSA) web UI on port 9392.
 #~
 #~ Debian/Ubuntu only. RHEL/CentOS users: see the Greenbone docs for
@@ -11,7 +11,7 @@ name: openvas
 
 vars:
   gvm_admin_user: "admin"
-  gvm_admin_pass: "secret:hobnob/openvas/admin_password"
+  gvm_admin_pass: "secret:vigo/openvas/admin_password"
   gvm_data_dir: "/var/lib/gvm"
   redis_socket: "/run/redis-openvas/redis.sock"
 
@@ -39,7 +39,7 @@ resources:
     type: file
     target_path: /etc/redis/redis-openvas.conf
     content: |
-      # Redis instance for OpenVAS — managed by hobnob
+      # Redis instance for OpenVAS — managed by vigo
       port 0
       unixsocket {{ .Vars.redis_socket }}
       unixsocketperm 770
@@ -94,15 +94,15 @@ resources:
     type: exec
     command: "greenbone-feed-sync"
     when: "hour_range('3','5')"
-    onlyif: "! test -f /tmp/.hobnob-gvm-sync-$(date +%Y%U)"
+    onlyif: "! test -f /tmp/.vigo-gvm-sync-$(date +%Y%U)"
     depends_on: [gvm-setup-sentinel]
 
   - name: nvt-sync-sentinel
     type: exec
-    command: "touch /tmp/.hobnob-gvm-sync-$(date +%Y%U)"
+    command: "touch /tmp/.vigo-gvm-sync-$(date +%Y%U)"
     depends_on: [sync-nvt-feeds]
     when: "hour_range('3','5')"
-    onlyif: "! test -f /tmp/.hobnob-gvm-sync-$(date +%Y%U)"
+    onlyif: "! test -f /tmp/.vigo-gvm-sync-$(date +%Y%U)"
 
   # ── Services ─────────────────────────────────────────────────────
 

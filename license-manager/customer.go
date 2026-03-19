@@ -79,7 +79,7 @@ func runCustomerShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Created:  %s\n\n", created)
 
 	rows, err := db.Query(
-		`SELECT license_id, max_thralls, issued_at, expires_at, version, superseded_by
+		`SELECT license_id, max_envoys, issued_at, expires_at, version, superseded_by
 		 FROM licenses WHERE customer_id = ? ORDER BY created_at ASC`, customerID,
 	)
 	if err != nil {
@@ -88,13 +88,13 @@ func runCustomerShow(cmd *cobra.Command, args []string) error {
 	defer rows.Close()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "LICENSE_ID\tMAX_THRALLS\tISSUED\tEXPIRES\tVERSION\tSTATUS")
+	fmt.Fprintln(w, "LICENSE_ID\tMAX_ENVOYS\tISSUED\tEXPIRES\tVERSION\tSTATUS")
 
 	for rows.Next() {
 		var id, issued, expires string
-		var maxThralls, version int
+		var maxEnvoys, version int
 		var supersededBy *string
-		if err := rows.Scan(&id, &maxThralls, &issued, &expires, &version, &supersededBy); err != nil {
+		if err := rows.Scan(&id, &maxEnvoys, &issued, &expires, &version, &supersededBy); err != nil {
 			return err
 		}
 
@@ -103,7 +103,7 @@ func runCustomerShow(cmd *cobra.Command, args []string) error {
 			status = fmt.Sprintf("superseded by %s", *supersededBy)
 		}
 
-		fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%d\t%s\n", id, maxThralls, issued, expires, version, status)
+		fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%d\t%s\n", id, maxEnvoys, issued, expires, version, status)
 	}
 	return w.Flush()
 }

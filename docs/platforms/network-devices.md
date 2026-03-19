@@ -1,6 +1,6 @@
 # Managing Network Devices
 
-Hobnob manages switches, routers, and firewalls as first-class fleet members through a gateway proxy pattern. Devices that can't run the agent binary are managed over SSH from a gateway thrall. This guide walks through setup and provides practical configuration examples for all supported platforms.
+Vigo manages switches, routers, and firewalls as first-class fleet members through a gateway proxy pattern. Devices that can't run the agent binary are managed over SSH from a gateway envoy. This guide walks through setup and provides practical configuration examples for all supported platforms.
 
 ## Supported Platforms
 
@@ -14,13 +14,13 @@ Hobnob manages switches, routers, and firewalls as first-class fleet members thr
 
 ## Setup
 
-### 1. Designate a gateway thrall
+### 1. Designate a gateway envoy
 
-The gateway is a Linux server running the Hobnob agent. It needs SSH connectivity to all managed devices.
+The gateway is a Linux server running the Vigo agent. It needs SSH connectivity to all managed devices.
 
 ```yaml
-# thralls/network.hnb
-thralls:
+# envoys/network.vgo
+envoys:
   - match: "netmgmt.example.com"
     roles: [bastion]
 ```
@@ -28,16 +28,16 @@ thralls:
 ### 2. Store device credentials
 
 ```bash
-hobnobcli secrets set network/core-sw01/ssh    # password or paste SSH private key
-hobnobcli secrets set network/dist-sw01/ssh
-hobnobcli secrets set network/edge-rtr01/ssh
+vigogo secrets set network/core-sw01/ssh    # password or paste SSH private key
+vigogo secrets set network/dist-sw01/ssh
+vigogo secrets set network/edge-rtr01/ssh
 ```
 
 ### 3. Define device entries
 
 ```yaml
-# thralls/network.hnb (continued)
-thralls:
+# envoys/network.vgo (continued)
+envoys:
   # Gateway
   - match: "netmgmt.example.com"
     roles: [bastion]
@@ -91,9 +91,9 @@ thralls:
 ### 4. Publish and verify
 
 ```bash
-hobnobcli config publish
-hobnobcli push netmgmt.example.com    # gateway check-in triggers device convergence
-hobnobcli nodes list                  # devices appear as thralls
+vigogo config publish
+vigogo push netmgmt.example.com    # gateway check-in triggers device convergence
+vigogo nodes list                  # devices appear as envoys
 ```
 
 ## Example: Campus Switch Baseline
@@ -101,7 +101,7 @@ hobnobcli nodes list                  # devices appear as thralls
 A module that applies to every campus switch regardless of vendor. Uses the cross-platform `network_*` executors — no vendor-specific commands needed.
 
 ```yaml
-# modules/switch-base.hnb
+# modules/switch-base.vgo
 name: switch-base
 
 vars:
@@ -120,7 +120,7 @@ resources:
     banner_type: login
     text: |
       *** AUTHORIZED ACCESS ONLY ***
-      This device is managed by Hobnob. Unauthorized changes will be reverted.
+      This device is managed by Vigo. Unauthorized changes will be reverted.
 
   # NTP — consistent time across all devices
   - name: ntp-primary
@@ -152,14 +152,14 @@ resources:
     privilege: "15"
 ```
 
-This single module works on Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos. The `device_type` parameter is auto-injected from the thrall config — you don't specify it in the module.
+This single module works on Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos. The `device_type` parameter is auto-injected from the envoy config — you don't specify it in the module.
 
 ## Example: VLAN Management
 
 Manage VLANs across your switching fabric with `foreach`:
 
 ```yaml
-# modules/datacenter-vlans.hnb
+# modules/datacenter-vlans.vgo
 name: datacenter-vlans
 
 vars:
@@ -192,7 +192,7 @@ Add a VLAN to the list, publish — every switch gets it on the next convergence
 Standardize interface descriptions and state across a rack of switches:
 
 ```yaml
-# modules/leaf-interfaces.hnb
+# modules/leaf-interfaces.vgo
 name: leaf-interfaces
 
 vars:
@@ -239,7 +239,7 @@ resources:
 Manage firewall rules on every border device:
 
 ```yaml
-# modules/border-acl.hnb
+# modules/border-acl.vgo
 name: border-acl
 
 vars:
@@ -276,7 +276,7 @@ resources:
 Manage routing tables declaratively:
 
 ```yaml
-# modules/site-routes.hnb
+# modules/site-routes.vgo
 name: site-routes
 
 vars:
@@ -301,7 +301,7 @@ resources:
 When the structured executors don't cover your use case, `network_config` pushes raw config blocks with idempotency (checks running-config before pushing):
 
 ```yaml
-# modules/ios-hardening.hnb
+# modules/ios-hardening.vgo
 name: ios-hardening
 
 resources:
@@ -335,7 +335,7 @@ resources:
 Use `when:` on module refs to apply vendor-specific modules alongside the shared baseline:
 
 ```yaml
-# roles/switch-core.hnb
+# roles/switch-core.vgo
 name: switch-core
 modules:
   - switch-base             # cross-platform baseline (works everywhere)
@@ -354,11 +354,11 @@ Run commands across your network fleet:
 
 ```bash
 # Show version on all Cisco switches
-hobnobcli push run --target "*.example.com" --command "show version" \
+vigogo push run --target "*.example.com" --command "show version" \
   --device-type cisco_ios
 
 # Check interface status on a specific device
-hobnobcli query --target "core-sw01.example.com" \
+vigogo query --target "core-sw01.example.com" \
   --command "show interfaces status"
 ```
 
@@ -386,9 +386,9 @@ After pushing, the executor runs the save command (`write memory` for IOS/EOS, `
 Network devices are full fleet members:
 
 ```bash
-hobnobcli nodes list              # devices appear alongside servers
-hobnobcli nodes traits core-sw01  # show device model, firmware, VLANs, interfaces
-hobnobcli runs list               # convergence runs visible per device
+vigogo nodes list              # devices appear alongside servers
+vigogo nodes traits core-sw01  # show device model, firmware, VLANs, interfaces
+vigogo runs list               # convergence runs visible per device
 ```
 
 The web UI dashboard shows device compliance alongside servers. Drifted devices (where running-config doesn't match desired state) appear as non-compliant.

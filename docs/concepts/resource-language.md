@@ -1,6 +1,6 @@
 # Resource Language
 
-Beyond basic resource definitions, Hobnob supports several advanced config patterns for reducing repetition and expressing complex desired state.
+Beyond basic resource definitions, Vigo supports several advanced config patterns for reducing repetition and expressing complex desired state.
 
 ## defaults
 
@@ -197,7 +197,7 @@ resources:
 
 ## stream_edit
 
-Pipe file content through scripts on the thrall before writing. Accepts a single path or a list for chained transforms:
+Pipe file content through scripts on the envoy before writing. Accepts a single path or a list for chained transforms:
 
 ```yaml
 resources:

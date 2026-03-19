@@ -16,16 +16,16 @@ import (
 
 var pushCmd = &cobra.Command{
 	Use:   "push",
-	Short: "Push ad-hoc commands to targeted thralls and view results in real time",
+	Short: "Push ad-hoc commands to targeted envoys and view results in real time",
 }
 
 var pushRunCmd = &cobra.Command{
 	Use:   "run <command-or-task-name>",
-	Short: "Execute an ad-hoc shell command or a stored task definition on matching thralls",
-	Long: `Run an ad-hoc command or a named task on targeted thralls.
+	Short: "Execute an ad-hoc shell command or a stored task definition on matching envoys",
+	Long: `Run an ad-hoc command or a named task on targeted envoys.
 
-  Ad-hoc command:  hobnobcli push run "uptime" --target "*.web.*"
-  Named task:      hobnobcli push run restart-app --target "*.web.*" --param env=staging`,
+  Ad-hoc command:  vigogo push run "uptime" --target "*.web.*"
+  Named task:      vigogo push run restart-app --target "*.web.*" --param env=staging`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
@@ -44,7 +44,7 @@ var pushRunCmd = &cobra.Command{
 			if u, err := user.Current(); err == nil {
 				operator = u.Username
 			} else {
-				operator = "hobnobcli"
+				operator = "vigogo"
 			}
 		}
 
@@ -321,8 +321,8 @@ var pushCancelCmd = &cobra.Command{
 	Short: "Cancel a stuck push or all running pushes",
 	Long: `Cancel a specific push by ID, or cancel all pushes stuck in running/pending state.
 
-  hobnobcli push cancel <id>       Cancel a specific push
-  hobnobcli push cancel --running  Cancel all running/pending pushes`,
+  vigogo push cancel <id>       Cancel a specific push
+  vigogo push cancel --running  Cancel all running/pending pushes`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cancelRunning, _ := cmd.Flags().GetBool("running")
 		client := newAPIClient()

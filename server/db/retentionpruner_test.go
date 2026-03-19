@@ -21,7 +21,7 @@ func openRetentionTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { sqlDB.Close() })
 
 	schema := `
-		CREATE TABLE thralls (
+		CREATE TABLE envoys (
 			id TEXT PRIMARY KEY, hostname TEXT NOT NULL, ip_address TEXT NOT NULL,
 			pubkey_pem TEXT NOT NULL, enrolled_at DATETIME NOT NULL DEFAULT (datetime('now')),
 			last_seen DATETIME, revoked INTEGER NOT NULL DEFAULT 0, revoked_at DATETIME,
@@ -29,7 +29,7 @@ func openRetentionTestDB(t *testing.T) *sql.DB {
 			tags TEXT NOT NULL DEFAULT '', maintenance_until DATETIME
 		);
 		CREATE TABLE runs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, thrall_id TEXT NOT NULL REFERENCES thralls(id),
+			id INTEGER PRIMARY KEY AUTOINCREMENT, envoy_id TEXT NOT NULL REFERENCES envoys(id),
 			started_at DATETIME NOT NULL DEFAULT (datetime('now')), finished_at DATETIME,
 			status TEXT NOT NULL DEFAULT 'running', module_count INTEGER NOT NULL DEFAULT 0,
 			changed_count INTEGER NOT NULL DEFAULT 0, failed_count INTEGER NOT NULL DEFAULT 0,
@@ -48,7 +48,7 @@ func openRetentionTestDB(t *testing.T) *sql.DB {
 		);
 		CREATE TABLE push_run_targets (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, push_run_id INTEGER NOT NULL REFERENCES push_runs(id) ON DELETE CASCADE,
-			thrall_id TEXT, hostname TEXT, status TEXT NOT NULL DEFAULT 'pending',
+			envoy_id TEXT, hostname TEXT, status TEXT NOT NULL DEFAULT 'pending',
 			exit_code INTEGER, stdout TEXT, stderr TEXT, duration_ms INTEGER, error_msg TEXT,
 			dispatched_at DATETIME, finished_at DATETIME
 		);
@@ -68,7 +68,7 @@ func openRetentionTestDB(t *testing.T) *sql.DB {
 			total INTEGER, compliant INTEGER, drifted INTEGER, failing INTEGER, stale INTEGER, unknown INTEGER
 		);
 		CREATE TABLE file_snapshots (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, thrall_id TEXT, path TEXT, content_hash TEXT,
+			id INTEGER PRIMARY KEY AUTOINCREMENT, envoy_id TEXT, path TEXT, content_hash TEXT,
 			created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 		);
 	`
@@ -83,17 +83,17 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 	queries := New(sqlDB)
 	ctx := context.Background()
 
-	// Insert a thrall for FK constraints.
-	sqlDB.Exec(`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES ('t1', 'h1', '10.0.0.1', 'key')`)
+	// Insert a envoy for FK constraints.
+	sqlDB.Exec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES ('t1', 'h1', '10.0.0.1', 'key')`)
 
 	old := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02 15:04:05")
 	recent := time.Now().Add(-1 * time.Hour).UTC().Format("2006-01-02 15:04:05")
 
 	// Insert old and recent runs.
-	sqlDB.Exec(`INSERT INTO runs (thrall_id, started_at, status) VALUES ('t1', ?, 'complete')`, old)
-	sqlDB.Exec(`INSERT INTO runs (thrall_id, started_at, status) VALUES ('t1', ?, 'complete')`, recent)
+	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'complete')`, old)
+	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'complete')`, recent)
 	// Insert a running run that's old — should NOT be pruned.
-	sqlDB.Exec(`INSERT INTO runs (thrall_id, started_at, status) VALUES ('t1', ?, 'running')`, old)
+	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'running')`, old)
 
 	// Old and recent task runs.
 	sqlDB.Exec(`INSERT INTO push_runs (command, target_glob, status, total_targets, created_at) VALUES ('echo', '*', 'complete', 1, ?)`, old)
@@ -142,10 +142,10 @@ func TestRetentionPruner_CascadeDeletesRunResults(t *testing.T) {
 	queries := New(sqlDB)
 	ctx := context.Background()
 
-	sqlDB.Exec(`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES ('t1', 'h1', '10.0.0.1', 'key')`)
+	sqlDB.Exec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES ('t1', 'h1', '10.0.0.1', 'key')`)
 
 	old := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02 15:04:05")
-	sqlDB.Exec(`INSERT INTO runs (id, thrall_id, started_at, status) VALUES (1, 't1', ?, 'complete')`, old)
+	sqlDB.Exec(`INSERT INTO runs (id, envoy_id, started_at, status) VALUES (1, 't1', ?, 'complete')`, old)
 	sqlDB.Exec(`INSERT INTO run_results (run_id, module_name, resource_type, resource_name, action_taken) VALUES (1, 'mod', 'file', 'conf', 'updated')`)
 
 	var resultsBefore int

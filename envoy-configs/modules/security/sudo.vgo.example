@@ -14,7 +14,7 @@ resources:
     type: file
     target_path: /etc/sudoers
     content: |
-      # /etc/sudoers — managed by hobnob
+      # /etc/sudoers — managed by vigo
       Defaults    env_reset
       Defaults    mail_badpass
       Defaults    secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -30,11 +30,11 @@ resources:
     mode: "0440"
     depends_on: [install-sudo]
 
-  - name: sudoers-hobnob
+  - name: sudoers-vigo
     type: file
-    target_path: /etc/sudoers.d/hobnob
+    target_path: /etc/sudoers.d/vigo
     content: |
-      # /etc/sudoers.d/hobnob — managed by hobnob
+      # /etc/sudoers.d/vigo — managed by vigo
       {{ if eq .Traits.os.family "redhat" -}}
       {{ if eq .Vars.passwordless "true" -}}
       %wheel ALL=(ALL:ALL) NOPASSWD: ALL

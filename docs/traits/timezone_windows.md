@@ -29,7 +29,7 @@ Supported mappings include: EST, CST, MST, PST, AKST, HST, UTC, GMT, CET, WET, E
 ```yaml
 - name: timezone-info
   type: file
-  target_path: C:\ProgramData\hobnob\timezone.txt
+  target_path: C:\ProgramData\vigo\timezone.txt
   content: |
     Timezone: {{ .Traits.timezone.name }} ({{ .Traits.timezone.abbreviation }})
 ```

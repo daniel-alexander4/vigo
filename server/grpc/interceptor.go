@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/metrics"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -32,7 +32,7 @@ const defaultSignatureWindow = 5 * time.Minute
 // ED25519 signatures on agent requests (SEC-03). The Register RPC is skipped
 // because the agent does not have a UUID yet during enrollment.
 //
-// The looked-up thrall is stored in the request context so downstream handlers
+// The looked-up envoy is stored in the request context so downstream handlers
 // can reuse it without another lookup.
 //
 // sigWindow configures the maximum age of a signed request before rejection
@@ -48,7 +48,7 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 		handler grpc.UnaryHandler,
 	) (any, error) {
 		// Skip signature verification for Register -- agent has no UUID yet.
-		if info.FullMethod == pb.HobnobAgent_Register_FullMethodName {
+		if info.FullMethod == pb.VigoAgent_Register_FullMethodName {
 			return handler(ctx, req)
 		}
 
@@ -84,14 +84,14 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 }
 
 // verifyCheckIn validates the signature on a CheckInRequest. On success, it
-// returns a context enriched with the looked-up thrall for handler reuse.
+// returns a context enriched with the looked-up envoy for handler reuse.
 func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) (context.Context, error) {
-	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
-		return ctx, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
-	thrallID := req.GetThrallId()
+	envoyID := req.GetEnvoyId()
 
-	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, thrallID, fleetIdx)
+	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx)
 	if err != nil {
 		return ctx, err
 	}
@@ -114,19 +114,19 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequ
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
-	// Store thrall in context for handler reuse (eliminates duplicate lookups).
-	return db.ContextWithThrall(ctx, thrall), nil
+	// Store envoy in context for handler reuse (eliminates duplicate lookups).
+	return db.ContextWithEnvoy(ctx, envoy), nil
 }
 
 // verifyReportResultCtx validates the signature on a ReportResultRequest and
-// stores the thrall in context for handler reuse.
+// stores the envoy in context for handler reuse.
 func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.ReportResultRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) (context.Context, error) {
-	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
-		return ctx, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
-	thrallID := req.GetThrallId()
+	envoyID := req.GetEnvoyId()
 
-	thrall, pubKey, err := lookupThrallAndPubKey(ctx, queries, thrallID, fleetIdx)
+	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx)
 	if err != nil {
 		return ctx, err
 	}
@@ -148,17 +148,17 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.Rep
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
-	return db.ContextWithThrall(ctx, thrall), nil
+	return db.ContextWithEnvoy(ctx, envoy), nil
 }
 
 // verifyReportTraits validates the signature on a ReportTraitsRequest.
 func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.ReportTraitsRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) error {
-	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
+		return status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
-	thrallID := req.GetThrallId()
+	envoyID := req.GetEnvoyId()
 
-	_, pubKey, err := lookupThrallAndPubKey(ctx, queries, thrallID, fleetIdx)
+	_, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx)
 	if err != nil {
 		return err
 	}
@@ -183,53 +183,53 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.Report
 	return nil
 }
 
-// lookupThrallAndPubKey retrieves a thrall and its parsed ED25519 public key.
+// lookupEnvoyAndPubKey retrieves a envoy and its parsed ED25519 public key.
 // When a FleetIndex is available, the parsed pubkey is served from memory (O(1),
 // no PEM parse). Falls back to direct DB query.
-func lookupThrallAndPubKey(ctx context.Context, queries *db.Queries, thrallID string, fleetIdx *fleet.FleetIndex) (db.Thrall, ed25519.PublicKey, error) {
+func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex) (db.Envoy, ed25519.PublicKey, error) {
 	// Fast path: FleetIndex returns parsed pubkey from memory.
 	if fleetIdx != nil {
-		pubKey := fleetIdx.GetPubKey(thrallID)
+		pubKey := fleetIdx.GetPubKey(envoyID)
 		if pubKey != nil {
-			ts, ok, _ := fleetIdx.GetThrallLite(thrallID)
+			ts, ok, _ := fleetIdx.GetEnvoyLite(envoyID)
 			if ok {
-				thrall := fleetThrallToDB(ts)
-				return thrall, pubKey, nil
+				envoy := fleetEnvoyToDB(ts)
+				return envoy, pubKey, nil
 			}
 		}
 		// Fall through to DB if not in FleetIndex.
 	}
 
 	// Slow path: direct DB query + parse.
-	thrall, err := queries.GetThrallByID(ctx, thrallID)
+	envoy, err := queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		metrics.SigVerifyFailed.WithLabelValues("thrall_not_found").Inc()
-		slog.Error("thrall lookup failed", "thrall_id", thrallID, "error", err)
-		return db.Thrall{}, nil, status.Error(codes.Unauthenticated, "thrall not found")
+		metrics.SigVerifyFailed.WithLabelValues("envoy_not_found").Inc()
+		slog.Error("envoy lookup failed", "envoy_id", envoyID, "error", err)
+		return db.Envoy{}, nil, status.Error(codes.Unauthenticated, "envoy not found")
 	}
 
-	block, _ := pem.Decode([]byte(thrall.PubkeyPem))
+	block, _ := pem.Decode([]byte(envoy.PubkeyPem))
 	if block == nil {
-		return db.Thrall{}, nil, status.Error(codes.Internal, "invalid stored public key")
+		return db.Envoy{}, nil, status.Error(codes.Internal, "invalid stored public key")
 	}
 
 	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return db.Thrall{}, nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
+		return db.Envoy{}, nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
 	}
 
 	pubKey, ok := parsed.(ed25519.PublicKey)
 	if !ok {
-		return db.Thrall{}, nil, status.Error(codes.Internal, "stored key is not ED25519")
+		return db.Envoy{}, nil, status.Error(codes.Internal, "stored key is not ED25519")
 	}
 
-	return thrall, pubKey, nil
+	return envoy, pubKey, nil
 }
 
-// fleetThrallToDB converts a FleetIndex ThrallState to a db.Thrall for
+// fleetEnvoyToDB converts a FleetIndex EnvoyState to a db.Envoy for
 // compatibility with code that expects the DB model.
-func fleetThrallToDB(ts *fleet.ThrallState) db.Thrall {
-	t := db.Thrall{
+func fleetEnvoyToDB(ts *fleet.EnvoyState) db.Envoy {
+	t := db.Envoy{
 		ID:        ts.ID,
 		Hostname:  ts.Hostname,
 		IpAddress: ts.IP,

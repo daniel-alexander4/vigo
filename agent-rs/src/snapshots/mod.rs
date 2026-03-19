@@ -46,7 +46,7 @@ impl Manager {
             .unwrap_or_else(|| Path::new("."));
         fs::create_dir_all(dir)?;
 
-        let tmp = dir.join(format!(".hobnob-restore-{}", uuid::Uuid::new_v4()));
+        let tmp = dir.join(format!(".vigo-restore-{}", uuid::Uuid::new_v4()));
         fs::write(&tmp, &data)?;
 
         if let Err(e) = fs::rename(&tmp, file_path) {

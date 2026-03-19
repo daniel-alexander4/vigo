@@ -16,18 +16,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hobnob/hobnob/server/conditionals"
-	"github.com/hobnob/hobnob/server/metrics"
-	"github.com/hobnob/hobnob/server/secrets"
-	"github.com/hobnob/hobnob/server/validate"
+	"github.com/daniel-alexander4/vigo/server/conditionals"
+	"github.com/daniel-alexander4/vigo/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/validate"
 	"gopkg.in/yaml.v3"
 )
 
 // SecretError describes a single secret resolution failure with enough
 // context to diagnose and fix without guessing.
 type SecretError struct {
-	Match    string // thrall match pattern (e.g. "db-*.prod.example.com")
-	Module   string // module name (empty if failure is in thrall vars)
+	Match    string // envoy match pattern (e.g. "db-*.prod.example.com")
+	Module   string // module name (empty if failure is in envoy vars)
 	Resource string // resource name (empty if failure is in vars)
 	Attr     string // attribute or var name
 	Secret   string // the secret key that failed
@@ -58,11 +58,11 @@ func (e *SecretError) Hint() string {
 	case "local", "":
 		switch {
 		case strings.Contains(msg, "not found"):
-			return fmt.Sprintf("hobnobcli secrets set %s", e.Secret)
+			return fmt.Sprintf("vigogo secrets set %s", e.Secret)
 		case strings.Contains(msg, "wrong master key"), strings.Contains(msg, "message authentication failed"):
-			return "secret was written with a different key -- re-encrypt with: hobnobcli secrets set " + e.Secret
+			return "secret was written with a different key -- re-encrypt with: vigogo secrets set " + e.Secret
 		case strings.Contains(msg, "ciphertext too short"):
-			return "file may be plaintext from a previous config -- re-encrypt with: hobnobcli secrets set " + e.Secret
+			return "file may be plaintext from a previous config -- re-encrypt with: vigogo secrets set " + e.Secret
 		default:
 			return fmt.Sprintf("check %s in the secrets directory", e.Secret)
 		}
@@ -71,9 +71,9 @@ func (e *SecretError) Hint() string {
 		case strings.Contains(msg, "not found"):
 			return fmt.Sprintf("create this secret in isopass: isopass set %s", e.Secret)
 		case strings.Contains(msg, "unreachable"):
-			return "ensure isopass is running and HOBNOB_ISOPASS_URL is correct"
+			return "ensure isopass is running and VIGO_ISOPASS_URL is correct"
 		case strings.Contains(msg, "authentication failed"):
-			return "check HOBNOB_ISOPASS_TOKEN -- regenerate if expired"
+			return "check VIGO_ISOPASS_TOKEN -- regenerate if expired"
 		default:
 			return "check isopass logs for details"
 		}
@@ -172,15 +172,15 @@ var knownSecretFields = map[string]bool{
 
 const secretPrefix = "secret:"
 
-// resolvedEntry pairs a match pattern with a resolved thrall config.
+// resolvedEntry pairs a match pattern with a resolved envoy config.
 type resolvedEntry struct {
 	match  string
-	config *ThrallConfig
+	config *EnvoyConfig
 }
 
-// ConfigStore loads, watches, and provides per-thrall configuration.
+// ConfigStore loads, watches, and provides per-envoy configuration.
 // The base dir contains modules/ and templates/ subdirectories plus
-// .hnb/.yaml config files organized in a directory hierarchy for
+// .vgo/.yaml config files organized in a directory hierarchy for
 // cascading inheritance. Secret references are resolved via a
 // secrets.Provider. Reload triggered by config publish via REST endpoint.
 type ConfigStore struct {
@@ -188,11 +188,11 @@ type ConfigStore struct {
 	entries       []resolvedEntry
 	index         *patternIndex                // accelerated hostname lookup
 	rawModules    map[string]*ModuleDefinition // unresolved, for secret ref scanning
-	thrallEntries []ThrallEntry                // original entries for tracing
+	envoyEntries []EnvoyEntry                // original entries for tracing
 	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing
 	moduleDefs    map[string]*ModuleDefinition // loaded modules for tracing
-	commonConfigs map[string]*CommonConfig     // dir path → common.hnb inheritance config
-	dir           string                       // thrall-configs directory
+	commonConfigs map[string]*CommonConfig     // dir path → common.vgo inheritance config
+	dir           string                       // envoy-configs directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
 	dangerous       bool   // allow non-idempotent resources
@@ -208,7 +208,7 @@ func NewEmptyConfigStore(provider secrets.Provider) *ConfigStore {
 		entries:       nil,
 		index:         buildPatternIndex(nil),
 		rawModules:    make(map[string]*ModuleDefinition),
-		thrallEntries: nil,
+		envoyEntries: nil,
 		roleDefs:      make(map[string]*RoleDefinition),
 		moduleDefs:    make(map[string]*ModuleDefinition),
 		commonConfigs: make(map[string]*CommonConfig),
@@ -226,8 +226,8 @@ func (cs *ConfigStore) SetOnReloadFailure(fn func(err error)) {
 	cs.onReloadFailure = fn
 }
 
-// NewConfigStore creates a ConfigStore that scans baseDir for thrall
-// config files (.hnb or .yaml), module definitions from baseDir/modules/,
+// NewConfigStore creates a ConfigStore that scans baseDir for envoy
+// config files (.vgo or .yaml), module definitions from baseDir/modules/,
 // and role definitions from baseDir/roles/. Secret references are resolved
 // using the given provider.
 //
@@ -262,7 +262,7 @@ func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (
 	return cs, nil
 }
 
-// Dir returns the thrall-configs directory path.
+// Dir returns the envoy-configs directory path.
 func (cs *ConfigStore) Dir() string {
 	return cs.dir
 }
@@ -351,21 +351,21 @@ func (cs *ConfigStore) LastReloadError() error {
 
 // Get returns the resolved config for the given hostname. Entries are
 // evaluated in order — first match wins. If no entry matches, an empty
-// config is returned (unconfigured thrall gets empty module list).
-func (cs *ConfigStore) Get(hostname string) *ThrallConfig {
+// config is returned (unconfigured envoy gets empty module list).
+func (cs *ConfigStore) Get(hostname string) *EnvoyConfig {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
 	if i := cs.index.Lookup(hostname); i >= 0 {
-		cfg := cloneThrallConfig(cs.entries[i].config)
-		cfg.Thrall = hostname
+		cfg := cloneEnvoyConfig(cs.entries[i].config)
+		cfg.Envoy = hostname
 		return cfg
 	}
 
-	// No explicit match — apply root common.hnb inheritance so every
-	// enrolled thrall gets the baseline config without needing match: "*".
+	// No explicit match — apply root common.vgo inheritance so every
+	// enrolled envoy gets the baseline config without needing match: "*".
 	if cc, ok := cs.commonConfigs[""]; ok && (len(cc.Modules) > 0 || len(cc.Roles) > 0) {
-		entry := ThrallEntry{Modules: cc.Modules, Roles: cc.Roles}
+		entry := EnvoyEntry{Modules: cc.Modules, Roles: cc.Roles}
 		if cc.Vars != nil {
 			entry.Vars = make(map[string]any, len(cc.Vars))
 			for k, v := range cc.Vars {
@@ -373,23 +373,23 @@ func (cs *ConfigStore) Get(hostname string) *ThrallConfig {
 			}
 		}
 		if cfg, err := cs.resolveEntry(entry, cs.moduleDefs, cs.roleDefs); err == nil {
-			resolved := cloneThrallConfig(cfg)
-			resolved.Thrall = hostname
+			resolved := cloneEnvoyConfig(cfg)
+			resolved.Envoy = hostname
 			return resolved
 		}
 	}
 
-	return &ThrallConfig{
-		Thrall:  hostname,
+	return &EnvoyConfig{
+		Envoy:  hostname,
 		Modules: []ModuleConfig{},
 	}
 }
 
 // Match returns the matched pattern and a read-only resolved config for
 // hostname using the pattern index. Returns ("", nil) if no entry matches.
-// The returned config is shared — callers must not mutate it. The Thrall
+// The returned config is shared — callers must not mutate it. The Envoy
 // field is NOT set to hostname (use MatchClone if you need that).
-func (cs *ConfigStore) Match(hostname string) (string, *ThrallConfig) {
+func (cs *ConfigStore) Match(hostname string) (string, *EnvoyConfig) {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
@@ -404,14 +404,14 @@ func (cs *ConfigStore) Match(hostname string) (string, *ThrallConfig) {
 // MatchClone returns the matched pattern and a cloned config for hostname.
 // Safe to mutate. Used by callers that need to modify the result (e.g.
 // EffectiveConfigYAML).
-func (cs *ConfigStore) MatchClone(hostname string) (string, *ThrallConfig) {
+func (cs *ConfigStore) MatchClone(hostname string) (string, *EnvoyConfig) {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
 	if i := cs.index.Lookup(hostname); i >= 0 {
 		entry := cs.entries[i]
-		cfg := cloneThrallConfig(entry.config)
-		cfg.Thrall = hostname
+		cfg := cloneEnvoyConfig(entry.config)
+		cfg.Envoy = hostname
 		return entry.match, cfg
 	}
 
@@ -438,7 +438,7 @@ type ConfigTrace struct {
 // InheritanceLevel describes one level in the directory inheritance chain.
 type InheritanceLevel struct {
 	Dir     string   `json:"dir"`               // relative dir path (e.g., "production/web")
-	File    string   `json:"file"`              // filename (e.g., "common.hnb")
+	File    string   `json:"file"`              // filename (e.g., "common.vgo")
 	Modules []string `json:"modules,omitempty"` // modules contributed at this level
 	Roles   []string `json:"roles,omitempty"`   // roles contributed at this level
 }
@@ -485,25 +485,25 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		trace.PatternType = "exact"
 	}
 
-	// Find the original ThrallEntry to trace var sources.
-	var thrallEntry *ThrallEntry
-	for i := range cs.thrallEntries {
-		if cs.thrallEntries[i].Match == entry.match {
-			thrallEntry = &cs.thrallEntries[i]
+	// Find the original EnvoyEntry to trace var sources.
+	var envoyEntry *EnvoyEntry
+	for i := range cs.envoyEntries {
+		if cs.envoyEntries[i].Match == entry.match {
+			envoyEntry = &cs.envoyEntries[i]
 			break
 		}
 	}
-	if thrallEntry == nil {
+	if envoyEntry == nil {
 		return trace
 	}
 
 	// Build inheritance chain for trace output.
-	if thrallEntry.DirPath != "" && len(cs.commonConfigs) > 0 {
-		chain := inheritanceChain(thrallEntry.DirPath, cs.commonConfigs)
+	if envoyEntry.DirPath != "" && len(cs.commonConfigs) > 0 {
+		chain := inheritanceChain(envoyEntry.DirPath, cs.commonConfigs)
 		for _, cc := range chain {
 			level := InheritanceLevel{
 				Dir:  cc.DirPath,
-				File: "common.hnb",
+				File: "common.vgo",
 			}
 			for _, ref := range cc.Modules {
 				level.Modules = append(level.Modules, ref.Name)
@@ -513,11 +513,11 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 
-	trace.Environment = thrallEntry.Environment
-	trace.Roles = thrallEntry.Roles
+	trace.Environment = envoyEntry.Environment
+	trace.Roles = envoyEntry.Roles
 
 	// Trace role expansion.
-	for _, roleName := range thrallEntry.Roles {
+	for _, roleName := range envoyEntry.Roles {
 		role, ok := cs.roleDefs[roleName]
 		if !ok {
 			continue
@@ -548,7 +548,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 
 	// 1. Module defaults
 	seen := make(map[string]bool)
-	for _, roleName := range thrallEntry.Roles {
+	for _, roleName := range envoyEntry.Roles {
 		role, ok := cs.roleDefs[roleName]
 		if !ok {
 			continue
@@ -572,7 +572,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			}
 		}
 	}
-	for _, ref := range thrallEntry.Modules {
+	for _, ref := range envoyEntry.Modules {
 		if seen[ref.Name] {
 			continue
 		}
@@ -585,7 +585,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 
 	// 2. vars_from files
-	for _, relPath := range thrallEntry.VarsFrom {
+	for _, relPath := range envoyEntry.VarsFrom {
 		expanded := relPath
 		if strings.Contains(expanded, "{{") {
 			expanded = strings.ReplaceAll(expanded, "{{ .Hostname }}", hostname)
@@ -601,15 +601,15 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 
 	// 3. Inline vars
-	for k := range thrallEntry.Vars {
+	for k := range envoyEntry.Vars {
 		varSource[k] = "inline"
 	}
 
 	// 4. environment_overrides
-	if thrallEntry.Environment != "" {
-		if envOverrides, ok := thrallEntry.EnvironmentOverrides[thrallEntry.Environment]; ok {
+	if envoyEntry.Environment != "" {
+		if envOverrides, ok := envoyEntry.EnvironmentOverrides[envoyEntry.Environment]; ok {
 			for k := range envOverrides {
-				varSource[k] = "environment_overrides:" + thrallEntry.Environment
+				varSource[k] = "environment_overrides:" + envoyEntry.Environment
 			}
 		}
 	}
@@ -641,12 +641,12 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	return trace
 }
 
-// thrallsDir returns the path to the thralls subdirectory.
+// envoysDir returns the path to the envoys subdirectory.
 // TreeNode represents one node in the config directory hierarchy for
 // the config tree command. It shows inheritance at each level.
 type TreeNode struct {
 	Dir      string      `json:"dir"`                // relative dir path ("", "production", "production/web")
-	File     string      `json:"file,omitempty"`     // filename if this is a leaf or common.hnb
+	File     string      `json:"file,omitempty"`     // filename if this is a leaf or common.vgo
 	Modules  []string    `json:"modules,omitempty"`  // modules defined at this level
 	Roles    []string    `json:"roles,omitempty"`    // roles defined at this level
 	Match    string      `json:"match,omitempty"`    // match pattern (leaf entries only)
@@ -662,25 +662,25 @@ func (cs *ConfigStore) Tree() *TreeNode {
 
 	root := &TreeNode{Dir: ""}
 
-	// Add common.hnb at root.
+	// Add common.vgo at root.
 	if cc, ok := cs.commonConfigs[""]; ok {
-		root.File = "common.hnb"
+		root.File = "common.vgo"
 		for _, ref := range cc.Modules {
 			root.Modules = append(root.Modules, ref.Name)
 		}
 		root.Roles = cc.Roles
 	}
 
-	// Build tree from thrall entries grouped by directory.
+	// Build tree from envoy entries grouped by directory.
 	dirNodes := map[string]*TreeNode{"": root}
 
-	// Ensure all common.hnb directories have nodes.
+	// Ensure all common.vgo directories have nodes.
 	for dirPath, cc := range cs.commonConfigs {
 		if dirPath == "" {
 			continue
 		}
 		node := getOrCreateNode(dirNodes, root, dirPath)
-		node.File = "common.hnb"
+		node.File = "common.vgo"
 		for _, ref := range cc.Modules {
 			node.Modules = append(node.Modules, ref.Name)
 		}
@@ -688,7 +688,7 @@ func (cs *ConfigStore) Tree() *TreeNode {
 	}
 
 	// Add leaf entries.
-	for _, entry := range cs.thrallEntries {
+	for _, entry := range cs.envoyEntries {
 		dirPath := entry.DirPath
 		parent := getOrCreateNode(dirNodes, root, dirPath)
 
@@ -725,7 +725,7 @@ type SearchResult struct {
 	Entries []SearchEntry `json:"entries"`
 }
 
-// SearchEntry is a single search result showing a thrall entry and its context.
+// SearchEntry is a single search result showing a envoy entry and its context.
 type SearchEntry struct {
 	Match       string             `json:"match"`
 	Dir         string             `json:"dir"`
@@ -737,7 +737,7 @@ type SearchEntry struct {
 	Vars        map[string]any     `json:"vars,omitempty"`
 }
 
-// Search finds thrall entries matching the given criteria.
+// Search finds envoy entries matching the given criteria.
 // query is matched against match: patterns using glob-style matching.
 // moduleName filters to entries that use a specific module (inherited or direct).
 // varName filters to entries that define a specific var.
@@ -747,7 +747,7 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 
 	result := &SearchResult{Entries: []SearchEntry{}}
 
-	for _, entry := range cs.thrallEntries {
+	for _, entry := range cs.envoyEntries {
 		// Filter by match pattern.
 		if query != "" && !globContains(entry.Match, query) {
 			continue
@@ -772,7 +772,7 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 			for _, cc := range chain {
 				level := InheritanceLevel{
 					Dir:  cc.DirPath,
-					File: "common.hnb",
+					File: "common.vgo",
 				}
 				for _, ref := range cc.Modules {
 					level.Modules = append(level.Modules, ref.Name)
@@ -871,7 +871,7 @@ func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "modul
 // templatesDir returns the path to the templates subdirectory.
 func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
 
-// loadAll reads module defs, role defs, and thrall YAML files, resolves
+// loadAll reads module defs, role defs, and envoy YAML files, resolves
 // all entries, and atomically swaps the config.
 func (cs *ConfigStore) loadAll() error {
 	start := time.Now()
@@ -900,15 +900,15 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("resolving source files: %w", err)
 	}
 
-	// Load roles: try roles.hnb at root first, fall back to roles/ directory.
+	// Load roles: try roles.vgo at root first, fall back to roles/ directory.
 	roleDefs, err := loadRolesFile(cs.dir)
 	if err != nil {
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	thrallEntries, commonConfigs, err := loadThrallsDir(cs.dir)
+	envoyEntries, commonConfigs, err := loadEnvoysDir(cs.dir)
 	if err != nil {
-		return fmt.Errorf("loading thralls: %w", err)
+		return fmt.Errorf("loading envoys: %w", err)
 	}
 
 	// Validate role references.
@@ -921,19 +921,19 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	// Validate network device entries: gateway references, device types, credentials.
-	if err := validateDeviceEntries(thrallEntries); err != nil {
+	if err := validateDeviceEntries(envoyEntries); err != nil {
 		return err
 	}
 
 	// Apply directory inheritance: prepend inherited modules/roles/vars
-	// from common.hnb files in ancestor directories.
-	for i := range thrallEntries {
-		applyInheritance(&thrallEntries[i], commonConfigs)
+	// from common.vgo files in ancestor directories.
+	for i := range envoyEntries {
+		applyInheritance(&envoyEntries[i], commonConfigs)
 	}
 
 	var entries []resolvedEntry
 	var allSecretErrs []*SecretError
-	for i, entry := range thrallEntries {
+	for i, entry := range envoyEntries {
 		cfg, err := cs.resolveEntry(entry, moduleDefs, roleDefs)
 		if err != nil {
 			// Secret errors are collected across all entries so the
@@ -943,7 +943,7 @@ func (cs *ConfigStore) loadAllInner() error {
 				allSecretErrs = append(allSecretErrs, se.Errors...)
 				continue
 			}
-			return fmt.Errorf("resolving thrall entry %d (match=%q): %w", i, entry.Match, err)
+			return fmt.Errorf("resolving envoy entry %d (match=%q): %w", i, entry.Match, err)
 		}
 		entries = append(entries, resolvedEntry{match: entry.Match, config: cfg})
 	}
@@ -966,7 +966,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.entries = entries
 	cs.index = idx
 	cs.rawModules = moduleDefs
-	cs.thrallEntries = thrallEntries
+	cs.envoyEntries = envoyEntries
 	cs.roleDefs = roleDefs
 	cs.moduleDefs = moduleDefs
 	cs.commonConfigs = commonConfigs
@@ -975,7 +975,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	v := cs.version.Add(1)
 
 	slog.Info("config loaded",
-		"thralls", len(entries),
+		"envoys", len(entries),
 		"modules", len(moduleDefs),
 		"roles", len(roleDefs),
 		"version", v)
@@ -984,7 +984,7 @@ func (cs *ConfigStore) loadAllInner() error {
 }
 
 // loadVarsFile reads a YAML file containing a flat key-value map of vars.
-// The path is relative to the thrall-configs directory. Returns the vars map
+// The path is relative to the envoy-configs directory. Returns the vars map
 // and insertion-ordered keys.
 func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
 	fullPath := filepath.Clean(filepath.Join(baseDir, relPath))
@@ -1051,8 +1051,8 @@ func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
 	return vars, keys, nil
 }
 
-// resolveEntry converts a ThrallEntry into a fully resolved ThrallConfig.
-func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*ThrallConfig, error) {
+// resolveEntry converts a EnvoyEntry into a fully resolved EnvoyConfig.
+func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*EnvoyConfig, error) {
 	// Collect module refs: roles first (with includes), then direct modules.
 	// First ref wins for conditional fields (matching existing var merge behavior).
 	var moduleRefs []ModuleRef
@@ -1114,7 +1114,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		for _, target := range moduleDefs[mod.Name].Before {
 			idx, ok := modulesByName[target]
 			if !ok {
-				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this thrall", mod.Name, target, target)
+				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this envoy", mod.Name, target, target)
 			}
 			modules[idx].DependsOn = appendUnique(modules[idx].DependsOn, mod.Name)
 		}
@@ -1149,7 +1149,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		}
 	}
 
-	// Build vars: module defaults → vars_from files → thrall-level overrides.
+	// Build vars: module defaults → vars_from files → envoy-level overrides.
 	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
 	var varOrder []string
@@ -1180,7 +1180,7 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		}
 	}
 	for k, v := range entry.Vars {
-		// Skip thrall-level vars that would conflict with conditional var names.
+		// Skip envoy-level vars that would conflict with conditional var names.
 		// Conditional vars take precedence -- they are evaluated at check-in time.
 		if condVarNames[k] {
 			continue
@@ -1191,8 +1191,8 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 		vars[k] = v
 	}
 
-	cfg := &ThrallConfig{
-		Thrall:          entry.Match,
+	cfg := &EnvoyConfig{
+		Envoy:          entry.Match,
 		MatchPattern:    entry.Match,
 		Environment:     entry.Environment,
 		Roles:           entry.Roles,
@@ -1260,27 +1260,27 @@ func (cs *ConfigStore) resolveEntry(entry ThrallEntry, moduleDefs map[string]*Mo
 
 // validateDeviceEntries checks network device entry constraints:
 // - device_type must be a supported type
-// - gateway must reference an existing thrall entry without a device_type
+// - gateway must reference an existing envoy entry without a device_type
 // - credential must use the secret: prefix
 // - gateway entries must not themselves have a device_type
-func validateDeviceEntries(entries []ThrallEntry) error {
+func validateDeviceEntries(entries []EnvoyEntry) error {
 	// Build lookup: match pattern → entry for gateway reference validation.
-	byMatch := make(map[string]*ThrallEntry, len(entries))
+	byMatch := make(map[string]*EnvoyEntry, len(entries))
 	for i := range entries {
 		byMatch[entries[i].Match] = &entries[i]
 	}
 
 	for _, entry := range entries {
 		if entry.DeviceType == "" && entry.Gateway == "" {
-			continue // normal thrall
+			continue // normal envoy
 		}
 
 		// device_type and gateway must be set together.
 		if entry.DeviceType != "" && entry.Gateway == "" {
-			return fmt.Errorf("thrall entry %q has device_type %q but no gateway — network devices require a gateway", entry.Match, entry.DeviceType)
+			return fmt.Errorf("envoy entry %q has device_type %q but no gateway — network devices require a gateway", entry.Match, entry.DeviceType)
 		}
 		if entry.Gateway != "" && entry.DeviceType == "" {
-			return fmt.Errorf("thrall entry %q has gateway %q but no device_type — gateway is only for network devices", entry.Match, entry.Gateway)
+			return fmt.Errorf("envoy entry %q has gateway %q but no device_type — gateway is only for network devices", entry.Match, entry.Gateway)
 		}
 
 		// Validate device_type.
@@ -1290,26 +1290,26 @@ func validateDeviceEntries(entries []ThrallEntry) error {
 				valid = append(valid, k)
 			}
 			sort.Strings(valid)
-			return fmt.Errorf("thrall entry %q has unsupported device_type %q (valid: %s)", entry.Match, entry.DeviceType, strings.Join(valid, ", "))
+			return fmt.Errorf("envoy entry %q has unsupported device_type %q (valid: %s)", entry.Match, entry.DeviceType, strings.Join(valid, ", "))
 		}
 
 		// Validate credential uses secret: prefix.
 		if entry.Credential == "" {
-			return fmt.Errorf("thrall entry %q (device_type=%s) requires a credential field", entry.Match, entry.DeviceType)
+			return fmt.Errorf("envoy entry %q (device_type=%s) requires a credential field", entry.Match, entry.DeviceType)
 		}
 		if !strings.HasPrefix(entry.Credential, secretPrefix) {
-			return fmt.Errorf("thrall entry %q credential must use \"secret:\" prefix", entry.Match)
+			return fmt.Errorf("envoy entry %q credential must use \"secret:\" prefix", entry.Match)
 		}
 
 		// Validate gateway references an existing entry.
 		gw, ok := byMatch[entry.Gateway]
 		if !ok {
-			return fmt.Errorf("thrall entry %q references gateway %q which does not exist", entry.Match, entry.Gateway)
+			return fmt.Errorf("envoy entry %q references gateway %q which does not exist", entry.Match, entry.Gateway)
 		}
 
-		// Gateway must be a normal thrall, not itself a device.
+		// Gateway must be a normal envoy, not itself a device.
 		if gw.DeviceType != "" {
-			return fmt.Errorf("thrall entry %q references gateway %q which is itself a network device", entry.Match, entry.Gateway)
+			return fmt.Errorf("envoy entry %q references gateway %q which is itself a network device", entry.Match, entry.Gateway)
 		}
 	}
 
@@ -1324,7 +1324,7 @@ type DeviceConfig struct {
 	Username   string       // SSH username
 	Port       int          // SSH port
 	IPAddress  string       // management IP
-	Config     *ThrallConfig // resolved config (modules, vars, etc.)
+	Config     *EnvoyConfig // resolved config (modules, vars, etc.)
 }
 
 // DevicesForGateway returns all network device entries whose gateway field
@@ -1349,7 +1349,7 @@ func (cs *ConfigStore) DevicesForGateway(gatewayHostname string) []DeviceConfig 
 			username = "admin"
 		}
 		devices = append(devices, DeviceConfig{
-			Hostname:   cfg.Thrall,
+			Hostname:   cfg.Envoy,
 			DeviceType: cfg.DeviceType,
 			Credential: cfg.Credential,
 			Username:   username,
@@ -1377,7 +1377,7 @@ func (cs *ConfigStore) AllDeviceEntries() []DeviceEntry {
 	for _, e := range cs.entries {
 		if e.config.DeviceType != "" {
 			entries = append(entries, DeviceEntry{
-				Hostname:   e.config.Thrall,
+				Hostname:   e.config.Envoy,
 				Gateway:    e.config.Gateway,
 				DeviceType: e.config.DeviceType,
 			})
@@ -1386,10 +1386,10 @@ func (cs *ConfigStore) AllDeviceEntries() []DeviceEntry {
 	return entries
 }
 
-// ThrallsReferencingSecret returns the match patterns of all thrall entries
+// EnvoysReferencingSecret returns the match patterns of all envoy entries
 // whose configuration contains a "secret:<secretPath>" reference. Used by
-// the rotation watcher to identify which thralls need force-push.
-func (cs *ConfigStore) ThrallsReferencingSecret(secretPath string) []string {
+// the rotation watcher to identify which envoys need force-push.
+func (cs *ConfigStore) EnvoysReferencingSecret(secretPath string) []string {
 	needle := secretPrefix + secretPath
 
 	cs.mu.RLock()
@@ -1451,7 +1451,7 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 	}
 
 	// Redact resolved secrets in vars.
-	redacted := cloneThrallConfig(cfg)
+	redacted := cloneEnvoyConfig(cfg)
 	for k, v := range redacted.Vars {
 		if _, ok := v.(string); ok && knownSecretFields[k] {
 			redacted.Vars[k] = "[REDACTED]"
@@ -1526,11 +1526,11 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 		def.MatchVars = matchVars
 		def.MatchVarDefaults = matchVarDefaults
 
-		// Warn about match vars without a default — thralls that don't match
+		// Warn about match vars without a default — envoys that don't match
 		// any branch will get an empty var, likely causing resource failures.
 		for name := range matchVars {
 			if _, hasDefault := matchVarDefaults[name]; !hasDefault {
-				slog.Warn("match var has no default — thralls not matching any branch will get an empty value",
+				slog.Warn("match var has no default — envoys not matching any branch will get an empty value",
 					"module", def.Name, "var", name)
 			}
 		}
@@ -1571,10 +1571,10 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 	return defs, nil
 }
 
-// loadRolesFile loads roles from a single roles.hnb file at the base dir.
+// loadRolesFile loads roles from a single roles.vgo file at the base dir.
 // The file must contain a top-level "roles:" list.
 func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
-	for _, name := range []string{"roles.hnb", "roles.yaml", "roles.yml"} {
+	for _, name := range []string{"roles.vgo", "roles.yaml", "roles.yml"} {
 		path := filepath.Join(baseDir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -1615,15 +1615,15 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 		return defs, nil
 	}
 
-	// No roles.hnb found — return empty (roles are optional).
+	// No roles.vgo found — return empty (roles are optional).
 	return make(map[string]*RoleDefinition), nil
 }
 
 // applyInheritance prepends inherited modules, roles, and vars from
-// common.hnb files in ancestor directories to a ThrallEntry.
+// common.vgo files in ancestor directories to a EnvoyEntry.
 // Parent modules come first (foundation before specialization).
 // Child vars override parent vars. exclude_modules strips specific inherited modules.
-func applyInheritance(entry *ThrallEntry, commons map[string]*CommonConfig) {
+func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig) {
 	if len(commons) == 0 {
 		return
 	}
@@ -1684,7 +1684,7 @@ func applyInheritance(entry *ThrallEntry, commons map[string]*CommonConfig) {
 // "" (root), "production" — in that order.
 func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*CommonConfig {
 	if dirPath == "" {
-		// Root-level entries get no inheritance (common.hnb at root
+		// Root-level entries get no inheritance (common.vgo at root
 		// applies only to subdirectories).
 		return nil
 	}
@@ -1701,7 +1701,7 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 	for i := range parts {
 		seg := filepath.Join(parts[:i+1]...)
 		// The last segment is the entry's own directory — include it
-		// because common.hnb there applies to entries in that dir.
+		// because common.vgo there applies to entries in that dir.
 		if cc, ok := commons[seg]; ok {
 			chain = append(chain, cc)
 		}
@@ -1710,23 +1710,23 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 	return chain
 }
 
-// loadThrallsDir walks the config directory hierarchy and returns all
-// leaf ThrallEntry items (files with match: entries) plus a map of
-// CommonConfig items from common.hnb files at each directory level.
+// loadEnvoysDir walks the config directory hierarchy and returns all
+// leaf EnvoyEntry items (files with match: entries) plus a map of
+// CommonConfig items from common.vgo files at each directory level.
 //
 // The directory structure defines inheritance:
-//   - common.hnb at any level = modules/roles/vars inherited by all subdirs
-//   - Any other .hnb file = leaf entry (must have match:)
-//   - Root-level common.hnb applies only to subdirectories
-//   - modules/, templates/ are skipped (not part of thrall hierarchy)
-//   - roles.hnb at root is skipped (loaded separately by loadRolesFile)
-func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error) {
-	thrallRoot := dir
+//   - common.vgo at any level = modules/roles/vars inherited by all subdirs
+//   - Any other .vgo file = leaf entry (must have match:)
+//   - Root-level common.vgo applies only to subdirectories
+//   - modules/, templates/ are skipped (not part of envoy hierarchy)
+//   - roles.vgo at root is skipped (loaded separately by loadRolesFile)
+func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
+	envoyRoot := dir
 
 	commons := make(map[string]*CommonConfig)
-	var allEntries []ThrallEntry
+	var allEntries []EnvoyEntry
 
-	err := filepath.WalkDir(thrallRoot, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(envoyRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil
@@ -1739,7 +1739,7 @@ func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error)
 		if !isConfigFile(d.Name()) {
 			return nil
 		}
-		// Skip modules/, templates/, examples/ and roles.hnb — they are not thrall entries.
+		// Skip modules/, templates/, examples/ and roles.vgo — they are not envoy entries.
 		rel, _ := filepath.Rel(dir, path)
 		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
 			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
@@ -1754,15 +1754,15 @@ func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error)
 		data = sanitizeYAML(data)
 
 		// Determine the relative dir path for this file within the hierarchy.
-		relToRoot, _ := filepath.Rel(thrallRoot, path)
+		relToRoot, _ := filepath.Rel(envoyRoot, path)
 		dirPath := filepath.Dir(relToRoot)
 		if dirPath == "." {
 			dirPath = ""
 		}
 
-		// common.hnb files define inheritance — they should not have match: entries.
+		// common.vgo files define inheritance — they should not have match: entries.
 		baseName := filepath.Base(path)
-		if baseName == "common.hnb" || baseName == "common.yaml" || baseName == "common.yml" {
+		if baseName == "common.vgo" || baseName == "common.yaml" || baseName == "common.yml" {
 			var cc CommonConfig
 			if unmarshalErr := yaml.Unmarshal(data, &cc); unmarshalErr != nil {
 				return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
@@ -1772,23 +1772,23 @@ func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error)
 			return nil
 		}
 
-		// roles.hnb at root level is handled separately — skip here.
-		if dirPath == "" && (baseName == "roles.hnb" || baseName == "roles.yaml" || baseName == "roles.yml") {
+		// roles.vgo at root level is handled separately — skip here.
+		if dirPath == "" && (baseName == "roles.vgo" || baseName == "roles.yaml" || baseName == "roles.yml") {
 			return nil
 		}
 
-		// Regular thrall entry file.
-		var cfg ThrallsConfig
+		// Regular envoy entry file.
+		var cfg EnvoysConfig
 		if unmarshalErr := yaml.Unmarshal(data, &cfg); unmarshalErr != nil {
 			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
 		}
-		for i, entry := range cfg.Thralls {
+		for i, entry := range cfg.Envoys {
 			if entry.Match == "" {
 				return fmt.Errorf("%s entry %d: missing required 'match' field", path, i)
 			}
-			cfg.Thralls[i].DirPath = dirPath
+			cfg.Envoys[i].DirPath = dirPath
 		}
-		allEntries = append(allEntries, cfg.Thralls...)
+		allEntries = append(allEntries, cfg.Envoys...)
 		return nil
 	})
 	if err != nil {
@@ -1799,7 +1799,7 @@ func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error)
 	seen := make(map[string]string, len(allEntries))
 	for _, entry := range allEntries {
 		if prev, exists := seen[entry.Match]; exists {
-			return nil, nil, fmt.Errorf("duplicate thrall match pattern %q (also defined in %s)", entry.Match, prev)
+			return nil, nil, fmt.Errorf("duplicate envoy match pattern %q (also defined in %s)", entry.Match, prev)
 		}
 		seen[entry.Match] = entry.Match
 	}
@@ -1808,7 +1808,7 @@ func loadThrallsDir(dir string) ([]ThrallEntry, map[string]*CommonConfig, error)
 }
 
 // mergeEnvironmentOverrides merges base vars with environment-specific overrides.
-func mergeEnvironmentOverrides(cfg *ThrallConfig) {
+func mergeEnvironmentOverrides(cfg *EnvoyConfig) {
 	if cfg.Vars == nil {
 		cfg.Vars = make(map[string]any)
 	}
@@ -1900,7 +1900,7 @@ func (cs *ConfigStore) resolveModuleSecrets(match string, mod *ModuleConfig) []*
 }
 
 // resolveSourceFiles reads external template files referenced by the "source"
-// attribute on file resources. The source path is relative to the thrall-configs
+// attribute on file resources. The source path is relative to the envoy-configs
 // directory (e.g., "templates/nginx/nginx.conf.tmpl"). The file contents replace
 // the "source" attribute with "content".
 // It is an error to set both "source" and "content" on the same resource.
@@ -1982,10 +1982,10 @@ func moduleDefReferencesSecret(def *ModuleDefinition, needle string) bool {
 	return false
 }
 
-// entryReferencesSecret checks if a thrall entry uses any affected module
+// entryReferencesSecret checks if a envoy entry uses any affected module
 // or has the secret in its environment_overrides (non-active environment overrides retain
 // raw secret: prefixes since only the active environment is resolved).
-func entryReferencesSecret(cfg *ThrallConfig, affectedModules map[string]bool, needle string) bool {
+func entryReferencesSecret(cfg *EnvoyConfig, affectedModules map[string]bool, needle string) bool {
 	// Check if any module is affected.
 	for _, mod := range cfg.Modules {
 		if affectedModules[mod.Name] {
@@ -2006,7 +2006,7 @@ func entryReferencesSecret(cfg *ThrallConfig, affectedModules map[string]bool, n
 	return false
 }
 
-// ComputeEnvDiff compares environment_overrides between two environments across all thrall
+// ComputeEnvDiff compares environment_overrides between two environments across all envoy
 // entries that include the given module. Returns a map of var_name -> "old → new".
 func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[string]string {
 	cs.mu.RLock()
@@ -2050,9 +2050,9 @@ func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[str
 	return diff
 }
 
-// cloneThrallConfig returns a shallow copy of the ThrallConfig with a
+// cloneEnvoyConfig returns a shallow copy of the EnvoyConfig with a
 // fresh Modules slice and Vars map, so modifications don't affect the original.
-func cloneThrallConfig(cfg *ThrallConfig) *ThrallConfig {
+func cloneEnvoyConfig(cfg *EnvoyConfig) *EnvoyConfig {
 	clone := *cfg
 	clone.Modules = make([]ModuleConfig, len(cfg.Modules))
 	copy(clone.Modules, cfg.Modules)
@@ -2115,13 +2115,13 @@ func walkConfigFiles(dir string) ([]string, error) {
 }
 
 // isConfigFile checks if a filename has a recognized config extension.
-// Accepts .hnb (preferred), .yaml, and .yml. Ignores .example files.
+// Accepts .vgo (preferred), .yaml, and .yml. Ignores .example files.
 func isConfigFile(name string) bool {
 	if strings.HasSuffix(name, ".example") {
 		return false
 	}
 	ext := filepath.Ext(name)
-	return ext == ".hnb" || ext == ".yaml" || ext == ".yml"
+	return ext == ".vgo" || ext == ".yaml" || ext == ".yml"
 }
 
 // appendUnique appends val to slice if not already present.

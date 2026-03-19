@@ -96,7 +96,7 @@ This is equivalent to `app-config` having `notify: [app-service]`.
 
 ## watch_secret
 
-Watches secret paths for rotation. When a secret is changed via `hobnobcli secrets set` (or detected by the isopass watcher), resources with matching `watch_secret` paths are re-applied on the next check-in:
+Watches secret paths for rotation. When a secret is changed via `vigogo secrets set` (or detected by the isopass watcher), resources with matching `watch_secret` paths are re-applied on the next check-in:
 
 ```yaml
 resources:
@@ -105,12 +105,12 @@ resources:
     target_path: /etc/app/config.yaml
     content: |
       dsn: {{ .Vars.db_dsn }}
-    watch_secret: ["hobnob/db/dsn"]
+    watch_secret: ["vigo/db/dsn"]
     notify: [app-service]
 ```
 
-When the secret at `hobnob/db/dsn` is changed:
-1. `hobnobcli secrets set` notifies the server
+When the secret at `vigo/db/dsn` is changed:
+1. `vigogo secrets set` notifies the server
 2. The config file is re-rendered with the new secret value
 3. The service is restarted via notify
 
@@ -119,7 +119,7 @@ When the secret at `hobnob/db/dsn` is changed:
 Modules can depend on other modules:
 
 ```yaml
-# modules/app.hnb
+# modules/app.vgo
 name: app
 depends_on: [nginx, postgres]
 resources:

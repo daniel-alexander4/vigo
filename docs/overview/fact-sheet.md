@@ -1,8 +1,8 @@
-# Hobnob Fact Sheet
+# Vigo Fact Sheet
 
 ## What It Is
 
-Hobnob is a distributed state enforcement engine. It ensures every machine in your fleet is configured exactly how you declared it, continuously and automatically. You describe desired state in YAML. Hobnob makes it so.
+Vigo is a distributed state enforcement engine. It ensures every machine in your fleet is configured exactly how you declared it, continuously and automatically. You describe desired state in YAML. Vigo makes it so.
 
 ## Architecture
 
@@ -10,9 +10,9 @@ Three binaries. Nothing else.
 
 | Component | Language | What it does |
 |-----------|----------|-------------|
-| `hobd` | Go | Central server. gRPC + REST + Web UI. One process. |
-| `hobnob` | Rust | Agent on each managed machine. One process, ~5 MB static binary. |
-| `hobnobcli` | Go | Admin CLI. Talks to the server's REST API. |
+| `vigosrv` | Go | Central server. gRPC + REST + Web UI. One process. |
+| `vigo` | Rust | Agent on each managed machine. One process, ~5 MB static binary. |
+| `vigogo` | Go | Admin CLI. Talks to the server's REST API. |
 
 No external database. No message broker. No JVM. No language runtime on managed nodes. No infrastructure to manage beyond the server itself.
 
@@ -25,7 +25,7 @@ No external database. No message broker. No JVM. No language runtime on managed 
 One format, one path, one way to configure:
 
 ```yaml
-# /srv/hobnob/policy/stage/modules/webserver.hnb
+# /srv/vigo/policy/stage/modules/webserver.vgo
 name: webserver
 resources:
   - name: Install nginx
@@ -46,7 +46,7 @@ resources:
     subscribes: nginx config
 ```
 
-A sysadmin unfamiliar with Hobnob can read this and understand what it does. That is a design goal, not an accident.
+A sysadmin unfamiliar with Vigo can read this and understand what it does. That is a design goal, not an accident.
 
 - **YAML only.** No custom DSL, no embedded programming language, no compile step.
 - **Go templates** in `content:` fields for dynamic values. Traits and variables are the only two namespaces.
@@ -65,14 +65,14 @@ Every connection is authenticated and encrypted. There are no optional security 
 - **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, push dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. Satisfies PCI-DSS 10.x, HIPAA audit controls, and NIST AU.
 - **Two-person approval workflow.** Config publish can require a second admin to approve before changes go live. The approver must be a different user than the publisher. Satisfies SOX segregation of duties.
 - **Source-available agent.** The code that runs as root on your machines is readable and auditable.
-- **Agent transparency.** `hobnob status` shows exactly what policy is being enforced, what traits are collected, and what results are pending — fully inspectable by the machine's local admin.
+- **Agent transparency.** `vigo status` shows exactly what policy is being enforced, what traits are collected, and what results are pending — fully inspectable by the machine's local admin.
 
 ## Install the Server
 
 One command on any Linux host with Docker:
 
 ```bash
-docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only && cd /srv/hobnob && docker compose up -d
+docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only && cd /srv/vigo && docker compose up -d
 ```
 
 This seeds the data directory (config, TLS certs, database, examples), then starts the server. Ready to enroll machines immediately.
@@ -103,7 +103,7 @@ One agent binary, seven operating system families, 72 built-in resource types.
 | illumos | SMF | IPS | Yes |
 | Windows | Windows Service | Chocolatey, winget, Scoop | Yes |
 
-The same `.hnb` config works across all platforms. Write `type: service` and the agent dispatches to the correct backend — systemd on Linux, launchctl on macOS, rcctl on OpenBSD, sc.exe on Windows. No platform-specific configs required.
+The same `.vgo` config works across all platforms. Write `type: service` and the agent dispatches to the correct backend — systemd on Linux, launchctl on macOS, rcctl on OpenBSD, sc.exe on Windows. No platform-specific configs required.
 
 Network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos) are managed via gateway proxy over SSH with 16 dedicated executors.
 
@@ -144,7 +144,7 @@ The agent is designed to survive anything short of hardware failure:
 
 ## Orchestration
 
-Beyond continuous convergence, Hobnob supports ad-hoc operations:
+Beyond continuous convergence, Vigo supports ad-hoc operations:
 
 - **Tasks.** Push commands to targeted agents in real time. Results stream back as they complete.
 - **Workflows.** Chain tasks into multi-step sequences with conditional branching and abort support.
@@ -159,7 +159,7 @@ Hub-spoke topology for multi-site and multi-region deployments:
 - A hub server routes enrollment to the nearest spoke based on hostname patterns.
 - Admin queries fan out from the hub to all spokes and aggregate results.
 - Per-spoke compliance breakdown and latency metrics.
-- Thrall reassignment between spokes with zero re-enrollment. Spoke drain for maintenance.
+- Envoy reassignment between spokes with zero re-enrollment. Spoke drain for maintenance.
 
 ## Observability
 
@@ -176,7 +176,7 @@ Built-in AI assistant accessible from every page of the web UI:
 
 - Supports Ollama (local), Claude, and OpenAI backends.
 - 14 tools for fleet queries, node inspection, compliance checks, config exploration, and documentation search.
-- Documentation corpus injection for context-aware answers about your specific Hobnob deployment.
+- Documentation corpus injection for context-aware answers about your specific Vigo deployment.
 
 ## Operations
 
@@ -206,9 +206,9 @@ Built-in AI assistant accessible from every page of the web UI:
 
 ## How It Compares
 
-The following estimates are based on vendor-documented requirements where available and internal benchmarks for Hobnob. All figures assume the same reference hardware: **4 vCPU, 8 GB RAM, SSD, 5-minute check-in interval.** Hobnob has no production deployments — its figures are theoretical projections from measured benchmarks. See the [Technical Comparison](technical-comparison.md) for detailed methodology and vendor source links.
+The following estimates are based on vendor-documented requirements where available and internal benchmarks for Vigo. All figures assume the same reference hardware: **4 vCPU, 8 GB RAM, SSD, 5-minute check-in interval.** Vigo has no production deployments — its figures are theoretical projections from measured benchmarks. See the [Technical Comparison](technical-comparison.md) for detailed methodology and vendor source links.
 
-| | Hobnob | Puppet PE | Chef Infra | Ansible AAP | Salt | CFEngine Enterprise |
+| | Vigo | Puppet PE | Chef Infra | Ansible AAP | Salt | CFEngine Enterprise |
 |---|---|---|---|---|---|---|
 | **Estimated nodes on 4v/8G** | 50K-200K* | 100-500 | 2K-4K | 200-400 | 1.2K-5K | ~1,000 |
 | **Server language** | Go | Ruby/JRuby | Ruby/Erlang | Python | Python | C + PostgreSQL |
@@ -219,6 +219,6 @@ The following estimates are based on vendor-documented requirements where availa
 | **Config language** | YAML | Puppet DSL | Ruby DSL | YAML + Jinja2 | YAML + Jinja2 | Promise DSL |
 | **Transport security** | mTLS + ED25519 | HTTPS + client certs | HTTPS + API tokens | SSH | ZeroMQ + AES | Custom TLS |
 
-*Hobnob's capacity estimate is theoretical — derived from internal FleetIndex benchmarks (~300µs per check-in, ~388 bytes per node) with conservative adjustments for real-world overhead. SQLite write batching is the first bottleneck (~50K); PostgreSQL extends capacity to ~200K. See [Scalability Analysis](../../devdocs/scalability.md) for benchmark data.
+*Vigo's capacity estimate is theoretical — derived from internal FleetIndex benchmarks (~300µs per check-in, ~388 bytes per node) with conservative adjustments for real-world overhead. SQLite write batching is the first bottleneck (~50K); PostgreSQL extends capacity to ~200K. See [Scalability Analysis](../../devdocs/scalability.md) for benchmark data.
 
-**Why the range varies:** Each tool's architecture determines its bottleneck on this hardware. Puppet's catalog compilation requires more CPU and RAM than 4v/8G provides (PE docs specify 10 GB minimum for 100 nodes). CFEngine Enterprise's PostgreSQL reporting hub requires ~8 MB per node (CFEngine docs). Ansible's push model is limited by SSH fork parallelism. Hobnob's in-memory FleetIndex and zero-DB check-in path minimize both CPU and RAM per node.
+**Why the range varies:** Each tool's architecture determines its bottleneck on this hardware. Puppet's catalog compilation requires more CPU and RAM than 4v/8G provides (PE docs specify 10 GB minimum for 100 nodes). CFEngine Enterprise's PostgreSQL reporting hub requires ~8 MB per node (CFEngine docs). Ansible's push model is limited by SSH fork parallelism. Vigo's in-memory FleetIndex and zero-DB check-in path minimize both CPU and RAM per node.

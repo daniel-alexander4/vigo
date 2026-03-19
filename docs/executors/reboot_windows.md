@@ -7,7 +7,7 @@ Manages Windows reboots idempotently by checking whether a reboot is pending bef
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `when_pending` | No | `true` | Only reboot if a reboot is pending. Set to `false` to always reboot. |
-| `message` | No | `Hobnob: scheduled reboot` | Message displayed to logged-in users before the reboot. |
+| `message` | No | `Vigo: scheduled reboot` | Message displayed to logged-in users before the reboot. |
 | `delay_secs` | No | `60` | Seconds to wait before the reboot begins. Must be a positive integer. |
 
 ## Idempotency

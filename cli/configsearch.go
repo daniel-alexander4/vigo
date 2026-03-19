@@ -19,14 +19,14 @@ var (
 
 var configSearchCmd = &cobra.Command{
 	Use:   "search",
-	Short: "Search thrall entries by match pattern, module, or var",
-	Long: `Find thrall entries matching the given criteria and show their
+	Short: "Search envoy entries by match pattern, module, or var",
+	Long: `Find envoy entries matching the given criteria and show their
 inheritance chain, modules, and vars.
 
 Examples:
-  hobnobcli config search --match "*web*"
-  hobnobcli config search --module nginx
-  hobnobcli config search --var log_level`,
+  vigogo config search --match "*web*"
+  vigogo config search --module nginx
+  vigogo config search --var log_level`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if searchMatch == "" && searchModule == "" && searchVar == "" {
 			return fmt.Errorf("at least one of --match, --module, or --var is required")
@@ -146,7 +146,7 @@ func printSearchEntry(e searchEntry) {
 }
 
 func init() {
-	configSearchCmd.Flags().StringVar(&searchMatch, "match", "", "Glob pattern to match against thrall match: patterns")
+	configSearchCmd.Flags().StringVar(&searchMatch, "match", "", "Glob pattern to match against envoy match: patterns")
 	configSearchCmd.Flags().StringVar(&searchModule, "module", "", "Find entries using this module (inherited or direct)")
 	configSearchCmd.Flags().StringVar(&searchVar, "var", "", "Find entries that define this var")
 

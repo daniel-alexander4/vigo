@@ -10,27 +10,27 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/metrics"
-	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/webhook"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/metrics"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// ReportResult handles the HobnobAgent.ReportResult RPC. It stores per-module
+// ReportResult handles the VigoAgent.ReportResult RPC. It stores per-module
 // execution results in the database and marks the run as finished.
 func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultRequest) (*pb.ReportResultResponse, error) {
-	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
-	thrallID := req.GetThrallId()
+	envoyID := req.GetEnvoyId()
 
 	// Create the run record (server generates the UUID).
 	run, err := s.runStore.CreateRun(ctx, db.CreateRunParams{
-		ThrallID:      thrallID,
+		EnvoyID:      envoyID,
 		Status:      "running",
 		ModuleCount: int64(len(req.GetResults())),
 	})
@@ -107,9 +107,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.Internal, "finishing run: %v", err)
 	}
 
-	// Reuse thrall from interceptor context (avoids redundant DB lookup).
-	hostname := thrallID // fallback
-	if n := db.ThrallFromContext(ctx); n != nil {
+	// Reuse envoy from interceptor context (avoids redundant DB lookup).
+	hostname := envoyID // fallback
+	if n := db.EnvoyFromContext(ctx); n != nil {
 		hostname = n.Hostname
 	}
 
@@ -128,10 +128,10 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	// Update FleetIndex with run status + append to recent runs.
 	if s.fleetIndex != nil {
 		now := time.Now()
-		s.fleetIndex.UpdateRunStatus(thrallID, runStatus, changedCount, now)
+		s.fleetIndex.UpdateRunStatus(envoyID, runStatus, changedCount, now)
 		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
 			RunID:        runID,
-			ThrallID:     thrallID,
+			EnvoyID:     envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
 			ChangedCount: changedCount,
@@ -151,7 +151,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			continue
 		}
 		if err := s.queries.InsertFileSnapshot(ctx, db.InsertFileSnapshotParams{
-			ThrallID:    thrallID,
+			EnvoyID:    envoyID,
 			FilePath:    result.GetFilePath(),
 			ContentHash: result.GetContentHash(),
 			Content:     result.GetPreviousContent(),
@@ -167,7 +167,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 
 	slog.Info("run completed",
 		"run_id", runID,
-		"thrall_id", thrallID,
+		"envoy_id", envoyID,
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
@@ -178,8 +178,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	if s.dispatcher != nil {
 		event := webhook.FormatRunEvent(runStatus)
 		s.dispatcher.Dispatch(ctx, event, webhook.EventPayload{
-			Thrall: &webhook.ThrallInfo{
-				ID:       thrallID,
+			Envoy: &webhook.EnvoyInfo{
+				ID:       envoyID,
 				Hostname: hostname,
 			},
 			Run: &webhook.RunInfo{
@@ -193,8 +193,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		// Also fire drift.detected if any changes detected.
 		if changedCount > 0 {
 			s.dispatcher.Dispatch(ctx, "drift.detected", webhook.EventPayload{
-				Thrall: &webhook.ThrallInfo{
-					ID:       thrallID,
+				Envoy: &webhook.EnvoyInfo{
+					ID:       envoyID,
 					Hostname: hostname,
 				},
 				Run: &webhook.RunInfo{
@@ -207,16 +207,16 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	}
 
 	// Send SMTP notification.
-	smtpThrall := &hobnobsmtp.ThrallInfo{ID: thrallID, Hostname: hostname}
-	smtpRun := &hobnobsmtp.RunInfo{ID: runID, Status: runStatus, Changed: int32(changedCount), Failed: int32(failedCount)}
-	s.smtpNotifier.Notify(hobnobsmtp.Event{
+	smtpEnvoy := &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: hostname}
+	smtpRun := &vigosmtp.RunInfo{ID: runID, Status: runStatus, Changed: int32(changedCount), Failed: int32(failedCount)}
+	s.smtpNotifier.Notify(vigosmtp.Event{
 		Name: webhook.FormatRunEvent(runStatus), Timestamp: time.Now().UTC(),
-		Thrall: smtpThrall, Run: smtpRun,
+		Envoy: smtpEnvoy, Run: smtpRun,
 	})
 	if changedCount > 0 {
-		s.smtpNotifier.Notify(hobnobsmtp.Event{
+		s.smtpNotifier.Notify(vigosmtp.Event{
 			Name: "drift.detected", Timestamp: time.Now().UTC(),
-			Thrall: smtpThrall, Run: smtpRun,
+			Envoy: smtpEnvoy, Run: smtpRun,
 		})
 	}
 

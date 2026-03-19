@@ -1,8 +1,8 @@
-# Modules and vars inherited by ALL thrall entries in subdirectories.
+# Modules and vars inherited by ALL envoy entries in subdirectories.
 # This file has no match: entries — it defines what every machine gets.
 #
-# Subdirectories can have their own common.hnb to add environment-specific
-# inheritance (e.g., production/common.hnb adds monitoring to all prod hosts).
+# Subdirectories can have their own common.vgo to add environment-specific
+# inheritance (e.g., production/common.vgo adds monitoring to all prod hosts).
 
 modules: [standard-users, diag-tools, motd]
 

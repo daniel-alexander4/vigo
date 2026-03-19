@@ -29,7 +29,7 @@ Uses `localtime_r` via libc to get the `tm_zone` abbreviation and `tm_gmtoff` of
 ```yaml
 - name: timezone-info
   type: file
-  target_path: /var/lib/hobnob/timezone.txt
+  target_path: /var/lib/vigo/timezone.txt
   content: |
     Timezone: {{ .Traits.timezone.name }} ({{ .Traits.timezone.abbreviation }})
     UTC Offset: {{ .Traits.timezone.utc_offset }}

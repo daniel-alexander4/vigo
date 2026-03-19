@@ -1,6 +1,6 @@
-# hobnobcli test
+# vigogo test
 
-Run config tests that validate resolved policy against expected outcomes. Tests verify that the config tree (modules, roles, thralls) produces the expected resources, vars, and module assignments for a given hostname — without connecting to the server.
+Run config tests that validate resolved policy against expected outcomes. Tests verify that the config tree (modules, roles, envoys) produces the expected resources, vars, and module assignments for a given hostname — without connecting to the server.
 
 Equivalent to rspec-puppet or ChefSpec: test the config compilation, not the execution.
 
@@ -8,32 +8,32 @@ Equivalent to rspec-puppet or ChefSpec: test the config compilation, not the exe
 
 ```bash
 # Run all tests in the default tests/ directory
-hobnobcli test
+vigogo test
 
 # Run a single test file
-hobnobcli test tests/nginx-module.test.hnb
+vigogo test tests/nginx-module.test.vgo
 
 # Run all tests in a directory
-hobnobcli test tests/
+vigogo test tests/
 
 # Specify a different config directory
-hobnobcli test --config-dir /srv/hobnob/policy/stage
+vigogo test --config-dir /srv/vigo/policy/stage
 ```
 
 ## Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--config-dir` | `/srv/hobnob/policy/stage` | Config directory to load |
+| `--config-dir` | `/srv/vigo/policy/stage` | Config directory to load |
 | `-v`, `--verbose` | `false` | Show resolved resource counts on pass |
 
 ## Test File Format
 
-Test files use the `.test.hnb` extension and are placed in `policy/stage/tests/`. They are YAML files with these fields:
+Test files use the `.test.vgo` extension and are placed in `policy/stage/tests/`. They are YAML files with these fields:
 
 ```yaml
 name: descriptive test name
-thrall: hostname-to-simulate
+envoy: hostname-to-simulate
 
 # Optional: mock traits for template rendering
 traits:
@@ -71,7 +71,7 @@ expect:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | No | Test name (defaults to filename) |
-| `thrall` | Yes | Hostname to simulate check-in for |
+| `envoy` | Yes | Hostname to simulate check-in for |
 | `traits` | No | Mock traits map for template rendering |
 | `expect.module_count` | No | Expected number of modules |
 | `expect.resource_count` | No | Expected total resource count across all modules |
@@ -101,7 +101,7 @@ Each entry in `expect.resources` can check any combination of:
 
 ```yaml
 name: nginx module installs package and manages service
-thrall: web01.prod.example.com
+envoy: web01.prod.example.com
 
 expect:
   modules: [nginx]
@@ -118,7 +118,7 @@ expect:
 
 ```yaml
 name: production web servers get 443 and 16 workers
-thrall: web01.prod.example.com
+envoy: web01.prod.example.com
 
 expect:
   vars:
@@ -130,7 +130,7 @@ expect:
 
 ```yaml
 name: config renders hostname from traits
-thrall: web01.prod.example.com
+envoy: web01.prod.example.com
 traits:
   hostname: web01.prod.example.com
   os:
@@ -146,7 +146,7 @@ expect:
 
 ```yaml
 name: webserver role includes base security
-thrall: web01.prod.example.com
+envoy: web01.prod.example.com
 
 expect:
   modules:
@@ -159,8 +159,8 @@ expect:
 ### Test conditional modules
 
 ```yaml
-name: container thralls skip monitoring agent
-thrall: container01.example.com
+name: container envoys skip monitoring agent
+envoy: container01.example.com
 
 expect:
   modules:
@@ -172,10 +172,10 @@ expect:
 ## Output
 
 ```
-$ hobnobcli test
+$ vigogo test
   PASS   nginx module installs package and manages service
   PASS   production web servers get 443 and 16 workers
-  FAIL   container thralls skip monitoring agent
+  FAIL   container envoys skip monitoring agent
            module_count: got 3, want 2
   PASS   webserver role includes base security
 
@@ -186,8 +186,8 @@ Exit code is 1 if any tests fail.
 
 ## How It Works
 
-1. Loads the full config tree from `--config-dir` (modules, roles, thralls, vars)
-2. For each test file, simulates a check-in for the given `thrall` hostname
+1. Loads the full config tree from `--config-dir` (modules, roles, envoys, vars)
+2. For each test file, simulates a check-in for the given `envoy` hostname
 3. Resolves config using the same code path as the server (role expansion, module ordering, var merging, `environment_overrides`)
 4. Compares resolved modules, resources, and vars against `expect` assertions
 5. If `traits` are provided, renders `content:` templates before checking `content_contains`
@@ -199,5 +199,5 @@ Secrets are not resolved during tests (a null provider is used). Resources with 
 ## Related
 
 - [validate](validate.md) — check YAML syntax and idempotency
-- [preview](preview.md) — preview planned changes against live thralls
+- [preview](preview.md) — preview planned changes against live envoys
 - [Composition Patterns](../concepts/composition-patterns.md) — config reuse patterns

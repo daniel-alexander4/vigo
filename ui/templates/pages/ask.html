@@ -39,11 +39,11 @@
         <div class="ask-section">
             <h3>Reports</h3>
             <div class="ask-reports">
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Give me a drift summary: which thralls have drifted and what changed?">Drift Summary</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show compliance status for every thrall. List each hostname with its status.">Per-Thrall Status</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Give me a drift summary: which envoys have drifted and what changed?">Drift Summary</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show compliance status for every envoy. List each hostname with its status.">Per-Envoy Status</button>
                 <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show me the compliance trend over the last 30 days. Is it improving or degrading?">Compliance Trend</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show all failing thralls with their last run details. What failed and why?">Failure Analysis</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="List all stale thralls that haven't checked in recently. How long has each been offline?">Stale Thralls</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show all failing envoys with their last run details. What failed and why?">Failure Analysis</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="List all stale envoys that haven't checked in recently. How long has each been offline?">Stale Envoys</button>
                 <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show the recent run history across the fleet. Highlight any patterns in failures.">Run History</button>
             </div>
         </div>
@@ -70,7 +70,7 @@
                 </table>
             </div>
             <button class="ask-report-btn ask-report-btn--full" onclick="aiDrawerSuggest(this)"
-                data-question="Analyze the current package drift across the fleet. For each drifted package, suggest a hobnob module or remediation step to fix it.">
+                data-question="Analyze the current package drift across the fleet. For each drifted package, suggest a vigo module or remediation step to fix it.">
                 Analyze & Remediate Drift
             </button>
             {{else}}
@@ -119,7 +119,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if .TrivyCritical}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">{{.TrivyCritical}}</td>
                                 <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
@@ -138,7 +138,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
                                 <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
                                 <td>{{.TrivyMedium}}</td>
@@ -160,7 +160,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if .LynisScore}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
                                 <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
                                 <td>{{.LynisSuggestions}}</td>
@@ -181,7 +181,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .RootkitClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Warning</td>
                                 <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
                                 <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
@@ -202,7 +202,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .ClamavClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Infected</td>
                                 <td class="text-danger">{{.ClamavInfected}}</td>
                                 <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
@@ -222,7 +222,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .AideClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
                                 <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
                                 <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
@@ -260,7 +260,7 @@
     <div class="sec-drawer__header">
         <span class="sec-drawer__title" id="sec-drawer-title">Security Details</span>
         <div>
-            <a href="#" id="sec-drawer-thrall-link" class="btn btn--sm" style="margin-right:8px">View Thrall</a>
+            <a href="#" id="sec-drawer-envoy-link" class="btn btn--sm" style="margin-right:8px">View Envoy</a>
             <button class="sec-drawer__close" onclick="closeSecDrawer()">&times;</button>
         </div>
     </div>
@@ -273,37 +273,37 @@
 
 <script>
 var SEC_CACHE_VER = '{{.Version}}';
-function secCacheKey(thrallId) { return 'sec_detail_' + SEC_CACHE_VER + '_' + thrallId; }
+function secCacheKey(envoyId) { return 'sec_detail_' + SEC_CACHE_VER + '_' + envoyId; }
 
-function secCacheGet(thrallId) {
-    try { return JSON.parse(sessionStorage.getItem(secCacheKey(thrallId))); } catch(e) { return null; }
+function secCacheGet(envoyId) {
+    try { return JSON.parse(sessionStorage.getItem(secCacheKey(envoyId))); } catch(e) { return null; }
 }
-function secCacheSet(thrallId, data) {
-    try { sessionStorage.setItem(secCacheKey(thrallId), JSON.stringify(data)); } catch(e) {}
+function secCacheSet(envoyId, data) {
+    try { sessionStorage.setItem(secCacheKey(envoyId), JSON.stringify(data)); } catch(e) {}
 }
 
-function fetchSecDetail(hostname, thrallId) {
+function fetchSecDetail(hostname, envoyId) {
     var drawer = document.getElementById('sec-drawer');
     var overlay = document.getElementById('sec-drawer-overlay');
     var title = document.getElementById('sec-drawer-title');
     var content = document.getElementById('sec-drawer-content');
     var tabs = document.getElementById('sec-drawer-tabs');
-    var link = document.getElementById('sec-drawer-thrall-link');
+    var link = document.getElementById('sec-drawer-envoy-link');
 
     title.textContent = hostname + ' — Security Details';
-    link.href = '/thralls/' + thrallId;
+    link.href = '/envoys/' + envoyId;
     tabs.innerHTML = '';
     drawer.classList.add('sec-drawer--open');
     overlay.classList.add('sec-drawer-overlay--open');
 
     // Check for cached live detail first.
-    var cached = secCacheGet(thrallId);
+    var cached = secCacheGet(envoyId);
     if (cached) {
         renderSecDetail(cached, tabs, content);
         // Add refresh button at the bottom.
         content.insertAdjacentHTML('beforeend',
             '<div style="margin-top:12px; padding-top:8px; border-top:1px solid var(--color-border)">' +
-            '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(thrallId) + '\')">Refresh from Agent</button> ' +
+            '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Refresh from Agent</button> ' +
             '<span class="text-muted" style="font-size:11px">Cached from previous query</span></div>');
         return;
     }
@@ -311,26 +311,26 @@ function fetchSecDetail(hostname, thrallId) {
     content.innerHTML = '<p class="text-muted">Loading scan data...</p>';
 
     // Show cached trait summary from FleetIndex (instant, no stream needed).
-    fetch('/ui/api/thralls/' + thrallId + '/security')
+    fetch('/ui/api/envoys/' + envoyId + '/security')
     .then(function(r) { return r.json(); })
     .then(function(traits) {
         if (traits.available === false) {
             content.innerHTML = '<p class="text-muted">No security scan data for this host.</p>';
             return;
         }
-        renderCachedTraits(traits, tabs, content, hostname, thrallId);
+        renderCachedTraits(traits, tabs, content, hostname, envoyId);
     })
     .catch(function(err) {
         content.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
     });
 }
 
-function secClearAndRefresh(hostname, thrallId) {
-    try { sessionStorage.removeItem(secCacheKey(thrallId)); } catch(e) {}
-    fetchSecDetail(hostname, thrallId);
+function secClearAndRefresh(hostname, envoyId) {
+    try { sessionStorage.removeItem(secCacheKey(envoyId)); } catch(e) {}
+    fetchSecDetail(hostname, envoyId);
 }
 
-function fetchLiveDetail(hostname, thrallId) {
+function fetchLiveDetail(hostname, envoyId) {
     var btn = document.getElementById('sec-live-btn');
     var area = document.getElementById('sec-live-area');
     if (btn) btn.disabled = true;
@@ -352,7 +352,7 @@ function fetchLiveDetail(hostname, thrallId) {
         if (data.responded && data.responded.length && data.responded[0].found) {
             var val = data.responded[0].value;
             var detail = typeof val === 'string' ? JSON.parse(val) : val;
-            secCacheSet(thrallId, detail);
+            secCacheSet(envoyId, detail);
             var tabs = document.getElementById('sec-drawer-tabs');
             var content = document.getElementById('sec-drawer-content');
             renderSecDetail(detail, tabs, content);
@@ -375,7 +375,7 @@ function closeSecDrawer() {
     document.getElementById('sec-drawer-overlay').classList.remove('sec-drawer-overlay--open');
 }
 
-function renderCachedTraits(traits, tabsEl, contentEl, hostname, thrallId) {
+function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
     // Build summary from flattened security_scan.* traits.
     var h = '<div class="sec-cached-summary">';
 
@@ -461,7 +461,7 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, thrallId) {
     // Live query button for detailed findings
     h += '<div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--color-border)">' +
         '<button class="btn btn--sm btn--outline" id="sec-live-btn" ' +
-        'onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(thrallId) + '\')">Fetch Live Detail</button> ' +
+        'onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button> ' +
         '<span class="text-muted" style="font-size:11px">Query agent for Lynis warnings, rootkit findings, AIDE file paths, per-CVE package info. ' +
         'Requires agent check-in (may take up to ~' + Math.round({{.QueryTimeoutSec}}/60) + ' min).</span>' +
         '<div id="sec-live-area"></div></div>';

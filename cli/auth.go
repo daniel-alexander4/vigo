@@ -19,7 +19,7 @@ var authCmd = &cobra.Command{
 
 var authSetTokenCmd = &cobra.Command{
 	Use:   "set-token <token>",
-	Short: "Save an hbt_ API token to ~/.config/hobnob/token for subsequent CLI requests",
+	Short: "Save an vgot_ API token to ~/.config/vigo/token for subsequent CLI requests",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token := strings.TrimSpace(args[0])
@@ -40,7 +40,7 @@ var authStatusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token := loadAuthToken()
 		if token == "" {
-			fmt.Println("Not authenticated. Run 'hobnobcli auth set-token <token>' to configure.")
+			fmt.Println("Not authenticated. Run 'vigogo auth set-token <token>' to configure.")
 		} else {
 			// Show a masked version of the token.
 			masked := token[:8] + "..." + token[len(token)-4:]
@@ -91,14 +91,14 @@ func init() {
 
 // tokenFilePath returns the path to the stored API token.
 func tokenFilePath() string {
-	if dir := os.Getenv("HOBNOB_CONFIG_DIR"); dir != "" {
+	if dir := os.Getenv("VIGO_CONFIG_DIR"); dir != "" {
 		return filepath.Join(dir, "token")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "hobnob", "token")
+	return filepath.Join(home, ".config", "vigo", "token")
 }
 
 // loadAuthToken reads the API token from the config file.

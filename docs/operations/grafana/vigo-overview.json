@@ -32,7 +32,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_nodes_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_nodes_total", "legendFormat": "" }]
     },
     {
       "title": "Active Nodes",
@@ -45,7 +45,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_nodes_active_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_nodes_active_total", "legendFormat": "" }]
     },
     {
       "title": "Compliance %",
@@ -65,7 +65,7 @@
           "unit": "percent"
         }
       },
-      "targets": [{ "expr": "hobnob_compliance_pct", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_compliance_pct", "legendFormat": "" }]
     },
     {
       "title": "Uptime",
@@ -78,7 +78,7 @@
           "unit": "s"
         }
       },
-      "targets": [{ "expr": "hobnob_uptime_seconds", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_uptime_seconds", "legendFormat": "" }]
     },
     {
       "title": "License Usage",
@@ -103,8 +103,8 @@
         }]
       },
       "targets": [
-        { "expr": "hobnob_license_thralls_used", "legendFormat": "Used" },
-        { "expr": "hobnob_license_thralls_max", "legendFormat": "Max" }
+        { "expr": "vigo_license_envoys_used", "legendFormat": "Used" },
+        { "expr": "vigo_license_envoys_max", "legendFormat": "Max" }
       ]
     },
     {
@@ -124,7 +124,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_license_days_remaining", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_license_days_remaining", "legendFormat": "" }]
     },
     {
       "title": "Active Streams",
@@ -137,7 +137,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_streams_active", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_streams_active", "legendFormat": "" }]
     },
     {
       "title": "Database Size",
@@ -150,7 +150,7 @@
           "unit": "bytes"
         }
       },
-      "targets": [{ "expr": "hobnob_database_size_bytes", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_database_size_bytes", "legendFormat": "" }]
     },
     {
       "title": "Compliance Breakdown",
@@ -172,7 +172,7 @@
           { "matcher": { "id": "byName", "options": "unknown" }, "properties": [{ "id": "color", "value": { "fixedColor": "text", "mode": "fixed" } }] }
         ]
       },
-      "targets": [{ "expr": "hobnob_compliance_status", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "vigo_compliance_status", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Compliance % Over Time",
@@ -185,7 +185,7 @@
           "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 80 }, { "color": "green", "value": 95 }] }
         }
       },
-      "targets": [{ "expr": "hobnob_compliance_pct", "legendFormat": "Compliance %" }]
+      "targets": [{ "expr": "vigo_compliance_pct", "legendFormat": "Compliance %" }]
     },
     {
       "title": "Check-in & gRPC",
@@ -199,7 +199,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_checkins_total[5m]) * 60", "legendFormat": "Check-ins/min" }]
+      "targets": [{ "expr": "rate(vigo_checkins_total[5m]) * 60", "legendFormat": "Check-ins/min" }]
     },
     {
       "title": "gRPC Request Rate",
@@ -207,7 +207,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 15 },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_grpc_requests_total[5m])", "legendFormat": "{{method}}" }]
+      "targets": [{ "expr": "rate(vigo_grpc_requests_total[5m])", "legendFormat": "{{method}}" }]
     },
     {
       "title": "gRPC Latency (p50 / p95 / p99)",
@@ -216,9 +216,9 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 5 } } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, rate(hobnob_grpc_request_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, rate(hobnob_grpc_request_duration_seconds_bucket[5m]))", "legendFormat": "p95" },
-        { "expr": "histogram_quantile(0.99, rate(hobnob_grpc_request_duration_seconds_bucket[5m]))", "legendFormat": "p99" }
+        { "expr": "histogram_quantile(0.50, rate(vigo_grpc_request_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(vigo_grpc_request_duration_seconds_bucket[5m]))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, rate(vigo_grpc_request_duration_seconds_bucket[5m]))", "legendFormat": "p99" }
       ]
     },
     {
@@ -234,8 +234,8 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, rate(hobnob_run_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, rate(hobnob_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+        { "expr": "histogram_quantile(0.50, rate(vigo_run_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(vigo_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
       ]
     },
     {
@@ -244,7 +244,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 }, "color": { "fixedColor": "yellow", "mode": "fixed" } } },
-      "targets": [{ "expr": "rate(hobnob_drift_detected_total[5m]) * 60", "legendFormat": "Drift corrections" }]
+      "targets": [{ "expr": "rate(vigo_drift_detected_total[5m]) * 60", "legendFormat": "Drift corrections" }]
     },
     {
       "title": "Module Actions",
@@ -252,7 +252,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_module_actions_total[5m]) * 60", "legendFormat": "{{action}}" }]
+      "targets": [{ "expr": "rate(vigo_module_actions_total[5m]) * 60", "legendFormat": "{{action}}" }]
     },
     {
       "title": "Operations",
@@ -266,7 +266,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 0, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 }, "color": { "fixedColor": "green", "mode": "fixed" } } },
-      "targets": [{ "expr": "rate(hobnob_enrollments_total[1h]) * 60", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "rate(vigo_enrollments_total[1h]) * 60", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Push Runs",
@@ -274,7 +274,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 6, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_push_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "rate(vigo_push_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Workflow Runs",
@@ -282,7 +282,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 12, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_workflow_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "rate(vigo_workflow_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Signature Verification Failures",
@@ -295,7 +295,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_sig_verify_failed_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_sig_verify_failed_total", "legendFormat": "" }]
     },
     {
       "title": "Infrastructure",
@@ -309,7 +309,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 0, "y": 41 },
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "hobnob_config_reload_duration_seconds", "legendFormat": "Reload" }]
+      "targets": [{ "expr": "vigo_config_reload_duration_seconds", "legendFormat": "Reload" }]
     },
     {
       "title": "Config Reload Errors",
@@ -322,7 +322,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_config_reload_errors_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_config_reload_errors_total", "legendFormat": "" }]
     },
     {
       "title": "FleetIndex Flush Duration",
@@ -331,8 +331,8 @@
       "gridPos": { "h": 7, "w": 6, "x": 12, "y": 41 },
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, rate(hobnob_fleetindex_flush_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, rate(hobnob_fleetindex_flush_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+        { "expr": "histogram_quantile(0.50, rate(vigo_fleetindex_flush_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(vigo_fleetindex_flush_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
       ]
     },
     {
@@ -341,7 +341,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 18, "y": 41 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "hobnob_fleetindex_dirty_count", "legendFormat": "Dirty entries" }]
+      "targets": [{ "expr": "vigo_fleetindex_dirty_count", "legendFormat": "Dirty entries" }]
     },
     {
       "title": "Webhooks & SMTP",
@@ -355,7 +355,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 49 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_webhook_deliveries_total[5m]) * 60", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "rate(vigo_webhook_deliveries_total[5m]) * 60", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Webhook Latency",
@@ -364,8 +364,8 @@
       "gridPos": { "h": 7, "w": 8, "x": 8, "y": 49 },
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, rate(hobnob_webhook_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, rate(hobnob_webhook_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+        { "expr": "histogram_quantile(0.50, rate(vigo_webhook_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(vigo_webhook_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
       ]
     },
     {
@@ -374,7 +374,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 8, "x": 16, "y": 49 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_smtp_sends_total[5m]) * 60", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "rate(vigo_smtp_sends_total[5m]) * 60", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Secrets",
@@ -388,7 +388,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 57 },
       "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "steps": [{ "color": "blue", "value": null }] } } },
-      "targets": [{ "expr": "hobnob_secret_rotations_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_secret_rotations_total", "legendFormat": "" }]
     },
     {
       "title": "Secret Resolution Errors",
@@ -401,7 +401,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_secret_resolution_errors_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_secret_resolution_errors_total", "legendFormat": "" }]
     },
     {
       "title": "AI Assistant",
@@ -415,7 +415,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 0, "y": 63 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(hobnob_ai_requests_total[5m]) * 60", "legendFormat": "Requests" }]
+      "targets": [{ "expr": "rate(vigo_ai_requests_total[5m]) * 60", "legendFormat": "Requests" }]
     },
     {
       "title": "AI Tokens Used",
@@ -423,7 +423,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 6, "y": 63 },
       "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "steps": [{ "color": "purple", "value": null }] } } },
-      "targets": [{ "expr": "hobnob_ai_tokens_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_ai_tokens_total", "legendFormat": "" }]
     },
     {
       "title": "AI Latency",
@@ -432,8 +432,8 @@
       "gridPos": { "h": 7, "w": 6, "x": 12, "y": 63 },
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, rate(hobnob_ai_request_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, rate(hobnob_ai_request_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
+        { "expr": "histogram_quantile(0.50, rate(vigo_ai_request_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(vigo_ai_request_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
       ]
     },
     {
@@ -447,17 +447,17 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "hobnob_ai_errors_total", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_ai_errors_total", "legendFormat": "" }]
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["hobnob"],
+  "tags": ["vigo"],
   "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "",
-  "title": "Hobnob — Fleet Overview",
-  "uid": "hobnob-overview",
+  "title": "Vigo — Fleet Overview",
+  "uid": "vigo-overview",
   "version": 1
 }

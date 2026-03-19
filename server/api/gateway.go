@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package api provides the grpc-gateway REST proxy for the HobnobAdmin service
+// Package api provides the grpc-gateway REST proxy for the VigoAdmin service
 // and mounts the web UI routes.
 package api
 
@@ -16,25 +16,25 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	hobnobai "github.com/hobnob/hobnob/server/ai"
-	"github.com/hobnob/hobnob/server/bootstrap"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/spanner"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/license"
-	"github.com/hobnob/hobnob/server/peer"
-	"github.com/hobnob/hobnob/server/publish"
-	"github.com/hobnob/hobnob/ui"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	vigoai "github.com/daniel-alexander4/vigo/server/ai"
+	"github.com/daniel-alexander4/vigo/server/bootstrap"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/license"
+	"github.com/daniel-alexander4/vigo/server/peer"
+	"github.com/daniel-alexander4/vigo/server/publish"
+	"github.com/daniel-alexander4/vigo/ui"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
-// at the given address using mTLS credentials. It registers the HobnobAdmin
+// at the given address using mTLS credentials. It registers the VigoAdmin
 // service handlers on /api/ paths and mounts the web UI on /.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *hobnobai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, peerSvc *peer.Service, aw auditRecorder, gwOpts ...GatewayOption) (*http.ServeMux, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, peerSvc *peer.Service, aw auditRecorder, gwOpts ...GatewayOption) (*http.ServeMux, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -45,7 +45,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
 
-	if err := pb.RegisterHobnobAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
+	if err := pb.RegisterVigoAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
 		return nil, fmt.Errorf("registering admin gateway: %w", err)
 	}
 
@@ -99,9 +99,9 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	approvalHandler.SetAuditWriter(aw)
 	approvalHandler.RegisterRoutes(mux)
 
-	// Mount thrall management endpoints (tags, maintenance).
-	thrallsHandler := NewThrallsHandler(queries, fleetIndex)
-	thrallsHandler.RegisterRoutes(mux)
+	// Mount envoy management endpoints (tags, maintenance).
+	envoysHandler := NewEnvoysHandler(queries, fleetIndex)
+	envoysHandler.RegisterRoutes(mux)
 
 	// Mount audit endpoint.
 	auditHandler := NewAuditHandler(queries)
@@ -120,7 +120,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	bh.RegisterRoutes(mux)
 
-	// grpc-gateway catches /api/ paths (hobnobcli uses /api/v1/*).
+	// grpc-gateway catches /api/ paths (vigogo uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 
 	return mux, nil
@@ -130,7 +130,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 type GatewayOption func(*bootstrap.Handler)
 
 // NewSpokeGateway creates a lightweight HTTP mux for spoke mode.
-// It exposes the admin gRPC-gateway proxy (for hobnobcli), metrics, and traits
+// It exposes the admin gRPC-gateway proxy (for vigogo), metrics, and traits
 // but omits the web UI and bootstrap routes.
 func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, spokeID string) (*http.ServeMux, error) {
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
@@ -141,7 +141,7 @@ func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile st
 	gwMux := runtime.NewServeMux()
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
 
-	if err := pb.RegisterHobnobAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
+	if err := pb.RegisterVigoAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
 		return nil, fmt.Errorf("registering admin gateway: %w", err)
 	}
 
@@ -160,7 +160,7 @@ func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile st
 		fmt.Fprintf(w, `{"status":"ok","spoke_id":%q}`, spokeID)
 	})
 
-	// grpc-gateway catches /api/ paths (hobnobcli uses /api/v1/*).
+	// grpc-gateway catches /api/ paths (vigogo uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 
 	return mux, nil

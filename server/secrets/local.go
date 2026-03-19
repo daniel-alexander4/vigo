@@ -21,11 +21,11 @@ import (
 // builtinDefaults are sane zero-config defaults for core secrets so the
 // server starts out of the box without a secrets directory.
 var builtinDefaults = map[string]string{
-	"HOBNOB_DB_DSN": "/srv/hobnob/db/hobnob.db",
+	"VIGO_DB_DSN": "/srv/vigo/db/vigo.db",
 }
 
-// pathToEnvVar converts a secret path like "hobnob/db/dsn" to an
-// environment variable name like "HOBNOB_DB_DSN".
+// pathToEnvVar converts a secret path like "vigo/db/dsn" to an
+// environment variable name like "VIGO_DB_DSN".
 func pathToEnvVar(key string) string {
 	return strings.ToUpper(strings.ReplaceAll(key, "/", "_"))
 }
@@ -33,7 +33,7 @@ func pathToEnvVar(key string) string {
 // LocalProvider is the default secrets backend. It stores secrets as
 // AES-256-GCM encrypted files under a directory, one file per secret path.
 //
-// Secret path "hobnob/db/dsn" maps to file "<secrets_dir>/hobnob/db/dsn".
+// Secret path "vigo/db/dsn" maps to file "<secrets_dir>/vigo/db/dsn".
 // Each file contains: 12-byte nonce || ciphertext || GCM tag (16 bytes).
 //
 // If no key_file is specified, a master key is auto-generated at

@@ -4,7 +4,7 @@ This example shows how to use `environment_overrides` to maintain different vari
 
 ## Module Definition
 
-`policy/stage/modules/webapp.hnb`:
+`policy/stage/modules/webapp.vgo`:
 
 ```yaml
 name: webapp
@@ -41,14 +41,14 @@ resources:
 
 ## Node Assignment with environment_overrides
 
-`policy/stage/thralls/nodes.hnb`:
+`policy/stage/envoys/nodes.vgo`:
 
 ```yaml
-thralls:
+envoys:
   - match: "*.web.example.com"
     roles: [webserver]
     vars:
-      app_db_password: "secret:hobnob/webapp/db_password"
+      app_db_password: "secret:vigo/webapp/db_password"
     environment_overrides:
       production:
         app_port: "8080"
@@ -68,10 +68,10 @@ thralls:
 
 1. The `vars` block sets base values that apply to all environments.
 2. The `environment_overrides` block defines per-environment overrides.
-3. A thrall's environment is set in its node entry:
+3. A envoy's environment is set in its node entry:
 
 ```yaml
-thralls:
+envoys:
   - match: "prod-*.web.example.com"
     environment: production
     roles: [webserver]
@@ -81,17 +81,17 @@ thralls:
     roles: [webserver]
 ```
 
-4. At check-in time, the server resolves the thrall's environment and merges:
+4. At check-in time, the server resolves the envoy's environment and merges:
    - Module default vars (lowest priority)
    - Node-level `vars` (overrides module defaults)
    - `environment_overrides[environment]` (highest priority)
 
 ## Promoting Between Environments
 
-Use `hobnobcli env promote` to promote variable values from one environment to another:
+Use `vigogo env promote` to promote variable values from one environment to another:
 
 ```bash
-hobnobcli env promote --module webapp --from staging --to production
+vigogo env promote --module webapp --from staging --to production
 ```
 
 This shows the diff between environments and creates an audit record.
@@ -101,16 +101,16 @@ This shows the diff between environments and creates an audit record.
 Different environments can reference different secrets:
 
 ```yaml
-thralls:
+envoys:
   - match: "prod-*.web.example.com"
     environment: production
     vars:
-      app_db_password: "secret:hobnob/webapp/prod/db_password"
+      app_db_password: "secret:vigo/webapp/prod/db_password"
 
   - match: "stg-*.web.example.com"
     environment: staging
     vars:
-      app_db_password: "secret:hobnob/webapp/staging/db_password"
+      app_db_password: "secret:vigo/webapp/staging/db_password"
 ```
 
 Each environment gets its own secret path, resolved by the secrets provider at check-in time.

@@ -32,9 +32,9 @@ func TestNewNotifier_DefaultPort(t *testing.T) {
 func TestRender_EnrolledEvent(t *testing.T) {
 	n := NewNotifier(Config{Host: "smtp.example.com"})
 	event := Event{
-		Name:      "thrall.enrolled",
+		Name:      "envoy.enrolled",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
-		Thrall: &ThrallInfo{
+		Envoy: &EnvoyInfo{
 			ID:       "abc-123",
 			Hostname: "web01.example.com",
 			IP:       "10.0.0.1",
@@ -50,7 +50,7 @@ func TestRender_EnrolledEvent(t *testing.T) {
 		t.Errorf("subject should contain hostname: %s", subject)
 	}
 	if !strings.Contains(body, "abc-123") {
-		t.Errorf("body should contain thrall ID: %s", body)
+		t.Errorf("body should contain envoy ID: %s", body)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestRender_RunFailureEvent(t *testing.T) {
 	event := Event{
 		Name:      "run.failure",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
-		Thrall:    &ThrallInfo{ID: "abc", Hostname: "db01"},
+		Envoy:    &EnvoyInfo{ID: "abc", Hostname: "db01"},
 		Run:       &RunInfo{ID: "run-1", Status: "failure", Changed: 2, Failed: 1},
 	}
 
@@ -81,7 +81,7 @@ func TestRender_DriftEvent(t *testing.T) {
 	event := Event{
 		Name:      "drift.detected",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
-		Thrall:    &ThrallInfo{ID: "abc", Hostname: "web01"},
+		Envoy:    &EnvoyInfo{ID: "abc", Hostname: "web01"},
 		Run:       &RunInfo{ID: "run-1", Status: "success", Changed: 3},
 	}
 
@@ -124,7 +124,7 @@ func TestRender_SecretRotatedEvent(t *testing.T) {
 		Name:      "secret.rotated",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
 		Details: map[string]any{
-			"path":     "hobnob/db/dsn",
+			"path":     "vigo/db/dsn",
 			"affected": 3,
 		},
 	}
@@ -134,10 +134,10 @@ func TestRender_SecretRotatedEvent(t *testing.T) {
 		t.Fatalf("render: %v", err)
 	}
 
-	if !strings.Contains(subject, "hobnob/db/dsn") {
+	if !strings.Contains(subject, "vigo/db/dsn") {
 		t.Errorf("subject should contain secret path: %s", subject)
 	}
-	if !strings.Contains(body, "3 thrall(s)") {
+	if !strings.Contains(body, "3 envoy(s)") {
 		t.Errorf("body should contain affected count: %s", body)
 	}
 }
@@ -148,7 +148,7 @@ func TestRender_ConfigReloadFailureEvent(t *testing.T) {
 		Name:      "config.reload.failure",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
 		Details: map[string]any{
-			"error": "modules/nginx.hnb: duplicate key 'resources'",
+			"error": "modules/nginx.vgo: duplicate key 'resources'",
 		},
 	}
 
@@ -165,12 +165,12 @@ func TestRender_ConfigReloadFailureEvent(t *testing.T) {
 	}
 }
 
-func TestRender_ThrallStaleEvent(t *testing.T) {
+func TestRender_EnvoyStaleEvent(t *testing.T) {
 	n := NewNotifier(Config{Host: "smtp.example.com"})
 	event := Event{
-		Name:      "thrall.stale",
+		Name:      "envoy.stale",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
-		Thrall:    &ThrallInfo{ID: "abc-123", Hostname: "web01.example.com", IP: "10.0.0.1"},
+		Envoy:    &EnvoyInfo{ID: "abc-123", Hostname: "web01.example.com", IP: "10.0.0.1"},
 		Details: map[string]any{
 			"last_seen": "2026-03-10 11:45:00 UTC",
 		},
@@ -254,7 +254,7 @@ func TestPerEventRecipients(t *testing.T) {
 		Events: map[string]*EventOverride{
 			"run.failure":    {Recipients: []string{"ops@example.com", "oncall@example.com"}},
 			"run.success":    {},
-			"thrall.enrolled": nil,
+			"envoy.enrolled": nil,
 		},
 	})
 
@@ -270,10 +270,10 @@ func TestPerEventRecipients(t *testing.T) {
 		t.Errorf("run.success should use default recipients, got %v", got)
 	}
 
-	// thrall.enrolled has nil override — falls back to default.
-	got = n.recipientsFor("thrall.enrolled")
+	// envoy.enrolled has nil override — falls back to default.
+	got = n.recipientsFor("envoy.enrolled")
 	if len(got) != 1 || got[0] != "admin@example.com" {
-		t.Errorf("thrall.enrolled should use default recipients, got %v", got)
+		t.Errorf("envoy.enrolled should use default recipients, got %v", got)
 	}
 }
 
@@ -304,13 +304,13 @@ func TestDigest_BuffersEvents(t *testing.T) {
 	n.Notify(Event{
 		Name:      "run.success",
 		Timestamp: time.Now(),
-		Thrall:    &ThrallInfo{ID: "a", Hostname: "web01"},
+		Envoy:    &EnvoyInfo{ID: "a", Hostname: "web01"},
 		Run:       &RunInfo{ID: "r1", Status: "success"},
 	})
 	n.Notify(Event{
 		Name:      "drift.detected",
 		Timestamp: time.Now(),
-		Thrall:    &ThrallInfo{ID: "b", Hostname: "web02"},
+		Envoy:    &EnvoyInfo{ID: "b", Hostname: "web02"},
 		Run:       &RunInfo{ID: "r2", Status: "success", Changed: 2},
 	})
 
@@ -337,7 +337,7 @@ func TestDigest_NonDigestEventsSentImmediately(t *testing.T) {
 	n.Notify(Event{
 		Name:      "run.failure",
 		Timestamp: time.Now(),
-		Thrall:    &ThrallInfo{ID: "a", Hostname: "web01"},
+		Envoy:    &EnvoyInfo{ID: "a", Hostname: "web01"},
 		Run:       &RunInfo{ID: "r1", Status: "failure", Failed: 1},
 	})
 
@@ -362,8 +362,8 @@ func TestDigest_FlushClearsBuffer(t *testing.T) {
 
 	n.mu.Lock()
 	n.digestBuf = []Event{
-		{Name: "run.success", Timestamp: time.Now(), Thrall: &ThrallInfo{Hostname: "web01"}},
-		{Name: "run.success", Timestamp: time.Now(), Thrall: &ThrallInfo{Hostname: "web02"}},
+		{Name: "run.success", Timestamp: time.Now(), Envoy: &EnvoyInfo{Hostname: "web01"}},
+		{Name: "run.success", Timestamp: time.Now(), Envoy: &EnvoyInfo{Hostname: "web02"}},
 	}
 	n.mu.Unlock()
 
@@ -396,9 +396,9 @@ func TestDigest_EmptyFlushIsNoop(t *testing.T) {
 func TestDigest_RenderDigest(t *testing.T) {
 	n := NewNotifier(Config{Host: "smtp.example.com"})
 	events := []Event{
-		{Name: "run.success", Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC), Thrall: &ThrallInfo{Hostname: "web01"}},
-		{Name: "run.success", Timestamp: time.Date(2026, 3, 10, 12, 5, 0, 0, time.UTC), Thrall: &ThrallInfo{Hostname: "web02"}},
-		{Name: "drift.detected", Timestamp: time.Date(2026, 3, 10, 12, 10, 0, 0, time.UTC), Thrall: &ThrallInfo{Hostname: "db01"}},
+		{Name: "run.success", Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC), Envoy: &EnvoyInfo{Hostname: "web01"}},
+		{Name: "run.success", Timestamp: time.Date(2026, 3, 10, 12, 5, 0, 0, time.UTC), Envoy: &EnvoyInfo{Hostname: "web02"}},
+		{Name: "drift.detected", Timestamp: time.Date(2026, 3, 10, 12, 10, 0, 0, time.UTC), Envoy: &EnvoyInfo{Hostname: "db01"}},
 	}
 
 	subject, body := n.renderDigest(events)
@@ -413,7 +413,7 @@ func TestDigest_RenderDigest(t *testing.T) {
 		t.Errorf("body should contain drift.detected count: %s", body)
 	}
 	if !strings.Contains(body, "web01") {
-		t.Errorf("body should contain thrall hostnames: %s", body)
+		t.Errorf("body should contain envoy hostnames: %s", body)
 	}
 }
 
@@ -440,20 +440,20 @@ func TestDigest_StartReturnsImmediatelyWhenDisabled(t *testing.T) {
 
 func TestBuildMessage(t *testing.T) {
 	msg := buildMessage(
-		"hobnob@example.com",
+		"vigo@example.com",
 		[]string{"admin@example.com", "ops@example.com"},
-		"[Hobnob] Test",
+		"[Vigo] Test",
 		"Hello, world.",
 	)
 
 	s := string(msg)
-	if !strings.Contains(s, "From: hobnob@example.com") {
+	if !strings.Contains(s, "From: vigo@example.com") {
 		t.Error("missing From header")
 	}
 	if !strings.Contains(s, "To: admin@example.com, ops@example.com") {
 		t.Error("missing To header")
 	}
-	if !strings.Contains(s, "Subject: [Hobnob] Test") {
+	if !strings.Contains(s, "Subject: [Vigo] Test") {
 		t.Error("missing Subject header")
 	}
 	if !strings.Contains(s, "Hello, world.") {

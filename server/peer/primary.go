@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -399,7 +399,7 @@ func (p *Primary) peerLoop(ctx context.Context, pc *peerConn) {
 		}
 		pc.conn = conn
 
-		client := pb.NewHobnobPeerClient(conn)
+		client := pb.NewVigoPeerClient(conn)
 		stream, err := client.SyncStream(ctx)
 		if err != nil {
 			slog.Error("peer primary: stream open failed", "addr", pc.entry.Addr, "error", err)

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package auth provides pluggable authentication for the Hobnob web UI and
+// Package auth provides pluggable authentication for the Vigo web UI and
 // REST API. Three methods are supported: "basic" (default, username/password
 // with credentials in the secrets store), "oidc" (OpenID Connect SSO), and
 // "isowebauth" (SSH key-based signing).

@@ -18,11 +18,11 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
-	"github.com/hobnob/hobnob/server/registry"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/registry"
 )
 
 // startTestServerWithConfig creates a gRPC server with the given config directory.
@@ -31,7 +31,7 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 	ctx := context.Background()
 
 	// Clean tables.
-	for _, table := range []string{"run_results", "runs", "thrall_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "thralls"} {
+	for _, table := range []string{"run_results", "runs", "envoy_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "envoys"} {
 		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("failed to delete from %s: %v", table, err)
 		}
@@ -68,11 +68,11 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 	return lis.Addr().String(), configStore, func() { srv.Stop() }
 }
 
-// setupE2EConfig creates a temp config directory with the given modules and thrall entries.
-func setupE2EConfig(t *testing.T, modules map[string]string, thrallsYAML string) string {
+// setupE2EConfig creates a temp config directory with the given modules and envoy entries.
+func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "thrall-configs")
-	for _, sub := range []string{"thralls", "modules", "roles"} {
+	dir := filepath.Join(t.TempDir(), "envoy-configs")
+	for _, sub := range []string{"envoys", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -82,16 +82,16 @@ func setupE2EConfig(t *testing.T, modules map[string]string, thrallsYAML string)
 			t.Fatal(err)
 		}
 	}
-	if thrallsYAML != "" {
-		if err := os.WriteFile(filepath.Join(dir, "thralls", "thralls.yaml"), []byte(thrallsYAML), 0644); err != nil {
+	if envoysYAML != "" {
+		if err := os.WriteFile(filepath.Join(dir, "envoys", "envoys.yaml"), []byte(envoysYAML), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	return dir
 }
 
-// registerThrall is a helper that registers a thrall and returns its ID, keys, and agent client.
-func registerThrall(t *testing.T, addr, hostname, token string) (string, ed25519.PublicKey, ed25519.PrivateKey, pb.HobnobAgentClient) {
+// registerEnvoy is a helper that registers a envoy and returns its ID, keys, and agent client.
+func registerEnvoy(t *testing.T, addr, hostname, token string) (string, ed25519.PublicKey, ed25519.PrivateKey, pb.VigoAgentClient) {
 	t.Helper()
 	ctx := context.Background()
 	queries := db.New(testDB)
@@ -111,22 +111,22 @@ func registerThrall(t *testing.T, addr, hostname, token string) (string, ed25519
 		t.Fatal(err)
 	}
 
-	thrallID, err := reg.Register(ctx, hostname, "10.0.0.1", pubPEM, token, false)
+	envoyID, err := reg.Register(ctx, hostname, "10.0.0.1", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	conn := dialTLS(t, addr)
 	t.Cleanup(func() { conn.Close() })
-	client := pb.NewHobnobAgentClient(conn)
+	client := pb.NewVigoAgentClient(conn)
 
-	return thrallID, pub, priv, client
+	return envoyID, pub, priv, client
 }
 
 // doCheckIn performs a signed CheckIn RPC. Pass policyVersion=0 for first check-in
 // (agent has no cached policy). Pass a non-zero value to simulate an agent that
 // already has a cached policy at that version.
-func doCheckIn(t *testing.T, client pb.HobnobAgentClient, thrallID string, priv ed25519.PrivateKey, fingerprint string, policyVersion uint64) (*pb.CheckInResponse, error) {
+func doCheckIn(t *testing.T, client pb.VigoAgentClient, envoyID string, priv ed25519.PrivateKey, fingerprint string, policyVersion uint64) (*pb.CheckInResponse, error) {
 	t.Helper()
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
@@ -134,7 +134,7 @@ func doCheckIn(t *testing.T, client pb.HobnobAgentClient, thrallID string, priv 
 	sig := signPayload(payload, tsStr, priv)
 
 	return client.CheckIn(context.Background(), &pb.CheckInRequest{
-		ThrallId:         thrallID,
+		EnvoyId:         envoyID,
 		StateFingerprint: fingerprint,
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -143,7 +143,7 @@ func doCheckIn(t *testing.T, client pb.HobnobAgentClient, thrallID string, priv 
 }
 
 // TestE2E_RegisterCheckInFlow verifies the full register-then-check-in path:
-// a thrall registers, checks in, and receives the expected policy bundle
+// a envoy registers, checks in, and receives the expected policy bundle
 // with the configured module.
 func TestE2E_RegisterCheckInFlow(t *testing.T) {
 	modules := map[string]string{
@@ -156,18 +156,18 @@ resources:
     state: present
 `,
 	}
-	thralls := `
-thralls:
+	envoys := `
+envoys:
   - match: "*.test.example.com"
     modules: [nginx]
 `
-	configDir := setupE2EConfig(t, modules, thralls)
+	configDir := setupE2EConfig(t, modules, envoys)
 	addr, _, cleanup := startTestServerWithConfig(t, configDir)
 	defer cleanup()
 
-	thrallID, _, priv, client := registerThrall(t, addr, "e2e-web01.test.example.com", "e2e-register-token")
+	envoyID, _, priv, client := registerEnvoy(t, addr, "e2e-web01.test.example.com", "e2e-register-token")
 
-	resp, err := doCheckIn(t, client, thrallID, priv, "initial-fp", 0)
+	resp, err := doCheckIn(t, client, envoyID, priv, "initial-fp", 0)
 	if err != nil {
 		t.Fatalf("CheckIn: %v", err)
 	}
@@ -197,19 +197,19 @@ resources:
     state: present
 `,
 	}
-	thralls := `
-thralls:
+	envoys := `
+envoys:
   - match: "*.test.example.com"
     modules: [nginx]
 `
-	configDir := setupE2EConfig(t, modules, thralls)
+	configDir := setupE2EConfig(t, modules, envoys)
 	addr, configStore, cleanup := startTestServerWithConfig(t, configDir)
 	defer cleanup()
 
-	thrallID, _, priv, client := registerThrall(t, addr, "e2e-version.test.example.com", "e2e-version-token")
+	envoyID, _, priv, client := registerEnvoy(t, addr, "e2e-version.test.example.com", "e2e-version-token")
 
 	// First CheckIn -- get initial version.
-	resp1, err := doCheckIn(t, client, thrallID, priv, "fp-v1", 0)
+	resp1, err := doCheckIn(t, client, envoyID, priv, "fp-v1", 0)
 	if err != nil {
 		t.Fatalf("CheckIn v1: %v", err)
 	}
@@ -219,7 +219,7 @@ thralls:
 		t.Fatalf("v1: expected 1 module in bundle, got %v", bundle1)
 	}
 
-	// Add a new module and update thrall config.
+	// Add a new module and update envoy config.
 	if err := os.WriteFile(filepath.Join(configDir, "modules", "certbot.yaml"), []byte(`
 name: certbot
 resources:
@@ -230,8 +230,8 @@ resources:
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(configDir, "thralls", "thralls.yaml"), []byte(`
-thralls:
+	if err := os.WriteFile(filepath.Join(configDir, "envoys", "envoys.yaml"), []byte(`
+envoys:
   - match: "*.test.example.com"
     modules: [nginx, certbot]
 `), 0644); err != nil {
@@ -244,7 +244,7 @@ thralls:
 	}
 
 	// Second CheckIn -- should have new module and bumped version.
-	resp2, err := doCheckIn(t, client, thrallID, priv, "fp-v2", 0)
+	resp2, err := doCheckIn(t, client, envoyID, priv, "fp-v2", 0)
 	if err != nil {
 		t.Fatalf("CheckIn v2: %v", err)
 	}
@@ -258,7 +258,7 @@ thralls:
 	}
 }
 
-// TestE2E_ForcePushDelivery verifies that setting force_push on a thrall
+// TestE2E_ForcePushDelivery verifies that setting force_push on a envoy
 // prevents the no-change short-circuit, causing the server to deliver a
 // full PolicyBundle even when the agent's cached policy version matches.
 func TestE2E_ForcePushDelivery(t *testing.T) {
@@ -272,19 +272,19 @@ resources:
     state: present
 `,
 	}
-	thralls := `
-thralls:
+	envoys := `
+envoys:
   - match: "*.test.example.com"
     modules: [nginx]
 `
-	configDir := setupE2EConfig(t, modules, thralls)
+	configDir := setupE2EConfig(t, modules, envoys)
 	addr, _, cleanup := startTestServerWithConfig(t, configDir)
 	defer cleanup()
 
-	thrallID, _, priv, client := registerThrall(t, addr, "e2e-forcepush.test.example.com", "e2e-force-token")
+	envoyID, _, priv, client := registerEnvoy(t, addr, "e2e-forcepush.test.example.com", "e2e-force-token")
 
 	// First CheckIn -- get the current policy version.
-	resp1, err := doCheckIn(t, client, thrallID, priv, "fp-init", 0)
+	resp1, err := doCheckIn(t, client, envoyID, priv, "fp-init", 0)
 	if err != nil {
 		t.Fatalf("initial CheckIn: %v", err)
 	}
@@ -294,7 +294,7 @@ thralls:
 	}
 
 	// Second CheckIn with matching PolicyVersion -- should short-circuit.
-	resp2, err := doCheckIn(t, client, thrallID, priv, "fp-cached", pv)
+	resp2, err := doCheckIn(t, client, envoyID, priv, "fp-cached", pv)
 	if err != nil {
 		t.Fatalf("cached CheckIn: %v", err)
 	}
@@ -304,12 +304,12 @@ thralls:
 
 	// Set force_push via DB.
 	queries := db.New(testDB)
-	if err := queries.SetForcePush(context.Background(), thrallID); err != nil {
+	if err := queries.SetForcePush(context.Background(), envoyID); err != nil {
 		t.Fatalf("SetForcePush: %v", err)
 	}
 
 	// Third CheckIn with same PolicyVersion -- force_push should bypass short-circuit.
-	resp3, err := doCheckIn(t, client, thrallID, priv, "fp-forced", pv)
+	resp3, err := doCheckIn(t, client, envoyID, priv, "fp-forced", pv)
 	if err != nil {
 		t.Fatalf("force-push CheckIn: %v", err)
 	}
@@ -321,17 +321,17 @@ thralls:
 	}
 }
 
-// TestE2E_RevocationFlow verifies that a revoked thrall receives
+// TestE2E_RevocationFlow verifies that a revoked envoy receives
 // PermissionDenied on subsequent check-in attempts.
 func TestE2E_RevocationFlow(t *testing.T) {
 	configDir := setupE2EConfig(t, nil, "")
 	addr, _, cleanup := startTestServerWithConfig(t, configDir)
 	defer cleanup()
 
-	thrallID, _, priv, client := registerThrall(t, addr, "e2e-revoke.test.example.com", "e2e-revoke-token")
+	envoyID, _, priv, client := registerEnvoy(t, addr, "e2e-revoke.test.example.com", "e2e-revoke-token")
 
 	// CheckIn should succeed.
-	_, err := doCheckIn(t, client, thrallID, priv, "fp-ok", 0)
+	_, err := doCheckIn(t, client, envoyID, priv, "fp-ok", 0)
 	if err != nil {
 		t.Fatalf("pre-revoke CheckIn: %v", err)
 	}
@@ -339,12 +339,12 @@ func TestE2E_RevocationFlow(t *testing.T) {
 	// Revoke.
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
-	if err := reg.RevokeThrall(context.Background(), thrallID); err != nil {
-		t.Fatalf("RevokeThrall: %v", err)
+	if err := reg.RevokeEnvoy(context.Background(), envoyID); err != nil {
+		t.Fatalf("RevokeEnvoy: %v", err)
 	}
 
 	// CheckIn should fail.
-	_, err = doCheckIn(t, client, thrallID, priv, "fp-revoked", 0)
+	_, err = doCheckIn(t, client, envoyID, priv, "fp-revoked", 0)
 	if err == nil {
 		t.Fatal("expected CheckIn to fail after revocation")
 	}

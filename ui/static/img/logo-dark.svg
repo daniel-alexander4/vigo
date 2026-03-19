@@ -9,7 +9,7 @@
   <line x1="38" y1="12.5" x2="23" y2="48" stroke="#667eea" stroke-width="3" stroke-linecap="round"/>
   <!-- Bottom server dot (larger) -->
   <circle cx="23" cy="50" r="6" fill="#667eea"/>
-  <text x="52" y="46" font-family="Ubuntu, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="32" font-weight="500" letter-spacing="-0.5">
-    <tspan fill="#667eea">h</tspan><tspan fill="#e2e8f0">obnob</tspan>
+  <text x="52" y="46" font-family="Ubuntu, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="40" font-weight="500" letter-spacing="-0.5">
+    <tspan fill="#667eea">v</tspan><tspan fill="#e2e8f0">igo</tspan>
   </text>
 </svg>

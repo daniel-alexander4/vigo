@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hobnob/hobnob/server/config"
+	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +27,7 @@ func testCfg(overrides ...func(*config.AISection)) config.AISection {
 
 func TestAsk_DirectAnswer(t *testing.T) {
 	provider := newMockProvider(&ChatResponse{
-		Content:    "Hobnob manages your infrastructure.",
+		Content:    "Vigo manages your infrastructure.",
 		TokensUsed: 100,
 	})
 
@@ -37,9 +37,9 @@ func TestAsk_DirectAnswer(t *testing.T) {
 		cfg:      testCfg(),
 	}
 
-	resp, err := a.Ask(context.Background(), AskRequest{Question: "What is Hobnob?"})
+	resp, err := a.Ask(context.Background(), AskRequest{Question: "What is Vigo?"})
 	require.NoError(t, err)
-	assert.Equal(t, "Hobnob manages your infrastructure.", resp.Answer)
+	assert.Equal(t, "Vigo manages your infrastructure.", resp.Answer)
 	assert.Equal(t, 100, resp.TokensUsed)
 	assert.Empty(t, resp.ToolsUsed)
 }
@@ -120,7 +120,7 @@ func TestAsk_RateLimit(t *testing.T) {
 }
 
 func TestStripSecrets(t *testing.T) {
-	input := `{"dsn": "secret:hobnob/db/dsn", "other": "safe"}`
+	input := `{"dsn": "secret:vigo/db/dsn", "other": "safe"}`
 	result := stripSecrets(input)
 	assert.NotContains(t, result, "secret:")
 	assert.Contains(t, result, "[REDACTED:")
@@ -133,7 +133,7 @@ func TestExtractHostname(t *testing.T) {
 	}{
 		{"why is web-03 failing?", "web-03"},
 		{"what's running on db.prod.example.com?", "db.prod.example.com"},
-		{"how many thralls do I have?", ""},
+		{"how many envoys do I have?", ""},
 		{"tell me about web-server-01", "web-server-01"},
 	}
 	for _, tt := range tests {

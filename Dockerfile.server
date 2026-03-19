@@ -30,9 +30,9 @@ RUN go mod download
 ARG CACHEBUST=0
 RUN echo "$CACHEBUST" > /dev/null
 COPY . .
-RUN CGO_ENABLED=1 go build -o hobd ./server
-RUN CGO_ENABLED=1 go build -o hobnobcli ./cli
-RUN CGO_ENABLED=1 go build -o hobnob-license-manager ./license-manager
+RUN CGO_ENABLED=1 go build -o vigosrv ./server
+RUN CGO_ENABLED=1 go build -o vigogo ./cli
+RUN CGO_ENABLED=1 go build -o vigo-license-manager ./license-manager
 
 # --- Runtime image ---
 
@@ -47,9 +47,9 @@ RUN wget -q "https://github.com/benbjohnson/litestream/releases/download/${LITES
     && rm /tmp/litestream.tar.gz \
     && chmod +x /usr/local/bin/litestream
 
-COPY --from=go-builder /build/hobd /usr/local/sbin/hobd
-COPY --from=go-builder /build/hobnobcli /usr/local/bin/hobnobcli
-COPY --from=go-builder /build/hobnob-license-manager /usr/local/sbin/hobnob-license-manager
+COPY --from=go-builder /build/vigosrv /usr/local/sbin/vigosrv
+COPY --from=go-builder /build/vigogo /usr/local/bin/vigogo
+COPY --from=go-builder /build/vigo-license-manager /usr/local/sbin/vigo-license-manager
 COPY --from=go-builder /build/migrations /migrations
 
 # Agent binaries — pre-built cross-compiled binaries first, then the freshly built
@@ -58,19 +58,19 @@ COPY --from=go-builder /build/migrations /migrations
 # Build additional platforms with: make dist-agent dist-agent-macos dist-agent-freebsd etc.
 RUN mkdir -p /dist/agent/linux/amd64
 COPY dist/agent/ /dist/agent/
-COPY --from=rust-builder /build/agent-rs/target/x86_64-unknown-linux-musl/release/hobnob /dist/agent/linux/amd64/hobnob
+COPY --from=rust-builder /build/agent-rs/target/x86_64-unknown-linux-musl/release/vigo /dist/agent/linux/amd64/vigo
 
-# Seed configs — copied to /srv/hobnob on first run by entrypoint.
+# Seed configs — copied to /srv/vigo on first run by entrypoint.
 COPY server-configs/server.yaml /seed/server.yaml
 COPY docker-compose.prod.yml /seed/docker-compose.yml
-COPY thrall-configs/ /seed/thrall-configs/
+COPY envoy-configs/ /seed/envoy-configs/
 COPY server-configs/policy/ /seed/policy/
 COPY server-configs/push/ /seed/push/
 
-# Documentation — seeded into /srv/hobnob/docs/ by entrypoint.
+# Documentation — seeded into /srv/vigo/docs/ by entrypoint.
 COPY docs/ /seed/docs/
 
-# CLI test script — seeded into /srv/hobnob/scripts/ by entrypoint.
+# CLI test script — seeded into /srv/vigo/scripts/ by entrypoint.
 # Only scripts that work without the source tree belong here.
 # test-unit.sh requires the repo and should be run from the checkout.
 RUN mkdir -p /seed/scripts

@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/hobnob/hobnob/server/license"
+	"github.com/daniel-alexander4/vigo/server/license"
 )
 
-// LicenseHandler serves the license status endpoint for hobnobcli.
+// LicenseHandler serves the license status endpoint for vigogo.
 type LicenseHandler struct {
 	enforcer *license.Enforcer
 }

@@ -11,7 +11,7 @@ import (
 	"encoding/pem"
 	"fmt"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"google.golang.org/protobuf/proto"
 )
 

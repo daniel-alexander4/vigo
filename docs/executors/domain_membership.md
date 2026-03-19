@@ -38,7 +38,7 @@ resources:
     type: domain_membership
     domain: corp.example.com
     username: "admin@corp.example.com"
-    password: "secret:hobnob/ad/join-password"
+    password: "secret:vigo/ad/join-password"
 ```
 
 ### Join a domain into a specific OU
@@ -49,7 +49,7 @@ resources:
     type: domain_membership
     domain: corp.example.com
     username: "CORP\\svc-join"
-    password: "secret:hobnob/ad/join-password"
+    password: "secret:vigo/ad/join-password"
     ou_path: "OU=WebServers,OU=Servers,DC=corp,DC=example,DC=com"
 ```
 
@@ -61,7 +61,7 @@ resources:
     type: domain_membership
     domain: corp.example.com
     username: "admin@corp.example.com"
-    password: "secret:hobnob/ad/join-password"
+    password: "secret:vigo/ad/join-password"
     restart_after_join: "false"
 
   - name: scheduled-reboot
@@ -80,7 +80,7 @@ resources:
     domain: corp.example.com
     state: absent
     username: "admin@corp.example.com"
-    password: "secret:hobnob/ad/leave-password"
+    password: "secret:vigo/ad/leave-password"
 ```
 
 ## Platform

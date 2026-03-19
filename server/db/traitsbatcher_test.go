@@ -10,8 +10,8 @@ import (
 func TestTraitsBatcher_MarkDeduplicates(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("thrall-1", `{"os":"linux"}`)
-	b.Mark("thrall-1", `{"os":"linux"}`) // same hash — should not re-queue
+	b.Mark("envoy-1", `{"os":"linux"}`)
+	b.Mark("envoy-1", `{"os":"linux"}`) // same hash — should not re-queue
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -25,12 +25,12 @@ func TestTraitsBatcher_MarkDeduplicates(t *testing.T) {
 func TestTraitsBatcher_MarkDifferentTraits(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("thrall-1", `{"os":"linux"}`)
-	b.Mark("thrall-1", `{"os":"freebsd"}`) // different hash — should replace
+	b.Mark("envoy-1", `{"os":"linux"}`)
+	b.Mark("envoy-1", `{"os":"freebsd"}`) // different hash — should replace
 
 	b.mu.Lock()
 	count := len(b.pending)
-	traits := b.pending["thrall-1"]
+	traits := b.pending["envoy-1"]
 	b.mu.Unlock()
 
 	if count != 1 {
@@ -41,12 +41,12 @@ func TestTraitsBatcher_MarkDifferentTraits(t *testing.T) {
 	}
 }
 
-func TestTraitsBatcher_MarkMultipleThralls(t *testing.T) {
+func TestTraitsBatcher_MarkMultipleEnvoys(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("thrall-1", `{"os":"linux"}`)
-	b.Mark("thrall-2", `{"os":"freebsd"}`)
-	b.Mark("thrall-1", `{"os":"linux"}`) // dedup
+	b.Mark("envoy-1", `{"os":"linux"}`)
+	b.Mark("envoy-2", `{"os":"freebsd"}`)
+	b.Mark("envoy-1", `{"os":"linux"}`) // dedup
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -60,7 +60,7 @@ func TestTraitsBatcher_MarkMultipleThralls(t *testing.T) {
 func TestTraitsBatcher_FlushClearsPending(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("thrall-1", `{"os":"linux"}`)
+	b.Mark("envoy-1", `{"os":"linux"}`)
 
 	// Flush with nil queries will panic if it tries to write.
 	// Since queries is nil, we just verify the pending map is swapped.
@@ -68,7 +68,7 @@ func TestTraitsBatcher_FlushClearsPending(t *testing.T) {
 	b.pending = make(map[string]string) // simulate flush
 	b.mu.Unlock()
 
-	b.Mark("thrall-1", `{"os":"linux"}`) // same hash as before — should still be deduped
+	b.Mark("envoy-1", `{"os":"linux"}`) // same hash as before — should still be deduped
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -82,7 +82,7 @@ func TestTraitsBatcher_FlushClearsPending(t *testing.T) {
 func TestTraitsBatcher_FlushResetsForNewTraits(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("thrall-1", `{"os":"linux"}`)
+	b.Mark("envoy-1", `{"os":"linux"}`)
 
 	// Simulate flush clearing pending but keeping hashes.
 	b.mu.Lock()
@@ -90,7 +90,7 @@ func TestTraitsBatcher_FlushResetsForNewTraits(t *testing.T) {
 	b.mu.Unlock()
 
 	// New traits should queue again.
-	b.Mark("thrall-1", `{"os":"freebsd"}`)
+	b.Mark("envoy-1", `{"os":"freebsd"}`)
 
 	b.mu.Lock()
 	count := len(b.pending)

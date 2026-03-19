@@ -29,11 +29,11 @@ impl Executor for BlockInFileExecutor {
         let mut marker_begin = params
             .get("marker_begin")
             .cloned()
-            .unwrap_or_else(|| "# BEGIN HOBNOB MANAGED BLOCK".into());
+            .unwrap_or_else(|| "# BEGIN VIGO MANAGED BLOCK".into());
         let mut marker_end = params
             .get("marker_end")
             .cloned()
-            .unwrap_or_else(|| "# END HOBNOB MANAGED BLOCK".into());
+            .unwrap_or_else(|| "# END VIGO MANAGED BLOCK".into());
 
         if !label.is_empty() {
             marker_begin = format!("{} {}", marker_begin, label);
@@ -220,10 +220,10 @@ mod tests {
         assert_eq!(result.action, Action::Created);
 
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("# BEGIN HOBNOB MANAGED BLOCK"));
+        assert!(content.contains("# BEGIN VIGO MANAGED BLOCK"));
         assert!(content.contains("nameserver 8.8.8.8"));
         assert!(content.contains("nameserver 8.8.4.4"));
-        assert!(content.contains("# END HOBNOB MANAGED BLOCK"));
+        assert!(content.contains("# END VIGO MANAGED BLOCK"));
         // Original content should still be present.
         assert!(content.contains("foo=bar"));
     }
@@ -232,7 +232,7 @@ mod tests {
     fn present_block_already_matches() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.conf");
-        let content = "# existing\n# BEGIN HOBNOB MANAGED BLOCK\nhello world\n# END HOBNOB MANAGED BLOCK\n";
+        let content = "# existing\n# BEGIN VIGO MANAGED BLOCK\nhello world\n# END VIGO MANAGED BLOCK\n";
         std::fs::write(&path, content).unwrap();
 
         let exec = BlockInFileExecutor;
@@ -251,7 +251,7 @@ mod tests {
     fn present_updates_block() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.conf");
-        let content = "header\n# BEGIN HOBNOB MANAGED BLOCK\nold content\n# END HOBNOB MANAGED BLOCK\nfooter\n";
+        let content = "header\n# BEGIN VIGO MANAGED BLOCK\nold content\n# END VIGO MANAGED BLOCK\nfooter\n";
         std::fs::write(&path, content).unwrap();
 
         let exec = BlockInFileExecutor;
@@ -276,7 +276,7 @@ mod tests {
     fn absent_removes_block() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.conf");
-        let content = "header\n# BEGIN HOBNOB MANAGED BLOCK\nmanaged content\n# END HOBNOB MANAGED BLOCK\nfooter\n";
+        let content = "header\n# BEGIN VIGO MANAGED BLOCK\nmanaged content\n# END VIGO MANAGED BLOCK\nfooter\n";
         std::fs::write(&path, content).unwrap();
 
         let exec = BlockInFileExecutor;
@@ -290,9 +290,9 @@ mod tests {
         assert_eq!(result.action, Action::Deleted);
 
         let updated = std::fs::read_to_string(&path).unwrap();
-        assert!(!updated.contains("BEGIN HOBNOB MANAGED BLOCK"));
+        assert!(!updated.contains("BEGIN VIGO MANAGED BLOCK"));
         assert!(!updated.contains("managed content"));
-        assert!(!updated.contains("END HOBNOB MANAGED BLOCK"));
+        assert!(!updated.contains("END VIGO MANAGED BLOCK"));
         assert!(updated.contains("header"));
         assert!(updated.contains("footer"));
     }
@@ -355,8 +355,8 @@ mod tests {
         assert_eq!(result.action, Action::Created);
 
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("# BEGIN HOBNOB MANAGED BLOCK myapp"));
-        assert!(content.contains("# END HOBNOB MANAGED BLOCK myapp"));
+        assert!(content.contains("# BEGIN VIGO MANAGED BLOCK myapp"));
+        assert!(content.contains("# END VIGO MANAGED BLOCK myapp"));
         assert!(content.contains("labeled content"));
     }
 }

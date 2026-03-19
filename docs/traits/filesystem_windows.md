@@ -31,7 +31,7 @@ Runs `wmic logicaldisk where DriveType=3 get DeviceID,Size,FreeSpace /value` to 
 ```yaml
 - name: disk-report
   type: file
-  target_path: C:\ProgramData\hobnob\disks.txt
+  target_path: C:\ProgramData\vigo\disks.txt
   content: |
     {{ range $drive, $info := .Traits.filesystem }}{{ $drive }}: {{ $info.percent_used }}% used
     {{ end }}

@@ -1,38 +1,38 @@
 # Config Publish Pipeline
 
-Operators edit `.hnb` files in a stage directory. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to the hidden `.live` directory the server reads from.
+Operators edit `.vgo` files in a stage directory. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to the hidden `.live` directory the server reads from.
 
 ## Directory Layout
 
 ```
-/srv/hobnob/policy/
+/srv/vigo/policy/
 ├── stage/                        ← operators edit here
 │   ├── modules/                  # Module definitions
 │   ├── templates/                # Template files for source: references
-│   ├── roles.hnb                 # All role definitions
-│   ├── common.hnb                # Inherited by all subdirs
+│   ├── roles.vgo                 # All role definitions
+│   ├── common.vgo                # Inherited by all subdirs
 │   ├── production/
-│   │   ├── common.hnb            # Inherited by production subdirs
-│   │   └── web/web.hnb           # Leaf entries with match:
-│   └── staging/staging.hnb
+│   │   ├── common.vgo            # Inherited by production subdirs
+│   │   └── web/web.vgo           # Leaf entries with match:
+│   └── staging/staging.vgo
 └── .live/                        ← server reads here (hidden, do not edit)
 ```
 
 The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../concepts/config-format.md#directory-inheritance) for details.
 
-The legacy layout with `thralls/`, `roles/`, and `vars/` directories is still supported.
+The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still supported.
 
 ## Usage
 
 ```bash
 # Validate without publishing
-hobnobcli config publish --dry-run
+vigogo config publish --dry-run
 
 # Validate and publish
-hobnobcli config publish
+vigogo config publish
 
 # Skip URL checks (air-gapped environments)
-hobnobcli config publish --skip-url-check
+vigogo config publish --skip-url-check
 ```
 
 ## Flags
@@ -46,12 +46,12 @@ hobnobcli config publish --skip-url-check
 
 ## How It Works
 
-1. Normalizes whitespace in all `.hnb`/`.yaml` files (strip trailing spaces, fix line endings)
+1. Normalizes whitespace in all `.vgo`/`.yaml` files (strip trailing spaces, fix line endings)
 2. Diffs `stage/` against `.live/` using SHA-256 hashes to find new, changed, and removed files
 3. Runs the **module linter** on changed/new module files (see below)
-4. Loads all `.hnb` files from `stage/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and thrall entries cross-reference each other.
+4. Loads all `.vgo` files from `stage/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and envoy entries cross-reference each other.
 5. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
-6. If validation passes and `--dry-run` is not set, atomically syncs `modules/`, `roles/`, `thralls/`, `templates/`, and `vars/` to `.live/`
+6. If validation passes and `--dry-run` is not set, atomically syncs `modules/`, `roles/`, `envoys/`, `templates/`, and `vars/` to `.live/`
 7. The CLI calls `POST /api/v1/config/reload` to trigger a server-side config reload
 8. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`
 
@@ -184,15 +184,15 @@ Permissions are enforced automatically after each publish. The server logs a war
 To set up the recommended permission model:
 
 ```bash
-# Create hobnob group for server process
-groupadd hobnob
+# Create vigo group for server process
+groupadd vigo
 
-# Lock down .live (only root/publish can write, hobd can read via group)
-chown -R root:hobnob /srv/hobnob/policy/.live
-chmod 750 /srv/hobnob/policy/.live
+# Lock down .live (only root/publish can write, vigosrv can read via group)
+chown -R root:vigo /srv/vigo/policy/.live
+chmod 750 /srv/vigo/policy/.live
 
 # Operators can write to stage
-chmod 770 /srv/hobnob/policy/stage
+chmod 770 /srv/vigo/policy/stage
 ```
 
 ## Custom Executor Resources
@@ -211,36 +211,36 @@ Unknown resource types are blocked by default. If a resource uses a custom execu
 
 If the server starts with invalid config in `.live/`, the behavior depends on the error type:
 
-- **Idempotency errors** (unguarded exec, reboot without subscribes, etc.) — **non-fatal**. The server starts with zero modules loaded. The error is logged at ERROR level and stored in `LastReloadError()`, surfaced via `hobnobcli doctor` and the web dashboard. The REST API, UI, and gRPC remain available so you can diagnose and fix the config. Thralls get empty policy (no changes applied) until the config is repaired and republished.
+- **Idempotency errors** (unguarded exec, reboot without subscribes, etc.) — **non-fatal**. The server starts with zero modules loaded. The error is logged at ERROR level and stored in `LastReloadError()`, surfaced via `vigogo doctor` and the web dashboard. The REST API, UI, and gRPC remain available so you can diagnose and fix the config. Envoys get empty policy (no changes applied) until the config is repaired and republished.
 - **Structural errors** (invalid YAML, dangling role→module references, secret resolution failures) — **fatal**. The server refuses to start. These indicate a fundamentally broken config tree.
 
 Since `config publish` runs the module linter before syncing, most idempotency errors are caught before they reach `.live/`. The non-fatal startup behavior is a safety net for configs that bypass publish (e.g., placed directly in `.live/`).
 
 ## First-Time Setup
 
-On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero thrall entries. Place your configs in `stage/` and run `hobnobcli config publish` to populate `.live/` for the first time.
+On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero envoy entries. Place your configs in `stage/` and run `vigogo config publish` to populate `.live/` for the first time.
 
 ## Output
 
 ```bash
-$ hobnobcli config publish --dry-run
-Validation passed: 12 modules, 3 roles, 8 thrall entries
-  + modules/nginx.hnb
-  + modules/sshd.hnb
-  + thralls/web.hnb
+$ vigogo config publish --dry-run
+Validation passed: 12 modules, 3 roles, 8 envoy entries
+  + modules/nginx.vgo
+  + modules/sshd.vgo
+  + envoys/web.vgo
 
-$ hobnobcli config publish
-Published: 12 modules, 3 roles, 8 thrall entries (15 files synced)
-  + modules/nginx.hnb
-  + modules/sshd.hnb
-  + thralls/web.hnb
+$ vigogo config publish
+Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
+  + modules/nginx.vgo
+  + modules/sshd.vgo
+  + envoys/web.vgo
 ```
 
 ## Integration with Change Approval
 
-When `publish.approval_required: true` is set in `server.yaml`, the publish flow adds an approval gate before configs go live. Instead of immediately syncing to `.live/` and triggering a reload, `hobnobcli config publish` creates a pending change request. The validated configs are staged but not activated.
+When `publish.approval_required: true` is set in `server.yaml`, the publish flow adds an approval gate before configs go live. Instead of immediately syncing to `.live/` and triggering a reload, `vigogo config publish` creates a pending change request. The validated configs are staged but not activated.
 
-A second admin must then run `hobnobcli config approve <id>` to activate the change. This enforces two-person review for all config changes reaching production.
+A second admin must then run `vigogo config approve <id>` to activate the change. This enforces two-person review for all config changes reaching production.
 
 If `approval_required` is `false` (the default), the publish flow works exactly as described above with no approval gate.
 

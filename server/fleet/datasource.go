@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/compliance"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/ui"
+	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/ui"
 )
 
 // DataSource implements ui.DataSource backed by a FleetIndex for real-time
@@ -36,14 +36,14 @@ func NewDataSource(fleet *FleetIndex, queries *db.Queries, runStore db.RunStore,
 }
 
 func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPageData {
-	allThralls := ds.fleet.AllThralls()
+	allEnvoys := ds.fleet.AllEnvoys()
 
-	totalThralls := len(allThralls)
+	totalEnvoys := len(allEnvoys)
 	activeCount := 0
 	driftedCount := 0
 	failureCount := 0
 
-	for _, ts := range allThralls {
+	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
@@ -59,8 +59,8 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 	}
 
 	driftRate := float64(0)
-	if totalThralls > 0 {
-		driftRate = float64(driftedCount) / float64(totalThralls) * 100
+	if totalEnvoys > 0 {
+		driftRate = float64(driftedCount) / float64(totalEnvoys) * 100
 	}
 
 	// Recent runs from ring buffer.
@@ -82,14 +82,14 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		ctx := context.Background()
 		dbRuns, err := ds.queries.ListAllRuns(ctx, 10)
 		if err == nil {
-			thrallMap := make(map[string]string, len(allThralls))
-			for _, ts := range allThralls {
-				thrallMap[ts.ID] = ts.Hostname
+			envoyMap := make(map[string]string, len(allEnvoys))
+			for _, ts := range allEnvoys {
+				envoyMap[ts.ID] = ts.Hostname
 			}
 			for _, r := range dbRuns {
 				recentRuns = append(recentRuns, ui.RunRow{
 					ID:           r.ID,
-					Hostname:     thrallMap[r.ThrallID],
+					Hostname:     envoyMap[r.EnvoyID],
 					StartedAt:    r.StartedAt,
 					Status:       r.Status,
 					ModuleCount:  r.ModuleCount,
@@ -100,8 +100,8 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		}
 	}
 
-	fleetRows := make([]ui.FleetRow, 0, len(allThralls))
-	for _, ts := range allThralls {
+	fleetRows := make([]ui.FleetRow, 0, len(allEnvoys))
+	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
@@ -116,8 +116,8 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 
 	return ui.DashboardPageData{
 		PageData:       ui.PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalThralls:   totalThralls,
-		ActiveThralls:  activeCount,
+		TotalEnvoys:   totalEnvoys,
+		ActiveEnvoys:  activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     recentRuns,
@@ -129,7 +129,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 	summary := ds.fleet.ComplianceSummary()
 	total := int64(summary.Total)
 
-	// Stale thralls are excluded from the compliance percentage — they represent
+	// Stale envoys are excluded from the compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := total - int64(summary.LostContact)
 	compPct := float64(0)
@@ -137,10 +137,10 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		compPct = float64(summary.Compliant) / float64(activeTotal) * 100
 	}
 
-	// Gather non-compliant thralls.
+	// Gather non-compliant envoys.
 	var nonCompliant []ui.ComplianceRow
-	allThralls := ds.fleet.AllThralls()
-	for _, ts := range allThralls {
+	allEnvoys := ds.fleet.AllEnvoys()
+	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
@@ -199,19 +199,19 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 func (ds *DataSource) DashboardStatsData(baseInterval time.Duration) ui.DashboardStatsFragmentData {
 	d := ds.DashboardData(baseInterval)
 	return ui.DashboardStatsFragmentData{
-		TotalThralls:   d.TotalThralls,
-		ActiveThralls:  d.ActiveThralls,
+		TotalEnvoys:   d.TotalEnvoys,
+		ActiveEnvoys:  d.ActiveEnvoys,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
 }
 
-func (ds *DataSource) ThrallsData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) ui.ThrallsPageData {
-	thralls, hasMore := ds.fleet.PaginatedThralls(afterHostname, limit, statusFilter)
+func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) ui.EnvoysPageData {
+	envoys, hasMore := ds.fleet.PaginatedEnvoys(afterHostname, limit, statusFilter)
 
-	rows := make([]ui.ThrallRow, 0, len(thralls))
-	for _, ts := range thralls {
-		rows = append(rows, ui.ThrallRow{
+	rows := make([]ui.EnvoyRow, 0, len(envoys))
+	for _, ts := range envoys {
+		rows = append(rows, ui.EnvoyRow{
 			ID:         ts.ID,
 			Hostname:   ts.Hostname,
 			IPAddress:  ts.IP,
@@ -226,48 +226,48 @@ func (ds *DataSource) ThrallsData(baseInterval time.Duration, statusFilter strin
 		nextCursor = rows[len(rows)-1].Hostname
 	}
 
-	return ui.ThrallsPageData{
-		PageData:     ui.PageData{Title: "Thralls", ActiveNav: "thralls"},
-		Thralls:      rows,
+	return ui.EnvoysPageData{
+		PageData:     ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:      rows,
 		StatusFilter: statusFilter,
-		ThrallCount:  len(rows),
+		EnvoyCount:  len(rows),
 		HasMore:      hasMore,
 		NextCursor:   nextCursor,
 	}
 }
 
-func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Duration) (ui.ThrallDetailPageData, error) {
+func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration) (ui.EnvoyDetailPageData, error) {
 	// FleetIndex for header (shell only — runs and facts loaded via fragments).
-	ts := ds.fleet.GetThrall(thrallID)
+	ts := ds.fleet.GetEnvoy(envoyID)
 	if ts == nil {
 		ctx := context.Background()
-		thrall, err := ds.queries.GetThrallByID(ctx, thrallID)
+		envoy, err := ds.queries.GetEnvoyByID(ctx, envoyID)
 		if err != nil {
-			return ui.ThrallDetailPageData{}, err
+			return ui.EnvoyDetailPageData{}, err
 		}
 		lastSeen := time.Time{}
-		if thrall.LastSeen.Valid {
-			lastSeen = thrall.LastSeen.Time
+		if envoy.LastSeen.Valid {
+			lastSeen = envoy.LastSeen.Time
 		}
 		var recent []compliance.RunInfo
-		runs, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{ThrallID: thrallID, Limit: 1})
+		runs, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{EnvoyID: envoyID, Limit: 1})
 		if err == nil && len(runs) > 0 {
 			recent = []compliance.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount}}
 		}
 		compStatus := compliance.ComputeStatus(recent, lastSeen, baseInterval)
-		ts = &ThrallState{
-			ID:               thrall.ID,
-			Hostname:         thrall.Hostname,
-			IP:               thrall.IpAddress,
-			EnrolledAt:       thrall.EnrolledAt,
+		ts = &EnvoyState{
+			ID:               envoy.ID,
+			Hostname:         envoy.Hostname,
+			IP:               envoy.IpAddress,
+			EnrolledAt:       envoy.EnrolledAt,
 			LastSeen:         lastSeen,
 			ComplianceStatus: compStatus,
 		}
 	}
 
-	return ui.ThrallDetailPageData{
-		PageData: ui.PageData{Title: "Thrall: " + ts.Hostname, ActiveNav: "thralls"},
-		Thrall: ui.ThrallRow{
+	return ui.EnvoyDetailPageData{
+		PageData: ui.PageData{Title: "Envoy: " + ts.Hostname, ActiveNav: "envoys"},
+		Envoy: ui.EnvoyRow{
 			ID:         ts.ID,
 			Hostname:   ts.Hostname,
 			IPAddress:  ts.IP,
@@ -278,21 +278,21 @@ func (ds *DataSource) ThrallDetailData(thrallID string, baseInterval time.Durati
 	}, nil
 }
 
-func (ds *DataSource) ThrallRunsData(thrallID string) (ui.ThrallRunsFragmentData, error) {
-	ts := ds.fleet.GetThrall(thrallID)
-	hostname := thrallID
+func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, error) {
+	ts := ds.fleet.GetEnvoy(envoyID)
+	hostname := envoyID
 	if ts != nil {
 		hostname = ts.Hostname
 	}
 
 	ctx := context.Background()
-	dbRuns, err := ds.queries.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
-		ThrallID: thrallID,
+	dbRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
+		EnvoyID: envoyID,
 		Limit:    20,
 	})
 	if err != nil {
-		slog.Error("failed to list runs for thrall", "error", err)
-		return ui.ThrallRunsFragmentData{}, nil
+		slog.Error("failed to list runs for envoy", "error", err)
+		return ui.EnvoyRunsFragmentData{}, nil
 	}
 
 	// Batch-fetch all run results in one query.
@@ -322,10 +322,10 @@ func (ds *DataSource) ThrallRunsData(thrallID string) (ui.ThrallRunsFragmentData
 		})
 	}
 
-	var runs []ui.ThrallDetailRunRow
+	var runs []ui.EnvoyDetailRunRow
 	var driftHistory []ui.DriftPoint
 	for _, r := range dbRuns {
-		runs = append(runs, ui.ThrallDetailRunRow{
+		runs = append(runs, ui.EnvoyDetailRunRow{
 			RunRow: ui.RunRow{
 				ID:           r.ID,
 				Hostname:     hostname,
@@ -345,11 +345,11 @@ func (ds *DataSource) ThrallRunsData(thrallID string) (ui.ThrallRunsFragmentData
 		})
 	}
 
-	return ui.ThrallRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
+	return ui.EnvoyRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
 }
 
-func (ds *DataSource) ThrallFactsData(thrallID string) (ui.ThrallFactsFragmentData, error) {
-	ts := ds.fleet.GetThrall(thrallID)
+func (ds *DataSource) EnvoyFactsData(envoyID string) (ui.EnvoyFactsFragmentData, error) {
+	ts := ds.fleet.GetEnvoy(envoyID)
 	facts := make(map[string]any)
 	if ts != nil && ts.Traits != nil {
 		for k, v := range ts.Traits {
@@ -357,14 +357,14 @@ func (ds *DataSource) ThrallFactsData(thrallID string) (ui.ThrallFactsFragmentDa
 		}
 	} else {
 		ctx := context.Background()
-		cf, err := ds.queries.GetLatestThrallTraits(ctx, thrallID)
+		cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
 		if err == nil {
 			if err := json.Unmarshal([]byte(cf.Traits), &facts); err != nil {
-				slog.Warn("malformed traits JSON", "thrall_id", thrallID, "error", err)
+				slog.Warn("malformed traits JSON", "envoy_id", envoyID, "error", err)
 			}
 		}
 	}
-	return ui.ThrallFactsFragmentData{Facts: facts}, nil
+	return ui.EnvoyFactsFragmentData{Facts: facts}, nil
 }
 
 func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
@@ -376,14 +376,14 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 	}
 
 	// Look up hostnames individually from FleetIndex (O(1) per run) instead
-	// of copying the entire thralls map.
+	// of copying the entire envoys map.
 	var rows []ui.RunRow
 	for _, r := range allRuns {
 		if statusFilter != "" && r.Status != statusFilter {
 			continue
 		}
-		hostname := r.ThrallID
-		if ts := ds.fleet.GetThrall(r.ThrallID); ts != nil {
+		hostname := r.EnvoyID
+		if ts := ds.fleet.GetEnvoy(r.EnvoyID); ts != nil {
 			hostname = ts.Hostname
 		}
 		rows = append(rows, ui.RunRow{
@@ -413,15 +413,15 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 	}
 
 	// Get hostname from FleetIndex.
-	hostname := r.ThrallID
-	thrallID := r.ThrallID
-	ts := ds.fleet.GetThrall(r.ThrallID)
+	hostname := r.EnvoyID
+	envoyID := r.EnvoyID
+	ts := ds.fleet.GetEnvoy(r.EnvoyID)
 	if ts != nil {
 		hostname = ts.Hostname
 	} else {
-		thrall, err := ds.queries.GetThrallByID(ctx, r.ThrallID)
+		envoy, err := ds.queries.GetEnvoyByID(ctx, r.EnvoyID)
 		if err == nil {
-			hostname = thrall.Hostname
+			hostname = envoy.Hostname
 		}
 	}
 
@@ -449,7 +449,7 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 
 	return ui.RunDetailPageData{
 		PageData: ui.PageData{Title: "Run Detail", ActiveNav: "runs"},
-		ThrallID: thrallID,
+		EnvoyID: envoyID,
 		Run: ui.RunRow{
 			ID:           r.ID,
 			Hostname:     hostname,
@@ -474,7 +474,7 @@ func (ds *DataSource) ConfigData(hostname string) (ui.ConfigPageData, error) {
 	}
 
 	return ui.ConfigPageData{
-		PageData: ui.PageData{Title: "Config: " + hostname, ActiveNav: "thralls"},
+		PageData: ui.PageData{Title: "Config: " + hostname, ActiveNav: "envoys"},
 		Hostname: hostname,
 		RawYAML:  yamlStr,
 	}, nil
@@ -488,14 +488,14 @@ func (ds *DataSource) PlanDetailData(planID string) (ui.PlanDetailPageData, erro
 	}
 
 	// Get hostname from FleetIndex or DB.
-	hostname := p.ThrallID
-	ts := ds.fleet.GetThrall(p.ThrallID)
+	hostname := p.EnvoyID
+	ts := ds.fleet.GetEnvoy(p.EnvoyID)
 	if ts != nil {
 		hostname = ts.Hostname
 	} else {
-		thrall, err := ds.queries.GetThrallByID(ctx, p.ThrallID)
+		envoy, err := ds.queries.GetEnvoyByID(ctx, p.EnvoyID)
 		if err == nil {
-			hostname = thrall.Hostname
+			hostname = envoy.Hostname
 		}
 	}
 
@@ -528,9 +528,9 @@ func (ds *DataSource) PlanDetailData(planID string) (ui.PlanDetailPageData, erro
 	}
 
 	return ui.PlanDetailPageData{
-		PageData:    ui.PageData{Title: "Plan Detail", ActiveNav: "thralls"},
+		PageData:    ui.PageData{Title: "Plan Detail", ActiveNav: "envoys"},
 		PlanID:      p.ID,
-		ThrallID:    p.ThrallID,
+		EnvoyID:    p.EnvoyID,
 		Hostname:    hostname,
 		CreatedAt:   p.CreatedAt,
 		Results:     results,
@@ -555,14 +555,14 @@ func planActionColor(action string) string {
 	}
 }
 
-// SecurityScanData aggregates security scan traits across all thralls.
+// SecurityScanData aggregates security scan traits across all envoys.
 func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
-	allThralls := ds.fleet.AllThralls()
+	allEnvoys := ds.fleet.AllEnvoys()
 	var data ui.SecurityScanPageData
-	data.TotalHosts = int64(len(allThralls))
+	data.TotalHosts = int64(len(allEnvoys))
 	cveSet := make(map[string]bool)
 
-	for _, ts := range allThralls {
+	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
@@ -570,7 +570,7 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			continue
 		}
 
-		// Check if this thrall has any security_scan data.
+		// Check if this envoy has any security_scan data.
 		hasScan := false
 		row := ui.SecurityHostRow{ID: ts.ID, Hostname: ts.Hostname}
 
@@ -676,7 +676,7 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 
 	// Collect CVE IDs from flattened traits.
 	// Trivy CVEs are stored as security_scan.trivy.cves.0, .1, .2, etc.
-	for _, ts := range allThralls {
+	for _, ts := range allEnvoys {
 		if ts.Revoked || ts.Traits == nil {
 			continue
 		}
@@ -705,9 +705,9 @@ func parseInt64(s string) int64 {
 	return n
 }
 
-// SecurityScanTraits returns the flattened security_scan.* traits for a single thrall.
-func (ds *DataSource) SecurityScanTraits(thrallID string) (map[string]string, bool) {
-	ts, ok, _ := ds.fleet.GetThrallLite(thrallID)
+// SecurityScanTraits returns the flattened security_scan.* traits for a single envoy.
+func (ds *DataSource) SecurityScanTraits(envoyID string) (map[string]string, bool) {
+	ts, ok, _ := ds.fleet.GetEnvoyLite(envoyID)
 	if !ok || ts.Traits == nil {
 		return nil, false
 	}

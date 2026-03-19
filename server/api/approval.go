@@ -13,11 +13,11 @@ import (
 	"strconv"
 	"time"
 
-	hobnobauth "github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/publish"
+	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/publish"
 )
 
 // ApprovalHandler manages the two-person change approval workflow for
@@ -287,7 +287,7 @@ func StartExpiryLoop(ctx context.Context, queries *db.Queries) {
 // usernameFromRequest extracts the username from the auth context.
 // Returns "anonymous" if no user is present (auth disabled).
 func usernameFromRequest(r *http.Request) string {
-	u := hobnobauth.UserFromContext(r.Context())
+	u := vigoauth.UserFromContext(r.Context())
 	if u != nil && u.Username != "" {
 		return u.Username
 	}

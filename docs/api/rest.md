@@ -1,6 +1,6 @@
 # REST API
 
-In addition to the grpc-gateway proxy (which exposes all `HobnobAdmin` RPCs under `/api/v1/`), the server mounts several direct REST handlers. These endpoints are not proxied through grpc-gateway and exist for features that benefit from direct HTTP handling.
+In addition to the grpc-gateway proxy (which exposes all `VigoAdmin` RPCs under `/api/v1/`), the server mounts several direct REST handlers. These endpoints are not proxied through grpc-gateway and exist for features that benefit from direct HTTP handling.
 
 All endpoints return JSON and accept JSON request bodies. Errors use the format `{"message": "..."}`.
 
@@ -10,7 +10,7 @@ Ad-hoc command dispatch to connected agents.
 
 ### POST /api/v1/push
 
-Dispatch a command to matching thralls.
+Dispatch a command to matching envoys.
 
 **Request body:**
 
@@ -251,7 +251,7 @@ Ask the AI assistant a question about your fleet.
 {
   "question": "Why is web-01.example.com failing?",
   "context": {
-    "thrall": "web-01.example.com"
+    "envoy": "web-01.example.com"
   },
   "history": [
     {"role": "user", "content": "previous question"},
@@ -265,7 +265,7 @@ Ask the AI assistant a question about your fleet.
 ```json
 {
   "answer": "web-01.example.com is failing because...",
-  "tools_used": ["get_thrall", "list_runs"],
+  "tools_used": ["get_envoy", "list_runs"],
   "tokens_used": 1234
 }
 ```
@@ -274,9 +274,9 @@ Ask the AI assistant a question about your fleet.
 
 Events are sent as server-sent events with JSON payloads:
 
-- `{"type": "status", "status": "thinking", "tools_called": ["get_thrall"]}`
-- `{"type": "delta", "text": "The thrall is..."}`
-- `{"type": "done", "tools_used": ["get_thrall"], "tokens_used": 1234}`
+- `{"type": "status", "status": "thinking", "tools_called": ["get_envoy"]}`
+- `{"type": "delta", "text": "The envoy is..."}`
+- `{"type": "done", "tools_used": ["get_envoy"], "tokens_used": 1234}`
 
 ---
 
@@ -295,11 +295,11 @@ Health check endpoint that validates server subsystems.
     {"name": "database", "status": "pass"},
     {"name": "tls", "status": "pass", "message": "expires 2027-03-13"},
     {"name": "secrets", "status": "pass", "message": "local"},
-    {"name": "license", "status": "pass", "message": "compliant, 12/25 thralls"},
+    {"name": "license", "status": "pass", "message": "compliant, 12/25 envoys"},
     {"name": "spanner", "status": "skip", "message": "standalone"},
     {"name": "smtp", "status": "skip", "message": "not configured"},
     {"name": "config", "status": "pass", "message": "15 modules, 8 entries"},
-    {"name": "stale_thralls", "status": "pass"}
+    {"name": "stale_envoys", "status": "pass"}
   ]
 }
 ```
@@ -312,7 +312,7 @@ Check statuses: `pass`, `warn`, `fail`, `skip`. Overall status: `healthy`, `degr
 
 ### GET /api/v1/license
 
-Returns current license status including stage, tier, thrall counts, and expiration.
+Returns current license status including stage, tier, envoy counts, and expiration.
 
 **Response:**
 
@@ -324,13 +324,13 @@ Returns current license status including stage, tier, thrall counts, and expirat
     "customer_id": "acme",
     "license_id": "lic-20260313-acme",
     "tier": "enterprise",
-    "max_thralls": 500,
+    "max_envoys": 500,
     "issued_at": "2026-03-13",
     "expires_at": "2027-03-13",
     "version": 1
   },
-  "active_thralls": 12,
-  "max_thralls": 500,
+  "active_envoys": 12,
+  "max_envoys": 500,
   "expires_at": "2027-03-13",
   "days_remaining": 365
 }
@@ -342,9 +342,9 @@ The `tier` field is `"free"`, `"standard"`, `"growth"`, or `"enterprise"`. Omitt
 
 ## Traits
 
-### GET /api/v1/thralls/{hostname}/traits
+### GET /api/v1/envoys/{hostname}/traits
 
-Returns the latest collected traits for a thrall by hostname.
+Returns the latest collected traits for a envoy by hostname.
 
 **Response:**
 
@@ -365,7 +365,7 @@ Returns the latest collected traits for a thrall by hostname.
 
 ### GET /api/v1/inventory
 
-Query thralls by trait values.
+Query envoys by trait values.
 
 **Query parameters:**
 
@@ -379,7 +379,7 @@ Query thralls by trait values.
 ```json
 {
   "count": 5,
-  "thralls": [
+  "envoys": [
     {
       "hostname": "web-01.example.com",
       "ip_address": "10.0.1.10",
@@ -402,9 +402,9 @@ Returns spanner role and spoke statuses (hub mode only).
 
 Returns detailed status for a single spoke.
 
-### GET /api/v1/spanner/spokes/{id}/thralls
+### GET /api/v1/spanner/spokes/{id}/envoys
 
-List thralls on a specific spoke.
+List envoys on a specific spoke.
 
 ### GET /api/v1/spanner/spokes/{id}/runs
 
@@ -412,17 +412,17 @@ List recent runs on a specific spoke.
 
 ### POST /api/v1/spanner/spokes/{id}/push
 
-Force-push to thralls on a specific spoke.
+Force-push to envoys on a specific spoke.
 
 ### POST /api/v1/spanner/reassign
 
-Reassign a thrall from one spoke to another.
+Reassign a envoy from one spoke to another.
 
 **Request body:**
 
 ```json
 {
-  "thrall_id": "...",
+  "envoy_id": "...",
   "from_spoke_id": "spoke-east",
   "to_spoke_id": "spoke-west"
 }
@@ -430,7 +430,7 @@ Reassign a thrall from one spoke to another.
 
 ### POST /api/v1/spanner/spokes/{id}/drain
 
-Drain all thralls from a spoke (move to target spoke or auto-route by patterns).
+Drain all envoys from a spoke (move to target spoke or auto-route by patterns).
 
 ---
 
@@ -477,19 +477,19 @@ If no entry matches, `matched` is `false` and other fields are omitted.
 
 ### GET /api/v1/config/tree
 
-Returns the directory inheritance structure for visualization. Shows `common.hnb` files at each level, leaf entries with their match patterns, and accumulated module totals.
+Returns the directory inheritance structure for visualization. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated module totals.
 
 **Response:** A tree of nodes with `dir`, `file`, `modules`, `roles`, `match`, `total`, `excluded`, and `children` fields.
 
 ### GET /api/v1/config/search
 
-Search thrall entries by match pattern, module name, or var name. Returns matching entries with their full inheritance chain and accumulated modules.
+Search envoy entries by match pattern, module name, or var name. Returns matching entries with their full inheritance chain and accumulated modules.
 
 **Query parameters:**
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `match` | No | Glob pattern to match against thrall `match:` patterns (e.g., `*web*`) |
+| `match` | No | Glob pattern to match against envoy `match:` patterns (e.g., `*web*`) |
 | `module` | No | Module name — find entries that use this module (inherited or direct) |
 | `var` | No | Var name — find entries that define this var |
 
@@ -504,8 +504,8 @@ At least one parameter is required.
       "match": "web*.prod.example.com",
       "dir": "production/web",
       "inheritance": [
-        {"dir": "", "file": "common.hnb", "modules": ["sshd", "monitoring"]},
-        {"dir": "production", "file": "common.hnb", "modules": ["log-shipping"]}
+        {"dir": "", "file": "common.vgo", "modules": ["sshd", "monitoring"]},
+        {"dir": "production", "file": "common.vgo", "modules": ["log-shipping"]}
       ],
       "own_modules": ["nginx"],
       "total": ["sshd", "monitoring", "log-shipping", "nginx"],
@@ -597,9 +597,9 @@ Record a config publish for audit trail.
 ```json
 {
   "operator": "admin",
-  "changed_files": ["modules/nginx.hnb"],
+  "changed_files": ["modules/nginx.vgo"],
   "removed_files": [],
-  "diff_summary": "--- modules/nginx.hnb\n+++ modules/nginx.hnb\n..."
+  "diff_summary": "--- modules/nginx.vgo\n+++ modules/nginx.vgo\n..."
 }
 ```
 
@@ -649,7 +649,7 @@ Remove the config publish freeze.
 
 ### POST /api/v1/config/reload
 
-Re-read all config files from disk. Called automatically by `hobnobcli config publish`.
+Re-read all config files from disk. Called automatically by `vigogo config publish`.
 
 ---
 
@@ -665,7 +665,7 @@ Create a pending config change. The change must be approved by a different admin
 
 ```json
 {
-  "diff_summary": "--- modules/nginx.hnb\n+++ modules/nginx.hnb\n..."
+  "diff_summary": "--- modules/nginx.vgo\n+++ modules/nginx.vgo\n..."
 }
 ```
 
@@ -749,13 +749,13 @@ Reject a pending config change.
 
 ### POST /api/v1/secrets/rotated
 
-Notify the server that a secret has been changed. Triggers `watch_secret` resources on affected thralls at their next check-in. Called automatically by `hobnobcli secrets set`.
+Notify the server that a secret has been changed. Triggers `watch_secret` resources on affected envoys at their next check-in. Called automatically by `vigogo secrets set`.
 
 **Request body:**
 
 ```json
 {
-  "path": "hobnob/grafana/admin-password"
+  "path": "vigo/grafana/admin-password"
 }
 ```
 
@@ -763,18 +763,18 @@ Notify the server that a secret has been changed. Triggers `watch_secret` resour
 
 ```json
 {
-  "path": "hobnob/grafana/admin-password",
+  "path": "vigo/grafana/admin-password",
   "affected": 2
 }
 ```
 
 ---
 
-## Thrall Tags
+## Envoy Tags
 
-### PUT /api/v1/thralls/{id}/tags
+### PUT /api/v1/envoys/{id}/tags
 
-Set tags on a thrall.
+Set tags on a envoy.
 
 **Request body:**
 
@@ -784,17 +784,17 @@ Set tags on a thrall.
 }
 ```
 
-### GET /api/v1/thralls/{id}/tags
+### GET /api/v1/envoys/{id}/tags
 
-Get tags for a thrall.
+Get tags for a envoy.
 
 ---
 
-## Thrall Maintenance
+## Envoy Maintenance
 
-### PUT /api/v1/thralls/{id}/maintenance
+### PUT /api/v1/envoys/{id}/maintenance
 
-Set a maintenance window for a thrall.
+Set a maintenance window for a envoy.
 
 **Request body:**
 
@@ -804,23 +804,23 @@ Set a maintenance window for a thrall.
 }
 ```
 
-### DELETE /api/v1/thralls/{id}/maintenance
+### DELETE /api/v1/envoys/{id}/maintenance
 
 Clear the maintenance window.
 
 ---
 
-## Thrall Compliance
+## Envoy Compliance
 
-### GET /api/v1/thralls/{id}/compliance
+### GET /api/v1/envoys/{id}/compliance
 
-Returns the current compliance status for a thrall.
+Returns the current compliance status for a envoy.
 
 **Response:**
 
 ```json
 {
-  "thrall_id": "a1b2c3d4",
+  "envoy_id": "a1b2c3d4",
   "hostname": "web-01.example.com",
   "status": "compliant",
   "last_run_at": "2026-03-16T10:00:00Z"
@@ -829,15 +829,15 @@ Returns the current compliance status for a thrall.
 
 ---
 
-## Thrall Force Update
+## Envoy Force Update
 
-### POST /api/v1/thralls/{id}/update
+### POST /api/v1/envoys/{id}/update
 
-Force an immediate check-in for a specific thrall. The thrall will receive the update at its next poll cycle.
+Force an immediate check-in for a specific envoy. The envoy will receive the update at its next poll cycle.
 
-### POST /api/v1/thralls/update
+### POST /api/v1/envoys/update
 
-Force an immediate check-in for all thralls.
+Force an immediate check-in for all envoys.
 
 ---
 
@@ -891,7 +891,7 @@ Delete a user account. Admin only. Cannot delete the last admin.
 
 ## API Tokens
 
-Create and manage API tokens for programmatic access. Tokens use the `hbt_` prefix.
+Create and manage API tokens for programmatic access. Tokens use the `vgot_` prefix.
 
 ### POST /api/v1/auth/tokens
 
@@ -912,7 +912,7 @@ Create a new API token. Requires authentication.
 {
   "id": "tok-abc123",
   "name": "ci-pipeline",
-  "token": "hbt_...",
+  "token": "vgot_...",
   "expires_at": "2026-04-15T10:00:00Z"
 }
 ```
@@ -933,7 +933,7 @@ Revoke an API token.
 
 ### GET /api/v1/preview
 
-Multi-node impact analysis showing which thralls would be affected by changes to a module.
+Multi-node impact analysis showing which envoys would be affected by changes to a module.
 
 **Query parameters:**
 
@@ -947,8 +947,8 @@ Multi-node impact analysis showing which thralls would be affected by changes to
 {
   "module": "nginx",
   "affected": [
-    {"hostname": "web-01.example.com", "thrall_id": "a1b2c3d4"},
-    {"hostname": "web-02.example.com", "thrall_id": "e5f6g7h8"}
+    {"hostname": "web-01.example.com", "envoy_id": "a1b2c3d4"},
+    {"hostname": "web-02.example.com", "envoy_id": "e5f6g7h8"}
   ],
   "count": 2
 }
@@ -998,9 +998,9 @@ Returns database statistics including file size, WAL size, page count, page size
   "page_count": 1024,
   "page_size": 4096,
   "tables": {
-    "thralls": 42,
+    "envoys": 42,
     "runs": 1250,
-    "thrall_traits": 42
+    "envoy_traits": 42
   }
 }
 ```
@@ -1013,9 +1013,9 @@ Returns all tables with their row counts.
 
 ```json
 {
-  "thralls": 42,
+  "envoys": 42,
   "runs": 1250,
-  "thrall_traits": 42
+  "envoy_traits": 42
 }
 ```
 
@@ -1073,7 +1073,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 
 ```json
 {
-  "sql": "SELECT hostname, ip_address FROM thralls WHERE status = 'active' LIMIT 10"
+  "sql": "SELECT hostname, ip_address FROM envoys WHERE status = 'active' LIMIT 10"
 }
 ```
 
@@ -1120,7 +1120,7 @@ Returns a JSON array of SIEM events derived from run results.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `since` | 24 hours ago | RFC 3339 timestamp. Only events after this time are returned |
-| `thrall` | (all) | Filter by hostname |
+| `envoy` | (all) | Filter by hostname |
 | `limit` | 1000 | Maximum events to return (max 10000) |
 
 **Response:**
@@ -1130,7 +1130,7 @@ Returns a JSON array of SIEM events derived from run results.
   {
     "timestamp": "2026-03-13T10:05:00Z",
     "hostname": "web-01.example.com",
-    "thrall_id": "a1b2c3d4",
+    "envoy_id": "a1b2c3d4",
     "run_id": "run-5678",
     "module_name": "nginx",
     "resource_name": "nginx.conf",
@@ -1139,7 +1139,7 @@ Returns a JSON array of SIEM events derived from run results.
     "changed": true,
     "duration_ms": 42,
     "run_status": "compliant",
-    "source": "hobnob"
+    "source": "vigo"
   }
 ]
 ```
@@ -1147,8 +1147,8 @@ Returns a JSON array of SIEM events derived from run results.
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | string | RFC 3339 time of the resource action |
-| `hostname` | string | Thrall hostname |
-| `thrall_id` | string | Thrall UUID |
+| `hostname` | string | Envoy hostname |
+| `envoy_id` | string | Envoy UUID |
 | `run_id` | string | Convergence run ID |
 | `module_name` | string | Module that owns the resource |
 | `resource_name` | string | Resource name within the module |
@@ -1158,7 +1158,7 @@ Returns a JSON array of SIEM events derived from run results.
 | `error` | string | Error message (omitted when empty) |
 | `duration_ms` | int | Time spent on this resource in milliseconds |
 | `run_status` | string | Overall run status (compliant, drifted, failing) |
-| `source` | string | Always `"hobnob"` |
+| `source` | string | Always `"vigo"` |
 
 ### GET /api/v1/export/cmdb
 
@@ -1178,7 +1178,7 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
   {
     "hostname": "web-01.example.com",
     "ip": "10.0.1.10",
-    "thrall_id": "a1b2c3d4",
+    "envoy_id": "a1b2c3d4",
     "os": "ubuntu",
     "os_version": "24.04",
     "architecture": "x86_64",
@@ -1196,9 +1196,9 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `hostname` | string | Thrall hostname |
+| `hostname` | string | Envoy hostname |
 | `ip` | string | IP address |
-| `thrall_id` | string | Thrall UUID |
+| `envoy_id` | string | Envoy UUID |
 | `os` | string | OS family |
 | `os_version` | string | OS version |
 | `architecture` | string | CPU architecture |
@@ -1223,7 +1223,7 @@ Create an on-demand backup snapshot. Requires admin authentication.
 
 ```json
 {
-  "path": "/backup/hobnob-20260315T140000Z.tar.gz",
+  "path": "/backup/vigo-20260315T140000Z.tar.gz",
   "size": 4218924,
   "created_at": "2026-03-15T14:00:00Z"
 }
@@ -1233,7 +1233,7 @@ Create an on-demand backup snapshot. Requires admin authentication.
 
 Download the latest backup archive as a `.tar.gz` file. Requires admin authentication.
 
-**Response:** Binary stream with `Content-Type: application/gzip` and `Content-Disposition: attachment; filename="hobnob-backup.tar.gz"`.
+**Response:** Binary stream with `Content-Type: application/gzip` and `Content-Disposition: attachment; filename="vigo-backup.tar.gz"`.
 
 ---
 
@@ -1248,7 +1248,7 @@ Download the latest backup archive as a `.tar.gz` file. Requires admin authentic
 
 ### GET /api/v1/export/oscal
 
-Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `findings` array is currently empty; future versions will map Hobnob compliance data to OSCAL control findings.
+Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `findings` array is currently empty; future versions will map Vigo compliance data to OSCAL control findings.
 
 **Response:**
 
@@ -1257,7 +1257,7 @@ Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `fi
   "assessment-results": {
     "uuid": "...",
     "metadata": {
-      "title": "Hobnob Assessment Results",
+      "title": "Vigo Assessment Results",
       "last-modified": "2026-03-13T10:00:00Z",
       "version": "1.0.0",
       "oscal-version": "1.1.2"
@@ -1265,7 +1265,7 @@ Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `fi
     "results": [
       {
         "uuid": "...",
-        "title": "Hobnob Compliance Assessment",
+        "title": "Vigo Compliance Assessment",
         "start": "2026-03-13T10:00:00Z",
         "findings": [],
         "remarks": "Stub: OSCAL findings mapping is not yet implemented."

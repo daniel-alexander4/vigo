@@ -203,7 +203,7 @@ pub async fn apply(
         .unwrap_or(Path::new("/tmp"));
 
     // Download to temp file in same directory for atomic rename.
-    let tmp_path = dir.join(format!(".hobnob-update-{}", std::process::id()));
+    let tmp_path = dir.join(format!(".vigo-update-{}", std::process::id()));
     let _cleanup = TempFileGuard(tmp_path.clone());
 
     let download_url = info.download_url.clone();

@@ -1,15 +1,15 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! rcctl service installation for the Hobnob agent on OpenBSD.
+//! rcctl service installation for the Vigo agent on OpenBSD.
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use tracing::info;
 
-const INSTALL_PATH: &str = "/usr/local/sbin/hobnob";
-const SERVICE_NAME: &str = "hobnob_thrall";
-const RC_D_PATH: &str = "/etc/rc.d/hobnob_thrall";
+const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
+const SERVICE_NAME: &str = "vigo_envoy";
+const RC_D_PATH: &str = "/etc/rc.d/vigo_envoy";
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
@@ -55,7 +55,7 @@ pub async fn install_service(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(INSTALL_PATH, std::fs::Permissions::from_mode(0o755))?;
         }
-        info!(path = INSTALL_PATH, "installed hobnob binary");
+        info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
     // Write rc.d script.
@@ -82,7 +82,7 @@ pub async fn install_service(
         }
     }
 
-    println!("Hobnob agent service installed and started.");
+    println!("Vigo agent service installed and started.");
     println!("  rcctl check {}    # check status", SERVICE_NAME);
 
     Ok(grpc_addr)
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn test_rc_script() {
         let script = rc_script();
-        assert!(script.contains("/usr/local/sbin/hobnob"));
+        assert!(script.contains("/usr/local/sbin/vigo"));
         assert!(!script.contains("--server"), "service should read config from file");
         assert!(script.contains("rc.subr"));
     }

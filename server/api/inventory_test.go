@@ -12,14 +12,14 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 func seedInventory(t *testing.T) (*http.ServeMux, *db.Queries) {
 	t.Helper()
 	sqlDB := openTestDB(t)
 
-	// Insert three thralls with different traits.
+	// Insert three envoys with different traits.
 	for _, tc := range []struct {
 		hostname string
 		ip       string
@@ -31,14 +31,14 @@ func seedInventory(t *testing.T) (*http.ServeMux, *db.Queries) {
 	} {
 		id := uuid.New().String()
 		_, err := sqlDB.Exec(
-			`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+			`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
 			id, tc.hostname, tc.ip, "pubkey-pem",
 		)
 		if err != nil {
-			t.Fatalf("insert thrall %s: %v", tc.hostname, err)
+			t.Fatalf("insert envoy %s: %v", tc.hostname, err)
 		}
 		_, err = sqlDB.Exec(
-			`INSERT INTO thrall_traits (id, thrall_id, traits) VALUES (?, ?, ?)`,
+			`INSERT INTO envoy_traits (id, envoy_id, traits) VALUES (?, ?, ?)`,
 			uuid.New().String(), id, tc.traits,
 		)
 		if err != nil {
@@ -46,11 +46,11 @@ func seedInventory(t *testing.T) (*http.ServeMux, *db.Queries) {
 		}
 	}
 
-	// Insert a revoked thrall (should be excluded).
+	// Insert a revoked envoy (should be excluded).
 	revokedID := uuid.New().String()
-	sqlDB.Exec(`INSERT INTO thralls (id, hostname, ip_address, pubkey_pem, revoked) VALUES (?, ?, ?, ?, 1)`,
+	sqlDB.Exec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem, revoked) VALUES (?, ?, ?, ?, 1)`,
 		revokedID, "revoked01", "10.0.2.1", "pubkey-pem")
-	sqlDB.Exec(`INSERT INTO thrall_traits (id, thrall_id, traits) VALUES (?, ?, ?)`,
+	sqlDB.Exec(`INSERT INTO envoy_traits (id, envoy_id, traits) VALUES (?, ?, ?)`,
 		uuid.New().String(), revokedID, `{"os":{"distro":"ubuntu"}}`)
 
 	queries := db.New(sqlDB)
@@ -73,12 +73,12 @@ func TestInventory_NoFilter(t *testing.T) {
 
 	var resp struct {
 		Count   int              `json:"count"`
-		Thralls []map[string]any `json:"thralls"`
+		Envoys []map[string]any `json:"envoys"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
 
 	if resp.Count != 3 {
-		t.Errorf("expected 3 thralls, got %d", resp.Count)
+		t.Errorf("expected 3 envoys, got %d", resp.Count)
 	}
 }
 
@@ -91,16 +91,16 @@ func TestInventory_WhereFilter(t *testing.T) {
 
 	var resp struct {
 		Count   int `json:"count"`
-		Thralls []struct {
+		Envoys []struct {
 			Hostname string `json:"hostname"`
-		} `json:"thralls"`
+		} `json:"envoys"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
 
 	if resp.Count != 2 {
-		t.Fatalf("expected 2 ubuntu thralls, got %d", resp.Count)
+		t.Fatalf("expected 2 ubuntu envoys, got %d", resp.Count)
 	}
-	for _, th := range resp.Thralls {
+	for _, th := range resp.Envoys {
 		if th.Hostname != "web01" && th.Hostname != "web02" {
 			t.Errorf("unexpected hostname %s", th.Hostname)
 		}
@@ -116,17 +116,17 @@ func TestInventory_MultipleWhere(t *testing.T) {
 
 	var resp struct {
 		Count   int `json:"count"`
-		Thralls []struct {
+		Envoys []struct {
 			Hostname string `json:"hostname"`
-		} `json:"thralls"`
+		} `json:"envoys"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
 
 	if resp.Count != 1 {
-		t.Fatalf("expected 1 thrall, got %d", resp.Count)
+		t.Fatalf("expected 1 envoy, got %d", resp.Count)
 	}
-	if resp.Thralls[0].Hostname != "web02" {
-		t.Errorf("expected web02, got %s", resp.Thralls[0].Hostname)
+	if resp.Envoys[0].Hostname != "web02" {
+		t.Errorf("expected web02, got %s", resp.Envoys[0].Hostname)
 	}
 }
 
@@ -139,18 +139,18 @@ func TestInventory_ShowFields(t *testing.T) {
 
 	var resp struct {
 		Count   int `json:"count"`
-		Thralls []struct {
+		Envoys []struct {
 			Hostname string         `json:"hostname"`
 			Traits   map[string]any `json:"traits"`
-		} `json:"thralls"`
+		} `json:"envoys"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
 
 	if resp.Count != 1 {
-		t.Fatalf("expected 1 rhel thrall, got %d", resp.Count)
+		t.Fatalf("expected 1 rhel envoy, got %d", resp.Count)
 	}
 
-	traits := resp.Thralls[0].Traits
+	traits := resp.Envoys[0].Traits
 	if traits["os.distro"] != "rocky" {
 		t.Errorf("expected os.distro=rocky, got %v", traits["os.distro"])
 	}
@@ -183,22 +183,22 @@ func TestInventory_NoMatch(t *testing.T) {
 func TestInventory_RevokedExcluded(t *testing.T) {
 	mux, _ := seedInventory(t)
 
-	// Query all — revoked thrall should not appear.
+	// Query all — revoked envoy should not appear.
 	req := httptest.NewRequest("GET", "/api/v1/inventory", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	var resp struct {
 		Count   int `json:"count"`
-		Thralls []struct {
+		Envoys []struct {
 			Hostname string `json:"hostname"`
-		} `json:"thralls"`
+		} `json:"envoys"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	for _, th := range resp.Thralls {
+	for _, th := range resp.Envoys {
 		if th.Hostname == "revoked01" {
-			t.Errorf("revoked thrall should not appear in inventory")
+			t.Errorf("revoked envoy should not appear in inventory")
 		}
 	}
 }

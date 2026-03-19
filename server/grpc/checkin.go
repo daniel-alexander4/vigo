@@ -9,49 +9,49 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/metrics"
-	"github.com/hobnob/hobnob/server/registry"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/metrics"
+	"github.com/daniel-alexander4/vigo/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// CheckIn handles the HobnobAgent.CheckIn RPC. It validates the client,
+// CheckIn handles the VigoAgent.CheckIn RPC. It validates the client,
 // stores inline traits for admin queries, and returns a policy bundle for
 // agent-side evaluation. The server never renders templates or evaluates
 // conditionals — the agent does that locally with its own traits.
 func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
-	if _, err := uuid.Parse(req.GetThrallId()); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid thrall_id: %v", err)
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
-	thrallID := req.GetThrallId()
+	envoyID := req.GetEnvoyId()
 
-	// Validate thrall is not revoked + look up state in one lock acquisition.
-	var thrall db.Thrall
+	// Validate envoy is not revoked + look up state in one lock acquisition.
+	var envoy db.Envoy
 	if s.fleetIndex != nil {
-		ts, exists, revoked := s.fleetIndex.GetThrallLite(thrallID)
+		ts, exists, revoked := s.fleetIndex.GetEnvoyLite(envoyID)
 		if !exists {
 			metrics.CheckinsTotal.WithLabelValues("error").Inc()
-			return nil, status.Error(codes.NotFound, "thrall not found")
+			return nil, status.Error(codes.NotFound, "envoy not found")
 		}
 		if revoked {
 			metrics.CheckinsTotal.WithLabelValues("error").Inc()
-			return nil, status.Error(codes.PermissionDenied, "thrall is revoked")
+			return nil, status.Error(codes.PermissionDenied, "envoy is revoked")
 		}
-		thrall = fleetThrallToDB(ts)
-	} else if err := s.registry.ValidateThrall(ctx, thrallID); err != nil {
+		envoy = fleetEnvoyToDB(ts)
+	} else if err := s.registry.ValidateEnvoy(ctx, envoyID); err != nil {
 		metrics.CheckinsTotal.WithLabelValues("error").Inc()
-		if errors.Is(err, registry.ErrThrallRevoked) {
-			return nil, status.Error(codes.PermissionDenied, "thrall is revoked")
+		if errors.Is(err, registry.ErrEnvoyRevoked) {
+			return nil, status.Error(codes.PermissionDenied, "envoy is revoked")
 		}
-		if errors.Is(err, registry.ErrThrallNotFound) {
-			return nil, status.Error(codes.NotFound, "thrall not found")
+		if errors.Is(err, registry.ErrEnvoyNotFound) {
+			return nil, status.Error(codes.NotFound, "envoy not found")
 		}
-		return nil, status.Errorf(codes.Internal, "validating thrall: %v", err)
+		return nil, status.Errorf(codes.Internal, "validating envoy: %v", err)
 	} else {
 		var err error
-		thrall, err = s.lookupThrall(ctx, thrallID)
+		envoy, err = s.lookupEnvoy(ctx, envoyID)
 		if err != nil {
 			return nil, err
 		}
@@ -60,35 +60,35 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// Log warning on every check-in if license is in grace or enrollment-block.
 	if s.licenseEnforcer != nil {
 		if warn := s.licenseEnforcer.CheckInWarning(); warn != "" {
-			slog.Warn(warn, "thrall_id", thrallID)
+			slog.Warn(warn, "envoy_id", envoyID)
 		}
 	}
 
-	// Maintenance mode: return empty policy so thrall skips convergence
+	// Maintenance mode: return empty policy so envoy skips convergence
 	// but still reports traits.
-	if s.fleetIndex != nil && s.fleetIndex.IsInMaintenance(thrallID) {
-		slog.Info("thrall in maintenance mode, returning empty policy", "thrall_id", thrallID)
+	if s.fleetIndex != nil && s.fleetIndex.IsInMaintenance(envoyID) {
+		slog.Info("envoy in maintenance mode, returning empty policy", "envoy_id", envoyID)
 		return &pb.CheckInResponse{}, nil
 	}
 
-	return s.buildCheckInResponse(ctx, thrallID, thrall, req, false)
+	return s.buildCheckInResponse(ctx, envoyID, envoy, req, false)
 }
 
-// lookupThrall resolves a thrall from FleetIndex, context, cache, or DB.
-func (s *AgentService) lookupThrall(ctx context.Context, thrallID string) (db.Thrall, error) {
+// lookupEnvoy resolves a envoy from FleetIndex, context, cache, or DB.
+func (s *AgentService) lookupEnvoy(ctx context.Context, envoyID string) (db.Envoy, error) {
 	// Fastest: FleetIndex in-memory lookup (no Traits copy needed).
 	if s.fleetIndex != nil {
-		ts, ok, _ := s.fleetIndex.GetThrallLite(thrallID)
+		ts, ok, _ := s.fleetIndex.GetEnvoyLite(envoyID)
 		if ok {
-			return fleetThrallToDB(ts), nil
+			return fleetEnvoyToDB(ts), nil
 		}
 	}
-	if n := db.ThrallFromContext(ctx); n != nil {
+	if n := db.EnvoyFromContext(ctx); n != nil {
 		return *n, nil
 	}
-	n, err := s.queries.GetThrallByID(ctx, thrallID)
+	n, err := s.queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		return db.Thrall{}, status.Errorf(codes.Internal, "looking up thrall: %v", err)
+		return db.Envoy{}, status.Errorf(codes.Internal, "looking up envoy: %v", err)
 	}
 	return n, nil
 }

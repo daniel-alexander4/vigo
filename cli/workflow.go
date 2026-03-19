@@ -30,7 +30,7 @@ var workflowRunCmd = &cobra.Command{
 			if u, err := user.Current(); err == nil {
 				operator = u.Username
 			} else {
-				operator = "hobnobcli"
+				operator = "vigogo"
 			}
 		}
 

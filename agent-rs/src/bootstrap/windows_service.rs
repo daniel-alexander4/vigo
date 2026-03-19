@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Elastic-2.0
 
-//! Windows Service installation for the Hobnob agent.
+//! Windows Service installation for the Vigo agent.
 
 #![cfg(windows)]
 
@@ -11,12 +11,12 @@ use tracing::info;
 
 use crate::platform::paths;
 
-const SERVICE_NAME: &str = "hobnob-thrall";
-const SERVICE_DISPLAY: &str = "Hobnob Configuration Management Agent";
+const SERVICE_NAME: &str = "vigo-envoy";
+const SERVICE_DISPLAY: &str = "Vigo Configuration Management Agent";
 
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 ///
-/// "http://hobd.example.com:8443" + "1530" → "hobd.example.com:1530"
+/// "http://vigosrv.example.com:8443" + "1530" → "vigosrv.example.com:1530"
 pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
     let mut host = bootstrap_server;
     host = host.strip_prefix("http://").unwrap_or(host);
@@ -37,7 +37,7 @@ pub async fn install_service(
 ) -> Result<String> {
     let grpc_addr = derive_grpc_addr(bootstrap_server, grpc_port);
     let binary_path = paths::default_binary_path();
-    let binary_dir = binary_path.parent().unwrap_or(Path::new(r"C:\Program Files\Hobnob"));
+    let binary_dir = binary_path.parent().unwrap_or(Path::new(r"C:\Program Files\Vigo"));
 
     // Create install directory.
     std::fs::create_dir_all(binary_dir)
@@ -49,7 +49,7 @@ pub async fn install_service(
     if src_path != binary_path {
         std::fs::copy(&src_path, &binary_path)
             .with_context(|| format!("install binary to {}", binary_path.display()))?;
-        info!(path = %binary_path.display(), "installed hobnob binary");
+        info!(path = %binary_path.display(), "installed vigo binary");
     }
 
     let bin_path_str = binary_path.to_string_lossy();
@@ -98,7 +98,7 @@ pub async fn install_service(
         bail!("sc.exe start exited with {}", start_status);
     }
 
-    println!("Hobnob agent service installed and started.");
+    println!("Vigo agent service installed and started.");
     println!("  sc.exe query {}    # check status", SERVICE_NAME);
     println!("  Get-EventLog -LogName Application -Source {} -Newest 20    # view logs", SERVICE_NAME);
 

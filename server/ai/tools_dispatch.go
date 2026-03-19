@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/compliance"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
+	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
 )
 
 // toolDeps holds the dependencies needed to execute tool calls.
@@ -38,10 +38,10 @@ func (d *toolDeps) dispatchTool(ctx context.Context, name, argsJSON string) (str
 	}
 
 	switch name {
-	case "list_thralls":
-		return d.listThralls(ctx, args)
-	case "get_thrall":
-		return d.getThrall(ctx, args)
+	case "list_envoys":
+		return d.listEnvoys(ctx, args)
+	case "get_envoy":
+		return d.getEnvoy(ctx, args)
 	case "get_traits":
 		return d.getTraits(ctx, args)
 	case "list_runs":
@@ -71,11 +71,11 @@ func (d *toolDeps) dispatchTool(ctx context.Context, name, argsJSON string) (str
 	}
 }
 
-func (d *toolDeps) listThralls(ctx context.Context, args map[string]any) (string, error) {
+func (d *toolDeps) listEnvoys(ctx context.Context, args map[string]any) (string, error) {
 	if d.queries == nil {
-		return marshalResult(map[string]any{"count": 0, "thralls": []any{}})
+		return marshalResult(map[string]any{"count": 0, "envoys": []any{}})
 	}
-	thralls, err := d.queries.ListThralls(ctx)
+	envoys, err := d.queries.ListEnvoys(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -83,7 +83,7 @@ func (d *toolDeps) listThralls(ctx context.Context, args map[string]any) (string
 	status, _ := args["status"].(string)
 	limit := intArg(args, "limit", 50)
 
-	type thrallInfo struct {
+	type envoyInfo struct {
 		ID         string  `json:"id"`
 		Hostname   string  `json:"hostname"`
 		IP         string  `json:"ip_address"`
@@ -92,8 +92,8 @@ func (d *toolDeps) listThralls(ctx context.Context, args map[string]any) (string
 		Status     string  `json:"status"`
 	}
 
-	var results []thrallInfo
-	for _, t := range thralls {
+	var results []envoyInfo
+	for _, t := range envoys {
 		ts := "active"
 		if t.Revoked != 0 {
 			ts = "revoked"
@@ -105,7 +105,7 @@ func (d *toolDeps) listThralls(ctx context.Context, args map[string]any) (string
 			continue
 		}
 
-		info := thrallInfo{
+		info := envoyInfo{
 			ID:         t.ID,
 			Hostname:   t.Hostname,
 			IP:         t.IpAddress,
@@ -123,28 +123,28 @@ func (d *toolDeps) listThralls(ctx context.Context, args map[string]any) (string
 
 	return marshalResult(map[string]any{
 		"count":   len(results),
-		"thralls": results,
+		"envoys": results,
 	})
 }
 
-func (d *toolDeps) getThrall(ctx context.Context, args map[string]any) (string, error) {
+func (d *toolDeps) getEnvoy(ctx context.Context, args map[string]any) (string, error) {
 	if d.queries == nil {
 		return "", fmt.Errorf("database not available")
 	}
 	hostname, _ := args["hostname"].(string)
 	id, _ := args["id"].(string)
 
-	var t db.Thrall
+	var t db.Envoy
 	var err error
 	if hostname != "" {
-		t, err = d.queries.GetThrallByHostname(ctx, hostname)
+		t, err = d.queries.GetEnvoyByHostname(ctx, hostname)
 	} else if id != "" {
-		t, err = d.queries.GetThrallByID(ctx, id)
+		t, err = d.queries.GetEnvoyByID(ctx, id)
 	} else {
 		return "", fmt.Errorf("either hostname or id is required")
 	}
 	if err != nil {
-		return "", fmt.Errorf("thrall not found: %w", err)
+		return "", fmt.Errorf("envoy not found: %w", err)
 	}
 
 	result := map[string]any{
@@ -170,12 +170,12 @@ func (d *toolDeps) getTraits(ctx context.Context, args map[string]any) (string, 
 		return "", fmt.Errorf("hostname is required")
 	}
 
-	t, err := d.queries.GetThrallByHostname(ctx, hostname)
+	t, err := d.queries.GetEnvoyByHostname(ctx, hostname)
 	if err != nil {
-		return "", fmt.Errorf("thrall not found: %w", err)
+		return "", fmt.Errorf("envoy not found: %w", err)
 	}
 
-	traits, err := d.queries.GetLatestThrallTraits(ctx, t.ID)
+	traits, err := d.queries.GetLatestEnvoyTraits(ctx, t.ID)
 	if err != nil {
 		return "", fmt.Errorf("no traits available: %w", err)
 	}
@@ -194,12 +194,12 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 	var runs []db.Run
 	var err error
 	if hostname != "" {
-		t, tErr := d.queries.GetThrallByHostname(ctx, hostname)
+		t, tErr := d.queries.GetEnvoyByHostname(ctx, hostname)
 		if tErr != nil {
-			return "", fmt.Errorf("thrall not found: %w", tErr)
+			return "", fmt.Errorf("envoy not found: %w", tErr)
 		}
-		runs, err = d.runStore.ListRunsByThrall(ctx, db.ListRunsByThrallParams{
-			ThrallID: t.ID,
+		runs, err = d.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
+			EnvoyID: t.ID,
 			Limit:    limit,
 		})
 	} else {
@@ -211,7 +211,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 
 	type runInfo struct {
 		ID        string `json:"id"`
-		ThrallID  string `json:"thrall_id"`
+		EnvoyID  string `json:"envoy_id"`
 		Status    string `json:"status"`
 		StartedAt string `json:"started_at"`
 		Changed   int64  `json:"changed"`
@@ -223,7 +223,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 	for _, r := range runs {
 		results = append(results, runInfo{
 			ID:        r.ID,
-			ThrallID:  r.ThrallID,
+			EnvoyID:  r.EnvoyID,
 			Status:    r.Status,
 			StartedAt: r.StartedAt.Format(time.RFC3339),
 			Changed:   r.ChangedCount,
@@ -285,7 +285,7 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 
 	return marshalResult(map[string]any{
 		"id":         run.ID,
-		"thrall_id":  run.ThrallID,
+		"envoy_id":  run.EnvoyID,
 		"status":     run.Status,
 		"started_at": run.StartedAt.Format(time.RFC3339),
 		"modules":    run.ModuleCount,
@@ -303,12 +303,12 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 	hostname, _ := args["hostname"].(string)
 
 	if hostname != "" {
-		t, err := d.queries.GetThrallByHostname(ctx, hostname)
+		t, err := d.queries.GetEnvoyByHostname(ctx, hostname)
 		if err != nil {
-			return "", fmt.Errorf("thrall not found: %w", err)
+			return "", fmt.Errorf("envoy not found: %w", err)
 		}
 
-		latestRuns, err := d.runStore.LatestRunPerThrall(ctx, []string{t.ID})
+		latestRuns, err := d.runStore.LatestRunPerEnvoy(ctx, []string{t.ID})
 		if err != nil {
 			return "", err
 		}
@@ -330,33 +330,33 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 	}
 
 	// Fleet-wide summary.
-	thralls, err := d.queries.ListThralls(ctx)
+	envoys, err := d.queries.ListEnvoys(ctx)
 	if err != nil {
 		return "", err
 	}
 
 	var ids []string
-	thrallMap := make(map[string]db.Thrall)
-	for _, t := range thralls {
+	envoyMap := make(map[string]db.Envoy)
+	for _, t := range envoys {
 		if t.Revoked != 0 {
 			continue
 		}
 		ids = append(ids, t.ID)
-		thrallMap[t.ID] = t
+		envoyMap[t.ID] = t
 	}
 
 	if len(ids) == 0 {
 		return marshalResult(map[string]any{"total": 0, "summary": map[string]int{}})
 	}
 
-	latestRuns, err := d.runStore.LatestRunPerThrall(ctx, ids)
+	latestRuns, err := d.runStore.LatestRunPerEnvoy(ctx, ids)
 	if err != nil {
 		return "", err
 	}
 
 	var statuses []string
 	for _, id := range ids {
-		t := thrallMap[id]
+		t := envoyMap[id]
 		var recent []compliance.RunInfo
 		if run, ok := latestRuns[id]; ok {
 			recent = []compliance.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
@@ -392,7 +392,7 @@ func (d *toolDeps) getConfig(_ context.Context, args map[string]any) (string, er
 
 func (d *toolDeps) queryInventory(ctx context.Context, args map[string]any) (string, error) {
 	if d.queries == nil {
-		return marshalResult(map[string]any{"count": 0, "thralls": []any{}})
+		return marshalResult(map[string]any{"count": 0, "envoys": []any{}})
 	}
 	whereRaw, _ := args["where"].([]any)
 	showRaw, _ := args["show"].([]any)
@@ -454,7 +454,7 @@ func (d *toolDeps) queryInventory(ctx context.Context, args map[string]any) (str
 
 	return marshalResult(map[string]any{
 		"count":   len(results),
-		"thralls": results,
+		"envoys": results,
 	})
 }
 
@@ -506,7 +506,7 @@ func (d *toolDeps) getModuleDefinition(args map[string]any) (string, error) {
 
 	modulesDir := filepath.Join(d.configStore.Dir(), "modules")
 	var found string
-	for _, ext := range []string{".hnb", ".yaml", ".yml"} {
+	for _, ext := range []string{".vgo", ".yaml", ".yml"} {
 		candidate := filepath.Join(modulesDir, name+ext)
 		if _, err := os.Stat(candidate); err == nil {
 			found = candidate
@@ -576,7 +576,7 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 		return marshalResult(map[string]any{
 			"hostname": hostname,
 			"modules":  0,
-			"message":  "no config found for this thrall",
+			"message":  "no config found for this envoy",
 		})
 	}
 
@@ -688,7 +688,7 @@ func intArg(args map[string]any, key string, def int) int {
 	}
 }
 
-func countResources(cfg *config.ThrallConfig) int {
+func countResources(cfg *config.EnvoyConfig) int {
 	n := 0
 	for _, m := range cfg.Modules {
 		n += len(m.Resources)

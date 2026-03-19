@@ -1,11 +1,11 @@
-# hobnobcli validate
+# vigogo validate
 
-Check `.hnb` files for YAML correctness, structural validity, and idempotency.
+Check `.vgo` files for YAML correctness, structural validity, and idempotency.
 
 ## Usage
 
 ```bash
-hobnobcli validate <file.hnb> [file2.hnb ...] [flags]
+vigogo validate <file.vgo> [file2.vgo ...] [flags]
 ```
 
 ## Checks Performed
@@ -17,32 +17,32 @@ hobnobcli validate <file.hnb> [file2.hnb ...] [flags]
 5. **Known types** -- unknown resource types blocked unless `skip_validation: true` is set
 6. **Redundant triggers** -- both `notify` and `subscribes` on the same pair is an error
 
-For thrall files (those with a top-level `thralls:` key), validates that each entry has a `match` field.
+For envoy files (those with a top-level `envoys:` key), validates that each entry has a `match` field.
 
-Accepts `.hnb`, `.yaml`, and `.yml` file extensions.
+Accepts `.vgo`, `.yaml`, and `.yml` file extensions.
 
 ## Examples
 
 ### Validate a single module
 
 ```bash
-hobnobcli validate policy/stage/modules/nginx.hnb
+vigogo validate policy/stage/modules/nginx.vgo
 ```
 
 ```
-policy/stage/modules/nginx.hnb: OK
+policy/stage/modules/nginx.vgo: OK
 ```
 
 ### Validate multiple files
 
 ```bash
-hobnobcli validate policy/stage/modules/*.hnb
+vigogo validate policy/stage/modules/*.vgo
 ```
 
 ```
-policy/stage/modules/nginx.hnb: OK
-policy/stage/modules/postgres.hnb: OK
-policy/stage/modules/app.hnb: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
+policy/stage/modules/nginx.vgo: OK
+policy/stage/modules/postgres.vgo: OK
+policy/stage/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
 ```
 
 ### Exit codes
@@ -52,11 +52,11 @@ policy/stage/modules/app.hnb: [error] app: resource "deploy" (exec) missing idem
 
 ## Relationship to Config Publish
 
-`hobnobcli validate` checks individual files in isolation. `hobnobcli config publish` runs a more comprehensive pipeline that includes the **module linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
+`vigogo validate` checks individual files in isolation. `vigogo config publish` runs a more comprehensive pipeline that includes the **module linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
 
 ## Related
 
-- [vi](vi.md) -- edit .hnb files with live validation
+- [vi](vi.md) -- edit .vgo files with live validation
 - [preview](preview.md) -- preview planned changes
 - [doctor](doctor.md) -- server health checks including config validation
 - [config publish](config.md#config-publish) -- full validation + linting pipeline

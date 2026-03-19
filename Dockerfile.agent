@@ -22,6 +22,6 @@ FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /build/agent-rs/target/x86_64-unknown-linux-musl/release/hobnob /usr/local/sbin/hobnob
+COPY --from=builder /build/agent-rs/target/x86_64-unknown-linux-musl/release/vigo /usr/local/sbin/vigo
 
-ENTRYPOINT ["hobnob"]
+ENTRYPOINT ["vigo"]

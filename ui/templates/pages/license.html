@@ -11,7 +11,7 @@
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Nodes Used</div>
-        <div class="stat-card__value">{{.ActiveThralls}} / {{.MaxThralls}}</div>
+        <div class="stat-card__value">{{.ActiveEnvoys}} / {{.MaxEnvoys}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Usage</div>
@@ -32,8 +32,8 @@
             {{end}}
             <tr><td class="text-muted">License ID</td><td><code>{{.LicenseID}}</code></td></tr>
             <tr><td class="text-muted">Tier</td><td>{{.Tier}}{{if .IsFreeTier}} <span class="badge badge--info">built-in</span>{{end}}</td></tr>
-            <tr><td class="text-muted">Max Nodes</td><td>{{.MaxThralls}}</td></tr>
-            <tr><td class="text-muted">Active Nodes</td><td>{{.ActiveThralls}}</td></tr>
+            <tr><td class="text-muted">Max Nodes</td><td>{{.MaxEnvoys}}</td></tr>
+            <tr><td class="text-muted">Active Nodes</td><td>{{.ActiveEnvoys}}</td></tr>
             <tr><td class="text-muted">Expires</td><td>{{.ExpiresAt}}</td></tr>
             <tr><td class="text-muted">Days Remaining</td><td>{{.DaysRemaining}}</td></tr>
             <tr><td class="text-muted">Enforcement Stage</td><td>
@@ -50,7 +50,7 @@
 <div class="card mt-3">
     <h2>Upgrade</h2>
     <p>The built-in free license supports up to 25 nodes. To manage more nodes or enable spanner, install a paid license:</p>
-    <pre><code>hobnobcli license install --file=license.lic</code></pre>
+    <pre><code>vigogo license install --file=license.lic</code></pre>
 </div>
 {{end}}
 {{end}}

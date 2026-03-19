@@ -21,10 +21,10 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/registry"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/registry"
 )
 
 var testDB *sql.DB
@@ -32,7 +32,7 @@ var testDBDir string
 
 func TestMain(m *testing.M) {
 	var err error
-	testDBDir, err = os.MkdirTemp("", "hobnob-bootstrap-test-*")
+	testDBDir, err = os.MkdirTemp("", "vigo-bootstrap-test-*")
 	if err != nil {
 		log.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -80,7 +80,7 @@ func findMigrationsDir() string {
 func cleanDB(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	for _, table := range []string{"run_results", "runs", "thrall_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "thralls"} {
+	for _, table := range []string{"run_results", "runs", "envoy_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "envoys"} {
 		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("failed to delete from %s: %v", table, err)
 		}
@@ -130,8 +130,8 @@ func TestBootstrapRegister_HappyPath_PopulatesFleetIndex(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if respBody.ThrallID == "" {
-		t.Fatal("expected non-empty thrall_id")
+	if respBody.EnvoyID == "" {
+		t.Fatal("expected non-empty envoy_id")
 	}
 	if respBody.SignedCertPEM == "" {
 		t.Fatal("expected non-empty signed_cert_pem")
@@ -140,10 +140,10 @@ func TestBootstrapRegister_HappyPath_PopulatesFleetIndex(t *testing.T) {
 		t.Fatal("expected non-empty ca_cert_pem")
 	}
 
-	// Verify the thrall is in FleetIndex — this is the bug that was missing.
-	ts := fi.GetThrall(respBody.ThrallID)
+	// Verify the envoy is in FleetIndex — this is the bug that was missing.
+	ts := fi.GetEnvoy(respBody.EnvoyID)
 	if ts == nil {
-		t.Fatal("thrall not found in FleetIndex after bootstrap registration")
+		t.Fatal("envoy not found in FleetIndex after bootstrap registration")
 	}
 	if ts.Hostname != "web-01.example.com" {
 		t.Errorf("expected hostname web-01.example.com, got %s", ts.Hostname)
@@ -154,8 +154,8 @@ func TestBootstrapRegister_HappyPath_PopulatesFleetIndex(t *testing.T) {
 
 	// Also verify hostname lookup works (this is what check-in uses).
 	id := fi.GetByHostname("web-01.example.com")
-	if id != respBody.ThrallID {
-		t.Errorf("FleetIndex hostname lookup returned %q, expected %q", id, respBody.ThrallID)
+	if id != respBody.EnvoyID {
+		t.Errorf("FleetIndex hostname lookup returned %q, expected %q", id, respBody.EnvoyID)
 	}
 }
 
@@ -195,9 +195,9 @@ func TestBootstrapRegister_TrustedEnrollment_PopulatesFleetIndex(t *testing.T) {
 	var respBody bootstrapRegisterResponse
 	json.NewDecoder(resp.Body).Decode(&respBody)
 
-	ts := fi.GetThrall(respBody.ThrallID)
+	ts := fi.GetEnvoy(respBody.EnvoyID)
 	if ts == nil {
-		t.Fatal("thrall not found in FleetIndex after trusted bootstrap registration")
+		t.Fatal("envoy not found in FleetIndex after trusted bootstrap registration")
 	}
 	if ts.Hostname != "db-01.example.com" {
 		t.Errorf("expected hostname db-01.example.com, got %s", ts.Hostname)

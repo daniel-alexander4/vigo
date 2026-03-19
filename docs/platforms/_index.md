@@ -1,6 +1,6 @@
 # Supported Platforms
 
-Hobnob manages servers, workstations, and network devices across 8 platforms. Each page covers bootstrap, package management, available executors, trait collectors, and platform-specific notes.
+Vigo manages servers, workstations, and network devices across 8 platforms. Each page covers bootstrap, package management, available executors, trait collectors, and platform-specific notes.
 
 | Platform | Init System | Package Manager | Executors |
 |----------|-------------|-----------------|-----------|

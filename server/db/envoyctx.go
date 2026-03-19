@@ -28,19 +28,19 @@ func ParsePubKey(pemStr string) (ed25519.PublicKey, error) {
 	return pubKey, nil
 }
 
-// thrallCtxKey is the context key for passing a cached thrall from the
+// envoyCtxKey is the context key for passing a cached envoy from the
 // interceptor to the handler within a single request.
-type thrallCtxKey struct{}
+type envoyCtxKey struct{}
 
-// ContextWithThrall stores a Thrall in the context for reuse by downstream
+// ContextWithEnvoy stores a Envoy in the context for reuse by downstream
 // handlers, avoiding duplicate DB lookups within the same gRPC request.
-func ContextWithThrall(ctx context.Context, n Thrall) context.Context {
-	return context.WithValue(ctx, thrallCtxKey{}, &n)
+func ContextWithEnvoy(ctx context.Context, n Envoy) context.Context {
+	return context.WithValue(ctx, envoyCtxKey{}, &n)
 }
 
-// ThrallFromContext retrieves a Thrall previously stored by the interceptor.
-// Returns nil if no thrall is in the context.
-func ThrallFromContext(ctx context.Context) *Thrall {
-	n, _ := ctx.Value(thrallCtxKey{}).(*Thrall)
+// EnvoyFromContext retrieves a Envoy previously stored by the interceptor.
+// Returns nil if no envoy is in the context.
+func EnvoyFromContext(ctx context.Context) *Envoy {
+	n, _ := ctx.Value(envoyCtxKey{}).(*Envoy)
 	return n
 }

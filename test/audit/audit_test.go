@@ -351,7 +351,7 @@ func TestRESTEndpointsDocumented(t *testing.T) {
 	for _, route := range routes {
 		path := normalizeRoute(route)
 		// Replace Go 1.22 path params {name} with a generic form for doc matching.
-		// In the doc, routes appear like /api/v1/tasks/{id} or /api/v1/thralls/{hostname}/traits.
+		// In the doc, routes appear like /api/v1/tasks/{id} or /api/v1/envoys/{hostname}/traits.
 		// Check if the path (or a simplified version) appears in the doc.
 		searchPath := path
 		// Also try without the path param suffix for table-style docs.

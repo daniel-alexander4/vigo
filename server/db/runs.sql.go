@@ -13,23 +13,23 @@ import (
 )
 
 const createRun = `-- name: CreateRun :one
-INSERT INTO runs (thrall_id, status, module_count)
+INSERT INTO runs (envoy_id, status, module_count)
 VALUES (?, ?, ?)
-RETURNING id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+RETURNING id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 `
 
 type CreateRunParams struct {
-	ThrallID    string `json:"thrall_id"`
+	EnvoyID     string `json:"envoy_id"`
 	Status      string `json:"status"`
 	ModuleCount int64  `json:"module_count"`
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
-	row := q.db.QueryRowContext(ctx, createRun, arg.ThrallID, arg.Status, arg.ModuleCount)
+	row := q.db.QueryRowContext(ctx, createRun, arg.EnvoyID, arg.Status, arg.ModuleCount)
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.ThrallID,
+		&i.EnvoyID,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
@@ -111,7 +111,7 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 WHERE id = ?
 `
@@ -121,7 +121,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id string) (Run, error) {
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.ThrallID,
+		&i.EnvoyID,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
@@ -134,7 +134,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id string) (Run, error) {
 }
 
 const listAllRuns = `-- name: ListAllRuns :many
-SELECT id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
 ORDER BY started_at DESC
 LIMIT ?
@@ -151,7 +151,7 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 		var i Run
 		if err := rows.Scan(
 			&i.ID,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
@@ -268,11 +268,11 @@ func (q *Queries) ListRunResultsByRunIDs(ctx context.Context, runIds []string) (
 const listRunResultsSince = `-- name: ListRunResultsSince :many
 SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
        rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
-       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       r.envoy_id, r.status AS run_status, r.started_at AS run_started_at,
        t.hostname
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
-JOIN thralls t ON t.id = r.thrall_id
+JOIN envoys t ON t.id = r.envoy_id
 WHERE rr.created_at >= ?1
 ORDER BY rr.created_at DESC
 LIMIT ?2
@@ -294,7 +294,7 @@ type ListRunResultsSinceRow struct {
 	ErrorMessage sql.NullString `json:"error_message"`
 	DurationMs   int64          `json:"duration_ms"`
 	CreatedAt    time.Time      `json:"created_at"`
-	ThrallID     string         `json:"thrall_id"`
+	EnvoyID      string         `json:"envoy_id"`
 	RunStatus    string         `json:"run_status"`
 	RunStartedAt time.Time      `json:"run_started_at"`
 	Hostname     string         `json:"hostname"`
@@ -320,7 +320,7 @@ func (q *Queries) ListRunResultsSince(ctx context.Context, arg ListRunResultsSin
 			&i.ErrorMessage,
 			&i.DurationMs,
 			&i.CreatedAt,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.RunStatus,
 			&i.RunStartedAt,
 			&i.Hostname,
@@ -338,26 +338,26 @@ func (q *Queries) ListRunResultsSince(ctx context.Context, arg ListRunResultsSin
 	return items, nil
 }
 
-const listRunResultsSinceByThrall = `-- name: ListRunResultsSinceByThrall :many
+const listRunResultsSinceByEnvoy = `-- name: ListRunResultsSinceByEnvoy :many
 SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
        rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
-       r.thrall_id, r.status AS run_status, r.started_at AS run_started_at,
+       r.envoy_id, r.status AS run_status, r.started_at AS run_started_at,
        t.hostname
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
-JOIN thralls t ON t.id = r.thrall_id
+JOIN envoys t ON t.id = r.envoy_id
 WHERE rr.created_at >= ?1 AND t.hostname = ?2
 ORDER BY rr.created_at DESC
 LIMIT ?3
 `
 
-type ListRunResultsSinceByThrallParams struct {
+type ListRunResultsSinceByEnvoyParams struct {
 	CreatedAt time.Time `json:"created_at"`
 	Hostname  string    `json:"hostname"`
 	Limit     int64     `json:"limit"`
 }
 
-type ListRunResultsSinceByThrallRow struct {
+type ListRunResultsSinceByEnvoyRow struct {
 	ID           string         `json:"id"`
 	RunID        string         `json:"run_id"`
 	ModuleName   string         `json:"module_name"`
@@ -368,21 +368,21 @@ type ListRunResultsSinceByThrallRow struct {
 	ErrorMessage sql.NullString `json:"error_message"`
 	DurationMs   int64          `json:"duration_ms"`
 	CreatedAt    time.Time      `json:"created_at"`
-	ThrallID     string         `json:"thrall_id"`
+	EnvoyID      string         `json:"envoy_id"`
 	RunStatus    string         `json:"run_status"`
 	RunStartedAt time.Time      `json:"run_started_at"`
 	Hostname     string         `json:"hostname"`
 }
 
-func (q *Queries) ListRunResultsSinceByThrall(ctx context.Context, arg ListRunResultsSinceByThrallParams) ([]ListRunResultsSinceByThrallRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRunResultsSinceByThrall, arg.CreatedAt, arg.Hostname, arg.Limit)
+func (q *Queries) ListRunResultsSinceByEnvoy(ctx context.Context, arg ListRunResultsSinceByEnvoyParams) ([]ListRunResultsSinceByEnvoyRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRunResultsSinceByEnvoy, arg.CreatedAt, arg.Hostname, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListRunResultsSinceByThrallRow{}
+	items := []ListRunResultsSinceByEnvoyRow{}
 	for rows.Next() {
-		var i ListRunResultsSinceByThrallRow
+		var i ListRunResultsSinceByEnvoyRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.RunID,
@@ -394,7 +394,7 @@ func (q *Queries) ListRunResultsSinceByThrall(ctx context.Context, arg ListRunRe
 			&i.ErrorMessage,
 			&i.DurationMs,
 			&i.CreatedAt,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.RunStatus,
 			&i.RunStartedAt,
 			&i.Hostname,
@@ -412,21 +412,21 @@ func (q *Queries) ListRunResultsSinceByThrall(ctx context.Context, arg ListRunRe
 	return items, nil
 }
 
-const listRunsByThrall = `-- name: ListRunsByThrall :many
-SELECT id, thrall_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+const listRunsByEnvoy = `-- name: ListRunsByEnvoy :many
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
-WHERE thrall_id = ?1
+WHERE envoy_id = ?1
 ORDER BY started_at DESC
 LIMIT ?2
 `
 
-type ListRunsByThrallParams struct {
-	ThrallID string `json:"thrall_id"`
-	Limit    int64  `json:"limit"`
+type ListRunsByEnvoyParams struct {
+	EnvoyID string `json:"envoy_id"`
+	Limit   int64  `json:"limit"`
 }
 
-func (q *Queries) ListRunsByThrall(ctx context.Context, arg ListRunsByThrallParams) ([]Run, error) {
-	rows, err := q.db.QueryContext(ctx, listRunsByThrall, arg.ThrallID, arg.Limit)
+func (q *Queries) ListRunsByEnvoy(ctx context.Context, arg ListRunsByEnvoyParams) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listRunsByEnvoy, arg.EnvoyID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func (q *Queries) ListRunsByThrall(ctx context.Context, arg ListRunsByThrallPara
 		var i Run
 		if err := rows.Scan(
 			&i.ID,
-			&i.ThrallID,
+			&i.EnvoyID,
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,

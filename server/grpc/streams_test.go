@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/fleet"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 func testMsg(pushID string) *pb.ServerStreamMessage {
@@ -22,7 +22,7 @@ func testMsg(pushID string) *pb.ServerStreamMessage {
 
 func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
@@ -30,9 +30,9 @@ func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 	sm.queueForPromotion("t1", msg, nil)
 
 	// Verify StreamRequested is set.
-	ts := fi.GetThrall("t1")
+	ts := fi.GetEnvoy("t1")
 	if ts == nil {
-		t.Fatal("thrall not found in FleetIndex")
+		t.Fatal("envoy not found in FleetIndex")
 	}
 	if !ts.StreamRequested {
 		t.Fatal("expected StreamRequested to be true after queueForPromotion")
@@ -52,7 +52,7 @@ func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 	}
 
 	// StreamRequested should be cleared.
-	ts = fi.GetThrall("t1")
+	ts = fi.GetEnvoy("t1")
 	if ts.StreamRequested {
 		t.Fatal("expected StreamRequested to be cleared after stream registered")
 	}
@@ -65,7 +65,7 @@ func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 
 func TestStreamPromotionTimeout(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 10*time.Millisecond)
 
@@ -75,7 +75,7 @@ func TestStreamPromotionTimeout(t *testing.T) {
 	})
 
 	// Verify StreamRequested is set.
-	ts := fi.GetThrall("t1")
+	ts := fi.GetEnvoy("t1")
 	if !ts.StreamRequested {
 		t.Fatal("expected StreamRequested to be true")
 	}
@@ -89,7 +89,7 @@ func TestStreamPromotionTimeout(t *testing.T) {
 	}
 
 	// StreamRequested should be cleared.
-	ts = fi.GetThrall("t1")
+	ts = fi.GetEnvoy("t1")
 	if ts.StreamRequested {
 		t.Fatal("expected StreamRequested to be cleared after timeout")
 	}
@@ -97,7 +97,7 @@ func TestStreamPromotionTimeout(t *testing.T) {
 
 func TestStreamReleaseOnWorkComplete(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
@@ -121,7 +121,7 @@ func TestStreamReleaseOnWorkComplete(t *testing.T) {
 
 func TestStreamReleaseNotSentForUnpromoted(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
@@ -141,7 +141,7 @@ func TestStreamReleaseNotSentForUnpromoted(t *testing.T) {
 
 func TestStreamPromotionToAlreadyConnected(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
@@ -171,7 +171,7 @@ func TestStreamPromotionToAlreadyConnected(t *testing.T) {
 
 func TestStreamPromotionMultipleMessages(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
@@ -207,7 +207,7 @@ func TestStreamPromotionMultipleMessages(t *testing.T) {
 
 func TestWorkCompletedMultipleDispatch(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 5*time.Second)
 
@@ -242,7 +242,7 @@ func TestWorkCompletedMultipleDispatch(t *testing.T) {
 
 func TestStreamPromotionTimeoutClearsFlag(t *testing.T) {
 	fi := fleet.NewFleetIndex()
-	fi.AddThrall(fleet.ThrallState{ID: "t1", Hostname: "web1.example.com"}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
 	sm := newStreamManager(8, fi, 10*time.Millisecond)
 
@@ -252,7 +252,7 @@ func TestStreamPromotionTimeoutClearsFlag(t *testing.T) {
 	})
 
 	// Verify flag is set.
-	ts := fi.GetThrall("t1")
+	ts := fi.GetEnvoy("t1")
 	if !ts.StreamRequested {
 		t.Fatal("expected StreamRequested to be true after queue")
 	}
@@ -265,7 +265,7 @@ func TestStreamPromotionTimeoutClearsFlag(t *testing.T) {
 	}
 
 	// Flag should be cleared.
-	ts = fi.GetThrall("t1")
+	ts = fi.GetEnvoy("t1")
 	if ts.StreamRequested {
 		t.Fatal("expected StreamRequested to be cleared after timeout")
 	}

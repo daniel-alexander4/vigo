@@ -1,6 +1,6 @@
 # Audit Log
 
-Hobnob provides a unified audit view across config publishes, push runs, and workflow executions.
+Vigo provides a unified audit view across config publishes, push runs, and workflow executions.
 
 ## Querying
 
@@ -8,13 +8,13 @@ Hobnob provides a unified audit view across config publishes, push runs, and wor
 
 ```bash
 # List recent events
-hobnobcli audit list
+vigogo audit list
 
 # Filter by time
-hobnobcli audit list --since 24h
+vigogo audit list --since 24h
 
 # Filter by operator and type
-hobnobcli audit list --operator admin --type config_publish
+vigogo audit list --operator admin --type config_publish
 ```
 
 ### API
@@ -29,7 +29,7 @@ The Audit page (`/audit`) shows a filterable table of events with auto-refresh.
 
 ## Tamper-Evident Trail
 
-Security-sensitive events (config changes, enrollment, revocation, push dispatch) are also recorded in a [tamper-evident hash chain](tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `hobnobcli audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
+Security-sensitive events (config changes, enrollment, revocation, push dispatch) are also recorded in a [tamper-evident hash chain](tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `vigogo audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
 
 ## Event Types
 
@@ -41,7 +41,7 @@ Security-sensitive events (config changes, enrollment, revocation, push dispatch
 
 ## Config Publish Attribution
 
-Every `hobnobcli config publish` records:
+Every `vigogo config publish` records:
 - **Operator**: `--operator` flag or `$USER`
 - **Changed files**: List of new/modified files
 - **Removed files**: List of deleted files
@@ -50,6 +50,6 @@ Every `hobnobcli config publish` records:
 View publish history:
 
 ```bash
-hobnobcli config history
-hobnobcli config history show <id>
+vigogo config history
+vigogo config history show <id>
 ```

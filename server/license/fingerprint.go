@@ -43,7 +43,7 @@ func MachineFingerprint(caFile string) (string, error) {
 		parts = append(parts, mac)
 	}
 
-	// 3. CA certificate fingerprint — ties to this Hobnob installation's TLS identity.
+	// 3. CA certificate fingerprint — ties to this Vigo installation's TLS identity.
 	if caFile != "" {
 		if fp, err := certFingerprint(caFile); err == nil {
 			parts = append(parts, fp)

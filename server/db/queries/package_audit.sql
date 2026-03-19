@@ -1,23 +1,23 @@
--- name: ListPackageAuditByThrall :many
-SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+-- name: ListPackageAuditByEnvoy :many
+SELECT pa.id, pa.envoy_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname
 FROM package_audit pa
-JOIN thralls t ON t.id = pa.thrall_id
-WHERE pa.thrall_id = ?
+JOIN envoys t ON t.id = pa.envoy_id
+WHERE pa.envoy_id = ?
 ORDER BY pa.detected_at DESC;
 
 -- name: ListPackageDrift :many
-SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+SELECT pa.id, pa.envoy_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname
 FROM package_audit pa
-JOIN thralls t ON t.id = pa.thrall_id
+JOIN envoys t ON t.id = pa.envoy_id
 WHERE (pa.installed_version != pa.desired_version OR (pa.installed_version IS NULL AND pa.desired_version IS NOT NULL) OR (pa.installed_version IS NOT NULL AND pa.desired_version IS NULL))
 ORDER BY pa.detected_at DESC;
 
 -- name: ListAllPackageAudit :many
-SELECT pa.id, pa.thrall_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
+SELECT pa.id, pa.envoy_id, pa.package_name, pa.installed_version, pa.desired_version, pa.detected_at,
        t.hostname
 FROM package_audit pa
-JOIN thralls t ON t.id = pa.thrall_id
+JOIN envoys t ON t.id = pa.envoy_id
 ORDER BY pa.detected_at DESC
 LIMIT ?;

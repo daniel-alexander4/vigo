@@ -4,52 +4,52 @@ Common issues and how to diagnose them.
 
 ## Diagnostic Tools
 
-### hobnob status (agent-side)
+### vigo status (agent-side)
 
-Run on any thrall to inspect the agent's local state without contacting the server:
+Run on any envoy to inspect the agent's local state without contacting the server:
 
 ```bash
-sudo hobnob status
+sudo vigo status
 ```
 
-This shows the thrall UUID, server address, cached policy details (version, modules, resources), cached traits age, pending result queue depth, and server pubkey status. It reads from the config file and LMDB state store only -- no network required.
+This shows the envoy UUID, server address, cached policy details (version, modules, resources), cached traits age, pending result queue depth, and server pubkey status. It reads from the config file and LMDB state store only -- no network required.
 
 Useful for verifying:
-- Whether the agent is registered (`Thrall ID` vs `(not registered)`)
+- Whether the agent is registered (`Envoy ID` vs `(not registered)`)
 - Which policy version the agent is running (`Policy > Version`)
 - Whether offline results are queued (`Pending results` count)
 - Whether the agent has the server's bundle-signing key (`Server pubkey`)
 
 See [Agent CLI](../cli/agent.md#status) for full output examples.
 
-### hobnobcli doctor
+### vigogo doctor
 
 The `doctor` command checks all server subsystems and reports their health:
 
 ```bash
-hobnobcli doctor
+vigogo doctor
 ```
 
-This runs 8 checks: database, TLS certificates, secrets provider, license, spanner, SMTP, config, and stale thralls. Each check reports `pass`, `warn`, `fail`, or `skip`.
+This runs 8 checks: database, TLS certificates, secrets provider, license, spanner, SMTP, config, and stale envoys. Each check reports `pass`, `warn`, `fail`, or `skip`.
 
-### hobnobcli runs
+### vigogo runs
 
 List recent convergence runs to spot failures:
 
 ```bash
-hobnobcli runs list
-hobnobcli runs list --thrall web-01.example.com
-hobnobcli runs status <run-id>
+vigogo runs list
+vigogo runs list --envoy web-01.example.com
+vigogo runs status <run-id>
 ```
 
 ### Prometheus Metrics
 
 Monitor the `/metrics` endpoint for:
 
-- `hobnob_checkins_total{status="error"}` -- check-in failures
-- `hobnob_sig_verify_failed_total` -- signature verification failures
-- `hobnob_config_reload_errors_total` -- config reload problems
-- `hobnob_checkin_age_seconds` -- stale thrall detection
+- `vigo_checkins_total{status="error"}` -- check-in failures
+- `vigo_sig_verify_failed_total` -- signature verification failures
+- `vigo_config_reload_errors_total` -- config reload problems
+- `vigo_checkin_age_seconds` -- stale envoy detection
 
 See [Metrics](metrics.md) for the full list.
 
@@ -67,7 +67,7 @@ See [Metrics](metrics.md) for the full list.
 
 ```bash
 # Watch for "server ready" in the logs
-docker compose logs -f hobnob | grep -m1 "server ready"
+docker compose logs -f vigo | grep -m1 "server ready"
 
 # Then bootstrap
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
@@ -86,22 +86,22 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 2. Check that the agent has the correct CA certificate:
    ```bash
-   openssl s_client -connect server:1530 -CAfile /etc/hobnob/ca.pem
+   openssl s_client -connect server:1530 -CAfile /etc/vigo/ca.pem
    ```
 
 3. Verify the agent's client certificate was signed by the same CA:
    ```bash
-   openssl verify -CAfile /etc/hobnob/ca.pem /etc/hobnob/client.crt
+   openssl verify -CAfile /etc/vigo/ca.pem /etc/vigo/client.crt
    ```
 
 4. Check the agent log for specific errors:
    ```bash
-   journalctl -u hobnob-thrall -f
+   journalctl -u vigo-envoy -f
    ```
 
 **Common causes:**
 - CA certificate mismatch between server and agent
-- Expired TLS certificates (check with `hobnobcli doctor`)
+- Expired TLS certificates (check with `vigogo doctor`)
 - Firewall blocking port 1530
 
 ### Check-in Failures
@@ -112,48 +112,48 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 1. Check the server log for signature errors:
    ```
-   hobnob_sig_verify_failed_total
+   vigo_sig_verify_failed_total
    ```
 
 2. Verify clock synchronization between agent and server. The signature window is 5 minutes by default (`tuning.signature_window`). If clocks are skewed beyond this, signatures will be rejected.
 
-3. Check if the thrall is revoked:
+3. Check if the envoy is revoked:
    ```bash
-   hobnobcli nodes list
+   vigogo nodes list
    ```
 
-4. Verify the agent's key pair matches the public key stored on the server. The agent generates an ED25519 key pair at enrollment, and the public key is stored in the `thralls` table.
+4. Verify the agent's key pair matches the public key stored on the server. The agent generates an ED25519 key pair at enrollment, and the public key is stored in the `envoys` table.
 
 **Common causes:**
 - Clock skew exceeding the signature window
 - Agent re-enrolled with a new key pair but old UUID
-- Thrall was revoked
+- Envoy was revoked
 
 ### Server Started with Zero Modules
 
-**Symptoms:** Server is running but thralls get empty policy (no resources applied). Logs show `config loaded with validation errors — starting with empty config`.
+**Symptoms:** Server is running but envoys get empty policy (no resources applied). Logs show `config loaded with validation errors — starting with empty config`.
 
 **Cause:** Idempotency validation errors in `.live/` modules. The server treats these as non-fatal — it starts with empty config so the REST API, UI, and gRPC remain available for diagnosis.
 
 **Fix:**
-1. Check the error details: `hobnobcli doctor` or look at the server logs
+1. Check the error details: `vigogo doctor` or look at the server logs
 2. Fix the module in `policy/stage/` (the module linter will catch and repair most issues)
-3. Republish: `hobnobcli config publish`
+3. Republish: `vigogo config publish`
 
 ### Config Reload Errors
 
-**Symptoms:** Config changes are not picked up. `hobnob_config_reload_errors_total` increases.
+**Symptoms:** Config changes are not picked up. `vigo_config_reload_errors_total` increases.
 
 **Diagnosis:**
 
 1. Check server logs for reload errors:
    ```
-   grep "config reload" /var/log/hobnob-server.log
+   grep "config reload" /var/log/vigo-server.log
    ```
 
 2. Validate config files manually:
    ```bash
-   hobnobcli config publish --dry-run
+   vigogo config publish --dry-run
    ```
 
 3. Common YAML errors:
@@ -167,9 +167,9 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 - Module referenced in a role but not defined in `modules/`
 - Circular dependency in `depends_on`
 
-### Thrall Reports Compliant but Resources Not Applied
+### Envoy Reports Compliant but Resources Not Applied
 
-**Symptoms:** A thrall shows `compliant` with `CHANGED 0, FAILED 0`, but the expected changes (files, users, sudoers, etc.) are not present on the machine.
+**Symptoms:** A envoy shows `compliant` with `CHANGED 0, FAILED 0`, but the expected changes (files, users, sudoers, etc.) are not present on the machine.
 
 **Cause:** The agent binary is too old to understand newer resource parameters. The agent sees the resource, checks the fields it knows about (e.g., user exists, shell correct), reports "already compliant," and silently ignores parameters it doesn't recognize (e.g., `sudo_nopasswd`, `password`, `authorized_keys`).
 
@@ -177,63 +177,63 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 1. Check the agent version:
    ```bash
-   hobnobcli thralls show <hostname>
+   vigogo envoys show <hostname>
    ```
    Look at the `Agent:` line. Compare with the version the server is distributing.
 
 2. Verify the resource is in the resolved config:
    ```bash
-   hobnobcli config trace <hostname>
+   vigogo config trace <hostname>
    ```
    If the module is listed but resources aren't being applied, it's an agent version mismatch.
 
-3. Check the run result for the specific thrall:
+3. Check the run result for the specific envoy:
    ```bash
-   hobnobcli runs list --thrall <thrall-uuid> --limit 1
+   vigogo runs list --envoy <envoy-uuid> --limit 1
    ```
 
 **Fix:** Update the agent binary. If you can push through the existing agent:
 
 ```bash
 # Re-bootstrap via push — downloads and installs the latest agent binary
-hobnobcli push run "curl -sSfk https://<server>:8443/bootstrap | sh" --target "<hostname>"
+vigogo push run "curl -sSfk https://<server>:8443/bootstrap | sh" --target "<hostname>"
 ```
 
 If you can SSH with a key (no sudo needed to connect):
 
 ```bash
 make build-agent
-scp bin/hobnob user@hostname:/tmp/hobnob
-ssh user@hostname "sudo mv /tmp/hobnob /usr/local/sbin/hobnob && sudo systemctl restart hobnob-thrall"
+scp bin/vigo user@hostname:/tmp/vigo
+ssh user@hostname "sudo mv /tmp/vigo /usr/local/sbin/vigo && sudo systemctl restart vigo-envoy"
 ```
 
 If you're completely locked out (can't sudo, can't push), you'll need console or physical access to the machine.
 
-### Thralls Showing as Stale
+### Envoys Showing as Stale
 
-**Symptoms:** Thralls appear as "stale" in the UI or CLI despite being online.
+**Symptoms:** Envoys appear as "stale" in the UI or CLI despite being online.
 
 **Diagnosis:**
 
-1. Check the stale threshold. A thrall is stale if it has not checked in within `2 * checkin.interval`:
+1. Check the stale threshold. A envoy is stale if it has not checked in within `2 * checkin.interval`:
    ```yaml
    checkin:
      interval: "5m"   # stale after 10 minutes
    ```
 
-2. On the thrall, verify the agent is running:
+2. On the envoy, verify the agent is running:
    ```bash
-   systemctl status hobnob-thrall
+   systemctl status vigo-envoy
    ```
 
 3. Check agent logs for errors:
    ```bash
-   journalctl -u hobnob-thrall --since "10 minutes ago"
+   journalctl -u vigo-envoy --since "10 minutes ago"
    ```
 
 4. Check the agent's local state:
    ```bash
-   sudo hobnob status
+   sudo vigo status
    ```
    Look at `Pending results` (queued but undelivered) and `Policy > Version` (stale cache).
 
@@ -253,16 +253,16 @@ If you're completely locked out (can't sudo, can't push), you'll need console or
 
 **Diagnosis:**
 
-1. Check FleetIndex size -- it holds all thrall state in memory. Each thrall with traits consumes approximately 2-5 KB:
+1. Check FleetIndex size -- it holds all envoy state in memory. Each envoy with traits consumes approximately 2-5 KB:
    ```
-   hobnob_nodes_total * ~4KB = expected memory for FleetIndex
+   vigo_nodes_total * ~4KB = expected memory for FleetIndex
    ```
 
 2. Check the recent runs ring buffer -- it holds the last 1000 runs in memory.
 
-3. If using `run_store: memory`, each thrall keeps up to `run_store_capacity` runs in memory.
+3. If using `run_store: memory`, each envoy keeps up to `run_store_capacity` runs in memory.
 
-4. Monitor `hobnob_database_size_bytes` for database growth.
+4. Monitor `vigo_database_size_bytes` for database growth.
 
 **Mitigation:**
 - Configure `database.retention` to prune old records
@@ -282,7 +282,7 @@ If you're completely locked out (can't sudo, can't push), you'll need console or
 
 2. For the `local` backend, verify secret files exist:
    ```bash
-   ls -la /srv/hobnob/secrets/
+   ls -la /srv/vigo/secrets/
    ```
 
 3. Secrets use the path format `secret:path/to/secret` which maps to a file at the secrets directory.
@@ -304,21 +304,21 @@ If you're completely locked out (can't sudo, can't push), you'll need console or
 server:
   tls_sans:
     - "192.168.1.2"              # your server's LAN IP
-    - "hobnob.example.com"       # or DNS name agents use
+    - "vigo.example.com"       # or DNS name agents use
 ```
 
 Then regenerate certs and restart:
 
 ```bash
-cd /srv/hobnob
+cd /srv/vigo
 rm -f tls/cert tls/key
 docker compose restart
 ```
 
-Re-bootstrap thralls so they pick up the new CA:
+Re-bootstrap envoys so they pick up the new CA:
 
 ```bash
-sudo systemctl stop hobnob-thrall
+sudo systemctl stop vigo-envoy
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
@@ -326,33 +326,33 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 **Symptoms:** `curl: (23) Failure writing output to destination` during bootstrap.
 
-**Cause:** The old agent binary at `/usr/local/sbin/hobnob` is locked by a running process. Curl can't overwrite a binary that's currently executing.
+**Cause:** The old agent binary at `/usr/local/sbin/vigo` is locked by a running process. Curl can't overwrite a binary that's currently executing.
 
 **Fix:**
 
 ```bash
 # Stop the agent first
-sudo systemctl stop hobnob-thrall
+sudo systemctl stop vigo-envoy
 
 # Then re-run bootstrap
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-### Resetting a Thrall
+### Resetting a Envoy
 
-To completely reset a thrall and re-bootstrap from scratch:
+To completely reset a envoy and re-bootstrap from scratch:
 
 ```bash
 # 1. Stop and remove the service
-sudo systemctl stop hobnob-thrall
-sudo systemctl disable hobnob-thrall
-sudo rm -f /etc/systemd/system/hobnob-thrall.service
+sudo systemctl stop vigo-envoy
+sudo systemctl disable vigo-envoy
+sudo rm -f /etc/systemd/system/vigo-envoy.service
 sudo systemctl daemon-reload
 
 # 2. Remove agent data and binary
-sudo rm -rf /etc/hobnob-thrall
-sudo rm -rf /var/lib/hobnob
-sudo rm -f /usr/local/sbin/hobnob
+sudo rm -rf /etc/vigo-envoy
+sudo rm -rf /var/lib/vigo
+sudo rm -f /usr/local/sbin/vigo
 
 # 3. Re-bootstrap
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
@@ -361,14 +361,14 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 Or use the reset script:
 
 ```bash
-sudo scripts/reset-thrall.sh
+sudo scripts/reset-envoy.sh
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-The thrall will re-enroll with a new UUID and keypair. The old thrall entry on the server becomes orphaned — revoke it with:
+The envoy will re-enroll with a new UUID and keypair. The old envoy entry on the server becomes orphaned — revoke it with:
 
 ```bash
-hobnobcli thralls revoke <old-uuid>
+vigogo envoys revoke <old-uuid>
 ```
 
 ### Resetting the Server
@@ -376,10 +376,10 @@ hobnobcli thralls revoke <old-uuid>
 To wipe all server state and start fresh (preserves license):
 
 ```bash
-cd /srv/hobnob
+cd /srv/vigo
 docker compose down
-sudo find /srv/hobnob -mindepth 1 -path /srv/hobnob/license -prune -o -print0 | xargs -0 rm -rf
-docker run --rm -v /srv/hobnob:/srv/hobnob ghcr.io/daniel-alexander4/hobnob:latest --seed-only
+sudo find /srv/vigo -mindepth 1 -path /srv/vigo/license -prune -o -print0 | xargs -0 rm -rf
+docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
 docker compose up -d
 ```
 
@@ -393,7 +393,7 @@ This re-seeds `server.yaml`, `.env`, `docker-compose.yml`, TLS certs, and exampl
 |------------|---------|
 | `config reload failed` | YAML parse or validation error |
 | `signature verification failed` | Agent sent an invalid ED25519 signature |
-| `thrall revoked` | A check-in was rejected because the thrall is revoked |
+| `envoy revoked` | A check-in was rejected because the envoy is revoked |
 | `state flusher: batch last_seen failed` | SQLite write error during FleetIndex flush |
 | `webhook: delivery failed after retries` | All retry attempts for a webhook exhausted |
 | `litestream exited` | Backup replication subprocess crashed |

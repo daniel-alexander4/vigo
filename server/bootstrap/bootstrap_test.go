@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hobnob/hobnob/server/ca"
-	"github.com/hobnob/hobnob/server/config"
+	"github.com/daniel-alexander4/vigo/server/ca"
+	"github.com/daniel-alexander4/vigo/server/config"
 )
 
 func TestBootstrapScript_ReturnsShellScript(t *testing.T) {
@@ -137,7 +137,7 @@ func TestAgentLatest_ReturnsVersionJSON(t *testing.T) {
 	if err := os.MkdirAll(osDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(osDir, "hobnob"), []byte("binary-content"), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(osDir, "vigo"), []byte("binary-content"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -180,7 +180,7 @@ func TestAgentDownload_ServesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := []byte("fake-agent-binary-v1")
-	if err := os.WriteFile(filepath.Join(osDir, "hobnob"), content, 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(osDir, "vigo"), content, 0755); err != nil {
 		t.Fatal(err)
 	}
 

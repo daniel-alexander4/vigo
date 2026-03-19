@@ -28,7 +28,7 @@ Reads DMI fields (`sys_vendor`, `board_vendor`, `bios_vendor`, `product_name`) f
 ```yaml
 - name: cloud-info
   type: file
-  target_path: /var/lib/hobnob/cloud.txt
+  target_path: /var/lib/vigo/cloud.txt
   content: |
     Cloud Provider: {{ .Traits.cloud.provider }}
 ```

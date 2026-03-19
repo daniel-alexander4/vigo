@@ -8,16 +8,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/validate"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/validate"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
 
 var validateCmd = &cobra.Command{
-	Use:   "validate <file.hnb> [file2.hnb ...]",
-	Short: "Validate .hnb files for YAML syntax, cross-references, and idempotency guards",
-	Long: `Validate one or more .hnb files.
+	Use:   "validate <file.vgo> [file2.vgo ...]",
+	Short: "Validate .vgo files for YAML syntax, cross-references, and idempotency guards",
+	Long: `Validate one or more .vgo files.
 
 Checks performed:
   1. YAML syntax correctness (valid YAML, proper indentation, no tabs, etc.)
@@ -65,8 +65,8 @@ func validateFile(path string) ([]validate.Finding, error) {
 	}
 
 	ext := filepath.Ext(path)
-	if ext != ".hnb" && ext != ".yaml" && ext != ".yml" {
-		return nil, fmt.Errorf("unsupported file type %q (expected .hnb, .yaml, or .yml)", ext)
+	if ext != ".vgo" && ext != ".yaml" && ext != ".yml" {
+		return nil, fmt.Errorf("unsupported file type %q (expected .vgo, .yaml, or .yml)", ext)
 	}
 
 	// Phase 1: YAML syntax check — catch malformed YAML before anything else.
@@ -75,19 +75,19 @@ func validateFile(path string) ([]validate.Finding, error) {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	// Phase 2: detect file type — thralls file vs module file.
-	// A thralls file has a top-level "thralls:" key; a role file has "modules:" but no "resources:".
+	// Phase 2: detect file type — envoys file vs module file.
+	// A envoys file has a top-level "envoys:" key; a role file has "modules:" but no "resources:".
 	var probe map[string]any
 	yaml.Unmarshal(data, &probe)
 
-	if _, isNodes := probe["thralls"]; isNodes {
-		// Thralls file — validate each entry has a "match" field.
-		var cfg config.ThrallsConfig
+	if _, isNodes := probe["envoys"]; isNodes {
+		// Envoys file — validate each entry has a "match" field.
+		var cfg config.EnvoysConfig
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("parsing thralls file: %w", err)
+			return nil, fmt.Errorf("parsing envoys file: %w", err)
 		}
 		var findings []validate.Finding
-		for i, entry := range cfg.Thralls {
+		for i, entry := range cfg.Envoys {
 			if entry.Match == "" {
 				findings = append(findings, validate.Finding{
 					Severity: validate.SeverityError,
@@ -96,17 +96,17 @@ func validateFile(path string) ([]validate.Finding, error) {
 				})
 			}
 		}
-		if len(cfg.Thralls) == 0 {
+		if len(cfg.Envoys) == 0 {
 			findings = append(findings, validate.Finding{
 				Severity: validate.SeverityWarning,
 				Module:   filepath.Base(path),
-				Message:  "no thrall entries defined",
+				Message:  "no envoy entries defined",
 			})
 		}
 		return findings, nil
 	}
 
-	// Phase 2b: structural parse as module via the tolerant thrall parser.
+	// Phase 2b: structural parse as module via the tolerant envoy parser.
 	def, err := config.ParseModuleFile(data)
 	if err != nil {
 		return nil, err

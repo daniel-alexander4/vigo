@@ -4,7 +4,7 @@ title: SOC 2 Compliance
 
 # SOC 2 Compliance
 
-SOC 2 (System and Organization Controls 2) evaluates an organization's controls against the AICPA Trust Services Criteria. Hobnob maps its technical controls to **32 SOC 2 criteria** across all five Trust Services categories.
+SOC 2 (System and Organization Controls 2) evaluates an organization's controls against the AICPA Trust Services Criteria. Vigo maps its technical controls to **32 SOC 2 criteria** across all five Trust Services categories.
 
 ## Coverage Summary
 
@@ -71,7 +71,7 @@ SOC 2 (System and Organization Controls 2) evaluates an organization's controls 
 | CC6.2 | User Registration and Authorization | Satisfied | Per-user accounts with unique UUIDs, role-based defaults, admin approval required |
 | CC6.3 | Role-Based Access and Least Privilege | Satisfied | 13 permissions: fleet.read, config.publish, users.manage, etc. |
 | CC6.6 | Restriction of Access to System Assets | Satisfied | File executor enforces permissions/ownership; firewall executor enforces network access |
-| CC6.7 | Management of Credentials | Satisfied | 12-char complexity, bcrypt hashing, AES-256-GCM storage, API tokens (hbt_ prefix) |
+| CC6.7 | Management of Credentials | Satisfied | 12-char complexity, bcrypt hashing, AES-256-GCM storage, API tokens (vgot_ prefix) |
 | CC6.8 | Prevention of Unauthorized Software | Satisfied | Package pinning, repository enforcement prevents unauthorized changes |
 
 ### CC7 — System Operations
@@ -123,30 +123,30 @@ SOC 2 (System and Organization Controls 2) evaluates an organization's controls 
 
 ```bash
 # JSON report
-hobnobcli report soc2
+vigogo report soc2
 
-# HTML report (printable, Hobnob-branded)
-hobnobcli report soc2 --format html --output soc2-report.html
+# HTML report (printable, Vigo-branded)
+vigogo report soc2 --format html --output soc2-report.html
 ```
 
 ### REST API
 
 ```bash
 # JSON
-curl -s https://hobnob:8443/api/v1/report/soc2 | jq .
+curl -s https://vigo:8443/api/v1/report/soc2 | jq .
 
 # HTML
-curl -s https://hobnob:8443/api/v1/report/soc2.html > soc2-report.html
+curl -s https://vigo:8443/api/v1/report/soc2.html > soc2-report.html
 ```
 
 ## SOC 2 Type I vs Type II
 
-- **Type I** — Point-in-time assessment of control design. Hobnob reports provide the evidence snapshot.
+- **Type I** — Point-in-time assessment of control design. Vigo reports provide the evidence snapshot.
 - **Type II** — Assessment over a period (typically 6-12 months). Schedule weekly reports via cron and provide the archive to your auditor:
 
 ```bash
 # Weekly SOC 2 evidence snapshot
-0 2 * * 1 /usr/local/bin/hobnobcli report soc2 --format html \
+0 2 * * 1 /usr/local/bin/vigogo report soc2 --format html \
   --output /evidence/soc2-$(date +\%Y\%m\%d).html
 ```
 

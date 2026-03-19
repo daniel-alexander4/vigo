@@ -1,20 +1,20 @@
-# Hobnob — Technical Overview
+# Vigo — Technical Overview
 
-Alexander4, LLC | hobnob.licensing@alexander4.org
+Alexander4, LLC | vigo.licensing@alexander4.org
 
 ---
 
 ## What It Is
 
-Hobnob is a pull-based distributed state enforcement engine. Agents on managed nodes pull desired state from a central server, apply changes idempotently, and report results back. Configuration is declared in YAML files. The system continuously converges machines toward the declared state.
+Vigo is a pull-based distributed state enforcement engine. Agents on managed nodes pull desired state from a central server, apply changes idempotently, and report results back. Configuration is declared in YAML files. The system continuously converges machines toward the declared state.
 
 ## Components
 
 | Binary | Language | Role |
 |--------|----------|------|
-| `hobd` | Go | Server — gRPC (port 1530) + REST API/Web UI (port 8443) |
-| `hobnob` | Rust | Agent — runs on each managed node |
-| `hobnobcli` | Go | Admin CLI — enrollment, state management, orchestration |
+| `vigosrv` | Go | Server — gRPC (port 1530) + REST API/Web UI (port 8443) |
+| `vigo` | Rust | Agent — runs on each managed node |
+| `vigogo` | Go | Admin CLI — enrollment, state management, orchestration |
 
 The server uses SQLite (embedded, WAL mode). No external database, message broker, or application runtime is required.
 
@@ -48,7 +48,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 - Optional two-person approval workflow for config publish: a second admin must approve before changes go live.
 - Blast radius protection: auto-rollback if fleet compliance drops below threshold after config publish.
 - Peer replication: primary/peer file sync for server redundancy with automatic agent failover and CLI-driven promotion.
-- `hobnob status` shows the local agent's enforced policy, collected traits, and pending results — fully transparent to the machine's admin.
+- `vigo status` shows the local agent's enforced policy, collected traits, and pending results — fully transparent to the machine's admin.
 - Configuration is YAML only. One format, one directory, one publish command. No API writes, no database config, no UI mutations.
 
 ## Executors (72 built-in)
@@ -171,7 +171,7 @@ resources:
 
 ## Spanner
 
-Hub-spoke topology for multi-site deployments. The hub routes enrollment to the nearest spoke by hostname pattern. Admin queries fan out from hub to all spokes. Per-spoke compliance breakdown and latency metrics. Thrall reassignment between spokes with zero re-enrollment. Spoke drain for maintenance.
+Hub-spoke topology for multi-site deployments. The hub routes enrollment to the nearest spoke by hostname pattern. Admin queries fan out from hub to all spokes. Per-spoke compliance breakdown and latency metrics. Envoy reassignment between spokes with zero re-enrollment. Spoke drain for maintenance.
 
 ## Requirements
 
@@ -182,4 +182,4 @@ Hub-spoke topology for multi-site deployments. The hub routes enrollment to the 
 ## Contact
 
 Alexander4, LLC
-hobnob.licensing@alexander4.org
+vigo.licensing@alexander4.org

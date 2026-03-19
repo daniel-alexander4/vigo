@@ -1,6 +1,6 @@
 # custom
 
-Runs external scripts that implement the Hobnob executor protocol via JSON over stdin/stdout. Allows extending the agent with custom resource types.
+Runs external scripts that implement the Vigo executor protocol via JSON over stdin/stdout. Allows extending the agent with custom resource types.
 
 ## Parameters
 
@@ -47,9 +47,9 @@ Idempotency is the responsibility of the script. The agent calls the script on e
 
 ### Script definition
 
-Place scripts in `/etc/hobnob/executors/` (or the configured custom executor directory). The filename (without extension) becomes the executor type name.
+Place scripts in `/etc/vigo/executors/` (or the configured custom executor directory). The filename (without extension) becomes the executor type name.
 
-`/etc/hobnob/executors/myresource`:
+`/etc/vigo/executors/myresource`:
 
 ```bash
 #!/bin/bash

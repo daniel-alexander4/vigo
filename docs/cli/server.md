@@ -1,4 +1,4 @@
-# hobnobcli server
+# vigogo server
 
 Manage peer replication: promote a peer to primary, check replication status.
 
@@ -10,10 +10,10 @@ Promote a peer server to primary role.
 
 ```bash
 # Promote the server at the configured --server address:
-hobnobcli server promote
+vigogo server promote
 
 # Promote a specific server:
-hobnobcli server promote --target peer1.example.com:8443
+vigogo server promote --target peer1.example.com:8443
 ```
 
 **Flags:**
@@ -40,7 +40,7 @@ If promotion is denied due to split-brain resolution:
 Show the current peer replication status.
 
 ```bash
-hobnobcli server status
+vigogo server status
 ```
 
 **Output (primary):**

@@ -1,16 +1,16 @@
 # Migration Guides
 
-Hobnob borrows ideas from every major configuration management system. If you're coming from Puppet, Ansible, Chef, Salt, or CFEngine, these guides map the concepts you already know to their Hobnob state enforcement equivalents.
+Vigo borrows ideas from every major configuration management system. If you're coming from Puppet, Ansible, Chef, Salt, or CFEngine, these guides map the concepts you already know to their Vigo state enforcement equivalents.
 
 ## Quick Comparison
 
-| Aspect | Puppet | Ansible | Chef | Salt | CFEngine | **Hobnob** |
+| Aspect | Puppet | Ansible | Chef | Salt | CFEngine | **Vigo** |
 |---|---|---|---|---|---|---|
-| Config language | Puppet DSL | YAML + Jinja2 | Ruby DSL | YAML + Jinja2 | CFEngine DSL | YAML (`.hnb`) |
+| Config language | Puppet DSL | YAML + Jinja2 | Ruby DSL | YAML + Jinja2 | CFEngine DSL | YAML (`.vgo`) |
 | Data lookup | Hiera | host_vars / group_vars | Attributes (15 levels) | Pillar | augments | `vars` / `environment_overrides` / `vars_from` |
 | System facts | Facter | Facts | Ohai | Grains | hard classes | Traits |
 | Reusable unit | Class / Module | Role | Cookbook / Recipe | State file / Formula | Bundle | Module |
-| Node classification | site.pp / ENC | Inventory | Run list / Policy | top.sls | promises.cf | `nodes.hnb` (first-match-wins) |
+| Node classification | site.pp / ENC | Inventory | Run list / Policy | top.sls | promises.cf | `nodes.vgo` (first-match-wins) |
 | Agent model | Pull (30 min) | Push (SSH) | Pull (30 min) | Push (ZMQ) / Pull | Pull (5 min) | Pull (configurable) |
 | Secrets | hiera-eyaml | Vault | Chef Vault / Data Bags | GPG pillar | cf-secret | `secret:` prefix |
 | Templates | ERB | Jinja2 | ERB | Jinja2 | Mustache | Go templates (`content:` only) |

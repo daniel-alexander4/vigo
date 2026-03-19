@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hobnob/hobnob/server/ai"
+	"github.com/daniel-alexander4/vigo/server/ai"
 )
 
 // AIHandler serves the /api/v1/ask endpoint.

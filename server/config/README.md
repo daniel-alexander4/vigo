@@ -1,12 +1,12 @@
 # server/config -- Configuration Loader
 
-The config system loads module, role, and node definitions from YAML files (`.hnb`), resolves secrets, and renders Go templates. Reload is triggered by config publish via the REST endpoint.
+The config system loads module, role, and node definitions from YAML files (`.vgo`), resolves secrets, and renders Go templates. Reload is triggered by config publish via the REST endpoint.
 
 ## Summary
 
-- Directory hierarchy defines thrall inheritance via `common.hnb` files
-- `modules/` for reusable resource sets, `templates/` for template files, `roles.hnb` for all roles
-- YAML syntax with `.hnb` file extension (`.yaml` and `.yml` also accepted)
+- Directory hierarchy defines envoy inheritance via `common.vgo` files
+- `modules/` for reusable resource sets, `templates/` for template files, `roles.vgo` for all roles
+- YAML syntax with `.vgo` file extension (`.yaml` and `.yml` also accepted)
 - Secret references resolved at load time (`secret:` prefix)
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Reload: triggered by `POST /api/v1/config/reload`, bumps policy version on change
@@ -15,29 +15,29 @@ The config system loads module, role, and node definitions from YAML files (`.hn
 
 ## Config Hierarchy
 
-The directory structure doubles as the thrall hierarchy. `common.hnb` at any level defines modules/roles/vars inherited by all entries in subdirectories.
+The directory structure doubles as the envoy hierarchy. `common.vgo` at any level defines modules/roles/vars inherited by all entries in subdirectories.
 
 ```
-/srv/hobnob/policy/stage/
+/srv/vigo/policy/stage/
 ├── modules/              # Reusable resource sets with default vars
-│   ├── nginx.hnb
-│   ├── openssh.hnb
+│   ├── nginx.vgo
+│   ├── openssh.vgo
 │   └── monitoring/
-│       └── prometheus.hnb
+│       └── prometheus.vgo
 ├── templates/            # External template files referenced by source:
 │   └── nginx/
 │       └── nginx.conf.tmpl
-├── roles.hnb             # All role definitions in one file
-├── common.hnb            # Modules/vars inherited by ALL subdirs
+├── roles.vgo             # All role definitions in one file
+├── common.vgo            # Modules/vars inherited by ALL subdirs
 ├── production/
-│   ├── common.hnb        # Additional modules/vars for production
+│   ├── common.vgo        # Additional modules/vars for production
 │   └── web/
-│       └── web.hnb       # Leaf entry: match: "web*.prod.example.com"
+│       └── web.vgo       # Leaf entry: match: "web*.prod.example.com"
 └── staging/
-    └── staging.hnb       # Leaf entry: match: "*.staging.example.com"
+    └── staging.vgo       # Leaf entry: match: "*.staging.example.com"
 ```
 
-Files ending in `.example` are ignored. The legacy layout with `thralls/`, `roles/`, and `vars/` directories is still supported.
+Files ending in `.example` are ignored. The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still supported.
 
 ## Module Format
 
@@ -192,7 +192,7 @@ Values prefixed with `secret:` are resolved through the secrets provider at conf
 
 ```yaml
 database:
-  dsn: "secret:hobnob/db/dsn"
+  dsn: "secret:vigo/db/dsn"
 ```
 
 The `secret:` prefix is resolved on **var values** and **resource attributes**, not inside template strings. To use a secret in a `content:` template, put the `secret:` reference in a var and use `{{ .Vars.name }}`.
@@ -203,7 +203,7 @@ The secrets provider is configured in `server.yaml`. For isopass, set `tls_skip_
 secrets:
   backend: isopass
   url: https://localhost:8443
-  token_file: /srv/hobnob/isopass-token
+  token_file: /srv/vigo/isopass-token
   tls_skip_verify: true
 ```
 
@@ -291,11 +291,11 @@ The module linter (`server/modlint`) runs on changed module files during `config
 3. **Validates** schema (required fields per type, cross-references, DAG cycles, idempotency)
 4. **Auto-comments** with `#~` prefix (regenerated every publish; hand-written `#` comments preserved)
 
-The linter is a standalone package with no server dependencies — it can be imported by hobd, hobnobcli, or any external Go program (e.g., Google Cloud Functions for the community module site).
+The linter is a standalone package with no server dependencies — it can be imported by vigosrv, vigogo, or any external Go program (e.g., Google Cloud Functions for the community module site).
 
 ## Config Reload
 
-- `hobnobcli config publish` calls `POST /api/v1/config/reload` after syncing files
+- `vigogo config publish` calls `POST /api/v1/config/reload` after syncing files
 - The server re-parses all config files and rebuilds the in-memory store
 - Policy version is incremented on each successful reload
 - On parse failure, the previous valid config is retained and an error is logged

@@ -6,7 +6,7 @@
 // check-in → convergence → report-result path over real mTLS gRPC.
 //
 // Prerequisites:
-//   - Agent binary at bin/hobnob (run `make build-agent` first)
+//   - Agent binary at bin/vigo (run `make build-agent` first)
 //   - Migrations in migrations/ (found automatically)
 package integration
 
@@ -34,10 +34,10 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	isgrpc "github.com/hobnob/hobnob/server/grpc"
-	"github.com/hobnob/hobnob/server/registry"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/registry"
 )
 
 // ---------- package-level fixtures ----------
@@ -54,13 +54,13 @@ func TestMain(m *testing.M) {
 	repoRoot = root
 
 	// Verify agent binary exists.
-	agentBin = filepath.Join(root, "bin", "hobnob")
+	agentBin = filepath.Join(root, "bin", "vigo")
 	if _, err := os.Stat(agentBin); err != nil {
 		log.Fatalf("agent binary not found at %s — run 'make build-agent' first", agentBin)
 	}
 
 	// Create temp dir for DB + certs.
-	tmpDir, err := os.MkdirTemp("", "hobnob-integration-*")
+	tmpDir, err := os.MkdirTemp("", "vigo-integration-*")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -106,17 +106,17 @@ type testEnv struct {
 	Cleanup    func()
 }
 
-// startServer creates a gRPC server with the given modules and thrall mappings.
+// startServer creates a gRPC server with the given modules and envoy mappings.
 // It cleans tables, creates a ConfigStore, and listens on a random port.
-func startServer(t *testing.T, modules map[string]string, thrallsYAML string) *testEnv {
+func startServer(t *testing.T, modules map[string]string, envoysYAML string) *testEnv {
 	t.Helper()
 	ctx := context.Background()
 
 	// Clean tables.
 	for _, table := range []string{
 		"task_run_targets", "task_runs", "workflow_step_results", "workflow_runs",
-		"run_results", "runs", "thrall_traits", "plans", "plan_results",
-		"file_snapshots", "approved_patterns", "thralls",
+		"run_results", "runs", "envoy_traits", "plans", "plan_results",
+		"file_snapshots", "approved_patterns", "envoys",
 	} {
 		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("clean %s: %v", table, err)
@@ -127,15 +127,15 @@ func startServer(t *testing.T, modules map[string]string, thrallsYAML string) *t
 	reg := registry.NewRegistry(queries)
 
 	// Build config directory.
-	configDir := filepath.Join(t.TempDir(), "thrall-configs")
-	for _, sub := range []string{"thralls", "modules", "roles"} {
+	configDir := filepath.Join(t.TempDir(), "envoy-configs")
+	for _, sub := range []string{"envoys", "modules", "roles"} {
 		os.MkdirAll(filepath.Join(configDir, sub), 0755)
 	}
 	for name, content := range modules {
 		os.WriteFile(filepath.Join(configDir, "modules", name+".yaml"), []byte(content), 0644)
 	}
-	if thrallsYAML != "" {
-		os.WriteFile(filepath.Join(configDir, "thralls", "thralls.yaml"), []byte(thrallsYAML), 0644)
+	if envoysYAML != "" {
+		os.WriteFile(filepath.Join(configDir, "envoys", "envoys.yaml"), []byte(envoysYAML), 0644)
 	}
 
 	configStore, err := config.NewConfigStore(configDir, &noopProvider{}, true)
@@ -222,7 +222,7 @@ func prepareAgentDir(t *testing.T) (dataDir string, pubPEM string) {
 	return dataDir, pubPEMStr
 }
 
-// enrollAgent registers the agent server-side and writes thrall.uuid to the agent data dir.
+// enrollAgent registers the agent server-side and writes envoy.uuid to the agent data dir.
 func enrollAgent(t *testing.T, env *testEnv, dataDir, pubPEM, hostname, token string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -232,18 +232,18 @@ func enrollAgent(t *testing.T, env *testEnv, dataDir, pubPEM, hostname, token st
 		t.Fatal(err)
 	}
 
-	thrallID, err := env.Registry.Register(ctx, hostname, "127.0.0.1", pubPEM, token, false)
+	envoyID, err := env.Registry.Register(ctx, hostname, "127.0.0.1", pubPEM, token, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	os.WriteFile(filepath.Join(dataDir, "thrall.uuid"), []byte(thrallID+"\n"), 0600)
-	return thrallID
+	os.WriteFile(filepath.Join(dataDir, "envoy.uuid"), []byte(envoyID+"\n"), 0600)
+	return envoyID
 }
 
 // ---------- agent binary runner ----------
 
-// runAgent executes `bin/hobnob run` (single convergence cycle) and returns
+// runAgent executes `bin/vigo run` (single convergence cycle) and returns
 // combined stdout+stderr output and any error.
 func runAgent(t *testing.T, serverAddr, dataDir string, extraArgs ...string) (string, error) {
 	t.Helper()
@@ -264,7 +264,7 @@ func runAgent(t *testing.T, serverAddr, dataDir string, extraArgs ...string) (st
 	cmd := exec.CommandContext(ctx, agentBin, args...)
 	cmd.Env = append(os.Environ(),
 		// Override LMDB state dir to a temp location so tests don't collide.
-		"HOBNOB_STATE_DIR="+filepath.Join(dataDir, "state"),
+		"VIGO_STATE_DIR="+filepath.Join(dataDir, "state"),
 	)
 
 	out, err := cmd.CombinedOutput()

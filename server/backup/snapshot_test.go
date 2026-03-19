@@ -140,7 +140,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 
 	stageDir := filepath.Join(serverRoot, "policy", "stage", "modules")
 	os.MkdirAll(stageDir, 0700)
-	os.WriteFile(filepath.Join(stageDir, "nginx.hnb"), []byte("name: nginx\n"), 0644)
+	os.WriteFile(filepath.Join(stageDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
 	secretsDir := filepath.Join(serverRoot, "secrets")
 	os.MkdirAll(secretsDir, 0700)
@@ -159,7 +159,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 		ServerRoot:     serverRoot,
 		DBDriver:       "sqlite",
 		DBDSN:          srcDB,
-		HobnobVersion:  "test-v1",
+		VigoVersion:  "test-v1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -172,8 +172,8 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 	}
 
 	expectedFiles := map[string]bool{
-		"db/hobnob.db":                  false,
-		"policy/stage/modules/nginx.hnb": false,
+		"db/vigo.db":                  false,
+		"policy/stage/modules/nginx.vgo": false,
 		"secrets/db_pass":               false,
 		"tls/cert":                      false,
 		"server.yaml":                   false,
@@ -205,7 +205,7 @@ func TestCreateArchive_ManifestCorrect(t *testing.T) {
 		ServerRoot:    serverRoot,
 		DBDriver:      "sqlite",
 		DBDSN:         srcDB,
-		HobnobVersion: "v2.0.0",
+		VigoVersion: "v2.0.0",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -219,8 +219,8 @@ func TestCreateArchive_ManifestCorrect(t *testing.T) {
 	if m.Version != 1 {
 		t.Errorf("version = %d, want 1", m.Version)
 	}
-	if m.HobnobVersion != "v2.0.0" {
-		t.Errorf("hobnob_version = %q, want v2.0.0", m.HobnobVersion)
+	if m.VigoVersion != "v2.0.0" {
+		t.Errorf("vigo_version = %q, want v2.0.0", m.VigoVersion)
 	}
 	if m.DBDriver != "sqlite" {
 		t.Errorf("db_driver = %q, want sqlite", m.DBDriver)
@@ -244,7 +244,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 
 	stageDir := filepath.Join(serverRoot, "policy", "stage", "modules")
 	os.MkdirAll(stageDir, 0700)
-	os.WriteFile(filepath.Join(stageDir, "nginx.hnb"), []byte("name: nginx\n"), 0644)
+	os.WriteFile(filepath.Join(stageDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
 	secretsDir := filepath.Join(serverRoot, "secrets")
 	os.MkdirAll(secretsDir, 0700)
@@ -262,7 +262,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 		ServerRoot:     serverRoot,
 		DBDriver:       "sqlite",
 		DBDSN:          srcDB,
-		HobnobVersion:  "test",
+		VigoVersion:  "test",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -270,7 +270,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 
 	// Restore to a different directory.
 	restoreDir := t.TempDir()
-	restoreDBPath := filepath.Join(restoreDir, "db", "hobnob.db")
+	restoreDBPath := filepath.Join(restoreDir, "db", "vigo.db")
 
 	m, err := RestoreArchive(archivePath, RestoreOptions{
 		TargetDir: restoreDir,
@@ -298,12 +298,12 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	}
 
 	// Verify config was restored.
-	data, err := os.ReadFile(filepath.Join(restoreDir, "policy", "stage", "modules", "nginx.hnb"))
+	data, err := os.ReadFile(filepath.Join(restoreDir, "policy", "stage", "modules", "nginx.vgo"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(data) != "name: nginx\n" {
-		t.Errorf("restored nginx.hnb = %q", string(data))
+		t.Errorf("restored nginx.vgo = %q", string(data))
 	}
 
 	// Verify secrets.
@@ -344,7 +344,7 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 
 	stageDir := filepath.Join(serverRoot, "policy", "stage")
 	os.MkdirAll(stageDir, 0700)
-	os.WriteFile(filepath.Join(stageDir, "test.hnb"), []byte("test"), 0644)
+	os.WriteFile(filepath.Join(stageDir, "test.vgo"), []byte("test"), 0644)
 
 	os.WriteFile(filepath.Join(serverRoot, "server.yaml"), []byte("test"), 0644)
 
@@ -354,7 +354,7 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 		ServerRoot:     serverRoot,
 		DBDriver:       "sqlite",
 		DBDSN:          srcDB,
-		HobnobVersion:  "test",
+		VigoVersion:  "test",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -370,13 +370,13 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 	}
 
 	// DB should exist.
-	restoreDBPath := filepath.Join(restoreDir, "db", "hobnob.db")
+	restoreDBPath := filepath.Join(restoreDir, "db", "vigo.db")
 	if _, err := os.Stat(restoreDBPath); err != nil {
 		t.Errorf("database not restored: %v", err)
 	}
 
 	// Config should NOT exist.
-	if _, err := os.Stat(filepath.Join(restoreDir, "policy", "stage", "test.hnb")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(restoreDir, "policy", "stage", "test.vgo")); !os.IsNotExist(err) {
 		t.Error("config should not be restored in db-only mode")
 	}
 
@@ -398,7 +398,7 @@ func TestReadManifest_WithoutFullExtraction(t *testing.T) {
 		ServerRoot:    serverRoot,
 		DBDriver:      "sqlite",
 		DBDSN:         srcDB,
-		HobnobVersion: "v1.0",
+		VigoVersion: "v1.0",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -412,8 +412,8 @@ func TestReadManifest_WithoutFullExtraction(t *testing.T) {
 	if m.Version != 1 {
 		t.Errorf("version = %d, want 1", m.Version)
 	}
-	if m.HobnobVersion != "v1.0" {
-		t.Errorf("version = %q, want v1.0", m.HobnobVersion)
+	if m.VigoVersion != "v1.0" {
+		t.Errorf("version = %q, want v1.0", m.VigoVersion)
 	}
 	if m.DBDriver != "sqlite" {
 		t.Errorf("driver = %q, want sqlite", m.DBDriver)
@@ -443,7 +443,7 @@ func TestRoundTrip_CreateRestoreVerify(t *testing.T) {
 		ServerRoot:    serverRoot,
 		DBDriver:      "sqlite",
 		DBDSN:         srcDB,
-		HobnobVersion: "round-trip",
+		VigoVersion: "round-trip",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -455,7 +455,7 @@ func TestRoundTrip_CreateRestoreVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	restoredDB, err := sql.Open("sqlite3", filepath.Join(restoreDir, "db", "hobnob.db"))
+	restoredDB, err := sql.Open("sqlite3", filepath.Join(restoreDir, "db", "vigo.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +484,7 @@ func TestCreateArchive_SkipsMissingOptionalDirs(t *testing.T) {
 		ServerRoot:    serverRoot,
 		DBDriver:      "sqlite",
 		DBDSN:         srcDB,
-		HobnobVersion: "minimal",
+		VigoVersion: "minimal",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -499,8 +499,8 @@ func TestCreateArchive_SkipsMissingOptionalDirs(t *testing.T) {
 	if len(m.Files) != 1 {
 		t.Errorf("expected 1 file (db only), got %d: %v", len(m.Files), m.Files)
 	}
-	if m.Files[0] != "db/hobnob.db" {
-		t.Errorf("expected db/hobnob.db, got %q", m.Files[0])
+	if m.Files[0] != "db/vigo.db" {
+		t.Errorf("expected db/vigo.db, got %q", m.Files[0])
 	}
 }
 
@@ -519,7 +519,7 @@ func TestRestoreArchive_DryRun(t *testing.T) {
 		ServerRoot:     serverRoot,
 		DBDriver:       "sqlite",
 		DBDSN:          srcDB,
-		HobnobVersion:  "dry",
+		VigoVersion:  "dry",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -537,8 +537,8 @@ func TestRestoreArchive_DryRun(t *testing.T) {
 	if m == nil {
 		t.Fatal("manifest should be returned on dry run")
 	}
-	if m.HobnobVersion != "dry" {
-		t.Errorf("version = %q, want dry", m.HobnobVersion)
+	if m.VigoVersion != "dry" {
+		t.Errorf("version = %q, want dry", m.VigoVersion)
 	}
 
 	// Nothing should be written to the restore dir.
@@ -563,7 +563,7 @@ func TestReadManifest_InvalidArchive(t *testing.T) {
 }
 
 func TestSanitizePgDSN_URI(t *testing.T) {
-	dsn := "postgres://admin:s3cret@db.example.com:5432/hobnob?sslmode=require"
+	dsn := "postgres://admin:s3cret@db.example.com:5432/vigo?sslmode=require"
 	sanitized, pw := sanitizePgDSN(dsn)
 	if pw != "s3cret" {
 		t.Errorf("password = %q, want s3cret", pw)
@@ -577,7 +577,7 @@ func TestSanitizePgDSN_URI(t *testing.T) {
 }
 
 func TestSanitizePgDSN_KeyValue(t *testing.T) {
-	dsn := "host=db.example.com port=5432 user=admin password=s3cret dbname=hobnob"
+	dsn := "host=db.example.com port=5432 user=admin password=s3cret dbname=vigo"
 	sanitized, pw := sanitizePgDSN(dsn)
 	if pw != "s3cret" {
 		t.Errorf("password = %q, want s3cret", pw)
@@ -591,7 +591,7 @@ func TestSanitizePgDSN_KeyValue(t *testing.T) {
 }
 
 func TestSanitizePgDSN_NoPassword(t *testing.T) {
-	dsn := "postgres://admin@db.example.com:5432/hobnob"
+	dsn := "postgres://admin@db.example.com:5432/vigo"
 	sanitized, pw := sanitizePgDSN(dsn)
 	if pw != "" {
 		t.Errorf("password = %q, want empty", pw)
@@ -604,10 +604,10 @@ func TestSanitizePgDSN_NoPassword(t *testing.T) {
 func TestManifestJSON_RoundTrip(t *testing.T) {
 	m := Manifest{
 		Version:       1,
-		HobnobVersion: "v1.0",
+		VigoVersion: "v1.0",
 		DBDriver:      "sqlite",
-		DBDSN:         "/data/hobnob.db",
-		Files:         []string{"db/hobnob.db", "server.yaml"},
+		DBDSN:         "/data/vigo.db",
+		Files:         []string{"db/vigo.db", "server.yaml"},
 	}
 
 	data, err := json.Marshal(m)

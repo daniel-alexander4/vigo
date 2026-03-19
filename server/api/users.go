@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/hobnob/hobnob/server/auth"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/secrets"
+	"github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 )
 
 // UsersHandler provides REST endpoints for user management.
@@ -236,7 +236,7 @@ func (h *UsersHandler) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store the secret (not yet enabled — must confirm first).
-	secretKey := fmt.Sprintf("hobnob/web/auth/totp/%s", u.Username)
+	secretKey := fmt.Sprintf("vigo/web/auth/totp/%s", u.Username)
 	if err := h.secrets.(interface{ Set(string, string) error }).Set(secretKey, secret); err != nil {
 		slog.Error("storing totp secret", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to store TOTP secret")
@@ -269,7 +269,7 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get the pending secret.
-	secretKey := fmt.Sprintf("hobnob/web/auth/totp/%s", u.Username)
+	secretKey := fmt.Sprintf("vigo/web/auth/totp/%s", u.Username)
 	secret, err := h.secrets.Get(r.Context(), secretKey)
 	if err != nil || secret == "" {
 		writeJSONError(w, http.StatusBadRequest, "no TOTP setup pending — call /totp/setup first")

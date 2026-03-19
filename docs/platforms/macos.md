@@ -5,7 +5,7 @@ weight: 30
 
 # macOS Agent Support
 
-Hobnob supports macOS with native integration for launchd services, Homebrew package management, and macOS-specific executors for user/group management via Directory Services and hostname/timezone via system utilities.
+Vigo supports macOS with native integration for launchd services, Homebrew package management, and macOS-specific executors for user/group management via Directory Services and hostname/timezone via system utilities.
 
 ## Supported Versions
 
@@ -28,30 +28,30 @@ The bootstrap script detects macOS via `uname -s`, downloads the agent binary, g
 
 ```sh
 # Download agent binary
-curl -o /usr/local/sbin/hobnob https://<server>:8443/api/v1/agent/download/darwin/arm64
-chmod +x /usr/local/sbin/hobnob
+curl -o /usr/local/sbin/vigo https://<server>:8443/api/v1/agent/download/darwin/arm64
+chmod +x /usr/local/sbin/vigo
 
 # Enroll and start
-/usr/local/sbin/hobnob --server <server>:1530 --enroll --token <token>
-sudo launchctl load /Library/LaunchDaemons/com.hobnob.thrall.plist
+/usr/local/sbin/vigo --server <server>:1530 --enroll --token <token>
+sudo launchctl load /Library/LaunchDaemons/com.vigo.envoy.plist
 ```
 
 ## launchd Service
 
-The agent runs as a launchd daemon with a plist at `/Library/LaunchDaemons/com.hobnob.thrall.plist`.
+The agent runs as a launchd daemon with a plist at `/Library/LaunchDaemons/com.vigo.envoy.plist`.
 
 ```sh
 # Check status
-sudo launchctl list | grep hobnob
+sudo launchctl list | grep vigo
 
 # Stop
-sudo launchctl unload /Library/LaunchDaemons/com.hobnob.thrall.plist
+sudo launchctl unload /Library/LaunchDaemons/com.vigo.envoy.plist
 
 # Start
-sudo launchctl load /Library/LaunchDaemons/com.hobnob.thrall.plist
+sudo launchctl load /Library/LaunchDaemons/com.vigo.envoy.plist
 
 # View logs
-log show --predicate 'process == "hobnob"' --last 1h
+log show --predicate 'process == "vigo"' --last 1h
 ```
 
 The plist is configured with `KeepAlive = true` for automatic restart on failure and `RunAtLoad = true` for boot-time startup.
@@ -273,7 +273,7 @@ Use traits in `when:` expressions and templates:
 ## Example: Development Workstation Module
 
 ```yaml
-# modules/macos-dev.hnb
+# modules/macos-dev.vgo
 name: macos-dev
 
 vars:
@@ -349,7 +349,7 @@ resources:
     type: file
     target_path: /Users/{{ .Traits.identity.hostname }}/.zshrc
     content: |
-      # Managed by Hobnob
+      # Managed by Vigo
       export EDITOR=vim
       export GOPATH=$HOME/go
       export PATH=$GOPATH/bin:$HOME/.cargo/bin:$PATH
@@ -422,7 +422,7 @@ resources:
 ```sh
 # Cross-compile for macOS (both architectures)
 make dist-agent-macos
-# Output: dist/agent/darwin/amd64/hobnob, dist/agent/darwin/arm64/hobnob
+# Output: dist/agent/darwin/amd64/vigo, dist/agent/darwin/arm64/vigo
 ```
 
 ## Related

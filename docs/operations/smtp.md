@@ -1,6 +1,6 @@
 # Email Notifications
 
-The Hobnob server can send email notifications for operational events via an SMTP relay. Notifications are disabled when `smtp.host` is empty.
+The Vigo server can send email notifications for operational events via an SMTP relay. Notifications are disabled when `smtp.host` is empty.
 
 ## Configuration
 
@@ -10,9 +10,9 @@ Add an `smtp:` section to `server.yaml`:
 smtp:
   host: smtp.example.com
   port: 587                            # default
-  from: hobnob@example.com
-  username: hobnob
-  password: "secret:hobnob/smtp/password"
+  from: vigo@example.com
+  username: vigo
+  password: "secret:vigo/smtp/password"
   tls: true                            # STARTTLS (default)
   recipients:
     - ops@example.com
@@ -23,13 +23,13 @@ smtp:
 
 | Event | Description |
 |-------|-------------|
-| `thrall.enrolled` | A new thrall was enrolled |
+| `envoy.enrolled` | A new envoy was enrolled |
 | `run.success` | A convergence run succeeded |
 | `run.failure` | A convergence run failed |
-| `drift.detected` | Drift was detected on a thrall |
+| `drift.detected` | Drift was detected on a envoy |
 | `secret.rotated` | A secret was rotated |
 | `config.reload.failure` | Config file reload failed |
-| `thrall.stale` | A thrall has gone stale (missed check-ins) |
+| `envoy.stale` | A envoy has gone stale (missed check-ins) |
 | `compliance.threshold` | Fleet compliance dropped below the configured percentage |
 
 ## Per-Event Overrides
@@ -39,7 +39,7 @@ You can enable only specific events and override recipients per event:
 ```yaml
 smtp:
   host: smtp.example.com
-  from: hobnob@example.com
+  from: vigo@example.com
   recipients:
     - ops@example.com
   events:
@@ -50,7 +50,7 @@ smtp:
     drift.detected: {}                 # enabled with default recipients
     compliance.threshold:
       threshold: 80                    # fire when compliance drops below 80%
-    thrall.stale: {}
+    envoy.stale: {}
 ```
 
 When `events` is omitted or null, all events are enabled with the default recipient list. When `events` is present, only the listed events are enabled.
@@ -62,7 +62,7 @@ Instead of sending individual emails for every event, you can batch them into pe
 ```yaml
 smtp:
   host: smtp.example.com
-  from: hobnob@example.com
+  from: vigo@example.com
   recipients:
     - ops@example.com
   digest:
@@ -93,4 +93,4 @@ The digest email groups events by type and shows counts, making it easy to spot 
 
 ## Verifying SMTP
 
-Use `hobnobcli doctor` to check SMTP connectivity. The doctor endpoint performs a TCP connection test to the configured SMTP server and reports pass/fail.
+Use `vigogo doctor` to check SMTP connectivity. The doctor endpoint performs a TCP connection test to the configured SMTP server and reports pass/fail.

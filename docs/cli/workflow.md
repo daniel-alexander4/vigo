@@ -1,4 +1,4 @@
-# hobnobcli workflow
+# vigogo workflow
 
 Run and monitor multi-step workflows that chain tasks with conditional branching.
 
@@ -14,7 +14,7 @@ Run and monitor multi-step workflows that chain tasks with conditional branching
 ## Usage
 
 ```bash
-hobnobcli workflow [subcommand] [flags]
+vigogo workflow [subcommand] [flags]
 ```
 
 ## run
@@ -22,7 +22,7 @@ hobnobcli workflow [subcommand] [flags]
 Start a named workflow. Optionally wait for completion with polling.
 
 ```bash
-hobnobcli workflow run <name> [flags]
+vigogo workflow run <name> [flags]
 ```
 
 ### Flags
@@ -37,7 +37,7 @@ hobnobcli workflow run <name> [flags]
 #### Start a workflow (fire and forget)
 
 ```bash
-hobnobcli workflow run deploy-web
+vigogo workflow run deploy-web
 ```
 
 ```
@@ -47,7 +47,7 @@ Workflow deploy-web started (id: w1a2b3c4)
 #### Start a workflow and wait for completion
 
 ```bash
-hobnobcli workflow run deploy-web --wait
+vigogo workflow run deploy-web --wait
 ```
 
 ```
@@ -73,13 +73,13 @@ STEP  NAME              STATUS     TASK RUN
 Show status and step details for a workflow run.
 
 ```bash
-hobnobcli workflow status <id>
+vigogo workflow status <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli workflow status w1a2b3c4
+vigogo workflow status w1a2b3c4
 ```
 
 ```
@@ -102,7 +102,7 @@ STEP  NAME              STATUS     TASK RUN
 List recent workflow runs.
 
 ```bash
-hobnobcli workflow list [flags]
+vigogo workflow list [flags]
 ```
 
 ### Flags
@@ -114,7 +114,7 @@ hobnobcli workflow list [flags]
 ### Example
 
 ```bash
-hobnobcli workflow list
+vigogo workflow list
 ```
 
 ```
@@ -128,13 +128,13 @@ w5e6f7g8    rotate-certs  failed     2/4    2026-03-12 09:00
 Abort a running workflow.
 
 ```bash
-hobnobcli workflow abort <id>
+vigogo workflow abort <id>
 ```
 
 ### Example
 
 ```bash
-hobnobcli workflow abort w1a2b3c4
+vigogo workflow abort w1a2b3c4
 ```
 
 ```

@@ -27,7 +27,7 @@ resources:
     target_path: /etc/ssh/sshd_config.d/cis-hardening.conf
     content: |
       # CIS RHEL 9 — SSH Hardening
-      # Managed by Hobnob
+      # Managed by Vigo
 
       Protocol 2
       LogLevel VERBOSE
@@ -73,7 +73,7 @@ resources:
     target_path: /etc/security/pwquality.conf
     content: |
       # CIS RHEL 9 — Password Quality
-      # Managed by Hobnob
+      # Managed by Vigo
       minlen = {{ .Vars.pass_min_len }}
       minclass = 4
       dcredit = -1

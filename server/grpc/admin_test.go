@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 )
 
 func TestGenerateToken(t *testing.T) {
@@ -84,7 +84,7 @@ func TestForcePushValidation(t *testing.T) {
 	}
 
 	// Invalid UUID should return error
-	_, err := svc.ForcePush(context.Background(), &pb.ForcePushRequest{ThrallId: "not-a-uuid"})
+	_, err := svc.ForcePush(context.Background(), &pb.ForcePushRequest{EnvoyId: "not-a-uuid"})
 	if err == nil {
 		t.Error("ForcePush() with invalid UUID should return error")
 	}

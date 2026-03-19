@@ -155,7 +155,7 @@ func BenchmarkPatternIndex_ExactLookup(b *testing.B) {
 	// 5000 exact patterns.
 	entries := make([]resolvedEntry, 5000)
 	for i := range entries {
-		entries[i] = resolvedEntry{match: fmt.Sprintf("thrall%04d.example.com", i)}
+		entries[i] = resolvedEntry{match: fmt.Sprintf("envoy%04d.example.com", i)}
 	}
 	idx := buildPatternIndex(entries)
 
@@ -172,7 +172,7 @@ func BenchmarkPatternIndex_GlobLookup(b *testing.B) {
 		entries[i] = resolvedEntry{match: fmt.Sprintf("*.group%02d.example.com", i)}
 	}
 	for i := 100; i < 5000; i++ {
-		entries[i] = resolvedEntry{match: fmt.Sprintf("thrall%04d.example.com", i)}
+		entries[i] = resolvedEntry{match: fmt.Sprintf("envoy%04d.example.com", i)}
 	}
 	idx := buildPatternIndex(entries)
 
@@ -186,7 +186,7 @@ func BenchmarkLinearMatch(b *testing.B) {
 	// Baseline: linear filepath.Match scan of 5000 entries.
 	entries := make([]resolvedEntry, 5000)
 	for i := range entries {
-		entries[i] = resolvedEntry{match: fmt.Sprintf("thrall%04d.example.com", i)}
+		entries[i] = resolvedEntry{match: fmt.Sprintf("envoy%04d.example.com", i)}
 	}
 
 	b.ResetTimer()

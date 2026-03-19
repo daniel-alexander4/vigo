@@ -1,6 +1,6 @@
 # ssh_exec
 
-Runs commands on remote network devices over SSH. This is the network equivalent of the [`exec`](exec.md) executor -- it executes arbitrary commands on devices that can't run the Hobnob agent (switches, routers, firewalls).
+Runs commands on remote network devices over SSH. This is the network equivalent of the [`exec`](exec.md) executor -- it executes arbitrary commands on devices that can't run the Vigo agent (switches, routers, firewalls).
 
 SSH connection parameters (`host`, `port`, `username`, `credential`) are auto-injected by the gateway proxy -- module authors don't need to specify them.
 
@@ -60,4 +60,4 @@ resources:
 
 ## Platform
 
-This executor is available on all platforms. It runs on the gateway thrall and connects to the target device over SSH.
+This executor is available on all platforms. It runs on the gateway envoy and connects to the target device over SSH.

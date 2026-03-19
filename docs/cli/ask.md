@@ -1,11 +1,11 @@
-# hobnobcli ask
+# vigogo ask
 
-Ask the AI assistant a natural language question about your fleet. The assistant can query thralls, runs, traits, compliance, configs, modules, and packages to answer questions.
+Ask the AI assistant a natural language question about your fleet. The assistant can query envoys, runs, traits, compliance, configs, modules, and packages to answer questions.
 
 ## Usage
 
 ```bash
-hobnobcli ask [question] [flags]
+vigogo ask [question] [flags]
 ```
 
 If no question argument is given, reads from stdin. This is useful for piping configuration files for review.
@@ -14,27 +14,27 @@ If no question argument is given, reads from stdin. This is useful for piping co
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--thrall` | | | Thrall hostname context for the question |
+| `--envoy` | | | Envoy hostname context for the question |
 
 ## Examples
 
 ### Ask a fleet-wide question
 
 ```bash
-hobnobcli ask "how many thralls do I have?"
+vigogo ask "how many envoys do I have?"
 ```
 
 ```
-You currently have 12 enrolled thralls, all active. 10 are compliant,
+You currently have 12 enrolled envoys, all active. 10 are compliant,
 1 is drifted, and 1 is failing.
 
-[tools: list_thralls, compliance_summary | tokens: 245]
+[tools: list_envoys, compliance_summary | tokens: 245]
 ```
 
-### Ask about a specific thrall
+### Ask about a specific envoy
 
 ```bash
-hobnobcli ask --thrall web-03 "why is it failing?"
+vigogo ask --envoy web-03 "why is it failing?"
 ```
 
 ```
@@ -44,19 +44,19 @@ E: Unable to locate package nginx-extras". The module specifies
 package "nginx-extras" but the available package on Ubuntu 24.04
 is "nginx-extra" (without the 's').
 
-[tools: thrall_detail, recent_runs | tokens: 412]
+[tools: envoy_detail, recent_runs | tokens: 412]
 ```
 
 ### Ask for module generation
 
 ```bash
-hobnobcli ask "write a module for nginx with TLS"
+vigogo ask "write a module for nginx with TLS"
 ```
 
 ### Pipe a config file for review
 
 ```bash
-hobnobcli ask < policy/stage/modules/nginx.hnb
+vigogo ask < policy/stage/modules/nginx.vgo
 ```
 
 The piped content is automatically prefixed with "Review this configuration:" before being sent to the AI.
@@ -67,6 +67,6 @@ The response is streamed via Server-Sent Events (SSE) when the server supports i
 
 ## Related
 
-- [thralls](thralls.md) -- manage enrolled thralls
+- [envoys](envoys.md) -- manage enrolled envoys
 - [query](query.md) -- query trait values directly
-- [validate](validate.md) -- validate .hnb files programmatically
+- [validate](validate.md) -- validate .vgo files programmatically

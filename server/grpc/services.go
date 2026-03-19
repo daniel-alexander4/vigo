@@ -8,17 +8,17 @@ import (
 	"log/slog"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/spanner"
-	"github.com/hobnob/hobnob/server/fleet"
-	"github.com/hobnob/hobnob/server/license"
-	"github.com/hobnob/hobnob/server/registry"
-	hobnobsmtp "github.com/hobnob/hobnob/server/smtp"
-	"github.com/hobnob/hobnob/server/push"
-	"github.com/hobnob/hobnob/server/traits"
-	"github.com/hobnob/hobnob/server/webhook"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/license"
+	"github.com/daniel-alexander4/vigo/server/registry"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/traits"
+	"github.com/daniel-alexander4/vigo/server/webhook"
 )
 
 // auditRecorder is the interface for the tamper-evident audit writer.
@@ -26,15 +26,15 @@ type auditRecorder interface {
 	Record(ctx context.Context, eventType, actor, summary, payload string) error
 }
 
-// AgentService implements the HobnobAgent gRPC service.
+// AgentService implements the VigoAgent gRPC service.
 type AgentService struct {
-	pb.UnimplementedHobnobAgentServer
+	pb.UnimplementedVigoAgentServer
 	registry       *registry.Registry
 	configStore    *config.ConfigStore
 	queries        *db.Queries
 	runStore       db.RunStore
 	dispatcher     *webhook.Dispatcher
-	smtpNotifier   *hobnobsmtp.Notifier
+	smtpNotifier   *vigosmtp.Notifier
 	traitsScanner   *traits.Scanner
 	traitsBatch    *db.TraitsBatcher
 	traitsPruner   *db.TraitsPruner
@@ -47,7 +47,7 @@ type AgentService struct {
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
-	reassignStore    *ReassignStore     // pending thrall reassignments (spoke side)
+	reassignStore    *ReassignStore     // pending envoy reassignments (spoke side)
 	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
 	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	bundlePubKeyPEM  string            // cached PEM of bundle signing public key
@@ -63,13 +63,13 @@ func (s *AgentService) SetAuditWriter(w auditRecorder) {
 	s.auditWriter = w
 }
 
-// isRecentlyActive returns true if the thrall has checked in within 2× the check-in interval.
+// isRecentlyActive returns true if the envoy has checked in within 2× the check-in interval.
 // Used to distinguish promotable (recently polling) from truly stale agents.
-func (s *AgentService) isRecentlyActive(thrallID string) bool {
+func (s *AgentService) isRecentlyActive(envoyID string) bool {
 	if s.fleetIndex == nil {
 		return false
 	}
-	ts, ok, _ := s.fleetIndex.GetThrallLite(thrallID)
+	ts, ok, _ := s.fleetIndex.GetEnvoyLite(envoyID)
 	if !ok {
 		return false
 	}
@@ -90,9 +90,9 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary
 	}
 }
 
-// AdminService implements the HobnobAdmin gRPC service.
+// AdminService implements the VigoAdmin gRPC service.
 type AdminService struct {
-	pb.UnimplementedHobnobAdminServer
+	pb.UnimplementedVigoAdminServer
 	registry      *registry.Registry
 	queries       *db.Queries
 	runStore      db.RunStore
@@ -100,7 +100,7 @@ type AdminService struct {
 	baseInterval  time.Duration
 	hub           *spanner.Hub   // non-nil when role=hub; aggregates from spokes
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
-	reassignStore *ReassignStore    // pending thrall reassignments (spoke side)
+	reassignStore *ReassignStore    // pending envoy reassignments (spoke side)
 	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)
 }
 

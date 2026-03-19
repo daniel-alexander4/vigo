@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	pb "github.com/hobnob/hobnob/gen/proto/hobnob"
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -23,11 +23,11 @@ type auditRecorder interface {
 	Record(ctx context.Context, eventType, actor, summary, payload string) error
 }
 
-// Service implements the HobnobPeer gRPC service.
+// Service implements the VigoPeer gRPC service.
 // On a primary, it accepts SyncStream connections (but won't receive pushes — primary pushes outbound).
 // On a peer, it receives file changes from the primary and writes them to disk.
 type Service struct {
-	pb.UnimplementedHobnobPeerServer
+	pb.UnimplementedVigoPeerServer
 
 	serverRoot     string
 	primaryAddr    string
@@ -263,7 +263,7 @@ func queryPeerStatus(ctx context.Context, addr string, tlsCfg *tls.Config) (*pb.
 	}
 	defer conn.Close()
 
-	client := pb.NewHobnobPeerClient(conn)
+	client := pb.NewVigoPeerClient(conn)
 	return client.Status(ctx, &pb.PeerStatusRequest{})
 }
 
@@ -414,7 +414,7 @@ func isPolicyPath(path string) bool {
 // into place for crash-safe writes.
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".hobnob-peer-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".vigo-peer-*.tmp")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}

@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 // ExportHandler serves compliance framework export endpoints (SIEM, CMDB, OSCAL).
@@ -50,7 +50,7 @@ func (h *ExportHandler) RegisterRoutes(mux *http.ServeMux) {
 type SIEMEvent struct {
 	Timestamp    string `json:"timestamp"`
 	Hostname     string `json:"hostname"`
-	ThrallID     string `json:"thrall_id"`
+	EnvoyID     string `json:"envoy_id"`
 	RunID        string `json:"run_id"`
 	ModuleName   string `json:"module_name"`
 	ResourceName string `json:"resource_name"`
@@ -63,11 +63,11 @@ type SIEMEvent struct {
 	Source       string `json:"source"`
 }
 
-// CMDBRecord is a CMDB-consumable configuration item for a thrall.
+// CMDBRecord is a CMDB-consumable configuration item for a envoy.
 type CMDBRecord struct {
 	Hostname         string `json:"hostname"`
 	IP               string `json:"ip"`
-	ThrallID         string `json:"thrall_id"`
+	EnvoyID         string `json:"envoy_id"`
 	OS               string `json:"os,omitempty"`
 	OSVersion        string `json:"os_version,omitempty"`
 	Architecture     string `json:"architecture,omitempty"`
@@ -115,14 +115,14 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	thrallFilter := r.URL.Query().Get("thrall")
+	envoyFilter := r.URL.Query().Get("envoy")
 
 	var events []SIEMEvent
 
-	if thrallFilter != "" {
-		rows, err := h.queries.ListRunResultsSinceByThrall(ctx, db.ListRunResultsSinceByThrallParams{
+	if envoyFilter != "" {
+		rows, err := h.queries.ListRunResultsSinceByEnvoy(ctx, db.ListRunResultsSinceByEnvoyParams{
 			CreatedAt: since,
-			Hostname:  thrallFilter,
+			Hostname:  envoyFilter,
 			Limit:     limit,
 		})
 		if err != nil {
@@ -131,7 +131,7 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 		}
 		events = make([]SIEMEvent, 0, len(rows))
 		for _, row := range rows {
-			events = append(events, siemEventFromByThrallRow(row))
+			events = append(events, siemEventFromByEnvoyRow(row))
 		}
 	} else {
 		rows, err := h.queries.ListRunResultsSince(ctx, db.ListRunResultsSinceParams{
@@ -156,7 +156,7 @@ func siemEventFromRow(row db.ListRunResultsSinceRow) SIEMEvent {
 	e := SIEMEvent{
 		Timestamp:    row.CreatedAt.Format(time.RFC3339),
 		Hostname:     row.Hostname,
-		ThrallID:     row.ThrallID,
+		EnvoyID:     row.EnvoyID,
 		RunID:        row.RunID,
 		ModuleName:   row.ModuleName,
 		ResourceName: row.ResourceName,
@@ -165,7 +165,7 @@ func siemEventFromRow(row db.ListRunResultsSinceRow) SIEMEvent {
 		Changed:      row.Changed != 0,
 		DurationMs:   row.DurationMs,
 		RunStatus:    row.RunStatus,
-		Source:       "hobnob",
+		Source:       "vigo",
 	}
 	if row.ErrorMessage.Valid {
 		e.Error = row.ErrorMessage.String
@@ -173,11 +173,11 @@ func siemEventFromRow(row db.ListRunResultsSinceRow) SIEMEvent {
 	return e
 }
 
-func siemEventFromByThrallRow(row db.ListRunResultsSinceByThrallRow) SIEMEvent {
+func siemEventFromByEnvoyRow(row db.ListRunResultsSinceByEnvoyRow) SIEMEvent {
 	e := SIEMEvent{
 		Timestamp:    row.CreatedAt.Format(time.RFC3339),
 		Hostname:     row.Hostname,
-		ThrallID:     row.ThrallID,
+		EnvoyID:     row.EnvoyID,
 		RunID:        row.RunID,
 		ModuleName:   row.ModuleName,
 		ResourceName: row.ResourceName,
@@ -186,7 +186,7 @@ func siemEventFromByThrallRow(row db.ListRunResultsSinceByThrallRow) SIEMEvent {
 		Changed:      row.Changed != 0,
 		DurationMs:   row.DurationMs,
 		RunStatus:    row.RunStatus,
-		Source:       "hobnob",
+		Source:       "vigo",
 	}
 	if row.ErrorMessage.Valid {
 		e.Error = row.ErrorMessage.String
@@ -198,10 +198,10 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	envFilter := r.URL.Query().Get("environment")
 
-	allThralls := h.fleetIndex.AllThralls()
-	records := make([]CMDBRecord, 0, len(allThralls))
+	allEnvoys := h.fleetIndex.AllEnvoys()
+	records := make([]CMDBRecord, 0, len(allEnvoys))
 
-	for _, ts := range allThralls {
+	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
@@ -224,7 +224,7 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 		rec := CMDBRecord{
 			Hostname:         ts.Hostname,
 			IP:               ts.IP,
-			ThrallID:         ts.ID,
+			EnvoyID:         ts.ID,
 			OS:               ts.Traits["os.family"],
 			OSVersion:        ts.Traits["os.version"],
 			Architecture:     ts.Traits["hardware.architecture"],
@@ -299,7 +299,7 @@ func (h *ExportHandler) handleOSCAL(w http.ResponseWriter, r *http.Request) {
 		"assessment-results": map[string]any{
 			"uuid": "00000000-0000-4000-8000-000000000000",
 			"metadata": map[string]any{
-				"title":         "Hobnob HIPAA Assessment Results",
+				"title":         "Vigo HIPAA Assessment Results",
 				"last-modified": now,
 				"version":       "1.0.0",
 				"oscal-version": "1.1.2",
@@ -307,8 +307,8 @@ func (h *ExportHandler) handleOSCAL(w http.ResponseWriter, r *http.Request) {
 			"results": []map[string]any{
 				{
 					"uuid":        "00000000-0000-4000-8000-000000000100",
-					"title":       "Hobnob HIPAA Compliance Assessment",
-					"description": "Automated assessment of HIPAA Security Rule technical controls implemented by Hobnob.",
+					"title":       "Vigo HIPAA Compliance Assessment",
+					"description": "Automated assessment of HIPAA Security Rule technical controls implemented by Vigo.",
 					"start":       now,
 					"reviewed-controls": map[string]any{
 						"control-selections": []map[string]any{

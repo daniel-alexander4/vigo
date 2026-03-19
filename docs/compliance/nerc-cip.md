@@ -4,7 +4,7 @@ title: NERC CIP
 
 # NERC CIP Compliance
 
-NERC CIP (North American Electric Reliability Corporation Critical Infrastructure Protection) standards protect the Bulk Electric System (BES) from cyber threats. Hobnob maps **18 requirements** across 8 CIP standards.
+NERC CIP (North American Electric Reliability Corporation Critical Infrastructure Protection) standards protect the Bulk Electric System (BES) from cyber threats. Vigo maps **18 requirements** across 8 CIP standards.
 
 ## Coverage Summary
 
@@ -22,13 +22,13 @@ NERC CIP (North American Electric Reliability Corporation Critical Infrastructur
 ## Generating Reports
 
 ```bash
-hobnobcli report nerccip
-hobnobcli report nerccip --format html --output nerccip-report.html
+vigogo report nerccip
+vigogo report nerccip --format html --output nerccip-report.html
 ```
 
 ## Key Capabilities for Energy Sector
 
-| NERC CIP Need | Hobnob Implementation |
+| NERC CIP Need | Vigo Implementation |
 |---------------|----------------------|
 | Asset inventory | 25 trait collectors, FleetIndex |
 | Configuration baselines | YAML modules = desired state |

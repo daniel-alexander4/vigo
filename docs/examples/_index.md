@@ -1,6 +1,6 @@
 # Example Walkthroughs
 
-These examples demonstrate real-world Hobnob configurations using `.hnb` YAML modules, roles, and node assignments.
+These examples demonstrate real-world Vigo configurations using `.vgo` YAML modules, roles, and node assignments.
 
 Each example is a complete walkthrough with ready-to-use config snippets. Adapt the variable values and paths for your environment.
 
@@ -21,7 +21,7 @@ All examples follow these patterns:
 
 - Modules live in `policy/stage/modules/`
 - Roles live in `policy/stage/roles/`
-- Node assignments live in `policy/stage/thralls/nodes.hnb`
+- Node assignments live in `policy/stage/envoys/nodes.vgo`
 - Go templates (`{{ }}`) are only used in `content:` attributes
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider
