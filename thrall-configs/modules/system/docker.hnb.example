@@ -14,9 +14,10 @@ resources:
   - name: docker-repo
     type: repository
     repository: docker-ce
-    key_url: https://download.docker.com/linux/ubuntu/gpg
-    repo: "deb [signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable"
+    key_url: "https://download.docker.com/linux/{{ .Traits.os.upstream_id }}/gpg"
+    repo: "deb [signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ .Traits.os.upstream_id }} {{ .Traits.os.upstream_codename }} stable"
     state: present
+    when: "os_family('debian')"
     depends_on: [docker-deps]
 
   - name: install-docker

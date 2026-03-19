@@ -18,7 +18,7 @@ resources:
 
   - name: set-java-alternative-debian
     type: alternatives
-    path: /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+    path: "/usr/lib/jvm/java-17-openjdk-{{ .Traits.os.arch }}/bin/java"
     link: /usr/bin/java
     priority: "100"
     depends_on: [install-java-debian]

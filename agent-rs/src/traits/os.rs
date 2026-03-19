@@ -17,11 +17,19 @@ pub fn collect() -> Result<Value> {
     let distro = release.get("ID").cloned().unwrap_or_default();
     let version = release.get("VERSION_ID").cloned().unwrap_or_default();
 
+    // Upstream distro and codename for derivative distributions.
+    // Linux Mint → ubuntu/noble, Pop!_OS → ubuntu/jammy, LMDE → debian/bookworm, etc.
+    // Sources: UBUNTU_CODENAME, VERSION_CODENAME, ID_LIKE from /etc/os-release.
+    let (upstream_id, upstream_codename) = upstream_from_release(&release, &distro);
+
     let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease")
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
 
-    let arch = match std::env::consts::ARCH {
+    // arch: normalized Go/Docker convention (amd64, arm64)
+    // arch_raw: original platform convention (x86_64, aarch64) for download URLs
+    let arch_raw = std::env::consts::ARCH;
+    let arch = match arch_raw {
         "x86_64" => "amd64",
         "aarch64" => "arm64",
         "x86" => "386",
@@ -34,7 +42,53 @@ pub fn collect() -> Result<Value> {
         "version": version,
         "kernel": kernel,
         "arch": arch,
+        "arch_raw": arch_raw,
+        "upstream_id": upstream_id,
+        "upstream_codename": upstream_codename,
     }))
+}
+
+/// Determine upstream distro ID and codename for derivative distributions.
+///
+/// For derivatives like Linux Mint, Pop!_OS, Elementary, etc., third-party
+/// repos (Docker, Node, Erlang) use the upstream Ubuntu/Debian codename.
+/// This extracts that from /etc/os-release fields:
+///   - UBUNTU_CODENAME → upstream is ubuntu with that codename
+///   - VERSION_CODENAME → fallback codename (may be the derivative's own)
+///   - ID_LIKE → first entry is the immediate parent distro
+///
+/// For non-derivatives, returns the distro's own ID and VERSION_CODENAME.
+fn upstream_from_release(release: &HashMap<String, String>, distro: &str) -> (String, String) {
+    // UBUNTU_CODENAME is set by Ubuntu derivatives (Mint, Pop, Elementary, Zorin, etc.)
+    if let Some(codename) = release.get("UBUNTU_CODENAME") {
+        if !codename.is_empty() {
+            return ("ubuntu".to_string(), codename.clone());
+        }
+    }
+
+    // For non-derivatives, VERSION_CODENAME is the distro's own codename.
+    // For Debian: "bookworm", "bullseye". For Ubuntu: "noble", "jammy".
+    let codename = release
+        .get("VERSION_CODENAME")
+        .cloned()
+        .unwrap_or_default();
+
+    // If the distro has ID_LIKE and is not itself a root distro, use the
+    // first parent as upstream_id. Otherwise, upstream_id == distro.
+    let upstream_id = release
+        .get("ID_LIKE")
+        .and_then(|v| {
+            let first = v.split_whitespace().next()?;
+            // Don't "upstream" root distros to themselves
+            if first == distro {
+                None
+            } else {
+                Some(first.to_string())
+            }
+        })
+        .unwrap_or_else(|| distro.to_string());
+
+    (upstream_id, codename)
 }
 
 /// Determine OS family from parsed os-release fields.
@@ -98,11 +152,10 @@ VERSION_ID="22.04"
         // May fail on non-Linux but should not panic.
         if let Ok(val) = collect() {
             let obj = val.as_object().unwrap();
-            assert!(obj.contains_key("family"));
-            assert!(obj.contains_key("distro"));
-            assert!(obj.contains_key("version"));
-            assert!(obj.contains_key("kernel"));
-            assert!(obj.contains_key("arch"));
+            for key in &["family", "distro", "version", "kernel", "arch",
+                         "arch_raw", "upstream_id", "upstream_codename"] {
+                assert!(obj.contains_key(*key), "missing key: {}", key);
+            }
         }
     }
 
@@ -135,5 +188,99 @@ VERSION_ID="22.04"
     fn test_family_unknown_uses_first_id_like() {
         let release = parse_os_release("ID=custom\nID_LIKE=\"niche obscure\"\n");
         assert_eq!(family_from_release(&release), "niche");
+    }
+
+    // --- upstream_from_release tests ---
+
+    #[test]
+    fn test_upstream_mint_22() {
+        // Linux Mint 22 has UBUNTU_CODENAME=noble
+        let release = parse_os_release(
+            "ID=linuxmint\nID_LIKE=\"ubuntu debian\"\nVERSION_ID=22\nVERSION_CODENAME=wilma\nUBUNTU_CODENAME=noble\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "linuxmint");
+        assert_eq!(id, "ubuntu");
+        assert_eq!(codename, "noble");
+    }
+
+    #[test]
+    fn test_upstream_mint_21() {
+        let release = parse_os_release(
+            "ID=linuxmint\nID_LIKE=\"ubuntu debian\"\nVERSION_ID=21.3\nVERSION_CODENAME=virginia\nUBUNTU_CODENAME=jammy\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "linuxmint");
+        assert_eq!(id, "ubuntu");
+        assert_eq!(codename, "jammy");
+    }
+
+    #[test]
+    fn test_upstream_pop_os() {
+        let release = parse_os_release(
+            "ID=pop\nID_LIKE=\"ubuntu debian\"\nVERSION_ID=22.04\nUBUNTU_CODENAME=jammy\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "pop");
+        assert_eq!(id, "ubuntu");
+        assert_eq!(codename, "jammy");
+    }
+
+    #[test]
+    fn test_upstream_ubuntu_is_itself() {
+        let release = parse_os_release(
+            "ID=ubuntu\nID_LIKE=debian\nVERSION_ID=24.04\nVERSION_CODENAME=noble\nUBUNTU_CODENAME=noble\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "ubuntu");
+        assert_eq!(id, "ubuntu");
+        assert_eq!(codename, "noble");
+    }
+
+    #[test]
+    fn test_upstream_debian_is_itself() {
+        let release = parse_os_release(
+            "ID=debian\nVERSION_ID=12\nVERSION_CODENAME=bookworm\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "debian");
+        assert_eq!(id, "debian");
+        assert_eq!(codename, "bookworm");
+    }
+
+    #[test]
+    fn test_upstream_rocky_linux() {
+        // Rocky has no UBUNTU_CODENAME; ID_LIKE points to rhel
+        let release = parse_os_release(
+            "ID=rocky\nID_LIKE=\"rhel centos fedora\"\nVERSION_ID=9.3\nVERSION_CODENAME=\"Blue Onyx\"\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "rocky");
+        assert_eq!(id, "rhel");
+        assert_eq!(codename, "Blue Onyx");
+    }
+
+    #[test]
+    fn test_upstream_lmde() {
+        // LMDE (Linux Mint Debian Edition) — no UBUNTU_CODENAME, ID_LIKE=debian
+        let release = parse_os_release(
+            "ID=linuxmint\nID_LIKE=debian\nVERSION_ID=6\nVERSION_CODENAME=faye\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "linuxmint");
+        assert_eq!(id, "debian");
+        assert_eq!(codename, "faye");
+    }
+
+    #[test]
+    fn test_upstream_elementary() {
+        let release = parse_os_release(
+            "ID=elementary\nID_LIKE=\"ubuntu debian\"\nVERSION_ID=7.1\nUBUNTU_CODENAME=jammy\n"
+        );
+        let (id, codename) = upstream_from_release(&release, "elementary");
+        assert_eq!(id, "ubuntu");
+        assert_eq!(codename, "jammy");
+    }
+
+    #[test]
+    fn test_upstream_fedora_no_codename() {
+        // Fedora has no ID_LIKE, no UBUNTU_CODENAME
+        let release = parse_os_release("ID=fedora\nVERSION_ID=39\n");
+        let (id, codename) = upstream_from_release(&release, "fedora");
+        assert_eq!(id, "fedora");
+        assert_eq!(codename, "");
     }
 }

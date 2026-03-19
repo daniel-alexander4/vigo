@@ -13,7 +13,7 @@ resources:
     type: repository
     repository: erlang
     key_url: https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc
-    repo: "deb [signed-by=/etc/apt/keyrings/erlang_solutions.gpg] https://packages.erlang-solutions.com/ubuntu jammy contrib"
+    repo: "deb [signed-by=/etc/apt/keyrings/erlang_solutions.gpg] https://packages.erlang-solutions.com/{{ .Traits.os.upstream_id }} {{ .Traits.os.upstream_codename }} contrib"
     state: present
     when: "os_family('debian')"
 
@@ -21,7 +21,7 @@ resources:
     type: repository
     repository: rabbitmq-server
     key_url: https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey
-    repo: "deb [signed-by=/etc/apt/keyrings/rabbitmq-server.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu jammy main"
+    repo: "deb [signed-by=/etc/apt/keyrings/rabbitmq-server.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/{{ .Traits.os.upstream_id }} {{ .Traits.os.upstream_codename }} main"
     state: present
     when: "os_family('debian')"
 

@@ -1,27 +1,24 @@
 # Templates
 
-Hobnob uses Go template syntax for dynamic content in resource definitions. Templates are rendered server-side at check-in time.
+Hobnob uses Go template syntax for dynamic content in resource definitions. Templates are rendered agent-side during policy evaluation.
 
 ## Where Templates Are Allowed
 
-| Attribute | Templates Allowed | Notes |
-|-----------|:-:|-------|
-| `content:` | Yes | Inline template in the YAML |
-| `source:` | Yes | External template file (e.g., `source: templates/nginx.conf.tmpl`) |
-| `target_path:` | No | |
-| `package:` | No | |
-| `service:` | No | |
-| `command:` | No | |
-| `owner:`, `group:` | No | |
-| `mode:` | No | |
-| `url:`, `repo:` | No | |
-| `stream_edit:` | No | |
-| `when:` | No | |
-| All other attributes | No | |
+Templates are rendered in **all string attributes** on every resource. This includes `content:`, `source:`, `target_path:`, `command:`, `repo:`, `key_url:`, `url:`, `owner:`, `group:`, `mode:`, `when:`, and any other string field.
+
+```yaml
+# All of these support {{ .Traits.* }} and {{ .Vars.* }}
+- name: docker-repo
+  type: repository
+  key_url: "https://download.docker.com/linux/{{ .Traits.os.upstream_id }}/gpg"
+  repo: "deb https://download.docker.com/linux/{{ .Traits.os.upstream_id }} {{ .Traits.os.upstream_codename }} stable"
+
+- name: install-consul
+  type: archive
+  url: "https://releases.hashicorp.com/consul/{{ .Vars.consul_version }}/consul_{{ .Vars.consul_version }}_linux_{{ .Traits.os.arch }}.zip"
+```
 
 For small templates, use `content:` directly. For larger config files, put the template in the `templates/` directory and reference it with `source:`. The `content:` and `source:` attributes are mutually exclusive.
-
-For attributes that need to vary per-thrall, use `vars` with literal overrides at the node level instead of templates.
 
 ## Template Data
 
