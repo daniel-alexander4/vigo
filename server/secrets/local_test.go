@@ -88,6 +88,78 @@ func TestLocalProviderSetTrimsCarriageReturn(t *testing.T) {
 	}
 }
 
+func TestLocalProviderSetStripsBOM(t *testing.T) {
+	p, _ := setupLocalProvider(t)
+	defer p.Close()
+
+	// UTF-8 BOM from Windows Notepad copy-paste.
+	if err := p.Set("hobnob/api/key", "\xEF\xBB\xBFsk-abc123"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	val, err := p.Get(context.Background(), "hobnob/api/key")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "sk-abc123" {
+		t.Errorf("Get = %q, want %q (BOM should be stripped)", val, "sk-abc123")
+	}
+}
+
+func TestLocalProviderSetStripsZeroWidth(t *testing.T) {
+	p, _ := setupLocalProvider(t)
+	defer p.Close()
+
+	// Zero-width space from Slack/web paste.
+	if err := p.Set("hobnob/api/key", "sk-abc\u200B123"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	val, err := p.Get(context.Background(), "hobnob/api/key")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "sk-abc123" {
+		t.Errorf("Get = %q, want %q (zero-width space should be stripped)", val, "sk-abc123")
+	}
+}
+
+func TestLocalProviderSetStripsNullAndBidi(t *testing.T) {
+	p, _ := setupLocalProvider(t)
+	defer p.Close()
+
+	// Null byte + bidi override (Trojan Source style).
+	if err := p.Set("hobnob/api/key", "pass\x00word\u202Etest"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	val, err := p.Get(context.Background(), "hobnob/api/key")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "passwordtest" {
+		t.Errorf("Get = %q, want %q (null and bidi should be stripped)", val, "passwordtest")
+	}
+}
+
+func TestLocalProviderSetNBSPToSpace(t *testing.T) {
+	p, _ := setupLocalProvider(t)
+	defer p.Close()
+
+	// Non-breaking space from web page copy-paste — converted to regular space, then trimmed.
+	if err := p.Set("hobnob/api/key", "\u00A0sk-abc123\u00A0"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	val, err := p.Get(context.Background(), "hobnob/api/key")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "sk-abc123" {
+		t.Errorf("Get = %q, want %q (NBSP should become space then trim)", val, "sk-abc123")
+	}
+}
+
 func TestLocalProviderGetBytes(t *testing.T) {
 	p, _ := setupLocalProvider(t)
 	defer p.Close()

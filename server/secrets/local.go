@@ -144,11 +144,43 @@ func (p *LocalProvider) GetVersion(_ context.Context, key string) (int, error) {
 }
 
 // Set encrypts and writes a secret value. Creates parent directories as needed.
-// Leading/trailing whitespace (spaces, tabs, newlines, carriage returns) is
-// stripped to prevent accidental copy-paste artifacts from corrupting secrets.
+// Invisible characters from copy-paste are sanitized: leading/trailing
+// whitespace is trimmed, and embedded control characters (null bytes, BOM,
+// zero-width spaces, bidi marks) are stripped entirely.
 func (p *LocalProvider) Set(key, value string) error {
-	value = strings.TrimSpace(value)
+	value = sanitizeSecret(value)
 	return p.encryptAndWrite(key, []byte(value))
+}
+
+// sanitizeSecret strips invisible characters that commonly sneak in via
+// copy-paste from web pages, Slack, terminals, and Windows Notepad.
+func sanitizeSecret(s string) string {
+	// First pass: remove embedded invisible characters that should never
+	// appear in a secret value (null, BOM, zero-width, bidi marks).
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\x00': // null byte
+			continue
+		case r == '\uFEFF': // UTF-8 BOM / zero-width no-break space
+			continue
+		case r == '\u00A0': // non-breaking space → regular space
+			b.WriteByte(' ')
+		case r == '\u200B' || r == '\u200C' || r == '\u200D': // zero-width space/joiner
+			continue
+		case r == '\u200E' || r == '\u200F': // LRM / RLM
+			continue
+		case r >= '\u202A' && r <= '\u202E': // bidi embedding/override
+			continue
+		case r >= '\u2066' && r <= '\u2069': // bidi isolate
+			continue
+		default:
+			b.WriteRune(r)
+		}
+	}
+	// Second pass: trim leading/trailing whitespace (spaces, tabs, newlines).
+	return strings.TrimSpace(b.String())
 }
 
 // Delete removes an encrypted secret file.
