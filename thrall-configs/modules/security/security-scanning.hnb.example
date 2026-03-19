@@ -232,11 +232,113 @@ resources:
     package: aide
     state: present
 
+  - name: aide-conf
+    type: file
+    target_path: /etc/aide/aide.conf
+    owner: root
+    group: root
+    mode: "0600"
+    depends_on: [install-aide]
+    content: |
+      # Managed by Hobnob — security-scanning module.
+      # Focused on security-critical paths only. Distro default monitors
+      # too much and causes multi-hour scans on normal systems.
+
+      database_in=file:{{ .Vars.aide_db_path }}
+      database_out=file:{{ .Vars.aide_db_new_path }}
+      database_new=file:{{ .Vars.aide_db_new_path }}
+      gzip_dbout=yes
+
+      # ── Rules ─────────────────────────────────────────────
+      FULL = p+i+n+u+g+s+m+c+sha256
+      DIR  = p+i+n+u+g
+      PERMS = p+u+g
+      LOG  = p+u+g+i+n+S
+      CONTENT = sha256
+
+      # ── System binaries ───────────────────────────────────
+      /usr/bin    FULL
+      /usr/sbin   FULL
+      /usr/local/bin   FULL
+      /usr/local/sbin  FULL
+
+      # ── Boot and kernel ───────────────────────────────────
+      /boot       FULL
+
+      # ── Critical config ───────────────────────────────────
+      /etc/passwd        FULL
+      /etc/shadow        FULL
+      /etc/group         FULL
+      /etc/gshadow       FULL
+      /etc/sudoers       FULL
+      /etc/sudoers.d     FULL
+      /etc/ssh           FULL
+      /etc/pam.d         FULL
+      /etc/security      FULL
+      /etc/login.defs    FULL
+      /etc/shells        FULL
+      /etc/hosts         FULL
+      /etc/hosts.allow   FULL
+      /etc/hosts.deny    FULL
+      /etc/crontab       FULL
+      /etc/cron.d        FULL
+      /etc/cron.daily    FULL
+      /etc/cron.weekly   FULL
+      /etc/cron.monthly  FULL
+      /etc/apt           PERMS
+      /etc/yum.repos.d   PERMS
+      /etc/systemd       PERMS
+      /etc/ld.so.conf    FULL
+      /etc/ld.so.conf.d  FULL
+      /etc/ld.so.preload FULL
+      /etc/modprobe.d    FULL
+      /etc/sysctl.conf   FULL
+      /etc/sysctl.d      FULL
+
+      # ── Firewall ──────────────────────────────────────────
+      /etc/iptables      FULL
+      /etc/nftables.conf FULL
+      /etc/ufw           PERMS
+
+      # ── Cron spool ────────────────────────────────────────
+      /var/spool/cron    FULL
+
+      # ── Kernel modules ────────────────────────────────────
+      /lib/modules       CONTENT
+
+      # ── Exclude high-churn, non-security paths ────────────
+      !/var/log
+      !/var/cache
+      !/var/tmp
+      !/var/lib/docker
+      !/var/lib/containerd
+      !/var/lib/lxcfs
+      !/var/lib/snapd
+      !/var/lib/apt
+      !/var/lib/dpkg/lock
+      !/var/lib/aide
+      !/var/lib/hobnob
+      !/tmp
+      !/run
+      !/proc
+      !/sys
+      !/dev
+      !/home
+      !/root/.bash_history
+      !/etc/mtab
+
+  - name: aide-reinit
+    type: exec
+    command: "sh -c 'aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}'"
+    depends_on: [aide-conf]
+    subscribes: [aide-conf]
+    when: changed
+
   - name: aide-init
     type: exec
     command: "sh -c 'if command -v aideinit >/dev/null 2>&1; then aideinit; else aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}; fi'"
     onlyif: "! test -f {{ .Vars.aide_db_path }}"
-    depends_on: [install-aide]
+    depends_on: [aide-conf]
 
   - name: run-aide
     type: exec
@@ -245,7 +347,7 @@ resources:
     timeout: "{{ .Vars.scan_timeout }}"
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-aide-$(date +%Y%m%d)"
-    depends_on: [aide-init, scan-dir]
+    depends_on: [aide-init, aide-reinit, scan-dir]
 
   - name: aide-sentinel
     type: exec

@@ -196,9 +196,23 @@ vars:
   trivy_severity: "CRITICAL,HIGH"
 ```
 
+## AIDE Configuration
+
+The module deploys a focused `/etc/aide/aide.conf` that monitors only security-critical paths:
+
+- **System binaries**: `/usr/bin`, `/usr/sbin`, `/usr/local/bin`, `/usr/local/sbin`
+- **Boot/kernel**: `/boot`, `/lib/modules`
+- **Auth files**: `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/pam.d`, `/etc/ssh`
+- **System config**: `/etc/crontab`, `/etc/cron.d`, `/etc/sysctl.conf`, firewall configs
+- **Cron spool**: `/var/spool/cron`
+
+High-churn directories are excluded: `/var/log`, `/var/cache`, `/var/lib/docker`, `/home`, `/tmp`, `/run`, `/proc`, `/sys`.
+
+This replaces the distro default which often monitors everything and causes multi-hour scans. The DB is automatically reinitialized when the config changes.
+
 ## AIDE Baseline
 
-AIDE initializes its database on first run. After legitimate system changes, update the baseline:
+After legitimate system changes (package upgrades, new binaries), update the baseline:
 
 ```bash
 aide --init && cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
