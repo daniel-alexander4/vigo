@@ -502,12 +502,43 @@ function switchSecTab(id) {
 
 function sevClass(s) { return s==='CRITICAL'||s==='high'?'sec-card--critical':s==='HIGH'?'sec-card--high':s==='MEDIUM'||s==='medium'?'sec-card--medium':'sec-card--low'; }
 function sevLabel(s) { return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); }
+function sevNorm(s) { return s ? s.toLowerCase() : 'other'; }
+
+function sevFilterBar(vulns, sevKey, filterId) {
+    var counts = {};
+    vulns.forEach(function(v) {
+        var s = sevNorm(v[sevKey] || 'other');
+        counts[s] = (counts[s] || 0) + 1;
+    });
+    var levels = ['critical','high','medium','low','other'];
+    var h = '<div class="sec-filter" id="' + filterId + '">';
+    h += '<button class="sec-filter__btn sec-filter__btn--active" data-sev="all" onclick="secFilter(this,\'' + filterId + '\')">All (' + vulns.length + ')</button>';
+    levels.forEach(function(lv) {
+        if (counts[lv]) {
+            h += '<button class="sec-filter__btn" data-sev="' + lv + '" onclick="secFilter(this,\'' + filterId + '\')">' + sevLabel(lv) + ' (' + counts[lv] + ')</button>';
+        }
+    });
+    h += '</div>';
+    return h;
+}
+
+function secFilter(btn, filterId) {
+    var bar = document.getElementById(filterId);
+    bar.querySelectorAll('.sec-filter__btn').forEach(function(b) { b.classList.remove('sec-filter__btn--active'); });
+    btn.classList.add('sec-filter__btn--active');
+    var sev = btn.getAttribute('data-sev');
+    var pane = bar.parentElement;
+    pane.querySelectorAll('.sec-card[data-sev]').forEach(function(card) {
+        card.style.display = (sev === 'all' || card.getAttribute('data-sev') === sev) ? '' : 'none';
+    });
+}
 
 function renderTrivy(t) {
     if (!t.vulnerabilities || !t.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + '</p>';
     var h = '<p class="text-muted">' + t.vulnerabilities.length + ' vulnerabilities' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
+    h += sevFilterBar(t.vulnerabilities, 'severity', 'trivy-sev-filter');
     t.vulnerabilities.forEach(function(v) {
-        h += '<div class="sec-card ' + sevClass(v.severity) + '">' +
+        h += '<div class="sec-card ' + sevClass(v.severity) + '" data-sev="' + sevNorm(v.severity) + '">' +
             '<div class="sec-card__header">' +
                 '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
                 '<span class="sec-card__sev">' + v.severity + '</span>' +
@@ -525,9 +556,10 @@ function renderTrivy(t) {
 
 function renderDebsecan(d) {
     if (!d.vulnerabilities || !d.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">' + d.vulnerabilities.length + ' vulnerabilities &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    var h = '<p class="text-muted">' + d.vulnerabilities.length + ' unique packages with vulnerabilities &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    h += sevFilterBar(d.vulnerabilities, 'urgency', 'debsecan-sev-filter');
     d.vulnerabilities.forEach(function(v) {
-        h += '<div class="sec-card ' + sevClass(v.urgency) + '">' +
+        h += '<div class="sec-card ' + sevClass(v.urgency) + '" data-sev="' + sevNorm(v.urgency) + '">' +
             '<div class="sec-card__header">' +
                 '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
                 '<span class="sec-card__sev">' + sevLabel(v.urgency) + '</span>' +

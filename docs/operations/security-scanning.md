@@ -72,7 +72,7 @@ All tools write to `/var/lib/hobnob/security/` on each thrall:
 | `rkhunter.log` | rkhunter log |
 | `clamav.log` | ClamAV scan results |
 | `aide.log` | AIDE integrity check |
-| `debsecan.log` | debsecan CVE list |
+| `debsecan.log` | debsecan CVE list (detail or default format) |
 
 ## Trait Data
 
@@ -151,6 +151,14 @@ Show Lynis scores across the fleet:
 ```bash
 hobnobcli inventory --show "security_scan.lynis.score"
 ```
+
+## CVE Deduplication
+
+When multiple CVEs affect the same package (common with libraries like `urllib3`, `openssl`), the detail view shows only the **most recent CVE per package** — keeping the list actionable rather than noisy. Summary counts still reflect total unique CVEs.
+
+## Severity Filter
+
+The Trivy and Debsecan detail views include a severity filter bar. Click a level (Critical, High, Medium, Low) to show only cards at that severity, or click **All** to reset. Counts per level are shown on each button.
 
 ## CVE Links
 

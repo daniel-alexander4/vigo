@@ -725,6 +725,8 @@ pub async fn daemon_loop(
             return Ok(());
         }
 
+        let cycle_start = Instant::now();
+
         // Collect traits for this cycle (including custom traits).
         let (traits_val, traits_json) = collect_traits(
             &collectors,
@@ -916,9 +918,13 @@ pub async fn daemon_loop(
                     rr.jitter_pct
                 };
 
-                let sleep_dur = jittered_duration(rr.interval, effective_jitter);
+                let target_dur = jittered_duration(rr.interval, effective_jitter);
+                let elapsed = cycle_start.elapsed();
+                let sleep_dur = target_dur.saturating_sub(elapsed);
                 info!(
-                    duration = ?sleep_dur,
+                    target = ?target_dur,
+                    elapsed = ?elapsed,
+                    sleep = ?sleep_dur,
                     "sleeping until next check-in"
                 );
 
@@ -1143,6 +1149,7 @@ async fn stream_loop(
     } = *handle;
 
     let result: StreamExit = async {
+        let mut cycle_start = Instant::now();
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => return StreamExit::Cancelled,
@@ -1191,6 +1198,7 @@ async fn stream_loop(
                     }
 
                     next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
+                    cycle_start = Instant::now();
                 }
 
                 _ = force_push_rx.recv() => {
@@ -1232,6 +1240,7 @@ async fn stream_loop(
                     }
 
                     next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
+                    cycle_start = Instant::now();
                 }
 
                 dispatch = push_dispatch_rx.recv() => {
@@ -1367,7 +1376,10 @@ async fn stream_loop(
                         Err(e) => warn!(error = %e, "stream periodic check-in failed"),
                     }
 
-                    next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
+                    let target = jittered_duration(interval, jitter_pct);
+                    let remaining = target.saturating_sub(cycle_start.elapsed());
+                    next_checkin.as_mut().reset(Instant::now() + remaining);
+                    cycle_start = Instant::now();
                 }
             }
         }

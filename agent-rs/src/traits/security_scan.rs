@@ -286,8 +286,8 @@ fn parse_debsecan() -> Option<Value> {
     let path = Path::new(SCAN_DIR).join("debsecan.log");
     let data = fs::read_to_string(&path).ok()?;
 
-    // debsecan --format detail: each vulnerability block starts with CVE ID.
-    // Lines like: CVE-2024-1234 package-name — urgency (high urgency|medium urgency|low urgency|...)
+    // Handles both debsecan --format detail (multi-line blocks starting with
+    // "CVE-xxx (urgency)") and default format ("CVE-xxx package (urgency)").
     let mut cves: Vec<String> = Vec::new();
     let mut high = 0u64;
     let mut medium = 0u64;
@@ -633,24 +633,99 @@ fn detail_debsecan() -> Option<Value> {
     let path = Path::new(SCAN_DIR).join("debsecan.log");
     let data = fs::read_to_string(&path).ok()?;
 
-    let mut vulns: Vec<Value> = Vec::new();
-    for line in data.lines() {
-        let trimmed = line.trim();
-        if !trimmed.starts_with("CVE-") { continue; }
-        if vulns.len() >= MAX_DETAIL_VULNS { break; }
-        let parts: Vec<&str> = trimmed.splitn(3, ' ').collect();
-        let cve_id = parts.first().unwrap_or(&"");
-        let package = parts.get(1).unwrap_or(&"").trim_end_matches(" --");
+    // debsecan --format detail produces multi-line blocks:
+    //   CVE-2024-1234 (high urgency)
+    //     Description text...
+    //     installed: libfoo 1.2.3-4 (built from libfoo 1.2.3-4)
+    //     fixed package: 1.2.3-5
+    //
+    // debsecan default format produces single lines:
+    //   CVE-2024-1234 libfoo (high urgency)
+    //
+    // We handle both formats and deduplicate per package, keeping only the
+    // highest-numbered CVE for each package.
+    use std::collections::HashMap;
+    let mut best: HashMap<String, (String, String)> = HashMap::new(); // package -> (cve_id, urgency)
+
+    let lines: Vec<&str> = data.lines().collect();
+    let mut i = 0;
+    while i < lines.len() {
+        let trimmed = lines[i].trim();
+        if !trimmed.starts_with("CVE-") {
+            i += 1;
+            continue;
+        }
+        let cve_id = trimmed.split_whitespace().next().unwrap_or("");
+        if cve_id.is_empty() {
+            i += 1;
+            continue;
+        }
+
         let urgency = if trimmed.contains("high urgency") { "high" }
             else if trimmed.contains("medium urgency") { "medium" }
             else if trimmed.contains("low urgency") { "low" }
             else { "other" };
-        vulns.push(json!({"cve_id": cve_id, "package": package, "urgency": urgency}));
+
+        // Try to extract package name. Detail format: package is on a
+        // subsequent "installed:" line. Default format: second token on the
+        // CVE line (e.g. "CVE-xxx libfoo (low urgency)").
+        let mut package = String::new();
+
+        // Check default format: second token is not "(" (urgency paren).
+        let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+        if tokens.len() >= 2 && !tokens[1].starts_with('(') {
+            package = tokens[1].to_string();
+        }
+
+        // Look ahead for "installed:" line (detail format).
+        let mut j = i + 1;
+        while j < lines.len() && !lines[j].trim().starts_with("CVE-") {
+            let inner = lines[j].trim();
+            if let Some(rest) = inner.strip_prefix("installed:") {
+                // "installed: libfoo 1.2.3-4 (built from ...)"
+                let pkg = rest.trim().split_whitespace().next().unwrap_or("");
+                if !pkg.is_empty() {
+                    package = pkg.to_string();
+                }
+                break;
+            }
+            j += 1;
+        }
+
+        if !package.is_empty() {
+            // Keep the highest-numbered CVE per package.
+            if let Some(existing) = best.get(&package) {
+                if cve_id > existing.0.as_str() {
+                    best.insert(package, (cve_id.to_string(), urgency.to_string()));
+                }
+            } else {
+                best.insert(package, (cve_id.to_string(), urgency.to_string()));
+            }
+        } else {
+            // No package found — still record it keyed by CVE ID.
+            best.entry(cve_id.to_string())
+                .or_insert_with(|| (cve_id.to_string(), urgency.to_string()));
+        }
+
+        i += 1;
     }
+
+    // Sort by urgency (high > medium > low > other), then by CVE ID descending.
+    let mut vulns: Vec<Value> = best.iter().map(|(pkg, (cve, urg))| {
+        json!({"cve_id": cve, "package": pkg, "urgency": urg})
+    }).collect();
+    vulns.sort_by(|a, b| {
+        fn urg_rank(u: &str) -> u8 { match u { "high" => 0, "medium" => 1, "low" => 2, _ => 3 } }
+        let ua = a["urgency"].as_str().unwrap_or("other");
+        let ub = b["urgency"].as_str().unwrap_or("other");
+        urg_rank(ua).cmp(&urg_rank(ub))
+            .then_with(|| b["cve_id"].as_str().unwrap_or("").cmp(a["cve_id"].as_str().unwrap_or("")))
+    });
+    vulns.truncate(MAX_DETAIL_VULNS);
 
     Some(json!({
         "vulnerabilities": vulns,
-        "truncated": vulns.len() >= MAX_DETAIL_VULNS,
+        "truncated": best.len() > MAX_DETAIL_VULNS,
         "last_scan": file_mtime_iso(&path),
     }))
 }
@@ -786,25 +861,93 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_debsecan_detail() {
-        let data = "CVE-2024-1000 libfoo -- high urgency\nCVE-2024-1001 libbar -- medium urgency\nCVE-2024-1002 libbaz -- high urgency\n";
-        let mut high = 0u64;
-        let mut medium = 0u64;
-        let mut cves = Vec::new();
-        for line in data.lines() {
-            let trimmed = line.trim();
-            if !trimmed.starts_with("CVE-") { continue; }
-            let id = trimmed.split_whitespace().next().unwrap_or("");
-            if trimmed.contains("high urgency") {
-                high += 1;
-                cves.push(id.to_string());
-            } else if trimmed.contains("medium urgency") {
-                medium += 1;
+    fn test_parse_debsecan_summary_counts() {
+        // Both default format ("CVE pkg (urgency)") and detail format
+        // ("CVE (urgency)") should count correctly via contains().
+        let default_fmt = "CVE-2024-1000 libfoo (high urgency)\nCVE-2024-1001 libbar (medium urgency)\n";
+        let detail_fmt = "CVE-2024-1000 (high urgency)\n  installed: libfoo 1.0\nCVE-2024-1001 (medium urgency)\n  installed: libbar 2.0\n";
+        for data in [default_fmt, detail_fmt] {
+            let mut high = 0u64;
+            let mut medium = 0u64;
+            for line in data.lines() {
+                let trimmed = line.trim();
+                if !trimmed.starts_with("CVE-") { continue; }
+                if trimmed.contains("high urgency") { high += 1; }
+                else if trimmed.contains("medium urgency") { medium += 1; }
             }
+            assert_eq!(high, 1, "data: {data}");
+            assert_eq!(medium, 1, "data: {data}");
         }
-        assert_eq!(high, 2);
-        assert_eq!(medium, 1);
-        assert_eq!(cves.len(), 2);
+    }
+
+    #[test]
+    fn test_detail_debsecan_dedup_per_package() {
+        // detail_debsecan should keep only the highest-numbered CVE per package.
+        // Simulates debsecan --format detail output with two CVEs for urllib3.
+        use std::collections::HashMap;
+        let data = "\
+CVE-2023-43804 (high urgency)\n\
+  Copies Cookies: header instead of stripping it on cross-origin redirect\n\
+  installed: python3-urllib3 1.26.7-1 (built from python3-urllib3 1.26.7-1)\n\
+  fixed package: not yet available\n\
+\n\
+CVE-2024-37891 (medium urgency)\n\
+  Proxy-Authorization header not stripped during cross-origin redirects\n\
+  installed: python3-urllib3 1.26.7-1 (built from python3-urllib3 1.26.7-1)\n\
+  fixed package: not yet available\n\
+\n\
+CVE-2024-11111 (low urgency)\n\
+  Something else in libfoo\n\
+  installed: libfoo 2.0-1\n\
+  fixed package: 2.0-2\n";
+
+        // Inline the same logic as detail_debsecan to test without filesystem.
+        let mut best: HashMap<String, (String, String)> = HashMap::new();
+        let lines: Vec<&str> = data.lines().collect();
+        let mut i = 0;
+        while i < lines.len() {
+            let trimmed = lines[i].trim();
+            if !trimmed.starts_with("CVE-") { i += 1; continue; }
+            let cve_id = trimmed.split_whitespace().next().unwrap_or("");
+            if cve_id.is_empty() { i += 1; continue; }
+            let urgency = if trimmed.contains("high urgency") { "high" }
+                else if trimmed.contains("medium urgency") { "medium" }
+                else if trimmed.contains("low urgency") { "low" }
+                else { "other" };
+            let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+            let mut package = String::new();
+            if tokens.len() >= 2 && !tokens[1].starts_with('(') {
+                package = tokens[1].to_string();
+            }
+            let mut j = i + 1;
+            while j < lines.len() && !lines[j].trim().starts_with("CVE-") {
+                let inner = lines[j].trim();
+                if let Some(rest) = inner.strip_prefix("installed:") {
+                    let pkg = rest.trim().split_whitespace().next().unwrap_or("");
+                    if !pkg.is_empty() { package = pkg.to_string(); }
+                    break;
+                }
+                j += 1;
+            }
+            if !package.is_empty() {
+                if let Some(existing) = best.get(&package) {
+                    if cve_id > existing.0.as_str() {
+                        best.insert(package, (cve_id.to_string(), urgency.to_string()));
+                    }
+                } else {
+                    best.insert(package, (cve_id.to_string(), urgency.to_string()));
+                }
+            }
+            i += 1;
+        }
+
+        // Two packages: python3-urllib3 (deduped to higher CVE) + libfoo.
+        assert_eq!(best.len(), 2);
+        let urllib = best.get("python3-urllib3").unwrap();
+        assert_eq!(urllib.0, "CVE-2024-37891"); // higher CVE number wins
+        assert_eq!(urllib.1, "medium");
+        let libfoo = best.get("libfoo").unwrap();
+        assert_eq!(libfoo.0, "CVE-2024-11111");
     }
 
     #[test]
