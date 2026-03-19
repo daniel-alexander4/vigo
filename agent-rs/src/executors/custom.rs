@@ -125,7 +125,7 @@ impl Executor for CustomExecutor {
 #[cfg(unix)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs
@@ -135,9 +135,10 @@ mod tests {
     }
 
     fn write_script(dir: &std::path::Path, name: &str, body: &str) -> String {
-        // Write as a non-executable temp file, then rename to the final path.
-        // This avoids "Text file busy" (ETXTBSY) on Linux, which can occur
-        // when set_permissions or write races with exec on tmpfs.
+        // Write as a non-executable temp file, rename, then chmod.
+        // Writing with mode 0o644 first avoids ETXTBSY on Linux tmpfs
+        // where the kernel can race between write-close and exec if the
+        // file is already executable during the write.
         use std::io::Write;
         let tmp_path = dir.join(format!(".{}.tmp", name));
         let final_path = dir.join(name);
@@ -146,13 +147,15 @@ mod tests {
             .write(true)
             .create(true)
             .truncate(true)
-            .mode(0o755)
+            .mode(0o644)
             .open(&tmp_path)
             .unwrap();
         f.write_all(content.as_bytes()).unwrap();
         f.sync_all().unwrap();
         drop(f);
         std::fs::rename(&tmp_path, &final_path).unwrap();
+        // Set executable after rename — file handle is fully closed.
+        std::fs::set_permissions(&final_path, std::fs::Permissions::from_mode(0o755)).unwrap();
         final_path.to_str().unwrap().to_string()
     }
 
