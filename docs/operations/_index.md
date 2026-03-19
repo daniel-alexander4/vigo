@@ -18,6 +18,7 @@ This section covers the operational aspects of running a Hobnob server in produc
 - [Rate Limiting](rate-limiting.md) -- Token-bucket rate limiting on check-in RPCs
 - [Maintenance Windows](maintenance-windows.md) -- Per-thrall and global change freeze
 - [Drift Alerting](drift-alerting.md) -- Fleet compliance threshold monitoring
+- [Security Scanning](security-scanning.md) -- CVE scanning, hardening audits, rootkit and malware detection
 - [Audit Log](audit.md) -- Unified audit trail for config, tasks, and workflows
 - [Tamper-Evident Audit Trail](tamper-evident-audit.md) -- SHA-256 hash chain for tamper detection
 - [Peer Replication](peer-replication.md) -- Primary/peer file sync and automatic failover

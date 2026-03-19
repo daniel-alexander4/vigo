@@ -998,6 +998,10 @@ func (m *mockDataSource) PlanDetailData(planID string) (PlanDetailPageData, erro
 	return PlanDetailPageData{}, fmt.Errorf("plan not found")
 }
 
+func (m *mockDataSource) SecurityScanData() SecurityScanPageData {
+	return SecurityScanPageData{}
+}
+
 // actionColor maps a plan action to a badge CSS class.
 func actionColor(action string) string {
 	switch action {

@@ -1,0 +1,128 @@
+#~ Installs Greenbone/OpenVAS Community Edition on a dedicated scanner host.
+#~ This is a heavyweight deployment (PostgreSQL, Redis, ~5 GB NVT feeds).
+#~ Deploy on ONE machine — OpenVAS scans targets remotely over the network.
+#~
+#~ Not wired to the Hobnob security_scan trait collector. Manage scan
+#~ results through the Greenbone Security Assistant (GSA) web UI on port 9392.
+#~
+#~ Debian/Ubuntu only. RHEL/CentOS users: see the Greenbone docs for
+#~ source-based installation.
+name: openvas
+
+vars:
+  gvm_admin_user: "admin"
+  gvm_admin_pass: "secret:hobnob/openvas/admin_password"
+  gvm_data_dir: "/var/lib/gvm"
+  redis_socket: "/run/redis-openvas/redis.sock"
+
+resources:
+  # ── Dependencies ─────────────────────────────────────────────────
+
+  - name: install-postgresql
+    type: package
+    package: postgresql
+    state: present
+
+  - name: postgresql-service
+    type: service
+    service: postgresql
+    enabled: true
+    state: running
+    depends_on: [install-postgresql]
+
+  - name: install-redis
+    type: package
+    package: redis-server
+    state: present
+
+  - name: redis-openvas-conf
+    type: file
+    target_path: /etc/redis/redis-openvas.conf
+    content: |
+      # Redis instance for OpenVAS — managed by hobnob
+      port 0
+      unixsocket {{ .Vars.redis_socket }}
+      unixsocketperm 770
+      databases 4097
+      maxmemory 2gb
+      maxmemory-policy allkeys-lru
+    owner: redis
+    group: redis
+    mode: "0640"
+    depends_on: [install-redis]
+
+  - name: redis-openvas-service
+    type: service
+    service: redis-server@openvas
+    enabled: true
+    state: running
+    depends_on: [redis-openvas-conf]
+
+  # ── GVM packages ─────────────────────────────────────────────────
+
+  - name: install-gvm
+    type: package
+    package: gvm
+    state: present
+    depends_on: [postgresql-service, redis-openvas-service]
+
+  # ── Initial setup (runs once) ────────────────────────────────────
+
+  - name: gvm-setup
+    type: exec
+    command: "gvm-setup"
+    onlyif: "! test -f {{ .Vars.gvm_data_dir }}/.gvm-setup-done"
+    depends_on: [install-gvm]
+
+  - name: gvm-setup-sentinel
+    type: exec
+    command: "touch {{ .Vars.gvm_data_dir }}/.gvm-setup-done"
+    depends_on: [gvm-setup]
+    onlyif: "! test -f {{ .Vars.gvm_data_dir }}/.gvm-setup-done"
+
+  - name: gvm-admin-user
+    type: exec
+    command: >-
+      gvmd --create-user={{ .Vars.gvm_admin_user }}
+    stdin: "{{ .Vars.gvm_admin_pass }}"
+    onlyif: "! gvmd --get-users | grep -q {{ .Vars.gvm_admin_user }}"
+    depends_on: [gvm-setup-sentinel]
+
+  # ── NVT feed sync (weekly) ──────────────────────────────────────
+
+  - name: sync-nvt-feeds
+    type: exec
+    command: "greenbone-feed-sync"
+    when: "hour_range('3','5')"
+    onlyif: "! test -f /tmp/.hobnob-gvm-sync-$(date +%Y%U)"
+    depends_on: [gvm-setup-sentinel]
+
+  - name: nvt-sync-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-gvm-sync-$(date +%Y%U)"
+    depends_on: [sync-nvt-feeds]
+    when: "hour_range('3','5')"
+    onlyif: "! test -f /tmp/.hobnob-gvm-sync-$(date +%Y%U)"
+
+  # ── Services ─────────────────────────────────────────────────────
+
+  - name: gvmd-service
+    type: service
+    service: gvmd
+    enabled: true
+    state: running
+    depends_on: [gvm-setup-sentinel]
+
+  - name: ospd-openvas-service
+    type: service
+    service: ospd-openvas
+    enabled: true
+    state: running
+    depends_on: [gvm-setup-sentinel]
+
+  - name: gsad-service
+    type: service
+    service: gsad
+    enabled: true
+    state: running
+    depends_on: [gvmd-service]

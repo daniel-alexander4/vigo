@@ -77,6 +77,87 @@
             <p class="text-muted">No package drift detected.</p>
             {{end}}
         </div>
+
+        {{/* Security scanning */}}
+        {{if .Security.ScannedHosts}}
+        <div class="ask-section">
+            <h3>Security Scanning <span class="ask-badge ask-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
+
+            <div class="ask-stats">
+                {{if .Security.TrivyCritical}}<div class="ask-stat ask-stat--danger">
+                    <span class="ask-stat__val">{{.Security.TrivyCritical}}</span>
+                    <span class="ask-stat__lbl">Critical CVEs</span>
+                </div>{{end}}
+                {{if .Security.TrivyHigh}}<div class="ask-stat ask-stat--warning">
+                    <span class="ask-stat__val">{{.Security.TrivyHigh}}</span>
+                    <span class="ask-stat__lbl">High CVEs</span>
+                </div>{{end}}
+                <div class="ask-stat ask-stat--info">
+                    <span class="ask-stat__val">{{.Security.LynisAvgScore}}</span>
+                    <span class="ask-stat__lbl">Avg Lynis Score</span>
+                </div>
+                {{if .Security.RootkitWarning}}<div class="ask-stat ask-stat--danger">
+                    <span class="ask-stat__val">{{.Security.RootkitWarning}}</span>
+                    <span class="ask-stat__lbl">Rootkit Warnings</span>
+                </div>{{end}}
+                {{if .Security.ClamavInfected}}<div class="ask-stat ask-stat--danger">
+                    <span class="ask-stat__val">{{.Security.ClamavInfected}}</span>
+                    <span class="ask-stat__lbl">Malware Detected</span>
+                </div>{{end}}
+                {{if .Security.AideChanged}}<div class="ask-stat ask-stat--warning">
+                    <span class="ask-stat__val">{{.Security.AideChanged}}</span>
+                    <span class="ask-stat__lbl">Integrity Changes</span>
+                </div>{{end}}
+            </div>
+
+            {{if .Security.CVEs}}
+            <div class="ask-section__sub">
+                <h4>Critical & High CVEs</h4>
+                <div class="sec-cve-list">
+                    {{range .Security.CVEs}}
+                    <a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+
+            {{if .Security.PerHost}}
+            <div class="ask-drift-table-wrap">
+                <table class="ask-drift-table">
+                    <thead>
+                        <tr>
+                            <th>Host</th>
+                            <th>Critical</th>
+                            <th>High</th>
+                            <th>Lynis</th>
+                            <th>Rootkit</th>
+                            <th>Malware</th>
+                            <th>Integrity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Security.PerHost}}
+                        <tr>
+                            <td>{{.Hostname}}</td>
+                            <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
+                            <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
+                            <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
+                            <td class="{{if .RootkitClean}}text-success{{else}}text-danger{{end}}">{{if .RootkitClean}}Clean{{else}}Warning{{end}}</td>
+                            <td class="{{if .ClamavClean}}text-success{{else}}text-danger{{end}}">{{if .ClamavClean}}Clean{{else}}Infected{{end}}</td>
+                            <td class="{{if .AideClean}}text-success{{else}}text-warning{{end}}">{{if .AideClean}}Clean{{else}}Changed{{end}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            {{end}}
+
+            <button class="ask-report-btn ask-report-btn--full" onclick="askSuggestion(this)"
+                data-question="Analyze the security scan results across the fleet. Summarize critical vulnerabilities and recommend remediation steps.">
+                Analyze Security Posture
+            </button>
+        </div>
+        {{end}}
     </div>
 
     {{/* ── Right panel: AI chat ── */}}

@@ -553,3 +553,136 @@ func planActionColor(action string) string {
 		return "muted"
 	}
 }
+
+// SecurityScanData aggregates security scan traits across all thralls.
+func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
+	allThralls := ds.fleet.AllThralls()
+	var data ui.SecurityScanPageData
+	data.TotalHosts = int64(len(allThralls))
+	cveSet := make(map[string]bool)
+
+	for _, ts := range allThralls {
+		if ts.Revoked {
+			continue
+		}
+		if ts.Traits == nil {
+			continue
+		}
+
+		// Check if this thrall has any security_scan data.
+		hasScan := false
+		row := ui.SecurityHostRow{Hostname: ts.Hostname}
+
+		if v, ok := ts.Traits["security_scan.trivy.critical"]; ok {
+			hasScan = true
+			n := parseInt64(v)
+			row.TrivyCritical = n
+			data.TrivyCritical += n
+		}
+		if v, ok := ts.Traits["security_scan.trivy.high"]; ok {
+			n := parseInt64(v)
+			row.TrivyHigh = n
+			data.TrivyHigh += n
+		}
+		if v, ok := ts.Traits["security_scan.trivy.medium"]; ok {
+			data.TrivyMedium += parseInt64(v)
+		}
+		if v, ok := ts.Traits["security_scan.trivy.low"]; ok {
+			data.TrivyLow += parseInt64(v)
+		}
+		if v, ok := ts.Traits["security_scan.lynis.score"]; ok {
+			hasScan = true
+			row.LynisScore = parseInt64(v)
+			data.LynisAvgScore += row.LynisScore
+		}
+		if v, ok := ts.Traits["security_scan.lynis.warnings"]; ok {
+			data.LynisWarnings += parseInt64(v)
+		}
+
+		// Rootkit: clean if both chkrootkit and rkhunter are clean (or absent).
+		chkClean := ts.Traits["security_scan.chkrootkit.clean"] != "false"
+		rkhClean := ts.Traits["security_scan.rkhunter.clean"] != "false"
+		if _, ok := ts.Traits["security_scan.chkrootkit.clean"]; ok {
+			hasScan = true
+		}
+		if _, ok := ts.Traits["security_scan.rkhunter.clean"]; ok {
+			hasScan = true
+		}
+		row.RootkitClean = chkClean && rkhClean
+		if row.RootkitClean {
+			data.RootkitClean++
+		} else {
+			data.RootkitWarning++
+		}
+
+		clamClean := ts.Traits["security_scan.clamav.clean"] != "false"
+		if _, ok := ts.Traits["security_scan.clamav.clean"]; ok {
+			hasScan = true
+		}
+		row.ClamavClean = clamClean
+		if clamClean {
+			data.ClamavClean++
+		} else {
+			data.ClamavInfected++
+		}
+
+		aideClean := ts.Traits["security_scan.aide.clean"] != "false"
+		if _, ok := ts.Traits["security_scan.aide.clean"]; ok {
+			hasScan = true
+		}
+		row.AideClean = aideClean
+		if aideClean {
+			data.AideClean++
+		} else {
+			data.AideChanged++
+		}
+
+		if v, ok := ts.Traits["security_scan.trivy.last_scan"]; ok {
+			row.LastScan = v
+		}
+
+		if hasScan {
+			data.ScannedHosts++
+			data.PerHost = append(data.PerHost, row)
+		}
+	}
+
+	// Average Lynis score.
+	if data.ScannedHosts > 0 {
+		data.LynisAvgScore = data.LynisAvgScore / data.ScannedHosts
+	}
+
+	// Collect CVE IDs from flattened traits.
+	// Trivy CVEs are stored as security_scan.trivy.cves.0, .1, .2, etc.
+	for _, ts := range allThralls {
+		if ts.Revoked || ts.Traits == nil {
+			continue
+		}
+		for k, v := range ts.Traits {
+			if len(k) > 28 && k[:27] == "security_scan.trivy.cves." {
+				if !cveSet[v] {
+					cveSet[v] = true
+					data.CVEs = append(data.CVEs, v)
+				}
+			}
+			if len(k) > 30 && k[:29] == "security_scan.debsecan.cves." {
+				if !cveSet[v] {
+					cveSet[v] = true
+					data.CVEs = append(data.CVEs, v)
+				}
+			}
+		}
+	}
+
+	return data
+}
+
+func parseInt64(s string) int64 {
+	var n int64
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			n = n*10 + int64(c-'0')
+		}
+	}
+	return n
+}

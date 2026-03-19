@@ -941,6 +941,47 @@ body {
     background: rgba(237, 137, 54, 0.15);
     color: var(--color-warning);
 }
+.ask-badge--muted {
+    background: rgba(160, 174, 192, 0.15);
+    color: var(--color-muted);
+}
+
+.ask-section__sub {
+    margin-top: 8px;
+}
+.ask-section__sub h4 {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin: 0 0 4px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.sec-cve-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+.sec-cve-link {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(245, 101, 101, 0.1);
+    color: var(--color-danger);
+    text-decoration: none;
+    font-family: var(--font-mono);
+}
+.sec-cve-link:hover {
+    background: rgba(245, 101, 101, 0.2);
+    text-decoration: underline;
+}
+.ask-stat--info {
+    border-left-color: var(--color-info, #4299e1);
+}
+.ask-stat--info .ask-stat__val {
+    color: var(--color-info, #4299e1);
+}
 
 .ask-drift-table-wrap {
     max-height: 200px;

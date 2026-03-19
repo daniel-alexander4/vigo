@@ -22,6 +22,8 @@ pub(crate) mod sysctl_util;
 mod cert_expiry;
 #[cfg(unix)]
 mod ports;
+#[cfg(unix)]
+mod security_scan;
 
 // Linux-specific collectors.
 #[cfg(target_os = "linux")]
@@ -187,7 +189,7 @@ use tracing::warn;
 /// Maximum time a single trait collector may run.
 pub const COLLECTOR_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Enum dispatch for the 27 built-in trait collectors.
+/// Enum dispatch for the 28 built-in trait collectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollectorKind {
     Os,
@@ -217,6 +219,7 @@ pub enum CollectorKind {
     Gpu,
     CertExpiry,
     Ports,
+    SecurityScan,
 }
 
 impl CollectorKind {
@@ -250,6 +253,7 @@ impl CollectorKind {
             Self::Gpu => "gpu",
             Self::CertExpiry => "cert_expiry",
             Self::Ports => "ports",
+            Self::SecurityScan => "security_scan",
         }
     }
 
@@ -265,6 +269,8 @@ impl CollectorKind {
             Self::CertExpiry => cert_expiry::collect(),
             #[cfg(unix)]
             Self::Ports => ports::collect(),
+            #[cfg(unix)]
+            Self::SecurityScan => security_scan::collect(),
 
             // Linux implementations.
             #[cfg(target_os = "linux")]
@@ -454,7 +460,8 @@ impl CollectorKind {
             #[cfg(windows)]
             Self::Virtual | Self::LoadAvg | Self::Kernel |
             Self::BlockDevices | Self::Systemd | Self::SELinux |
-            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports => Ok(Value::Null),
+            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports |
+            Self::SecurityScan => Ok(Value::Null),
         }
     }
 
@@ -488,12 +495,13 @@ impl CollectorKind {
             "gpu" => Some(Self::Gpu),
             "cert_expiry" => Some(Self::CertExpiry),
             "ports" => Some(Self::Ports),
+            "security_scan" => Some(Self::SecurityScan),
             _ => None,
         }
     }
 }
 
-/// The standard set of all 27 trait collectors, in the same order as Go.
+/// The standard set of all 28 trait collectors.
 pub fn default_collectors() -> Vec<CollectorKind> {
     vec![
         CollectorKind::Os,
@@ -523,6 +531,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Gpu,
         CollectorKind::CertExpiry,
         CollectorKind::Ports,
+        CollectorKind::SecurityScan,
     ]
 }
 
@@ -562,6 +571,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Locale,
         CollectorKind::Gpu,
         CollectorKind::CertExpiry,
+        CollectorKind::SecurityScan,
     ]
 }
 
@@ -631,7 +641,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 27);
+        assert_eq!(default_collectors().len(), 28);
     }
 
     #[test]

@@ -1,0 +1,263 @@
+#~ Deploys security scanning tools and schedules daily/weekly scans.
+#~ Results are collected by the built-in security_scan trait collector
+#~ and displayed on the Compliance & Security dashboard.
+#~
+#~ Tools: Trivy (CVE), Lynis (hardening), chkrootkit, rkhunter,
+#~        ClamAV (malware), AIDE (file integrity), debsecan (Debian CVEs).
+#~
+#~ Scan output: /var/lib/hobnob/security/
+name: security-scanning
+
+vars:
+  scan_hour_start: "2"
+  scan_hour_end: "5"
+  scan_dir: "/var/lib/hobnob/security"
+  trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"
+  aide_db_path: "/var/lib/aide/aide.db"
+  aide_db_new_path: "/var/lib/aide/aide.db.new"
+
+resources:
+  # ── Output directory ──────────────────────────────────────────────
+
+  - name: scan-dir
+    type: directory
+    target_path: "{{ .Vars.scan_dir }}"
+    owner: root
+    group: root
+    mode: "0700"
+
+  # ── Trivy (CVE scanner) ──────────────────────────────────────────
+
+  - name: trivy-repo-key-debian
+    type: exec
+    command: >-
+      sh -c 'wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key
+      | gpg --dearmor -o /usr/share/keyrings/trivy.gpg'
+    when: "os_family('debian')"
+    onlyif: "! test -f /usr/share/keyrings/trivy.gpg"
+
+  - name: trivy-repo-debian
+    type: file
+    target_path: /etc/apt/sources.list.d/trivy.list
+    content: |
+      deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main
+    owner: root
+    group: root
+    mode: "0644"
+    when: "os_family('debian')"
+    depends_on: [trivy-repo-key-debian]
+
+  - name: trivy-repo-rhel
+    type: file
+    target_path: /etc/yum.repos.d/trivy.repo
+    content: |
+      [trivy]
+      name=Trivy
+      baseurl=https://aquasecurity.github.io/trivy-repo/rpm/releases/$basearch/
+      gpgcheck=0
+      enabled=1
+    owner: root
+    group: root
+    mode: "0644"
+    when: "!os_family('debian')"
+
+  - name: install-trivy
+    type: package
+    package: trivy
+    state: present
+    depends_on: [trivy-repo-debian, trivy-repo-rhel]
+
+  - name: run-trivy
+    type: exec
+    command: >-
+      trivy rootfs --format json --severity {{ .Vars.trivy_severity }}
+      --output {{ .Vars.scan_dir }}/trivy.json /
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-trivy-$(date +%Y%m%d)"
+    depends_on: [install-trivy, scan-dir]
+
+  - name: trivy-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-trivy-$(date +%Y%m%d)"
+    depends_on: [run-trivy]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-trivy-$(date +%Y%m%d)"
+
+  # ── Lynis (security audit) ───────────────────────────────────────
+
+  - name: install-lynis
+    type: package
+    package: lynis
+    state: present
+
+  - name: run-lynis
+    type: exec
+    command: >-
+      lynis audit system --no-colors --quiet
+      --logfile {{ .Vars.scan_dir }}/lynis.log
+      --report-file {{ .Vars.scan_dir }}/lynis-report.dat
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-lynis-$(date +%Y%m%d)"
+    depends_on: [install-lynis, scan-dir]
+
+  - name: lynis-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-lynis-$(date +%Y%m%d)"
+    depends_on: [run-lynis]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-lynis-$(date +%Y%m%d)"
+
+  # ── chkrootkit ───────────────────────────────────────────────────
+
+  - name: install-chkrootkit
+    type: package
+    package: chkrootkit
+    state: present
+
+  - name: run-chkrootkit
+    type: exec
+    command: "chkrootkit > {{ .Vars.scan_dir }}/chkrootkit.log 2>&1 || true"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-chkrootkit-$(date +%Y%m%d)"
+    depends_on: [install-chkrootkit, scan-dir]
+
+  - name: chkrootkit-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-chkrootkit-$(date +%Y%m%d)"
+    depends_on: [run-chkrootkit]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-chkrootkit-$(date +%Y%m%d)"
+
+  # ── rkhunter ─────────────────────────────────────────────────────
+
+  - name: install-rkhunter
+    type: package
+    package: rkhunter
+    state: present
+
+  - name: run-rkhunter
+    type: exec
+    command: >-
+      rkhunter --check --skip-keypress --report-warnings-only
+      --logfile {{ .Vars.scan_dir }}/rkhunter.log || true
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-rkhunter-$(date +%Y%m%d)"
+    depends_on: [install-rkhunter, scan-dir]
+
+  - name: rkhunter-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-rkhunter-$(date +%Y%m%d)"
+    depends_on: [run-rkhunter]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-rkhunter-$(date +%Y%m%d)"
+
+  # ── ClamAV ───────────────────────────────────────────────────────
+
+  - name: install-clamav-debian
+    type: package
+    package: clamav
+    state: present
+    when: "os_family('debian')"
+
+  - name: install-clamav-daemon-debian
+    type: package
+    package: clamav-daemon
+    state: present
+    when: "os_family('debian')"
+    depends_on: [install-clamav-debian]
+
+  - name: install-clamav-rhel
+    type: package
+    package: clamav
+    state: present
+    when: "!os_family('debian')"
+
+  - name: install-clamd-rhel
+    type: package
+    package: clamd
+    state: present
+    when: "!os_family('debian')"
+    depends_on: [install-clamav-rhel]
+
+  - name: freshclam-update
+    type: exec
+    command: "freshclam --quiet || true"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-freshclam-$(date +%Y%m%d)"
+    depends_on: [install-clamav-daemon-debian, install-clamd-rhel]
+
+  - name: freshclam-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-freshclam-$(date +%Y%m%d)"
+    depends_on: [freshclam-update]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-freshclam-$(date +%Y%m%d)"
+
+  - name: run-clamscan
+    type: exec
+    command: >-
+      clamscan --recursive --infected --no-summary
+      --log={{ .Vars.scan_dir }}/clamav.log
+      /etc /usr/bin /usr/sbin /usr/local/bin || true
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-clamscan-$(date +%Y%m%d)"
+    depends_on: [freshclam-update, scan-dir]
+
+  - name: clamscan-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-clamscan-$(date +%Y%m%d)"
+    depends_on: [run-clamscan]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-clamscan-$(date +%Y%m%d)"
+
+  # ── AIDE (file integrity) ────────────────────────────────────────
+
+  - name: install-aide
+    type: package
+    package: aide
+    state: present
+
+  - name: aide-init
+    type: exec
+    command: >-
+      aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}
+    onlyif: "! test -f {{ .Vars.aide_db_path }}"
+    depends_on: [install-aide]
+
+  - name: run-aide
+    type: exec
+    command: >-
+      aide --check > {{ .Vars.scan_dir }}/aide.log 2>&1 || true
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-aide-$(date +%Y%m%d)"
+    depends_on: [aide-init, scan-dir]
+
+  - name: aide-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-aide-$(date +%Y%m%d)"
+    depends_on: [run-aide]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-aide-$(date +%Y%m%d)"
+
+  # ── debsecan (Debian/Ubuntu CVEs) ────────────────────────────────
+
+  - name: install-debsecan
+    type: package
+    package: debsecan
+    state: present
+    when: "os_family('debian')"
+
+  - name: run-debsecan
+    type: exec
+    command: >-
+      debsecan --format detail > {{ .Vars.scan_dir }}/debsecan.log 2>&1 || true
+    when: "os_family('debian') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-debsecan-$(date +%Y%m%d)"
+    depends_on: [install-debsecan, scan-dir]
+
+  - name: debsecan-sentinel
+    type: exec
+    command: "touch /tmp/.hobnob-debsecan-$(date +%Y%m%d)"
+    depends_on: [run-debsecan]
+    when: "os_family('debian') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    onlyif: "! test -f /tmp/.hobnob-debsecan-$(date +%Y%m%d)"

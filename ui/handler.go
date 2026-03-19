@@ -46,6 +46,7 @@ type DataSource interface {
 	RunDetailData(runID string) (RunDetailPageData, error)
 	ConfigData(hostname string) (ConfigPageData, error)
 	PlanDetailData(planID string) (PlanDetailPageData, error)
+	SecurityScanData() SecurityScanPageData
 }
 
 // Handler serves all UI pages.
@@ -1622,6 +1623,12 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 	}, nil
 }
 
+func (ds *dbDataSource) SecurityScanData() SecurityScanPageData {
+	// DB-backed datasource does not have access to flattened traits.
+	// Return empty data — fleet DataSource handles this.
+	return SecurityScanPageData{}
+}
+
 // --- Push and Workflow page types ---
 
 // PushRow is a single push run displayed in the push list.
@@ -2289,6 +2296,39 @@ type AskDriftRow struct {
 	DesiredVersion   string
 }
 
+// SecurityScanPageData holds aggregated security scan results for the ask/security page.
+type SecurityScanPageData struct {
+	// Fleet-wide totals.
+	TrivyCritical  int64
+	TrivyHigh      int64
+	TrivyMedium    int64
+	TrivyLow       int64
+	LynisAvgScore  int64
+	LynisWarnings  int64
+	RootkitClean   int64
+	RootkitWarning int64
+	ClamavClean    int64
+	ClamavInfected int64
+	AideClean      int64
+	AideChanged    int64
+	ScannedHosts   int64
+	TotalHosts     int64
+	CVEs           []string           // deduplicated critical+high CVE IDs
+	PerHost        []SecurityHostRow  // per-thrall breakdown
+}
+
+// SecurityHostRow holds per-thrall security scan summary.
+type SecurityHostRow struct {
+	Hostname       string
+	TrivyCritical  int64
+	TrivyHigh      int64
+	LynisScore     int64
+	RootkitClean   bool
+	ClamavClean    bool
+	AideClean      bool
+	LastScan       string
+}
+
 // AskPage renders the AI compliance & security dashboard.
 func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -2318,6 +2358,8 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	secData := h.dataSource.SecurityScanData()
+
 	data := struct {
 		PageData
 		CompliancePct  float64
@@ -2329,6 +2371,7 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		NoData         int64
 		DriftCount     int
 		DriftRows      []AskDriftRow
+		Security       SecurityScanPageData
 	}{
 		PageData:      PageData{Title: "Compliance & Security", ActiveNav: "ask"},
 		CompliancePct: compData.CompliancePct,
@@ -2340,6 +2383,7 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		NoData:         compData.NoData,
 		DriftCount:    len(driftRows),
 		DriftRows:     driftRows,
+		Security:      secData,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "ask", data)
