@@ -537,7 +537,45 @@ run_test_expect_fail "rollback (no args)" $CLI rollback --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
-# 26. Error handling
+# 27. report (compliance reports)
+# -------------------------------------------------------------------
+echo -e "${BOLD}[report]${NC}"
+run_test "report compliance (JSON)" $CLI report compliance --server "$SERVER"
+run_test "report compliance (HTML)" $CLI report compliance --format html --server "$SERVER"
+run_test "report hitrust (JSON)" $CLI report hitrust --server "$SERVER"
+run_test "report hitrust (HTML)" $CLI report hitrust --format html --server "$SERVER"
+run_test "report soc2 (JSON)" $CLI report soc2 --server "$SERVER"
+run_test "report soc2 (HTML)" $CLI report soc2 --format html --server "$SERVER"
+run_test "report pci (JSON)" $CLI report pci --server "$SERVER"
+run_test "report pci (HTML)" $CLI report pci --format html --server "$SERVER"
+run_test "report cis (JSON)" $CLI report cis --server "$SERVER"
+run_test "report cis (HTML)" $CLI report cis --format html --server "$SERVER"
+
+# Test --output flag with a temp file.
+REPORT_TMPFILE=$(mktemp /tmp/hobnob-report-XXXXXX.json)
+run_test "report compliance --output" $CLI report compliance --output "$REPORT_TMPFILE" --server "$SERVER"
+if [[ -s "$REPORT_TMPFILE" ]]; then
+    echo -e "  ${GREEN}PASS${NC}  report output file is non-empty"
+    PASS=$((PASS + 1))
+else
+    echo -e "  ${RED}FAIL${NC}  report output file is empty"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("report output file check")
+fi
+rm -f "$REPORT_TMPFILE"
+echo ""
+
+# -------------------------------------------------------------------
+# 28. remediation
+# -------------------------------------------------------------------
+echo -e "${BOLD}[remediation]${NC}"
+run_test "remediation status" $CLI remediation status --server "$SERVER"
+run_test "remediation list" $CLI remediation list --server "$SERVER"
+run_test "remediation run --dry-run" $CLI remediation run --dry-run --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 29. Error handling
 # -------------------------------------------------------------------
 echo -e "${BOLD}[error handling]${NC}"
 run_test_expect_fail "thralls show bad-id" $CLI thralls show "nonexistent-id-000" --server "$SERVER"
