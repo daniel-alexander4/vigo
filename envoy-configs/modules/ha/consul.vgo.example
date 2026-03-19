@@ -112,9 +112,10 @@ resources:
   - name: daemon-reload
     type: exec
     command: "systemctl daemon-reload"
+    when: changed
+    onlyif: "true"
     depends_on: [consul-unit-file]
     notify: [consul-service]
-    subscribes: [consul-unit-file]
 
   # --- Service ---
 

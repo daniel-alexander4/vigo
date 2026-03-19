@@ -15,7 +15,7 @@ resources:
   - name: enable-ufw
     type: exec
     command: "ufw --force enable"
-    when: "!command_succeeds('ufw status | grep -q active')"
+    onlyif: "ufw status | grep -q inactive"
     depends_on: [install-ufw]
 
   - name: allow-ssh
@@ -47,12 +47,12 @@ resources:
     type: exec
     command: |
       ufw allow proto icmp from any to any
-    when: "!command_succeeds('ufw status verbose | grep -q ICMP')"
+    onlyif: "! iptables -L ufw-user-input -n 2>/dev/null | grep -q icmp"
     depends_on: [enable-ufw]
 
   # Default deny incoming — ufw's default policy for anything not explicitly allowed
   - name: deny-incoming-default
     type: exec
     command: "ufw default deny incoming"
-    when: "!command_succeeds('ufw status verbose | grep -q \"Default: deny (incoming)\"')"
+    onlyif: "! ufw status verbose | grep -q 'Default: deny (incoming)'"
     depends_on: [allow-ssh, allow-http, allow-https, allow-icmp]

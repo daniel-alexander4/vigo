@@ -54,7 +54,8 @@ resources:
   - name: reload-exports
     type: exec
     command: "exportfs -ra"
-    subscribes: [nfs-exports]
+    when: changed
+    onlyif: "systemctl is-active nfs-server"
 
   # --- Service (distro-specific) ---
 

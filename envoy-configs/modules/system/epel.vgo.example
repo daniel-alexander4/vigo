@@ -1,18 +1,17 @@
 name: epel
 
 resources:
-  - conditional_block:
+  - name: epel-repo
+    type: repository
+    repository: epel
+    key_url: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9"
+    repo: "epel"
+    state: present
     when: "os_family('redhat')"
-    resources:
-      - name: epel-repo
-        type: repository
-        repository: epel
-        key_url: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9"
-        repo: "epel"
-        state: present
 
-      - name: install-epel-release
-        type: package
-        package: epel-release
-        state: present
-        depends_on: [epel-repo]
+  - name: install-epel-release
+    type: package
+    package: epel-release
+    state: present
+    when: "os_family('redhat')"
+    depends_on: [epel-repo]

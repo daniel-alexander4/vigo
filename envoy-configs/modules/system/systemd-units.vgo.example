@@ -50,9 +50,10 @@ resources:
   - name: daemon-reload
     type: exec
     command: "systemctl daemon-reload"
+    when: changed
+    onlyif: "true"
     depends_on: [app-unit-file]
     notify: [app-service]
-    subscribes: [app-unit-file]
 
   - name: app-service
     type: service

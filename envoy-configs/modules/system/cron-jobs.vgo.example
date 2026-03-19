@@ -10,8 +10,7 @@ resources:
   - name: log-cleanup
     type: cron
     command: "find /var/log -name '*.gz' -mtime +30 -delete"
-    minute: "30"
-    hour: "2"
+    schedule: "30 2 * * *"
     user: root
     state: present
 
@@ -19,9 +18,7 @@ resources:
   - name: weekly-backup
     type: cron
     command: "/usr/local/bin/backup.sh"
-    minute: "0"
-    hour: "1"
-    weekday: "0"
+    schedule: "0 1 * * 0"
     user: root
     state: present
 
@@ -29,6 +26,6 @@ resources:
   - name: health-check
     type: cron
     command: "curl -sf http://localhost:8080/health > /dev/null || logger -t healthcheck 'FAILED'"
-    minute: "*/15"
+    schedule: "*/15 * * * *"
     user: root
     state: present

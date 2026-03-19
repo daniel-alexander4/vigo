@@ -83,7 +83,6 @@ resources:
     type: cron
     name: "pci-fim-daily-check"
     command: "/usr/bin/aide --check > /var/log/aide/aide-$(date +\\%Y\\%m\\%d).log 2>&1"
-    hour: "3"
-    minute: "30"
+    schedule: "30 3 * * *"
     user: root
     depends_on: [aide-init-db]

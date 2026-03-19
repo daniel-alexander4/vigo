@@ -58,7 +58,7 @@ resources:
   - name: enable-management-plugin
     type: exec
     command: "rabbitmq-plugins enable rabbitmq_management"
-    when: "!command_succeeds('rabbitmq-plugins list -e | grep rabbitmq_management')"
+    onlyif: "! rabbitmq-plugins list -e | grep -q rabbitmq_management"
     depends_on: [install-rabbitmq]
     notify: [rabbitmq-service]
 

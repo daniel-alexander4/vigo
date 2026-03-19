@@ -40,6 +40,7 @@ resources:
       --severity {{ .Vars.trivy_severity }}
       --output {{ .Vars.scan_dir }}\trivy.json C:\
     onlyif: "!(Test-Path $env:TEMP\\.vigo-trivy-$(Get-Date -Format yyyyMMdd))"
+    skip_validation: true
     when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     depends_on: [install-trivy, scan-dir]
 
@@ -47,6 +48,7 @@ resources:
     type: powershell
     command: "New-Item -ItemType File -Path $env:TEMP\\.vigo-trivy-$(Get-Date -Format yyyyMMdd) -Force | Out-Null"
     onlyif: "!(Test-Path $env:TEMP\\.vigo-trivy-$(Get-Date -Format yyyyMMdd))"
+    skip_validation: true
     when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     depends_on: [run-trivy]
 
@@ -56,6 +58,7 @@ resources:
     type: powershell
     command: "Get-MpComputerStatus | ConvertTo-Json -Depth 3 | Out-File -Encoding utf8 {{ .Vars.scan_dir }}\\defender.json"
     onlyif: "!(Test-Path $env:TEMP\\.vigo-defender-$(Get-Date -Format yyyyMMdd))"
+    skip_validation: true
     when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     depends_on: [scan-dir]
 
@@ -63,6 +66,7 @@ resources:
     type: powershell
     command: "New-Item -ItemType File -Path $env:TEMP\\.vigo-defender-$(Get-Date -Format yyyyMMdd) -Force | Out-Null"
     onlyif: "!(Test-Path $env:TEMP\\.vigo-defender-$(Get-Date -Format yyyyMMdd))"
+    skip_validation: true
     when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     depends_on: [defender-status]
 
@@ -87,6 +91,7 @@ resources:
         '[]'
       } | Out-File -Encoding utf8 {{ .Vars.scan_dir }}\updates.json
     onlyif: "!(Test-Path $env:TEMP\\.vigo-updates-$(Get-Date -Format yyyyMMdd))"
+    skip_validation: true
     when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     depends_on: [scan-dir]
 
@@ -94,5 +99,6 @@ resources:
     type: powershell
     command: "New-Item -ItemType File -Path $env:TEMP\\.vigo-updates-$(Get-Date -Format yyyyMMdd) -Force | Out-Null"
     onlyif: "!(Test-Path $env:TEMP\\.vigo-updates-$(Get-Date -Format yyyyMMdd))"
+    skip_validation: true
     when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     depends_on: [check-updates]

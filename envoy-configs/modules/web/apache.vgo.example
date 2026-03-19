@@ -31,14 +31,16 @@ resources:
   - name: enable-mod-rewrite
     type: exec
     command: a2enmod rewrite
-    when: "os_family('debian') && !command_succeeds('apache2ctl -M 2>/dev/null | grep -q rewrite')"
+    onlyif: "! apache2ctl -M 2>/dev/null | grep -q rewrite"
+    when: "os_family('debian')"
     depends_on: [install-apache-debian]
     notify: [apache-service-debian]
 
   - name: enable-mod-ssl
     type: exec
     command: a2enmod ssl
-    when: "os_family('debian') && !command_succeeds('apache2ctl -M 2>/dev/null | grep -q ssl')"
+    onlyif: "! apache2ctl -M 2>/dev/null | grep -q ssl_module"
+    when: "os_family('debian')"
     depends_on: [install-apache-debian]
     notify: [apache-service-debian]
 

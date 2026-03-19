@@ -53,25 +53,24 @@ resources:
     mode: "0644"
 
   # pwquality is RHEL/CentOS-specific (pam_pwquality module)
-  - conditional_block:
-      when: "os_family('redhat')"
-      resources:
-        - name: install-libpwquality
-          type: package
-          package: libpwquality
-          state: present
+  - name: install-libpwquality
+    type: package
+    package: libpwquality
+    state: present
+    when: "os_family('redhat')"
 
-        - name: pwquality-conf
-          type: file
-          target_path: /etc/security/pwquality.conf
-          content: |
-            # /etc/security/pwquality.conf — managed by vigo
-            minlen = {{ .Vars.pass_min_len }}
-            dcredit = {{ .Vars.pwquality_dcredit }}
-            ucredit = {{ .Vars.pwquality_ucredit }}
-            lcredit = {{ .Vars.pwquality_lcredit }}
-            ocredit = {{ .Vars.pwquality_ocredit }}
-          owner: root
-          group: root
-          mode: "0644"
-          depends_on: [install-libpwquality]
+  - name: pwquality-conf
+    type: file
+    target_path: /etc/security/pwquality.conf
+    content: |
+      # /etc/security/pwquality.conf — managed by vigo
+      minlen = {{ .Vars.pass_min_len }}
+      dcredit = {{ .Vars.pwquality_dcredit }}
+      ucredit = {{ .Vars.pwquality_ucredit }}
+      lcredit = {{ .Vars.pwquality_lcredit }}
+      ocredit = {{ .Vars.pwquality_ocredit }}
+    owner: root
+    group: root
+    mode: "0644"
+    when: "os_family('redhat')"
+    depends_on: [install-libpwquality]

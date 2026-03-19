@@ -19,7 +19,7 @@ resources:
   - name: create-pv
     type: exec
     command: "pvcreate /dev/sdb"
-    when: "!command_succeeds('pvs /dev/sdb')"
+    onlyif: "! pvs /dev/sdb 2>/dev/null | grep -q /dev/sdb"
     depends_on: [install-lvm]
 
   # --- Volume group ---
@@ -27,7 +27,7 @@ resources:
   - name: create-vg
     type: exec
     command: "vgcreate data_vg /dev/sdb"
-    when: "!command_succeeds('vgs data_vg')"
+    onlyif: "! vgs data_vg 2>/dev/null | grep -q data_vg"
     depends_on: [create-pv]
 
   # --- Logical volume ---
@@ -35,7 +35,7 @@ resources:
   - name: create-lv
     type: exec
     command: "lvcreate -l 100%FREE -n data_lv data_vg"
-    when: "!command_succeeds('lvs data_vg/data_lv')"
+    onlyif: "! lvs data_vg/data_lv 2>/dev/null"
     depends_on: [create-vg]
 
   # --- Filesystem ---
@@ -43,7 +43,7 @@ resources:
   - name: format-lv
     type: exec
     command: "mkfs.ext4 /dev/data_vg/data_lv"
-    when: "!command_succeeds('blkid /dev/data_vg/data_lv')"
+    onlyif: "! blkid /dev/data_vg/data_lv 2>/dev/null | grep -q ext4"
     depends_on: [create-lv]
 
   # --- Mount ---

@@ -56,7 +56,7 @@ resources:
     notify: [restart-auditd]
 
   - name: audit-log-permissions
-    type: file
+    type: directory
     target_path: /var/log/audit
     owner: root
     group: root
@@ -66,4 +66,5 @@ resources:
   - name: restart-auditd
     type: exec
     command: "service auditd restart"
+    onlyif: "systemctl is-active auditd"
     depends_on: [pci-audit-rules]

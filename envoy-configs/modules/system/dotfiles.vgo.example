@@ -12,10 +12,15 @@ resources:
     foreach: users
     target_path: "/home/{{ .Item }}/.vimrc"
     content: "{{ .Vars.vimrc_content }}"
+    owner: "{{ .Item }}"
+    group: "{{ .Item }}"
+    mode: "0644"
 
   - name: "bashrc-{{ .Item }}"
     type: file
     foreach: users
     target_path: "/home/{{ .Item }}/.bashrc"
     content: "{{ .Vars.bashrc_content }}"
-    mode: "0755"
+    owner: "{{ .Item }}"
+    group: "{{ .Item }}"
+    mode: "0644"

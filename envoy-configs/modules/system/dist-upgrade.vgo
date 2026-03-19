@@ -24,11 +24,13 @@ resources:
   - name: autoremove
     type: exec
     command: "apt-get autoremove -y -qq"
-    when: "os_family('debian')"
-    subscribes: [apt-dist-upgrade]
+    when: changed
+    onlyif: "dpkg -l | grep -q ^rc"
+    depends_on: [apt-dist-upgrade]
 
   - name: reboot-if-needed
     type: exec
-    command: "[ -f /var/run/reboot-required ] && shutdown -r +1 'Rebooting after dist-upgrade' || true"
-    when: "os_family('debian')"
-    subscribes: [apt-dist-upgrade]
+    command: "shutdown -r +1 'Rebooting after dist-upgrade'"
+    when: changed
+    onlyif: "test -f /var/run/reboot-required"
+    depends_on: [apt-dist-upgrade]

@@ -10,6 +10,9 @@ resources:
   - name: remove-old-config
     type: file
     target_path: /etc/old-app.conf
+    owner: root
+    group: root
+    mode: "0644"
     state: absent
 
   # Remove decommissioned user

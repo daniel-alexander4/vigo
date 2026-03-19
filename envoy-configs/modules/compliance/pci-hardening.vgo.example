@@ -99,6 +99,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: "sysctl --system"
+    onlyif: "! sysctl -n net.ipv4.ip_forward 2>/dev/null | grep -q 0"
     depends_on: [sysctl-hardening]
 
   # ── Req 2.2.5 — Password/account lockout policy (PAM) ─────────────
