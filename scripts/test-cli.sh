@@ -364,6 +364,7 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[auth]${NC}"
 run_test "auth status" $CLI auth status --server "$SERVER"
+run_test "auth emergency-access" $CLI auth emergency-access --reason "CLI test suite" --server "$SERVER"
 
 # API token lifecycle: create → list → revoke.
 TOKEN_OUT=$($CLI auth create-token --server "$SERVER" 2>&1 || true)
@@ -449,11 +450,21 @@ if [[ $(id -u) -eq 0 ]]; then
     if [[ -f "$BACKUP_FILE" ]]; then
         run_test "backup inspect" $CLI backup inspect "$BACKUP_FILE"
         run_test "backup restore --dry-run" $CLI backup restore "$BACKUP_FILE" --dry-run
+
+        # Verify SHA-256 sidecar file was created.
+        if [[ -f "${BACKUP_FILE}.sha256" ]]; then
+            echo -e "  ${GREEN}PASS${NC}  backup sha256 sidecar exists"
+            PASS=$((PASS + 1))
+        else
+            echo -e "  ${RED}FAIL${NC}  backup sha256 sidecar missing"
+            FAIL=$((FAIL + 1))
+            FAILURES+=("backup sha256 sidecar")
+        fi
     fi
 else
     skip_test "backup create" "requires root (reads server.yaml and secrets)"
 fi
-rm -f "$BACKUP_FILE"
+rm -f "$BACKUP_FILE" "${BACKUP_FILE}.sha256"
 echo ""
 
 # -------------------------------------------------------------------
@@ -550,6 +561,14 @@ run_test "report pci (JSON)" $CLI report pci --server "$SERVER"
 run_test "report pci (HTML)" $CLI report pci --format html --server "$SERVER"
 run_test "report cis (JSON)" $CLI report cis --server "$SERVER"
 run_test "report cis (HTML)" $CLI report cis --format html --server "$SERVER"
+run_test "report nist (JSON)" $CLI report nist --server "$SERVER"
+run_test "report nist (HTML)" $CLI report nist --format html --server "$SERVER"
+run_test "report iso27001 (JSON)" $CLI report iso27001 --server "$SERVER"
+run_test "report iso27001 (HTML)" $CLI report iso27001 --format html --server "$SERVER"
+run_test "report gdpr (JSON)" $CLI report gdpr --server "$SERVER"
+run_test "report gdpr (HTML)" $CLI report gdpr --format html --server "$SERVER"
+run_test "report nerccip (JSON)" $CLI report nerccip --server "$SERVER"
+run_test "report nerccip (HTML)" $CLI report nerccip --format html --server "$SERVER"
 
 # Test --output flag with a temp file.
 REPORT_TMPFILE=$(mktemp /tmp/hobnob-report-XXXXXX.json)
