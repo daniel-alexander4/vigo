@@ -13,6 +13,10 @@ Guides for deploying Hobnob in regulated environments.
 - [SOC 2](soc2.md) -- Trust Services Criteria mapping (32 criteria across 5 categories)
 - [PCI DSS v4.0](pci-dss.md) -- 42 requirements mapped + 4 enforcement modules
 - [CIS Benchmarks](cis-benchmarks.md) -- Ubuntu, RHEL, Windows Level 1 enforcement modules
+- [NIST 800-53](nist-800-53.md) -- 41 controls across 10 families (Federal/FedRAMP)
+- [ISO 27001](iso-27001.md) -- 33 Annex A controls across 11 domains
+- [GDPR](gdpr.md) -- 13 articles covering technical measures
+- [NERC CIP](nerc-cip.md) -- 18 requirements across 8 CIP standards (energy sector)
 - [Remediation Workflow](remediation.md) -- Automated drift detection, fix, and verification
 - [Database Encryption at Rest](database-encryption.md) -- LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](../operations/hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification

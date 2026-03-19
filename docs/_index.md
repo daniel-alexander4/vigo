@@ -92,6 +92,10 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [SOC 2](compliance/soc2.md) — 32 Trust Services Criteria across 5 categories
 - [PCI DSS v4.0](compliance/pci-dss.md) — 42 requirements + 4 enforcement modules
 - [CIS Benchmarks](compliance/cis-benchmarks.md) — Ubuntu, RHEL, Windows Level 1 modules
+- [NIST 800-53](compliance/nist-800-53.md) — 41 Federal/FedRAMP controls
+- [ISO 27001](compliance/iso-27001.md) — 33 Annex A controls
+- [GDPR](compliance/gdpr.md) — 13 EU data protection articles
+- [NERC CIP](compliance/nerc-cip.md) — 18 energy sector requirements
 - [Remediation Workflow](compliance/remediation.md) — Automated drift detection, fix, verification
 - [Database Encryption at Rest](compliance/database-encryption.md) — LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](operations/hipaa-checklist.md) — 164.312 requirement mapping and verification

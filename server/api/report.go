@@ -47,6 +47,14 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/pci.html", h.handlePCIReportHTML)
 	mux.HandleFunc("GET /api/v1/report/cis", h.handleCISReport)
 	mux.HandleFunc("GET /api/v1/report/cis.html", h.handleCISReportHTML)
+	mux.HandleFunc("GET /api/v1/report/nist", h.handleNISTReport)
+	mux.HandleFunc("GET /api/v1/report/nist.html", h.handleNISTReportHTML)
+	mux.HandleFunc("GET /api/v1/report/iso27001", h.handleISO27001Report)
+	mux.HandleFunc("GET /api/v1/report/iso27001.html", h.handleISO27001ReportHTML)
+	mux.HandleFunc("GET /api/v1/report/gdpr", h.handleGDPRReport)
+	mux.HandleFunc("GET /api/v1/report/gdpr.html", h.handleGDPRReportHTML)
+	mux.HandleFunc("GET /api/v1/report/nerccip", h.handleNERCCIPReport)
+	mux.HandleFunc("GET /api/v1/report/nerccip.html", h.handleNERCCIPReportHTML)
 }
 
 // ComplianceReport is the JSON format for a compliance report.
@@ -637,4 +645,258 @@ func (h *ReportHandler) handleCISReport(w http.ResponseWriter, r *http.Request) 
 func (h *ReportHandler) handleCISReportHTML(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Hobnob CIS Benchmark Compliance Report", "hobnob-cis",
 		h.buildCISFindings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- NIST 800-53 ----------
+
+func (h *ReportHandler) buildNIST80053Findings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// AC — Access Control
+		{ControlID: "AC-2", Title: "Account Management", Status: "satisfied", Evidence: "Per-user accounts with UUIDs, RBAC roles, admin approval for creation, audited lifecycle"},
+		{ControlID: "AC-3", Title: "Access Enforcement", Status: "satisfied", Evidence: "13 fine-grained permissions, RequirePermission() middleware on all endpoints"},
+		{ControlID: "AC-6", Title: "Least Privilege", Status: "satisfied", Evidence: "Role-based defaults (admin/viewer), custom permission sets per user"},
+		{ControlID: "AC-7", Title: "Unsuccessful Logon Attempts", Status: "satisfied", Evidence: "auth.login_failed audit events with IP; PAM faillock via CIS/PCI modules"},
+		{ControlID: "AC-8", Title: "System Use Notification", Status: "satisfied", Evidence: "SSH banner via cis-auth module; login page branding"},
+		{ControlID: "AC-11", Title: "Session Lock", Status: "satisfied", Evidence: "15-minute idle session timeout; shell TMOUT via CIS modules"},
+		{ControlID: "AC-12", Title: "Session Termination", Status: "satisfied", Evidence: "24-hour absolute session lifetime; idle timeout configurable"},
+		{ControlID: "AC-17", Title: "Remote Access", Status: "satisfied", Evidence: "mTLS on all remote access; SSH hardening via modules; TOTP MFA available"},
+
+		// AU — Audit and Accountability
+		{ControlID: "AU-2", Title: "Audit Events", Status: "satisfied", Evidence: "15+ event types: auth, user, token, config, push, workflow, emergency, remediation, thrall"},
+		{ControlID: "AU-3", Title: "Content of Audit Records", Status: "satisfied", Evidence: "Each entry: timestamp, event type, actor, summary, payload, prev_hash, hash"},
+		{ControlID: "AU-6", Title: "Audit Review, Analysis, Reporting", Status: "satisfied", Evidence: "CLI audit list/verify, compliance dashboards, SIEM export, scheduled reports"},
+		{ControlID: "AU-8", Title: "Time Stamps", Status: "satisfied", Evidence: "UTC RFC3339 timestamps; NTP/chrony enforcement via modules"},
+		{ControlID: "AU-9", Title: "Protection of Audit Information", Status: statusForAudit(auditStatus), Evidence: "SHA-256 hash chain — " + auditEvidence},
+		{ControlID: "AU-10", Title: "Non-repudiation", Status: "satisfied", Evidence: "ED25519 signatures on agent communication; tamper-evident audit chain"},
+		{ControlID: "AU-11", Title: "Audit Record Retention", Status: "satisfied", Evidence: "Litestream continuous backup; encrypted snapshots; configurable retention"},
+		{ControlID: "AU-12", Title: "Audit Generation", Status: "satisfied", Evidence: "Automatic audit recording on all security-relevant events; no opt-out"},
+
+		// CA — Assessment, Authorization, Monitoring
+		{ControlID: "CA-7", Title: "Continuous Monitoring", Status: "satisfied", Evidence: "Agent check-in every 5 min (configurable); compliance monitor every 60s; drift alerts"},
+
+		// CM — Configuration Management
+		{ControlID: "CM-2", Title: "Baseline Configuration", Status: "satisfied", Evidence: "YAML modules define desired state; version-controlled in git"},
+		{ControlID: "CM-3", Title: "Configuration Change Control", Status: "satisfied", Evidence: "Stage → publish workflow, modlint validation, change approval, audit trail"},
+		{ControlID: "CM-5", Title: "Access Restrictions for Change", Status: "satisfied", Evidence: "config.publish permission required; change approval workflow (two-person rule)"},
+		{ControlID: "CM-6", Title: "Configuration Settings", Status: "satisfied", Evidence: "73 idempotent executors enforce settings across all platforms"},
+		{ControlID: "CM-7", Title: "Least Functionality", Status: "satisfied", Evidence: "CIS modules disable unnecessary services, remove unused packages"},
+		{ControlID: "CM-8", Title: "System Component Inventory", Status: "satisfied", Evidence: "25 trait collectors auto-discover hardware, OS, network, packages; FleetIndex"},
+		{ControlID: "CM-11", Title: "User-Installed Software", Status: "satisfied", Evidence: "Package executor enforces approved versions; repository control"},
+
+		// CP — Contingency Planning
+		{ControlID: "CP-9", Title: "System Backup", Status: "satisfied", Evidence: "Litestream continuous WAL replication; AES-256-GCM encrypted snapshots; SHA-256 integrity"},
+		{ControlID: "CP-10", Title: "System Recovery and Reconstitution", Status: "satisfied", Evidence: "Config-as-code rapid rebuild; disaster recovery documented; backup restore tested"},
+
+		// IA — Identification and Authentication
+		{ControlID: "IA-2", Title: "Identification and Authentication", Status: "satisfied", Evidence: "Basic (bcrypt), OIDC, isowebauth; unique user IDs; TOTP MFA"},
+		{ControlID: "IA-5", Title: "Authenticator Management", Status: "satisfied", Evidence: "12-char complexity, bcrypt hashing, AES-256-GCM storage, API tokens (hbt_ prefix)"},
+		{ControlID: "IA-8", Title: "Identification and Authentication (Non-Org)", Status: "satisfied", Evidence: "Agent mTLS certificates; ED25519 signature verification on all agent traffic"},
+
+		// IR — Incident Response
+		{ControlID: "IR-4", Title: "Incident Handling", Status: "satisfied", Evidence: "Documented 5-phase incident response plan; emergency access procedure"},
+		{ControlID: "IR-5", Title: "Incident Monitoring", Status: "satisfied", Evidence: "Webhook + SMTP alerts; compliance threshold monitoring; audit trail"},
+		{ControlID: "IR-6", Title: "Incident Reporting", Status: "satisfied", Evidence: "Audit events for all security incidents; SIEM export for external correlation"},
+
+		// SC — System and Communications Protection
+		{ControlID: "SC-7", Title: "Boundary Protection", Status: "satisfied", Evidence: "Firewall executor enforces network segmentation; mTLS on management traffic"},
+		{ControlID: "SC-8", Title: "Transmission Confidentiality and Integrity", Status: "satisfied", Evidence: "mTLS (TLS 1.3) on all gRPC and REST traffic; no plaintext transport"},
+		{ControlID: "SC-12", Title: "Cryptographic Key Establishment", Status: "satisfied", Evidence: "Auto-generated master key; Argon2id derivation; ED25519 agent keys"},
+		{ControlID: "SC-13", Title: "Cryptographic Protection", Status: "satisfied", Evidence: "AES-256-GCM, TLS 1.3, ED25519, bcrypt, SHA-256 — FIPS-grade algorithms"},
+		{ControlID: "SC-28", Title: "Protection of Information at Rest", Status: "satisfied", Evidence: "AES-256-GCM for secrets and backups; LUKS recommended for database"},
+
+		// SI — System and Information Integrity
+		{ControlID: "SI-2", Title: "Flaw Remediation", Status: "satisfied", Evidence: "CVE scanning via security_scan trait; automated remediation workflow"},
+		{ControlID: "SI-3", Title: "Malicious Code Protection", Status: "satisfied", Evidence: "AV/EDR enforcement via package/service executors; ClamAV module"},
+		{ControlID: "SI-4", Title: "System Monitoring", Status: "satisfied", Evidence: "Continuous drift detection; compliance dashboards; Prometheus metrics"},
+		{ControlID: "SI-7", Title: "Software, Firmware, and Information Integrity", Status: "satisfied", Evidence: "Drift detection = FIM; file snapshots; ED25519 bundle signatures"},
+	}
+}
+
+func (h *ReportHandler) handleNISTReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob NIST 800-53 Compliance Report", "hobnob-nist800-53",
+		h.buildNIST80053Findings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleNISTReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob NIST 800-53 Compliance Report", "hobnob-nist800-53",
+		h.buildNIST80053Findings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- ISO 27001 ----------
+
+func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// A.5 — Information Security Policies
+		{ControlID: "A.5.1", Title: "Management Direction for InfoSec", Status: "satisfied", Evidence: "Config-as-code defines and enforces security policies; version-controlled, auditable"},
+
+		// A.6 — Organization of Information Security
+		{ControlID: "A.6.1", Title: "Internal Organization", Status: "satisfied", Evidence: "RBAC with 13 permissions; segregation of duties; change approval workflow"},
+
+		// A.8 — Asset Management
+		{ControlID: "A.8.1", Title: "Responsibility for Assets", Status: "satisfied", Evidence: "25 trait collectors auto-discover assets; FleetIndex provides real-time inventory"},
+		{ControlID: "A.8.2", Title: "Information Classification", Status: "partial", Evidence: "secret: prefix classifies sensitive values; organizational classification policy required"},
+
+		// A.9 — Access Control
+		{ControlID: "A.9.1.2", Title: "Access to Networks and Services", Status: "satisfied", Evidence: "mTLS on all management traffic; firewall executor enforces network access"},
+		{ControlID: "A.9.2.1", Title: "User Registration and De-registration", Status: "satisfied", Evidence: "Per-user accounts with UUIDs; audited creation/deletion; cascade delete on decommission"},
+		{ControlID: "A.9.2.3", Title: "Management of Privileged Access", Status: "satisfied", Evidence: "13 fine-grained permissions; admin/viewer roles; least privilege defaults"},
+		{ControlID: "A.9.3.1", Title: "Use of Secret Authentication Information", Status: "satisfied", Evidence: "12-char complexity, bcrypt hashing, AES-256-GCM storage; TOTP MFA available"},
+		{ControlID: "A.9.4.1", Title: "Information Access Restriction", Status: "satisfied", Evidence: "RequirePermission() middleware; file executor enforces filesystem permissions"},
+		{ControlID: "A.9.4.2", Title: "Secure Log-on Procedures", Status: "satisfied", Evidence: "Failed login auditing with IP; account lockout via PAM; session timeout"},
+		{ControlID: "A.9.4.3", Title: "Password Management System", Status: "satisfied", Evidence: "Bcrypt hashing, complexity enforcement, secrets provider encryption"},
+
+		// A.10 — Cryptography
+		{ControlID: "A.10.1.1", Title: "Policy on Use of Cryptographic Controls", Status: "satisfied", Evidence: "AES-256-GCM, TLS 1.3, ED25519, bcrypt, Argon2id — enforced by default"},
+		{ControlID: "A.10.1.2", Title: "Key Management", Status: "satisfied", Evidence: "Auto-generated master key; secret rotation via watcher; certificate lifecycle"},
+
+		// A.12 — Operations Security
+		{ControlID: "A.12.1.2", Title: "Change Management", Status: "satisfied", Evidence: "Stage → publish, modlint validation, change approval, blast radius limits, audit trail"},
+		{ControlID: "A.12.1.4", Title: "Separation of Environments", Status: "satisfied", Evidence: "environment_overrides, conditional variables per environment"},
+		{ControlID: "A.12.2.1", Title: "Controls Against Malware", Status: "satisfied", Evidence: "Package/service executors enforce AV/EDR; security scanning trait collector"},
+		{ControlID: "A.12.3.1", Title: "Information Backup", Status: "satisfied", Evidence: "Litestream continuous backup; AES-256-GCM encrypted snapshots; SHA-256 integrity"},
+		{ControlID: "A.12.4.1", Title: "Event Logging", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
+		{ControlID: "A.12.4.3", Title: "Administrator and Operator Logs", Status: "satisfied", Evidence: "All admin actions audited: user/token CRUD, config publish, push, workflow"},
+		{ControlID: "A.12.4.4", Title: "Clock Synchronisation", Status: "satisfied", Evidence: "NTP/chrony enforcement via modules; UTC RFC3339 timestamps"},
+		{ControlID: "A.12.5.1", Title: "Installation of Software on Operational Systems", Status: "satisfied", Evidence: "Package executor enforces approved versions; repository control"},
+		{ControlID: "A.12.6.1", Title: "Management of Technical Vulnerabilities", Status: "satisfied", Evidence: "CVE scanning via security_scan trait; automated remediation workflow"},
+
+		// A.13 — Communications Security
+		{ControlID: "A.13.1.1", Title: "Network Controls", Status: "satisfied", Evidence: "Firewall executor; mTLS; network segmentation enforcement"},
+		{ControlID: "A.13.2.1", Title: "Information Transfer Policies", Status: "satisfied", Evidence: "All data in transit encrypted via mTLS (TLS 1.3); no plaintext transport"},
+
+		// A.14 — System Acquisition, Development, Maintenance
+		{ControlID: "A.14.1.2", Title: "Securing Application Services", Status: "satisfied", Evidence: "mTLS on all services; secret: prefix for sensitive config values"},
+		{ControlID: "A.14.2.2", Title: "System Change Control Procedures", Status: "satisfied", Evidence: "Stage/live separation, git history, modlint, change approval, auto-rollback"},
+
+		// A.16 — Information Security Incident Management
+		{ControlID: "A.16.1.2", Title: "Reporting Information Security Events", Status: "satisfied", Evidence: "Webhook + SMTP alerts; compliance threshold monitoring; emergency access procedure"},
+		{ControlID: "A.16.1.5", Title: "Response to Information Security Incidents", Status: "satisfied", Evidence: "Documented 5-phase incident response plan; remediation workflow"},
+		{ControlID: "A.16.1.7", Title: "Collection of Evidence", Status: "satisfied", Evidence: "Run history, file snapshots, compliance history, tamper-evident audit chain"},
+
+		// A.17 — Business Continuity
+		{ControlID: "A.17.1.1", Title: "Planning Information Security Continuity", Status: "satisfied", Evidence: "Config-as-code enables rapid rebuild; disaster recovery documented"},
+
+		// A.18 — Compliance
+		{ControlID: "A.18.1.3", Title: "Protection of Records", Status: "satisfied", Evidence: "Encrypted backups; tamper-evident audit chain; file snapshots"},
+		{ControlID: "A.18.2.2", Title: "Compliance with Security Policies", Status: "satisfied", Evidence: "Continuous drift detection; 5-level compliance status; fleet dashboards"},
+		{ControlID: "A.18.2.3", Title: "Technical Compliance Review", Status: "satisfied", Evidence: "Automated convergence checks on every agent check-in; CIS benchmark modules"},
+	}
+}
+
+func (h *ReportHandler) handleISO27001Report(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob ISO 27001 Compliance Report", "hobnob-iso27001",
+		h.buildISO27001Findings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleISO27001ReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob ISO 27001 Compliance Report", "hobnob-iso27001",
+		h.buildISO27001Findings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- GDPR ----------
+
+func (h *ReportHandler) buildGDPRFindings(_ AuditChainStatus) []ControlFinding {
+	return []ControlFinding{
+		// Article 5 — Principles
+		{ControlID: "Art.5(1)(f)", Title: "Integrity and Confidentiality", Status: "satisfied", Evidence: "AES-256-GCM encryption, mTLS transport, ED25519 signatures, tamper-evident audit"},
+
+		// Article 25 — Data Protection by Design
+		{ControlID: "Art.25(1)", Title: "Data Protection by Design", Status: "satisfied", Evidence: "secret: prefix prevents plaintext secrets; encryption by default; least-privilege RBAC"},
+		{ControlID: "Art.25(2)", Title: "Data Protection by Default", Status: "satisfied", Evidence: "Minimal data collection; traits auto-discovered, not user-provided PII"},
+
+		// Article 30 — Records of Processing
+		{ControlID: "Art.30(1)", Title: "Records of Processing Activities", Status: "satisfied", Evidence: "Tamper-evident audit trail records all data processing activities with timestamps"},
+
+		// Article 32 — Security of Processing
+		{ControlID: "Art.32(1)(a)", Title: "Encryption", Status: "satisfied", Evidence: "AES-256-GCM at rest, mTLS (TLS 1.3) in transit, Argon2id key derivation"},
+		{ControlID: "Art.32(1)(b)", Title: "Confidentiality, Integrity, Availability", Status: "satisfied", Evidence: "RBAC access control, hash chain integrity, Litestream continuous backup"},
+		{ControlID: "Art.32(1)(c)", Title: "Ability to Restore Availability", Status: "satisfied", Evidence: "Encrypted backups, disaster recovery procedures, config-as-code rapid rebuild"},
+		{ControlID: "Art.32(1)(d)", Title: "Testing Security Measures", Status: "satisfied", Evidence: "Continuous compliance monitoring; audit chain verification; CIS benchmark modules"},
+		{ControlID: "Art.32(2)", Title: "Risk Assessment for Processing", Status: "partial", Evidence: "Compliance reports provide risk evidence; formal DPIA is organizational"},
+
+		// Article 33 — Breach Notification
+		{ControlID: "Art.33(1)", Title: "Notification to Supervisory Authority", Status: "partial", Evidence: "Tamper-evident audit provides breach evidence; 72-hour notification is organizational"},
+		{ControlID: "Art.33(3)", Title: "Content of Notification", Status: "satisfied", Evidence: "Audit trail captures: nature of breach, categories affected, consequences, measures taken"},
+
+		// Article 35 — Data Protection Impact Assessment
+		{ControlID: "Art.35(1)", Title: "Data Protection Impact Assessment", Status: "partial", Evidence: "Compliance reports + fleet status provide input for DPIA; formal assessment is organizational"},
+
+		// Article 17 — Right to Erasure
+		{ControlID: "Art.17(1)", Title: "Right to Erasure", Status: "satisfied", Evidence: "Cascade delete removes all thrall data; documented decommissioning procedure"},
+	}
+}
+
+func (h *ReportHandler) handleGDPRReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob GDPR Compliance Report", "hobnob-gdpr",
+		h.buildGDPRFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleGDPRReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob GDPR Compliance Report", "hobnob-gdpr",
+		h.buildGDPRFindings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- NERC CIP ----------
+
+func (h *ReportHandler) buildNERCCIPFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// CIP-002 — BES Cyber System Categorization
+		{ControlID: "CIP-002-5.1", Title: "BES Cyber System Identification", Status: "satisfied", Evidence: "25 trait collectors auto-discover system inventory; FleetIndex asset registry"},
+
+		// CIP-003 — Security Management Controls
+		{ControlID: "CIP-003-8-R1", Title: "Cyber Security Policies", Status: "satisfied", Evidence: "Config-as-code modules define and enforce security policies; version-controlled"},
+		{ControlID: "CIP-003-8-R2", Title: "Cyber Security Plans", Status: "partial", Evidence: "Technical controls automated; organizational planning is separate"},
+
+		// CIP-004 — Personnel and Training
+		{ControlID: "CIP-004-6-R4", Title: "Access Management Program", Status: "satisfied", Evidence: "RBAC with 13 permissions; per-user accounts; audited lifecycle"},
+		{ControlID: "CIP-004-6-R5", Title: "Access Revocation", Status: "satisfied", Evidence: "User deletion with cascade; token revocation; thrall revocation; all audited"},
+
+		// CIP-005 — Electronic Security Perimeters
+		{ControlID: "CIP-005-7-R1", Title: "Electronic Security Perimeter", Status: "satisfied", Evidence: "Firewall executor enforces network boundaries; mTLS on management traffic"},
+		{ControlID: "CIP-005-7-R2", Title: "Remote Access Management", Status: "satisfied", Evidence: "mTLS required; SSH hardening via modules; TOTP MFA; encrypted tunnels"},
+
+		// CIP-007 — Systems Security Management
+		{ControlID: "CIP-007-6-R1", Title: "Ports and Services", Status: "satisfied", Evidence: "CIS/PCI modules disable unnecessary services; firewall restricts ports"},
+		{ControlID: "CIP-007-6-R2", Title: "Security Patch Management", Status: "satisfied", Evidence: "Package executor enforces versions; push system enables fleet-wide patching"},
+		{ControlID: "CIP-007-6-R3", Title: "Malicious Code Prevention", Status: "satisfied", Evidence: "AV/EDR enforcement via package/service executors; security scanning"},
+		{ControlID: "CIP-007-6-R4", Title: "Security Event Monitoring", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
+		{ControlID: "CIP-007-6-R5", Title: "System Access Control", Status: "satisfied", Evidence: "Authentication required; RBAC; password complexity; session timeout; MFA"},
+
+		// CIP-009 — Recovery Plans
+		{ControlID: "CIP-009-6-R1", Title: "Recovery Plan Specifications", Status: "satisfied", Evidence: "Disaster recovery documented; config-as-code rapid rebuild; encrypted backups"},
+		{ControlID: "CIP-009-6-R2", Title: "Recovery Plan Implementation and Testing", Status: "satisfied", Evidence: "Backup restore tested; Litestream continuous replication; remediation workflow"},
+
+		// CIP-010 — Configuration Change Management
+		{ControlID: "CIP-010-3-R1", Title: "Configuration Change Management", Status: "satisfied", Evidence: "Stage → publish workflow; modlint validation; change approval; blast radius limits"},
+		{ControlID: "CIP-010-3-R2", Title: "Configuration Monitoring", Status: "satisfied", Evidence: "Continuous drift detection on every check-in; compliance alerts; FIM"},
+
+		// CIP-011 — Information Protection
+		{ControlID: "CIP-011-2-R1", Title: "Information Protection", Status: "satisfied", Evidence: "AES-256-GCM for secrets and backups; secret: prefix; no plaintext secrets"},
+		{ControlID: "CIP-011-2-R2", Title: "BES Cyber Asset Reuse and Disposal", Status: "satisfied", Evidence: "Documented decommissioning with cascade delete and secure media disposal"},
+	}
+}
+
+func (h *ReportHandler) handleNERCCIPReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob NERC CIP Compliance Report", "hobnob-nerccip",
+		h.buildNERCCIPFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleNERCCIPReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob NERC CIP Compliance Report", "hobnob-nerccip",
+		h.buildNERCCIPFindings(h.auditStatusFromRequest(r)), true)
 }

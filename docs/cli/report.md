@@ -119,3 +119,39 @@ hobnobcli report cis [flags]
 hobnobcli report cis
 hobnobcli report cis --format html --output /tmp/cis-report.html
 ```
+
+### nist
+
+Generate a NIST 800-53 compliance report (41 controls across 10 families — AC, AU, CA, CM, CP, IA, IR, SC, SI).
+
+```bash
+hobnobcli report nist
+hobnobcli report nist --format html --output /tmp/nist-report.html
+```
+
+### iso27001
+
+Generate an ISO 27001 compliance report (33 Annex A controls across 11 domains).
+
+```bash
+hobnobcli report iso27001
+hobnobcli report iso27001 --format html --output /tmp/iso27001-report.html
+```
+
+### gdpr
+
+Generate a GDPR compliance report (13 articles covering technical measures under Art. 5, 17, 25, 30, 32, 33, 35).
+
+```bash
+hobnobcli report gdpr
+hobnobcli report gdpr --format html --output /tmp/gdpr-report.html
+```
+
+### nerccip
+
+Generate a NERC CIP compliance report (18 requirements across 8 CIP standards for energy sector).
+
+```bash
+hobnobcli report nerccip
+hobnobcli report nerccip --format html --output /tmp/nerccip-report.html
+```
