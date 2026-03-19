@@ -40,6 +40,10 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Ensure Go and Cargo are in PATH (sudo strips user PATH).
+export PATH="/usr/local/go/bin:$HOME/.cargo/bin:/home/dan/.cargo/bin:$PATH"
+export GOPATH="${GOPATH:-/home/dan/go}"
+
 cd "$DATA_DIR"
 
 # ---------------------------------------------------------------------------
