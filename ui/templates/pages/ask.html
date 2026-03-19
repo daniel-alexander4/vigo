@@ -115,13 +115,14 @@
                 <h4>Critical CVEs by Host</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Count</th><th>CVEs</th></tr></thead>
+                        <thead><tr><th>Host</th><th>Count</th><th>CVEs</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if .TrivyCritical}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">{{.TrivyCritical}}</td>
                                 <td class="sec-cve-list">{{range .CVEs}}<a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a> {{end}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -142,16 +143,17 @@
                 <h4>High CVEs by Host</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>CVEs</th></tr></thead>
+                        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>CVEs</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
                                 <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
                                 <td>{{.TrivyMedium}}</td>
                                 <td>{{.TrivyLow}}</td>
                                 <td class="sec-cve-list">{{range .CVEs}}<a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a> {{end}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -164,14 +166,15 @@
                 <h4>Lynis Hardening Scores</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Score</th><th>Warnings</th><th>Suggestions</th></tr></thead>
+                        <thead><tr><th>Host</th><th>Score</th><th>Warnings</th><th>Suggestions</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if .LynisScore}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
                                 <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
                                 <td>{{.LynisSuggestions}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -184,14 +187,15 @@
                 <h4>Rootkit Detection</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Status</th><th>rkhunter Warnings</th><th>chkrootkit Infected</th></tr></thead>
+                        <thead><tr><th>Host</th><th>Status</th><th>rkhunter Warnings</th><th>chkrootkit Infected</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .RootkitClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Warning</td>
                                 <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
                                 <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -204,13 +208,14 @@
                 <h4>Malware Detection (ClamAV)</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Status</th><th>Infected Files</th></tr></thead>
+                        <thead><tr><th>Host</th><th>Status</th><th>Infected Files</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .ClamavClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Infected</td>
                                 <td class="text-danger">{{.ClamavInfected}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -223,14 +228,15 @@
                 <h4>File Integrity (AIDE)</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Added</th><th>Removed</th><th>Changed</th></tr></thead>
+                        <thead><tr><th>Host</th><th>Added</th><th>Removed</th><th>Changed</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .AideClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
                                 <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
                                 <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
