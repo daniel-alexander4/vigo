@@ -81,6 +81,14 @@ type Result struct {
 // When opts.CheckURLs is true, http/https URLs in changed/new modules are
 // checked for aliveness via HTTP HEAD.
 func ValidateSource(opts Options) (*Result, error) {
+	// Normalize file permissions in stage/: ensure all config files are
+	// owner-rw and group-readable, and directories are traversable.
+	// This fixes files created by editors or cp that end up with
+	// restrictive permissions (e.g., root-only 0600).
+	if err := normalizeStagePermissions(StageDir); err != nil {
+		return nil, fmt.Errorf("normalizing permissions: %w", err)
+	}
+
 	// Normalize whitespace in all .hnb/.yaml files: strip trailing whitespace
 	// from every line. This prevents invisible formatting issues from editors
 	// that add trailing spaces or mixed line endings.
@@ -671,6 +679,45 @@ func CheckLivePermissions(live string) string {
 		return fmt.Sprintf(".live directory %s is group and world accessible (mode %04o) — run 'chmod 750 %s'", live, mode, live)
 	}
 	return ""
+}
+
+// normalizeStagePermissions walks the stage directory and ensures all
+// config files are 0644 (owner rw, group/other r) and directories are
+// 0755 (owner rwx, group/other rx). This fixes files created by editors,
+// cp, or tar that end up with restrictive permissions, which would cause
+// subsequent steps (whitespace normalization, config loading) to fail
+// with "permission denied".
+func normalizeStagePermissions(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if path != dir && (strings.HasPrefix(name, ".") || skipDirs[name]) {
+				return filepath.SkipDir
+			}
+			info, statErr := d.Info()
+			if statErr != nil {
+				return statErr
+			}
+			if info.Mode().Perm() != 0o755 {
+				return os.Chmod(path, 0o755)
+			}
+			return nil
+		}
+		if !isPublishableFile(d.Name()) {
+			return nil
+		}
+		info, statErr := d.Info()
+		if statErr != nil {
+			return statErr
+		}
+		if info.Mode().Perm() != 0o644 {
+			return os.Chmod(path, 0o644)
+		}
+		return nil
+	})
 }
 
 // normalizeWhitespace walks the stage directory and strips trailing

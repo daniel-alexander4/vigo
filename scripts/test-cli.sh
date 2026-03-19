@@ -213,8 +213,11 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[config]${NC}"
 run_test "config history" $CLI config history --server "$SERVER"
-run_test "config publish --dry-run" $CLI config publish --dry-run --server "$SERVER" || \
-    skip_test "config publish --dry-run" "requires root (live dir is read-only)"
+if [[ $(id -u) -eq 0 ]]; then
+    run_test "config publish --dry-run" $CLI config publish --dry-run --server "$SERVER"
+else
+    skip_test "config publish --dry-run" "requires root (normalizes stage permissions)"
+fi
 
 if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
     run_test "config trace" $CLI config trace "$FIRST_THRALL" --server "$SERVER"
