@@ -15,6 +15,7 @@ Manage enrolled thralls (managed nodes). Also available as `hobnobcli nodes`.
 | `untag` | Remove specific tags from a thrall |
 | `maintenance` | Set or clear maintenance mode |
 | `purge` | Delete stale duplicate thralls, keeping only the most recently seen per hostname |
+| `push` | Force immediate check-in and convergence |
 | `rebootstrap` | Signal thralls to download the latest agent binary and restart |
 
 ## Usage
@@ -251,6 +252,34 @@ Purge these thralls? [y/N] y
 Purged 2 stale thrall(s).
 ```
 
+## push
+
+Force a thrall to check in and converge immediately, without waiting for its next polling interval. Sets a force-update flag on the server that the agent picks up on its next poll.
+
+```bash
+# Push a single thrall
+hobnobcli thralls push <hostname-or-uuid>
+
+# Push all active thralls
+hobnobcli thralls push --all
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Force check-in for all active thralls |
+
+### Example
+
+```bash
+hobnobcli thralls push web-01.example.com
+```
+
+```
+OK Force update queued for web-01.example.com
+```
+
 ## rebootstrap
 
 Signal thralls to download the latest agent binary and restart on their next check-in. No SSH required — the server sets a `force_update` flag that the agent picks up during its normal polling cycle.
@@ -274,4 +303,4 @@ The agent downloads the latest binary from the server's `/api/v1/agent/download`
 - [approved](approved.md) -- manage enrollment patterns
 - [runs](runs.md) -- view run history for thralls
 - [inventory](inventory.md) -- query thralls by traits
-- [push](push.md) -- trigger immediate check-in
+- [push](push.md) -- dispatch ad-hoc commands to thralls

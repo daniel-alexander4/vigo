@@ -14,33 +14,40 @@ var thrallsPushCmd = &cobra.Command{
 	Short: "Force targeted thralls to check in and converge immediately instead of waiting for their next interval",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
-		thrallID := ""
-		if !all {
-			if len(args) < 1 {
-				return fmt.Errorf("specify a hostname or UUID, or use --all")
-			}
-			thrallID = args[0]
+		if !all && len(args) < 1 {
+			return fmt.Errorf("specify a hostname or UUID, or use --all")
 		}
+
+		client := newAPIClient()
 
 		if all {
 			if !confirmAction("Force check-in for ALL thralls?") {
 				fmt.Println("Cancelled.")
 				return nil
 			}
+			var resp struct {
+				Status string `json:"status"`
+				Count  int    `json:"count"`
+			}
+			if err := client.post("/api/v1/thralls/update", nil, &resp); err != nil {
+				return err
+			}
+			fmt.Printf("%s Force update queued for %d thrall(s)\n", green("OK"), resp.Count)
+			return nil
 		}
 
-		client := newAPIClient()
-		var resp struct {
-			ThrallsNotified int32 `json:"thrallsNotified"`
-		}
-		err := client.post("/api/v1/push", map[string]string{
-			"thrall_id": thrallID,
-		}, &resp)
+		thrallID, err := resolveThrall(client, args[0])
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("%s Force push sent — %d thrall(s) notified\n", green("OK"), resp.ThrallsNotified)
+		var resp struct {
+			Status string `json:"status"`
+		}
+		if err := client.post("/api/v1/thralls/"+thrallID+"/update", nil, &resp); err != nil {
+			return err
+		}
+		fmt.Printf("%s Force update queued for %s\n", green("OK"), args[0])
 		return nil
 	},
 }
