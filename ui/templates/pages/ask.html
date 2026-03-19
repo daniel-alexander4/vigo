@@ -391,18 +391,24 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, thrallId) {
         h += '</tr></tbody></table>';
 
         // CVE IDs from flattened traits.
-        var cves = [];
+        var trivyCves = [], debsecanCves = [];
         for (var k in traits) {
-            if (k.indexOf('security_scan.trivy.cves.') === 0 || k.indexOf('security_scan.debsecan.cves.') === 0) {
-                cves.push(traits[k]);
-            }
+            if (k.indexOf('security_scan.trivy.cves.') === 0) trivyCves.push(traits[k]);
+            else if (k.indexOf('security_scan.debsecan.cves.') === 0) debsecanCves.push(traits[k]);
         }
-        if (cves.length) {
-            h += '<h4>CVEs (' + cves.length + ')</h4>';
-            cves.forEach(function(c) {
+        var allCves = trivyCves.concat(debsecanCves);
+        if (allCves.length) {
+            h += '<h4>CVEs (' + allCves.length + ')</h4>';
+            trivyCves.forEach(function(c) {
                 h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
                     '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-card__cve">' + c + '</a>' +
-                    '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-card__sev">View on NVD &rarr;</a>' +
+                    '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-card__sev">NVD &rarr;</a>' +
+                '</div></div>';
+            });
+            debsecanCves.forEach(function(c) {
+                h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
+                    '<a href="https://security-tracker.debian.org/tracker/' + c + '" target="_blank" rel="noopener" class="sec-card__cve">' + c + '</a>' +
+                    '<a href="https://security-tracker.debian.org/tracker/' + c + '" target="_blank" rel="noopener" class="sec-card__sev">Debian Tracker &rarr;</a>' +
                 '</div></div>';
             });
         }
@@ -561,7 +567,7 @@ function renderDebsecan(d) {
     d.vulnerabilities.forEach(function(v) {
         h += '<div class="sec-card ' + sevClass(v.urgency) + '" data-sev="' + sevNorm(v.urgency) + '">' +
             '<div class="sec-card__header">' +
-                '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
+                '<a href="https://security-tracker.debian.org/tracker/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
                 '<span class="sec-card__sev">' + sevLabel(v.urgency) + '</span>' +
             '</div>' +
             '<div class="sec-card__body"><span class="mono">' + esc(v.package) + '</span></div>' +
