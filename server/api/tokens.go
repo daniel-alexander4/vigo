@@ -42,6 +42,15 @@ type createTokenResponse struct {
 	Name  string `json:"name"`
 }
 
+type tokenListItem struct {
+	ID         string     `json:"id"`
+	UserID     string     `json:"user_id"`
+	Name       string     `json:"name"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+}
+
 func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	u := hobnobauth.UserFromContext(r.Context())
 	if u == nil {
@@ -89,11 +98,29 @@ func (h *TokensHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.tokenStore.ListByUser(r.Context(), u.ID)
+	rows, err := h.tokenStore.ListByUser(r.Context(), u.ID)
 	if err != nil {
 		slog.Error("listing api tokens", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	tokens := make([]tokenListItem, len(rows))
+	for i, row := range rows {
+		tokens[i] = tokenListItem{
+			ID:        row.ID,
+			UserID:    row.UserID,
+			Name:      row.Name,
+			CreatedAt: row.CreatedAt,
+		}
+		if row.LastUsedAt.Valid {
+			t := row.LastUsedAt.Time
+			tokens[i].LastUsedAt = &t
+		}
+		if row.ExpiresAt.Valid {
+			t := row.ExpiresAt.Time
+			tokens[i].ExpiresAt = &t
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
