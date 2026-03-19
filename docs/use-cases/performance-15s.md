@@ -222,6 +222,61 @@ The differentiator isn't just scale — it's **convergence speed**. Most config 
 - **Push operations land fast.** A workflow targeting 1,000 machines completes in seconds, not hours.
 - **Live queries are practical.** "What version of openssl is on every machine right now?" — answered in one check-in cycle.
 
+## Competitive Landscape
+
+No existing tool does general-purpose OS state enforcement at 15-second intervals. The space breaks down into several categories.
+
+### Traditional Config Management (30-Minute Default Intervals)
+
+| Tool | Default Interval | Practical Minimum | Agent Weight | Notes |
+|------|-----------------|-------------------|-------------|-------|
+| **Puppet** | 30 min | ~5 min | ~200 MiB (Ruby) | Server (PuppetDB + JVM) collapses at high frequency |
+| **Chef** | 30 min | ~5 min | ~200 MiB (Ruby) | chef-client is heavy per-run |
+| **Ansible** | None (push-only) | N/A | Agentless (SSH) | No convergence loop — AWX adds scheduling but still SSH-per-run |
+| **Salt** | 30 min+ | ~1 min | ~150 MiB (Python) | ZeroMQ transport is fast, but `state.apply` is heavy |
+
+None of these were designed for sub-minute convergence. Their agents are too heavy (Ruby/Python runtimes) and their server-side evaluation too expensive per run.
+
+### Closest Competitor: CFEngine
+
+CFEngine is the most philosophically aligned. Built on Promise Theory, designed for continuous enforcement from the ground up, written in C, lightweight agent (~10 MiB). Default interval is 5 minutes, can be tuned to ~1 minute.
+
+- **Strengths:** Battle-tested at 100K+ nodes, tiny agent footprint, 30+ year track record
+- **Weaknesses:** Domain-specific language is notoriously hard to learn, aging codebase, hub architecture struggles below 2-minute intervals, no modern features (no streaming, no live queries, no workflow engine)
+- **Practical floor:** ~1 minute. Below that, the hub's PostgreSQL-backed reporting chokes.
+
+### Event-Driven (Faster Than Polling, But Different)
+
+**mgmt** — Go-based, event-driven via inotify/etcd. Reacts to changes instantly rather than polling. Conceptually faster than 15-second polling, but not production-ready, tiny community, no central server model, no fleet management.
+
+### Enterprise Endpoint Platforms
+
+**Tanium** — The only product that operates at comparable speed. Sub-15-second query response across hundreds of thousands of endpoints using a peer-to-peer linear chain architecture.
+
+- **Strengths:** Proven at 500K+ endpoints, sub-second queries
+- **Weaknesses:** Query and observe focused, not state enforcement. No idempotent convergence loop. Enterprise-only pricing ($50-100/endpoint/year). Proprietary.
+
+**osquery** — Scheduled SQL queries against endpoint state. Read-only observation, no enforcement.
+
+### Cloud-Native / Kubernetes (Different Problem)
+
+ArgoCD, Flux, Crossplane, and Terraform operate in the Kubernetes or infrastructure-as-code space. They manage cloud resources or container orchestration, not OS-level state on bare metal or VMs. Sync intervals are 3-5 minutes at best, with no general-purpose OS convergence.
+
+### Where Hobnob Sits
+
+| | Convergence Speed | General-Purpose OS | Lightweight Agent | Fleet Scale |
+|---|---|---|---|---|
+| **Hobnob** | 15s | Yes (7 OSes) | ~5 MiB (Rust) | 10K+ per node |
+| **CFEngine** | ~1 min floor | Yes (Unix/Windows) | ~10 MiB (C) | 100K+ |
+| **Puppet** | ~5 min floor | Yes | ~200 MiB (Ruby) | 10K+ (with PuppetDB) |
+| **Salt** | ~1 min floor | Yes | ~150 MiB (Python) | 10K+ |
+| **Tanium** | Sub-15s | Queries only, no enforcement | Proprietary | 500K+ |
+| **mgmt** | Instant (event) | Limited | ~15 MiB (Go) | Not production-ready |
+
+**The gap Hobnob fills:** There is no tool that does continuous idempotent state enforcement at 15-second intervals with a lightweight agent across multiple operating systems. CFEngine comes closest but can't practically go below ~1 minute, and its learning curve is steep. Tanium has the speed but is query-only and enterprise-priced. Everything else is 5-30 minute territory with heavy agents.
+
+The 15-second convergence with a 5 MiB Rust agent on a $20/month VPS is genuinely unoccupied territory.
+
 ## The Sweet Spot
 
 Hobnob's strongest position is **security-conscious organizations with 100-5,000 heterogeneous Unix/Windows machines** that need provable, continuous compliance — not just periodic configuration. MSPs, universities, government IT, regulated industries (finance, healthcare), and hosting providers all fit that profile.
