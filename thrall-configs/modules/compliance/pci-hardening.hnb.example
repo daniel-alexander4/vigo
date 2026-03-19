@@ -1,0 +1,157 @@
+# PCI DSS v4.0 System Hardening Module
+# Enforces: Req 2.2.2 (vendor defaults), 2.2.4 (unnecessary services),
+#           2.2.5 (security parameters), 2.2.7 (encrypted admin access)
+#
+# Apply to all systems in PCI scope via roles:
+#   roles:
+#     - name: pci-cardholder
+#       modules: [pci-hardening, pci-audit, pci-fim, openssh, chrony]
+
+name: pci-hardening
+
+vars:
+  # Req 2.2.5 — Password lockout
+  pam_deny_count: "5"
+  pam_unlock_time: "900"
+  # Req 2.2.5 — Session timeout
+  tmout_seconds: "900"
+
+resources:
+  # ── Req 2.2.4 — Disable unnecessary services ──────────────────────
+
+  - name: disable-avahi
+    type: service
+    service: avahi-daemon
+    enabled: false
+    state: stopped
+    when: "os_family('debian') or os_family('redhat')"
+
+  - name: disable-cups
+    type: service
+    service: cups
+    enabled: false
+    state: stopped
+    when: "os_family('debian') or os_family('redhat')"
+
+  - name: disable-rpcbind
+    type: service
+    service: rpcbind
+    enabled: false
+    state: stopped
+    when: "os_family('debian') or os_family('redhat')"
+
+  # ── Req 2.2.2 — Remove/disable default accounts ───────────────────
+
+  - name: lock-games-user
+    type: exec
+    command: "usermod -L -s /usr/sbin/nologin games"
+    onlyif: "getent passwd games && ! passwd -S games 2>/dev/null | grep -q '^games L'"
+
+  - name: lock-lp-user
+    type: exec
+    command: "usermod -L -s /usr/sbin/nologin lp"
+    onlyif: "getent passwd lp && ! passwd -S lp 2>/dev/null | grep -q '^lp L'"
+
+  # ── Req 2.2.5 — Security parameters ───────────────────────────────
+
+  - name: sysctl-hardening
+    type: file
+    target_path: /etc/sysctl.d/99-pci-hardening.conf
+    content: |
+      # PCI DSS v4.0 Req 2.2.5 — Network security parameters
+      # Managed by Hobnob
+
+      # Disable IP forwarding (unless this is a router)
+      net.ipv4.ip_forward = 0
+      net.ipv6.conf.all.forwarding = 0
+
+      # Disable source routing
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv6.conf.all.accept_source_route = 0
+
+      # Disable ICMP redirects
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv6.conf.all.accept_redirects = 0
+      net.ipv4.conf.all.send_redirects = 0
+
+      # Enable SYN flood protection
+      net.ipv4.tcp_syncookies = 1
+
+      # Log martian packets
+      net.ipv4.conf.all.log_martians = 1
+
+      # Ignore ICMP broadcasts
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+
+      # Disable IPv6 router advertisements
+      net.ipv6.conf.all.accept_ra = 0
+
+      # Restrict core dumps
+      fs.suid_dumpable = 0
+
+      # Randomize virtual address space
+      kernel.randomize_va_space = 2
+    owner: root
+    group: root
+    mode: "0644"
+    notify: [apply-sysctl]
+
+  - name: apply-sysctl
+    type: exec
+    command: "sysctl --system"
+    depends_on: [sysctl-hardening]
+
+  # ── Req 2.2.5 — Password/account lockout policy (PAM) ─────────────
+
+  - name: pam-faillock
+    type: file
+    target_path: /etc/security/faillock.conf
+    content: |
+      # PCI DSS v4.0 Req 8.3.4 — Account lockout
+      # Managed by Hobnob
+      deny = {{ .Vars.pam_deny_count }}
+      unlock_time = {{ .Vars.pam_unlock_time }}
+      audit
+      silent
+    owner: root
+    group: root
+    mode: "0644"
+    when: "os_family('debian') or os_family('redhat')"
+
+  - name: login-defs
+    type: file
+    target_path: /etc/login.defs
+    source: templates/pci-login-defs.tmpl
+    owner: root
+    group: root
+    mode: "0644"
+    when: "os_family('debian') or os_family('redhat')"
+
+  # ── Req 8.2.8 — Session timeout ───────────────────────────────────
+
+  - name: shell-timeout
+    type: file
+    target_path: /etc/profile.d/pci-timeout.sh
+    content: |
+      # PCI DSS v4.0 Req 8.2.8 — Idle session timeout
+      # Managed by Hobnob
+      TMOUT={{ .Vars.tmout_seconds }}
+      readonly TMOUT
+      export TMOUT
+    owner: root
+    group: root
+    mode: "0644"
+
+  # ── Req 2.2.7 — Encrypted admin access ────────────────────────────
+
+  - name: disable-telnet
+    type: package
+    package: telnetd
+    state: absent
+    when: "os_family('debian')"
+
+  - name: disable-rsh
+    type: package
+    package: rsh-server
+    state: absent
+    when: "os_family('debian') or os_family('redhat')"

@@ -75,3 +75,25 @@ hobnobcli report soc2 [flags]
 hobnobcli report soc2
 hobnobcli report soc2 --format html --output /tmp/soc2-report.html
 ```
+
+### pci
+
+Generate a PCI DSS v4.0 compliance report (Req 1-12: network security, config hardening, access control, audit trails, file integrity monitoring).
+
+```bash
+hobnobcli report pci [flags]
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--format` | `json` | Output format: `json` or `html` |
+| `--output` | | Write to file instead of stdout |
+
+**Examples:**
+
+```bash
+hobnobcli report pci
+hobnobcli report pci --format html --output /tmp/pci-report.html
+```

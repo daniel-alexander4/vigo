@@ -1,0 +1,89 @@
+# PCI DSS v4.0 File Integrity Monitoring Module
+# Enforces: Req 11.5.1 (FIM deployed), 11.5.1.1 (FIM alerts)
+#
+# Installs and configures AIDE (Advanced Intrusion Detection Environment)
+# for file integrity monitoring on critical system files and cardholder
+# data directories. AIDE runs daily via cron and logs changes.
+#
+# Hobnob's own drift detection provides a second layer of FIM — any
+# managed file that changes between check-ins triggers a compliance alert.
+
+name: pci-fim
+
+vars:
+  aide_db_path: "/var/lib/aide/aide.db"
+  aide_report_url: "file:///var/log/aide/aide.log"
+  cde_data_dir: "/var/data/cardholder"
+
+resources:
+  - name: install-aide-debian
+    type: package
+    package: aide
+    state: present
+    when: "os_family('debian')"
+
+  - name: install-aide-redhat
+    type: package
+    package: aide
+    state: present
+    when: "os_family('redhat')"
+
+  - name: aide-conf
+    type: file
+    target_path: /etc/aide/aide.conf
+    content: |
+      # AIDE configuration for PCI DSS v4.0 Req 11.5.1
+      # Managed by Hobnob
+
+      database_in=file:{{ .Vars.aide_db_path }}
+      database_out=file:{{ .Vars.aide_db_path }}.new
+      database_new=file:{{ .Vars.aide_db_path }}.new
+      report_url={{ .Vars.aide_report_url }}
+      gzip_dbout=yes
+      verbose=5
+
+      # What to monitor
+      NORMAL = p+i+n+u+g+s+b+m+c+sha256
+
+      # Critical system files (PCI Req 11.5.1)
+      /etc NORMAL
+      /bin NORMAL
+      /sbin NORMAL
+      /usr/bin NORMAL
+      /usr/sbin NORMAL
+      /boot NORMAL
+
+      # Cardholder data environment
+      {{ .Vars.cde_data_dir }} NORMAL
+
+      # Exclude transient files
+      !/etc/mtab
+      !/etc/resolv.conf
+      !/var/log
+      !/var/run
+      !/var/cache
+      !/tmp
+    owner: root
+    group: root
+    mode: "0600"
+    depends_on: [install-aide-debian, install-aide-redhat]
+
+  - name: aide-log-dir
+    type: exec
+    command: "mkdir -p /var/log/aide && chmod 700 /var/log/aide"
+    onlyif: "test ! -d /var/log/aide"
+
+  - name: aide-init-db
+    type: exec
+    command: "aide --init && mv {{ .Vars.aide_db_path }}.new {{ .Vars.aide_db_path }}"
+    onlyif: "test ! -f {{ .Vars.aide_db_path }}"
+    depends_on: [aide-conf, aide-log-dir]
+
+  - name: aide-cron
+    type: cron
+    name: "pci-fim-daily-check"
+    command: "/usr/bin/aide --check > /var/log/aide/aide-$(date +\\%Y\\%m\\%d).log 2>&1"
+    hour: "3"
+    minute: "30"
+    user: root
+    depends_on: [aide-init-db]

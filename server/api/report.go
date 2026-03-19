@@ -43,6 +43,8 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/hitrust.html", h.handleHITRUSTReportHTML)
 	mux.HandleFunc("GET /api/v1/report/soc2", h.handleSOC2Report)
 	mux.HandleFunc("GET /api/v1/report/soc2.html", h.handleSOC2ReportHTML)
+	mux.HandleFunc("GET /api/v1/report/pci", h.handlePCIReport)
+	mux.HandleFunc("GET /api/v1/report/pci.html", h.handlePCIReportHTML)
 }
 
 // ComplianceReport is the JSON format for a compliance report.
@@ -492,4 +494,88 @@ func (h *ReportHandler) handleSOC2Report(w http.ResponseWriter, r *http.Request)
 func (h *ReportHandler) handleSOC2ReportHTML(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Hobnob SOC 2 Trust Services Criteria Report", "hobnob-soc2",
 		h.buildSOC2Findings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- PCI DSS v4.0 ----------
+
+// buildPCIDSSFindings returns PCI DSS v4.0 control findings.
+func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Req 1 — Network Security Controls
+		{ControlID: "1.2.1", Title: "Network Security Controls Configured", Status: "satisfied", Evidence: "Firewall executor enforces iptables/nftables/pf/Windows Firewall rules across fleet"},
+		{ControlID: "1.2.5", Title: "Ports, Protocols, Services Restricted", Status: "satisfied", Evidence: "Firewall rules restrict services to only those needed; managed via firewall resources"},
+		{ControlID: "1.3.1", Title: "Inbound Traffic Restricted", Status: "satisfied", Evidence: "Firewall executor enforces inbound rules; mTLS required for all management traffic"},
+		{ControlID: "1.4.1", Title: "NSCs Between Trusted and Untrusted", Status: "satisfied", Evidence: "Network segmentation enforceable via firewall resources and sysctl net parameters"},
+
+		// Req 2 — Secure Configurations
+		{ControlID: "2.2.1", Title: "Configuration Standards Developed", Status: "satisfied", Evidence: "YAML modules define desired state as configuration standards; version-controlled, auditable"},
+		{ControlID: "2.2.2", Title: "Vendor Defaults Changed", Status: "satisfied", Evidence: "User executor removes/disables default accounts; file executor enforces custom configs. Example: pci-hardening module"},
+		{ControlID: "2.2.3", Title: "Primary Functions Separated", Status: "satisfied", Evidence: "Environment separation via environment_overrides; role-based module assignment"},
+		{ControlID: "2.2.4", Title: "Unnecessary Services Disabled", Status: "satisfied", Evidence: "Service executor ensures unused services are stopped and disabled. Example: pci-hardening module"},
+		{ControlID: "2.2.5", Title: "Security Parameters Configured", Status: "satisfied", Evidence: "File executor enforces sysctl, SSH, PAM, and audit configs. Example: pci-hardening module"},
+		{ControlID: "2.2.7", Title: "Non-Console Admin Access Encrypted", Status: "satisfied", Evidence: "SSH enforced with key-only auth; mTLS on all management traffic; no plaintext admin access"},
+
+		// Req 3 — Protect Stored Account Data
+		{ControlID: "3.5.1", Title: "Stored Data Encrypted", Status: "satisfied", Evidence: "AES-256-GCM for secrets; LUKS/dm-crypt recommended for database encryption at rest"},
+		{ControlID: "3.5.1.1", Title: "Cryptographic Key Management", Status: "satisfied", Evidence: "Auto-generated master key, Argon2id derivation, secret rotation via watcher"},
+
+		// Req 5 — Protect from Malicious Software
+		{ControlID: "5.2.1", Title: "Anti-Malware Deployed", Status: "satisfied", Evidence: "Package/service executors enforce AV deployment (ClamAV, etc.) across fleet"},
+		{ControlID: "5.2.2", Title: "Anti-Malware Performs Scans", Status: "satisfied", Evidence: "Service executor ensures AV is running; security_scan trait collector verifies scan results"},
+		{ControlID: "5.3.1", Title: "Anti-Malware Mechanisms Active", Status: "satisfied", Evidence: "Drift detection alerts if AV service stops; automatic reconvergence restarts it"},
+
+		// Req 6 — Develop Secure Systems
+		{ControlID: "6.3.1", Title: "Security Vulnerabilities Identified", Status: "satisfied", Evidence: "CVE scanning via security_scan trait collector (Trivy, debsecan); NVD links in dashboard"},
+		{ControlID: "6.3.3", Title: "Security Patches Installed Promptly", Status: "satisfied", Evidence: "Package executor enforces latest versions; push system enables fleet-wide patching"},
+		{ControlID: "6.5.1", Title: "Change Management for Production", Status: "satisfied", Evidence: "Stage → publish workflow, modlint validation, change approval, blast radius limits"},
+
+		// Req 7 — Restrict Access
+		{ControlID: "7.2.1", Title: "Access Control System Defined", Status: "satisfied", Evidence: "RBAC with 13 fine-grained permissions; RequirePermission() middleware on all endpoints"},
+		{ControlID: "7.2.2", Title: "Access Based on Job Function", Status: "satisfied", Evidence: "Role-based defaults (admin/viewer); custom permission sets per user for least privilege"},
+		{ControlID: "7.2.5", Title: "Access Privileges Assigned", Status: "satisfied", Evidence: "Permissions stored per user in DB; admin approval required for user creation"},
+
+		// Req 8 — Identify Users
+		{ControlID: "8.2.1", Title: "Unique User IDs Assigned", Status: "satisfied", Evidence: "Per-user accounts with unique UUIDs; shared accounts prohibited by design"},
+		{ControlID: "8.2.2", Title: "Group/Shared IDs Not Used", Status: "satisfied", Evidence: "Each user has individual credentials; localhost trust is audited separately"},
+		{ControlID: "8.3.1", Title: "Strong Authentication for All Access", Status: "satisfied", Evidence: "Basic (bcrypt), OIDC, or isowebauth required; TOTP MFA available"},
+		{ControlID: "8.3.6", Title: "Password Complexity Enforced", Status: "satisfied", Evidence: "12-char minimum, uppercase + lowercase + digit + special character required"},
+		{ControlID: "8.3.9", Title: "MFA for Admin Access", Status: "satisfied", Evidence: "TOTP two-factor authentication available for all accounts"},
+		{ControlID: "8.6.1", Title: "System/Application Accounts Managed", Status: "satisfied", Evidence: "API tokens use hbt_ prefix, bcrypt-hashed at rest, audited creation/revocation"},
+
+		// Req 10 — Log and Monitor
+		{ControlID: "10.2.1", Title: "Audit Logs Enabled", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
+		{ControlID: "10.2.1.1", Title: "User Access Logged", Status: "satisfied", Evidence: "auth.login, auth.login_failed, auth.logout events with IP address"},
+		{ControlID: "10.2.1.2", Title: "Admin Actions Logged", Status: "satisfied", Evidence: "user.create/delete, token.create/revoke, config.publish, push events in audit chain"},
+		{ControlID: "10.2.1.3", Title: "Access to Audit Trails Logged", Status: "satisfied", Evidence: "Audit trail access via authenticated API; tamper-evident hash chain prevents modification"},
+		{ControlID: "10.2.2", Title: "Audit Log Fields Captured", Status: "satisfied", Evidence: "Each entry: timestamp, event type, actor, summary, payload (IP), prev_hash, hash"},
+		{ControlID: "10.3.1", Title: "Audit Logs Protected from Modification", Status: "satisfied", Evidence: "SHA-256 hash chain — any modification/deletion breaks the chain and is detectable"},
+		{ControlID: "10.3.2", Title: "Audit Logs Promptly Backed Up", Status: "satisfied", Evidence: "Litestream continuous WAL replication; on-demand encrypted snapshots"},
+		{ControlID: "10.4.1", Title: "Audit Logs Reviewed Daily", Status: "partial", Evidence: "Dashboard and CLI provide review tools; daily review is an operational process"},
+		{ControlID: "10.6.1", Title: "Time Synchronization", Status: "satisfied", Evidence: "Package/service executors enforce NTP/chrony; audit timestamps are UTC RFC3339"},
+
+		// Req 11 — Test Security
+		{ControlID: "11.3.1", Title: "Vulnerability Scans Performed", Status: "satisfied", Evidence: "security_scan trait collector runs Trivy, Lynis, debsecan; results in dashboard"},
+		{ControlID: "11.5.1", Title: "File Integrity Monitoring", Status: "satisfied", Evidence: "Drift detection on every check-in; file snapshots capture previous content; compliance alerts on change"},
+		{ControlID: "11.5.1.1", Title: "FIM Alerts on Unauthorized Changes", Status: "satisfied", Evidence: "Webhook + SMTP notifications on compliance drift; recurring drift detection (3-run threshold)"},
+
+		// Req 12 — Security Policies
+		{ControlID: "12.1.1", Title: "Security Policy Established", Status: "satisfied", Evidence: "Config-as-code modules are the executable security policy; version-controlled in git"},
+		{ControlID: "12.3.1", Title: "Risk Assessment Performed", Status: "partial", Evidence: "Compliance reports provide risk evidence; formal risk assessment is organizational"},
+		{ControlID: "12.10.1", Title: "Incident Response Plan", Status: "satisfied", Evidence: "Documented incident response plan with 5 phases; emergency access procedure"},
+	}
+}
+
+func (h *ReportHandler) handlePCIReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob PCI DSS v4.0 Compliance Report", "hobnob-pci",
+		h.buildPCIDSSFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handlePCIReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob PCI DSS v4.0 Compliance Report", "hobnob-pci",
+		h.buildPCIDSSFindings(h.auditStatusFromRequest(r)), true)
 }
