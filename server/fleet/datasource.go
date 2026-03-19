@@ -585,10 +585,12 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			data.TrivyHigh += n
 		}
 		if v, ok := ts.Traits["security_scan.trivy.medium"]; ok {
-			data.TrivyMedium += parseInt64(v)
+			row.TrivyMedium = parseInt64(v)
+			data.TrivyMedium += row.TrivyMedium
 		}
 		if v, ok := ts.Traits["security_scan.trivy.low"]; ok {
-			data.TrivyLow += parseInt64(v)
+			row.TrivyLow = parseInt64(v)
+			data.TrivyLow += row.TrivyLow
 		}
 		if v, ok := ts.Traits["security_scan.lynis.score"]; ok {
 			hasScan = true
@@ -596,7 +598,11 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			data.LynisAvgScore += row.LynisScore
 		}
 		if v, ok := ts.Traits["security_scan.lynis.warnings"]; ok {
-			data.LynisWarnings += parseInt64(v)
+			row.LynisWarnings = parseInt64(v)
+			data.LynisWarnings += row.LynisWarnings
+		}
+		if v, ok := ts.Traits["security_scan.lynis.suggestions"]; ok {
+			row.LynisSuggestions = parseInt64(v)
 		}
 
 		// Rootkit: clean if both chkrootkit and rkhunter are clean (or absent).
@@ -604,9 +610,11 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		rkhClean := ts.Traits["security_scan.rkhunter.clean"] != "false"
 		if _, ok := ts.Traits["security_scan.chkrootkit.clean"]; ok {
 			hasScan = true
+			row.ChkrootkitInfected = parseInt64(ts.Traits["security_scan.chkrootkit.infected"])
 		}
 		if _, ok := ts.Traits["security_scan.rkhunter.clean"]; ok {
 			hasScan = true
+			row.RkhunterWarnings = parseInt64(ts.Traits["security_scan.rkhunter.warnings"])
 		}
 		row.RootkitClean = chkClean && rkhClean
 		if row.RootkitClean {
@@ -618,6 +626,7 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		clamClean := ts.Traits["security_scan.clamav.clean"] != "false"
 		if _, ok := ts.Traits["security_scan.clamav.clean"]; ok {
 			hasScan = true
+			row.ClamavInfected = parseInt64(ts.Traits["security_scan.clamav.infected"])
 		}
 		row.ClamavClean = clamClean
 		if clamClean {
@@ -629,6 +638,9 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		aideClean := ts.Traits["security_scan.aide.clean"] != "false"
 		if _, ok := ts.Traits["security_scan.aide.clean"]; ok {
 			hasScan = true
+			row.AideAdded = parseInt64(ts.Traits["security_scan.aide.added"])
+			row.AideRemoved = parseInt64(ts.Traits["security_scan.aide.removed"])
+			row.AideChanged = parseInt64(ts.Traits["security_scan.aide.changed"])
 		}
 		row.AideClean = aideClean
 		if aideClean {
@@ -639,6 +651,15 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 
 		if v, ok := ts.Traits["security_scan.trivy.last_scan"]; ok {
 			row.LastScan = v
+		}
+
+		// Collect per-host CVE IDs.
+		for k, v := range ts.Traits {
+			if (len(k) > 28 && k[:27] == "security_scan.trivy.cves.") ||
+				(len(k) > 30 && k[:29] == "security_scan.debsecan.cves.") ||
+				(len(k) > 37 && k[:36] == "security_scan.windows_updates.cves.") {
+				row.CVEs = append(row.CVEs, v)
+			}
 		}
 
 		if hasScan {

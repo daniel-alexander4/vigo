@@ -2322,10 +2322,21 @@ type SecurityHostRow struct {
 	Hostname       string
 	TrivyCritical  int64
 	TrivyHigh      int64
+	TrivyMedium    int64
+	TrivyLow       int64
 	LynisScore     int64
+	LynisWarnings  int64
+	LynisSuggestions int64
 	RootkitClean   bool
+	RkhunterWarnings int64
+	ChkrootkitInfected int64
 	ClamavClean    bool
+	ClamavInfected int64
 	AideClean      bool
+	AideAdded      int64
+	AideRemoved    int64
+	AideChanged    int64
+	CVEs           []string
 	LastScan       string
 }
 
