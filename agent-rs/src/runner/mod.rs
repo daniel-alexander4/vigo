@@ -179,6 +179,7 @@ pub fn converge(
                 changed: false,
                 error: Some(format!("dependency {:?} failed", failed_dep)),
                 duration_ms: 0,
+                skip_reason: Some("dep failed".into()),
                 ..Default::default()
             });
             continue;
@@ -305,6 +306,7 @@ fn execute_resource(
             changed: false,
             error: None,
             duration_ms: 0,
+            skip_reason: Some("not triggered".into()),
             ..Default::default()
         };
     }
@@ -331,6 +333,7 @@ fn execute_resource(
                             changed: false,
                             error: None,
                             duration_ms: 0,
+                            skip_reason: Some(format!("when: {}", when_expr)),
                 ..Default::default()
                         };
                     }
@@ -350,6 +353,7 @@ fn execute_resource(
                             changed: false,
                             error: None,
                             duration_ms: 0,
+                            skip_reason: Some("when: eval error".into()),
                 ..Default::default()
                         };
                     }
@@ -371,6 +375,7 @@ fn execute_resource(
                     changed: false,
                     error: None,
                     duration_ms: 0,
+                    skip_reason: Some("when: parse error".into()),
                 ..Default::default()
                 };
             }

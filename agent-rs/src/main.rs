@@ -544,7 +544,10 @@ fn print_trace(
         let (status, color) = if let Some(ref err) = r.error {
             (format!("ERROR: {}", err), format!("{BOLD}{RED}"))
         } else {
-            let s = r.action.to_string();
+            let s = match (&r.action, &r.skip_reason) {
+                (executors::Action::Skipped, Some(reason)) => format!("skipped ({})", reason),
+                _ => r.action.to_string(),
+            };
             let c = match r.action {
                 executors::Action::Created => GREEN.to_string(),
                 executors::Action::Updated => YELLOW.to_string(),

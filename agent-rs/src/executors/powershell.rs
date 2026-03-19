@@ -121,6 +121,7 @@ impl Executor for PowershellExecutor {
         if !creates.is_empty() && Path::new(&creates).exists() {
             result.action = Action::Skipped;
             result.changed = false;
+            result.skip_reason = Some("creates exists".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -131,6 +132,7 @@ impl Executor for PowershellExecutor {
             if success {
                 result.action = Action::Skipped;
                 result.changed = false;
+                result.skip_reason = Some("unless guard".into());
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
@@ -142,6 +144,7 @@ impl Executor for PowershellExecutor {
             if !success {
                 result.action = Action::Skipped;
                 result.changed = false;
+                result.skip_reason = Some("onlyif guard".into());
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }

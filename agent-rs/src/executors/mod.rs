@@ -240,6 +240,8 @@ pub struct ResourceResult {
     pub content_hash: Option<String>,
     /// File executor: absolute path of the managed file.
     pub file_path: Option<String>,
+    /// Brief reason when action is Skipped (e.g. "when: false", "onlyif guard", "dep failed").
+    pub skip_reason: Option<String>,
 }
 
 impl ResourceResult {
@@ -256,6 +258,7 @@ impl ResourceResult {
             previous_content: None,
             content_hash: None,
             file_path: None,
+            skip_reason: None,
         }
     }
 

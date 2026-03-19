@@ -88,6 +88,7 @@ impl Executor for RebootWindowsExecutor {
             if !pending {
                 result.action = Action::Skipped;
                 result.changed = false;
+                result.skip_reason = Some("no reboot pending".into());
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }

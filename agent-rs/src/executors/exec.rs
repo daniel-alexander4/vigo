@@ -240,6 +240,7 @@ fn execute_exec(
     if (is_subscriber || is_secret_subscriber) && !triggered && !has_guards {
         result.action = Action::Skipped;
         result.changed = false;
+        result.skip_reason = Some("not triggered".into());
         return Ok(());
     }
 
@@ -250,6 +251,7 @@ fn execute_exec(
             if !creates.is_empty() && Path::new(creates).exists() {
                 result.action = Action::Skipped;
                 result.changed = false;
+                result.skip_reason = Some("creates exists".into());
                 return Ok(());
             }
         }
@@ -272,6 +274,7 @@ fn execute_exec(
                         _ => {
                             result.action = Action::Skipped;
                             result.changed = false;
+                            result.skip_reason = Some("onlyif guard".into());
                             return Ok(());
                         }
                     }
@@ -289,6 +292,7 @@ fn execute_exec(
                         if o.status.success() {
                             result.action = Action::Skipped;
                             result.changed = false;
+                            result.skip_reason = Some("unless guard".into());
                             return Ok(());
                         }
                     }
