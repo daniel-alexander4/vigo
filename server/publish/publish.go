@@ -748,6 +748,17 @@ func normalizeWhitespace(dir string) error {
 			changed = true
 		}
 
+		// Strip leading non-ASCII bytes (e.g., ● from terminal copy-paste).
+		if len(text) > 0 && text[0] > 127 {
+			for i := 0; i < len(text); i++ {
+				if text[i] <= 127 {
+					text = text[i:]
+					changed = true
+					break
+				}
+			}
+		}
+
 		lines := strings.Split(text, "\n")
 		for i, line := range lines {
 			trimmed := strings.TrimRight(line, " \t\r")

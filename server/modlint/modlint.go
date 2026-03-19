@@ -107,10 +107,21 @@ type resource struct {
 func repair(input []byte, r *Result) []byte {
 	text := string(input)
 
-	// Strip UTF-8 BOM if present — editors and file transfers can inject
-	// this invisible prefix, which causes the YAML parser to see a scalar
-	// instead of a mapping node.
+	// Strip UTF-8 BOM if present.
 	text = strings.TrimPrefix(text, "\xef\xbb\xbf")
+
+	// Strip leading non-ASCII bytes before the first YAML content.
+	// Copy-paste from terminals can inject characters like ● (U+25CF)
+	// from systemd status output.
+	if len(text) > 0 && text[0] > 127 {
+		for i := 0; i < len(text); i++ {
+			if text[i] <= 127 {
+				text = text[i:]
+				r.Warnings = append(r.Warnings, "stripped leading non-ASCII bytes")
+				break
+			}
+		}
+	}
 
 	// Normalize line endings.
 	text = strings.ReplaceAll(text, "\r\n", "\n")

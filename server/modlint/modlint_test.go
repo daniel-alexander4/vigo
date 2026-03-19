@@ -74,6 +74,18 @@ func TestLint_RepairBOM(t *testing.T) {
 	}
 }
 
+func TestLint_RepairLeadingNonASCII(t *testing.T) {
+	// ● (U+25CF) followed by space then valid YAML — common from terminal copy-paste.
+	input := "\xe2\x97\x8f #~ comment\nname: test\nresources:\n  - name: pkg\n    type: package\n    package: vim\n"
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected no errors after stripping leading non-ASCII, got: %v", r.Errors)
+	}
+	if !containsWarning(r, "non-ASCII") {
+		t.Error("expected warning about stripping non-ASCII bytes")
+	}
+}
+
 func TestLint_RepairUnquotedBooleans(t *testing.T) {
 	input := "name: test\nresources:\n  - name: svc\n    type: service\n    service: nginx\n    enabled: yes\n    state: running\n"
 	r := Lint([]byte(input), Options{})
