@@ -45,6 +45,7 @@ enum Commands {
     Run {
         module: Option<String>,
         dry_run: bool,
+        no_daemon: bool,
     },
     Register {
         token: String,
@@ -164,16 +165,18 @@ fn parse_args() -> Result<Cli> {
             "run" => {
                 let mut module = None;
                 let mut dry_run = false;
+                let mut no_daemon = false;
                 let mut j = 1;
                 while j < positional.len() {
                     match positional[j].as_str() {
                         "--module" => { j += 1; module = Some(positional.get(j).cloned().context("--module requires a value")?); }
                         "--dry-run" => { dry_run = true; }
+                        "--no-daemon" => { no_daemon = true; }
                         _ => bail!("unknown run flag: {}", positional[j]),
                     }
                     j += 1;
                 }
-                Commands::Run { module, dry_run }
+                Commands::Run { module, dry_run, no_daemon }
             }
             "register" => {
                 let mut token = None;
@@ -255,7 +258,8 @@ FLAGS:
     --once                        Run a single convergence cycle and exit
 
 COMMANDS:
-    run         Run a single convergence cycle and exit
+    run         Run a single convergence cycle and exit (starts daemon if stopped)
+                  --no-daemon    Don't start the daemon after the run
     register    Register with the server (--token <TOKEN> [--force])
     bootstrap   Bootstrap agent (--server <URL> [--token <TOKEN>] [--install-service] [--force])
     version     Print agent version
@@ -277,6 +281,72 @@ fn setup_logger(level: &str) {
         _ => tracing::Level::INFO,
     };
     tracing_subscriber::fmt().with_max_level(level).init();
+}
+
+/// Ensure the agent daemon service is running. Called after `hobnob run`
+/// so the daemon resumes if it was stopped for manual testing.
+fn ensure_daemon_running() {
+    use std::process::Command;
+
+    #[cfg(unix)]
+    {
+        if std::path::Path::new("/run/systemd/system").exists() {
+            // systemd
+            let running = Command::new("systemctl")
+                .args(["is-active", "--quiet", "hobnob-thrall"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !running {
+                info!("starting hobnob-thrall daemon");
+                match Command::new("systemctl").args(["start", "hobnob-thrall"]).status() {
+                    Ok(s) if s.success() => info!("hobnob-thrall daemon started"),
+                    Ok(s) => warn!("failed to start hobnob-thrall (exit {})", s),
+                    Err(e) => warn!("failed to start hobnob-thrall: {}", e),
+                }
+            }
+        } else if std::path::Path::new("/Library/LaunchDaemons/com.hobnob.thrall.plist").exists() {
+            // launchd (macOS)
+            let running = Command::new("launchctl")
+                .args(["list", "com.hobnob.thrall"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !running {
+                info!("starting hobnob-thrall daemon");
+                let _ = Command::new("launchctl")
+                    .args(["load", "-w", "/Library/LaunchDaemons/com.hobnob.thrall.plist"])
+                    .status();
+            }
+        } else if std::path::Path::new("/etc/rc.d/hobnob").exists()
+            || std::path::Path::new("/usr/local/etc/rc.d/hobnob").exists()
+        {
+            // BSD rc.d
+            let running = Command::new("service")
+                .args(["hobnob", "status"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !running {
+                info!("starting hobnob daemon");
+                let _ = Command::new("service").args(["hobnob", "start"]).status();
+            }
+        }
+        // No known service manager — skip silently.
+    }
+
+    #[cfg(windows)]
+    {
+        let running = Command::new("sc.exe")
+            .args(["query", "hobnob-thrall"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("RUNNING"))
+            .unwrap_or(false);
+        if !running {
+            info!("starting hobnob-thrall service");
+            let _ = Command::new("sc.exe").args(["start", "hobnob-thrall"]).status();
+        }
+    }
 }
 
 /// Read thrall UUID from <data-dir>/thrall.uuid.
@@ -1198,13 +1268,19 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Run { module, dry_run: run_dry_run }) => {
-            run_once(
+        Some(Commands::Run { module, dry_run: run_dry_run, no_daemon }) => {
+            let result = run_once(
                 &cli,
                 module.clone(),
                 cli.dry_run || *run_dry_run,
             )
-            .await
+            .await;
+
+            if !no_daemon {
+                ensure_daemon_running();
+            }
+
+            result
         }
 
         None if cli.once => {
