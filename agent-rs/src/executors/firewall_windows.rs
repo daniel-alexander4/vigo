@@ -210,3 +210,42 @@ impl Executor for FirewallWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_name_and_port() {
+        let exec = FirewallWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("name or port param is required"));
+    }
+
+    #[test]
+    fn invalid_direction() {
+        let exec = FirewallWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("name".to_string(), "AllowHTTP".to_string());
+        params.insert("direction".to_string(), "sideways".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown direction"));
+    }
+
+    #[test]
+    fn unknown_state() {
+        let exec = FirewallWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("name".to_string(), "AllowHTTP".to_string());
+        params.insert("state".to_string(), "bogus".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
+    }
+}

@@ -332,3 +332,33 @@ impl Executor for PackageWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_package() {
+        let exec = PackageWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("package param is required"));
+    }
+
+    #[test]
+    fn empty_package_string() {
+        let exec = PackageWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("package".to_string(), "".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("package param is required"));
+    }
+}

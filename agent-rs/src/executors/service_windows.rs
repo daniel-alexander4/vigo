@@ -272,3 +272,33 @@ impl Executor for ServiceWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_service() {
+        let exec = ServiceWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("service param is required"));
+    }
+
+    #[test]
+    fn empty_service_string() {
+        let exec = ServiceWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("service".to_string(), "".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("service param is required"));
+    }
+}

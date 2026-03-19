@@ -90,3 +90,33 @@ impl Executor for HostnameWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_hostname() {
+        let exec = HostnameWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("hostname param is required"));
+    }
+
+    #[test]
+    fn empty_hostname_string() {
+        let exec = HostnameWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("hostname".to_string(), "".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("hostname param is required"));
+    }
+}

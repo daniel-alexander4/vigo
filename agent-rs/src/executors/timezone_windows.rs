@@ -81,3 +81,33 @@ impl Executor for TimezoneWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_timezone() {
+        let exec = TimezoneWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("timezone param is required"));
+    }
+
+    #[test]
+    fn empty_timezone_string() {
+        let exec = TimezoneWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("timezone".to_string(), "".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("timezone param is required"));
+    }
+}

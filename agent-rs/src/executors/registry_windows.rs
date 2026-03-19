@@ -236,3 +236,52 @@ impl Executor for RegistryWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_path() {
+        let exec = RegistryWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("path param is required"));
+    }
+
+    #[test]
+    fn invalid_hive_prefix() {
+        let exec = RegistryWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("path".to_string(), "BOGUS:\\SOFTWARE\\Test".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("path must start with a registry hive"));
+    }
+
+    #[test]
+    fn unknown_state() {
+        let exec = RegistryWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("path".to_string(), "HKLM:\\SOFTWARE\\Test".to_string());
+        params.insert("state".to_string(), "bogus".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
+    }
+
+    #[test]
+    fn ps_type_mapping() {
+        assert_eq!(RegistryWindowsExecutor::ps_type("dword"), "DWord");
+        assert_eq!(RegistryWindowsExecutor::ps_type("qword"), "QWord");
+        assert_eq!(RegistryWindowsExecutor::ps_type("binary"), "Binary");
+        assert_eq!(RegistryWindowsExecutor::ps_type("multi_string"), "MultiString");
+        assert_eq!(RegistryWindowsExecutor::ps_type("expand_string"), "ExpandString");
+        assert_eq!(RegistryWindowsExecutor::ps_type("string"), "String");
+        assert_eq!(RegistryWindowsExecutor::ps_type("unknown"), "String");
+    }
+}

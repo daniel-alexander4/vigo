@@ -374,3 +374,115 @@ impl Executor for CronWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_name() {
+        let exec = CronWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("name param is required"));
+    }
+
+    #[test]
+    fn missing_command_when_present() {
+        let exec = CronWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("name".to_string(), "MyTask".to_string());
+        params.insert("state".to_string(), "present".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("command param is required when state=present"));
+    }
+
+    #[test]
+    fn invalid_schedule_bad_field_count() {
+        let result = CronWindowsExecutor::translate_schedule("* * *");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected 5 fields or @shortcut"));
+    }
+
+    #[test]
+    fn translate_schedule_named_shortcuts() {
+        let hourly = CronWindowsExecutor::translate_schedule("@hourly").unwrap();
+        assert_eq!(hourly.sc, "HOURLY");
+
+        let daily = CronWindowsExecutor::translate_schedule("@daily").unwrap();
+        assert_eq!(daily.sc, "DAILY");
+        assert_eq!(daily.st, "00:00");
+
+        let weekly = CronWindowsExecutor::translate_schedule("@weekly").unwrap();
+        assert_eq!(weekly.sc, "WEEKLY");
+
+        let monthly = CronWindowsExecutor::translate_schedule("@monthly").unwrap();
+        assert_eq!(monthly.sc, "MONTHLY");
+        assert_eq!(monthly.day, "1");
+
+        let reboot = CronWindowsExecutor::translate_schedule("@reboot").unwrap();
+        assert_eq!(reboot.sc, "ONSTART");
+    }
+
+    #[test]
+    fn translate_schedule_every_n_minutes() {
+        let sched = CronWindowsExecutor::translate_schedule("*/15 * * * *").unwrap();
+        assert_eq!(sched.sc, "MINUTE");
+        assert_eq!(sched.mo, "15");
+    }
+
+    #[test]
+    fn translate_schedule_every_n_hours() {
+        let sched = CronWindowsExecutor::translate_schedule("0 */2 * * *").unwrap();
+        assert_eq!(sched.sc, "HOURLY");
+        assert_eq!(sched.mo, "2");
+    }
+
+    #[test]
+    fn translate_schedule_daily_at_time() {
+        let sched = CronWindowsExecutor::translate_schedule("30 14 * * *").unwrap();
+        assert_eq!(sched.sc, "DAILY");
+        assert_eq!(sched.st, "14:30");
+    }
+
+    #[test]
+    fn translate_schedule_weekly() {
+        let sched = CronWindowsExecutor::translate_schedule("0 3 * * 1").unwrap();
+        assert_eq!(sched.sc, "WEEKLY");
+        assert_eq!(sched.st, "03:00");
+        assert_eq!(sched.day, "MON");
+    }
+
+    #[test]
+    fn translate_schedule_monthly() {
+        let sched = CronWindowsExecutor::translate_schedule("0 5 15 * *").unwrap();
+        assert_eq!(sched.sc, "MONTHLY");
+        assert_eq!(sched.st, "05:00");
+        assert_eq!(sched.day, "15");
+    }
+
+    #[test]
+    fn cron_weekday_mapping() {
+        assert_eq!(CronWindowsExecutor::cron_weekday_to_schtasks("0"), "SUN");
+        assert_eq!(CronWindowsExecutor::cron_weekday_to_schtasks("7"), "SUN");
+        assert_eq!(CronWindowsExecutor::cron_weekday_to_schtasks("1"), "MON");
+        assert_eq!(CronWindowsExecutor::cron_weekday_to_schtasks("5"), "FRI");
+        assert_eq!(CronWindowsExecutor::cron_weekday_to_schtasks("6"), "SAT");
+    }
+
+    #[test]
+    fn unknown_state() {
+        let exec = CronWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("name".to_string(), "MyTask".to_string());
+        params.insert("state".to_string(), "bogus".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
+    }
+}

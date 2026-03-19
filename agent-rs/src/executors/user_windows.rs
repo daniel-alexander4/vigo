@@ -285,3 +285,27 @@ impl Executor for UserWindowsExecutor {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_username() {
+        let exec = UserWindowsExecutor::new();
+        let params = HashMap::new();
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("name param is required"));
+    }
+
+    #[test]
+    fn empty_username_string() {
+        let exec = UserWindowsExecutor::new();
+        let mut params = HashMap::new();
+        params.insert("username".to_string(), "".to_string());
+        let result = exec.execute(&params, false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("name param is required"));
+    }
+}
