@@ -300,6 +300,53 @@ if $NEED_CONTAINER_RESTART; then
     timeout 60 docker compose logs -f hobnob 2>&1 | grep -m1 "server ready" || true
 fi
 
+# Inject cross-compiled agent binaries into the running container so the
+# bootstrap endpoint serves the freshly built binaries (not stale ones baked
+# into the image). Must happen after the container starts.
+if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=hobnob | grep -q .; then
+    echo "Injecting cross-compiled agent binaries into container..."
+    for t in "${CROSS_TARGETS[@]}"; do
+        case "$t" in
+            amd64)
+                if [ -f "$REPO_DIR/dist/agent/linux/amd64/hobnob" ]; then
+                    docker cp "$REPO_DIR/dist/agent/linux/amd64/hobnob" hobnob:/dist/agent/linux/amd64/hobnob
+                    echo "  linux/amd64 → container"
+                fi
+                ;;
+            arm64)
+                if [ -f "$REPO_DIR/dist/agent/linux/arm64/hobnob" ]; then
+                    docker exec hobnob mkdir -p /dist/agent/linux/arm64
+                    docker cp "$REPO_DIR/dist/agent/linux/arm64/hobnob" hobnob:/dist/agent/linux/arm64/hobnob
+                    echo "  linux/arm64 → container"
+                fi
+                ;;
+            freebsd)
+                if [ -f "$REPO_DIR/dist/agent/freebsd/amd64/hobnob" ]; then
+                    docker exec hobnob mkdir -p /dist/agent/freebsd/amd64
+                    docker cp "$REPO_DIR/dist/agent/freebsd/amd64/hobnob" hobnob:/dist/agent/freebsd/amd64/hobnob
+                    echo "  freebsd/amd64 → container"
+                fi
+                ;;
+            windows)
+                if [ -f "$REPO_DIR/dist/agent/windows/amd64/hobnob.exe" ]; then
+                    docker exec hobnob mkdir -p /dist/agent/windows/amd64
+                    docker cp "$REPO_DIR/dist/agent/windows/amd64/hobnob.exe" hobnob:/dist/agent/windows/amd64/hobnob.exe
+                    echo "  windows/amd64 → container"
+                fi
+                ;;
+            darwin)
+                for arch in amd64 arm64; do
+                    if [ -f "$REPO_DIR/dist/agent/darwin/$arch/hobnob" ]; then
+                        docker exec hobnob mkdir -p /dist/agent/darwin/$arch
+                        docker cp "$REPO_DIR/dist/agent/darwin/$arch/hobnob" hobnob:/dist/agent/darwin/$arch/hobnob
+                        echo "  darwin/$arch → container"
+                    fi
+                done
+                ;;
+        esac
+    done
+fi
+
 # ---------------------------------------------------------------------------
 # Install binaries to host
 # ---------------------------------------------------------------------------
@@ -333,16 +380,29 @@ if $NEED_HOST_UPDATE; then
     esac
     HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-    if $BUILD_AGENT && [ -f "$REPO_DIR/bin/hobnob" ]; then
+    # Stop the agent service before overwriting the binary (avoids ETXTBSY).
+    systemctl stop hobnob-thrall 2>/dev/null || true
+
+    AGENT_INSTALLED=false
+    # Prefer host dist/ for cross-compiled binaries (fresher than what's in the container image).
+    if [ -f "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" ]; then
+        cp "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/sbin/hobnob
+        echo "Installed agent binary from dist: $HOST_OS/$AGENT_ARCH"
+        AGENT_INSTALLED=true
+    elif $BUILD_AGENT && [ -f "$REPO_DIR/bin/hobnob" ]; then
         cp "$REPO_DIR/bin/hobnob" /usr/local/sbin/hobnob
         echo "Installed agent binary from local build"
-        systemctl restart hobnob-thrall 2>/dev/null || true
+        AGENT_INSTALLED=true
     elif docker exec hobnob test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" 2>/dev/null; then
         docker cp "hobnob:/dist/agent/$HOST_OS/$AGENT_ARCH/hobnob" /usr/local/sbin/hobnob
         echo "Installed agent binary: $HOST_OS/$AGENT_ARCH"
-        systemctl restart hobnob-thrall 2>/dev/null || true
+        AGENT_INSTALLED=true
     else
         echo "WARNING: No agent binary for $HOST_OS/$AGENT_ARCH"
+    fi
+
+    if $AGENT_INSTALLED; then
+        systemctl start hobnob-thrall 2>/dev/null || true
     fi
 fi
 
