@@ -402,6 +402,8 @@ async fn run_once(
         return Ok(());
     }
 
+    let force_update = resp.force_update;
+
     // Collect system traits for policy evaluation and executor detection.
     let collected_traits = traits::collect_all(&traits::default_collectors()).await;
 
@@ -485,6 +487,21 @@ async fn run_once(
         if let Err(e) = client.report_result(&run_id, proto_results).await {
             warn!(error = %e, "failed to report results to server");
         }
+    }
+
+    // Self-update: if server flagged force_update, download and replace binary.
+    if force_update {
+        info!("server requested agent update");
+        let tls_certs = if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
+            Some(update::TlsCerts {
+                ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+                client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+                client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
+            })
+        } else {
+            None
+        };
+        update::force_self_update(&cli.api_addr, tls_certs.as_ref()).await;
     }
 
     let error_count = results.iter().filter(|r| r.error.is_some()).count();
