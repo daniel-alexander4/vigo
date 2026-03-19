@@ -63,9 +63,17 @@ pub fn eval_bundle(
     let mut modules = Vec::with_capacity(bundle.modules.len());
 
     for pmod in &bundle.modules {
+        // Render templates in module-level when before evaluating.
+        let mod_when = if pmod.when.contains("{{") {
+            let mod_ctx = template::TemplateContext { traits, vars: &vars_value };
+            template::render(&pmod.when, &mod_ctx).unwrap_or_else(|_| pmod.when.clone())
+        } else {
+            pmod.when.clone()
+        };
+
         // Check module-level when.
-        if !pmod.when.is_empty() {
-            match eval_module_when(&pmod.when, &vars) {
+        if !mod_when.is_empty() {
+            match eval_module_when(&mod_when, &vars) {
                 Ok(true) => {}
                 Ok(false) => continue,
                 Err(e) => {
@@ -86,15 +94,41 @@ pub fn eval_bundle(
             ..Default::default()
         };
 
+        // Build template context once per module (vars + traits are the same for all resources).
+        let ctx = template::TemplateContext {
+            traits,
+            vars: &vars_value,
+        };
+
         for pres in &pmod.resources {
+            // Render templates in the when expression before evaluating it.
+            // This allows when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+            let rendered_when = if pres.when.contains("{{") {
+                match template::render(&pres.when, &ctx) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        warn!(
+                            module = %pmod.name,
+                            resource = %pres.name,
+                            when = %pres.when,
+                            error = %e,
+                            "skipping resource: when template render failed"
+                        );
+                        continue;
+                    }
+                }
+            } else {
+                pres.when.clone()
+            };
+
             // Evaluate resource when expression.
-            let (should_include, agent_when) = match evaluate_resource_when(&pres.when, &vars) {
+            let (should_include, agent_when) = match evaluate_resource_when(&rendered_when, &vars) {
                 Ok(result) => result,
                 Err(e) => {
                     warn!(
                         module = %pmod.name,
                         resource = %pres.name,
-                        when = %pres.when,
+                        when = %rendered_when,
                         error = %e,
                         "skipping resource: when expression failed"
                     );
@@ -105,7 +139,7 @@ pub fn eval_bundle(
                 continue;
             }
 
-            // Render attribute templates.
+            // Render attribute templates (ctx already built above).
             let ctx = template::TemplateContext {
                 traits,
                 vars: &vars_value,

@@ -6,17 +6,22 @@
 #~        ClamAV (malware), AIDE (file integrity), debsecan (Debian CVEs).
 #~
 #~ Scan output: /var/lib/hobnob/security/
-#~
-#~ Note: when: expressions use literal values, not Go templates.
-#~ To change the scan window, edit the hour values directly in this file.
 name: security-scanning
+
+vars:
+  scan_hour_start: "2"
+  scan_hour_end: "5"
+  scan_dir: "/var/lib/hobnob/security"
+  trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"
+  aide_db_path: "/var/lib/aide/aide.db"
+  aide_db_new_path: "/var/lib/aide/aide.db.new"
 
 resources:
   # ── Output directory ──────────────────────────────────────────────
 
   - name: scan-dir
     type: directory
-    target_path: /var/lib/hobnob/security
+    target_path: "{{ .Vars.scan_dir }}"
     owner: root
     group: root
     mode: "0700"
@@ -72,9 +77,9 @@ resources:
   - name: run-trivy
     type: exec
     command: >-
-      trivy rootfs --format json --severity CRITICAL,HIGH,MEDIUM,LOW
-      --output /var/lib/hobnob/security/trivy.json /
-    when: "hour_range('2','5')"
+      trivy rootfs --format json --severity {{ .Vars.trivy_severity }}
+      --output {{ .Vars.scan_dir }}/trivy.json /
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-trivy-$(date +%Y%m%d)"
     depends_on: [install-trivy, scan-dir]
 
@@ -82,7 +87,7 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-trivy-$(date +%Y%m%d)"
     depends_on: [run-trivy]
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-trivy-$(date +%Y%m%d)"
 
   # ── Lynis (security audit) ───────────────────────────────────────
@@ -96,9 +101,9 @@ resources:
     type: exec
     command: >-
       lynis audit system --no-colors --quiet
-      --logfile /var/lib/hobnob/security/lynis.log
-      --report-file /var/lib/hobnob/security/lynis-report.dat
-    when: "hour_range('2','5')"
+      --logfile {{ .Vars.scan_dir }}/lynis.log
+      --report-file {{ .Vars.scan_dir }}/lynis-report.dat
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-lynis-$(date +%Y%m%d)"
     depends_on: [install-lynis, scan-dir]
 
@@ -106,7 +111,7 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-lynis-$(date +%Y%m%d)"
     depends_on: [run-lynis]
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-lynis-$(date +%Y%m%d)"
 
   # ── chkrootkit ───────────────────────────────────────────────────
@@ -118,8 +123,8 @@ resources:
 
   - name: run-chkrootkit
     type: exec
-    command: "chkrootkit > /var/lib/hobnob/security/chkrootkit.log 2>&1 || true"
-    when: "hour_range('2','5')"
+    command: "chkrootkit > {{ .Vars.scan_dir }}/chkrootkit.log 2>&1 || true"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-chkrootkit-$(date +%Y%m%d)"
     depends_on: [install-chkrootkit, scan-dir]
 
@@ -127,7 +132,7 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-chkrootkit-$(date +%Y%m%d)"
     depends_on: [run-chkrootkit]
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-chkrootkit-$(date +%Y%m%d)"
 
   # ── rkhunter ─────────────────────────────────────────────────────
@@ -141,8 +146,8 @@ resources:
     type: exec
     command: >-
       rkhunter --check --skip-keypress --report-warnings-only
-      --logfile /var/lib/hobnob/security/rkhunter.log || true
-    when: "hour_range('2','5')"
+      --logfile {{ .Vars.scan_dir }}/rkhunter.log || true
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-rkhunter-$(date +%Y%m%d)"
     depends_on: [install-rkhunter, scan-dir]
 
@@ -150,7 +155,7 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-rkhunter-$(date +%Y%m%d)"
     depends_on: [run-rkhunter]
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-rkhunter-$(date +%Y%m%d)"
 
   # ── ClamAV ───────────────────────────────────────────────────────
@@ -184,7 +189,7 @@ resources:
   - name: freshclam-update
     type: exec
     command: "freshclam --quiet || true"
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-freshclam-$(date +%Y%m%d)"
     depends_on: [install-clamav-daemon-debian, install-clamd-rhel]
 
@@ -192,16 +197,16 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-freshclam-$(date +%Y%m%d)"
     depends_on: [freshclam-update]
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-freshclam-$(date +%Y%m%d)"
 
   - name: run-clamscan
     type: exec
     command: >-
       clamscan --recursive --infected --no-summary
-      --log=/var/lib/hobnob/security/clamav.log
+      --log={{ .Vars.scan_dir }}/clamav.log
       /etc /usr/bin /usr/sbin /usr/local/bin || true
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-clamscan-$(date +%Y%m%d)"
     depends_on: [freshclam-update, scan-dir]
 
@@ -209,7 +214,7 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-clamscan-$(date +%Y%m%d)"
     depends_on: [run-clamscan]
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-clamscan-$(date +%Y%m%d)"
 
   # ── AIDE (file integrity) ────────────────────────────────────────
@@ -222,14 +227,14 @@ resources:
   - name: aide-init
     type: exec
     command: "aideinit || true"
-    onlyif: "! test -f /var/lib/aide/aide.db"
+    onlyif: "! test -f {{ .Vars.aide_db_path }}"
     depends_on: [install-aide]
 
   - name: run-aide
     type: exec
     command: >-
-      aide --check --config /etc/aide/aide.conf > /var/lib/hobnob/security/aide.log 2>&1 || true
-    when: "hour_range('2','5')"
+      aide --check --config /etc/aide/aide.conf > {{ .Vars.scan_dir }}/aide.log 2>&1 || true
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-aide-$(date +%Y%m%d)"
     depends_on: [aide-init, scan-dir]
 
@@ -237,7 +242,7 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-aide-$(date +%Y%m%d)"
     depends_on: [run-aide]
-    when: "hour_range('2','5')"
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-aide-$(date +%Y%m%d)"
 
   # ── debsecan (Debian/Ubuntu CVEs) ────────────────────────────────
@@ -251,8 +256,8 @@ resources:
   - name: run-debsecan
     type: exec
     command: >-
-      debsecan --format detail > /var/lib/hobnob/security/debsecan.log 2>&1 || true
-    when: "os_family('debian') and hour_range('2','5')"
+      debsecan --format detail > {{ .Vars.scan_dir }}/debsecan.log 2>&1 || true
+    when: "os_family('debian') and hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-debsecan-$(date +%Y%m%d)"
     depends_on: [install-debsecan, scan-dir]
 
@@ -260,5 +265,5 @@ resources:
     type: exec
     command: "touch /tmp/.hobnob-debsecan-$(date +%Y%m%d)"
     depends_on: [run-debsecan]
-    when: "os_family('debian') and hour_range('2','5')"
+    when: "os_family('debian') and hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     onlyif: "! test -f /tmp/.hobnob-debsecan-$(date +%Y%m%d)"
