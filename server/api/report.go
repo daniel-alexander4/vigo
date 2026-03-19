@@ -7,14 +7,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/hobnob/hobnob/server/audit"
-	"github.com/hobnob/hobnob/server/config"
-	"github.com/hobnob/hobnob/server/db"
-	"github.com/hobnob/hobnob/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/audit"
+	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
 // ReportHandler generates compliance reports in HTML and JSON formats.
@@ -55,6 +57,8 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/gdpr.html", h.handleGDPRReportHTML)
 	mux.HandleFunc("GET /api/v1/report/nerccip", h.handleNERCCIPReport)
 	mux.HandleFunc("GET /api/v1/report/nerccip.html", h.handleNERCCIPReportHTML)
+	mux.HandleFunc("GET /api/v1/report/executive", h.handleExecutiveReport)
+	mux.HandleFunc("GET /api/v1/report/executive.html", h.handleExecutiveReportHTML)
 }
 
 // ComplianceReport is the JSON format for a compliance report.
@@ -127,7 +131,7 @@ func (h *ReportHandler) buildReport(r *http.Request, title string, controls []Co
 
 	// Per-node status.
 	var nodes []FleetNodeStatus
-	for _, t := range h.fleetIndex.AllThralls() {
+	for _, t := range h.fleetIndex.AllEnvoys() {
 		if t.Revoked {
 			continue
 		}
@@ -147,7 +151,7 @@ func (h *ReportHandler) buildReport(r *http.Request, title string, controls []Co
 	return &ComplianceReport{
 		Title:       title,
 		GeneratedAt: now.Format(time.RFC3339),
-		GeneratedBy: "Hobnob " + h.version,
+		GeneratedBy: "Vigo " + h.version,
 		Version:     h.version,
 		Summary: ComplianceReportSummary{
 			TotalNodes:      int(total),
@@ -206,12 +210,12 @@ func (h *ReportHandler) hipaaControls(r *http.Request) []ControlFinding {
 }
 
 func (h *ReportHandler) handleComplianceReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob HIPAA Compliance Report", "hobnob-compliance",
+	h.serveFrameworkReport(w, r, "Vigo HIPAA Compliance Report", "vigo-compliance",
 		h.hipaaControls(r), false)
 }
 
 func (h *ReportHandler) handleComplianceReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob HIPAA Compliance Report", "hobnob-compliance",
+	h.serveFrameworkReport(w, r, "Vigo HIPAA Compliance Report", "vigo-compliance",
 		h.hipaaControls(r), true)
 }
 
@@ -317,13 +321,13 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
 		fmt.Fprint(w, `</tbody></table>`)
 	}
 
-	fmt.Fprintf(w, `<div class="footer">Hobnob Compliance Report &mdash; Generated %s &mdash; %s</div>
+	fmt.Fprintf(w, `<div class="footer">Vigo Compliance Report &mdash; Generated %s &mdash; %s</div>
 </body></html>`, r.GeneratedAt, html.EscapeString(r.GeneratedBy))
 }
 
 // ---------- HITRUST CSF ----------
 
-// buildHITRUSTFindings returns HITRUST CSF control findings mapped to Hobnob capabilities.
+// buildHITRUSTFindings returns HITRUST CSF control findings mapped to Vigo capabilities.
 func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []ControlFinding {
 	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
 	if !auditStatus.Valid {
@@ -419,12 +423,12 @@ func (h *ReportHandler) auditStatusFromRequest(r *http.Request) AuditChainStatus
 }
 
 func (h *ReportHandler) handleHITRUSTReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob HITRUST CSF Compliance Report", "hobnob-hitrust",
+	h.serveFrameworkReport(w, r, "Vigo HITRUST CSF Compliance Report", "vigo-hitrust",
 		h.buildHITRUSTFindings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handleHITRUSTReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob HITRUST CSF Compliance Report", "hobnob-hitrust",
+	h.serveFrameworkReport(w, r, "Vigo HITRUST CSF Compliance Report", "vigo-hitrust",
 		h.buildHITRUSTFindings(h.auditStatusFromRequest(r)), true)
 }
 
@@ -466,7 +470,7 @@ func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []Contro
 		{ControlID: "CC6.2", Title: "User Registration and Authorization", Status: "satisfied", Evidence: "Per-user accounts with unique UUIDs, role-based defaults, admin approval required"},
 		{ControlID: "CC6.3", Title: "Role-Based Access and Least Privilege", Status: "satisfied", Evidence: "13 fine-grained permissions: fleet.read, config.publish, users.manage, etc."},
 		{ControlID: "CC6.6", Title: "Restriction of Access to System Assets", Status: "satisfied", Evidence: "File executor enforces permissions/ownership; firewall executor enforces network access"},
-		{ControlID: "CC6.7", Title: "Management of Credentials", Status: "satisfied", Evidence: "12-char complexity, bcrypt hashing, AES-256-GCM encrypted storage, API tokens (hbt_ prefix)"},
+		{ControlID: "CC6.7", Title: "Management of Credentials", Status: "satisfied", Evidence: "12-char complexity, bcrypt hashing, AES-256-GCM encrypted storage, API tokens (vgot_ prefix)"},
 		{ControlID: "CC6.8", Title: "Prevention of Unauthorized Software", Status: "satisfied", Evidence: "Package executor enforces versions; repository executor controls sources"},
 
 		// CC7 — System Operations
@@ -497,12 +501,12 @@ func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []Contro
 }
 
 func (h *ReportHandler) handleSOC2Report(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob SOC 2 Trust Services Criteria Report", "hobnob-soc2",
+	h.serveFrameworkReport(w, r, "Vigo SOC 2 Trust Services Criteria Report", "vigo-soc2",
 		h.buildSOC2Findings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handleSOC2ReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob SOC 2 Trust Services Criteria Report", "hobnob-soc2",
+	h.serveFrameworkReport(w, r, "Vigo SOC 2 Trust Services Criteria Report", "vigo-soc2",
 		h.buildSOC2Findings(h.auditStatusFromRequest(r)), true)
 }
 
@@ -555,7 +559,7 @@ func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []Cont
 		{ControlID: "8.3.1", Title: "Strong Authentication for All Access", Status: "satisfied", Evidence: "Basic (bcrypt), OIDC, or isowebauth required; TOTP MFA available"},
 		{ControlID: "8.3.6", Title: "Password Complexity Enforced", Status: "satisfied", Evidence: "12-char minimum, uppercase + lowercase + digit + special character required"},
 		{ControlID: "8.3.9", Title: "MFA for Admin Access", Status: "satisfied", Evidence: "TOTP two-factor authentication available for all accounts"},
-		{ControlID: "8.6.1", Title: "System/Application Accounts Managed", Status: "satisfied", Evidence: "API tokens use hbt_ prefix, bcrypt-hashed at rest, audited creation/revocation"},
+		{ControlID: "8.6.1", Title: "System/Application Accounts Managed", Status: "satisfied", Evidence: "API tokens use vgot_ prefix, bcrypt-hashed at rest, audited creation/revocation"},
 
 		// Req 10 — Log and Monitor
 		{ControlID: "10.2.1", Title: "Audit Logs Enabled", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
@@ -581,12 +585,12 @@ func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []Cont
 }
 
 func (h *ReportHandler) handlePCIReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob PCI DSS v4.0 Compliance Report", "hobnob-pci",
+	h.serveFrameworkReport(w, r, "Vigo PCI DSS v4.0 Compliance Report", "vigo-pci",
 		h.buildPCIDSSFindings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handlePCIReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob PCI DSS v4.0 Compliance Report", "hobnob-pci",
+	h.serveFrameworkReport(w, r, "Vigo PCI DSS v4.0 Compliance Report", "vigo-pci",
 		h.buildPCIDSSFindings(h.auditStatusFromRequest(r)), true)
 }
 
@@ -638,12 +642,12 @@ func (h *ReportHandler) buildCISFindings(auditStatus AuditChainStatus) []Control
 }
 
 func (h *ReportHandler) handleCISReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob CIS Benchmark Compliance Report", "hobnob-cis",
+	h.serveFrameworkReport(w, r, "Vigo CIS Benchmark Compliance Report", "vigo-cis",
 		h.buildCISFindings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handleCISReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob CIS Benchmark Compliance Report", "hobnob-cis",
+	h.serveFrameworkReport(w, r, "Vigo CIS Benchmark Compliance Report", "vigo-cis",
 		h.buildCISFindings(h.auditStatusFromRequest(r)), true)
 }
 
@@ -667,7 +671,7 @@ func (h *ReportHandler) buildNIST80053Findings(auditStatus AuditChainStatus) []C
 		{ControlID: "AC-17", Title: "Remote Access", Status: "satisfied", Evidence: "mTLS on all remote access; SSH hardening via modules; TOTP MFA available"},
 
 		// AU — Audit and Accountability
-		{ControlID: "AU-2", Title: "Audit Events", Status: "satisfied", Evidence: "15+ event types: auth, user, token, config, push, workflow, emergency, remediation, thrall"},
+		{ControlID: "AU-2", Title: "Audit Events", Status: "satisfied", Evidence: "15+ event types: auth, user, token, config, push, workflow, emergency, remediation, envoy"},
 		{ControlID: "AU-3", Title: "Content of Audit Records", Status: "satisfied", Evidence: "Each entry: timestamp, event type, actor, summary, payload, prev_hash, hash"},
 		{ControlID: "AU-6", Title: "Audit Review, Analysis, Reporting", Status: "satisfied", Evidence: "CLI audit list/verify, compliance dashboards, SIEM export, scheduled reports"},
 		{ControlID: "AU-8", Title: "Time Stamps", Status: "satisfied", Evidence: "UTC RFC3339 timestamps; NTP/chrony enforcement via modules"},
@@ -694,7 +698,7 @@ func (h *ReportHandler) buildNIST80053Findings(auditStatus AuditChainStatus) []C
 
 		// IA — Identification and Authentication
 		{ControlID: "IA-2", Title: "Identification and Authentication", Status: "satisfied", Evidence: "Basic (bcrypt), OIDC, isowebauth; unique user IDs; TOTP MFA"},
-		{ControlID: "IA-5", Title: "Authenticator Management", Status: "satisfied", Evidence: "12-char complexity, bcrypt hashing, AES-256-GCM storage, API tokens (hbt_ prefix)"},
+		{ControlID: "IA-5", Title: "Authenticator Management", Status: "satisfied", Evidence: "12-char complexity, bcrypt hashing, AES-256-GCM storage, API tokens (vgot_ prefix)"},
 		{ControlID: "IA-8", Title: "Identification and Authentication (Non-Org)", Status: "satisfied", Evidence: "Agent mTLS certificates; ED25519 signature verification on all agent traffic"},
 
 		// IR — Incident Response
@@ -718,12 +722,12 @@ func (h *ReportHandler) buildNIST80053Findings(auditStatus AuditChainStatus) []C
 }
 
 func (h *ReportHandler) handleNISTReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob NIST 800-53 Compliance Report", "hobnob-nist800-53",
+	h.serveFrameworkReport(w, r, "Vigo NIST 800-53 Compliance Report", "vigo-nist800-53",
 		h.buildNIST80053Findings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handleNISTReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob NIST 800-53 Compliance Report", "hobnob-nist800-53",
+	h.serveFrameworkReport(w, r, "Vigo NIST 800-53 Compliance Report", "vigo-nist800-53",
 		h.buildNIST80053Findings(h.auditStatusFromRequest(r)), true)
 }
 
@@ -794,12 +798,12 @@ func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []Co
 }
 
 func (h *ReportHandler) handleISO27001Report(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob ISO 27001 Compliance Report", "hobnob-iso27001",
+	h.serveFrameworkReport(w, r, "Vigo ISO 27001 Compliance Report", "vigo-iso27001",
 		h.buildISO27001Findings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handleISO27001ReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob ISO 27001 Compliance Report", "hobnob-iso27001",
+	h.serveFrameworkReport(w, r, "Vigo ISO 27001 Compliance Report", "vigo-iso27001",
 		h.buildISO27001Findings(h.auditStatusFromRequest(r)), true)
 }
 
@@ -832,17 +836,17 @@ func (h *ReportHandler) buildGDPRFindings(_ AuditChainStatus) []ControlFinding {
 		{ControlID: "Art.35(1)", Title: "Data Protection Impact Assessment", Status: "partial", Evidence: "Compliance reports + fleet status provide input for DPIA; formal assessment is organizational"},
 
 		// Article 17 — Right to Erasure
-		{ControlID: "Art.17(1)", Title: "Right to Erasure", Status: "satisfied", Evidence: "Cascade delete removes all thrall data; documented decommissioning procedure"},
+		{ControlID: "Art.17(1)", Title: "Right to Erasure", Status: "satisfied", Evidence: "Cascade delete removes all envoy data; documented decommissioning procedure"},
 	}
 }
 
 func (h *ReportHandler) handleGDPRReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob GDPR Compliance Report", "hobnob-gdpr",
+	h.serveFrameworkReport(w, r, "Vigo GDPR Compliance Report", "vigo-gdpr",
 		h.buildGDPRFindings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handleGDPRReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob GDPR Compliance Report", "hobnob-gdpr",
+	h.serveFrameworkReport(w, r, "Vigo GDPR Compliance Report", "vigo-gdpr",
 		h.buildGDPRFindings(h.auditStatusFromRequest(r)), true)
 }
 
@@ -864,7 +868,7 @@ func (h *ReportHandler) buildNERCCIPFindings(auditStatus AuditChainStatus) []Con
 
 		// CIP-004 — Personnel and Training
 		{ControlID: "CIP-004-6-R4", Title: "Access Management Program", Status: "satisfied", Evidence: "RBAC with 13 permissions; per-user accounts; audited lifecycle"},
-		{ControlID: "CIP-004-6-R5", Title: "Access Revocation", Status: "satisfied", Evidence: "User deletion with cascade; token revocation; thrall revocation; all audited"},
+		{ControlID: "CIP-004-6-R5", Title: "Access Revocation", Status: "satisfied", Evidence: "User deletion with cascade; token revocation; envoy revocation; all audited"},
 
 		// CIP-005 — Electronic Security Perimeters
 		{ControlID: "CIP-005-7-R1", Title: "Electronic Security Perimeter", Status: "satisfied", Evidence: "Firewall executor enforces network boundaries; mTLS on management traffic"},
@@ -892,11 +896,480 @@ func (h *ReportHandler) buildNERCCIPFindings(auditStatus AuditChainStatus) []Con
 }
 
 func (h *ReportHandler) handleNERCCIPReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob NERC CIP Compliance Report", "hobnob-nerccip",
+	h.serveFrameworkReport(w, r, "Vigo NERC CIP Compliance Report", "vigo-nerccip",
 		h.buildNERCCIPFindings(h.auditStatusFromRequest(r)), false)
 }
 
 func (h *ReportHandler) handleNERCCIPReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Hobnob NERC CIP Compliance Report", "hobnob-nerccip",
+	h.serveFrameworkReport(w, r, "Vigo NERC CIP Compliance Report", "vigo-nerccip",
 		h.buildNERCCIPFindings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- Executive Summary ----------
+
+// ExecutiveReport is the JSON format for the executive summary report.
+type ExecutiveReport struct {
+	GeneratedAt string             `json:"generated_at"`
+	GeneratedBy string             `json:"generated_by"`
+	Score       ExecutiveScore     `json:"score"`
+	Trend       []TrendPoint       `json:"trend"`
+	Frameworks  []FrameworkSummary `json:"frameworks"`
+	Fleet       ExecutiveFleet     `json:"fleet"`
+	TopIssues   []ExecutiveIssue   `json:"top_issues"`
+	AuditChain  AuditChainStatus   `json:"audit_chain"`
+}
+
+// ExecutiveScore is the overall compliance score and rating.
+type ExecutiveScore struct {
+	Percent float64 `json:"percent"`
+	Rating  string  `json:"rating"` // "Excellent", "Good", "Needs Attention", "Critical"
+}
+
+// TrendPoint is a single day's compliance percentage in the 30-day trend.
+type TrendPoint struct {
+	Date    string  `json:"date"`
+	Percent float64 `json:"percent"`
+}
+
+// FrameworkSummary is a single framework's control status counts.
+type FrameworkSummary struct {
+	Name         string  `json:"name"`
+	Satisfied    int     `json:"satisfied"`
+	Partial      int     `json:"partial"`
+	NotSatisfied int     `json:"not_satisfied"`
+	ScorePercent float64 `json:"score_percent"`
+}
+
+// ExecutiveFleet is the fleet summary with friendly labels.
+type ExecutiveFleet struct {
+	Total          int `json:"total"`
+	FullyCompliant int `json:"fully_compliant"`
+	ConfigChanges  int `json:"config_changes"`
+	Errors         int `json:"errors"`
+	Unreachable    int `json:"unreachable"`
+	PendingData    int `json:"pending_data"`
+}
+
+// ExecutiveIssue is a plain-English issue with severity.
+type ExecutiveIssue struct {
+	Severity    string `json:"severity"` // "critical", "warning", "info"
+	Description string `json:"description"`
+}
+
+func complianceRating(pct float64) string {
+	switch {
+	case pct >= 95:
+		return "Excellent"
+	case pct >= 80:
+		return "Good"
+	case pct >= 50:
+		return "Needs Attention"
+	default:
+		return "Critical"
+	}
+}
+
+func frameworkScore(controls []ControlFinding) FrameworkSummary {
+	var s FrameworkSummary
+	for _, c := range controls {
+		switch c.Status {
+		case "satisfied":
+			s.Satisfied++
+		case "partial":
+			s.Partial++
+		default:
+			s.NotSatisfied++
+		}
+	}
+	total := s.Satisfied + s.Partial + s.NotSatisfied
+	if total > 0 {
+		s.ScorePercent = math.Round(float64(s.Satisfied)/float64(total)*1000) / 10
+	}
+	return s
+}
+
+func (h *ReportHandler) buildExecutiveReport(r *http.Request) (*ExecutiveReport, error) {
+	now := time.Now().UTC()
+	summary := h.fleetIndex.ComplianceSummary()
+
+	pct := float64(0)
+	if summary.Total > 0 {
+		pct = math.Round(float64(summary.Compliant)/float64(summary.Total)*1000) / 10
+	}
+
+	// 30-day trend from compliance_history table.
+	history, _ := h.queries.ListComplianceHistory(r.Context(), 30)
+	trend := make([]TrendPoint, 0, len(history))
+	// ListComplianceHistory returns DESC; reverse for chronological order.
+	for i := len(history) - 1; i >= 0; i-- {
+		rec := history[i]
+		dayPct := float64(0)
+		if rec.Total > 0 {
+			dayPct = math.Round(float64(rec.Compliant)/float64(rec.Total)*1000) / 10
+		}
+		trend = append(trend, TrendPoint{Date: rec.RecordedAt, Percent: dayPct})
+	}
+
+	// Audit chain.
+	auditStatus := h.auditStatusFromRequest(r)
+
+	// All 9 frameworks.
+	type fwDef struct {
+		name     string
+		controls []ControlFinding
+	}
+	fws := []fwDef{
+		{"HIPAA", h.buildControlFindings(summary, auditStatus)},
+		{"HITRUST CSF", h.buildHITRUSTFindings(auditStatus)},
+		{"SOC 2", h.buildSOC2Findings(auditStatus)},
+		{"PCI DSS v4.0", h.buildPCIDSSFindings(auditStatus)},
+		{"CIS Benchmarks", h.buildCISFindings(auditStatus)},
+		{"NIST 800-53", h.buildNIST80053Findings(auditStatus)},
+		{"ISO 27001", h.buildISO27001Findings(auditStatus)},
+		{"GDPR", h.buildGDPRFindings(auditStatus)},
+		{"NERC CIP", h.buildNERCCIPFindings(auditStatus)},
+	}
+	frameworks := make([]FrameworkSummary, len(fws))
+	for i, fw := range fws {
+		fs := frameworkScore(fw.controls)
+		fs.Name = fw.name
+		frameworks[i] = fs
+	}
+
+	// Top issues.
+	topIssues := h.buildTopIssues(summary, auditStatus, frameworks)
+
+	return &ExecutiveReport{
+		GeneratedAt: now.Format(time.RFC3339),
+		GeneratedBy: "Vigo " + h.version,
+		Score: ExecutiveScore{
+			Percent: pct,
+			Rating:  complianceRating(pct),
+		},
+		Trend:      trend,
+		Frameworks: frameworks,
+		Fleet: ExecutiveFleet{
+			Total:          summary.Total,
+			FullyCompliant: summary.Compliant,
+			ConfigChanges:  summary.RecurringDrift,
+			Errors:         summary.Errors,
+			Unreachable:    summary.LostContact,
+			PendingData:    summary.NoData,
+		},
+		TopIssues:  topIssues,
+		AuditChain: auditStatus,
+	}, nil
+}
+
+func (h *ReportHandler) buildTopIssues(summary fleet.ComplianceCounters, auditStatus AuditChainStatus, frameworks []FrameworkSummary) []ExecutiveIssue {
+	var issues []ExecutiveIssue
+
+	// Priority 1: Audit chain broken (critical).
+	if !auditStatus.Valid {
+		issues = append(issues, ExecutiveIssue{
+			Severity:    "critical",
+			Description: "The audit trail integrity check has failed. The tamper-evident hash chain is broken, which may indicate unauthorized modification of audit records.",
+		})
+	}
+
+	// Priority 2: Nodes with errors (critical).
+	if summary.Errors > 0 {
+		issues = append(issues, ExecutiveIssue{
+			Severity:    "critical",
+			Description: fmt.Sprintf("%d node(s) are reporting errors during configuration enforcement. These systems may not be in their desired state.", summary.Errors),
+		})
+	}
+
+	// Priority 3: Unreachable nodes (warning).
+	if summary.LostContact > 0 {
+		issues = append(issues, ExecutiveIssue{
+			Severity:    "warning",
+			Description: fmt.Sprintf("%d node(s) have not checked in recently and may be unreachable. Their compliance status cannot be verified.", summary.LostContact),
+		})
+	}
+
+	// Priority 4: Recurring drift (warning).
+	if summary.RecurringDrift > 0 {
+		issues = append(issues, ExecutiveIssue{
+			Severity:    "warning",
+			Description: fmt.Sprintf("%d node(s) are experiencing recurring configuration drift. Changes are being reverted repeatedly, indicating an external process may be conflicting.", summary.RecurringDrift),
+		})
+	}
+
+	// Priority 5: Per-framework not_satisfied controls (warning).
+	for _, fw := range frameworks {
+		if fw.NotSatisfied > 0 {
+			issues = append(issues, ExecutiveIssue{
+				Severity:    "warning",
+				Description: fmt.Sprintf("%s: %d control(s) are not satisfied and require attention.", fw.Name, fw.NotSatisfied),
+			})
+		}
+	}
+
+	// Priority 6: Pending data (info).
+	if summary.NoData > 0 {
+		issues = append(issues, ExecutiveIssue{
+			Severity:    "info",
+			Description: fmt.Sprintf("%d node(s) have enrolled but not yet reported any data. These are new systems awaiting their first check-in.", summary.NoData),
+		})
+	}
+
+	// Priority 7: Per-framework partial controls (info).
+	for _, fw := range frameworks {
+		if fw.Partial > 0 {
+			issues = append(issues, ExecutiveIssue{
+				Severity:    "info",
+				Description: fmt.Sprintf("%s: %d control(s) are partially satisfied and may require organizational action.", fw.Name, fw.Partial),
+			})
+		}
+	}
+
+	// Sort by severity (critical > warning > info), stable to preserve priority order within severity.
+	severityRank := map[string]int{"critical": 0, "warning": 1, "info": 2}
+	sort.SliceStable(issues, func(i, j int) bool {
+		return severityRank[issues[i].Severity] < severityRank[issues[j].Severity]
+	})
+
+	// Cap at 10.
+	if len(issues) > 10 {
+		issues = issues[:10]
+	}
+	return issues
+}
+
+func (h *ReportHandler) handleExecutiveReport(w http.ResponseWriter, r *http.Request) {
+	report, err := h.buildExecutiveReport(r)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to build executive report: "+err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if r.URL.Query().Get("download") == "1" {
+		filename := fmt.Sprintf("vigo-executive-%s.json", time.Now().Format("2006-01-02"))
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.Encode(report)
+}
+
+func (h *ReportHandler) handleExecutiveReportHTML(w http.ResponseWriter, r *http.Request) {
+	report, err := h.buildExecutiveReport(r)
+	if err != nil {
+		http.Error(w, "failed to build executive report: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.URL.Query().Get("download") == "1" {
+		filename := fmt.Sprintf("vigo-executive-%s.html", time.Now().Format("2006-01-02"))
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	}
+	renderExecutiveHTML(w, report)
+}
+
+func renderExecutiveHTML(w http.ResponseWriter, r *ExecutiveReport) {
+	// Score colors.
+	scoreColor := "#27ae60"
+	switch {
+	case r.Score.Percent < 50:
+		scoreColor = "#e74c3c"
+	case r.Score.Percent < 80:
+		scoreColor = "#f39c12"
+	case r.Score.Percent < 95:
+		scoreColor = "#2ecc71"
+	}
+
+	// Donut chart: SVG arc for the score percentage.
+	// Circle: cx=60, cy=60, r=50. Circumference = 2*pi*50 ≈ 314.16
+	circumference := 2 * math.Pi * 50
+	filled := circumference * r.Score.Percent / 100
+
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vigo Executive Compliance Summary</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 2rem; background: #fff; color: #1a1a2e; line-height: 1.6; }
+  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1a1a2e; padding-bottom: 1rem; margin-bottom: 2rem; }
+  .header h1 { margin: 0; font-size: 1.5rem; }
+  .header .meta { text-align: right; font-size: 0.85rem; color: #6c757d; }
+  .score-section { display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; }
+  .score-gauge svg { display: block; }
+  .score-gauge text { font-family: inherit; }
+  .score-info .rating { font-size: 1.5rem; font-weight: 700; margin: 0; }
+  .score-info .sublabel { font-size: 0.85rem; color: #6c757d; }
+  .fleet-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .fleet-card { background: #f8f9fa; border-radius: 8px; padding: 1rem; text-align: center; }
+  .fleet-card .value { font-size: 2rem; font-weight: bold; }
+  .fleet-card .label { font-size: 0.75rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; }
+  h2 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.3rem; }
+  .trend-chart { margin-bottom: 2rem; }
+  .trend-chart svg { display: block; width: 100%%; max-width: 600px; }
+  table { width: 100%%; border-collapse: collapse; margin-bottom: 2rem; }
+  th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #dee2e6; font-size: 0.9rem; }
+  th { background: #f8f9fa; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: #6c757d; }
+  .bar-container { display: flex; height: 18px; border-radius: 4px; overflow: hidden; min-width: 120px; }
+  .bar-green { background: #27ae60; }
+  .bar-yellow { background: #f39c12; }
+  .bar-red { background: #e74c3c; }
+  .issue { padding: 0.5rem 0.75rem; border-left: 4px solid; margin-bottom: 0.5rem; font-size: 0.9rem; }
+  .issue-critical { border-color: #e74c3c; background: #fdf0f0; }
+  .issue-warning { border-color: #f39c12; background: #fef9f0; }
+  .issue-info { border-color: #3498db; background: #f0f6fe; }
+  .issue .sev { font-weight: 600; text-transform: uppercase; font-size: 0.7rem; margin-right: 0.5rem; }
+  .issue .sev-critical { color: #e74c3c; }
+  .issue .sev-warning { color: #f39c12; }
+  .issue .sev-info { color: #3498db; }
+  .audit-banner { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 2rem; font-size: 0.9rem; }
+  .audit-pass { background: #d4edda; color: #155724; }
+  .audit-fail { background: #f8d7da; color: #721c24; }
+  .footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; font-size: 0.8rem; color: #6c757d; text-align: center; }
+  @media print {
+    body { padding: 0.5rem; font-size: 11px; }
+    .header { page-break-after: avoid; }
+    .score-section { page-break-after: avoid; }
+    .fleet-cards { page-break-after: avoid; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    .issue { page-break-inside: avoid; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Executive Compliance Summary</h1>
+  <div class="meta">
+    Generated: %s<br>
+    %s
+  </div>
+</div>
+`, r.GeneratedAt, html.EscapeString(r.GeneratedBy))
+
+	// 1. Score gauge — SVG donut.
+	fmt.Fprintf(w, `<div class="score-section">
+  <div class="score-gauge">
+    <svg width="120" height="120" viewBox="0 0 120 120">
+      <circle cx="60" cy="60" r="50" fill="none" stroke="#e9ecef" stroke-width="10"/>
+      <circle cx="60" cy="60" r="50" fill="none" stroke="%s" stroke-width="10"
+        stroke-dasharray="%.1f %.1f" stroke-dashoffset="%.1f"
+        stroke-linecap="round" transform="rotate(-90 60 60)"/>
+      <text x="60" y="55" text-anchor="middle" font-size="22" font-weight="bold" fill="%s">%.0f%%%%</text>
+      <text x="60" y="72" text-anchor="middle" font-size="11" fill="#6c757d">compliance</text>
+    </svg>
+  </div>
+  <div class="score-info">
+    <p class="rating" style="color:%s">%s</p>
+    <p class="sublabel">Overall fleet compliance rating</p>
+  </div>
+</div>
+`, scoreColor, filled, circumference-filled, -circumference/4, scoreColor, r.Score.Percent,
+		scoreColor, html.EscapeString(r.Score.Rating))
+
+	// 2. Fleet summary cards.
+	fmt.Fprintf(w, `<div class="fleet-cards">
+  <div class="fleet-card"><div class="value">%d</div><div class="label">Total Nodes</div></div>
+  <div class="fleet-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Fully Compliant</div></div>
+  <div class="fleet-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Configuration Changes Detected</div></div>
+  <div class="fleet-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Errors</div></div>
+  <div class="fleet-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Unreachable</div></div>
+  <div class="fleet-card"><div class="value" style="color:#95a5a6">%d</div><div class="label">Pending Data</div></div>
+</div>
+`, r.Fleet.Total, r.Fleet.FullyCompliant, r.Fleet.ConfigChanges, r.Fleet.Errors, r.Fleet.Unreachable, r.Fleet.PendingData)
+
+	// 3. 30-day trend — inline SVG area chart.
+	if len(r.Trend) > 1 {
+		fmt.Fprint(w, `<h2>30-Day Compliance Trend</h2>
+<div class="trend-chart">
+<svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="600" height="200" fill="#fafafa" rx="4"/>
+`)
+		// Grid lines at 25%, 50%, 75%, 100%.
+		for _, pctLine := range []float64{25, 50, 75, 100} {
+			y := 190 - (pctLine/100)*180
+			fmt.Fprintf(w, `  <line x1="40" y1="%.0f" x2="590" y2="%.0f" stroke="#e9ecef" stroke-width="1"/>
+  <text x="35" y="%.0f" text-anchor="end" font-size="9" fill="#adb5bd">%.0f%%%%</text>
+`, y, y, y+3, pctLine)
+		}
+
+		n := len(r.Trend)
+		xStep := 550.0 / float64(n-1)
+		var linePoints, areaPoints strings.Builder
+		for i, pt := range r.Trend {
+			x := 40 + float64(i)*xStep
+			y := 190 - (pt.Percent/100)*180
+			fmt.Fprintf(&linePoints, "%.1f,%.1f ", x, y)
+			fmt.Fprintf(&areaPoints, "%.1f,%.1f ", x, y)
+		}
+		lastX := 40 + float64(n-1)*xStep
+		fmt.Fprintf(&areaPoints, "%.1f,190 40,190", lastX)
+
+		fmt.Fprintf(w, `  <polygon points="%s" fill="%s" fill-opacity="0.15"/>
+  <polyline points="%s" fill="none" stroke="%s" stroke-width="2"/>
+`, areaPoints.String(), scoreColor, linePoints.String(), scoreColor)
+
+		fmt.Fprint(w, `</svg>
+</div>
+`)
+	}
+
+	// 4. Framework coverage table with stacked bars.
+	fmt.Fprint(w, `<h2>Framework Coverage</h2>
+<table>
+<thead><tr><th>Framework</th><th>Score</th><th style="width:40%%">Controls</th><th>Satisfied</th><th>Partial</th><th>Not Met</th></tr></thead>
+<tbody>
+`)
+	for _, fw := range r.Frameworks {
+		total := fw.Satisfied + fw.Partial + fw.NotSatisfied
+		gPct, yPct, rPct := float64(0), float64(0), float64(0)
+		if total > 0 {
+			gPct = float64(fw.Satisfied) / float64(total) * 100
+			yPct = float64(fw.Partial) / float64(total) * 100
+			rPct = float64(fw.NotSatisfied) / float64(total) * 100
+		}
+		fmt.Fprintf(w, `<tr><td>%s</td><td>%.1f%%%%</td><td><div class="bar-container">`,
+			html.EscapeString(fw.Name), fw.ScorePercent)
+		if gPct > 0 {
+			fmt.Fprintf(w, `<div class="bar-green" style="width:%.1f%%"></div>`, gPct)
+		}
+		if yPct > 0 {
+			fmt.Fprintf(w, `<div class="bar-yellow" style="width:%.1f%%"></div>`, yPct)
+		}
+		if rPct > 0 {
+			fmt.Fprintf(w, `<div class="bar-red" style="width:%.1f%%"></div>`, rPct)
+		}
+		fmt.Fprintf(w, `</div></td><td>%d</td><td>%d</td><td>%d</td></tr>
+`, fw.Satisfied, fw.Partial, fw.NotSatisfied)
+	}
+	fmt.Fprint(w, `</tbody></table>`)
+
+	// 5. Top issues.
+	if len(r.TopIssues) > 0 {
+		fmt.Fprint(w, `<h2>Top Issues</h2>
+`)
+		for _, issue := range r.TopIssues {
+			fmt.Fprintf(w, `<div class="issue issue-%s"><span class="sev sev-%s">%s</span>%s</div>
+`, issue.Severity, issue.Severity, html.EscapeString(strings.ToUpper(issue.Severity)), html.EscapeString(issue.Description))
+		}
+	}
+
+	// 6. Audit chain banner.
+	auditClass := "audit-pass"
+	auditText := fmt.Sprintf("Audit Trail Verified — %d entries, integrity intact.", r.AuditChain.EntryCount)
+	if !r.AuditChain.Valid {
+		auditClass = "audit-fail"
+		auditText = "AUDIT TRAIL INTEGRITY CHECK FAILED"
+		if r.AuditChain.Error != "" {
+			auditText += " — " + r.AuditChain.Error
+		}
+	}
+	fmt.Fprintf(w, `<div class="audit-banner %s"><strong>Audit Chain:</strong> %s</div>
+`, auditClass, html.EscapeString(auditText))
+
+	// Footer.
+	fmt.Fprintf(w, `<div class="footer">Vigo Executive Compliance Summary &mdash; Generated %s &mdash; %s</div>
+</body></html>`, r.GeneratedAt, html.EscapeString(r.GeneratedBy))
 }

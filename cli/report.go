@@ -24,9 +24,9 @@ var reportComplianceCmd = &cobra.Command{
 fleet status, and audit chain verification.
 
 Examples:
-  hobnobcli report compliance
-  hobnobcli report compliance --format html --output report.html
-  hobnobcli report compliance --format json --output report.json`,
+  vigogo report compliance
+  vigogo report compliance --format html --output report.html
+  vigogo report compliance --format json --output report.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -93,8 +93,8 @@ var reportHITRUSTCmd = &cobra.Command{
 (01 Access Control, 06 Compliance, 09 Operations, 10 Maintenance, etc.).
 
 Examples:
-  hobnobcli report hitrust
-  hobnobcli report hitrust --format html --output hitrust-report.html`,
+  vigogo report hitrust
+  vigogo report hitrust --format html --output hitrust-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -159,8 +159,8 @@ var reportSOC2Cmd = &cobra.Command{
 (CC1-CC9 Common Criteria, A1 Availability, C1 Confidentiality, PI1 Processing Integrity).
 
 Examples:
-  hobnobcli report soc2
-  hobnobcli report soc2 --format html --output soc2-report.html`,
+  vigogo report soc2
+  vigogo report soc2 --format html --output soc2-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -222,8 +222,8 @@ var reportPCICmd = &cobra.Command{
 (Req 1-12: network security, config hardening, access control, audit trails, etc.).
 
 Examples:
-  hobnobcli report pci
-  hobnobcli report pci --format html --output pci-report.html`,
+  vigogo report pci
+  vigogo report pci --format html --output pci-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -339,10 +339,11 @@ func makeReportCmd(use, short, apiPath string) *cobra.Command {
 }
 
 var (
-	reportNISTCmd    = makeReportCmd("nist", "Generate a NIST 800-53 compliance report", "nist")
-	reportISO27001Cmd = makeReportCmd("iso27001", "Generate an ISO 27001 compliance report", "iso27001")
-	reportGDPRCmd    = makeReportCmd("gdpr", "Generate a GDPR compliance report", "gdpr")
-	reportNERCCIPCmd = makeReportCmd("nerccip", "Generate a NERC CIP compliance report", "nerccip")
+	reportNISTCmd      = makeReportCmd("nist", "Generate a NIST 800-53 compliance report", "nist")
+	reportISO27001Cmd  = makeReportCmd("iso27001", "Generate an ISO 27001 compliance report", "iso27001")
+	reportGDPRCmd      = makeReportCmd("gdpr", "Generate a GDPR compliance report", "gdpr")
+	reportNERCCIPCmd   = makeReportCmd("nerccip", "Generate a NERC CIP compliance report", "nerccip")
+	reportExecutiveCmd = makeReportCmd("executive", "Generate an executive compliance summary", "executive")
 )
 
 var reportCISCmd = &cobra.Command{
@@ -352,8 +353,8 @@ var reportCISCmd = &cobra.Command{
 for Ubuntu, RHEL, and Windows Server.
 
 Examples:
-  hobnobcli report cis
-  hobnobcli report cis --format html --output cis-report.html`,
+  vigogo report cis
+  vigogo report cis --format html --output cis-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -420,8 +421,8 @@ var remediationRunCmd = &cobra.Command{
 reconvergence. Use --dry-run to preview without acting.
 
 Examples:
-  hobnobcli remediation run --dry-run
-  hobnobcli remediation run`,
+  vigogo remediation run --dry-run
+  vigogo remediation run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		client := newAPIClient()
@@ -479,7 +480,7 @@ func init() {
 	reportCISCmd.Flags().String("format", "json", "Output format: json or html")
 	reportCISCmd.Flags().String("output", "", "Write output to file instead of stdout")
 	reportCmd.AddCommand(reportComplianceCmd, reportHITRUSTCmd, reportSOC2Cmd, reportPCICmd, reportCISCmd,
-		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd)
+		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd, reportExecutiveCmd)
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")
 	remediationCmd.AddCommand(remediationRunCmd, remediationStatusCmd, remediationListCmd)

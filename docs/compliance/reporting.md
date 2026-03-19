@@ -4,7 +4,7 @@ title: Compliance Reporting
 
 # Compliance Reporting
 
-Hobnob generates compliance reports mapped to HIPAA and HITRUST CSF frameworks. Reports include fleet compliance status, audit chain integrity verification, and per-node evidence.
+Vigo generates compliance reports mapped to 9 security frameworks, plus an executive summary for non-technical audiences. Reports include fleet compliance status, audit chain integrity verification, and per-node evidence.
 
 ## Report Formats
 
@@ -14,6 +14,8 @@ Hobnob generates compliance reports mapped to HIPAA and HITRUST CSF frameworks. 
 | HIPAA | HTML | `GET /api/v1/report/compliance.html` | Auditor-readable, printable |
 | HITRUST CSF | JSON | `GET /api/v1/report/hitrust` | Programmatic consumption |
 | HITRUST CSF | HTML | `GET /api/v1/report/hitrust.html` | Auditor-readable, printable |
+| Executive Summary | JSON | `GET /api/v1/report/executive` | C-suite / auditor overview |
+| Executive Summary | HTML | `GET /api/v1/report/executive.html` | Print-friendly PDF via Ctrl+P |
 | OSCAL | JSON | `GET /api/v1/export/oscal` | Machine-readable OSCAL v1.1.2 |
 
 ## Generating Reports
@@ -22,29 +24,29 @@ Hobnob generates compliance reports mapped to HIPAA and HITRUST CSF frameworks. 
 
 ```bash
 # JSON report to stdout
-hobnobcli report compliance
+vigogo report compliance
 
 # HTML report to file
-hobnobcli report compliance --format html --output /tmp/compliance-report.html
+vigogo report compliance --format html --output /tmp/compliance-report.html
 
 # JSON report to file
-hobnobcli report compliance --format json --output /tmp/compliance.json
+vigogo report compliance --format json --output /tmp/compliance.json
 ```
 
 ### REST API
 
 ```bash
 # JSON report
-curl -s https://hobnob:8443/api/v1/report/compliance | jq .
+curl -s https://vigo:8443/api/v1/report/compliance | jq .
 
 # HTML report (view in browser)
-curl -s https://hobnob:8443/api/v1/report/compliance.html > report.html
+curl -s https://vigo:8443/api/v1/report/compliance.html > report.html
 
 # HTML report (download with filename)
-curl -s "https://hobnob:8443/api/v1/report/compliance.html?download=1" -o report.html
+curl -s "https://vigo:8443/api/v1/report/compliance.html?download=1" -o report.html
 
 # OSCAL Assessment Results
-curl -s https://hobnob:8443/api/v1/export/oscal | jq .
+curl -s https://vigo:8443/api/v1/export/oscal | jq .
 ```
 
 ## Report Contents
@@ -94,7 +96,7 @@ The report automatically verifies the tamper-evident audit chain and includes th
 
 ## HTML Report
 
-The HTML report is a self-contained, printable document branded with the Hobnob name. It includes:
+The HTML report is a self-contained, printable document branded with the Vigo name. It includes:
 
 - Summary cards with color-coded compliance percentage
 - Audit chain integrity banner
@@ -117,14 +119,57 @@ The OSCAL (Open Security Controls Assessment Language) export produces a valid N
 
 This format is consumable by GRC tools (Archer, ServiceNow GRC, RegScale) and federal compliance platforms.
 
+## Executive Summary Report
+
+The executive summary is designed for business owners, C-suite, and auditors who need a high-level compliance overview without per-node technical detail.
+
+### Contents
+
+- **Compliance Score** — fleet-wide percentage with rating (Excellent/Good/Needs Attention/Critical)
+- **30-Day Trend** — daily compliance history as an inline SVG area chart
+- **Framework Coverage** — all 9 frameworks with satisfied/partial/not-satisfied counts and stacked bar charts
+- **Fleet Summary** — friendly labels: Fully Compliant, Configuration Changes Detected, Errors, Unreachable, Pending Data
+- **Top Issues** — max 10, severity-sorted, plain-English descriptions
+- **Audit Chain** — pass/fail integrity banner
+
+### CLI
+
+```bash
+# JSON to stdout
+vigogo report executive
+
+# HTML report to file (print as PDF via Ctrl+P)
+vigogo report executive --format html --output /tmp/executive-summary.html
+
+# JSON to file
+vigogo report executive --format json --output /tmp/executive.json
+```
+
+### REST API
+
+```bash
+# JSON report
+curl -s https://vigo:8443/api/v1/report/executive | jq .
+
+# HTML report
+curl -s https://vigo:8443/api/v1/report/executive.html > executive.html
+
+# Download with filename
+curl -s "https://vigo:8443/api/v1/report/executive.html?download=1" -o executive.html
+```
+
+### Print to PDF
+
+The HTML report includes `@media print` CSS for clean PDF output. Open the HTML file in a browser and press Ctrl+P (Cmd+P on macOS) to print or save as PDF.
+
 ## Scheduled Reports
 
 For automated compliance snapshots, schedule report generation via cron:
 
 ```bash
 # Weekly HTML report archived with date stamp
-0 2 * * 1 /usr/local/bin/hobnobcli report compliance --format html \
-  --output /backup/compliance/hobnob-$(date +\%Y\%m\%d).html
+0 2 * * 1 /usr/local/bin/vigogo report compliance --format html \
+  --output /backup/compliance/vigo-$(date +\%Y\%m\%d).html
 ```
 
 ## Remediation Integration
@@ -133,13 +178,13 @@ When the report shows non-compliant nodes, use the remediation system to automat
 
 ```bash
 # Check what needs remediation
-hobnobcli remediation status
+vigogo remediation status
 
 # Preview remediation targets
-hobnobcli remediation run --dry-run
+vigogo remediation run --dry-run
 
 # Execute remediation (force-push reconvergence)
-hobnobcli remediation run
+vigogo remediation run
 ```
 
 See [Remediation Workflow](remediation.md) for details.

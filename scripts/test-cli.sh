@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Automated CLI test suite for hobnobcli.
+# Automated CLI test suite for vigogo.
 # Exercises every subcommand against a live server.
 #
 # Usage:
 #   ./scripts/test-cli.sh [--server https://host:8443]
 #
-# Requires: hobnobcli in PATH (or ./bin/hobnobcli), jq, curl.
+# Requires: vigogo in PATH (or ./bin/vigogo), jq, curl.
 # Assumes the server is running and reachable from localhost (implicit admin).
 
 set -uo pipefail
@@ -14,7 +14,7 @@ SERVER="${1:-https://localhost:8443}"
 # Strip --server prefix if passed as flag
 [[ "$SERVER" == "--server" ]] && SERVER="${2:-https://localhost:8443}"
 
-CLI="${HOBNOBCLI:-hobnobcli}"
+CLI="${VIGOGO:-vigogo}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -100,7 +100,7 @@ run_test_grep() {
     fi
 }
 
-echo -e "${BOLD}hobnobcli test suite${NC}"
+echo -e "${BOLD}vigogo test suite${NC}"
 echo "Server: $SERVER"
 echo ""
 
@@ -136,7 +136,7 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[license]${NC}"
 run_test "license status" $CLI license status --server "$SERVER"
-run_test "license fingerprint" $CLI license fingerprint --ca-file /srv/hobnob/tls/ca 2>/dev/null || \
+run_test "license fingerprint" $CLI license fingerprint --ca-file /srv/vigo/tls/ca 2>/dev/null || \
     skip_test "license fingerprint" "ca file not found"
 echo ""
 
@@ -149,41 +149,41 @@ run_test "db tables" $CLI db tables --server "$SERVER"
 run_test "db integrity" $CLI db integrity --server "$SERVER"
 run_test "db checkpoint" $CLI db checkpoint --server "$SERVER"
 run_test "db vacuum" $CLI db vacuum --force --server "$SERVER"
-run_test "db query" $CLI db query "SELECT count(*) FROM thralls" --server "$SERVER"
+run_test "db query" $CLI db query "SELECT count(*) FROM envoys" --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
-# 4. thralls
+# 4. envoys
 # -------------------------------------------------------------------
-echo -e "${BOLD}[thralls]${NC}"
-run_test "thralls list" $CLI thralls list --server "$SERVER"
+echo -e "${BOLD}[envoys]${NC}"
+run_test "envoys list" $CLI envoys list --server "$SERVER"
 
-# Capture first thrall hostname for subsequent tests.
-FIRST_THRALL=$($CLI thralls list --server "$SERVER" 2>/dev/null | awk 'NR==2{print $2}' || true)
-if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
-    run_test "thralls show" $CLI thralls show "$FIRST_THRALL" --server "$SERVER"
-    run_test "thralls traits" $CLI thralls traits "$FIRST_THRALL" --server "$SERVER"
-    run_test "thralls preview" $CLI thralls preview "$FIRST_THRALL" --server "$SERVER"
+# Capture first envoy hostname for subsequent tests.
+FIRST_ENVOY=$($CLI envoys list --server "$SERVER" 2>/dev/null | awk 'NR==2{print $2}' || true)
+if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
+    run_test "envoys show" $CLI envoys show "$FIRST_ENVOY" --server "$SERVER"
+    run_test "envoys traits" $CLI envoys traits "$FIRST_ENVOY" --server "$SERVER"
+    run_test "envoys preview" $CLI envoys preview "$FIRST_ENVOY" --server "$SERVER"
 
     # Tag and untag.
-    run_test "thralls tag" $CLI thralls tag "$FIRST_THRALL" "test-tag" --server "$SERVER"
-    run_test "thralls untag" $CLI thralls untag "$FIRST_THRALL" "test-tag" --server "$SERVER"
+    run_test "envoys tag" $CLI envoys tag "$FIRST_ENVOY" "test-tag" --server "$SERVER"
+    run_test "envoys untag" $CLI envoys untag "$FIRST_ENVOY" "test-tag" --server "$SERVER"
 
     # Packages.
-    run_test "packages list" $CLI thralls packages list --thrall "$FIRST_THRALL" --server "$SERVER" || true
+    run_test "packages list" $CLI envoys packages list --envoy "$FIRST_ENVOY" --server "$SERVER" || true
 
     # Maintenance: set and immediately clear.
-    run_test "thralls maintenance set" $CLI thralls maintenance "$FIRST_THRALL" --until "2099-01-01T00:00:00Z" --server "$SERVER"
-    run_test "thralls maintenance clear" $CLI thralls maintenance "$FIRST_THRALL" --clear --server "$SERVER"
+    run_test "envoys maintenance set" $CLI envoys maintenance "$FIRST_ENVOY" --until "2099-01-01T00:00:00Z" --server "$SERVER"
+    run_test "envoys maintenance clear" $CLI envoys maintenance "$FIRST_ENVOY" --clear --server "$SERVER"
 
     # Force push — triggers immediate check-in via the force-update endpoint.
-    run_test "thralls push" $CLI thralls push "$FIRST_THRALL" --server "$SERVER"
+    run_test "envoys push" $CLI envoys push "$FIRST_ENVOY" --server "$SERVER"
 else
-    skip_test "thralls show/traits/preview/tag/maintenance" "no thralls enrolled"
+    skip_test "envoys show/traits/preview/tag/maintenance" "no envoys enrolled"
 fi
 
 # Purge (dry-run — safe, no deletions).
-run_test "thralls purge --dry-run" $CLI thralls purge --dry-run --server "$SERVER"
+run_test "envoys purge --dry-run" $CLI envoys purge --dry-run --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
@@ -243,12 +243,12 @@ else
     skip_test "config publish --dry-run" "requires root (normalizes stage permissions)"
 fi
 
-if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
-    run_test "config trace" $CLI config trace "$FIRST_THRALL" --server "$SERVER"
+if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
+    run_test "config trace" $CLI config trace "$FIRST_ENVOY" --server "$SERVER"
 fi
 run_test "config tree" $CLI config tree --server "$SERVER"
 run_test "config pending" $CLI config pending --server "$SERVER"
-run_test "config search --module" $CLI config search --module "hobnob-server-backup" --server "$SERVER" || true
+run_test "config search --module" $CLI config search --module "vigo-server-backup" --server "$SERVER" || true
 
 # History show: grab first publish ID.
 FIRST_PUBLISH=$($CLI config history --server "$SERVER" 2>/dev/null | awk 'NR==2{print $1}' || true)
@@ -284,9 +284,9 @@ echo ""
 echo -e "${BOLD}[push]${NC}"
 run_test "push list" $CLI push list --server "$SERVER"
 
-if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
-    # Push a harmless command to one thrall.
-    PUSH_OUT=$($CLI push run "echo hobnob-cli-test" --target "$FIRST_THRALL" --timeout 15 --server "$SERVER" 2>&1 || true)
+if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
+    # Push a harmless command to one envoy.
+    PUSH_OUT=$($CLI push run "echo vigo-cli-test" --target "$FIRST_ENVOY" --timeout 15 --server "$SERVER" 2>&1 || true)
     if echo "$PUSH_OUT" | grep -qiE "dispatched|push_id|run_id|complete"; then
         echo -e "  ${GREEN}PASS${NC}  push run (echo)"
         PASS=$((PASS + 1))
@@ -302,7 +302,7 @@ if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
         FAILURES+=("push run")
     fi
 else
-    skip_test "push run" "no thralls enrolled"
+    skip_test "push run" "no envoys enrolled"
 fi
 echo ""
 
@@ -310,17 +310,17 @@ echo ""
 # 10. packages
 # -------------------------------------------------------------------
 echo -e "${BOLD}[packages]${NC}"
-run_test "packages drift" $CLI thralls packages drift --server "$SERVER"
+run_test "packages drift" $CLI envoys packages drift --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
 # 11. query
 # -------------------------------------------------------------------
 echo -e "${BOLD}[query]${NC}"
-if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
-    run_test "query" $CLI query "os.hostname" --target "$FIRST_THRALL" --timeout 10 --server "$SERVER" || true
+if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
+    run_test "query" $CLI query "os.hostname" --target "$FIRST_ENVOY" --timeout 10 --server "$SERVER" || true
 else
-    skip_test "query" "no thralls enrolled"
+    skip_test "query" "no envoys enrolled"
 fi
 echo ""
 
@@ -444,7 +444,7 @@ echo ""
 # 18. backup
 # -------------------------------------------------------------------
 echo -e "${BOLD}[backup]${NC}"
-BACKUP_FILE=$(mktemp /tmp/hobnob-test-backup-XXXXXX.tar.gz)
+BACKUP_FILE=$(mktemp /tmp/vigo-test-backup-XXXXXX.tar.gz)
 if [[ $(id -u) -eq 0 ]]; then
     run_test "backup create" $CLI backup create "$BACKUP_FILE"
     if [[ -f "$BACKUP_FILE" ]]; then
@@ -471,10 +471,10 @@ echo ""
 # 19. test (config validation)
 # -------------------------------------------------------------------
 echo -e "${BOLD}[test]${NC}"
-if [[ -d "/srv/hobnob/policy/stage" ]]; then
-    run_test "test" $CLI test /srv/hobnob/policy/stage --server "$SERVER"
-elif [[ -d "thrall-configs" ]]; then
-    run_test "test" $CLI test thrall-configs --server "$SERVER"
+if [[ -d "/srv/vigo/policy/stage" ]]; then
+    run_test "test" $CLI test /srv/vigo/policy/stage --server "$SERVER"
+elif [[ -d "envoy-configs" ]]; then
+    run_test "test" $CLI test envoy-configs --server "$SERVER"
 else
     skip_test "test" "no config dir found"
 fi
@@ -501,19 +501,19 @@ echo ""
 # 21. validate
 # -------------------------------------------------------------------
 echo -e "${BOLD}[validate]${NC}"
-if [[ -d "/srv/hobnob/policy/stage/modules" ]]; then
-    HNB_FILE=$(find /srv/hobnob/policy/stage/modules -name '*.hnb' ! -name '*.example' 2>/dev/null | head -1)
+if [[ -d "/srv/vigo/policy/stage/modules" ]]; then
+    HNB_FILE=$(find /srv/vigo/policy/stage/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$HNB_FILE" ]]; then
         run_test "config validate" $CLI config validate "$HNB_FILE"
     else
-        skip_test "config validate" "no .hnb files found in stage"
+        skip_test "config validate" "no .vgo files found in stage"
     fi
-elif [[ -d "thrall-configs/modules" ]]; then
-    HNB_FILE=$(find thrall-configs/modules -name '*.hnb' ! -name '*.example' 2>/dev/null | head -1)
+elif [[ -d "envoy-configs/modules" ]]; then
+    HNB_FILE=$(find envoy-configs/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$HNB_FILE" ]]; then
         run_test "config validate" $CLI config validate "$HNB_FILE"
     else
-        skip_test "config validate" "no .hnb files found"
+        skip_test "config validate" "no .vgo files found"
     fi
 else
     skip_test "config validate" "no config dir found"
@@ -532,8 +532,8 @@ echo ""
 # 24. ask (AI assistant)
 # -------------------------------------------------------------------
 echo -e "${BOLD}[ask]${NC}"
-if $CLI ask "How many thralls are enrolled?" --server "$SERVER" >/dev/null 2>&1; then
-    run_test "ask" $CLI ask "How many thralls are enrolled?" --server "$SERVER"
+if $CLI ask "How many envoys are enrolled?" --server "$SERVER" >/dev/null 2>&1; then
+    run_test "ask" $CLI ask "How many envoys are enrolled?" --server "$SERVER"
 else
     skip_test "ask" "AI not enabled in server.yaml"
 fi
@@ -543,7 +543,7 @@ echo ""
 # 25. rollback
 # -------------------------------------------------------------------
 echo -e "${BOLD}[rollback]${NC}"
-# Rollback requires a thrall + run ID with file snapshots; test error handling.
+# Rollback requires a envoy + run ID with file snapshots; test error handling.
 run_test_expect_fail "rollback (no args)" $CLI rollback --server "$SERVER"
 echo ""
 
@@ -569,9 +569,11 @@ run_test "report gdpr (JSON)" $CLI report gdpr --server "$SERVER"
 run_test "report gdpr (HTML)" $CLI report gdpr --format html --server "$SERVER"
 run_test "report nerccip (JSON)" $CLI report nerccip --server "$SERVER"
 run_test "report nerccip (HTML)" $CLI report nerccip --format html --server "$SERVER"
+run_test "report executive (JSON)" $CLI report executive --server "$SERVER"
+run_test "report executive (HTML)" $CLI report executive --format html --server "$SERVER"
 
 # Test --output flag with a temp file.
-REPORT_TMPFILE=$(mktemp /tmp/hobnob-report-XXXXXX.json)
+REPORT_TMPFILE=$(mktemp /tmp/vigo-report-XXXXXX.json)
 run_test "report compliance --output" $CLI report compliance --output "$REPORT_TMPFILE" --server "$SERVER"
 if [[ -s "$REPORT_TMPFILE" ]]; then
     echo -e "  ${GREEN}PASS${NC}  report output file is non-empty"
@@ -597,14 +599,14 @@ echo ""
 # 29. Error handling
 # -------------------------------------------------------------------
 echo -e "${BOLD}[error handling]${NC}"
-run_test_expect_fail "thralls show bad-id" $CLI thralls show "nonexistent-id-000" --server "$SERVER"
+run_test_expect_fail "envoys show bad-id" $CLI envoys show "nonexistent-id-000" --server "$SERVER"
 run_test_expect_fail "runs show bad-id" $CLI runs show "nonexistent-id-000" --server "$SERVER"
 run_test_expect_fail "push run missing --target" $CLI push run "echo hi" --server "$SERVER"
 run_test_expect_fail "config approve bad-id" $CLI config approve 999999 --server "$SERVER"
 run_test_expect_fail "config reject bad-id" $CLI config reject 999999 --server "$SERVER"
-run_test_expect_fail "validate nonexistent" $CLI config validate "/tmp/nonexistent-file.hnb"
-run_test_expect_fail "thralls revoke bad-id" bash -c "echo y | $CLI thralls revoke 'nonexistent-000' --server '$SERVER'"
-run_test_expect_fail "thralls delete bad-id" bash -c "echo y | $CLI thralls delete 'nonexistent-000' --server '$SERVER'"
+run_test_expect_fail "validate nonexistent" $CLI config validate "/tmp/nonexistent-file.vgo"
+run_test_expect_fail "envoys revoke bad-id" bash -c "echo y | $CLI envoys revoke 'nonexistent-000' --server '$SERVER'"
+run_test_expect_fail "envoys delete bad-id" bash -c "echo y | $CLI envoys delete 'nonexistent-000' --server '$SERVER'"
 run_test_expect_fail "spanner reassign bad-id" bash -c "echo y | $CLI spanner reassign 'nonexistent-000' --from 'a' --to 'b' --server '$SERVER'"
 run_test "db reset (denied)" bash -c "echo n | $CLI db reset --server '$SERVER'"
 echo ""
