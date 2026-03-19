@@ -295,51 +295,49 @@ function fetchSecDetail(hostname, thrallId) {
             content.innerHTML = '<p class="text-muted">No security scan data for this host.</p>';
             return;
         }
-        renderCachedTraits(traits, tabs, content);
-
-        // Phase 2: Try live query for full detail (CVE descriptions, findings).
-        var timeoutSec = {{.QueryTimeoutSec}};
-        var statusHtml = '<div class="sec-live-status" id="sec-live-status">' +
-            '<p><strong>Fetching full scan detail from agent...</strong></p>' +
-            '<p class="text-muted" style="font-size:11px">The agent is in polling mode. Waiting for it to check in ' +
-            '(up to ~' + Math.round(timeoutSec/60) + ' min), open a stream, read scan files, and respond. ' +
-            'The summary above is from the last check-in.</p>' +
-            '<div class="sec-progress" id="sec-progress"><div class="sec-progress__bar" id="sec-progress-bar"></div></div>' +
-            '</div>';
-        content.insertAdjacentHTML('beforeend', statusHtml);
-
-        // Animate progress bar.
-        var bar = document.getElementById('sec-progress-bar');
-        if (bar) {
-            bar.style.transition = 'width ' + timeoutSec + 's linear';
-            requestAnimationFrame(function() { bar.style.width = '100%'; });
-        }
-
-        return fetch('/api/v1/query', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: {{.QueryTimeoutSec}} })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            var status = document.getElementById('sec-live-status');
-            try {
-                if (data.responded && data.responded.length && data.responded[0].found) {
-                    var val = data.responded[0].value;
-                    var detail = typeof val === 'string' ? JSON.parse(val) : val;
-                    renderSecDetail(detail, tabs, content);
-                } else if (status) {
-                    status.innerHTML = data.timedOut && data.timedOut.length
-                        ? 'Live detail unavailable — agent polling. Summary shown from last check-in.'
-                        : 'Live detail unavailable. Summary shown from last check-in.';
-                }
-            } catch(e) {
-                if (status) status.textContent = 'Live detail parse error: ' + e.message;
-            }
-        });
+        renderCachedTraits(traits, tabs, content, hostname, thrallId);
     })
     .catch(function(err) {
         content.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
+    });
+}
+
+function fetchLiveDetail(hostname, thrallId) {
+    var btn = document.getElementById('sec-live-btn');
+    var area = document.getElementById('sec-live-area');
+    if (btn) btn.disabled = true;
+    if (btn) btn.textContent = 'Waiting for agent...';
+    var timeoutSec = {{.QueryTimeoutSec}};
+    area.innerHTML = '<div class="sec-live-status">' +
+        '<p class="text-muted" style="font-size:11px">Waiting for agent to check in and open a stream (up to ~' + Math.round(timeoutSec/60) + ' min)...</p>' +
+        '<div class="sec-progress"><div class="sec-progress__bar" id="sec-live-bar"></div></div></div>';
+    var bar = document.getElementById('sec-live-bar');
+    if (bar) { bar.style.transition = 'width ' + timeoutSec + 's linear'; requestAnimationFrame(function() { bar.style.width = '100%'; }); }
+
+    fetch('/api/v1/query', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: timeoutSec})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.responded && data.responded.length && data.responded[0].found) {
+            var val = data.responded[0].value;
+            var detail = typeof val === 'string' ? JSON.parse(val) : val;
+            var tabs = document.getElementById('sec-drawer-tabs');
+            var content = document.getElementById('sec-drawer-content');
+            renderSecDetail(detail, tabs, content);
+        } else {
+            area.innerHTML = '<p class="text-muted" style="margin-top:8px">' +
+                (data.timedOut && data.timedOut.length
+                    ? 'Agent did not respond — it may not have checked in during the wait window.'
+                    : 'Agent offline or no scan data.') + '</p>';
+            if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+        }
+    })
+    .catch(function(err) {
+        area.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
+        if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
     });
 }
 
@@ -348,7 +346,7 @@ function closeSecDrawer() {
     document.getElementById('sec-drawer-overlay').classList.remove('sec-drawer-overlay--open');
 }
 
-function renderCachedTraits(traits, tabsEl, contentEl) {
+function renderCachedTraits(traits, tabsEl, contentEl, hostname, thrallId) {
     // Build summary from flattened security_scan.* traits.
     var h = '<div class="sec-cached-summary">';
 
@@ -381,26 +379,57 @@ function renderCachedTraits(traits, tabsEl, contentEl) {
         }
     }
 
+    // Lynis card
     if (traits['security_scan.lynis.score']) {
-        h += '<h4>Lynis</h4><p>Score: <strong>' + traits['security_scan.lynis.score'] + '</strong>';
-        h += ' | Warnings: ' + (traits['security_scan.lynis.warnings']||'0');
-        h += ' | Suggestions: ' + (traits['security_scan.lynis.suggestions']||'0') + '</p>';
+        var lynisClean = (traits['security_scan.lynis.warnings']||'0') === '0';
+        h += '<div class="sec-card ' + (lynisClean?'sec-card--info':'sec-card--high') + '">' +
+            '<div class="sec-card__header"><span class="sec-card__cve">Lynis Hardening</span>' +
+            '<span class="sec-card__sev">Score: ' + traits['security_scan.lynis.score'] + '/100</span></div>' +
+            '<div class="sec-card__body">Warnings: ' + (traits['security_scan.lynis.warnings']||'0') +
+            ' &middot; Suggestions: ' + (traits['security_scan.lynis.suggestions']||'0') + '</div></div>';
     }
 
+    // Rootkit card
     if (traits['security_scan.chkrootkit.clean'] !== undefined || traits['security_scan.rkhunter.clean'] !== undefined) {
-        h += '<h4>Rootkit</h4><p>';
-        if (traits['security_scan.chkrootkit.clean'] !== undefined) h += 'chkrootkit: ' + (traits['security_scan.chkrootkit.clean']==='true' ? '<span class="text-success">Clean</span>' : '<span class="text-danger">Infected</span>') + ' ';
-        if (traits['security_scan.rkhunter.clean'] !== undefined) h += 'rkhunter: ' + (traits['security_scan.rkhunter.clean']==='true' ? '<span class="text-success">Clean</span>' : '<span class="text-danger">Warning</span>');
-        h += '</p>';
+        var rkClean = (traits['security_scan.chkrootkit.clean']||'true') === 'true' && (traits['security_scan.rkhunter.clean']||'true') === 'true';
+        h += '<div class="sec-card ' + (rkClean?'sec-card--info':'sec-card--critical') + '">' +
+            '<div class="sec-card__header"><span class="sec-card__cve">Rootkit Detection</span>' +
+            '<span class="sec-card__sev">' + (rkClean?'Clean':'Warning') + '</span></div>' +
+            '<div class="sec-card__body">';
+        if (traits['security_scan.chkrootkit.clean'] !== undefined) h += 'chkrootkit: ' + (traits['security_scan.chkrootkit.clean']==='true'?'clean':'<strong class="text-danger">infected</strong>') + ' &middot; ';
+        if (traits['security_scan.rkhunter.clean'] !== undefined) h += 'rkhunter: ' + (traits['security_scan.rkhunter.clean']==='true'?'clean':'<strong class="text-danger">warning</strong>');
+        h += '</div></div>';
     }
 
+    // ClamAV card
     if (traits['security_scan.clamav.clean'] !== undefined) {
-        h += '<h4>ClamAV</h4><p>' + (traits['security_scan.clamav.clean']==='true' ? '<span class="text-success">Clean</span>' : '<span class="text-danger">Infected (' + (traits['security_scan.clamav.infected']||'?') + ')</span>') + '</p>';
+        var clamClean = traits['security_scan.clamav.clean'] === 'true';
+        h += '<div class="sec-card ' + (clamClean?'sec-card--info':'sec-card--critical') + '">' +
+            '<div class="sec-card__header"><span class="sec-card__cve">ClamAV Malware Scan</span>' +
+            '<span class="sec-card__sev">' + (clamClean?'Clean':'Infected') + '</span></div>' +
+            (clamClean?'':'<div class="sec-card__body text-danger">' + (traits['security_scan.clamav.infected']||'?') + ' infected file(s)</div>') +
+            '</div>';
     }
 
+    // AIDE card
     if (traits['security_scan.aide.clean'] !== undefined) {
-        h += '<h4>AIDE</h4><p>' + (traits['security_scan.aide.clean']==='true' ? '<span class="text-success">Clean</span>' : 'Added: ' + (traits['security_scan.aide.added']||'0') + ' | Removed: ' + (traits['security_scan.aide.removed']||'0') + ' | Changed: ' + (traits['security_scan.aide.changed']||'0')) + '</p>';
+        var aideClean = traits['security_scan.aide.clean'] === 'true';
+        h += '<div class="sec-card ' + (aideClean?'sec-card--info':'sec-card--high') + '">' +
+            '<div class="sec-card__header"><span class="sec-card__cve">AIDE File Integrity</span>' +
+            '<span class="sec-card__sev">' + (aideClean?'Clean':'Changed') + '</span></div>' +
+            (aideClean?'':'<div class="sec-card__body">Added: ' + (traits['security_scan.aide.added']||'0') +
+            ' &middot; Removed: ' + (traits['security_scan.aide.removed']||'0') +
+            ' &middot; Changed: ' + (traits['security_scan.aide.changed']||'0') + '</div>') +
+            '</div>';
     }
+
+    // Live query button for detailed findings
+    h += '<div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--color-border)">' +
+        '<button class="btn btn--sm btn--outline" id="sec-live-btn" ' +
+        'onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(thrallId) + '\')">Fetch Live Detail</button> ' +
+        '<span class="text-muted" style="font-size:11px">Query agent for Lynis warnings, rootkit findings, AIDE file paths, per-CVE package info. ' +
+        'Requires agent check-in (may take up to ~' + Math.round({{.QueryTimeoutSec}}/60) + ' min).</span>' +
+        '<div id="sec-live-area"></div></div>';
 
     h += '</div>';
     contentEl.innerHTML = h;
