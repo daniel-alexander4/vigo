@@ -95,11 +95,18 @@ Contact us for details.
 
 ## Prohibited Use
 
-This software may not be used by, for, or on behalf of any military
-organization, department of defense, armed forces, defense contractor,
-intelligence agency, or any entity primarily engaged in military or
-weapons-related activities. No license — free or paid — will be granted
-for such use. This prohibition is absolute and non-negotiable.
+This software may not be used by, for, or on behalf of:
+
+- Any military organization, department of defense, armed forces, defense
+  contractor, intelligence agency, or entity primarily engaged in military
+  or weapons-related activities.
+- Any manufacturer, distributor, or retailer of firearms, ammunition,
+  weapons, or weapons components.
+- Any manufacturer, distributor, or retailer of pesticides, herbicides,
+  or chemical poisons intended to kill living organisms.
+
+No license — free or paid — will be granted for such use. These
+prohibitions are absolute and non-negotiable.
 
 ## Right to Refuse
 
