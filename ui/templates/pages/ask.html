@@ -115,27 +115,18 @@
                 <h4>Critical CVEs by Host</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Count</th><th>CVEs</th><th></th></tr></thead>
+                        <thead><tr><th>Host</th><th>Count</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if .TrivyCritical}}
                             <tr>
                                 <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">{{.TrivyCritical}}</td>
-                                <td class="sec-cve-list">{{range .CVEs}}<a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a> {{end}}</td>
                                 <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
                     </table>
                 </div>
-                {{if .Security.CVEs}}
-                <h4>All Critical & High CVEs <span class="ask-badge ask-badge--muted">{{len .Security.CVEs}}</span></h4>
-                <div class="sec-cve-list">
-                    {{range .Security.CVEs}}
-                    <a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a>
-                    {{end}}
-                </div>
-                {{end}}
             </div>
 
             {{/* ── High CVEs panel ── */}}
@@ -143,7 +134,7 @@
                 <h4>High CVEs by Host</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>CVEs</th><th></th></tr></thead>
+                        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
                             <tr>
@@ -152,7 +143,6 @@
                                 <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
                                 <td>{{.TrivyMedium}}</td>
                                 <td>{{.TrivyLow}}</td>
-                                <td class="sec-cve-list">{{range .CVEs}}<a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a> {{end}}</td>
                                 <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
