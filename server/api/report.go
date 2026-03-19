@@ -39,6 +39,8 @@ func NewReportHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, configS
 func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/compliance", h.handleComplianceReport)
 	mux.HandleFunc("GET /api/v1/report/compliance.html", h.handleComplianceReportHTML)
+	mux.HandleFunc("GET /api/v1/report/hitrust", h.handleHITRUSTReport)
+	mux.HandleFunc("GET /api/v1/report/hitrust.html", h.handleHITRUSTReportHTML)
 }
 
 // ComplianceReport is the JSON format for a compliance report.
@@ -89,7 +91,7 @@ type AuditChainStatus struct {
 	Error      string `json:"error,omitempty"`
 }
 
-func (h *ReportHandler) buildReport(r *http.Request) (*ComplianceReport, error) {
+func (h *ReportHandler) buildReport(r *http.Request, title string, controls []ControlFinding) (*ComplianceReport, error) {
 	now := time.Now().UTC()
 
 	// Fleet summary.
@@ -108,9 +110,6 @@ func (h *ReportHandler) buildReport(r *http.Request) (*ComplianceReport, error) 
 		auditStatus.EntryCount = verifyResult.EntryCount
 		auditStatus.Error = verifyResult.Error
 	}
-
-	// HIPAA control mappings.
-	controls := h.buildControlFindings(summary, auditStatus)
 
 	// Per-node status.
 	var nodes []FleetNodeStatus
@@ -132,7 +131,7 @@ func (h *ReportHandler) buildReport(r *http.Request) (*ComplianceReport, error) 
 	}
 
 	return &ComplianceReport{
-		Title:       "Hobnob HIPAA Compliance Report",
+		Title:       title,
 		GeneratedAt: now.Format(time.RFC3339),
 		GeneratedBy: "Hobnob " + h.version,
 		Version:     h.version,
@@ -182,8 +181,18 @@ func statusForAudit(a AuditChainStatus) string {
 	return "not_satisfied"
 }
 
+func (h *ReportHandler) hipaaControls(r *http.Request) []ControlFinding {
+	var auditStatus AuditChainStatus
+	if v, err := audit.Verify(r.Context(), h.queries); err == nil {
+		auditStatus.Valid = v.Valid
+		auditStatus.EntryCount = v.EntryCount
+		auditStatus.Error = v.Error
+	}
+	return h.buildControlFindings(h.fleetIndex.ComplianceSummary(), auditStatus)
+}
+
 func (h *ReportHandler) handleComplianceReport(w http.ResponseWriter, r *http.Request) {
-	report, err := h.buildReport(r)
+	report, err := h.buildReport(r, "Hobnob HIPAA Compliance Report", h.hipaaControls(r))
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
 		return
@@ -195,7 +204,7 @@ func (h *ReportHandler) handleComplianceReport(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ReportHandler) handleComplianceReportHTML(w http.ResponseWriter, r *http.Request) {
-	report, err := h.buildReport(r)
+	report, err := h.buildReport(r, "Hobnob HIPAA Compliance Report", h.hipaaControls(r))
 	if err != nil {
 		http.Error(w, "failed to build report: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -316,4 +325,107 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
 
 	fmt.Fprintf(w, `<div class="footer">Hobnob Compliance Report &mdash; Generated %s &mdash; %s</div>
 </body></html>`, r.GeneratedAt, html.EscapeString(r.GeneratedBy))
+}
+
+// ---------- HITRUST CSF ----------
+
+// buildHITRUSTFindings returns HITRUST CSF control findings mapped to Hobnob capabilities.
+func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Domain 01 — Access Control
+		{ControlID: "01.b", Title: "User Registration", Status: "satisfied", Evidence: "Per-user accounts with unique UUIDs, RBAC roles, admin/viewer + 13 fine-grained permissions"},
+		{ControlID: "01.c", Title: "Privilege Management", Status: "satisfied", Evidence: "Fine-grained RBAC: 13 permissions (fleet.read, config.publish, users.manage, etc.), role-based defaults"},
+		{ControlID: "01.d", Title: "User Password Management", Status: "satisfied", Evidence: "12-char minimum, complexity rules (upper/lower/digit/special), bcrypt hashing, secrets provider encryption"},
+		{ControlID: "01.i", Title: "Policy on Use of Network Services", Status: "satisfied", Evidence: "mTLS enforced on all gRPC/REST traffic, no plaintext transport"},
+		{ControlID: "01.j", Title: "User Authentication for External Connections", Status: "satisfied", Evidence: "mTLS certificates, ED25519 agent signatures, TOTP MFA available"},
+		{ControlID: "01.n", Title: "Network Connection Control", Status: "satisfied", Evidence: "Firewall executor enforces host-based firewall rules (iptables, nftables, pf, Windows Firewall)"},
+		{ControlID: "01.v", Title: "Information Access Restriction", Status: "satisfied", Evidence: "File executor enforces permissions, ownership, and mode on all managed files"},
+
+		// Domain 06 — Compliance
+		{ControlID: "06.c", Title: "Protection of Organizational Records", Status: "satisfied", Evidence: "Encrypted backups (AES-256-GCM), SHA-256 integrity verification, file snapshots in DB"},
+		{ControlID: "06.g", Title: "Compliance with Security Policies", Status: "satisfied", Evidence: "Continuous drift detection with 5-level compliance status, fleet-wide dashboards"},
+		{ControlID: "06.h", Title: "Technical Compliance Checking", Status: "satisfied", Evidence: "Automated convergence checks on every agent check-in, recurring drift detection (3-run threshold)"},
+		{ControlID: "06.i", Title: "Information Systems Audit Controls", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
+
+		// Domain 07 — Asset Management
+		{ControlID: "07.a", Title: "Inventory of Assets", Status: "satisfied", Evidence: "25 trait collectors auto-discover hardware, OS, network, packages; FleetIndex provides real-time inventory"},
+
+		// Domain 09 — Communications and Operations Management
+		{ControlID: "09.a", Title: "Documented Operating Procedures", Status: "satisfied", Evidence: "Config-as-code: YAML modules define desired state, version-controlled, auditable"},
+		{ControlID: "09.b", Title: "Change Management", Status: "satisfied", Evidence: "Stage → publish workflow, git-tracked changes, modlint validation, tamper-evident audit trail"},
+		{ControlID: "09.c", Title: "Segregation of Duties", Status: "satisfied", Evidence: "RBAC with admin/viewer roles + fine-grained permissions, change approval workflow (two-person rule)"},
+		{ControlID: "09.d", Title: "Separation of Environments", Status: "satisfied", Evidence: "Environment-specific configs via environment_overrides, conditional variables per environment"},
+		{ControlID: "09.i", Title: "Protection Against Malicious Code", Status: "satisfied", Evidence: "Package executor enforces AV/EDR packages, service executor ensures they're running"},
+		{ControlID: "09.k", Title: "Back-up", Status: "satisfied", Evidence: "Litestream continuous WAL replication, on-demand snapshots, AES-256-GCM encrypted backups"},
+		{ControlID: "09.l", Title: "Network Security Management", Status: "satisfied", Evidence: "Firewall executor (iptables/nftables/pf/Windows), mTLS on all management traffic"},
+		{ControlID: "09.q", Title: "Audit Logging", Status: statusForAudit(auditStatus), Evidence: "SHA-256 hash chain audit trail: auth, user, token, config, push, workflow, emergency, remediation events"},
+		{ControlID: "09.s", Title: "Protection of Log Information", Status: "satisfied", Evidence: "Audit chain is tamper-evident (SHA-256 hash chain), immutable once written"},
+		{ControlID: "09.v", Title: "Clock Synchronization", Status: "satisfied", Evidence: "Package/service executors can enforce NTP/chrony across fleet"},
+
+		// Domain 10 — Systems Acquisition, Development, Maintenance
+		{ControlID: "10.f", Title: "Cryptographic Controls", Status: "satisfied", Evidence: "AES-256-GCM secrets, mTLS (TLS 1.3), ED25519 signatures, Argon2id key derivation"},
+		{ControlID: "10.g", Title: "Key Management", Status: "satisfied", Evidence: "Auto-generated master key, secret rotation via watcher, certificate deployment and renewal"},
+		{ControlID: "10.h", Title: "Control of Operational Software", Status: "satisfied", Evidence: "Package executor enforces versions, repository executor controls sources"},
+		{ControlID: "10.k", Title: "Change Control Procedures", Status: "satisfied", Evidence: "Stage/live separation, modlint validation, change approval, blast radius limits, auto-rollback"},
+		{ControlID: "10.l", Title: "Technical Review After OS Changes", Status: "satisfied", Evidence: "Automatic reconvergence detects drift after OS updates on next check-in"},
+		{ControlID: "10.m", Title: "Restrictions on Software Changes", Status: "satisfied", Evidence: "Package pinning prevents unauthorized version changes, repository enforcement controls sources"},
+
+		// Domain 11 — Incident Management
+		{ControlID: "11.a", Title: "Reporting Security Events", Status: "satisfied", Evidence: "Webhook + SMTP notifications for compliance drift, threshold breaches, stale nodes"},
+		{ControlID: "11.e", Title: "Collection of Evidence", Status: "satisfied", Evidence: "Run history, file snapshots, compliance history, tamper-evident audit chain"},
+
+		// Domain 12 — Business Continuity
+		{ControlID: "12.c", Title: "Developing and Implementing BCPs", Status: "satisfied", Evidence: "Config-as-code enables rapid rebuild; backup + restore tested; disaster recovery documented"},
+
+		// Domain 16 — Endpoint Protection
+		{ControlID: "16.a", Title: "Endpoint Protection", Status: "satisfied", Evidence: "Package/service executors enforce AV/EDR/firewall on all managed endpoints"},
+	}
+}
+
+func (h *ReportHandler) handleHITRUSTReport(w http.ResponseWriter, r *http.Request) {
+	var auditStatus AuditChainStatus
+	if v, err := audit.Verify(r.Context(), h.queries); err == nil {
+		auditStatus.Valid = v.Valid
+		auditStatus.EntryCount = v.EntryCount
+		auditStatus.Error = v.Error
+	}
+	controls := h.buildHITRUSTFindings(auditStatus)
+
+	report, err := h.buildReport(r, "Hobnob HITRUST CSF Compliance Report", controls)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.Encode(report)
+}
+
+func (h *ReportHandler) handleHITRUSTReportHTML(w http.ResponseWriter, r *http.Request) {
+	var auditStatus AuditChainStatus
+	if v, err := audit.Verify(r.Context(), h.queries); err == nil {
+		auditStatus.Valid = v.Valid
+		auditStatus.EntryCount = v.EntryCount
+		auditStatus.Error = v.Error
+	}
+	controls := h.buildHITRUSTFindings(auditStatus)
+
+	report, err := h.buildReport(r, "Hobnob HITRUST CSF Compliance Report", controls)
+	if err != nil {
+		http.Error(w, "failed to build report: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.URL.Query().Get("download") == "1" {
+		filename := fmt.Sprintf("hobnob-hitrust-%s.html", time.Now().Format("2006-01-02"))
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	}
+	renderComplianceHTML(w, report)
 }

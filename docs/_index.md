@@ -88,6 +88,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 ## Compliance
 
 - [Compliance Reporting](compliance/reporting.md) — HIPAA reports in JSON, HTML, and OSCAL
+- [HITRUST CSF](compliance/hitrust.md) — 31 control references mapped across 8 domains
 - [Remediation Workflow](compliance/remediation.md) — Automated drift detection, fix, verification
 - [Database Encryption at Rest](compliance/database-encryption.md) — LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](operations/hipaa-checklist.md) — 164.312 requirement mapping and verification

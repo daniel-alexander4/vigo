@@ -86,6 +86,72 @@ Examples:
 	},
 }
 
+var reportHITRUSTCmd = &cobra.Command{
+	Use:   "hitrust",
+	Short: "Generate a HITRUST CSF compliance report",
+	Long: `Generate a compliance report mapped to HITRUST CSF control domains
+(01 Access Control, 06 Compliance, 09 Operations, 10 Maintenance, etc.).
+
+Examples:
+  hobnobcli report hitrust
+  hobnobcli report hitrust --format html --output hitrust-report.html`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		format, _ := cmd.Flags().GetString("format")
+		output, _ := cmd.Flags().GetString("output")
+
+		client := newAPIClient()
+
+		var path string
+		switch format {
+		case "html":
+			path = "/api/v1/report/hitrust.html"
+		default:
+			path = "/api/v1/report/hitrust"
+		}
+
+		if format == "html" {
+			resp, err := client.getRaw(path)
+			if err != nil {
+				return fmt.Errorf("generating report: %w", err)
+			}
+			defer resp.Body.Close()
+
+			var w io.Writer = os.Stdout
+			if output != "" {
+				f, err := os.Create(output)
+				if err != nil {
+					return fmt.Errorf("creating output file: %w", err)
+				}
+				defer f.Close()
+				w = f
+			}
+			if _, err := io.Copy(w, resp.Body); err != nil {
+				return fmt.Errorf("writing report: %w", err)
+			}
+			if output != "" {
+				fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
+			}
+			return nil
+		}
+
+		var report map[string]any
+		if err := client.get(path, &report); err != nil {
+			return fmt.Errorf("generating report: %w", err)
+		}
+
+		data, _ := json.MarshalIndent(report, "", "  ")
+		if output != "" {
+			if err := os.WriteFile(output, append(data, '\n'), 0644); err != nil {
+				return fmt.Errorf("writing output: %w", err)
+			}
+			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
+		} else {
+			fmt.Println(string(data))
+		}
+		return nil
+	},
+}
+
 var remediationCmd = &cobra.Command{
 	Use:   "remediation",
 	Short: "Manage automated drift remediation",
@@ -148,7 +214,9 @@ var remediationListCmd = &cobra.Command{
 func init() {
 	reportComplianceCmd.Flags().String("format", "json", "Output format: json or html")
 	reportComplianceCmd.Flags().String("output", "", "Write output to file instead of stdout")
-	reportCmd.AddCommand(reportComplianceCmd)
+	reportHITRUSTCmd.Flags().String("format", "json", "Output format: json or html")
+	reportHITRUSTCmd.Flags().String("output", "", "Write output to file instead of stdout")
+	reportCmd.AddCommand(reportComplianceCmd, reportHITRUSTCmd)
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")
 	remediationCmd.AddCommand(remediationRunCmd, remediationStatusCmd, remediationListCmd)

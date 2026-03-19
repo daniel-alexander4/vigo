@@ -1,18 +1,20 @@
 ---
-title: HIPAA Compliance Reporting
+title: Compliance Reporting
 ---
 
-# HIPAA Compliance Reporting
+# Compliance Reporting
 
-Hobnob generates HIPAA compliance reports that map technical controls to 45 CFR 164.312 requirements. Reports include fleet compliance status, audit chain integrity verification, and per-node evidence.
+Hobnob generates compliance reports mapped to HIPAA and HITRUST CSF frameworks. Reports include fleet compliance status, audit chain integrity verification, and per-node evidence.
 
 ## Report Formats
 
-| Format | Endpoint | Use Case |
-|--------|----------|----------|
-| JSON | `GET /api/v1/report/compliance` | Programmatic consumption, CI/CD pipelines |
-| HTML | `GET /api/v1/report/compliance.html` | Auditor-readable, printable, downloadable |
-| OSCAL | `GET /api/v1/export/oscal` | Machine-readable OSCAL Assessment Results v1.1.2 |
+| Framework | Format | Endpoint | Use Case |
+|-----------|--------|----------|----------|
+| HIPAA | JSON | `GET /api/v1/report/compliance` | Programmatic consumption |
+| HIPAA | HTML | `GET /api/v1/report/compliance.html` | Auditor-readable, printable |
+| HITRUST CSF | JSON | `GET /api/v1/report/hitrust` | Programmatic consumption |
+| HITRUST CSF | HTML | `GET /api/v1/report/hitrust.html` | Auditor-readable, printable |
+| OSCAL | JSON | `GET /api/v1/export/oscal` | Machine-readable OSCAL v1.1.2 |
 
 ## Generating Reports
 
