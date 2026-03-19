@@ -1002,6 +1002,10 @@ func (m *mockDataSource) SecurityScanData() SecurityScanPageData {
 	return SecurityScanPageData{}
 }
 
+func (m *mockDataSource) SecurityScanTraits(_ string) (map[string]string, bool) {
+	return nil, false
+}
+
 // actionColor maps a plan action to a badge CSS class.
 func actionColor(action string) string {
 	switch action {

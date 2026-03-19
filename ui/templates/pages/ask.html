@@ -292,35 +292,47 @@ function fetchSecDetail(hostname, thrallId) {
 
     title.textContent = hostname + ' — Security Details';
     link.href = '/thralls/' + thrallId;
-    content.innerHTML = '<p class="text-muted">Loading scan results from agent...</p>';
+    content.innerHTML = '<p class="text-muted">Loading scan data...</p>';
     tabs.innerHTML = '';
     drawer.classList.add('sec-drawer--open');
     overlay.classList.add('sec-drawer-overlay--open');
 
-    fetch('/api/v1/query', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: 15})
-    })
+    // Phase 1: Show cached trait summary from FleetIndex (instant, no stream needed).
+    fetch('/ui/api/thralls/' + thrallId + '/security')
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-        try {
-            if (data.responded && data.responded.length && data.responded[0].found) {
-                var val = data.responded[0].value;
-                var detail = typeof val === 'string' ? JSON.parse(val) : val;
-                renderSecDetail(detail, tabs, content);
-            } else if (data.timedOut && data.timedOut.length) {
-                content.innerHTML = '<p class="text-danger">Agent did not respond in time. Is the daemon running?</p>';
-            } else if (data.offline && data.offline.length) {
-                content.innerHTML = '<p class="text-warning">Agent is offline. Start the daemon and try again.</p>';
-            } else {
-                content.innerHTML = '<p class="text-muted">No security scan data available on this host.</p>' +
-                    '<pre class="text-muted" style="font-size:11px">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
-            }
-        } catch(e) {
-            content.innerHTML = '<p class="text-danger">Parse error: ' + esc(e.message) + '</p>' +
-                '<pre class="text-muted" style="font-size:11px">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
+    .then(function(traits) {
+        if (traits.available === false) {
+            content.innerHTML = '<p class="text-muted">No security scan data for this host.</p>';
+            return;
         }
+        renderCachedTraits(traits, tabs, content);
+
+        // Phase 2: Try live query for full detail (CVE descriptions, findings).
+        content.insertAdjacentHTML('beforeend',
+            '<p class="text-muted sec-live-status" id="sec-live-status">Fetching live scan detail from agent...</p>');
+
+        return fetch('/api/v1/query', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: 30})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var status = document.getElementById('sec-live-status');
+            try {
+                if (data.responded && data.responded.length && data.responded[0].found) {
+                    var val = data.responded[0].value;
+                    var detail = typeof val === 'string' ? JSON.parse(val) : val;
+                    renderSecDetail(detail, tabs, content);
+                } else if (status) {
+                    status.innerHTML = data.timedOut && data.timedOut.length
+                        ? 'Live detail unavailable — agent polling. Summary shown from last check-in.'
+                        : 'Live detail unavailable. Summary shown from last check-in.';
+                }
+            } catch(e) {
+                if (status) status.textContent = 'Live detail parse error: ' + e.message;
+            }
+        });
     })
     .catch(function(err) {
         content.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
@@ -330,6 +342,60 @@ function fetchSecDetail(hostname, thrallId) {
 function closeSecDrawer() {
     document.getElementById('sec-drawer').classList.remove('sec-drawer--open');
     document.getElementById('sec-drawer-overlay').classList.remove('sec-drawer-overlay--open');
+}
+
+function renderCachedTraits(traits, tabsEl, contentEl) {
+    // Build summary from flattened security_scan.* traits.
+    var h = '<div class="sec-cached-summary">';
+
+    var trivy = traits['security_scan.trivy.critical'] || traits['security_scan.trivy.high'];
+    if (trivy !== undefined) {
+        h += '<h4>Trivy CVE Summary</h4><table class="ask-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
+        h += '<td class="text-danger">' + (traits['security_scan.trivy.critical']||'0') + '</td>';
+        h += '<td class="text-warning">' + (traits['security_scan.trivy.high']||'0') + '</td>';
+        h += '<td>' + (traits['security_scan.trivy.medium']||'0') + '</td>';
+        h += '<td>' + (traits['security_scan.trivy.low']||'0') + '</td>';
+        h += '<td>' + (traits['security_scan.trivy.total']||'0') + '</td>';
+        h += '<td>' + (traits['security_scan.trivy.last_scan']||'—') + '</td>';
+        h += '</tr></tbody></table>';
+
+        // CVE IDs from flattened traits.
+        var cves = [];
+        for (var k in traits) {
+            if (k.indexOf('security_scan.trivy.cves.') === 0 || k.indexOf('security_scan.debsecan.cves.') === 0) {
+                cves.push(traits[k]);
+            }
+        }
+        if (cves.length) {
+            h += '<h4>CVEs</h4><div class="sec-cve-list">';
+            cves.forEach(function(c) { h += '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-cve-link">' + c + '</a> '; });
+            h += '</div>';
+        }
+    }
+
+    if (traits['security_scan.lynis.score']) {
+        h += '<h4>Lynis</h4><p>Score: <strong>' + traits['security_scan.lynis.score'] + '</strong>';
+        h += ' | Warnings: ' + (traits['security_scan.lynis.warnings']||'0');
+        h += ' | Suggestions: ' + (traits['security_scan.lynis.suggestions']||'0') + '</p>';
+    }
+
+    if (traits['security_scan.chkrootkit.clean'] !== undefined || traits['security_scan.rkhunter.clean'] !== undefined) {
+        h += '<h4>Rootkit</h4><p>';
+        if (traits['security_scan.chkrootkit.clean'] !== undefined) h += 'chkrootkit: ' + (traits['security_scan.chkrootkit.clean']==='true' ? '<span class="text-success">Clean</span>' : '<span class="text-danger">Infected</span>') + ' ';
+        if (traits['security_scan.rkhunter.clean'] !== undefined) h += 'rkhunter: ' + (traits['security_scan.rkhunter.clean']==='true' ? '<span class="text-success">Clean</span>' : '<span class="text-danger">Warning</span>');
+        h += '</p>';
+    }
+
+    if (traits['security_scan.clamav.clean'] !== undefined) {
+        h += '<h4>ClamAV</h4><p>' + (traits['security_scan.clamav.clean']==='true' ? '<span class="text-success">Clean</span>' : '<span class="text-danger">Infected (' + (traits['security_scan.clamav.infected']||'?') + ')</span>') + '</p>';
+    }
+
+    if (traits['security_scan.aide.clean'] !== undefined) {
+        h += '<h4>AIDE</h4><p>' + (traits['security_scan.aide.clean']==='true' ? '<span class="text-success">Clean</span>' : 'Added: ' + (traits['security_scan.aide.added']||'0') + ' | Removed: ' + (traits['security_scan.aide.removed']||'0') + ' | Changed: ' + (traits['security_scan.aide.changed']||'0')) + '</p>';
+    }
+
+    h += '</div>';
+    contentEl.innerHTML = h;
 }
 
 function renderSecDetail(d, tabsEl, contentEl) {

@@ -704,3 +704,21 @@ func parseInt64(s string) int64 {
 	}
 	return n
 }
+
+// SecurityScanTraits returns the flattened security_scan.* traits for a single thrall.
+func (ds *DataSource) SecurityScanTraits(thrallID string) (map[string]string, bool) {
+	ts, ok, _ := ds.fleet.GetThrallLite(thrallID)
+	if !ok || ts.Traits == nil {
+		return nil, false
+	}
+	result := make(map[string]string)
+	for k, v := range ts.Traits {
+		if strings.HasPrefix(k, "security_scan.") {
+			result[k] = v
+		}
+	}
+	if len(result) == 0 {
+		return nil, false
+	}
+	return result, true
+}

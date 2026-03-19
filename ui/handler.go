@@ -47,6 +47,7 @@ type DataSource interface {
 	ConfigData(hostname string) (ConfigPageData, error)
 	PlanDetailData(planID string) (PlanDetailPageData, error)
 	SecurityScanData() SecurityScanPageData
+	SecurityScanTraits(thrallID string) (map[string]string, bool)
 }
 
 // Handler serves all UI pages.
@@ -142,6 +143,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.Dashboard)
 	mux.HandleFunc("GET /thralls", h.Thralls)
 	mux.HandleFunc("GET /thralls/{id}", h.ThrallDetail)
+	mux.HandleFunc("GET /ui/api/thralls/{id}/security", h.ThrallSecurityTraits)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
@@ -973,6 +975,20 @@ func (h *Handler) ThrallDetail(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "thrall-detail", data)
 }
 
+// ThrallSecurityTraits returns cached security_scan traits for a thrall as JSON.
+// This uses FleetIndex data (no agent stream required).
+func (h *Handler) ThrallSecurityTraits(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	traits, ok := h.dataSource.SecurityScanTraits(idStr)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"available":false}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(traits)
+}
+
 // ThrallRunsFragment renders the runs + drift history fragment for a thrall (HTMX lazy load).
 func (h *Handler) ThrallRunsFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
@@ -1627,6 +1643,10 @@ func (ds *dbDataSource) SecurityScanData() SecurityScanPageData {
 	// DB-backed datasource does not have access to flattened traits.
 	// Return empty data — fleet DataSource handles this.
 	return SecurityScanPageData{}
+}
+
+func (ds *dbDataSource) SecurityScanTraits(_ string) (map[string]string, bool) {
+	return nil, false
 }
 
 // --- Push and Workflow page types ---
