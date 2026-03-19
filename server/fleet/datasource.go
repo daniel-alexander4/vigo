@@ -671,6 +671,12 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 					data.CVEs = append(data.CVEs, v)
 				}
 			}
+			if len(k) > 37 && k[:36] == "security_scan.windows_updates.cves." {
+				if !cveSet[v] {
+					cveSet[v] = true
+					data.CVEs = append(data.CVEs, v)
+				}
+			}
 		}
 	}
 

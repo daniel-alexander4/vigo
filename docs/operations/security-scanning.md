@@ -194,6 +194,35 @@ aide --init && cp /var/lib/aide/aide.db.new /var/lib/aide/aide.db
 
 Or push this via a Hobnob exec resource.
 
+## Windows
+
+A separate `security-scanning-windows.hnb.example` module provides security scanning for Windows thralls:
+
+| Tool | Purpose | Install Method |
+|------|---------|---------------|
+| **Trivy** | OS package and Windows Update CVE scanning | Chocolatey |
+| **Windows Defender** | Antivirus status, real-time protection, threat count | Built-in (PowerShell) |
+| **Windows Updates** | Missing patches with CVE IDs and MSRC severity | Built-in (PowerShell) |
+
+Enable it the same way as the Linux module:
+
+```yaml
+# In common.hnb or a Windows-specific node mapping
+modules: [security-scanning-windows]
+```
+
+All `when:` guards include `os_family('windows')` so it's safe to include alongside the Linux module — each runs only on its platform.
+
+Scan output is written to `C:\ProgramData\Hobnob\security\`:
+
+| File | Tool |
+|------|------|
+| `trivy.json` | Trivy JSON report |
+| `defender.json` | Windows Defender status |
+| `updates.json` | Missing Windows Updates with CVE IDs |
+
+The same `security_scan` trait collector reads these files on Windows, so results appear on the dashboard alongside Linux thralls.
+
 ## Network-Based Scanners
 
 Tools like OpenVAS/Greenbone, Nessus, Qualys, and Rapid7 InsightVM are centralized network scanners — they run on a dedicated host and scan targets remotely. They don't fit the local-agent-per-thrall model.

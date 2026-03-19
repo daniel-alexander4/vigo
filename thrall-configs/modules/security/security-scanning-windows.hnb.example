@@ -1,0 +1,98 @@
+#~ Deploys security scanning tools on Windows thralls.
+#~ Results are collected by the built-in security_scan trait collector
+#~ and displayed on the Compliance & Security dashboard.
+#~
+#~ Tools: Trivy (CVE), Windows Defender (status check), Windows Updates
+#~        (missing patches).
+#~
+#~ Requires Chocolatey for Trivy installation. Windows Defender and
+#~ Windows Update checks use built-in PowerShell — no additional installs.
+#~
+#~ Scan output: C:\ProgramData\Hobnob\security\
+name: security-scanning-windows
+
+vars:
+  scan_dir: "C:\\ProgramData\\Hobnob\\security"
+  trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"
+  scan_hour_start: "2"
+  scan_hour_end: "5"
+
+resources:
+  # ── Output directory ──────────────────────────────────────────────
+
+  - name: scan-dir
+    type: directory
+    target_path: "C:\\ProgramData\\Hobnob\\security"
+    when: "os_family('windows')"
+
+  # ── Trivy (CVE scanner) ──────────────────────────────────────────
+
+  - name: install-trivy
+    type: package
+    package: trivy
+    state: present
+    when: "os_family('windows')"
+
+  - name: run-trivy
+    type: powershell
+    command: >-
+      trivy rootfs --format json
+      --severity {{ .Vars.trivy_severity }}
+      --output {{ .Vars.scan_dir }}\trivy.json C:\
+    onlyif: "!(Test-Path $env:TEMP\\.hobnob-trivy-$(Get-Date -Format yyyyMMdd))"
+    when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    depends_on: [install-trivy, scan-dir]
+
+  - name: trivy-sentinel
+    type: powershell
+    command: "New-Item -ItemType File -Path $env:TEMP\\.hobnob-trivy-$(Get-Date -Format yyyyMMdd) -Force | Out-Null"
+    onlyif: "!(Test-Path $env:TEMP\\.hobnob-trivy-$(Get-Date -Format yyyyMMdd))"
+    when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    depends_on: [run-trivy]
+
+  # ── Windows Defender status ──────────────────────────────────────
+
+  - name: defender-status
+    type: powershell
+    command: "Get-MpComputerStatus | ConvertTo-Json -Depth 3 | Out-File -Encoding utf8 {{ .Vars.scan_dir }}\\defender.json"
+    onlyif: "!(Test-Path $env:TEMP\\.hobnob-defender-$(Get-Date -Format yyyyMMdd))"
+    when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    depends_on: [scan-dir]
+
+  - name: defender-sentinel
+    type: powershell
+    command: "New-Item -ItemType File -Path $env:TEMP\\.hobnob-defender-$(Get-Date -Format yyyyMMdd) -Force | Out-Null"
+    onlyif: "!(Test-Path $env:TEMP\\.hobnob-defender-$(Get-Date -Format yyyyMMdd))"
+    when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    depends_on: [defender-status]
+
+  # ── Windows Update check (missing patches) ───────────────────────
+
+  - name: check-updates
+    type: powershell
+    command: >-
+      $session = New-Object -ComObject Microsoft.Update.Session;
+      $searcher = $session.CreateUpdateSearcher();
+      $results = $searcher.Search('IsInstalled=0');
+      if ($results.Updates.Count -gt 0) {
+        $results.Updates | ForEach-Object {
+          [PSCustomObject]@{
+            Title    = $_.Title
+            CVEs     = ($_.CveIDs -join ',')
+            Severity = $_.MsrcSeverity
+            KB       = ($_.KBArticleIDs -join ',')
+          }
+        } | ConvertTo-Json -Depth 3
+      } else {
+        '[]'
+      } | Out-File -Encoding utf8 {{ .Vars.scan_dir }}\updates.json
+    onlyif: "!(Test-Path $env:TEMP\\.hobnob-updates-$(Get-Date -Format yyyyMMdd))"
+    when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    depends_on: [scan-dir]
+
+  - name: updates-sentinel
+    type: powershell
+    command: "New-Item -ItemType File -Path $env:TEMP\\.hobnob-updates-$(Get-Date -Format yyyyMMdd) -Force | Out-Null"
+    onlyif: "!(Test-Path $env:TEMP\\.hobnob-updates-$(Get-Date -Format yyyyMMdd))"
+    when: "os_family('windows') && hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    depends_on: [check-updates]

@@ -5,21 +5,26 @@
 //! module and emits summary traits. Each tool section is only present if its
 //! output file exists — tools that aren't installed produce no data, no error.
 //!
-//! Supported tools:
-//!   trivy      — /var/lib/hobnob/security/trivy.json
-//!   lynis      — /var/lib/hobnob/security/lynis-report.dat
-//!   chkrootkit — /var/lib/hobnob/security/chkrootkit.log
-//!   rkhunter   — /var/lib/hobnob/security/rkhunter.log
-//!   clamav     — /var/lib/hobnob/security/clamav.log
-//!   aide       — /var/lib/hobnob/security/aide.log
-//!   debsecan   — /var/lib/hobnob/security/debsecan.log
+//! Cross-platform. Scan output directory:
+//!   Unix:    /var/lib/hobnob/security/
+//!   Windows: C:\ProgramData\Hobnob\security\
+//!
+//! Supported tools (Unix):
+//!   trivy, lynis, chkrootkit, rkhunter, clamav, aide, debsecan
+//!
+//! Supported tools (Windows):
+//!   trivy, windows_defender, windows_updates
 
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::fs;
 use std::path::Path;
 
+#[cfg(unix)]
 const SCAN_DIR: &str = "/var/lib/hobnob/security";
+
+#[cfg(windows)]
+const SCAN_DIR: &str = r"C:\ProgramData\Hobnob\security";
 
 /// Maximum number of CVE IDs to include in traits (critical + high).
 const MAX_CVES: usize = 50;
@@ -47,6 +52,12 @@ pub fn collect() -> Result<Value> {
     }
     if let Some(v) = parse_debsecan() {
         map.insert("debsecan".into(), v);
+    }
+    if let Some(v) = parse_windows_defender() {
+        map.insert("windows_defender".into(), v);
+    }
+    if let Some(v) = parse_windows_updates() {
+        map.insert("windows_updates".into(), v);
     }
 
     if map.is_empty() {
@@ -318,6 +329,97 @@ fn parse_debsecan() -> Option<Value> {
     }))
 }
 
+// ── Windows Defender ──────────────────────────────────────────────────
+
+fn parse_windows_defender() -> Option<Value> {
+    // Reads JSON output from:
+    //   powershell -Command "Get-MpComputerStatus | ConvertTo-Json"
+    //     > <SCAN_DIR>/defender.json
+    let path = Path::new(SCAN_DIR).join("defender.json");
+    let data = fs::read_to_string(&path).ok()?;
+    let parsed: Value = serde_json::from_str(&data).ok()?;
+
+    let enabled = parsed.get("AntivirusEnabled").and_then(|v| v.as_bool()).unwrap_or(false);
+    let rt_enabled = parsed.get("RealTimeProtectionEnabled").and_then(|v| v.as_bool()).unwrap_or(false);
+    let sig_age = parsed.get("AntivirusSignatureAge").and_then(|v| v.as_u64()).unwrap_or(0);
+    let threats = parsed.get("DetectedThreatCount").and_then(|v| v.as_u64())
+        .or_else(|| parsed.get("ThreatDetected").and_then(|v| v.as_u64()))
+        .unwrap_or(0);
+
+    Some(json!({
+        "enabled": enabled,
+        "realtime_protection": rt_enabled,
+        "signature_age_days": sig_age,
+        "threats_detected": threats,
+        "clean": threats == 0,
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+// ── Windows Updates ──────────────────────────────────────────────────
+
+fn parse_windows_updates() -> Option<Value> {
+    // Reads JSON output from a PowerShell script that checks for missing updates:
+    //   powershell -Command "
+    //     $session = New-Object -ComObject Microsoft.Update.Session
+    //     $searcher = $session.CreateUpdateSearcher()
+    //     $results = $searcher.Search('IsInstalled=0')
+    //     $results.Updates | Select-Object Title,
+    //       @{N='CVEs';E={$_.CveIDs -join ','}},
+    //       @{N='Severity';E={$_.MsrcSeverity}},
+    //       @{N='KB';E={$_.KBArticleIDs -join ','}}
+    //     | ConvertTo-Json
+    //   " > <SCAN_DIR>/updates.json
+    let path = Path::new(SCAN_DIR).join("updates.json");
+    let data = fs::read_to_string(&path).ok()?;
+    let parsed: Value = serde_json::from_str(&data).ok()?;
+
+    let updates = match &parsed {
+        Value::Array(arr) => arr.clone(),
+        Value::Object(_) => vec![parsed.clone()], // single result comes as object
+        _ => return None,
+    };
+
+    let mut critical = 0u64;
+    let mut important = 0u64;
+    let mut moderate = 0u64;
+    let mut low = 0u64;
+    let mut other = 0u64;
+    let mut cves: Vec<String> = Vec::new();
+
+    for update in &updates {
+        let severity = update.get("Severity").and_then(|s| s.as_str()).unwrap_or("");
+        match severity {
+            "Critical" => critical += 1,
+            "Important" => important += 1,
+            "Moderate" => moderate += 1,
+            "Low" => low += 1,
+            _ => other += 1,
+        }
+
+        // Collect CVE IDs from the comma-separated string.
+        if let Some(cve_str) = update.get("CVEs").and_then(|v| v.as_str()) {
+            for cve in cve_str.split(',') {
+                let cve = cve.trim();
+                if cve.starts_with("CVE-") && cves.len() < MAX_CVES && !cves.contains(&cve.to_string()) {
+                    cves.push(cve.to_string());
+                }
+            }
+        }
+    }
+
+    Some(json!({
+        "missing": updates.len(),
+        "critical": critical,
+        "important": important,
+        "moderate": moderate,
+        "low": low,
+        "other": other,
+        "cves": cves,
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,5 +598,82 @@ mod tests {
         assert!(!result.is_empty());
         assert!(result.contains('T'));
         assert!(result.ends_with('Z'));
+    }
+
+    #[test]
+    fn test_parse_windows_defender_json() {
+        let data = r#"{
+            "AntivirusEnabled": true,
+            "RealTimeProtectionEnabled": true,
+            "AntivirusSignatureAge": 1,
+            "DetectedThreatCount": 0
+        }"#;
+        let parsed: serde_json::Value = serde_json::from_str(data).unwrap();
+        let enabled = parsed.get("AntivirusEnabled").and_then(|v| v.as_bool()).unwrap_or(false);
+        let threats = parsed.get("DetectedThreatCount").and_then(|v| v.as_u64()).unwrap_or(0);
+        assert!(enabled);
+        assert_eq!(threats, 0);
+    }
+
+    #[test]
+    fn test_parse_windows_defender_threats() {
+        let data = r#"{
+            "AntivirusEnabled": true,
+            "RealTimeProtectionEnabled": false,
+            "AntivirusSignatureAge": 5,
+            "DetectedThreatCount": 3
+        }"#;
+        let parsed: serde_json::Value = serde_json::from_str(data).unwrap();
+        let threats = parsed.get("DetectedThreatCount").and_then(|v| v.as_u64()).unwrap_or(0);
+        assert_eq!(threats, 3);
+    }
+
+    #[test]
+    fn test_parse_windows_updates_json() {
+        let data = r#"[
+            {"Title": "Security Update KB1234", "CVEs": "CVE-2024-1000,CVE-2024-1001", "Severity": "Critical", "KB": "1234"},
+            {"Title": "Security Update KB5678", "CVEs": "CVE-2024-2000", "Severity": "Important", "KB": "5678"},
+            {"Title": "Update KB9999", "CVEs": "", "Severity": "Moderate", "KB": "9999"}
+        ]"#;
+        let parsed: serde_json::Value = serde_json::from_str(data).unwrap();
+        let updates = parsed.as_array().unwrap();
+        let mut critical = 0u64;
+        let mut important = 0u64;
+        let mut cves = Vec::new();
+        for update in updates {
+            let severity = update.get("Severity").and_then(|s| s.as_str()).unwrap_or("");
+            match severity {
+                "Critical" => critical += 1,
+                "Important" => important += 1,
+                _ => {}
+            }
+            if let Some(cve_str) = update.get("CVEs").and_then(|v| v.as_str()) {
+                for cve in cve_str.split(',') {
+                    let cve = cve.trim();
+                    if cve.starts_with("CVE-") {
+                        cves.push(cve.to_string());
+                    }
+                }
+            }
+        }
+        assert_eq!(critical, 1);
+        assert_eq!(important, 1);
+        assert_eq!(cves.len(), 3);
+        assert!(cves.contains(&"CVE-2024-1000".to_string()));
+    }
+
+    #[test]
+    fn test_parse_windows_updates_single_object() {
+        // PowerShell returns a single object (not array) when there's only one result.
+        let data = r#"{"Title": "Security Update KB1234", "CVEs": "CVE-2024-5000", "Severity": "Critical", "KB": "1234"}"#;
+        let parsed: serde_json::Value = serde_json::from_str(data).unwrap();
+        let updates = match &parsed {
+            serde_json::Value::Array(arr) => arr.clone(),
+            serde_json::Value::Object(_) => vec![parsed.clone()],
+            _ => panic!("unexpected"),
+        };
+        assert_eq!(updates.len(), 1);
+        let severity = updates[0].get("Severity").and_then(|s| s.as_str()).unwrap_or("");
+        assert_eq!(severity, "Critical");
     }
 }

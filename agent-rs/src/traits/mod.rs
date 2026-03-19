@@ -22,7 +22,6 @@ pub(crate) mod sysctl_util;
 mod cert_expiry;
 #[cfg(unix)]
 mod ports;
-#[cfg(unix)]
 mod security_scan;
 
 // Linux-specific collectors.
@@ -269,7 +268,6 @@ impl CollectorKind {
             Self::CertExpiry => cert_expiry::collect(),
             #[cfg(unix)]
             Self::Ports => ports::collect(),
-            #[cfg(unix)]
             Self::SecurityScan => security_scan::collect(),
 
             // Linux implementations.
@@ -460,8 +458,7 @@ impl CollectorKind {
             #[cfg(windows)]
             Self::Virtual | Self::LoadAvg | Self::Kernel |
             Self::BlockDevices | Self::Systemd | Self::SELinux |
-            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports |
-            Self::SecurityScan => Ok(Value::Null),
+            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports => Ok(Value::Null),
         }
     }
 
