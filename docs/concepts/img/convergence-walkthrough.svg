@@ -50,7 +50,7 @@
 
   <!-- Publish arrow -->
   <line x1="115" y1="175" x2="325" y2="175" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arr)"/>
-  <text x="220" y="170" text-anchor="middle" font-size="10" fill="#805ad5">hobnobcli config publish</text>
+  <text x="220" y="170" text-anchor="middle" font-size="10" fill="#805ad5">vigogo config publish</text>
 
   <!-- Server validates -->
   <rect x="345" y="180" width="130" height="55" rx="6" fill="#fff" stroke="#90cdf4" stroke-width="1"/>

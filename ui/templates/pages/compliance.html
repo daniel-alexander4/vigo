@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Compliance</h1>
-    <p>Fleet compliance overview and trends</p>
+    <p>Fleet compliance overview and reporting</p>
 </div>
 
 <div class="compliance-gauge">
@@ -46,6 +46,68 @@
     {{sparklineSVG .SparklineData 400 60}}
 </div>
 {{end}}
+
+<div class="fw-executive">
+    <a href="/compliance/executive" class="fw-executive__link">
+        <span class="fw-executive__title">Executive Summary</span>
+        <span class="fw-executive__desc">Print-ready overview for leadership and auditors</span>
+        <span class="fw-executive__action">View Report &rarr;</span>
+    </a>
+</div>
+
+<h3 class="section-heading">Frameworks</h3>
+<div class="fw-grid" id="fw-grid">
+    <div class="fw-grid__loading">Loading framework data&hellip;</div>
+</div>
+
+<script>
+(function() {
+    fetch('/api/v1/report/executive')
+        .then(r => r.json())
+        .then(data => {
+            const grid = document.getElementById('fw-grid');
+            if (!data.frameworks || !data.frameworks.length) {
+                grid.innerHTML = '<p class="text-muted">No framework data available.</p>';
+                return;
+            }
+            const slugMap = {
+                'HIPAA': 'compliance',
+                'HITRUST CSF': 'hitrust',
+                'SOC 2': 'soc2',
+                'PCI DSS v4.0': 'pci',
+                'CIS Benchmarks': 'cis',
+                'NIST 800-53': 'nist',
+                'ISO 27001': 'iso27001',
+                'GDPR': 'gdpr',
+                'NERC CIP': 'nerccip'
+            };
+            let html = '';
+            data.frameworks.forEach(fw => {
+                const slug = slugMap[fw.name] || fw.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+                const total = fw.satisfied + fw.partial + fw.not_satisfied;
+                const gPct = total > 0 ? (fw.satisfied / total * 100) : 0;
+                const yPct = total > 0 ? (fw.partial / total * 100) : 0;
+                const rPct = total > 0 ? (fw.not_satisfied / total * 100) : 0;
+                const colorClass = fw.score_percent >= 95 ? 'success' : fw.score_percent >= 80 ? 'warning' : 'danger';
+                html += '<a href="/compliance/' + slug + '" class="fw-card">' +
+                    '<div class="fw-card__name">' + fw.name + '</div>' +
+                    '<div class="fw-card__score fw-card__score--' + colorClass + '">' + fw.score_percent.toFixed(1) + '%</div>' +
+                    '<div class="fw-card__bar">' +
+                        (gPct > 0 ? '<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:' + gPct.toFixed(1) + '%"></div>' : '') +
+                        (yPct > 0 ? '<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:' + yPct.toFixed(1) + '%"></div>' : '') +
+                        (rPct > 0 ? '<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:' + rPct.toFixed(1) + '%"></div>' : '') +
+                    '</div>' +
+                    '<div class="fw-card__counts">' + fw.satisfied + ' satisfied &middot; ' + fw.partial + ' partial &middot; ' + fw.not_satisfied + ' not met</div>' +
+                    '<div class="fw-card__action">View Report &rarr;</div>' +
+                '</a>';
+            });
+            grid.innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('fw-grid').innerHTML = '<p class="text-muted">Failed to load framework data.</p>';
+        });
+})();
+</script>
 
 {{if .NonCompliant}}
 <div class="table-container">

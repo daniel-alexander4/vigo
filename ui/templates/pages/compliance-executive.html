@@ -1,0 +1,107 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="page-header__breadcrumb">
+        <a href="/compliance">&larr; Back to Compliance</a>
+    </div>
+    <h1>Executive Summary</h1>
+    <div class="page-header__actions">
+        <a href="/api/v1/report/executive" class="btn btn--sm" download>Download JSON</a>
+        <a href="/api/v1/report/executive.html?download=1" class="btn btn--sm" download>Download HTML</a>
+        <a href="/api/v1/report/executive.html" target="_blank" class="btn btn--sm btn--primary">Print Report</a>
+    </div>
+</div>
+
+<div id="exec-content">
+    <div class="fw-grid__loading">Loading executive summary&hellip;</div>
+</div>
+
+<script>
+(function() {
+    fetch('/api/v1/report/executive')
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('exec-content');
+            let html = '';
+
+            // Score
+            const pct = data.score.percent;
+            const colorClass = pct >= 95 ? 'success' : pct >= 80 ? 'warning' : 'danger';
+            html += '<div class="compliance-gauge">' +
+                '<div class="compliance-gauge__header">' +
+                '<span class="compliance-gauge__pct compliance-gauge__pct--' + colorClass + '">' + Math.round(pct) + '%</span>' +
+                '<span class="compliance-gauge__label">' + data.score.rating + '</span>' +
+                '</div>' +
+                '<div class="compliance-gauge__bar"><div class="compliance-gauge__fill compliance-gauge__fill--' + colorClass + '" style="width:' + Math.round(pct) + '%"></div></div>' +
+                '</div>';
+
+            // Fleet cards
+            const f = data.fleet;
+            html += '<div class="breakdown">' +
+                '<div class="breakdown__item"><div class="breakdown__count">' + f.total + '</div><div class="breakdown__status">Total Nodes</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-success">' + f.fully_compliant + '</div><div class="breakdown__status">Fully Compliant</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-warning">' + f.config_changes + '</div><div class="breakdown__status">Config Changes</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-danger">' + f.errors + '</div><div class="breakdown__status">Errors</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-warning">' + f.unreachable + '</div><div class="breakdown__status">Unreachable</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-muted">' + f.pending_data + '</div><div class="breakdown__status">Pending Data</div></div>' +
+                '</div>';
+
+            // Audit chain
+            const audit = data.audit_chain;
+            if (audit.valid) {
+                html += '<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; ' + audit.entry_count + ' entries, integrity intact.</div>';
+            } else {
+                html += '<div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED' + (audit.error ? ' &mdash; ' + audit.error : '') + '</div>';
+            }
+
+            // Top issues
+            if (data.top_issues && data.top_issues.length) {
+                html += '<h3 class="section-heading">Top Issues</h3>';
+                data.top_issues.forEach(issue => {
+                    html += '<div class="exec-issue exec-issue--' + issue.severity + '">' +
+                        '<span class="exec-issue__sev">' + issue.severity.toUpperCase() + '</span>' +
+                        issue.description + '</div>';
+                });
+            }
+
+            // Framework table
+            if (data.frameworks && data.frameworks.length) {
+                const slugMap = {
+                    'HIPAA': 'compliance',
+                    'HITRUST CSF': 'hitrust',
+                    'SOC 2': 'soc2',
+                    'PCI DSS v4.0': 'pci',
+                    'CIS Benchmarks': 'cis',
+                    'NIST 800-53': 'nist',
+                    'ISO 27001': 'iso27001',
+                    'GDPR': 'gdpr',
+                    'NERC CIP': 'nerccip'
+                };
+                html += '<h3 class="section-heading">Framework Coverage</h3>';
+                html += '<div class="table-container"><table class="table">' +
+                    '<thead><tr><th>Framework</th><th>Score</th><th style="width:35%">Controls</th><th>Satisfied</th><th>Partial</th><th>Not Met</th></tr></thead><tbody>';
+                data.frameworks.forEach(fw => {
+                    const slug = slugMap[fw.name] || fw.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+                    const total = fw.satisfied + fw.partial + fw.not_satisfied;
+                    const gPct = total > 0 ? (fw.satisfied / total * 100) : 0;
+                    const yPct = total > 0 ? (fw.partial / total * 100) : 0;
+                    const rPct = total > 0 ? (fw.not_satisfied / total * 100) : 0;
+                    html += '<tr><td><a href="/compliance/' + slug + '">' + fw.name + '</a></td>' +
+                        '<td>' + fw.score_percent.toFixed(1) + '%</td>' +
+                        '<td><div class="fw-card__bar">' +
+                            (gPct > 0 ? '<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:' + gPct.toFixed(1) + '%"></div>' : '') +
+                            (yPct > 0 ? '<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:' + yPct.toFixed(1) + '%"></div>' : '') +
+                            (rPct > 0 ? '<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:' + rPct.toFixed(1) + '%"></div>' : '') +
+                        '</div></td>' +
+                        '<td>' + fw.satisfied + '</td><td>' + fw.partial + '</td><td>' + fw.not_satisfied + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            el.innerHTML = html;
+        })
+        .catch(err => {
+            document.getElementById('exec-content').innerHTML = '<p class="text-danger">Failed to load executive summary: ' + err.message + '</p>';
+        });
+})();
+</script>
+{{end}}

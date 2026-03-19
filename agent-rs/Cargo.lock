@@ -1033,51 +1033,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hobnob"
-version = "0.1.2"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "ed25519-dalek",
- "heed",
- "hex",
- "hostname",
- "libc",
- "mockito",
- "nix",
- "p256",
- "pkcs8",
- "prost",
- "prost-types",
- "rand 0.8.5",
- "rcgen",
- "regex-lite",
- "russh",
- "russh-keys",
- "rustls",
- "rustls-pemfile",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "sha2",
- "spki",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tonic-build",
- "tracing",
- "tracing-subscriber",
- "ureq",
- "uuid",
- "windows-service",
- "winreg",
-]
-
-[[package]]
 name = "home"
 version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3161,6 +3116,51 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vigo"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "ed25519-dalek",
+ "heed",
+ "hex",
+ "hostname",
+ "libc",
+ "mockito",
+ "nix",
+ "p256",
+ "pkcs8",
+ "prost",
+ "prost-types",
+ "rand 0.8.5",
+ "rcgen",
+ "regex-lite",
+ "russh",
+ "russh-keys",
+ "rustls",
+ "rustls-pemfile",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "spki",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+ "uuid",
+ "windows-service",
+ "winreg",
+]
 
 [[package]]
 name = "want"

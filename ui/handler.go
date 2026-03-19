@@ -149,6 +149,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
 	mux.HandleFunc("GET /compliance", h.Compliance)
+	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
+	mux.HandleFunc("GET /compliance/{framework}", h.ComplianceFramework)
 	mux.HandleFunc("GET /push", h.Push)
 	mux.HandleFunc("GET /push/{id}", h.PushDetail)
 	mux.HandleFunc("GET /workflows", h.Workflows)
@@ -299,6 +301,13 @@ type ComplianceRow struct {
 	Status        string
 	LastSeen      time.Time
 	LastRunStatus string
+}
+
+// ComplianceReportPageData holds data for a per-framework compliance report page.
+type ComplianceReportPageData struct {
+	PageData
+	FrameworkTitle string
+	FrameworkSlug  string
 }
 
 // DashboardStatsFragmentData holds data for the stats fragment (HTMX auto-refresh).

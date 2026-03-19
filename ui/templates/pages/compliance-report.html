@@ -1,0 +1,98 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="page-header__breadcrumb">
+        <a href="/compliance">&larr; Back to Compliance</a>
+    </div>
+    <h1>{{.FrameworkTitle}}</h1>
+    <div class="page-header__actions">
+        <a href="/api/v1/report/{{.FrameworkSlug}}" class="btn btn--sm" download>Download JSON</a>
+        <a href="/api/v1/report/{{.FrameworkSlug}}.html?download=1" class="btn btn--sm" download>Download HTML</a>
+        <a href="/api/v1/report/{{.FrameworkSlug}}.html" target="_blank" class="btn btn--sm btn--primary">Print Report</a>
+    </div>
+</div>
+
+<div id="report-content">
+    <div class="fw-grid__loading">Loading report data&hellip;</div>
+</div>
+
+<script>
+(function() {
+    const slug = {{.FrameworkSlug}};
+    fetch('/api/v1/report/' + slug)
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('report-content');
+            let html = '';
+
+            // Summary
+            const s = data.summary;
+            const pct = s.compliance_percent;
+            const colorClass = pct >= 80 ? 'success' : pct >= 50 ? 'warning' : 'danger';
+            html += '<div class="compliance-gauge">' +
+                '<div class="compliance-gauge__header">' +
+                '<span class="compliance-gauge__pct compliance-gauge__pct--' + colorClass + '">' + Math.round(pct) + '%</span>' +
+                '<span class="compliance-gauge__label">fleet compliance</span>' +
+                '</div>' +
+                '<div class="compliance-gauge__bar"><div class="compliance-gauge__fill compliance-gauge__fill--' + colorClass + '" style="width:' + Math.round(pct) + '%"></div></div>' +
+                '</div>';
+
+            html += '<div class="breakdown">' +
+                '<div class="breakdown__item"><div class="breakdown__count text-success">' + s.compliant + '</div><div class="breakdown__status">Compliant</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-warning">' + s.recurring_drift + '</div><div class="breakdown__status">Recurring Drift</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-danger">' + s.errors + '</div><div class="breakdown__status">Errors</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-warning">' + s.lost_contact + '</div><div class="breakdown__status">Lost Contact</div></div>' +
+                '<div class="breakdown__item"><div class="breakdown__count text-muted">' + s.no_data + '</div><div class="breakdown__status">No Data</div></div>' +
+                '</div>';
+
+            // Audit chain
+            const audit = data.audit_chain;
+            if (audit.valid) {
+                html += '<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; ' + audit.entry_count + ' entries, integrity intact.</div>';
+            } else {
+                html += '<div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED' + (audit.error ? ' &mdash; ' + audit.error : '') + '</div>';
+            }
+
+            // Controls table
+            if (data.controls && data.controls.length) {
+                const satisfied = data.controls.filter(c => c.status === 'satisfied').length;
+                const partial = data.controls.filter(c => c.status === 'partial').length;
+                const notSatisfied = data.controls.filter(c => c.status !== 'satisfied' && c.status !== 'partial').length;
+                html += '<h3 class="section-heading">Controls <span class="text-muted">(' + satisfied + ' satisfied, ' + partial + ' partial, ' + notSatisfied + ' not met)</span></h3>';
+                html += '<div class="table-container"><table class="table">' +
+                    '<thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Evidence</th></tr></thead><tbody>';
+                data.controls.forEach(c => {
+                    const badge = c.status === 'satisfied' ? 'badge--compliant' :
+                                  c.status === 'partial' ? 'badge--recurring-drift' : 'badge--errors';
+                    html += '<tr><td class="mono">' + c.control_id + '</td>' +
+                        '<td>' + c.title + '</td>' +
+                        '<td><span class="badge ' + badge + '">' + c.status + '</span></td>' +
+                        '<td class="text-muted">' + c.evidence + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            // Fleet table
+            if (data.fleet && data.fleet.length) {
+                html += '<h3 class="section-heading">Fleet Status</h3>';
+                html += '<div class="table-container"><table class="table">' +
+                    '<thead><tr><th>Hostname</th><th>Status</th><th>OS</th><th>IP</th><th>Last Seen</th></tr></thead><tbody>';
+                data.fleet.forEach(n => {
+                    const badge = n.status === 'compliant' ? 'badge--compliant' : 'badge--errors';
+                    const lastSeen = n.last_seen ? new Date(n.last_seen).toLocaleString() : '-';
+                    html += '<tr><td>' + n.hostname + '</td>' +
+                        '<td><span class="badge ' + badge + '">' + n.status + '</span></td>' +
+                        '<td class="text-muted">' + (n.os || '-') + '</td>' +
+                        '<td class="text-muted">' + (n.ip || '-') + '</td>' +
+                        '<td class="text-muted">' + lastSeen + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            el.innerHTML = html;
+        })
+        .catch(err => {
+            document.getElementById('report-content').innerHTML = '<p class="text-danger">Failed to load report: ' + err.message + '</p>';
+        });
+})();
+</script>
+{{end}}

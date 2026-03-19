@@ -27,7 +27,7 @@
 
   <!-- Actor headers -->
   <rect x="55" y="48" width="160" height="36" rx="8" fill="url(#thrallGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="135" y="71" text-anchor="middle" font-weight="700" fill="#276749">Agent (hobnob)</text>
+  <text x="135" y="71" text-anchor="middle" font-weight="700" fill="#276749">Agent (vigo)</text>
 
   <rect x="490" y="48" width="200" height="36" rx="8" fill="url(#serverGrad)" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
   <text x="590" y="71" text-anchor="middle" font-weight="700" fill="#1a56a0">Server (hobd)</text>

@@ -1,12 +1,12 @@
 # ╔═══════════════════════════════════════════════════════════════════════════╗
-# ║  Hobnob Server Configuration — Full Option Reference                   ║
+# ║  Vigo Server Configuration — Full Option Reference                   ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 #
 # Copy to server.yaml and edit. Required options are uncommented.
 # Optional sections are commented out with their defaults shown.
 #
 # Fields that accept "secret:path" are resolved through the secrets backend
-# at startup (e.g. secret:hobnob/db/dsn → /srv/hobnob/secrets/hobnob/db/dsn).
+# at startup (e.g. secret:vigo/db/dsn → /srv/vigo/secrets/vigo/db/dsn).
 
 
 # ── Server ────────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ server:
     ca_key_file: "tls/ca_key"
   # tls_sans:                                  # extra SANs for auto-generated certs
   #   - "192.168.1.2"                          # host LAN IP (needed in Docker)
-  #   - "hobnob.example.com"                   # DNS name agents use
+  #   - "vigo.example.com"                   # DNS name agents use
 
 
 # ── Database ──────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ server:
 # Postgres: dsn is a connection string. Set driver: postgres.
 
 database:
-  dsn: "secret:hobnob/db/dsn"
+  dsn: "secret:vigo/db/dsn"
   # driver: postgres
   # retention: "90d"                           # auto-prune old runs/tasks/workflows
 
@@ -40,14 +40,14 @@ database:
 
 secrets:
   backend: local
-  # key_file: "/srv/hobnob/master.key"         # AES-256-GCM key (0600); omit to auto-generate
-  # secrets_dir: "/srv/hobnob/secrets"          # encrypted secret files (default)
+  # key_file: "/srv/vigo/master.key"         # AES-256-GCM key (0600); omit to auto-generate
+  # secrets_dir: "/srv/vigo/secrets"          # encrypted secret files (default)
 
 # --- Isopass backend (external secrets API) ---
 # secrets:
 #   backend: isopass
 #   url: "https://isopass.internal:8443"
-#   token_file: "/srv/hobnob/isopass-token"    # bearer token file (0600)
+#   token_file: "/srv/vigo/isopass-token"    # bearer token file (0600)
 #   tls_skip_verify: false
 
 
@@ -72,7 +72,7 @@ bootstrap:
 # ── Authentication ────────────────────────────────────────────────────────
 # Web UI and REST API auth. Default: basic (username/password).
 # Passwords stored as bcrypt hashes in the local secrets provider
-# at hobnob/web/auth/<username>. Set via: hobnobcli secrets set-web-password
+# at vigo/web/auth/<username>. Set via: vigocli secrets set-web-password
 
 # auth:
 #   method: basic                              # basic | none | oidc | isowebauth
@@ -88,7 +88,7 @@ bootstrap:
 #   oidc:
 #     issuer: "https://accounts.google.com"
 #     client_id: "your-client-id"
-#     client_secret: "secret:hobnob/auth/oidc_client_secret"
+#     client_secret: "secret:vigo/auth/oidc_client_secret"
 #     redirect_url: "https://localhost:8443/auth/callback"
 #     scopes: [openid, profile, email]
 #
@@ -96,7 +96,7 @@ bootstrap:
 # auth:
 #   method: isowebauth
 #   isowebauth:
-#     namespace: "hobnob"
+#     namespace: "vigo"
 
 
 # ── Audit Trail ──────────────────────────────────────────────────────────
@@ -104,12 +104,12 @@ bootstrap:
 # Security-sensitive events (config changes, enrollment, revocation, task
 # dispatch) are recorded in a SHA-256 hash chain. Each entry includes the
 # hash of the previous entry, making modifications or deletions detectable.
-# Verify with: hobnobcli audit verify, GET /api/v1/audit/verify, or the
+# Verify with: vigocli audit verify, GET /api/v1/audit/verify, or the
 # web UI audit page.
 
 
 # ── Webhooks ──────────────────────────────────────────────────────────────
-# Configure endpoints via hobnobcli or REST API. This section controls dispatch.
+# Configure endpoints via vigocli or REST API. This section controls dispatch.
 
 webhooks:
   timeout: "10s"
@@ -130,9 +130,9 @@ watcher:
 # smtp:
 #   host: "smtp.example.com"
 #   port: 587
-#   from: "hobnob@example.com"
-#   username: "hobnob"
-#   password: "secret:hobnob/smtp/password"
+#   from: "vigo@example.com"
+#   username: "vigo"
+#   password: "secret:vigo/smtp/password"
 #   tls: true
 #   recipients:
 #     - "admin@example.com"
@@ -205,7 +205,7 @@ watcher:
 #   model: "qwen2.5:7b"
 #   max_tokens: 4096
 #   base_url: ""                               # auto for ollama; required for openai-compat
-#   api_key: "secret:hobnob/ai/api_key"        # for paid providers
+#   api_key: "secret:vigo/ai/api_key"        # for paid providers
 #   rate_limit: 0                              # requests/minute (0 = unlimited)
 #   max_tool_rounds: 10
 #   context_mode: "auto"                       # tools | prefetch | auto
@@ -216,9 +216,9 @@ watcher:
 # Streams WAL changes to a replica for disaster recovery.
 
 # backup:
-#   url: "s3://my-bucket/hobnob"
-#   access_key_id: "secret:hobnob/backup/aws_access_key"
-#   secret_access_key: "secret:hobnob/backup/aws_secret_key"
+#   url: "s3://my-bucket/vigo"
+#   access_key_id: "secret:vigo/backup/aws_access_key"
+#   secret_access_key: "secret:vigo/backup/aws_secret_key"
 #   region: "us-east-1"
 #   endpoint: ""                               # S3-compatible (MinIO, Backblaze)
 #   force_path_style: false                    # required for MinIO
