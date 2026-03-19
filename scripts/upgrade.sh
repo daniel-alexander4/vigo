@@ -90,11 +90,10 @@ for t in "${CROSS_TARGETS[@]+"${CROSS_TARGETS[@]}"}"; do
 done
 CROSS_TARGETS=("${expanded[@]+"${expanded[@]}"}")
 
-# --build implies both --server and --agent.
-if $BUILD_ALL; then
-    BUILD_SERVER=true
-    BUILD_AGENT=true
-fi
+# --build does a full Docker image rebuild. Go and Rust are both compiled
+# inside the Dockerfile — no local toolchain needed. --server and --agent
+# are for fast local rebuilds outside of Docker.
+# Don't set BUILD_SERVER/BUILD_AGENT from --build — those mean "local build".
 
 # Determine what kind of upgrade this is.
 NEED_IMAGE_REBUILD=false
@@ -276,13 +275,14 @@ fi
 # ---------------------------------------------------------------------------
 
 echo "Updating docs, examples, and scripts..."
-if $BUILD_SERVER || $BUILD_AGENT; then
+if $BUILD_SERVER || $BUILD_AGENT || $BUILD_ALL; then
     # Copy directly from repo — faster than spinning up a container.
+    mkdir -p "$DATA_DIR/docs" "$DATA_DIR/scripts"
     cp -r "$REPO_DIR/docs/." "$DATA_DIR/docs/"
     cp -r "$REPO_DIR/scripts/." "$DATA_DIR/scripts/"
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
 else
-    # Pull mode or full rebuild — seed from the image.
+    # Pull mode — seed from the image.
     docker run --rm -v "$DATA_DIR:$DATA_DIR" "$IMAGE" --seed-only 2>/dev/null || true
 fi
 
