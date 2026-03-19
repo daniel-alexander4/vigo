@@ -221,6 +221,7 @@ fn check_reassignment(resp: &CheckInResponse) -> Result<()> {
 /// Perform a convergence cycle with an already-received CheckInResponse.
 ///
 /// Used by both RunOnce (poll) and the stream event loop.
+/// Acquires a file lock to prevent concurrent convergence (e.g. daemon + manual run).
 fn converge(
     resp: &CheckInResponse,
     executors: &HashMap<String, Box<dyn Executor>>,
@@ -229,6 +230,7 @@ fn converge(
     policy_state: &mut PolicyState,
     dry_run: bool,
     module_filter: Option<&str>,
+    data_dir: &std::path::Path,
 ) -> Result<RunResult> {
     for w in &resp.warnings {
         warn!("server: {}", w);
@@ -332,6 +334,31 @@ fn converge(
         });
     }
 
+    // Acquire convergence lock — prevents daemon + manual run collisions.
+    let _lock = match runner::lock::ConvergenceLock::try_acquire(data_dir) {
+        Ok(Some(guard)) => Some(guard),
+        Ok(None) => {
+            warn!("skipping convergence — another process holds the lock");
+            return Ok(RunResult {
+                results: vec![],
+                interval,
+                jitter_pct,
+                no_change: true,
+                response_fingerprint: String::new(),
+                policy_version: resp.policy_version,
+                policy_bundle: policy_state.accepted_bundle.clone(),
+                stream_requested: resp.stream_requested,
+                proxied_devices,
+                server_pubkey_pem: resp.server_pubkey_pem.clone(),
+                force_update: resp.force_update,
+            });
+        }
+        Err(e) => {
+            warn!(error = %e, "failed to acquire convergence lock, proceeding unlocked");
+            None
+        }
+    };
+
     let run_id = uuid::Uuid::new_v4().to_string();
     let opts = RunOptions {
         dry_run,
@@ -367,6 +394,7 @@ pub async fn run_once(
     dry_run: bool,
     module_filter: Option<&str>,
     state_fingerprint: &str,
+    data_dir: &std::path::Path,
 ) -> Result<RunResult> {
     let resp = client
         .check_in(
@@ -392,7 +420,7 @@ pub async fn run_once(
     }
 
     let rr = converge(
-        &resp, executors, traits_val, cache, policy_state, dry_run, module_filter,
+        &resp, executors, traits_val, cache, policy_state, dry_run, module_filter, data_dir,
     )?;
 
     // Report results back to server (skip in dry-run mode).
@@ -587,6 +615,7 @@ fn converge_local(
     executors: &HashMap<String, Box<dyn Executor>>,
     result_cache: &mut ResultCache,
     policy_state: &mut PolicyState,
+    data_dir: &std::path::Path,
 ) -> Option<(RunResult, Vec<u8>)> {
     let rtxn = store.read_txn().ok()?;
 
@@ -635,6 +664,7 @@ fn converge_local(
         policy_state,
         false,
         None,
+        data_dir,
     ) {
         Ok(rr) => {
             // Update policy state so subsequent cycles use this bundle.
@@ -705,6 +735,7 @@ pub async fn daemon_loop(
         .await;
 
         // Poll mode: run one unary check-in cycle.
+        let lock_dir = data_dir.as_deref().unwrap_or(std::path::Path::new("/var/lib/hobnob"));
         match run_once(
             client,
             executors,
@@ -715,6 +746,7 @@ pub async fn daemon_loop(
             false,
             None,
             &last_fingerprint,
+            lock_dir,
         )
         .await
         {
@@ -831,6 +863,7 @@ pub async fn daemon_loop(
                                 &mut policy_state,
                                 &mut last_fingerprint,
                                 state_store.as_ref(),
+                                lock_dir,
                             )
                             .await;
 
@@ -909,6 +942,7 @@ pub async fn daemon_loop(
                         executors,
                         &mut result_cache,
                         &mut policy_state,
+                        lock_dir,
                     ) {
                         log_run_result(&rr);
                         pending_delivered = false;
@@ -1038,6 +1072,7 @@ async fn stream_loop(
     policy_state: &mut PolicyState,
     _last_fingerprint: &mut String,
     state_store: Option<&StateStore>,
+    data_dir: &std::path::Path,
 ) -> StreamExit {
     let use_delta = state_store.is_some();
     let mut delta_seq: i64 = 0;
@@ -1062,7 +1097,7 @@ async fn stream_loop(
         return StreamExit::Disconnected(Some(e));
     }
     match converge(
-        initial_resp, executors, initial_traits, result_cache, policy_state, false, None,
+        initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir,
     ) {
         Ok(rr) => {
             if !rr.results.is_empty() {
@@ -1136,7 +1171,7 @@ async fn stream_loop(
                         ..Default::default()
                     };
 
-                    match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None) {
+                    match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir) {
                         Ok(rr) => {
                             if !rr.results.is_empty() {
                                 if use_delta {
@@ -1174,7 +1209,7 @@ async fn stream_loop(
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }
-                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
                                         if use_delta {
@@ -1288,7 +1323,7 @@ async fn stream_loop(
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }
-                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None) {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
                                         if use_delta {
@@ -1729,7 +1764,7 @@ mod tests {
         let mut ps = PolicyState::new();
 
         // converge_local should load the bundle and produce a result.
-        let result = converge_local(&store, &executors, &mut result_cache, &mut ps);
+        let result = converge_local(&store, &executors, &mut result_cache, &mut ps, dir.path());
         assert!(result.is_some(), "converge_local should succeed with stored bundle");
 
         let (rr, traits_bytes) = result.unwrap();
@@ -1777,7 +1812,7 @@ mod tests {
             .as_secs()
             - 10;
 
-        let result = converge_local(&store, &executors, &mut result_cache, &mut ps);
+        let result = converge_local(&store, &executors, &mut result_cache, &mut ps, dir.path());
         assert!(result.is_none(), "should skip convergence for expired bundle");
     }
 

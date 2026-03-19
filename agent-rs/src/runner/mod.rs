@@ -6,6 +6,7 @@
 
 pub mod cache;
 pub mod dag;
+pub mod lock;
 
 use crate::executors::{Action, Executor, ResourceResult};
 use crate::proto::Module;

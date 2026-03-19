@@ -445,6 +445,10 @@ async fn run_once(
     // Load custom executors.
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
 
+    // Acquire convergence lock — prevents daemon + manual run collisions.
+    let _lock = runner::lock::ConvergenceLock::try_acquire(&cli.data_dir)?
+        .ok_or_else(|| anyhow::anyhow!("another convergence is running (lock held)"))?;
+
     // Run convergence.
     let run_id = uuid::Uuid::new_v4().to_string();
     let mut cache = runner::cache::ResultCache::new(cli.result_cache_cycles);
