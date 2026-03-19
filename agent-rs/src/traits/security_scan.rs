@@ -420,6 +420,241 @@ fn parse_windows_updates() -> Option<Value> {
     }))
 }
 
+/// Maximum vulnerabilities in detail output.
+const MAX_DETAIL_VULNS: usize = 500;
+/// Maximum findings per tool in detail output.
+const MAX_DETAIL_FINDINGS: usize = 200;
+
+/// Collect detailed security scan results on demand (not for regular traits).
+/// Reads raw scan output files and returns per-finding data for UI display.
+pub fn collect_detail() -> Result<Value> {
+    let dir = Path::new(SCAN_DIR);
+    if !dir.exists() {
+        return Ok(json!({"available": false, "scan_dir": SCAN_DIR}));
+    }
+
+    let mut map = serde_json::Map::new();
+    map.insert("available".into(), json!(true));
+    map.insert("scan_dir".into(), json!(SCAN_DIR));
+
+    if let Some(v) = detail_trivy() { map.insert("trivy".into(), v); }
+    if let Some(v) = detail_lynis() { map.insert("lynis".into(), v); }
+    if let Some(v) = detail_rkhunter() { map.insert("rkhunter".into(), v); }
+    if let Some(v) = detail_chkrootkit() { map.insert("chkrootkit".into(), v); }
+    if let Some(v) = detail_clamav() { map.insert("clamav".into(), v); }
+    if let Some(v) = detail_aide() { map.insert("aide".into(), v); }
+    if let Some(v) = detail_debsecan() { map.insert("debsecan".into(), v); }
+
+    Ok(Value::Object(map))
+}
+
+fn detail_trivy() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("trivy.json");
+    let data = fs::read_to_string(&path).ok()?;
+    let parsed: Value = serde_json::from_str(&data).ok()?;
+
+    let mut vulns = Vec::new();
+    if let Some(results) = parsed.get("Results").and_then(|r| r.as_array()) {
+        for result in results {
+            let target = result.get("Target").and_then(|t| t.as_str()).unwrap_or("");
+            if let Some(vs) = result.get("Vulnerabilities").and_then(|v| v.as_array()) {
+                for v in vs {
+                    if vulns.len() >= MAX_DETAIL_VULNS { break; }
+                    vulns.push(json!({
+                        "cve_id": v.get("VulnerabilityID").and_then(|s| s.as_str()).unwrap_or(""),
+                        "severity": v.get("Severity").and_then(|s| s.as_str()).unwrap_or(""),
+                        "package": v.get("PkgName").and_then(|s| s.as_str()).unwrap_or(""),
+                        "installed": v.get("InstalledVersion").and_then(|s| s.as_str()).unwrap_or(""),
+                        "fixed": v.get("FixedVersion").and_then(|s| s.as_str()).unwrap_or(""),
+                        "title": v.get("Title").and_then(|s| s.as_str()).unwrap_or(""),
+                        "target": target,
+                    }));
+                }
+            }
+        }
+    }
+
+    Some(json!({
+        "vulnerabilities": vulns,
+        "truncated": vulns.len() >= MAX_DETAIL_VULNS,
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+fn detail_lynis() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("lynis-report.dat");
+    let data = fs::read_to_string(&path).ok()?;
+
+    let mut score: Option<u64> = None;
+    let mut warnings = Vec::new();
+    let mut suggestions = Vec::new();
+
+    for line in data.lines() {
+        if let Some(val) = line.strip_prefix("hardening_index=") {
+            score = val.trim().parse().ok();
+        } else if let Some(val) = line.strip_prefix("warning[]=") {
+            if warnings.len() < MAX_DETAIL_FINDINGS {
+                // Format: ID|description|severity|...
+                let parts: Vec<&str> = val.splitn(4, '|').collect();
+                warnings.push(json!({
+                    "id": parts.first().unwrap_or(&""),
+                    "text": parts.get(1).unwrap_or(&""),
+                }));
+            }
+        } else if let Some(val) = line.strip_prefix("suggestion[]=") {
+            if suggestions.len() < MAX_DETAIL_FINDINGS {
+                let parts: Vec<&str> = val.splitn(4, '|').collect();
+                suggestions.push(json!({
+                    "id": parts.first().unwrap_or(&""),
+                    "text": parts.get(1).unwrap_or(&""),
+                }));
+            }
+        }
+    }
+
+    Some(json!({
+        "score": score.unwrap_or(0),
+        "warnings": warnings,
+        "suggestions": suggestions,
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+fn detail_rkhunter() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("rkhunter.log");
+    let data = fs::read_to_string(&path).ok()?;
+
+    let mut warnings: Vec<String> = Vec::new();
+    for line in data.lines() {
+        if line.contains("[ Warning ]") && warnings.len() < MAX_DETAIL_FINDINGS {
+            warnings.push(line.trim().to_string());
+        }
+    }
+
+    Some(json!({
+        "warnings": warnings,
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+fn detail_chkrootkit() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("chkrootkit.log");
+    let data = fs::read_to_string(&path).ok()?;
+
+    let mut infected: Vec<String> = Vec::new();
+    for line in data.lines() {
+        if line.contains("INFECTED") && infected.len() < MAX_DETAIL_FINDINGS {
+            infected.push(line.trim().to_string());
+        }
+    }
+
+    Some(json!({
+        "infected": infected,
+        "clean": infected.is_empty(),
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+fn detail_clamav() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("clamav.log");
+    let data = fs::read_to_string(&path).ok()?;
+
+    let mut findings: Vec<Value> = Vec::new();
+    for line in data.lines() {
+        if line.contains("FOUND") && findings.len() < MAX_DETAIL_FINDINGS {
+            // Format: /path/to/file: SignatureName FOUND
+            if let Some(colon) = line.rfind(": ") {
+                let file_path = &line[..colon];
+                let sig = line[colon + 2..].trim_end_matches(" FOUND").trim();
+                findings.push(json!({"path": file_path, "signature": sig}));
+            }
+        }
+    }
+
+    Some(json!({
+        "findings": findings,
+        "clean": findings.is_empty(),
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+fn detail_aide() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("aide.log");
+    let data = fs::read_to_string(&path).ok()?;
+
+    let mut added: Vec<String> = Vec::new();
+    let mut removed: Vec<String> = Vec::new();
+    let mut changed: Vec<String> = Vec::new();
+
+    // AIDE detailed output has sections like:
+    //   Added files:
+    //     /path/to/file
+    //   Removed files:
+    //     /path/to/file
+    //   Changed files:
+    //     /path/to/file
+    let mut section = "";
+    for line in data.lines() {
+        let trimmed = line.trim();
+        if trimmed == "Added files:" || trimmed.starts_with("Added entries:") {
+            section = "added";
+            // If this is the summary line "Added entries: 3", skip it.
+            if trimmed.contains(':') && trimmed.ends_with(char::is_numeric) { continue; }
+        } else if trimmed == "Removed files:" || trimmed.starts_with("Removed entries:") {
+            section = "removed";
+            if trimmed.contains(':') && trimmed.ends_with(char::is_numeric) { continue; }
+        } else if trimmed == "Changed files:" || trimmed.starts_with("Changed entries:") {
+            section = "changed";
+            if trimmed.contains(':') && trimmed.ends_with(char::is_numeric) { continue; }
+        } else if trimmed.is_empty() || trimmed.starts_with("---") || trimmed.starts_with("AIDE") || trimmed.starts_with("Start") || trimmed.starts_with("End") || trimmed.starts_with("Total") || trimmed.starts_with("Number of") {
+            if trimmed.is_empty() { section = ""; }
+            continue;
+        } else if trimmed.starts_with('/') {
+            let path_str = trimmed.split_whitespace().next().unwrap_or(trimmed).to_string();
+            match section {
+                "added" if added.len() < MAX_DETAIL_FINDINGS => added.push(path_str),
+                "removed" if removed.len() < MAX_DETAIL_FINDINGS => removed.push(path_str),
+                "changed" if changed.len() < MAX_DETAIL_FINDINGS => changed.push(path_str),
+                _ => {}
+            }
+        }
+    }
+
+    Some(json!({
+        "added": added,
+        "removed": removed,
+        "changed": changed,
+        "clean": added.is_empty() && removed.is_empty() && changed.is_empty(),
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+fn detail_debsecan() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("debsecan.log");
+    let data = fs::read_to_string(&path).ok()?;
+
+    let mut vulns: Vec<Value> = Vec::new();
+    for line in data.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("CVE-") { continue; }
+        if vulns.len() >= MAX_DETAIL_VULNS { break; }
+        let parts: Vec<&str> = trimmed.splitn(3, ' ').collect();
+        let cve_id = parts.first().unwrap_or(&"");
+        let package = parts.get(1).unwrap_or(&"").trim_end_matches(" --");
+        let urgency = if trimmed.contains("high urgency") { "high" }
+            else if trimmed.contains("medium urgency") { "medium" }
+            else if trimmed.contains("low urgency") { "low" }
+            else { "other" };
+        vulns.push(json!({"cve_id": cve_id, "package": package, "urgency": urgency}));
+    }
+
+    Some(json!({
+        "vulnerabilities": vulns,
+        "truncated": vulns.len() >= MAX_DETAIL_VULNS,
+        "last_scan": file_mtime_iso(&path),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

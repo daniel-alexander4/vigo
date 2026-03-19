@@ -119,7 +119,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if .TrivyCritical}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
                                 <td class="text-danger">{{.TrivyCritical}}</td>
                                 <td class="sec-cve-list">{{range .CVEs}}<a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a> {{end}}</td>
                             </tr>
@@ -146,7 +146,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
                                 <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
                                 <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
                                 <td>{{.TrivyMedium}}</td>
@@ -168,7 +168,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if .LynisScore}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
                                 <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
                                 <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
                                 <td>{{.LynisSuggestions}}</td>
@@ -188,7 +188,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .RootkitClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
                                 <td class="text-danger">Warning</td>
                                 <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
                                 <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
@@ -208,7 +208,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .ClamavClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
                                 <td class="text-danger">Infected</td>
                                 <td class="text-danger">{{.ClamavInfected}}</td>
                             </tr>
@@ -227,7 +227,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .AideClean}}
                             <tr>
-                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}');return false;">{{.Hostname}}</a></td>
                                 <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
                                 <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
                                 <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
@@ -257,4 +257,175 @@
 
 
 </div>
+
+{{/* ── Security Detail Drawer ── */}}
+<div class="sec-drawer" id="sec-drawer">
+    <div class="sec-drawer__header">
+        <span class="sec-drawer__title" id="sec-drawer-title">Security Details</span>
+        <div>
+            <a href="#" id="sec-drawer-thrall-link" class="btn btn--sm" style="margin-right:8px">View Thrall</a>
+            <button class="sec-drawer__close" onclick="closeSecDrawer()">&times;</button>
+        </div>
+    </div>
+    <div class="sec-drawer__tabs" id="sec-drawer-tabs"></div>
+    <div class="sec-drawer__content" id="sec-drawer-content">
+        <p class="text-muted">Click a hostname in the security panels above.</p>
+    </div>
+</div>
+<div class="sec-drawer-overlay" id="sec-drawer-overlay" onclick="closeSecDrawer()"></div>
+
+<script>
+function fetchSecDetail(hostname, thrallId) {
+    var drawer = document.getElementById('sec-drawer');
+    var overlay = document.getElementById('sec-drawer-overlay');
+    var title = document.getElementById('sec-drawer-title');
+    var content = document.getElementById('sec-drawer-content');
+    var tabs = document.getElementById('sec-drawer-tabs');
+    var link = document.getElementById('sec-drawer-thrall-link');
+
+    title.textContent = hostname + ' — Security Details';
+    link.href = '/thralls/' + thrallId;
+    content.innerHTML = '<p class="text-muted">Loading scan results from agent...</p>';
+    tabs.innerHTML = '';
+    drawer.classList.add('sec-drawer--open');
+    overlay.classList.add('sec-drawer-overlay--open');
+
+    fetch('/api/v1/query', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: 15})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.responded && data.responded.length && data.responded[0].found) {
+            var detail = JSON.parse(data.responded[0].value);
+            renderSecDetail(detail, tabs, content);
+        } else if (data.timedOut && data.timedOut.length) {
+            content.innerHTML = '<p class="text-danger">Agent did not respond in time. Is the daemon running?</p>';
+        } else if (data.offline && data.offline.length) {
+            content.innerHTML = '<p class="text-warning">Agent is offline. Start the daemon and try again.</p>';
+        } else {
+            content.innerHTML = '<p class="text-muted">No security scan data available on this host.</p>';
+        }
+    })
+    .catch(function(err) {
+        content.innerHTML = '<p class="text-danger">Error: ' + err.message + '</p>';
+    });
+}
+
+function closeSecDrawer() {
+    document.getElementById('sec-drawer').classList.remove('sec-drawer--open');
+    document.getElementById('sec-drawer-overlay').classList.remove('sec-drawer-overlay--open');
+}
+
+function renderSecDetail(d, tabsEl, contentEl) {
+    if (d.available === false) {
+        contentEl.innerHTML = '<p class="text-muted">Security scanning not configured on this host.</p>';
+        return;
+    }
+
+    var sections = [];
+    if (d.trivy) sections.push({id:'trivy', label:'Trivy CVEs', html: renderTrivy(d.trivy)});
+    if (d.debsecan) sections.push({id:'debsecan', label:'Debsecan', html: renderDebsecan(d.debsecan)});
+    if (d.lynis) sections.push({id:'lynis', label:'Lynis', html: renderLynis(d.lynis)});
+    if (d.rkhunter) sections.push({id:'rkhunter', label:'rkhunter', html: renderList('Warnings', d.rkhunter.warnings, d.rkhunter.last_scan)});
+    if (d.chkrootkit) sections.push({id:'chkrootkit', label:'chkrootkit', html: renderList('Infected', d.chkrootkit.infected, d.chkrootkit.last_scan)});
+    if (d.clamav) sections.push({id:'clamav', label:'ClamAV', html: renderClamav(d.clamav)});
+    if (d.aide) sections.push({id:'aide', label:'AIDE', html: renderAide(d.aide)});
+
+    if (!sections.length) {
+        contentEl.innerHTML = '<p class="text-muted">No scan output files found.</p>';
+        return;
+    }
+
+    tabsEl.innerHTML = sections.map(function(s, i) {
+        return '<button class="sec-tab' + (i===0?' sec-tab--active':'') + '" onclick="switchSecTab(\'' + s.id + '\')">' + s.label + '</button>';
+    }).join('');
+
+    contentEl.innerHTML = sections.map(function(s, i) {
+        return '<div class="sec-tab-pane' + (i===0?' sec-tab-pane--active':'') + '" id="sec-pane-' + s.id + '">' + s.html + '</div>';
+    }).join('');
+}
+
+function switchSecTab(id) {
+    document.querySelectorAll('.sec-tab').forEach(function(t) { t.classList.remove('sec-tab--active'); });
+    document.querySelectorAll('.sec-tab-pane').forEach(function(p) { p.classList.remove('sec-tab-pane--active'); });
+    document.querySelector('.sec-tab[onclick*="' + id + '"]').classList.add('sec-tab--active');
+    document.getElementById('sec-pane-' + id).classList.add('sec-tab-pane--active');
+}
+
+function renderTrivy(t) {
+    if (!t.vulnerabilities || !t.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + '</p>';
+    var h = '<p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + (t.truncated?' (truncated)':'') + '</p>';
+    h += '<table class="ask-drift-table"><thead><tr><th>Severity</th><th>CVE</th><th>Package</th><th>Installed</th><th>Fixed</th><th>Title</th></tr></thead><tbody>';
+    t.vulnerabilities.forEach(function(v) {
+        var cls = v.severity==='CRITICAL'?'text-danger':v.severity==='HIGH'?'text-warning':'';
+        h += '<tr><td class="'+cls+'">'+v.severity+'</td>';
+        h += '<td><a href="https://nvd.nist.gov/vuln/detail/'+v.cve_id+'" target="_blank" rel="noopener" class="sec-cve-link">'+v.cve_id+'</a></td>';
+        h += '<td class="mono">'+v.package+'</td><td class="mono">'+v.installed+'</td><td class="mono">'+(v.fixed||'-')+'</td>';
+        h += '<td>'+esc(v.title)+'</td></tr>';
+    });
+    h += '</tbody></table>';
+    return h;
+}
+
+function renderDebsecan(d) {
+    if (!d.vulnerabilities || !d.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    h += '<table class="ask-drift-table"><thead><tr><th>Urgency</th><th>CVE</th><th>Package</th></tr></thead><tbody>';
+    d.vulnerabilities.forEach(function(v) {
+        var cls = v.urgency==='high'?'text-danger':v.urgency==='medium'?'text-warning':'';
+        h += '<tr><td class="'+cls+'">'+v.urgency+'</td>';
+        h += '<td><a href="https://nvd.nist.gov/vuln/detail/'+v.cve_id+'" target="_blank" rel="noopener" class="sec-cve-link">'+v.cve_id+'</a></td>';
+        h += '<td class="mono">'+esc(v.package)+'</td></tr>';
+    });
+    h += '</tbody></table>';
+    return h;
+}
+
+function renderLynis(l) {
+    var h = '<p><strong>Hardening Score:</strong> ' + l.score + '</p>';
+    h += '<p class="text-muted">Last scan: ' + (l.last_scan||'unknown') + '</p>';
+    if (l.warnings && l.warnings.length) {
+        h += '<h4>Warnings (' + l.warnings.length + ')</h4><ul class="sec-findings">';
+        l.warnings.forEach(function(w) { h += '<li><code>' + esc(w.id) + '</code> ' + esc(w.text) + '</li>'; });
+        h += '</ul>';
+    }
+    if (l.suggestions && l.suggestions.length) {
+        h += '<h4>Suggestions (' + l.suggestions.length + ')</h4><ul class="sec-findings">';
+        l.suggestions.forEach(function(s) { h += '<li><code>' + esc(s.id) + '</code> ' + esc(s.text) + '</li>'; });
+        h += '</ul>';
+    }
+    return h;
+}
+
+function renderList(label, items, lastScan) {
+    var h = '<p class="text-muted">Last scan: ' + (lastScan||'unknown') + '</p>';
+    if (!items || !items.length) return h + '<p class="text-success">Clean — no ' + label.toLowerCase() + ' found.</p>';
+    h += '<h4>' + label + ' (' + items.length + ')</h4><ul class="sec-findings">';
+    items.forEach(function(i) { h += '<li><code>' + esc(typeof i === 'string' ? i : JSON.stringify(i)) + '</code></li>'; });
+    h += '</ul>';
+    return h;
+}
+
+function renderClamav(c) {
+    var h = '<p class="text-muted">Last scan: ' + (c.last_scan||'unknown') + '</p>';
+    if (!c.findings || !c.findings.length) return h + '<p class="text-success">Clean — no malware found.</p>';
+    h += '<table class="ask-drift-table"><thead><tr><th>File</th><th>Signature</th></tr></thead><tbody>';
+    c.findings.forEach(function(f) { h += '<tr><td class="mono">'+esc(f.path)+'</td><td>'+esc(f.signature)+'</td></tr>'; });
+    h += '</tbody></table>';
+    return h;
+}
+
+function renderAide(a) {
+    var h = '<p class="text-muted">Last scan: ' + (a.last_scan||'unknown') + '</p>';
+    if (a.clean) return h + '<p class="text-success">Clean — no integrity changes detected.</p>';
+    if (a.added && a.added.length) { h += '<h4>Added (' + a.added.length + ')</h4><ul class="sec-findings">'; a.added.forEach(function(f) { h += '<li class="mono">' + esc(f) + '</li>'; }); h += '</ul>'; }
+    if (a.removed && a.removed.length) { h += '<h4>Removed (' + a.removed.length + ')</h4><ul class="sec-findings">'; a.removed.forEach(function(f) { h += '<li class="mono text-danger">' + esc(f) + '</li>'; }); h += '</ul>'; }
+    if (a.changed && a.changed.length) { h += '<h4>Changed (' + a.changed.length + ')</h4><ul class="sec-findings">'; a.changed.forEach(function(f) { h += '<li class="mono text-warning">' + esc(f) + '</li>'; }); h += '</ul>'; }
+    return h;
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+</script>
 {{end}}

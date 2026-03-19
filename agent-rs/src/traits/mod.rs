@@ -22,7 +22,7 @@ pub(crate) mod sysctl_util;
 mod cert_expiry;
 #[cfg(unix)]
 mod ports;
-mod security_scan;
+pub(crate) mod security_scan;
 
 // Linux-specific collectors.
 #[cfg(target_os = "linux")]

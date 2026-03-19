@@ -1278,13 +1278,19 @@ async fn stream_loop(
                         None => continue,
                     };
 
-                    // Collect traits (uses cache, so this is fast).
-                    let (traits_val, _) = collect_traits_basic(collectors).await;
-
-                    // Look up the requested trait path.
-                    let (value, found) = match crate::traits::traverse_dot_path(&traits_val, &query.trait_path) {
-                        Some(v) => (serde_json::to_string(&v).unwrap_or_default(), true),
-                        None => (String::new(), false),
+                    // Special virtual traits — read data on demand, not from cached traits.
+                    let (value, found) = if query.trait_path == "security_scan_detail" {
+                        match crate::traits::security_scan::collect_detail() {
+                            Ok(v) if !v.is_null() => (serde_json::to_string(&v).unwrap_or_default(), true),
+                            _ => (String::new(), false),
+                        }
+                    } else {
+                        // Normal trait lookup from cached traits.
+                        let (traits_val, _) = collect_traits_basic(collectors).await;
+                        match crate::traits::traverse_dot_path(&traits_val, &query.trait_path) {
+                            Some(v) => (serde_json::to_string(&v).unwrap_or_default(), true),
+                            None => (String::new(), false),
+                        }
                     };
 
                     // Send the response.
