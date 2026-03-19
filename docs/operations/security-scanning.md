@@ -122,7 +122,7 @@ The `security_scan` trait collector emits structured JSON under the `security_sc
     "high": 3,
     "medium": 10,
     "low": 5,
-    "other": 2,
+    "unassigned": 2,
     "total": 20,
     "cves": ["CVE-2024-9999"],
     "last_scan": "2026-03-18T03:00:00Z"

@@ -500,17 +500,17 @@ function switchSecTab(id) {
     document.getElementById('sec-pane-' + id).classList.add('sec-tab-pane--active');
 }
 
-function sevClass(s) { return s==='CRITICAL'||s==='high'?'sec-card--critical':s==='HIGH'?'sec-card--high':s==='MEDIUM'||s==='medium'?'sec-card--medium':'sec-card--low'; }
-function sevLabel(s) { return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); }
-function sevNorm(s) { return s ? s.toLowerCase() : 'other'; }
+function sevClass(s) { var l=s?s.toLowerCase():''; return l==='critical'?'sec-card--critical':l==='high'?'sec-card--high':l==='medium'?'sec-card--medium':l==='low'?'sec-card--low':'sec-card--info'; }
+function sevLabel(s) { if (!s) return 'Unassigned'; return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); }
+function sevNorm(s) { return s ? s.toLowerCase() : 'unassigned'; }
 
 function sevFilterBar(vulns, sevKey, filterId) {
     var counts = {};
     vulns.forEach(function(v) {
-        var s = sevNorm(v[sevKey] || 'other');
+        var s = sevNorm(v[sevKey] || 'unassigned');
         counts[s] = (counts[s] || 0) + 1;
     });
-    var levels = ['critical','high','medium','low','other'];
+    var levels = ['critical','high','medium','low','unassigned'];
     var h = '<div class="sec-filter" id="' + filterId + '">';
     h += '<button class="sec-filter__btn sec-filter__btn--active" data-sev="all" onclick="secFilter(this,\'' + filterId + '\')">All (' + vulns.length + ')</button>';
     levels.forEach(function(lv) {

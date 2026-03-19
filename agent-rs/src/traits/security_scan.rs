@@ -288,11 +288,13 @@ fn parse_debsecan() -> Option<Value> {
 
     // Handles both debsecan --format detail (multi-line blocks starting with
     // "CVE-xxx (urgency)") and default format ("CVE-xxx package (urgency)").
+    // Many CVEs have no urgency marker at all — debsecan omits it when the
+    // Debian security team hasn't assigned one yet. These are "unassigned".
     let mut cves: Vec<String> = Vec::new();
     let mut high = 0u64;
     let mut medium = 0u64;
     let mut low = 0u64;
-    let mut other = 0u64;
+    let mut unassigned = 0u64;
 
     for line in data.lines() {
         let trimmed = line.trim();
@@ -314,7 +316,7 @@ fn parse_debsecan() -> Option<Value> {
         } else if trimmed.contains("low urgency") {
             low += 1;
         } else {
-            other += 1;
+            unassigned += 1;
         }
     }
 
@@ -322,8 +324,8 @@ fn parse_debsecan() -> Option<Value> {
         "high": high,
         "medium": medium,
         "low": low,
-        "other": other,
-        "total": high + medium + low + other,
+        "unassigned": unassigned,
+        "total": high + medium + low + unassigned,
         "cves": cves,
         "last_scan": file_mtime_iso(&path),
     }))
@@ -664,7 +666,7 @@ fn detail_debsecan() -> Option<Value> {
         let urgency = if trimmed.contains("high urgency") { "high" }
             else if trimmed.contains("medium urgency") { "medium" }
             else if trimmed.contains("low urgency") { "low" }
-            else { "other" };
+            else { "unassigned" };
 
         // Try to extract package name. Detail format: package is on a
         // subsequent "installed:" line. Default format: second token on the
@@ -710,14 +712,14 @@ fn detail_debsecan() -> Option<Value> {
         i += 1;
     }
 
-    // Sort by urgency (high > medium > low > other), then by CVE ID descending.
+    // Sort by urgency (high > medium > low > unassigned), then by CVE ID descending.
     let mut vulns: Vec<Value> = best.iter().map(|(pkg, (cve, urg))| {
         json!({"cve_id": cve, "package": pkg, "urgency": urg})
     }).collect();
     vulns.sort_by(|a, b| {
         fn urg_rank(u: &str) -> u8 { match u { "high" => 0, "medium" => 1, "low" => 2, _ => 3 } }
-        let ua = a["urgency"].as_str().unwrap_or("other");
-        let ub = b["urgency"].as_str().unwrap_or("other");
+        let ua = a["urgency"].as_str().unwrap_or("unassigned");
+        let ub = b["urgency"].as_str().unwrap_or("unassigned");
         urg_rank(ua).cmp(&urg_rank(ub))
             .then_with(|| b["cve_id"].as_str().unwrap_or("").cmp(a["cve_id"].as_str().unwrap_or("")))
     });
@@ -913,7 +915,7 @@ CVE-2024-11111 (low urgency)\n\
             let urgency = if trimmed.contains("high urgency") { "high" }
                 else if trimmed.contains("medium urgency") { "medium" }
                 else if trimmed.contains("low urgency") { "low" }
-                else { "other" };
+                else { "unassigned" };
             let tokens: Vec<&str> = trimmed.split_whitespace().collect();
             let mut package = String::new();
             if tokens.len() >= 2 && !tokens[1].starts_with('(') {
@@ -948,6 +950,25 @@ CVE-2024-11111 (low urgency)\n\
         assert_eq!(urllib.1, "medium");
         let libfoo = best.get("libfoo").unwrap();
         assert_eq!(libfoo.0, "CVE-2024-11111");
+    }
+
+    #[test]
+    fn test_debsecan_no_urgency_is_unassigned() {
+        // Most debsecan CVEs have no urgency marker at all.
+        // These should be classified as "unassigned", not "other".
+        let data = "CVE-2025-54389\n  installed: aide 0.17.4\nCVE-2012-6655 (low urgency)\n  installed: accountsservice 22.07.5\n";
+        let mut low = 0u64;
+        let mut unassigned = 0u64;
+        for line in data.lines() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with("CVE-") { continue; }
+            if trimmed.contains("high urgency") {}
+            else if trimmed.contains("medium urgency") {}
+            else if trimmed.contains("low urgency") { low += 1; }
+            else { unassigned += 1; }
+        }
+        assert_eq!(low, 1);
+        assert_eq!(unassigned, 1);
     }
 
     #[test]
