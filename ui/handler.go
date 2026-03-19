@@ -957,6 +957,49 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "compliance", data)
 }
 
+// ComplianceExecutive renders the executive summary page.
+func (h *Handler) ComplianceExecutive(w http.ResponseWriter, r *http.Request) {
+	data := ComplianceReportPageData{
+		PageData:       PageData{Title: "Executive Summary", ActiveNav: "compliance"},
+		FrameworkTitle: "Executive Summary",
+		FrameworkSlug:  "executive",
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "compliance-executive", data)
+}
+
+// ComplianceFramework renders a per-framework compliance report page.
+func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
+	fw := r.PathValue("framework")
+
+	// Map URL slugs to display names and API slugs.
+	frameworks := map[string][2]string{
+		"compliance": {"HIPAA Compliance Report", "compliance"},
+		"hitrust":    {"HITRUST CSF Compliance Report", "hitrust"},
+		"soc2":       {"SOC 2 Trust Services Criteria Report", "soc2"},
+		"pci":        {"PCI DSS v4.0 Compliance Report", "pci"},
+		"cis":        {"CIS Benchmark Compliance Report", "cis"},
+		"nist":       {"NIST 800-53 Compliance Report", "nist"},
+		"iso27001":   {"ISO 27001 Compliance Report", "iso27001"},
+		"gdpr":       {"GDPR Compliance Report", "gdpr"},
+		"nerccip":    {"NERC CIP Compliance Report", "nerccip"},
+	}
+
+	info, ok := frameworks[fw]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	data := ComplianceReportPageData{
+		PageData:       PageData{Title: info[0], ActiveNav: "compliance"},
+		FrameworkTitle: info[0],
+		FrameworkSlug:  info[1],
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "compliance-report", data)
+}
+
 // Envoys renders the envoys list page with optional status filter and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")

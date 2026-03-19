@@ -1,8 +1,8 @@
 # Compliance
 
-The Compliance page provides a fleet-wide compliance overview with trends. Available at `/compliance`.
+The Compliance section provides fleet-wide compliance overview, framework-specific reports, and an executive summary. Available at `/compliance`.
 
-## Layout
+## Hub Page (`/compliance`)
 
 ### Compliance Gauge
 
@@ -28,25 +28,77 @@ Five inline counters showing the distribution:
 
 An SVG sparkline showing daily compliance percentage over the last 30 days. Only displayed when historical data is available in the `compliance_history` table.
 
+### Executive Summary Link
+
+A prominent card linking to the executive summary report (`/compliance/executive`). Designed for C-suite and auditors.
+
+### Framework Grid
+
+A 3-column grid of cards for all 9 compliance frameworks. Each card shows:
+
+- Framework name
+- Score percentage (color-coded: green >=95%, yellow >=80%, red <80%)
+- Stacked progress bar (green/yellow/red for satisfied/partial/not-satisfied)
+- Control counts
+- "View Report" link to the per-framework detail page
+
+Framework data is fetched from `GET /api/v1/report/executive` via JavaScript.
+
 ### Non-Compliant Envoys Table
 
-A table listing all envoys that are not compliant:
+A table listing all envoys that are not compliant.
 
-| Column | Description |
-|--------|-------------|
-| Hostname | Envoy hostname |
-| Status | Compliance status badge |
-| Last Seen | Last check-in time |
-| Last Run | Last run status badge |
+## Framework Report Pages (`/compliance/{framework}`)
+
+Each of the 9 frameworks has its own page:
+
+| Route | Framework |
+|-------|-----------|
+| `/compliance/compliance` | HIPAA |
+| `/compliance/hitrust` | HITRUST CSF |
+| `/compliance/soc2` | SOC 2 |
+| `/compliance/pci` | PCI DSS v4.0 |
+| `/compliance/cis` | CIS Benchmarks |
+| `/compliance/nist` | NIST 800-53 |
+| `/compliance/iso27001` | ISO 27001 |
+| `/compliance/gdpr` | GDPR |
+| `/compliance/nerccip` | NERC CIP |
+
+Each page includes:
+
+- Back navigation to the compliance hub
+- Download buttons (JSON, HTML, Print)
+- Fleet compliance gauge and breakdown cards
+- Audit chain status banner
+- Controls table with control ID, title, status badge, and evidence
+- Fleet status table with per-node details
+
+Report data is fetched from the existing `GET /api/v1/report/{framework}` API endpoint via JavaScript.
+
+## Executive Summary Page (`/compliance/executive`)
+
+A summary-oriented page for non-technical audiences:
+
+- Compliance score with rating (Excellent/Good/Needs Attention/Critical)
+- Fleet summary with friendly labels
+- Audit chain status banner
+- Top 10 issues in plain English (severity-sorted)
+- Framework coverage table with stacked bars
+
+Includes download buttons for JSON, HTML, and a print-friendly version.
 
 ## Key Actions
 
 - Identify non-compliant envoys at a glance
 - Track compliance trends over time via the sparkline
-- Click through to individual envoy detail pages
+- Generate framework-specific reports for auditors
+- Print executive summaries for leadership
+- Download reports in JSON or HTML format
 
 ## Data Sources
 
 - Compliance counters: FleetIndex (`ComplianceSummary()`)
 - Sparkline data: `compliance_history` table (daily snapshots)
 - Non-compliant envoy list: FleetIndex, filtered to exclude status "compliant"
+- Framework data: `GET /api/v1/report/executive` API (fetched client-side)
+- Per-framework reports: `GET /api/v1/report/{framework}` API (fetched client-side)
