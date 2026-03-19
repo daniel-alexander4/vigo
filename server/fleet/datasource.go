@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/hobnob/hobnob/server/compliance"
@@ -655,9 +656,9 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 
 		// Collect per-host CVE IDs.
 		for k, v := range ts.Traits {
-			if (len(k) > 28 && k[:27] == "security_scan.trivy.cves.") ||
-				(len(k) > 30 && k[:29] == "security_scan.debsecan.cves.") ||
-				(len(k) > 37 && k[:36] == "security_scan.windows_updates.cves.") {
+			if strings.HasPrefix(k, "security_scan.trivy.cves.") ||
+				strings.HasPrefix(k, "security_scan.debsecan.cves.") ||
+				strings.HasPrefix(k, "security_scan.windows_updates.cves.") {
 				row.CVEs = append(row.CVEs, v)
 			}
 		}
@@ -680,19 +681,9 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			continue
 		}
 		for k, v := range ts.Traits {
-			if len(k) > 28 && k[:27] == "security_scan.trivy.cves." {
-				if !cveSet[v] {
-					cveSet[v] = true
-					data.CVEs = append(data.CVEs, v)
-				}
-			}
-			if len(k) > 30 && k[:29] == "security_scan.debsecan.cves." {
-				if !cveSet[v] {
-					cveSet[v] = true
-					data.CVEs = append(data.CVEs, v)
-				}
-			}
-			if len(k) > 37 && k[:36] == "security_scan.windows_updates.cves." {
+			if strings.HasPrefix(k, "security_scan.trivy.cves.") ||
+				strings.HasPrefix(k, "security_scan.debsecan.cves.") ||
+				strings.HasPrefix(k, "security_scan.windows_updates.cves.") {
 				if !cveSet[v] {
 					cveSet[v] = true
 					data.CVEs = append(data.CVEs, v)
