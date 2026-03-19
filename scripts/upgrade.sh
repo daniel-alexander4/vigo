@@ -104,7 +104,13 @@ if $BUILD_ALL; then
     NEED_IMAGE_REBUILD=true
     NEED_CONTAINER_RESTART=true
     NEED_HOST_UPDATE=true
-elif $BUILD_SERVER || $BUILD_AGENT; then
+elif $BUILD_SERVER; then
+    # Server binary runs inside Alpine (musl). Must rebuild the Docker image
+    # so Go compiles in the Alpine build stage. Local build is host-only (CLI).
+    NEED_IMAGE_REBUILD=true
+    NEED_CONTAINER_RESTART=true
+    NEED_HOST_UPDATE=true
+elif $BUILD_AGENT; then
     NEED_CONTAINER_RESTART=true
     NEED_HOST_UPDATE=true
 elif [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
@@ -250,7 +256,7 @@ fi
 # Docker image: full rebuild or pull
 # ---------------------------------------------------------------------------
 
-if $NEED_IMAGE_REBUILD && $BUILD_ALL; then
+if $NEED_IMAGE_REBUILD; then
     # Bust all caches to ensure fresh binaries in the runtime image.
     touch "$REPO_DIR/proto/hobnob.proto" "$REPO_DIR/agent-rs/src/main.rs" 2>/dev/null || true
 
@@ -355,15 +361,9 @@ if $NEED_HOST_UPDATE; then
     echo "Updating host binaries..."
 
     if $BUILD_SERVER; then
-        # --server: inject locally-built binaries into running container + host.
+        # --server: host CLI from local build, server binary from Docker image.
         cp "$REPO_DIR/bin/hobnobcli" /usr/local/bin/hobnobcli
         ln -sf hobnobcli /usr/local/bin/hnbvi
-
-        # Inject and restart server binary inside the container.
-        docker cp "$REPO_DIR/bin/hobd" hobnob:/usr/local/sbin/hobd
-        docker cp "$REPO_DIR/bin/hobnobcli" hobnob:/usr/local/bin/hobnobcli
-        docker compose restart hobnob
-        echo "Injected Go binaries and restarted container."
     else
         # Pull or full rebuild: extract from the new container.
         docker cp hobnob:/usr/local/bin/hobnobcli /usr/local/bin/hobnobcli
