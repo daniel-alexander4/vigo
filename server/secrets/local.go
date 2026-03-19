@@ -144,7 +144,10 @@ func (p *LocalProvider) GetVersion(_ context.Context, key string) (int, error) {
 }
 
 // Set encrypts and writes a secret value. Creates parent directories as needed.
+// Leading/trailing whitespace (spaces, tabs, newlines, carriage returns) is
+// stripped to prevent accidental copy-paste artifacts from corrupting secrets.
 func (p *LocalProvider) Set(key, value string) error {
+	value = strings.TrimSpace(value)
 	return p.encryptAndWrite(key, []byte(value))
 }
 

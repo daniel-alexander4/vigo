@@ -52,6 +52,42 @@ func TestLocalProviderSetAndGet(t *testing.T) {
 	}
 }
 
+func TestLocalProviderSetTrimsWhitespace(t *testing.T) {
+	p, _ := setupLocalProvider(t)
+	defer p.Close()
+
+	// Simulate copy-paste with trailing newline, tabs, spaces.
+	if err := p.Set("hobnob/api/key", "  sk-abc123\n\t "); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	val, err := p.Get(context.Background(), "hobnob/api/key")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "sk-abc123" {
+		t.Errorf("Get = %q, want %q (whitespace should be trimmed)", val, "sk-abc123")
+	}
+}
+
+func TestLocalProviderSetTrimsCarriageReturn(t *testing.T) {
+	p, _ := setupLocalProvider(t)
+	defer p.Close()
+
+	// Windows-style line ending from copy-paste.
+	if err := p.Set("hobnob/api/key", "mypassword\r\n"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	val, err := p.Get(context.Background(), "hobnob/api/key")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if val != "mypassword" {
+		t.Errorf("Get = %q, want %q", val, "mypassword")
+	}
+}
+
 func TestLocalProviderGetBytes(t *testing.T) {
 	p, _ := setupLocalProvider(t)
 	defer p.Close()
