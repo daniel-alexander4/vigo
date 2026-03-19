@@ -180,3 +180,50 @@ Choose **30 seconds** when:
 - You want to double the fleet capacity on the same hardware
 - Network is metered or bandwidth-constrained
 - You're running 10,000+ thralls and don't want to tune
+
+## Use Cases at 15-Second Convergence
+
+At 1,000+ machines checking in every 15 seconds, Hobnob moves from traditional config management into **continuous enforcement**. The convergence speed changes what's practical.
+
+### Compliance-as-Code / Regulatory Enforcement
+
+PCI-DSS, HIPAA, SOC2, CIS benchmarks — enforced continuously, not audited quarterly. Firewall rules, user accounts, file permissions, and service states converge back within 15 seconds of drift. The run history provides a provable continuous compliance trail, not point-in-time snapshots. Particularly valuable in academic and government environments with strict NIST controls.
+
+### MSP / Multi-Tenant Fleet Management
+
+Managed service providers running 50-200 customers, each with 5-50 machines. Per-customer policy via node matching and roles, single server. At 15-second convergence, customer tickets about "service is down" get self-healed before the ticket is filed. Traits-based inventory replaces separate CMDB tools.
+
+### Edge / Retail / Kiosk Networks
+
+Hundreds of point-of-sale systems, digital signage, or branch office servers. Machines that must stay locked down and identical — drift is a security incident. Offline convergence means a store losing WAN still converges locally. Push operations handle coordinated updates across regions via rolling execution with health checks.
+
+### Web Hosting / Shared Infrastructure
+
+VPS providers or universities managing student and faculty servers. Every box stays current on SSH config, log forwarding, monitoring agents, and package patches. Traits collectors feed real-time inventory — who's running what, where.
+
+### Security Operations
+
+Continuous posture enforcement: SSH hardening, firewall rules, user cleanup, certificate rotation. At 15 seconds, a compromised machine that gets its config reverted almost immediately. `when:` conditionals react to traits — e.g., lock down a machine differently if it's externally reachable. Query dispatch enables fleet-wide incident response ("show me every machine running this process").
+
+### CI/CD Build Farms / Lab Environments
+
+Keep 100+ build agents identical — correct toolchains, caches, credentials, services. Self-healing after developers break their own build boxes. Rotate secrets fleet-wide via the watcher and push mechanism.
+
+### IoT / Industrial
+
+Any fleet of Linux devices (ARM or x86) that must stay configured identically. Factory floor controllers, sensor gateways, network appliances. Offline convergence is critical here — network is unreliable by nature.
+
+## What 15-Second Convergence Specifically Enables
+
+The differentiator isn't just scale — it's **convergence speed**. Most config management tools run on 30-minute intervals. At 15 seconds:
+
+- **Self-healing becomes real.** Someone `chmod 777`s a sensitive file — it's reverted before the next log rotation.
+- **Drift detection is continuous**, not sampled. The compliance dashboard reflects reality, not a stale snapshot.
+- **Push operations land fast.** A workflow targeting 1,000 machines completes in seconds, not hours.
+- **Live queries are practical.** "What version of openssl is on every machine right now?" — answered in one check-in cycle.
+
+## The Sweet Spot
+
+Hobnob's strongest position is **security-conscious organizations with 100-5,000 heterogeneous Unix/Windows machines** that need provable, continuous compliance — not just periodic configuration. MSPs, universities, government IT, regulated industries (finance, healthcare), and hosting providers all fit that profile.
+
+The spanner hub-spoke architecture extends this further — a regional topology where each spoke handles 1,000+ local machines, with the hub aggregating compliance and routing admin operations.
