@@ -70,6 +70,9 @@ COPY server-configs/push/ /seed/push/
 # Documentation — seeded into /srv/hobnob/docs/ by entrypoint.
 COPY docs/ /seed/docs/
 
+# Test scripts — seeded into /srv/hobnob/scripts/ by entrypoint.
+COPY scripts/ /seed/scripts/
+
 COPY entrypoint.sh /entrypoint.sh
 
 EXPOSE 1530 8443

@@ -122,6 +122,16 @@ if [ -d "${SEED_DIR}/docs" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Seed test scripts into bind-mounted volume
+# ---------------------------------------------------------------------------
+
+if [ -d "${SEED_DIR}/scripts" ]; then
+    mkdir -p "${DATA_DIR}/scripts"
+    cp -r "${SEED_DIR}/scripts/." "${DATA_DIR}/scripts/"
+    chmod +x "${DATA_DIR}"/scripts/*.sh 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
 # Install CLI tools to host (bind-mounted /usr/local/bin via /host-bin)
 # ---------------------------------------------------------------------------
 

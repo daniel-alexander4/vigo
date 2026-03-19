@@ -82,6 +82,7 @@ Hobnob is a distributed state enforcement engine for servers and network devices
 - [Compliance Export](operations/compliance-export.md) — SIEM, CMDB, OSCAL feeds
 - [Peer Replication](operations/peer-replication.md) — Primary/peer file sync and automatic failover
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
+- [Testing](operations/testing.md) — CLI integration tests and unit tests for verifying server health
 - [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
 
 ## Reference
