@@ -41,6 +41,8 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/compliance.html", h.handleComplianceReportHTML)
 	mux.HandleFunc("GET /api/v1/report/hitrust", h.handleHITRUSTReport)
 	mux.HandleFunc("GET /api/v1/report/hitrust.html", h.handleHITRUSTReportHTML)
+	mux.HandleFunc("GET /api/v1/report/soc2", h.handleSOC2Report)
+	mux.HandleFunc("GET /api/v1/report/soc2.html", h.handleSOC2ReportHTML)
 }
 
 // ComplianceReport is the JSON format for a compliance report.
@@ -192,33 +194,13 @@ func (h *ReportHandler) hipaaControls(r *http.Request) []ControlFinding {
 }
 
 func (h *ReportHandler) handleComplianceReport(w http.ResponseWriter, r *http.Request) {
-	report, err := h.buildReport(r, "Hobnob HIPAA Compliance Report", h.hipaaControls(r))
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	enc.Encode(report)
+	h.serveFrameworkReport(w, r, "Hobnob HIPAA Compliance Report", "hobnob-compliance",
+		h.hipaaControls(r), false)
 }
 
 func (h *ReportHandler) handleComplianceReportHTML(w http.ResponseWriter, r *http.Request) {
-	report, err := h.buildReport(r, "Hobnob HIPAA Compliance Report", h.hipaaControls(r))
-	if err != nil {
-		http.Error(w, "failed to build report: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	// Determine if download or inline viewing.
-	if r.URL.Query().Get("download") == "1" {
-		filename := fmt.Sprintf("hobnob-compliance-%s.html", time.Now().Format("2006-01-02"))
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	}
-
-	renderComplianceHTML(w, report)
+	h.serveFrameworkReport(w, r, "Hobnob HIPAA Compliance Report", "hobnob-compliance",
+		h.hipaaControls(r), true)
 }
 
 func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
@@ -387,18 +369,24 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 	}
 }
 
-func (h *ReportHandler) handleHITRUSTReport(w http.ResponseWriter, r *http.Request) {
-	var auditStatus AuditChainStatus
-	if v, err := audit.Verify(r.Context(), h.queries); err == nil {
-		auditStatus.Valid = v.Valid
-		auditStatus.EntryCount = v.EntryCount
-		auditStatus.Error = v.Error
-	}
-	controls := h.buildHITRUSTFindings(auditStatus)
-
-	report, err := h.buildReport(r, "Hobnob HITRUST CSF Compliance Report", controls)
+// serveFrameworkReport handles JSON and HTML report generation for any framework.
+func (h *ReportHandler) serveFrameworkReport(w http.ResponseWriter, r *http.Request, title, filePrefix string, controls []ControlFinding, asHTML bool) {
+	report, err := h.buildReport(r, title, controls)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
+		if asHTML {
+			http.Error(w, "failed to build report: "+err.Error(), http.StatusInternalServerError)
+		} else {
+			writeJSONError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
+		}
+		return
+	}
+	if asHTML {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.URL.Query().Get("download") == "1" {
+			filename := fmt.Sprintf("%s-%s.html", filePrefix, time.Now().Format("2006-01-02"))
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		}
+		renderComplianceHTML(w, report)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -407,25 +395,101 @@ func (h *ReportHandler) handleHITRUSTReport(w http.ResponseWriter, r *http.Reque
 	enc.Encode(report)
 }
 
-func (h *ReportHandler) handleHITRUSTReportHTML(w http.ResponseWriter, r *http.Request) {
-	var auditStatus AuditChainStatus
+// auditStatusFromRequest verifies the audit chain and returns the status.
+func (h *ReportHandler) auditStatusFromRequest(r *http.Request) AuditChainStatus {
+	var s AuditChainStatus
 	if v, err := audit.Verify(r.Context(), h.queries); err == nil {
-		auditStatus.Valid = v.Valid
-		auditStatus.EntryCount = v.EntryCount
-		auditStatus.Error = v.Error
+		s.Valid = v.Valid
+		s.EntryCount = v.EntryCount
+		s.Error = v.Error
 	}
-	controls := h.buildHITRUSTFindings(auditStatus)
+	return s
+}
 
-	report, err := h.buildReport(r, "Hobnob HITRUST CSF Compliance Report", controls)
-	if err != nil {
-		http.Error(w, "failed to build report: "+err.Error(), http.StatusInternalServerError)
-		return
+func (h *ReportHandler) handleHITRUSTReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob HITRUST CSF Compliance Report", "hobnob-hitrust",
+		h.buildHITRUSTFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleHITRUSTReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob HITRUST CSF Compliance Report", "hobnob-hitrust",
+		h.buildHITRUSTFindings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- SOC 2 Trust Services Criteria ----------
+
+// buildSOC2Findings returns SOC 2 Trust Services Criteria findings.
+func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if r.URL.Query().Get("download") == "1" {
-		filename := fmt.Sprintf("hobnob-hitrust-%s.html", time.Now().Format("2006-01-02"))
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	return []ControlFinding{
+		// CC1 — Control Environment
+		{ControlID: "CC1.1", Title: "COSO Principle 1: Integrity and Ethics", Status: "partial", Evidence: "Tamper-evident audit trail enforces accountability; organizational ethics policy required"},
+		{ControlID: "CC1.2", Title: "COSO Principle 2: Board Oversight", Status: "partial", Evidence: "Compliance dashboards provide oversight visibility; board governance is organizational"},
+		{ControlID: "CC1.3", Title: "COSO Principle 3: Management Structure", Status: "satisfied", Evidence: "RBAC with 13 fine-grained permissions, admin/viewer roles, segregation of duties"},
+
+		// CC2 — Communication and Information
+		{ControlID: "CC2.1", Title: "Internal Communication of Objectives", Status: "satisfied", Evidence: "Config-as-code documents desired state; drift detection identifies deviations"},
+		{ControlID: "CC2.2", Title: "Internal Communication of Policies", Status: "satisfied", Evidence: "YAML modules are the executable policy; version-controlled, auditable"},
+
+		// CC3 — Risk Assessment
+		{ControlID: "CC3.1", Title: "Risk Identification and Analysis", Status: "satisfied", Evidence: "Continuous drift detection, 5-level compliance status, fleet-wide dashboards"},
+		{ControlID: "CC3.2", Title: "Fraud Risk Assessment", Status: "partial", Evidence: "Tamper-evident audit trail detects unauthorized changes; fraud risk assessment is organizational"},
+		{ControlID: "CC3.3", Title: "Change Risk Assessment", Status: "satisfied", Evidence: "Blast radius limits, compliance threshold monitoring, auto-rollback on regression"},
+
+		// CC4 — Monitoring Activities
+		{ControlID: "CC4.1", Title: "Ongoing and Separate Evaluations", Status: "satisfied", Evidence: "Continuous convergence checks on every agent check-in; compliance monitor runs every 60s"},
+		{ControlID: "CC4.2", Title: "Communication of Deficiencies", Status: "satisfied", Evidence: "Webhook + SMTP alerts on compliance threshold breaches, drift detection, stale nodes"},
+
+		// CC5 — Control Activities
+		{ControlID: "CC5.1", Title: "Selection of Control Activities", Status: "satisfied", Evidence: "Idempotent resource executors enforce desired state; 73 built-in executor types"},
+		{ControlID: "CC5.2", Title: "Technology General Controls", Status: "satisfied", Evidence: "mTLS, ED25519 signatures, AES-256-GCM encryption, bcrypt password hashing"},
+		{ControlID: "CC5.3", Title: "Deployment of Control Activities", Status: "satisfied", Evidence: "Stage → publish workflow with modlint validation, change approval, audit trail"},
+
+		// CC6 — Logical and Physical Access Controls
+		{ControlID: "CC6.1", Title: "Logical Access Security", Status: "satisfied", Evidence: "Authentication required (basic/OIDC/isowebauth), TOTP MFA, 15-min idle timeout"},
+		{ControlID: "CC6.2", Title: "User Registration and Authorization", Status: "satisfied", Evidence: "Per-user accounts with unique UUIDs, role-based defaults, admin approval required"},
+		{ControlID: "CC6.3", Title: "Role-Based Access and Least Privilege", Status: "satisfied", Evidence: "13 fine-grained permissions: fleet.read, config.publish, users.manage, etc."},
+		{ControlID: "CC6.6", Title: "Restriction of Access to System Assets", Status: "satisfied", Evidence: "File executor enforces permissions/ownership; firewall executor enforces network access"},
+		{ControlID: "CC6.7", Title: "Management of Credentials", Status: "satisfied", Evidence: "12-char complexity, bcrypt hashing, AES-256-GCM encrypted storage, API tokens (hbt_ prefix)"},
+		{ControlID: "CC6.8", Title: "Prevention of Unauthorized Software", Status: "satisfied", Evidence: "Package executor enforces versions; repository executor controls sources"},
+
+		// CC7 — System Operations
+		{ControlID: "CC7.1", Title: "Detection of Security Events", Status: "satisfied", Evidence: "Continuous drift detection, compliance monitoring, failed login tracking with IP"},
+		{ControlID: "CC7.2", Title: "Monitoring for Anomalies", Status: "satisfied", Evidence: "Recurring drift detection (3-run threshold), compliance threshold alerts, stale node detection"},
+		{ControlID: "CC7.3", Title: "Evaluation of Security Events", Status: "satisfied", Evidence: "Tamper-evident audit trail with event classification; SIEM export for external analysis"},
+		{ControlID: "CC7.4", Title: "Response to Security Events", Status: "satisfied", Evidence: "Documented incident response plan; emergency access procedure; remediation workflow"},
+		{ControlID: "CC7.5", Title: "Recovery from Security Events", Status: "satisfied", Evidence: "Encrypted backups, disaster recovery procedures, config-as-code rapid rebuild"},
+
+		// CC8 — Change Management
+		{ControlID: "CC8.1", Title: "Change Management Process", Status: "satisfied", Evidence: "Stage → live separation, git-tracked changes, modlint validation, change approval workflow"},
+
+		// CC9 — Risk Mitigation
+		{ControlID: "CC9.1", Title: "Risk Mitigation Activities", Status: "satisfied", Evidence: "Automated remediation workflow, blast radius limits, auto-rollback on compliance drop"},
+
+		// A1 — Availability
+		{ControlID: "A1.1", Title: "Availability Commitments", Status: "satisfied", Evidence: "Litestream continuous backup, disaster recovery docs, peer replication for HA"},
+		{ControlID: "A1.2", Title: "Environmental Protections", Status: "partial", Evidence: "Agent offline convergence (cached policy); physical protections are organizational"},
+
+		// C1 — Confidentiality
+		{ControlID: "C1.1", Title: "Identification of Confidential Information", Status: "satisfied", Evidence: "secret: prefix identifies sensitive values; never appear in logs, config, or DB plaintext"},
+		{ControlID: "C1.2", Title: "Disposal of Confidential Information", Status: "satisfied", Evidence: "Documented decommissioning procedures with cascade delete and secure media disposal"},
+
+		// PI1 — Processing Integrity
+		{ControlID: "PI1.1", Title: "Data Processing Accuracy", Status: "satisfied", Evidence: "Idempotent executors check before acting; ED25519 signatures verify data integrity"},
+		{ControlID: "PI1.2", Title: "Monitoring of Processing", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
 	}
-	renderComplianceHTML(w, report)
+}
+
+func (h *ReportHandler) handleSOC2Report(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob SOC 2 Trust Services Criteria Report", "hobnob-soc2",
+		h.buildSOC2Findings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleSOC2ReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob SOC 2 Trust Services Criteria Report", "hobnob-soc2",
+		h.buildSOC2Findings(h.auditStatusFromRequest(r)), true)
 }

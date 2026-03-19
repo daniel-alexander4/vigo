@@ -53,3 +53,25 @@ hobnobcli report hitrust [flags]
 hobnobcli report hitrust
 hobnobcli report hitrust --format html --output /tmp/hitrust-report.html
 ```
+
+### soc2
+
+Generate a SOC 2 Trust Services Criteria compliance report (CC1-CC9 Common Criteria, A1 Availability, C1 Confidentiality, PI1 Processing Integrity).
+
+```bash
+hobnobcli report soc2 [flags]
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--format` | `json` | Output format: `json` or `html` |
+| `--output` | | Write to file instead of stdout |
+
+**Examples:**
+
+```bash
+hobnobcli report soc2
+hobnobcli report soc2 --format html --output /tmp/soc2-report.html
+```
