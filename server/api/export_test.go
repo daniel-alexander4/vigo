@@ -452,7 +452,7 @@ func TestExportOSCALStub(t *testing.T) {
 	if !ok {
 		t.Fatal("missing metadata")
 	}
-	if meta["title"] != "Hobnob Assessment Results" {
+	if meta["title"] != "Hobnob HIPAA Assessment Results" {
 		t.Errorf("unexpected title: %v", meta["title"])
 	}
 	if meta["oscal-version"] != "1.1.2" {
@@ -469,8 +469,8 @@ func TestExportOSCALStub(t *testing.T) {
 	if !ok {
 		t.Fatal("missing findings")
 	}
-	if len(findings) != 0 {
-		t.Errorf("expected empty findings, got %d", len(findings))
+	if len(findings) < 13 {
+		t.Errorf("expected at least 13 findings, got %d", len(findings))
 	}
 }
 

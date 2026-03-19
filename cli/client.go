@@ -46,6 +46,24 @@ func isLocalhost(rawURL string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
+// getRaw performs a GET and returns the raw response (caller must close body).
+func (c *apiClient) getRaw(path string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	c.setAuthHeader(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resp.Body.Close()
+		return nil, fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+	return resp, nil
+}
+
 func (c *apiClient) get(path string, result any) error {
 	req, err := http.NewRequest(http.MethodGet, c.baseURL+path, nil)
 	if err != nil {

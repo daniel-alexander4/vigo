@@ -8,6 +8,8 @@ Guides for deploying Hobnob in regulated environments.
 
 ## Topics
 
+- [Compliance Reporting](reporting.md) -- HIPAA reports in JSON, HTML, and OSCAL formats
+- [Remediation Workflow](remediation.md) -- Automated drift detection, fix, and verification
 - [Database Encryption at Rest](database-encryption.md) -- LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](../operations/hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification
 - [BAA Template](../operations/baa-template.md) -- Business Associate Agreement template for ePHI environments

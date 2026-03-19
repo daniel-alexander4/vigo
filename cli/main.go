@@ -56,6 +56,8 @@ func init() {
 		workflowCmd,
 		secretsCmd,
 		exportCmd,
+		reportCmd,
+		remediationCmd,
 		authCmd,
 		webusersCmd,
 		webhooksCmd,

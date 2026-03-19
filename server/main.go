@@ -700,6 +700,9 @@ func run() error {
 	pushHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
+	reportHandler := api.NewReportHandler(queries, fleetIndex, configStore, version)
+	remediationHandler := api.NewRemediationHandler(queries, fleetIndex)
+	remediationHandler.SetAuditWriter(auditWriter)
 	peerHandler := api.NewPeerHandler(peerSvc)
 
 	// Auth-related API handlers.
@@ -777,6 +780,8 @@ func run() error {
 		queryHandler.RegisterRoutes(mux)
 		workflowHandler.RegisterRoutes(mux)
 		exportHandler.RegisterRoutes(mux)
+		reportHandler.RegisterRoutes(mux)
+		remediationHandler.RegisterRoutes(mux)
 		usersHandler.RegisterRoutes(mux)
 		tokensHandler.RegisterRoutes(mux)
 		backupHandler.RegisterRoutes(mux)
@@ -833,6 +838,8 @@ func run() error {
 		queryHandler.RegisterRoutes(gwMux)
 		workflowHandler.RegisterRoutes(gwMux)
 		exportHandler.RegisterRoutes(gwMux)
+		reportHandler.RegisterRoutes(gwMux)
+		remediationHandler.RegisterRoutes(gwMux)
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
 		backupHandler.RegisterRoutes(gwMux)
