@@ -287,6 +287,16 @@ func run() error {
 	authMethod := authProvider.Method()
 	slog.Info("auth provider initialized", "method", authMethod)
 
+	// Wire audit writer into auth provider for login/logout/failed-auth logging.
+	switch p := authProvider.(type) {
+	case *hobnobauth.BasicProvider:
+		p.SetAuditWriter(auditWriter)
+	case *hobnobauth.OIDCProvider:
+		p.SetAuditWriter(auditWriter)
+	case *hobnobauth.IsowebauthProvider:
+		p.SetAuditWriter(auditWriter)
+	}
+
 	// Initialize subsystems.
 	reg := registry.NewRegistry(queries)
 
@@ -696,7 +706,9 @@ func run() error {
 	userStore := hobnobauth.NewUserStore(queries)
 	tokenStore := hobnobauth.NewTokenStore(queries)
 	usersHandler := api.NewUsersHandler(userStore, authMethod)
+	usersHandler.SetAuditWriter(auditWriter)
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
+	tokensHandler.SetAuditWriter(auditWriter)
 
 	// Seed default admin account on first startup (no password — must be set via CLI).
 	if count, err := userStore.CountUsers(ctx); err == nil && count == 0 {

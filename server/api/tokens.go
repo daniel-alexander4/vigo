@@ -5,6 +5,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -14,9 +15,13 @@ import (
 
 // TokensHandler provides REST endpoints for API token management.
 type TokensHandler struct {
-	tokenStore *hobnobauth.TokenStore
-	authMethod string
+	tokenStore  *hobnobauth.TokenStore
+	authMethod  string
+	auditWriter auditRecorder
 }
+
+// SetAuditWriter sets the audit writer for recording token events.
+func (h *TokensHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // NewTokensHandler creates a tokens API handler.
 func NewTokensHandler(tokenStore *hobnobauth.TokenStore, authMethod string) *TokensHandler {
@@ -82,6 +87,8 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "token.create", u.Username, fmt.Sprintf("created token %s", req.Name), "")
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(createTokenResponse{
@@ -140,6 +147,8 @@ func (h *TokensHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "failed to delete token")
 		return
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "token.revoke", u.Username, fmt.Sprintf("revoked token %s", id), "")
 
 	w.WriteHeader(http.StatusNoContent)
 }

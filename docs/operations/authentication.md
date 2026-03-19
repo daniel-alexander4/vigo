@@ -261,6 +261,30 @@ hobnobcli secrets set-web-password hobnob/web/auth/alice
 hobnobcli webusers delete --username alice
 ```
 
+## Audit Logging
+
+All authentication and user management events are recorded in the tamper-evident audit chain (`audit_entries` table). These events support HIPAA 164.312(b) audit controls and intrusion detection.
+
+| Event Type | Trigger | Actor |
+|------------|---------|-------|
+| `auth.login` | Successful login (basic, OIDC, isowebauth) | Username |
+| `auth.login_failed` | Failed login (bad password, unknown user, bad signature) | Attempted username |
+| `auth.logout` | User logout | Username |
+| `user.create` | User account created | Admin who created |
+| `user.delete` | User account deleted | Admin who deleted |
+| `user.role_change` | Role updated (only when role actually changes) | Admin who changed |
+| `token.create` | API token created | Token owner |
+| `token.revoke` | API token revoked | Token owner |
+
+Login and failed login events include the client IP address in the payload field (`{"ip":"..."}`) for brute-force detection. Failed login events record the attempted username (not the password).
+
+View audit events:
+
+```bash
+hobnobcli audit list
+hobnobcli audit list --type auth.login_failed
+```
+
 ## Troubleshooting
 
 **OIDC callback fails with "invalid state parameter":**

@@ -15,15 +15,31 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// auditRecorder is the interface for the tamper-evident audit writer.
+type auditRecorder interface {
+	Record(ctx context.Context, eventType, actor, summary, payload string) error
+}
+
+// recordAudit is a nil-safe helper that records an audit event.
+func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary, payload string) {
+	if w == nil {
+		return
+	}
+	if err := w.Record(ctx, eventType, actor, summary, payload); err != nil {
+		slog.Error("audit record failed", "type", eventType, "error", err)
+	}
+}
+
 // BasicProvider implements Provider using username/password authentication.
 // User accounts live in the database; password hashes are stored in the
 // local secrets provider at hobnob/web/auth/<username>. An account is not
 // active until a password secret is set via hobnobcli.
 type BasicProvider struct {
-	sessions   *SessionManager
-	userStore  *UserStore
-	tokenStore *TokenStore
-	secrets    secrets.Provider
+	sessions    *SessionManager
+	userStore   *UserStore
+	tokenStore  *TokenStore
+	secrets     secrets.Provider
+	auditWriter auditRecorder
 }
 
 // NewBasicProvider creates a BasicProvider.
@@ -35,6 +51,9 @@ func NewBasicProvider(sessions *SessionManager, userStore *UserStore, tokenStore
 		secrets:    secretsProvider,
 	}
 }
+
+// SetAuditWriter sets the audit writer for recording auth events.
+func (p *BasicProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
 
 func (p *BasicProvider) Method() string { return "basic" }
 
@@ -166,6 +185,7 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil {
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "unknown user", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
@@ -175,16 +195,19 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	hash, err := p.secrets.Get(r.Context(), secretKey)
 	if err != nil {
 		slog.Debug("no password secret for user", "username", username, "error", err)
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
 	if hash == "" {
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
 
 	// Compare password against bcrypt hash.
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "bad password", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
@@ -195,11 +218,18 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	p.sessions.PutUser(r.Context(), user)
 
+	recordAudit(r.Context(), p.auditWriter, "auth.login", username, "basic login", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
+	user := p.sessions.GetUser(r.Context())
+	actor := ""
+	if user != nil {
+		actor = user.Username
+	}
 	_ = p.sessions.DestroyUser(r.Context())
+	recordAudit(r.Context(), p.auditWriter, "auth.logout", actor, "logout", "")
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 

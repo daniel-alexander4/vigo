@@ -5,6 +5,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -14,9 +15,13 @@ import (
 
 // UsersHandler provides REST endpoints for user management.
 type UsersHandler struct {
-	store      *auth.UserStore
-	authMethod string
+	store       *auth.UserStore
+	authMethod  string
+	auditWriter auditRecorder
 }
+
+// SetAuditWriter sets the audit writer for recording user management events.
+func (h *UsersHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // NewUsersHandler creates a users API handler.
 func NewUsersHandler(store *auth.UserStore, authMethod string) *UsersHandler {
@@ -89,6 +94,8 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "user.create", u.Username, fmt.Sprintf("created user %s with role %s", req.Username, req.Role), "")
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
@@ -143,6 +150,15 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit role changes only.
+	if req.Role != "" && req.Role != existing.Role {
+		actor := ""
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			actor = u.Username
+		}
+		recordAudit(r.Context(), h.auditWriter, "user.role_change", actor, fmt.Sprintf("%s role changed from %s to %s", existing.Username, existing.Role, req.Role), "")
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -156,11 +172,24 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Look up username before deleting for the audit log.
+	deleted, _ := h.store.GetByID(r.Context(), id)
+
 	if err := h.store.Delete(r.Context(), id); err != nil {
 		slog.Error("deleting user", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to delete user")
 		return
 	}
+
+	actor := ""
+	if u != nil {
+		actor = u.Username
+	}
+	deletedName := id
+	if deleted != nil {
+		deletedName = deleted.Username
+	}
+	recordAudit(r.Context(), h.auditWriter, "user.delete", actor, fmt.Sprintf("deleted user %s", deletedName), "")
 
 	w.WriteHeader(http.StatusNoContent)
 }
