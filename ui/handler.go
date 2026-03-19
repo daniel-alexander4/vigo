@@ -2319,6 +2319,7 @@ type SecurityScanPageData struct {
 
 // SecurityHostRow holds per-thrall security scan summary.
 type SecurityHostRow struct {
+	ID             string
 	Hostname       string
 	TrivyCritical  int64
 	TrivyHigh      int64

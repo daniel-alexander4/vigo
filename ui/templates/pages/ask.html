@@ -119,7 +119,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if .TrivyCritical}}
                             <tr>
-                                <td><a href="/thralls/{{.Hostname}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">{{.TrivyCritical}}</td>
                                 <td class="sec-cve-list">{{range .CVEs}}<a href="https://nvd.nist.gov/vuln/detail/{{.}}" target="_blank" rel="noopener" class="sec-cve-link">{{.}}</a> {{end}}</td>
                             </tr>
@@ -146,7 +146,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
                             <tr>
-                                <td><a href="/thralls/{{.Hostname}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
                                 <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
                                 <td>{{.TrivyMedium}}</td>
@@ -168,7 +168,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if .LynisScore}}
                             <tr>
-                                <td><a href="/thralls/{{.Hostname}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
                                 <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
                                 <td>{{.LynisSuggestions}}</td>
@@ -188,7 +188,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .RootkitClean}}
                             <tr>
-                                <td><a href="/thralls/{{.Hostname}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Warning</td>
                                 <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
                                 <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
@@ -208,7 +208,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .ClamavClean}}
                             <tr>
-                                <td><a href="/thralls/{{.Hostname}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Infected</td>
                                 <td class="text-danger">{{.ClamavInfected}}</td>
                             </tr>
@@ -227,7 +227,7 @@
                         <tbody>
                             {{range .Security.PerHost}}{{if not .AideClean}}
                             <tr>
-                                <td><a href="/thralls/{{.Hostname}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td><a href="/thralls/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
                                 <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
                                 <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>

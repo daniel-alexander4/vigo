@@ -572,7 +572,7 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 
 		// Check if this thrall has any security_scan data.
 		hasScan := false
-		row := ui.SecurityHostRow{Hostname: ts.Hostname}
+		row := ui.SecurityHostRow{ID: ts.ID, Hostname: ts.Hostname}
 
 		if v, ok := ts.Traits["security_scan.trivy.critical"]; ok {
 			hasScan = true
