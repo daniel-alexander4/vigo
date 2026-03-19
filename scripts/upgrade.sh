@@ -280,14 +280,18 @@ fi
 # Seed docs, examples, and scripts from the image (or repo for --server)
 # ---------------------------------------------------------------------------
 
-echo "Updating docs and scripts..."
+echo "Updating docs, scripts, and compose file..."
 if $BUILD_SERVER || $BUILD_AGENT || $BUILD_ALL; then
     # Copy directly from repo — faster than spinning up a container.
     mkdir -p "$DATA_DIR/docs" "$DATA_DIR/scripts"
     cp -r "$REPO_DIR/docs/." "$DATA_DIR/docs/"
-    # Only copy scripts that work without the source tree.
-    cp "$REPO_DIR/scripts/test-cli.sh" "$DATA_DIR/scripts/"
+    # Copy all scripts that work without the source tree.
+    for s in test-cli.sh upgrade.sh install-license-manager.sh use-example.sh reset-envoy.sh; do
+        [ -f "$REPO_DIR/scripts/$s" ] && cp "$REPO_DIR/scripts/$s" "$DATA_DIR/scripts/$s"
+    done
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
+    # Keep docker-compose.yml in sync with the repo.
+    cp "$REPO_DIR/docker-compose.prod.yml" "$DATA_DIR/docker-compose.yml"
 else
     # Pull mode — seed from the image.
     docker run --rm -v "$DATA_DIR:$DATA_DIR" "$IMAGE" --seed-only 2>/dev/null || true
