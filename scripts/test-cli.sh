@@ -121,7 +121,15 @@ run_test "doctor" $CLI doctor --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
-# 2. license
+# 2. audit
+# -------------------------------------------------------------------
+echo -e "${BOLD}[audit]${NC}"
+run_test "audit list" $CLI audit list --server "$SERVER"
+run_test "audit verify" $CLI audit verify --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 3. license
 # -------------------------------------------------------------------
 echo -e "${BOLD}[license]${NC}"
 run_test "license status" $CLI license status --server "$SERVER"
@@ -136,6 +144,8 @@ echo -e "${BOLD}[db]${NC}"
 run_test "db stats" $CLI db stats --server "$SERVER"
 run_test "db tables" $CLI db tables --server "$SERVER"
 run_test "db integrity" $CLI db integrity --server "$SERVER"
+run_test "db checkpoint" $CLI db checkpoint --server "$SERVER"
+run_test "db vacuum" $CLI db vacuum --force --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
@@ -157,9 +167,16 @@ if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
 
     # Packages.
     run_test "packages list" $CLI thralls packages list --thrall "$FIRST_THRALL" --server "$SERVER" || true
+
+    # Maintenance: set and immediately clear.
+    run_test "thralls maintenance set" $CLI thralls maintenance "$FIRST_THRALL" --until "2099-01-01T00:00:00Z" --server "$SERVER"
+    run_test "thralls maintenance clear" $CLI thralls maintenance "$FIRST_THRALL" --clear --server "$SERVER"
 else
-    skip_test "thralls show/traits/preview/tag" "no thralls enrolled"
+    skip_test "thralls show/traits/preview/tag/maintenance" "no thralls enrolled"
 fi
+
+# Purge (dry-run — safe, no deletions).
+run_test "thralls purge --dry-run" $CLI thralls purge --dry-run --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
@@ -222,10 +239,21 @@ fi
 if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
     run_test "config trace" $CLI config trace "$FIRST_THRALL" --server "$SERVER"
 fi
+run_test "config tree" $CLI config tree --server "$SERVER"
+run_test "config pending" $CLI config pending --server "$SERVER"
+run_test "config search --module" $CLI config search --module "hobnob-server-backup" --server "$SERVER" || true
 echo ""
 
 # -------------------------------------------------------------------
-# 8. inventory
+# 8. config freeze / unfreeze
+# -------------------------------------------------------------------
+echo -e "${BOLD}[config freeze]${NC}"
+run_test "config freeze" bash -c "echo y | $CLI config freeze --until 1s --server '$SERVER'"
+run_test "config unfreeze" $CLI config unfreeze --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 9. inventory
 # -------------------------------------------------------------------
 echo -e "${BOLD}[inventory]${NC}"
 run_test "inventory" $CLI inventory --server "$SERVER"
@@ -261,7 +289,14 @@ fi
 echo ""
 
 # -------------------------------------------------------------------
-# 10. query
+# 10. packages
+# -------------------------------------------------------------------
+echo -e "${BOLD}[packages]${NC}"
+run_test "packages drift" $CLI packages drift --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 11. query
 # -------------------------------------------------------------------
 echo -e "${BOLD}[query]${NC}"
 if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
@@ -360,6 +395,7 @@ echo ""
 echo -e "${BOLD}[spanner]${NC}"
 run_test "spanner status" $CLI spanner status --server "$SERVER" || \
     skip_test "spanner status" "spanner not configured"
+run_test "spanner spokes" $CLI spanner spokes --server "$SERVER" || true
 echo ""
 
 # -------------------------------------------------------------------
@@ -411,12 +447,77 @@ fi
 echo ""
 
 # -------------------------------------------------------------------
-# 21. Error handling
+# 21. preview
+# -------------------------------------------------------------------
+echo -e "${BOLD}[preview]${NC}"
+if [[ -n "$FIRST_THRALL" && "$FIRST_THRALL" != "ID" ]]; then
+    run_test "preview" $CLI preview "$FIRST_THRALL" --server "$SERVER"
+else
+    skip_test "preview" "no thralls enrolled"
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# 22. validate
+# -------------------------------------------------------------------
+echo -e "${BOLD}[validate]${NC}"
+if [[ -d "thrall-configs/modules" ]]; then
+    # Validate the first .hnb file found.
+    HNB_FILE=$(find thrall-configs/modules -name '*.hnb' -o -name '*.hnb.example' 2>/dev/null | head -1)
+    if [[ -n "$HNB_FILE" ]]; then
+        run_test "validate" $CLI validate "$HNB_FILE"
+    else
+        skip_test "validate" "no .hnb files found"
+    fi
+elif [[ -d "/srv/hobnob/policy/stage/modules" ]]; then
+    HNB_FILE=$(find /srv/hobnob/policy/stage/modules -name '*.hnb' 2>/dev/null | head -1)
+    if [[ -n "$HNB_FILE" ]]; then
+        run_test "validate" $CLI validate "$HNB_FILE"
+    else
+        skip_test "validate" "no .hnb files found"
+    fi
+else
+    skip_test "validate" "no config dir found"
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# 23. env
+# -------------------------------------------------------------------
+echo -e "${BOLD}[env]${NC}"
+# env promote requires valid module + tiers; test that it rejects bad input.
+run_test_expect_fail "env promote (no args)" $CLI env promote --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 24. ask (AI assistant)
+# -------------------------------------------------------------------
+echo -e "${BOLD}[ask]${NC}"
+if $CLI ask "How many thralls are enrolled?" --server "$SERVER" >/dev/null 2>&1; then
+    run_test "ask" $CLI ask "How many thralls are enrolled?" --server "$SERVER"
+else
+    skip_test "ask" "AI not enabled in server.yaml"
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# 25. rollback
+# -------------------------------------------------------------------
+echo -e "${BOLD}[rollback]${NC}"
+# Rollback requires a thrall + run ID with file snapshots; test error handling.
+run_test_expect_fail "rollback (no args)" $CLI rollback --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 26. Error handling
 # -------------------------------------------------------------------
 echo -e "${BOLD}[error handling]${NC}"
 run_test_expect_fail "thralls show bad-id" $CLI thralls show "nonexistent-id-000" --server "$SERVER"
 run_test_expect_fail "runs show bad-id" $CLI runs show "nonexistent-id-000" --server "$SERVER"
 run_test_expect_fail "push run missing --target" $CLI push run "echo hi" --server "$SERVER"
+run_test_expect_fail "config approve bad-id" $CLI config approve 999999 --server "$SERVER"
+run_test_expect_fail "config reject bad-id" $CLI config reject 999999 --server "$SERVER"
+run_test_expect_fail "validate nonexistent" $CLI validate "/tmp/nonexistent-file.hnb"
 echo ""
 
 # -------------------------------------------------------------------
