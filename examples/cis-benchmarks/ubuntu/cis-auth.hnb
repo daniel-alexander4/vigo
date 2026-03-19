@@ -1,0 +1,150 @@
+# CIS Ubuntu 22.04 LTS Benchmark — Section 5: Access, Authentication, Authorization
+# Level 1 controls for SSH, PAM, and password policy
+
+name: cis-auth
+
+vars:
+  ssh_max_auth_tries: "4"
+  ssh_client_alive_interval: "300"
+  ssh_client_alive_count_max: "3"
+  ssh_login_grace_time: "60"
+  ssh_allow_groups: "sshusers sudo"
+  pass_max_days: "365"
+  pass_min_days: "1"
+  pass_warn_age: "7"
+  pass_min_len: "14"
+
+resources:
+  # ── 5.2.x — SSH Server Configuration ──────────────────────────────
+
+  - name: "5.2.1-ssh-permissions"
+    type: exec
+    command: "chmod 600 /etc/ssh/sshd_config"
+    onlyif: "test $(stat -c %a /etc/ssh/sshd_config) != 600"
+
+  - name: "5.2-sshd-config"
+    type: file
+    target_path: /etc/ssh/sshd_config.d/cis-hardening.conf
+    content: |
+      # CIS Ubuntu 22.04 — SSH Hardening
+      # Managed by Hobnob
+
+      # 5.2.4 — Use SSH Protocol 2
+      Protocol 2
+
+      # 5.2.5 — Disable SSH LogLevel INFO
+      LogLevel VERBOSE
+
+      # 5.2.6 — Disable X11Forwarding
+      X11Forwarding no
+
+      # 5.2.7 — Set MaxAuthTries
+      MaxAuthTries {{ .Vars.ssh_max_auth_tries }}
+
+      # 5.2.8 — Disable PermitRootLogin
+      PermitRootLogin no
+
+      # 5.2.9 — Disable PermitEmptyPasswords
+      PermitEmptyPasswords no
+
+      # 5.2.10 — Disable HostbasedAuthentication
+      HostbasedAuthentication no
+
+      # 5.2.11 — Set client alive interval
+      ClientAliveInterval {{ .Vars.ssh_client_alive_interval }}
+      ClientAliveCountMax {{ .Vars.ssh_client_alive_count_max }}
+
+      # 5.2.12 — Set LoginGraceTime
+      LoginGraceTime {{ .Vars.ssh_login_grace_time }}
+
+      # 5.2.13 — Set AllowGroups
+      AllowGroups {{ .Vars.ssh_allow_groups }}
+
+      # 5.2.14 — Set Banner
+      Banner /etc/issue.net
+
+      # 5.2.15 — Disable forwarding
+      AllowTcpForwarding no
+      AllowAgentForwarding no
+
+      # 5.2.16 — Set MaxStartups
+      MaxStartups 10:30:60
+
+      # 5.2.17 — Set MaxSessions
+      MaxSessions 10
+
+      # Strong ciphers and MACs
+      Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+    owner: root
+    group: root
+    mode: "0644"
+    notify: ["restart-sshd"]
+
+  - name: "5.2-ssh-banner"
+    type: file
+    target_path: /etc/issue.net
+    content: |
+      Authorized access only. All activity is monitored and logged.
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: restart-sshd
+    type: exec
+    command: "systemctl restart sshd"
+
+  # ── 5.4.x — Password policy ───────────────────────────────────────
+
+  - name: "5.4.1-password-expiration"
+    type: file
+    target_path: /etc/login.defs.d/cis-password.conf
+    content: |
+      # CIS 5.4.1 — Password expiration and complexity
+      PASS_MAX_DAYS {{ .Vars.pass_max_days }}
+      PASS_MIN_DAYS {{ .Vars.pass_min_days }}
+      PASS_WARN_AGE {{ .Vars.pass_warn_age }}
+      PASS_MIN_LEN {{ .Vars.pass_min_len }}
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: "5.4.4-default-umask"
+    type: file
+    target_path: /etc/profile.d/cis-umask.sh
+    content: |
+      # CIS 5.4.4 — Set default umask to 027
+      umask 027
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: "5.4.5-shell-timeout"
+    type: file
+    target_path: /etc/profile.d/cis-tmout.sh
+    content: |
+      # CIS 5.4.5 — Set shell timeout (900 seconds)
+      TMOUT=900
+      readonly TMOUT
+      export TMOUT
+    owner: root
+    group: root
+    mode: "0644"
+
+  # ── 5.5.x — Root and system accounts ──────────────────────────────
+
+  - name: "5.5.2-lock-system-accounts"
+    type: exec
+    command: |
+      for user in $(awk -F: '($3 < 1000 && $1 != "root") {print $1}' /etc/passwd); do
+        if [ "$(passwd -S $user 2>/dev/null | awk '{print $2}')" != "L" ]; then
+          usermod -L -s /usr/sbin/nologin "$user" 2>/dev/null || true
+        fi
+      done
+    onlyif: "awk -F: '($3 < 1000 && $1 != \"root\" && $7 !~ /nologin|false/) {found=1} END {exit !found}' /etc/passwd"
+
+  - name: "5.5.5-root-default-group"
+    type: exec
+    command: "usermod -g 0 root"
+    onlyif: "test $(id -gn root) != root"

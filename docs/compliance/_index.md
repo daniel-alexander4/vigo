@@ -12,6 +12,7 @@ Guides for deploying Hobnob in regulated environments.
 - [HITRUST CSF](hitrust.md) -- HITRUST CSF control mapping across 8 domains (31 controls)
 - [SOC 2](soc2.md) -- Trust Services Criteria mapping (32 criteria across 5 categories)
 - [PCI DSS v4.0](pci-dss.md) -- 42 requirements mapped + 4 enforcement modules
+- [CIS Benchmarks](cis-benchmarks.md) -- Ubuntu, RHEL, Windows Level 1 enforcement modules
 - [Remediation Workflow](remediation.md) -- Automated drift detection, fix, and verification
 - [Database Encryption at Rest](database-encryption.md) -- LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](../operations/hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification

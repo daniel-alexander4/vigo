@@ -1,0 +1,72 @@
+# CIS Ubuntu 22.04 LTS Benchmark — Section 6: System Maintenance
+# Level 1 controls for file permissions and integrity
+
+name: cis-permissions
+
+resources:
+  # ── 6.1.x — System file permissions ───────────────────────────────
+
+  - name: "6.1.2-passwd-permissions"
+    type: exec
+    command: "chmod 644 /etc/passwd"
+    onlyif: "test $(stat -c %a /etc/passwd) != 644"
+
+  - name: "6.1.3-shadow-permissions"
+    type: exec
+    command: "chmod 640 /etc/shadow"
+    onlyif: "test $(stat -c %a /etc/shadow) != 640"
+
+  - name: "6.1.4-group-permissions"
+    type: exec
+    command: "chmod 644 /etc/group"
+    onlyif: "test $(stat -c %a /etc/group) != 644"
+
+  - name: "6.1.5-gshadow-permissions"
+    type: exec
+    command: "chmod 640 /etc/gshadow"
+    onlyif: "test $(stat -c %a /etc/gshadow) != 640"
+
+  - name: "6.1.6-passwd-owner"
+    type: exec
+    command: "chown root:root /etc/passwd"
+    onlyif: "test $(stat -c %U:%G /etc/passwd) != root:root"
+
+  - name: "6.1.7-shadow-owner"
+    type: exec
+    command: "chown root:shadow /etc/shadow"
+    onlyif: "test $(stat -c %U:%G /etc/shadow) != root:shadow"
+
+  - name: "6.1.8-group-owner"
+    type: exec
+    command: "chown root:root /etc/group"
+    onlyif: "test $(stat -c %U:%G /etc/group) != root:root"
+
+  - name: "6.1.9-gshadow-owner"
+    type: exec
+    command: "chown root:shadow /etc/gshadow"
+    onlyif: "test $(stat -c %U:%G /etc/gshadow) != root:shadow"
+
+  # ── 6.2.x — User and group settings ───────────────────────────────
+
+  - name: "6.2.1-no-empty-passwords"
+    type: exec
+    command: |
+      for user in $(awk -F: '($2 == "") {print $1}' /etc/shadow); do
+        passwd -l "$user" 2>/dev/null || true
+      done
+    onlyif: "awk -F: '($2 == \"\") {found=1} END {exit !found}' /etc/shadow"
+
+  - name: "6.2.6-root-path-integrity"
+    type: exec
+    command: "chmod 755 /root"
+    onlyif: "test $(stat -c %a /root) != 700 && test $(stat -c %a /root) != 750 && test $(stat -c %a /root) != 755"
+
+  - name: "6.2.7-home-dir-permissions"
+    type: exec
+    command: |
+      for dir in $(awk -F: '($3 >= 1000 && $7 !~ /nologin|false/) {print $6}' /etc/passwd); do
+        if [ -d "$dir" ]; then
+          chmod g-w,o-rwx "$dir" 2>/dev/null || true
+        fi
+      done
+    onlyif: "find /home -maxdepth 1 -mindepth 1 -type d -perm /027 2>/dev/null | head -1 | grep -q ."

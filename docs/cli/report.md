@@ -97,3 +97,25 @@ hobnobcli report pci [flags]
 hobnobcli report pci
 hobnobcli report pci --format html --output /tmp/pci-report.html
 ```
+
+### cis
+
+Generate a CIS Benchmark compliance report for Ubuntu, RHEL, and Windows Server.
+
+```bash
+hobnobcli report cis [flags]
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--format` | `json` | Output format: `json` or `html` |
+| `--output` | | Write to file instead of stdout |
+
+**Examples:**
+
+```bash
+hobnobcli report cis
+hobnobcli report cis --format html --output /tmp/cis-report.html
+```

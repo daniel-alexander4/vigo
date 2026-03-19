@@ -45,6 +45,8 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/soc2.html", h.handleSOC2ReportHTML)
 	mux.HandleFunc("GET /api/v1/report/pci", h.handlePCIReport)
 	mux.HandleFunc("GET /api/v1/report/pci.html", h.handlePCIReportHTML)
+	mux.HandleFunc("GET /api/v1/report/cis", h.handleCISReport)
+	mux.HandleFunc("GET /api/v1/report/cis.html", h.handleCISReportHTML)
 }
 
 // ComplianceReport is the JSON format for a compliance report.
@@ -578,4 +580,61 @@ func (h *ReportHandler) handlePCIReport(w http.ResponseWriter, r *http.Request) 
 func (h *ReportHandler) handlePCIReportHTML(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Hobnob PCI DSS v4.0 Compliance Report", "hobnob-pci",
 		h.buildPCIDSSFindings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- CIS Benchmarks ----------
+
+// buildCISFindings returns CIS Benchmark control findings.
+// These map to the enforcement modules in examples/cis-benchmarks/.
+func (h *ReportHandler) buildCISFindings(auditStatus AuditChainStatus) []ControlFinding {
+	return []ControlFinding{
+		// Section 1 — Filesystem
+		{ControlID: "1.1.1", Title: "Disable Unused Filesystems", Status: "satisfied", Evidence: "cis-filesystem module: blacklists cramfs, freevxfs, jffs2, hfs, hfsplus, squashfs, udf, usb-storage"},
+		{ControlID: "1.4.1", Title: "Bootloader Permissions", Status: "satisfied", Evidence: "cis-filesystem module: chmod 600 /boot/grub/grub.cfg"},
+		{ControlID: "1.5.1", Title: "ASLR Enabled", Status: "satisfied", Evidence: "cis-filesystem module: kernel.randomize_va_space = 2"},
+		{ControlID: "1.5.3", Title: "Core Dumps Restricted", Status: "satisfied", Evidence: "cis-filesystem module: hard core 0 + fs.suid_dumpable = 0"},
+
+		// Section 2 — Services
+		{ControlID: "2.1.1", Title: "Time Synchronization", Status: "satisfied", Evidence: "cis-services module: chrony installed and running"},
+		{ControlID: "2.2.x", Title: "Unnecessary Services Disabled", Status: "satisfied", Evidence: "cis-services module: removes/disables avahi, cups, dhcp, ldap, nfs, bind, ftp, http, dovecot, smb, squid, snmp, rpcbind, rsync"},
+		{ControlID: "2.3.x", Title: "Unnecessary Clients Removed", Status: "satisfied", Evidence: "cis-services module: removes nis, rsh, talk, telnet, ldap clients"},
+
+		// Section 3 — Network
+		{ControlID: "3.2.x", Title: "Network Host Parameters", Status: "satisfied", Evidence: "cis-network module: disable IP forwarding, disable redirects"},
+		{ControlID: "3.3.x", Title: "Network Security Parameters", Status: "satisfied", Evidence: "cis-network module: disable source routing, log martians, SYN cookies, reverse path filtering, ignore ICMP broadcasts"},
+		{ControlID: "3.4.x", Title: "Uncommon Protocols Disabled", Status: "satisfied", Evidence: "cis-network module: blacklists DCCP, SCTP, RDS, TIPC"},
+
+		// Section 4 — Logging
+		{ControlID: "4.1.x", Title: "Audit Logging Configured", Status: "satisfied", Evidence: "cis-logging module: auditd installed, 15+ audit rules (time, identity, network, MAC, login, permissions, access, privileged, delete, modules)"},
+		{ControlID: "4.1.immutable", Title: "Audit Rules Immutable", Status: "satisfied", Evidence: "cis-logging module: -e 2 flag requires reboot to change audit rules"},
+		{ControlID: "4.2.x", Title: "Syslog Configured", Status: "satisfied", Evidence: "cis-logging module: rsyslog installed, running, file permissions 0640"},
+
+		// Section 5 — Access/Auth
+		{ControlID: "5.2.x", Title: "SSH Hardened", Status: "satisfied", Evidence: "cis-auth module: Protocol 2, no root login, no empty passwords, strong ciphers/MACs/KEX, MaxAuthTries 4, AllowGroups, session timeout, banner"},
+		{ControlID: "5.4.x", Title: "Password Policy", Status: "satisfied", Evidence: "cis-auth module: PASS_MAX_DAYS 365, PASS_MIN_DAYS 1, PASS_WARN_AGE 7, 14-char minimum (RHEL: pwquality minclass=4)"},
+		{ControlID: "5.4.4", Title: "Default umask 027", Status: "satisfied", Evidence: "cis-auth module: /etc/profile.d/cis-umask.sh"},
+		{ControlID: "5.4.5", Title: "Shell Timeout", Status: "satisfied", Evidence: "cis-auth module: TMOUT=900 readonly"},
+		{ControlID: "5.5.x", Title: "System Accounts Locked", Status: "satisfied", Evidence: "cis-auth module: locks all UID < 1000 accounts (except root) with nologin shell"},
+
+		// Section 6 — Maintenance
+		{ControlID: "6.1.x", Title: "System File Permissions", Status: "satisfied", Evidence: "cis-permissions module: passwd 644, shadow 640, group 644, gshadow 640, correct ownership"},
+		{ControlID: "6.2.1", Title: "No Empty Passwords", Status: "satisfied", Evidence: "cis-permissions module: locks accounts with empty password fields"},
+		{ControlID: "6.2.7", Title: "Home Directory Permissions", Status: "satisfied", Evidence: "cis-permissions module: removes group-write and other-access from home directories"},
+
+		// Windows equivalents
+		{ControlID: "W-1.1.x", Title: "Windows Password Policy", Status: "satisfied", Evidence: "cis-account-policies module: 24 history, 365 max age, 14 min length, complexity enabled"},
+		{ControlID: "W-1.2.x", Title: "Windows Account Lockout", Status: "satisfied", Evidence: "cis-account-policies module: 5 threshold, 15 min duration, 15 min reset"},
+		{ControlID: "W-17.x", Title: "Windows Audit Policy", Status: "satisfied", Evidence: "cis-audit-policy module: credential validation, user mgmt, logon/logoff, process creation, policy change, system integrity"},
+		{ControlID: "W-2.3.x", Title: "Windows Security Options", Status: "satisfied", Evidence: "cis-security-options module: disable guest, SMB signing, WDigest disabled, inactivity timeout, firewall enabled"},
+	}
+}
+
+func (h *ReportHandler) handleCISReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob CIS Benchmark Compliance Report", "hobnob-cis",
+		h.buildCISFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleCISReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Hobnob CIS Benchmark Compliance Report", "hobnob-cis",
+		h.buildCISFindings(h.auditStatusFromRequest(r)), true)
 }

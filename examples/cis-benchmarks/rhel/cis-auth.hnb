@@ -1,0 +1,119 @@
+# CIS RHEL 9 Benchmark — Section 5: Access, Authentication, Authorization
+# Level 1 controls for SSH, PAM, and password policy
+
+name: cis-auth
+
+vars:
+  ssh_max_auth_tries: "4"
+  ssh_client_alive_interval: "300"
+  ssh_client_alive_count_max: "3"
+  ssh_login_grace_time: "60"
+  ssh_allow_groups: "sshusers wheel"
+  pass_max_days: "365"
+  pass_min_days: "1"
+  pass_warn_age: "7"
+  pass_min_len: "14"
+
+resources:
+  # ── 5.2.x — SSH Server Configuration ──────────────────────────────
+
+  - name: "5.2.1-ssh-permissions"
+    type: exec
+    command: "chmod 600 /etc/ssh/sshd_config"
+    onlyif: "test $(stat -c %a /etc/ssh/sshd_config) != 600"
+
+  - name: "5.2-sshd-config"
+    type: file
+    target_path: /etc/ssh/sshd_config.d/cis-hardening.conf
+    content: |
+      # CIS RHEL 9 — SSH Hardening
+      # Managed by Hobnob
+
+      Protocol 2
+      LogLevel VERBOSE
+      X11Forwarding no
+      MaxAuthTries {{ .Vars.ssh_max_auth_tries }}
+      PermitRootLogin no
+      PermitEmptyPasswords no
+      HostbasedAuthentication no
+      ClientAliveInterval {{ .Vars.ssh_client_alive_interval }}
+      ClientAliveCountMax {{ .Vars.ssh_client_alive_count_max }}
+      LoginGraceTime {{ .Vars.ssh_login_grace_time }}
+      AllowGroups {{ .Vars.ssh_allow_groups }}
+      Banner /etc/issue.net
+      AllowTcpForwarding no
+      AllowAgentForwarding no
+      MaxStartups 10:30:60
+      MaxSessions 10
+      Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+    owner: root
+    group: root
+    mode: "0644"
+    notify: ["restart-sshd"]
+
+  - name: "5.2-ssh-banner"
+    type: file
+    target_path: /etc/issue.net
+    content: |
+      Authorized access only. All activity is monitored and logged.
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: restart-sshd
+    type: exec
+    command: "systemctl restart sshd"
+
+  # ── 5.4.x — Password policy ───────────────────────────────────────
+
+  - name: "5.4.1-password-quality"
+    type: file
+    target_path: /etc/security/pwquality.conf
+    content: |
+      # CIS RHEL 9 — Password Quality
+      # Managed by Hobnob
+      minlen = {{ .Vars.pass_min_len }}
+      minclass = 4
+      dcredit = -1
+      ucredit = -1
+      lcredit = -1
+      ocredit = -1
+      maxrepeat = 3
+      maxclassrepeat = 4
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: "5.4.4-default-umask"
+    type: file
+    target_path: /etc/profile.d/cis-umask.sh
+    content: |
+      umask 027
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: "5.4.5-shell-timeout"
+    type: file
+    target_path: /etc/profile.d/cis-tmout.sh
+    content: |
+      TMOUT=900
+      readonly TMOUT
+      export TMOUT
+    owner: root
+    group: root
+    mode: "0644"
+
+  # ── 5.5.x — System accounts ───────────────────────────────────────
+
+  - name: "5.5.2-lock-system-accounts"
+    type: exec
+    command: |
+      for user in $(awk -F: '($3 < 1000 && $1 != "root") {print $1}' /etc/passwd); do
+        if [ "$(passwd -S $user 2>/dev/null | awk '{print $2}')" != "LK" ]; then
+          usermod -L -s /sbin/nologin "$user" 2>/dev/null || true
+        fi
+      done
+    onlyif: "awk -F: '($3 < 1000 && $1 != \"root\" && $7 !~ /nologin|false/) {found=1} END {exit !found}' /etc/passwd"
