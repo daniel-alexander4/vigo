@@ -64,8 +64,10 @@ func (s *AgentService) SetAuditWriter(w auditRecorder) {
 	s.auditWriter = w
 }
 
-// isRecentlyActive returns true if the envoy has checked in within 2× the check-in interval.
+// isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.
 // Used to distinguish promotable (recently polling) from truly stale agents.
+// The 3× margin covers one full interval + jitter + clock skew, ensuring an
+// actively polling agent isn't misclassified as offline between check-ins.
 func (s *AgentService) isRecentlyActive(envoyID string) bool {
 	if s.fleetIndex == nil {
 		return false
@@ -74,9 +76,9 @@ func (s *AgentService) isRecentlyActive(envoyID string) bool {
 	if !ok {
 		return false
 	}
-	staleThreshold := 2 * s.baseInterval
+	staleThreshold := 3 * s.baseInterval
 	if staleThreshold == 0 {
-		staleThreshold = 10 * time.Minute // fallback
+		staleThreshold = 15 * time.Minute // fallback
 	}
 	return time.Since(ts.LastSeen) <= staleThreshold
 }
