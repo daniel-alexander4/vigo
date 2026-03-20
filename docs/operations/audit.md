@@ -1,3 +1,4 @@
+
 # Audit Log
 
 Vigo provides a unified audit view across config publishes, push runs, and workflow executions.

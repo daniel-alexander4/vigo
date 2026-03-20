@@ -1,3 +1,4 @@
+
 # Docker Stack Management
 
 This example uses the `docker_image`, `docker_container`, and `docker_compose` [executors](../reference/executors/_index.md) to manage containerized services.

@@ -1,3 +1,4 @@
+
 # vigogo tokens
 
 Manage enrollment tokens used for agent bootstrap.

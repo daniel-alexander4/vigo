@@ -1,3 +1,4 @@
+
 # Dashboard
 
 The dashboard provides fleet health at a glance. It is the landing page at `/`.

@@ -1,3 +1,4 @@
+
 # Bootstrap Enrollment
 
 Bootstrap is the process by which a new machine becomes a managed envoy. The server provides a one-line bootstrap script that handles agent installation and enrollment.

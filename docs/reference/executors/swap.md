@@ -1,3 +1,4 @@
+
 # swap
 
 Manages swap files -- creates, activates, and persists swap files, or removes them.

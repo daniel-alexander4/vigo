@@ -1,3 +1,4 @@
+
 # registry (Windows)
 
 Manages Windows Registry keys and values idempotently. Reads the current state via PowerShell and only writes when drift is detected.

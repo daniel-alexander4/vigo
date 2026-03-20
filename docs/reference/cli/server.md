@@ -1,3 +1,4 @@
+
 # vigogo server
 
 Manage peer replication: promote a peer to primary, check replication status.

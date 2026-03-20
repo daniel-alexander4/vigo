@@ -1,3 +1,4 @@
+
 # tmpfile
 
 Manages systemd-tmpfiles configuration files in `/etc/tmpfiles.d/`. Used to declare temporary files, directories, and cleanup rules that systemd-tmpfiles enforces.

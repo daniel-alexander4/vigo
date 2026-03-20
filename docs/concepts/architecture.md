@@ -1,3 +1,4 @@
+
 # Architecture
 
 Vigo has three binaries, two network ports, and a filesystem-only config path.

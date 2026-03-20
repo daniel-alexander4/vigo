@@ -1,3 +1,4 @@
+
 ---
 name: Go-to-Market Channels by Industry
 description: Specific strategies to reach buyers in each target market — communities, events, content, partnerships, and outreach tactics

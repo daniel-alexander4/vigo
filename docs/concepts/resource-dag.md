@@ -1,3 +1,4 @@
+
 # Resource DAG
 
 Resources within a module form a Directed Acyclic Graph (DAG) based on their dependency declarations. The agent executes resources in topological order — dependencies first, dependents after.

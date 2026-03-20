@@ -1,3 +1,4 @@
+
 # Licensing
 
 Vigo uses a built-in licensing system with a free tier and paid tiers. Licenses govern maximum envoy counts and feature access.

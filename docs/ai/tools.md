@@ -1,3 +1,4 @@
+
 # LLM Tools
 
 The AI assistant has access to 14 read-only tools for querying fleet state. These tools are exposed to the LLM as function definitions, and the assistant calls them iteratively to gather data for answering questions.

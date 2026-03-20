@@ -1,3 +1,4 @@
+
 # P2P Spanner Architecture (Future)
 
 This document describes a peer-to-peer spanner model that eliminates the hub as a single point of failure. This is a design document — the current implementation uses hub-spoke spanner, which is sufficient for most deployments.

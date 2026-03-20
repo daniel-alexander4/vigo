@@ -1,3 +1,4 @@
+
 # Compliance Export
 
 Vigo provides compliance evidence to external tools via three export endpoints: SIEM, CMDB, and OSCAL. Vigo provides evidence; compliance tools evaluate it.

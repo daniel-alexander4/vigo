@@ -1,3 +1,4 @@
+
 # network_static_route
 
 Manages static routes on network devices over SSH. Supports adding and removing IPv4 static routes across Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.

@@ -1,3 +1,4 @@
+
 # Peer Replication
 
 Vigo supports active-passive replication with automatic failover. One server is the **primary** (accepts writes, pushes config); the others are **peers** (receive synced files, accept read-only check-ins). If the primary goes down, promote a peer to primary and agents fail over automatically.

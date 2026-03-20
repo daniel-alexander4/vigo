@@ -1,3 +1,4 @@
+
 # certificates
 
 The `certificates` trait collector scans well-known certificate directories for PEM/CRT files and reports their expiry dates and days remaining.

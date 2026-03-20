@@ -1,3 +1,4 @@
+
 # Security Hardening
 
 This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo configuration using multiple modules with `depends_on` ordering.

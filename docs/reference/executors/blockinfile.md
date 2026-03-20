@@ -1,3 +1,4 @@
+
 # blockinfile
 
 Manages marked blocks of text within a file, delimited by BEGIN/END markers. Useful for managing a section of a config file without touching the rest.

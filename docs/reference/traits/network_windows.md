@@ -1,3 +1,4 @@
+
 # Network (Windows)
 
 Collects the system hostname, primary IP address, and MAC address on Windows.

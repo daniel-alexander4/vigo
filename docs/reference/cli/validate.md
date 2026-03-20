@@ -1,3 +1,4 @@
+
 # vigogo validate
 
 Check `.vgo` files for YAML correctness, structural validity, and idempotency.

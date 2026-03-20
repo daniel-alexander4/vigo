@@ -1,3 +1,4 @@
+
 # service_recovery_windows
 
 Manages per-service failure recovery actions on Windows idempotently via `sc.exe`. Configures what happens when a Windows service crashes -- restart the service, run a command, reboot the machine, or take no action.

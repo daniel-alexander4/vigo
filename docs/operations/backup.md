@@ -1,3 +1,4 @@
+
 # Backup & Recovery
 
 Vigo uses [Litestream](https://litestream.io) for continuous SQLite WAL replication. When configured, the server manages a Litestream subprocess that streams WAL changes to a remote replica in near-real-time.

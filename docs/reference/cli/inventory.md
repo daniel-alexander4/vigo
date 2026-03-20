@@ -1,3 +1,4 @@
+
 # vigogo inventory
 
 Query enrolled envoys by their collected traits with flexible filtering and column display.

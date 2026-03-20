@@ -1,3 +1,4 @@
+
 # SELinux
 
 Reports SELinux enforcement status, mode, and active policy.

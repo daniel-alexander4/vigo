@@ -1,3 +1,4 @@
+
 # Rate Limiting
 
 Vigo supports token-bucket rate limiting on check-in RPCs to protect the server from excessive traffic during fleet-wide events (mass reboots, network partitions, etc.).

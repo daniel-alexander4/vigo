@@ -1,3 +1,4 @@
+
 # Templates
 
 Vigo uses Go template syntax for dynamic content in resource definitions. Templates are rendered agent-side during policy evaluation.

@@ -1,3 +1,4 @@
+
 # AI Providers
 
 The Vigo AI assistant supports four LLM providers. Configure the provider in the `ai:` section of `server.yaml`.

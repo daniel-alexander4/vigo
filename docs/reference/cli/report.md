@@ -1,3 +1,4 @@
+
 # vigogo report
 
 Generate compliance reports mapped to security frameworks.
@@ -154,6 +155,15 @@ Generate a NERC CIP compliance report (18 requirements across 8 CIP standards fo
 ```bash
 vigogo report nerccip
 vigogo report nerccip --format html --output /tmp/nerccip-report.html
+```
+
+### cyberessentials
+
+Generate a Cyber Essentials+ compliance report (29 controls across 5 themes — UK Government cybersecurity certification).
+
+```bash
+vigogo report cyberessentials
+vigogo report cyberessentials --format html --output /tmp/ce-report.html
 ```
 
 ### executive

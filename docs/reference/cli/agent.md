@@ -1,3 +1,4 @@
+
 # Agent CLI Reference
 
 `vigo` is the Rust agent binary that runs on managed machines (envoys). It is a separate binary from `vigogo` (the admin CLI).

@@ -1,3 +1,4 @@
+
 ---
 title: Compliance Reporting
 ---
@@ -14,6 +15,8 @@ Vigo generates compliance reports mapped to 9 security frameworks, plus an execu
 | HIPAA | HTML | `GET /api/v1/report/compliance.html` | Auditor-readable, printable |
 | HITRUST CSF | JSON | `GET /api/v1/report/hitrust` | Programmatic consumption |
 | HITRUST CSF | HTML | `GET /api/v1/report/hitrust.html` | Auditor-readable, printable |
+| Cyber Essentials+ | JSON | `GET /api/v1/report/cyberessentials` | Programmatic consumption |
+| Cyber Essentials+ | HTML | `GET /api/v1/report/cyberessentials.html` | Auditor-readable, printable |
 | Executive Summary | JSON | `GET /api/v1/report/executive` | C-suite / auditor overview |
 | Executive Summary | HTML | `GET /api/v1/report/executive.html` | Print-friendly PDF via Ctrl+P |
 | OSCAL | JSON | `GET /api/v1/export/oscal` | Machine-readable OSCAL v1.1.2 |
@@ -127,7 +130,7 @@ The executive summary is designed for business owners, C-suite, and auditors who
 
 - **Compliance Score** — fleet-wide percentage with rating (Excellent/Good/Needs Attention/Critical)
 - **30-Day Trend** — daily compliance history as an inline SVG area chart
-- **Framework Coverage** — all 9 frameworks with satisfied/partial/not-satisfied counts and stacked bar charts
+- **Framework Coverage** — all 10 frameworks with satisfied/partial/not-satisfied counts and stacked bar charts
 - **Fleet Summary** — friendly labels: Fully Compliant, Configuration Changes Detected, Errors, Unreachable, Pending Data
 - **Top Issues** — max 10, severity-sorted, plain-English descriptions
 - **Audit Chain** — pass/fail integrity banner

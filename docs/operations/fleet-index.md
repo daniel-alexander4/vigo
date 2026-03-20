@@ -1,3 +1,4 @@
+
 # FleetIndex
 
 The FleetIndex is an in-memory cache that accelerates check-in operations. It holds the current state of every envoy, eliminating database queries on the check-in hot path.

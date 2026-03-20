@@ -1,3 +1,4 @@
+
 # Spanner
 
 Spanner enables hub-spoke scaling for large fleets. A hub server aggregates data from spoke servers, each of which handles a partition of envoys.

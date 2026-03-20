@@ -1,3 +1,4 @@
+
 # Security Scanning
 
 Vigo can deploy and manage security scanning tools across your fleet, collect scan results as traits, and display fleet-wide security posture on the Compliance & Security dashboard.

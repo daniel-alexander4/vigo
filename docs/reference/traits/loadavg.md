@@ -1,3 +1,4 @@
+
 # Load Average
 
 Reports the system load averages over 1, 5, and 15 minute intervals.

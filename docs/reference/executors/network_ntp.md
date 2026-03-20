@@ -1,3 +1,4 @@
+
 # network_ntp
 
 Manages NTP server configuration on Cisco and Juniper network devices over SSH. Supports both Cisco IOS/NX-OS and Juniper Junos.

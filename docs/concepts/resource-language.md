@@ -1,3 +1,4 @@
+
 # Resource Language
 
 Beyond basic resource definitions, Vigo supports several advanced config patterns for reducing repetition and expressing complex desired state.

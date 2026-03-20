@@ -1,3 +1,4 @@
+
 # Vigo Differentiators
 
 What Vigo does in the areas of safety, reliability, and simplicity that other state enforcement and configuration management systems do not.

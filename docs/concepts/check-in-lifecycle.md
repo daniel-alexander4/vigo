@@ -1,3 +1,4 @@
+
 # Check-in Lifecycle
 
 The agent check-in is the core data flow in Vigo. Every 5 minutes (configurable), the agent contacts the server, receives its desired state, applies changes, and reports results.

@@ -1,3 +1,4 @@
+
 # Block Devices
 
 Enumerates physical block devices with size, model, and read-only status.

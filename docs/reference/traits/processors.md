@@ -1,3 +1,4 @@
+
 # Processors
 
 Provides detailed CPU information including model, vendor, core counts, and clock speed.

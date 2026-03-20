@@ -1,3 +1,4 @@
+
 # gRPC Agent Service
 
 The `VigoAgent` service handles all communication between the Rust agent and the server. It runs on port 1530 over mTLS. Every unary RPC includes an ED25519 signature in the request, verified by the server against the agent's stored public key.

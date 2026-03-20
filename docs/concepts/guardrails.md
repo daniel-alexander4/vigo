@@ -1,3 +1,4 @@
+
 # Guardrails
 
 Vigo includes self-protection guardrails that prevent configs from accidentally breaking the agent or server. These are hardcoded in both the server (config validation) and agent (runtime enforcement).

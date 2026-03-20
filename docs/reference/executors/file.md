@@ -1,3 +1,4 @@
+
 # file
 
 Manages file content, permissions, and ownership idempotently. Uses SHA-256 content hashing for drift detection and atomic writes (write to temp file, then rename) to prevent partial updates.

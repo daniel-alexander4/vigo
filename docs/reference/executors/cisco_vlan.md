@@ -1,3 +1,4 @@
+
 # cisco_vlan
 
 Manages VLANs on Cisco IOS/NX-OS switches over SSH. Checks the VLAN table before acting and only pushes configuration when drift is detected.

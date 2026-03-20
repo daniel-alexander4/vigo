@@ -1,3 +1,4 @@
+
 # Concepts
 
 Core concepts that explain how Vigo works.

@@ -1,3 +1,4 @@
+
 # AI Assistant
 
 Vigo includes a built-in AI assistant accessible via the `/ask` endpoint (REST API) and the web UI at `/ask`. The assistant answers questions about your fleet by querying envoy state, traits, compliance, runs, and configuration through a tool-use loop.

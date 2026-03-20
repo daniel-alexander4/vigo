@@ -1,3 +1,4 @@
+
 # service_windows
 
 Manages Windows services via `sc.exe`. Supports starting, stopping, restarting, and configuring startup type.

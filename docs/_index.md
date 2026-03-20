@@ -1,3 +1,4 @@
+
 # Vigo Documentation
 
 Vigo is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (envoys) pull desired state from a central server, apply idempotent changes, and report results back. 72 built-in resource types across 8 platforms. No DSL — plain YAML.

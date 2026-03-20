@@ -1,3 +1,4 @@
+
 # FreeBSD Support
 
 Vigo supports FreeBSD with native integration for rc.d services, the `pw` user/group utility, kernel module management, and `pkg` package management. The agent includes FreeBSD-specific executors alongside shared BSD executors for hostname, timezone, sysctl, and pf firewall management.

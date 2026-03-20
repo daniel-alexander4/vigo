@@ -1,3 +1,4 @@
+
 # Network
 
 Collects the system hostname, FQDN, IP addresses, and MAC addresses.

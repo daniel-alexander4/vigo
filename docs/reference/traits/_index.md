@@ -1,3 +1,4 @@
+
 # Trait Collectors
 
 Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent runs 27 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 27 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).

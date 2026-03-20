@@ -1,3 +1,4 @@
+
 # Prometheus Metrics
 
 The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (default 8443).

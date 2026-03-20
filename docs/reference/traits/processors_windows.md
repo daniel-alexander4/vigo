@@ -1,3 +1,4 @@
+
 # Processors (Windows)
 
 Provides detailed CPU information including model, core counts, and clock speed on Windows.

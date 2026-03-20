@@ -1,3 +1,4 @@
+
 # Drift Alerting
 
 The compliance monitor checks fleet health every 60 seconds and fires alerts when compliance drops below a configurable threshold.

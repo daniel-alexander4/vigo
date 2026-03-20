@@ -1,3 +1,4 @@
+
 # Tamper-Evident Audit Trail
 
 Vigo maintains a tamper-evident audit trail using a SHA-256 hash chain. Every recorded event includes the hash of the previous entry, making modifications, deletions, or out-of-order insertions detectable by anyone with read access to the database.

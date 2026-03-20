@@ -1,3 +1,4 @@
+
 # logrotate
 
 Manages logrotate configuration files in `/etc/logrotate.d/`.

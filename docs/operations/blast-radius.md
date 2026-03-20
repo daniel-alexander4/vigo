@@ -1,3 +1,4 @@
+
 # Blast Radius Limits
 
 Vigo can automatically roll back a config publish when it causes fleet compliance to drop. This prevents a bad configuration change from propagating to the entire fleet.

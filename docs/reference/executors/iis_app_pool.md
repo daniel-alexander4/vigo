@@ -1,3 +1,4 @@
+
 # iis_app_pool
 
 Manages IIS application pools idempotently via the PowerShell WebAdministration module. Controls .NET runtime version, pipeline mode, process identity, idle timeout, and recycling schedule.

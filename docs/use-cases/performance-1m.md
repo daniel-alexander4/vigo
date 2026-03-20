@@ -1,3 +1,4 @@
+
 # Performance Analysis (Theoretical): 1-Minute Check-ins on 4 vCPU / 8 GB / SSD
 
 These projections are based on benchmarked per-request costs from the codebase, not measured end-to-end under production load. Actual performance will vary with hardware, network conditions, policy complexity, and fleet composition.

@@ -1,3 +1,4 @@
+
 # OS
 
 Detects the operating system distribution, version, kernel release, architecture, and packaging family. For derivative distributions (Linux Mint, Pop!_OS, Elementary, etc.), also resolves the upstream distro and codename for third-party repository configuration.

@@ -1,3 +1,4 @@
+
 # reboot_windows
 
 Manages Windows reboots idempotently by checking whether a reboot is pending before triggering one. Useful after feature installs, Windows Updates, or configuration changes that require a restart.

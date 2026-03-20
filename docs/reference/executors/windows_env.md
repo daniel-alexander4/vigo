@@ -1,3 +1,4 @@
+
 # windows_env
 
 Manages persistent Windows environment variables idempotently via the .NET `[Environment]::SetEnvironmentVariable()` API. Changes are written to the registry and survive reboots.

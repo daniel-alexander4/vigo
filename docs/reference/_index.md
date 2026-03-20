@@ -1,3 +1,4 @@
+
 # Reference
 
 Complete reference documentation for Vigo's resource types, trait collectors, CLI commands, and APIs.

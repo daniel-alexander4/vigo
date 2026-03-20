@@ -1,3 +1,4 @@
+
 # Security
 
 The envoy detail page at `/envoys/{id}` serves as the security information view for individual managed nodes. It shows enrollment credentials, compliance status, and audit history.

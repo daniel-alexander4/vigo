@@ -1,3 +1,4 @@
+
 # OpenBSD Support
 
 Vigo supports OpenBSD with native integration for rcctl service management and pkg_add package management. The agent shares BSD-common executors with FreeBSD and NetBSD for hostname, timezone, sysctl, and pf firewall management.

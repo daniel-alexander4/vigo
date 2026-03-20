@@ -1,3 +1,4 @@
+
 # First Module
 
 This walkthrough builds a complete nginx module with package installation, config file management, and service control — demonstrating the core patterns you'll use in every Vigo module.

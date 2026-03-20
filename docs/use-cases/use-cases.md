@@ -1,3 +1,4 @@
+
 # Use Cases
 
 Vigo is a general-purpose distributed state enforcement engine. Its core pattern — central authority defines desired state, distributed agents enforce it idempotently, report back with collected traits, all over authenticated channels with offline resilience — applies across many domains.

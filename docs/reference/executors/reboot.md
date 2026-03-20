@@ -1,3 +1,4 @@
+
 # reboot
 
 Triggers or cancels system reboots. Supports delayed reboots and conditional reboots based on a "reboot required" sentinel file.

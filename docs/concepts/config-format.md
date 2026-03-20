@@ -1,3 +1,4 @@
+
 # Config Format
 
 All Vigo configuration lives in YAML files with the `.vgo` extension under `policy/stage/`. The server reloads config when `vigogo config publish` syncs files to `.live/`.

@@ -1,3 +1,4 @@
+
 # local_security_policy
 
 Manages local security policies idempotently via the Windows `secedit` tool. Enforces password policies, account lockout settings, and audit policies.

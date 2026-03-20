@@ -1,3 +1,4 @@
+
 # Windows Support
 
 Vigo fully supports Windows as a managed platform. The Rust agent runs as a native Windows Service with 22 Windows-specific executors, 13 trait collectors, and Windows-native `when:` builtins.

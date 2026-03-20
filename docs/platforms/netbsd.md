@@ -1,3 +1,4 @@
+
 # NetBSD Support
 
 Vigo supports NetBSD with native integration for rc.d services and pkgin package management. The agent shares BSD-common executors with FreeBSD and OpenBSD.

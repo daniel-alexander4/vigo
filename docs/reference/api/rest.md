@@ -1,3 +1,4 @@
+
 # REST API
 
 In addition to the grpc-gateway proxy (which exposes all `VigoAdmin` RPCs under `/api/v1/`), the server mounts several direct REST handlers. These endpoints are not proxied through grpc-gateway and exist for features that benefit from direct HTTP handling.

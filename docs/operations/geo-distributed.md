@@ -1,3 +1,4 @@
+
 # Geo-Distributed Deployments
 
 Running Vigo across geographic regions — US and Europe, multiple data centers, or any WAN-separated fleet. This guide covers single-server and hub-spoke topologies, latency characteristics, and configuration for distributed fleets up to 500 nodes.

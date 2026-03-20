@@ -1,3 +1,4 @@
+
 # Convergence Walkthrough
 
 A step-by-step trace of what happens when you add a new module, publish it, and a envoy converges — with realistic timing and traffic flow for each phase.

@@ -1,3 +1,4 @@
+
 # acl (Windows)
 
 Manages NTFS file and directory access control lists (ACLs) idempotently via PowerShell `Get-Acl`/`Set-Acl`. Grants or removes access rules for specific identities (users, groups) with fine-grained control over rights, inheritance, and access type.

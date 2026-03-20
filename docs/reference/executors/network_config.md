@@ -1,3 +1,4 @@
+
 # network_config
 
 Declarative config-block management for network devices over SSH. Ensures that specified configuration lines are present (or absent) in the device's running configuration, using device-specific config mode commands.

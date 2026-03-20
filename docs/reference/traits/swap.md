@@ -1,3 +1,4 @@
+
 # Swap
 
 Enumerates active swap devices with type, size, usage, and priority.

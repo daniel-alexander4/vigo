@@ -1,3 +1,4 @@
+
 # DMI
 
 Reads Desktop Management Interface (SMBIOS) fields describing the system's BIOS, motherboard, and chassis.

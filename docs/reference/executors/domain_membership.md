@@ -1,3 +1,4 @@
+
 # domain_membership
 
 Manages Active Directory domain membership idempotently via PowerShell. Joins machines to a domain, verifies current membership, and removes machines from a domain.

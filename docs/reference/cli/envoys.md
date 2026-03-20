@@ -1,3 +1,4 @@
+
 # vigogo envoys
 
 Manage enrolled envoys (managed nodes). Also available as `vigogo nodes`.

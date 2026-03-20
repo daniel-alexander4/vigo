@@ -1,3 +1,4 @@
+
 # Vigo — Technical Overview
 
 Alexander4, LLC | vigo.licensing@alexander4.org

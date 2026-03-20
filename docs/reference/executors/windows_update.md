@@ -1,3 +1,4 @@
+
 # windows_update
 
 Manages Windows Update and WSUS (Windows Server Update Services) configuration idempotently via registry values. Controls the update source, auto-update behavior, and scheduled install timing.

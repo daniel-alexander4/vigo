@@ -1,3 +1,4 @@
+
 # package
 
 Installs, upgrades, and removes OS packages. Auto-detects the system's package manager (APT, DNF, YUM, APK, Pacman, Zypper) based on the OS family and distro.

@@ -1,3 +1,4 @@
+
 # Migrating from Puppet
 
 Vigo is the most conceptually similar tool to Puppet — both are pull-based, compile a desired-state catalog on the server, and apply idempotent resources on the agent. If you think in Puppet, Vigo will feel familiar.

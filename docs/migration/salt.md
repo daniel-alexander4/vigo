@@ -1,3 +1,4 @@
+
 # Migrating from Salt
 
 Vigo and Salt share a YAML-first configuration philosophy, making Salt the smoothest migration path. Both use YAML for state definitions, have a concept of system facts (grains/traits), and support a pull-based agent model. The key differences are template rendering, data lookup, and execution model.

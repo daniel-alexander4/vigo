@@ -1,3 +1,4 @@
+
 # Maintenance Windows
 
 Vigo supports per-envoy maintenance windows and global change freezes to prevent configuration changes during planned outages.

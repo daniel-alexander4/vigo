@@ -1,3 +1,4 @@
+
 # vigogo query
 
 Query trait values from targeted envoys in real time, with cached fallback for offline nodes.

@@ -1,3 +1,4 @@
+
 # CLI Reference
 
 Vigo has two CLI binaries:

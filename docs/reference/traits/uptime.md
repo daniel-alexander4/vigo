@@ -1,3 +1,4 @@
+
 # Uptime
 
 Reports system uptime in seconds and the last boot time as an RFC 3339 timestamp.

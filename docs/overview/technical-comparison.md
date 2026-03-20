@@ -1,3 +1,4 @@
+
 # Technical Comparison
 
 A factual comparison of Vigo against five established configuration management systems — Puppet, CFEngine, Chef, Ansible, and SaltStack — covering architecture, security, performance, expressiveness, scalability, and operational characteristics.

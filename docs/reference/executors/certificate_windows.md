@@ -1,3 +1,4 @@
+
 # certificate_windows
 
 Manages certificates in Windows certificate stores idempotently via PowerShell. Imports PFX/CER/CRT files, verifies certificate presence by thumbprint, and removes certificates.

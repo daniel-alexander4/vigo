@@ -1,3 +1,4 @@
+
 # symlink
 
 Manages symbolic and hard links idempotently.

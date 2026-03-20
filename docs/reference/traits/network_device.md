@@ -1,3 +1,4 @@
+
 # Network Device Traits
 
 Collects facts from network devices (Cisco IOS/NX-OS, Juniper Junos) over SSH during the gateway proxy convergence loop. Unlike standard trait collectors that run locally, this collector operates remotely through the gateway envoy.

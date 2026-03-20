@@ -1,3 +1,4 @@
+
 # Email Notifications
 
 The Vigo server can send email notifications for operational events via an SMTP relay. Notifications are disabled when `smtp.host` is empty.

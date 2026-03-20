@@ -1,3 +1,4 @@
+
 # Hardware (Windows)
 
 Reports logical CPU count, total physical memory, and total disk size on Windows.

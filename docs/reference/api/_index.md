@@ -1,3 +1,4 @@
+
 # API Reference
 
 Vigo exposes two API surfaces:

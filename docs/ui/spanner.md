@@ -1,3 +1,4 @@
+
 # Spanner
 
 The Spanner page shows hub-spoke topology and health. Available at `/spanner`. Only visible in hub mode.

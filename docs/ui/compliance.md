@@ -1,3 +1,4 @@
+
 # Compliance
 
 The Compliance section provides fleet-wide compliance overview, framework-specific reports, and an executive summary. Available at `/compliance`.
@@ -50,7 +51,7 @@ A table listing all envoys that are not compliant.
 
 ## Framework Report Pages (`/compliance/{framework}`)
 
-Each of the 9 frameworks has its own page:
+Each of the 10 frameworks has its own page:
 
 | Route | Framework |
 |-------|-----------|
@@ -63,6 +64,7 @@ Each of the 9 frameworks has its own page:
 | `/compliance/iso27001` | ISO 27001 |
 | `/compliance/gdpr` | GDPR |
 | `/compliance/nerccip` | NERC CIP |
+| `/compliance/cyberessentials` | Cyber Essentials+ |
 
 Each page includes:
 

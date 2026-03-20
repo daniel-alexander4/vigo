@@ -1,3 +1,4 @@
+
 # Virtual
 
 Detects whether the system is running in a virtual machine or container, and identifies the hypervisor.

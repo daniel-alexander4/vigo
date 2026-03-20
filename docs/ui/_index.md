@@ -1,3 +1,4 @@
+
 # Web UI
 
 Vigo includes an HTMX-based web dashboard available at `https://server:8443`. The UI provides real-time visibility into fleet health, compliance status, convergence runs, orchestration pushes, and spanner topology.

@@ -1,3 +1,4 @@
+
 # Secrets
 
 Vigo never stores secrets in config files, environment variables, logs, or database records. All secret values use the `secret:` prefix and are resolved through a pluggable backend at runtime.

@@ -1,3 +1,4 @@
+
 # network_syslog
 
 Manages syslog server configuration on Cisco and Juniper network devices over SSH.

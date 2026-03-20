@@ -1,3 +1,4 @@
+
 # Getting Started
 
 This section walks you through installing Vigo, enrolling your first envoy, and writing your first module.

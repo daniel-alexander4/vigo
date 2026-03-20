@@ -1,3 +1,4 @@
+
 # Database
 
 Vigo supports two database backends: SQLite (default) and PostgreSQL.

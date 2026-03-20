@@ -1,3 +1,4 @@
+
 # vigogo db
 
 Inspect and maintain the server's SQLite database.

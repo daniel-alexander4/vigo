@@ -1,3 +1,4 @@
+
 # Config Publish Pipeline
 
 Operators edit `.vgo` files in a stage directory. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to the hidden `.live` directory the server reads from.

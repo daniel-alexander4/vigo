@@ -1,3 +1,4 @@
+
 # When Expressions
 
 The `when:` attribute on resources and modules controls conditional execution. Expressions evaluate to true or false — the resource is skipped when false.

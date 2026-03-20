@@ -1,3 +1,4 @@
+
 # archive
 
 Downloads and extracts archive files from URLs. Supports tar.gz, tar.bz2, tar.xz, zip, deb, and rpm formats. Optionally verifies SHA-256 checksums and extracts specific binaries.

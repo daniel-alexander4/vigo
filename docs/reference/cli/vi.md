@@ -1,3 +1,4 @@
+
 # vigogo vi
 
 Edit a `.vgo` file in vim with Vigo-aware syntax highlighting and automatic validation on save.

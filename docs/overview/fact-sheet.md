@@ -1,3 +1,4 @@
+
 # Vigo Fact Sheet
 
 ## What It Is

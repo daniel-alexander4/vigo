@@ -1,3 +1,4 @@
+
 # vigogo export
 
 Export compliance data from the Vigo server in formats suitable for SIEM, CMDB, and OSCAL tools.

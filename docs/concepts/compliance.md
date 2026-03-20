@@ -1,3 +1,4 @@
+
 # Compliance
 
 Vigo computes compliance status per envoy and fleet-wide. Statuses: compliant, drifted, failing, stale, unknown.

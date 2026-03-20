@@ -1,3 +1,4 @@
+
 # Custom Traits
 
 Custom trait collectors extend the agent's fact-gathering with site-specific data. They are scripts that output JSON and are run alongside the built-in collectors.

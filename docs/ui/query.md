@@ -1,3 +1,4 @@
+
 # Query
 
 The Query page provides a live trait query interface. Available at `/query`.

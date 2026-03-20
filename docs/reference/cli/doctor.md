@@ -1,3 +1,4 @@
+
 # vigogo doctor
 
 Run health checks against the Vigo server to verify it is operating correctly.

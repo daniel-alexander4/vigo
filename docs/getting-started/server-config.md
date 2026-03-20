@@ -1,3 +1,4 @@
+
 # Server Configuration
 
 The server is configured via `server.yaml`. This page documents every section and option.

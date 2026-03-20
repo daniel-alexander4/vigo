@@ -1,3 +1,4 @@
+
 # Compiled Promises
 
 Compiled promises are signed policy bundles that allow agents to converge locally when the server is unreachable. Bundles are cryptographically signed and verified. Agents cache policy for offline operation.

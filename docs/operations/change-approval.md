@@ -1,3 +1,4 @@
+
 # Change Approval
 
 The change approval workflow enforces a two-person rule for config changes. When enabled, `vigogo config publish` no longer triggers an immediate config reload. Instead, the change is submitted for approval and a second user must approve it before the server reloads.

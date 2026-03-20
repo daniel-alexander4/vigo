@@ -1,3 +1,4 @@
+
 # vigogo auth
 
 Manage CLI authentication tokens for the REST API.

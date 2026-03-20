@@ -1,3 +1,4 @@
+
 # Hardware
 
 Reports logical CPU count, total physical memory, and disk sizes per mount point.

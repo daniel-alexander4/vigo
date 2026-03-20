@@ -1,3 +1,4 @@
+
 ---
 name: 15-Second Convergence Market Analysis
 description: Industry analysis of which markets would adopt Vigo for its 15-second check-in convergence — tiered by urgency and willingness to pay

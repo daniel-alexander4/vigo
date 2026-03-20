@@ -1,3 +1,4 @@
+
 # Kubernetes Node Management
 
 This example manages the OS-level configuration of machines running Kubernetes — container runtime, kubelet, kernel tuning, CNI, and firewall rules. A rolling drain-and-reboot workflow handles OS patching without cluster disruption.

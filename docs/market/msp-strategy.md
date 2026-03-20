@@ -1,3 +1,4 @@
+
 ---
 name: MSP & Compliance Go-to-Market Strategy
 description: Strategy for getting Vigo into MSP and compliance-driven organizations — market analysis, gaps, pricing, phased plan

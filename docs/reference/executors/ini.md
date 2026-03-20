@@ -1,3 +1,4 @@
+
 # ini
 
 Manages key-value pairs in INI-style configuration files with optional section support.

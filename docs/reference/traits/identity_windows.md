@@ -1,3 +1,4 @@
+
 # Identity (Windows)
 
 Reports the agent process's user identity and administrator privilege status on Windows.

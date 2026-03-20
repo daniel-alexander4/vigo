@@ -1,3 +1,4 @@
+
 # powershell
 
 Runs PowerShell scripts with proper error handling and idempotency guards. Unlike the generic [`exec`](exec.md) executor, this executor always uses `powershell.exe` with `-NoProfile -NonInteractive -ExecutionPolicy Bypass` and automatically sets `$ErrorActionPreference = 'Stop'` so that PowerShell exceptions are mapped to resource failures.

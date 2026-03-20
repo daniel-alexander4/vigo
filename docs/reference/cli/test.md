@@ -1,3 +1,4 @@
+
 # vigogo test
 
 Run config tests that validate resolved policy against expected outcomes. Tests verify that the config tree (modules, roles, envoys) produces the expected resources, vars, and module assignments for a given hostname — without connecting to the server.

@@ -1,3 +1,4 @@
+
 # host
 
 Manages entries in `/etc/hosts` (or the system hosts file) idempotently.

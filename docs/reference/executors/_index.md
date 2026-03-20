@@ -1,3 +1,4 @@
+
 # Executor Reference
 
 Vigo ships 72 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.

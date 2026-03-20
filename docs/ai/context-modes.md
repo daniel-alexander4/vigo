@@ -1,3 +1,4 @@
+
 # Context Modes
 
 The AI assistant supports three context modes that control how fleet data is provided to the LLM. Configure with `ai.context_mode` in `server.yaml`.

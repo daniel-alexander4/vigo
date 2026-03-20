@@ -1,3 +1,4 @@
+
 ---
 name: Vigo Market Analysis & Positioning Materials
 description: Positioning copy, battle cards, and messaging framework for Vigo across target markets — ready for website, sales decks, and outreach

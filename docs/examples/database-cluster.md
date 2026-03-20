@@ -1,3 +1,4 @@
+
 # Database Cluster
 
 This example sets up PostgreSQL with managed credentials using `secret:` references and `vars_from` for shared configuration.

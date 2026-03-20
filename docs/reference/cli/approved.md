@@ -1,3 +1,4 @@
+
 # vigogo approved
 
 Manage approved enrollment patterns that control which hostnames can enroll as envoys.

@@ -1,3 +1,4 @@
+
 # Migration Guides
 
 Vigo borrows ideas from every major configuration management system. If you're coming from Puppet, Ansible, Chef, Salt, or CFEngine, these guides map the concepts you already know to their Vigo state enforcement equivalents.

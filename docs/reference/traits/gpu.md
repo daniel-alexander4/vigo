@@ -1,3 +1,4 @@
+
 # GPU
 
 Detects and reports graphics processing units with driver, memory, and utilization details.

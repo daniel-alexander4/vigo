@@ -1,3 +1,4 @@
+
 # alternatives
 
 Manages Debian/Ubuntu `update-alternatives` entries. Installs and sets the active alternative for a given name.

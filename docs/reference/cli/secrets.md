@@ -1,3 +1,4 @@
+
 # vigogo secrets
 
 Manage secrets stored as AES-256-GCM encrypted files in the local secrets provider.

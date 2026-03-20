@@ -1,3 +1,4 @@
+
 # Managing Network Devices
 
 Vigo manages switches, routers, and firewalls as first-class fleet members through a gateway proxy pattern. Devices that can't run the agent binary are managed over SSH from a gateway envoy. This guide walks through setup and provides practical configuration examples for all supported platforms.

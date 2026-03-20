@@ -1,3 +1,4 @@
+
 # ports
 
 The `ports` trait collector discovers listening TCP ports on the system.

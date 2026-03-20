@@ -1,3 +1,4 @@
+
 # windows_defender
 
 Manages Windows Defender settings and exclusions idempotently via PowerShell. Supports path, process, and extension exclusions, real-time protection toggle, and scheduled scan configuration.

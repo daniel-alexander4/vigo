@@ -1,3 +1,4 @@
+
 # Custom Executors
 
 Custom executors let you extend Vigo with your own resource types. They communicate with the agent via a JSON stdin/stdout protocol.
