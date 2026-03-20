@@ -28,6 +28,7 @@ The following pages are only visible to authenticated admin users.
 | Enrollment | `/admin/enrollment` | Approved enrollment patterns |
 | Tokens | `/admin/tokens` | Bootstrap and API token management |
 | Webhooks | `/admin/webhooks` | Webhook endpoint configuration |
+| Config Trace | `/admin/trace` | Directory inheritance visualization and config resolution tracing |
 | Health | `/admin/health` | System health checks (doctor) |
 | Backup | `/admin/backup` | Backup status, snapshot creation, download |
 

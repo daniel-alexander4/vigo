@@ -197,6 +197,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /admin/approved", h.AdminApproved)
 		mux.HandleFunc("GET /admin/tokens", h.AdminTokens)
 		mux.HandleFunc("GET /admin/webhooks", h.AdminWebhooks)
+		mux.HandleFunc("GET /admin/trace", h.AdminTrace)
 		mux.HandleFunc("GET /admin/doctor", h.AdminDoctor)
 		mux.HandleFunc("GET /admin/backup", h.AdminBackup)
 		if h.peerSvc != nil {
@@ -502,6 +503,11 @@ type AdminTokensPageData struct {
 
 // AdminWebhooksPageData holds data for the admin webhooks page.
 type AdminWebhooksPageData struct {
+	PageData
+}
+
+// AdminTracePageData holds data for the admin config trace page.
+type AdminTracePageData struct {
 	PageData
 }
 
@@ -2846,6 +2852,18 @@ func (h *Handler) AdminWebhooks(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderAdmin(w, "admin-webhooks", data)
+}
+
+// AdminTrace renders the admin config trace page.
+func (h *Handler) AdminTrace(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	data := AdminTracePageData{
+		PageData: PageData{Title: "Config Trace", ActiveNav: "admin-trace"},
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.RenderAdmin(w, "admin-trace", data)
 }
 
 // AdminDoctor renders the admin health check page.

@@ -429,18 +429,68 @@ type ConfigTrace struct {
 	RoleExpansion   []RoleTraceEntry      `json:"role_expansion,omitempty"`
 	Inheritance     []InheritanceLevel    `json:"inheritance,omitempty"`
 	Modules         []string              `json:"modules"`
+	ModuleSources   map[string]string     `json:"module_sources,omitempty"` // module name → source file/role
 	VarSources      []VarSourceEntry      `json:"var_sources"`
 	FinalVars       map[string]any        `json:"final_vars"`
 	ConditionalVars []string              `json:"conditional_vars,omitempty"`
 	ResourceCount   int                   `json:"resource_count"`
 }
 
+// FilterByModule returns a copy of the trace filtered to only show
+// inheritance levels, modules, and role expansions relevant to the
+// given module name. Vars are kept unfiltered since they apply globally.
+func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
+	if module == "" || !t.Matched {
+		return t
+	}
+
+	out := *t
+
+	// Filter inheritance to levels that contribute this module.
+	out.Inheritance = nil
+	for _, lvl := range t.Inheritance {
+		for _, m := range lvl.Modules {
+			if m == module {
+				out.Inheritance = append(out.Inheritance, lvl)
+				break
+			}
+		}
+	}
+
+	// Filter role expansion to entries that include this module.
+	out.RoleExpansion = nil
+	for _, re := range t.RoleExpansion {
+		for _, m := range re.Modules {
+			if m == module {
+				out.RoleExpansion = append(out.RoleExpansion, re)
+				break
+			}
+		}
+	}
+
+	// Filter modules list.
+	out.Modules = nil
+	for _, m := range t.Modules {
+		if m == module {
+			out.Modules = append(out.Modules, m)
+		}
+	}
+
+	// Recount resources for filtered modules only.
+	// (ResourceCount stays approximate — exact filtering would require
+	// access to the module defs which the trace struct doesn't carry.)
+
+	return &out
+}
+
 // InheritanceLevel describes one level in the directory inheritance chain.
 type InheritanceLevel struct {
-	Dir     string   `json:"dir"`               // relative dir path (e.g., "production/web")
-	File    string   `json:"file"`              // filename (e.g., "common.vgo")
-	Modules []string `json:"modules,omitempty"` // modules contributed at this level
-	Roles   []string `json:"roles,omitempty"`   // roles contributed at this level
+	Dir       string         `json:"dir"`                // relative dir path (e.g., "production/web")
+	File      string         `json:"file"`               // filename (e.g., "common.vgo")
+	Modules   []string       `json:"modules,omitempty"`  // modules contributed at this level
+	Roles     []string       `json:"roles,omitempty"`    // roles contributed at this level
+	Vars      map[string]any `json:"vars,omitempty"`     // vars contributed at this level
+	Overrides []string       `json:"overrides,omitempty"` // var keys that override a parent value
 }
 
 // RoleTraceEntry shows which modules came from which role (and includes).
@@ -497,7 +547,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		return trace
 	}
 
-	// Build inheritance chain for trace output.
+	// Build inheritance chain for trace output, tracking vars and overrides.
+	moduleSources := make(map[string]string)
+	seenVars := make(map[string]bool)
 	if envoyEntry.DirPath != "" && len(cs.commonConfigs) > 0 {
 		chain := inheritanceChain(envoyEntry.DirPath, cs.commonConfigs)
 		for _, cc := range chain {
@@ -507,8 +559,25 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			}
 			for _, ref := range cc.Modules {
 				level.Modules = append(level.Modules, ref.Name)
+				if _, exists := moduleSources[ref.Name]; !exists {
+					src := "common.vgo"
+					if cc.DirPath != "" {
+						src = cc.DirPath + "/common.vgo"
+					}
+					moduleSources[ref.Name] = src
+				}
 			}
 			level.Roles = cc.Roles
+			if len(cc.Vars) > 0 {
+				level.Vars = make(map[string]any, len(cc.Vars))
+				for k, v := range cc.Vars {
+					level.Vars[k] = v
+					if seenVars[k] {
+						level.Overrides = append(level.Overrides, k)
+					}
+					seenVars[k] = true
+				}
+			}
 			trace.Inheritance = append(trace.Inheritance, level)
 		}
 	}
@@ -528,11 +597,17 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			if inc, ok := cs.roleDefs[incName]; ok {
 				for _, ref := range inc.Modules {
 					rte.Modules = append(rte.Modules, ref.Name)
+					if _, exists := moduleSources[ref.Name]; !exists {
+						moduleSources[ref.Name] = "role:" + roleName
+					}
 				}
 			}
 		}
 		for _, ref := range role.Modules {
 			rte.Modules = append(rte.Modules, ref.Name)
+			if _, exists := moduleSources[ref.Name]; !exists {
+				moduleSources[ref.Name] = "role:" + roleName
+			}
 		}
 		trace.RoleExpansion = append(trace.RoleExpansion, rte)
 	}
@@ -541,7 +616,11 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	cfg := entry.config
 	for _, mod := range cfg.Modules {
 		trace.Modules = append(trace.Modules, mod.Name)
+		if _, exists := moduleSources[mod.Name]; !exists {
+			moduleSources[mod.Name] = "direct"
+		}
 	}
+	trace.ModuleSources = moduleSources
 
 	// Trace var sources by replaying the merge order.
 	varSource := make(map[string]string) // key → source

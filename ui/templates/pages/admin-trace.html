@@ -1,0 +1,170 @@
+{{template "admin-base" .}}
+
+{{define "admin-content"}}
+<div class="page-header">
+    <h1>Config Trace</h1>
+</div>
+
+<div class="card">
+    <div class="card__header">
+        <h2>Trace Resolution</h2>
+    </div>
+    <div class="card__body">
+        <form onsubmit="runTrace(); return false;" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <input type="text" id="trace-hostname" class="form-input" placeholder="hostname (e.g., web-01.prod.example.com)" style="flex:1;min-width:260px;">
+            <input type="text" id="trace-module" class="form-input" placeholder="module filter (optional)" style="width:200px;">
+            <button type="submit" class="btn btn--primary">Trace</button>
+        </form>
+        <div id="trace-result"></div>
+    </div>
+</div>
+
+<script>
+function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(s)));
+    return div.innerHTML;
+}
+
+async function runTrace() {
+    var hostname = document.getElementById('trace-hostname').value.trim();
+    if (!hostname) return;
+    var module = document.getElementById('trace-module').value.trim();
+    var url = '/api/v1/config/trace?hostname=' + encodeURIComponent(hostname);
+    if (module) url += '&module=' + encodeURIComponent(module);
+
+    var el = document.getElementById('trace-result');
+    el.innerHTML = '<p class="text-muted">Tracing...</p>';
+
+    try {
+        var resp = await fetch(url);
+        var data = await resp.json();
+        el.innerHTML = renderTrace(data);
+    } catch (err) {
+        el.innerHTML = '<p class="text-muted">Failed to trace: ' + escapeHtml(err.message) + '</p>';
+    }
+}
+
+/* Green ramp: light (#c6f6d5) to dark (#14532d) */
+function greenLevel(depth, total) {
+    if (total <= 1) return { bg: '#f0fdf4', border: '#86efac' };
+    var t = depth / (total - 1);
+    var r = Math.round(240 - t * 200);
+    var g = Math.round(253 - t * 170);
+    var b = Math.round(230 - t * 180);
+    var br = Math.round(134 - t * 100);
+    var bg2 = Math.round(174 - t * 120);
+    var bb = Math.round(172 - t * 130);
+    return {
+        bg: 'rgb(' + r + ',' + g + ',' + b + ')',
+        border: 'rgb(' + br + ',' + bg2 + ',' + bb + ')'
+    };
+}
+
+function renderTrace(t) {
+    if (!t.matched) {
+        return '<p class="text-muted">No config entry matches hostname <strong>' + escapeHtml(t.hostname) + '</strong></p>';
+    }
+
+    var html = '';
+
+    /* Header */
+    html += '<div style="margin-bottom:16px;">';
+    html += '<div><strong>Hostname:</strong> ' + escapeHtml(t.hostname) + '</div>';
+    html += '<div><strong>Match:</strong> <code>' + escapeHtml(t.match_pattern) + '</code> <span class="text-muted">(' + escapeHtml(t.pattern_type) + ')</span></div>';
+    if (t.environment) html += '<div><strong>Environment:</strong> ' + escapeHtml(t.environment) + '</div>';
+    html += '<div><strong>Resources:</strong> ' + t.resource_count + ' total</div>';
+    html += '</div>';
+
+    /* Inheritance chain */
+    var inh = t.inheritance || [];
+    if (inh.length > 0) {
+        html += '<h3 style="margin:16px 0 8px;">Inheritance</h3>';
+        for (var i = 0; i < inh.length; i++) {
+            var lvl = inh[i];
+            var c = greenLevel(i, inh.length);
+            var filePath = lvl.file;
+            if (lvl.dir) filePath = lvl.dir + '/' + lvl.file;
+
+            html += '<div class="trace-level" style="border-left:4px solid ' + c.border + ';background:' + c.bg + ';padding:8px 12px;margin-bottom:2px;border-radius:4px;">';
+            html += '<strong>' + escapeHtml(filePath) + '</strong>';
+
+            if (lvl.modules && lvl.modules.length) {
+                html += '<div style="margin-top:4px;"><span class="text-muted">modules:</span> ' + lvl.modules.map(escapeHtml).join(', ') + '</div>';
+            }
+            if (lvl.roles && lvl.roles.length) {
+                html += '<div><span class="text-muted">roles:</span> ' + lvl.roles.map(escapeHtml).join(', ') + '</div>';
+            }
+            var overrides = {};
+            if (lvl.overrides) lvl.overrides.forEach(function(k) { overrides[k] = true; });
+            if (lvl.vars) {
+                var keys = Object.keys(lvl.vars).sort();
+                if (keys.length) {
+                    html += '<div style="margin-top:4px;"><span class="text-muted">vars:</span>';
+                    for (var j = 0; j < keys.length; j++) {
+                        var val = String(lvl.vars[keys[j]]);
+                        if (val.indexOf('secret:') === 0) val = 'secret:****';
+                        var ov = overrides[keys[j]] ? ' <span style="color:#d97706;">&#9889; overrides</span>' : '';
+                        html += '<div style="margin-left:16px;"><code>' + escapeHtml(keys[j]) + '</code> = ' + escapeHtml(val) + ov + '</div>';
+                    }
+                    html += '</div>';
+                }
+            }
+            html += '</div>';
+        }
+    }
+
+    /* Modules */
+    var mods = t.modules || [];
+    var srcs = t.module_sources || {};
+    if (mods.length) {
+        html += '<h3 style="margin:16px 0 8px;">Modules (' + mods.length + ')</h3>';
+        html += '<table class="table"><thead><tr><th>Module</th><th>Source</th></tr></thead><tbody>';
+        for (var i = 0; i < mods.length; i++) {
+            html += '<tr><td>' + escapeHtml(mods[i]) + '</td><td class="text-muted">' + escapeHtml(srcs[mods[i]] || '') + '</td></tr>';
+        }
+        html += '</tbody></table>';
+    }
+
+    /* Roles */
+    var roles = t.role_expansion || [];
+    if (roles.length) {
+        html += '<h3 style="margin:16px 0 8px;">Roles</h3>';
+        for (var i = 0; i < roles.length; i++) {
+            var re = roles[i];
+            html += '<div><strong>' + escapeHtml(re.role) + '</strong>';
+            if (re.includes && re.includes.length) html += ' <span class="text-muted">(includes: ' + re.includes.map(escapeHtml).join(', ') + ')</span>';
+            html += '</div>';
+            if (re.modules) {
+                for (var j = 0; j < re.modules.length; j++) {
+                    html += '<div style="margin-left:16px;"><span class="text-muted">&rarr;</span> ' + escapeHtml(re.modules[j]) + '</div>';
+                }
+            }
+        }
+    }
+
+    /* Vars */
+    var vars = t.var_sources || [];
+    if (vars.length) {
+        html += '<h3 style="margin:16px 0 8px;">Vars</h3>';
+        html += '<table class="table"><thead><tr><th>Key</th><th>Value</th><th>Source</th></tr></thead><tbody>';
+        for (var i = 0; i < vars.length; i++) {
+            var v = vars[i];
+            var val = String(v.value);
+            if (val.indexOf('secret:') === 0) val = 'secret:****';
+            if (val.length > 60) val = val.substring(0, 57) + '...';
+            html += '<tr><td><code>' + escapeHtml(v.key) + '</code></td><td>' + escapeHtml(val) + '</td><td class="text-muted">' + escapeHtml(v.source) + '</td></tr>';
+        }
+        html += '</tbody></table>';
+    }
+
+    /* Conditional vars */
+    var cvars = t.conditional_vars || [];
+    if (cvars.length) {
+        html += '<div style="margin-top:12px;"><strong>Conditional vars:</strong> ' + cvars.map(escapeHtml).join(', ') + '</div>';
+    }
+
+    return html;
+}
+</script>
+{{end}}

@@ -438,13 +438,14 @@ Drain all envoys from a spoke (move to target spoke or auto-route by patterns).
 
 ### GET /api/v1/config/trace
 
-Trace config resolution for a hostname. Shows which node entry matched, how roles expanded (including includes), where each variable came from, and the final module list.
+Trace config resolution for a hostname. Shows the full directory inheritance chain with vars and override markers at each level, which modules came from which files or roles, how roles expanded, and where each variable's final value originated.
 
 **Query parameters:**
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `hostname` | Yes | The hostname to trace |
+| `module` | No | Filter trace to only the branch relevant to this module |
 
 **Response:**
 
@@ -463,15 +464,40 @@ Trace config resolution for a hostname. Shows which node entry matched, how role
       "modules": ["firewall", "sshd", "nginx", "logrotate"]
     }
   ],
-  "modules": ["firewall", "sshd", "nginx", "logrotate"],
+  "inheritance": [
+    {
+      "dir": "",
+      "file": "common.vgo",
+      "modules": ["monitoring"],
+      "vars": {"dns_server": "1.1.1.1"}
+    },
+    {
+      "dir": "production",
+      "file": "common.vgo",
+      "modules": ["log-shipping"],
+      "vars": {"dns_server": "10.0.0.1", "log_level": "warn"},
+      "overrides": ["dns_server"]
+    }
+  ],
+  "modules": ["monitoring", "log-shipping", "firewall", "sshd", "nginx", "logrotate"],
+  "module_sources": {
+    "monitoring": "common.vgo",
+    "log-shipping": "production/common.vgo",
+    "firewall": "role:webserver",
+    "sshd": "role:webserver",
+    "nginx": "role:webserver",
+    "logrotate": "role:webserver"
+  },
   "var_sources": [
-    {"key": "nginx_port", "value": 443, "source": "environment_overrides[production]"},
-    {"key": "log_level", "value": "info", "source": "node vars"}
+    {"key": "nginx_port", "value": 443, "source": "environment_overrides:production"},
+    {"key": "log_level", "value": "warn", "source": "inline"}
   ],
   "conditional_vars": ["is_debian", "has_enough_ram"],
   "resource_count": 14
 }
 ```
+
+When `?module=` is provided, the `inheritance`, `modules`, and `role_expansion` fields are filtered to only entries relevant to that module. Vars are kept unfiltered.
 
 If no entry matches, `matched` is `false` and other fields are omitted.
 

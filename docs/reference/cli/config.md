@@ -20,27 +20,49 @@ Config inspection commands.
 
 ## config trace
 
-Shows which pattern matched a hostname, how roles expanded, where each variable came from, and the final module list. Useful for debugging why a envoy gets a particular configuration.
+Shows the full directory inheritance chain for a hostname with colored output: which `common.vgo` files contributed modules and vars at each level, which vars override parent values, and where each module originated (inheritance, role, or direct assignment).
 
 ### Usage
 
 ```bash
 vigogo config trace <hostname>
+vigogo config trace <hostname> --module <module-name>
 ```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--module` | Filter the trace to only show the inheritance branch relevant to a specific module |
 
 ### Example
 
 ```
 $ vigogo config trace web01.prod.example.com
 
-Hostname:      web01.prod.example.com
-Match pattern: web*.prod.example.com (glob)
-Environment:   production
-Resources:     14 total
+Hostname:       web01.prod.example.com
+Match:          web*.prod.example.com (glob)
+Environment:    production
+Resources:      14 total
 
 Inheritance:
-  common.vgo              → [sshd, monitoring]
-  production/common.vgo   → [log-shipping, auditd]
+
+  ├─ common.vgo
+  │  modules: sshd, monitoring
+  │  vars:    dns_server = 1.1.1.1
+  │
+  └─ production/common.vgo
+     modules: log-shipping, auditd
+     vars:    log_level = warn
+
+Modules (7):
+  sshd            ← common.vgo
+  monitoring      ← common.vgo
+  log-shipping    ← production/common.vgo
+  auditd          ← production/common.vgo
+  firewall        ← role:webserver
+  nginx           ← role:webserver
+  logrotate       ← role:webserver
 
 Roles:
   webserver (includes: base-security)
@@ -48,33 +70,31 @@ Roles:
     → nginx
     → logrotate
 
-Modules (6):
-  sshd           (inherited from common.vgo)
-  monitoring     (inherited from common.vgo)
-  log-shipping   (inherited from production/common.vgo)
-  auditd         (inherited from production/common.vgo)
-  firewall
-  nginx
-  logrotate
-
 Vars:
-  dns_server      = 1.1.1.1                          ← inherited:common.vgo
-  log_level       = warn                              ← inherited:production/common.vgo
-  nginx_port      = 443                               ← environment_overrides[production]
-  worker_procs    = 4                                 ← vars_from[vars/web01.vgo]
-  ssl_protocols   = TLSv1.2 TLSv1.3                  ← vars_from[vars/web-common.vgo]
-  db_password     = secret:****                       ← vars_from[vars/db-creds.vgo]
+  dns_server      = 1.1.1.1                          ← module:sshd
+  log_level       = warn                              ← environment_overrides:production
+  nginx_port      = 443                               ← inline
+  worker_procs    = 4                                 ← vars_from:vars/web01.vgo
+  db_password     = secret:****                       ← vars_from:vars/db-creds.vgo
 
 Conditional vars: is_debian, has_enough_ram
 ```
 
-When directory inheritance is configured, the trace shows the full inheritance chain — which `common.vgo` files contributed which modules and vars.
+The inheritance section uses a green color ramp in the terminal — lighter at the root `common.vgo` and progressively darker at deeper directory levels. Vars that override a parent value are marked with a `⚡` indicator.
 
-If no config entry matches the hostname:
+### Filtering by module
+
+```
+$ vigogo config trace web01.prod.example.com --module log-shipping
+```
+
+When `--module` is specified, only inheritance levels that contribute that module are shown, along with the relevant role expansion.
+
+### No match
 
 ```
 $ vigogo config trace unknown.example.com
-No config entry matches hostname "unknown.example.com"
+! No config entry matches hostname "unknown.example.com"
 ```
 
 ### Notes
@@ -82,6 +102,7 @@ No config entry matches hostname "unknown.example.com"
 - Secret values (prefixed with `secret:`) are masked in output
 - Variable values longer than 60 characters are truncated
 - The source column shows where each variable was set (module defaults, node vars, environment_overrides, or vars_from file)
+- The inheritance chain shows vars contributed at each `common.vgo` level with override markers
 
 ## config tree
 

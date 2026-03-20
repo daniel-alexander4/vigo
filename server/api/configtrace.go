@@ -51,6 +51,8 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 }
 
 // HandleTrace returns detailed config resolution info for a hostname.
+// Optional ?module= parameter filters the trace to only show the branch
+// relevant to that module.
 func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request) {
 	hostname := r.URL.Query().Get("hostname")
 	if hostname == "" {
@@ -59,6 +61,10 @@ func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request)
 	}
 
 	trace := h.configStore.Trace(hostname)
+
+	if module := r.URL.Query().Get("module"); module != "" {
+		trace = trace.FilterByModule(module)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(trace)
