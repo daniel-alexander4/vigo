@@ -277,12 +277,15 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 
 	// Auto-update: if the agent reports a version that doesn't match the
-	// server's version, tell it to download the latest binary and restart.
-	// This ensures all agents stay current without manual intervention.
+	// server's version AND a binary is available to serve, tell it to
+	// download the latest binary and restart.
 	if !forceUpdate && agentVersion != "" && s.serverVersion != "" && agentVersion != s.serverVersion {
-		slog.Info("agent version mismatch, requesting update",
-			"envoy", envoyID, "agent", agentVersion, "server", s.serverVersion)
-		forceUpdate = true
+		binReady := s.agentBinAvailable == nil || s.agentBinAvailable()
+		if binReady {
+			slog.Info("agent version mismatch, requesting update",
+				"envoy", envoyID, "agent", agentVersion, "server", s.serverVersion)
+			forceUpdate = true
+		}
 	}
 	// Clear the ephemeral flag so it's only sent once.
 	if forceUpdate && s.fleetIndex != nil {

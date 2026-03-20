@@ -54,8 +54,9 @@ type AgentService struct {
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
 	jitterPercent    int32             // jitter percentage sent to agents
 	fallbackServers  []string          // peer server addresses returned to agents on registration
-	serverVersion    string            // server/agent binary version — agents reporting a different version get force_update
-	auditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
+	serverVersion      string            // server/agent binary version — agents reporting a different version get force_update
+	agentBinAvailable  func() bool // checks whether at least one agent binary exists for distribution
+	auditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.

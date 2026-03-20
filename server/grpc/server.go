@@ -84,8 +84,9 @@ type ServerConfig struct {
 	BundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	RateLimit        config.RateLimitSection // rate limiting config
 	FallbackServers  []string          // peer server addresses returned to agents on registration
-	AuditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
-	ServerVersion    string            // server binary version — agents with different version get force_update
+	AuditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
+	ServerVersion      string            // server binary version — agents with different version get force_update
+	AgentBinAvailable  func() bool // if set, version-mismatch auto-update only fires when at least one binary exists
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -191,8 +192,9 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		baseInterval:     cfg.Interval,
 		jitterPercent:    cfg.JitterPercent,
 		fallbackServers:  cfg.FallbackServers,
-		auditWriter:      cfg.AuditWriter,
-		serverVersion:    cfg.ServerVersion,
+		auditWriter:        cfg.AuditWriter,
+		serverVersion:      cfg.ServerVersion,
+		agentBinAvailable:  cfg.AgentBinAvailable,
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {

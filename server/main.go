@@ -490,6 +490,16 @@ func run() error {
 		FallbackServers:     fallbackServers,
 		AuditWriter:         auditWriter,
 		ServerVersion:       version,
+		AgentBinAvailable: func() bool {
+			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {
+				for _, goarch := range []string{"amd64", "arm64"} {
+					if _, err := os.Stat(bootstrap.BinaryPath(agentDir, goos, goarch)); err == nil {
+						return true
+					}
+				}
+			}
+			return false
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("creating gRPC server: %w", err)
