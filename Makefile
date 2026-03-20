@@ -8,17 +8,21 @@ VERSION ?= $(shell cat VERSION 2>/dev/null || echo dev)
 # --- Primary build: server + CLI (Go), agent (Rust) ---
 
 # GOFLAGS for hardened builds:
-#   -trimpath     removes source file paths from binary
-#   -s -w         strips symbol table and DWARF debug info
-#   -buildid=     removes build ID
+#   -trimpath       removes source file paths from binary
+#   -s -w           strips symbol table and DWARF debug info
+#   -buildid=       removes build ID
+#   -buildmode=pie  Position Independent Executable (full ASLR)
+# CGO hardening: stack protectors, FORTIFY_SOURCE, full RELRO, no-execstack
 GO_VERSION_FLAG := -X main.version=$(VERSION)
 GO_LDFLAGS := -ldflags="-s -w -buildid= $(GO_VERSION_FLAG)"
-GO_HARDENED := -trimpath $(GO_LDFLAGS)
+GO_HARDENED := -buildmode=pie -trimpath $(GO_LDFLAGS)
+export CGO_CFLAGS := -D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2
+export CGO_LDFLAGS := -Wl,-z,relro,-z,now,-z,noexecstack
 
 build: build-agent
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigogo ./cli
-	go build -o bin/vigo-license-manager ./license-manager
+	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigo-license-manager ./license-manager
 	ln -sf vigogo bin/hnbvi
 
 build-agent:
@@ -45,28 +49,29 @@ lint-agent:
 
 # --- Distribution: cross-compiled static binaries ---
 
-# Distribution builds apply hardening flags to strip debug info and source paths.
-# For additional anti-reverse-engineering, use `make dist-obfuscated` which uses
-# garble to randomize identifiers and encrypt string literals.
-# Install garble: go install mvdan.cc/garble@latest
+# Distribution builds use garble for obfuscation (identifier randomization +
+# string literal encryption) on top of strip/trimpath/PIE/CGO hardening.
+# Requires: go install mvdan.cc/garble@latest
 #
+# For an unobfuscated dist build: make dist-plain
 # To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
 dist: dist-agent
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
-	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigogo ./cli
-
-# Obfuscated distribution build using garble.
-# Requires: go install mvdan.cc/garble@latest
-dist-obfuscated: dist-agent
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 garble -literals -tiny build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
 	GOOS=linux GOARCH=amd64 garble -literals -tiny build $(GO_HARDENED) -o dist/cli/linux/amd64/vigogo ./cli
+	GOOS=linux GOARCH=amd64 garble -literals -tiny build $(GO_HARDENED) -o dist/cli/linux/amd64/vigo-license-manager ./license-manager
+
+# Unobfuscated distribution build (hardened but without garble).
+dist-plain: dist-agent
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
+	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigogo ./cli
+	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigo-license-manager ./license-manager
 
 # Sign distribution binaries with ED25519 key for tamper detection.
 # Usage: make dist-sign SIGN_KEY=/path/to/signing.key
 SIGN_KEY ?= signing.key
 dist-sign: dist-sign-agent
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
-	@for bin in dist/server/linux/amd64/vigosrv dist/cli/linux/amd64/vigogo; do \
+	@for bin in dist/server/linux/amd64/vigosrv dist/cli/linux/amd64/vigogo dist/cli/linux/amd64/vigo-license-manager; do \
 		if [ -f "$$bin" ]; then \
 			go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
 			echo "signed $$bin"; \

@@ -10,14 +10,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev" // set by -ldflags at build time
+
 const defaultKeyDir = "/srv/vigo/license/keys"
 
 var keyDir string
 
 var rootCmd = &cobra.Command{
-	Use:   "vigo-license-manager",
-	Short: "Internal tool for managing Vigo licenses",
-	Long:  "vigo-license-manager generates Ed25519 keypairs, creates and tracks signed license files, and manages customer license lifecycle.",
+	Use:     "vigo-license-manager",
+	Short:   "Internal tool for managing Vigo licenses",
+	Long:    "vigo-license-manager generates Ed25519 keypairs, creates and tracks signed license files, and manages customer license lifecycle.",
+	Version: version,
 }
 
 func main() {
