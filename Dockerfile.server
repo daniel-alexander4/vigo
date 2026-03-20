@@ -41,17 +41,17 @@ COPY . .
 ENV CGO_CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2" \
     CGO_LDFLAGS="-Wl,-z,relro,-z,now,-z,noexecstack"
 
-RUN CGO_ENABLED=1 garble -literals -tiny build \
+RUN CGO_ENABLED=1 garble -literals build \
     -buildmode=pie -trimpath \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigosrv ./server
 
-RUN CGO_ENABLED=1 garble -literals -tiny build \
+RUN CGO_ENABLED=1 garble -literals build \
     -buildmode=pie -trimpath \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigogo ./cli
 
-RUN CGO_ENABLED=1 garble -literals -tiny build \
+RUN CGO_ENABLED=1 garble -literals build \
     -buildmode=pie -trimpath \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigo-license-manager ./license-manager
